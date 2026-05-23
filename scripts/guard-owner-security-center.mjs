@@ -49,6 +49,10 @@ const migration = read("supabase/migrations/202605220004_owner_security_center.s
   "revoke_all_temporary_owner_grants",
   "run_owner_security_checklist",
   "owner_required",
+  "requireTrustedCurrentOwnerDevice",
+  "trusted_device_required",
+  "typed_confirmation_required",
+  "owner_security_access_denied",
   "writeSecurityAudit",
 ].forEach((needle) => {
   if (!ownerFunction.includes(needle)) fail(`missing Edge Function owner security marker: ${needle}`);
@@ -59,8 +63,21 @@ const migration = read("supabase/migrations/202605220004_owner_security_center.s
   "security_audit_events",
   "enable row level security",
   "owner_security_center_table_status",
+  "revoked_reason",
 ].forEach((needle) => {
-  if (!migration.includes(needle)) fail(`missing migration marker: ${needle}`);
+  const migrationText = `${migration}\n${read("supabase/migrations/202605230001_owner_security_center_hardening.sql")}`;
+  if (!migrationText.includes(needle)) fail(`missing migration marker: ${needle}`);
+});
+
+[
+  "UNTRUST DEVICE",
+  "REVOKE GRANT",
+  "REVOKE GRANTS",
+  "Owner Security actions require a reason.",
+  "Emergency actions require backend-verified owner access",
+  "!ownerSecurityDangerActionsAvailable",
+].forEach((needle) => {
+  if (!adminScreen.includes(needle)) fail(`missing dangerous-action safety UI marker: ${needle}`);
 });
 
 const mobileClient = `${adminScreen}\n${ownerControls}`;

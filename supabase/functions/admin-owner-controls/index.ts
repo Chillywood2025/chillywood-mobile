@@ -1012,25 +1012,31 @@ const normalizeDeviceContext = (value: unknown) => {
 };
 
 const ownerDeviceTrustStatus = (row: JsonObject | null | undefined) => {
-  if (!row) return "unknown";
+  if (!row) return "not_connected";
   if (toText(row.revoked_at ?? row.revokedAt)) return "revoked";
   if (toText(row.trusted_at ?? row.trustedAt)) return "trusted";
-  return "unknown";
+  return "not_recorded";
 };
 
 const normalizeOwnerDevice = (row: JsonObject, currentHash: string | null = null) => {
   const trustStatus = ownerDeviceTrustStatus(row);
+  const fullHash = toText(row.device_fingerprint_hash);
   return {
     appVersion: toText(row.app_version) || null,
     buildVersion: toText(row.build_version) || null,
     createdAt: toText(row.created_at) || null,
+    deviceHashShort: fullHash ? `${fullHash.slice(0, 10)}...${fullHash.slice(-6)}` : null,
     deviceLabel: toText(row.device_label) || "Unknown device",
     id: toText(row.id),
-    isCurrentDevice: !!currentHash && toText(row.device_fingerprint_hash) === currentHash,
+    isCurrentDevice: !!currentHash && fullHash === currentHash,
     lastSeenAt: toText(row.last_seen_at) || null,
     platform: toText(row.platform) || "unknown",
+    proofSource: "table: owner_trusted_devices",
     revokedAt: toText(row.revoked_at) || null,
+    revokedBy: toText(row.revoked_by) || null,
+    revokedReason: redactText(row.revoked_reason ?? "", 260) || null,
     trustedAt: toText(row.trusted_at) || null,
+    trustedBy: toText(row.trusted_by) || null,
     trustStatus,
   };
 };
@@ -1163,8 +1169,10 @@ const normalizeTemporaryGrant = (row: JsonObject) => {
     grantType: toText(row.permission_key) || "unknown",
     id: toText(row.id),
     isProofGrant: normalizeEmail(row.target_email).startsWith("liveops.proof+") || metadata.canary_proof === true,
+    proofSource: "table: platform_staff_permission_grants",
     reason: redactText(row.reason, 260) || null,
     revokedAt: toText(row.revoked_at) || null,
+    revokedBy: toText(row.revoked_by) || null,
     state: toText(row.status) === "revoked" ? "revoked" : expired ? "expired" : "active",
     targetEmail: normalizeEmail(row.target_email) || null,
     targetUserId: toText(row.target_user_id) || null,
@@ -1216,6 +1224,15 @@ const listSecurityAuditEvents = async (
   user: AuthenticatedUser,
   payload: JsonObject = {},
 ) => {
+  const result = await readSecurityAuditEvents(adminClient, user, payload);
+  return result.events;
+};
+
+const readSecurityAuditEvents = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  payload: JsonObject = {},
+) => {
   if (user.role !== "owner") throw new Error("owner_required");
   const limit = parseLimit(payload.limit, 40, 120);
   const filter = toText(payload.filter).toLowerCase();
@@ -1228,9 +1245,29 @@ const listSecurityAuditEvents = async (
     { order: "created_at", source: "break_glass", table: "platform_break_glass_audit" },
   ];
   const rows: JsonObject[] = [];
+  const sourceStates: JsonObject = {};
+  const checkedAt = new Date().toISOString();
   for (const source of sources) {
     const { data, error } = await adminClient.from(source.table).select("*").order(source.order, { ascending: false }).limit(limit);
-    if (!error) rows.push(...((data ?? []) as JsonObject[]).map((row) => normalizeSecurityAuditEvent(source.source, row)));
+    if (error) {
+      sourceStates[source.source] = {
+        checkedAt,
+        error: redactText(error.message, 260),
+        message: `${source.table} could not be read.`,
+        proofSource: `table: ${source.table}`,
+        status: "not_connected",
+      };
+      continue;
+    }
+    const sourceRows = (data ?? []) as JsonObject[];
+    sourceStates[source.source] = {
+      checkedAt,
+      message: sourceRows.length ? `${sourceRows.length} row(s) loaded.` : "Connected with zero rows.",
+      proofSource: `table: ${source.table}`,
+      rowCount: sourceRows.length,
+      status: sourceRows.length ? "connected" : "empty",
+    };
+    rows.push(...sourceRows.map((row) => normalizeSecurityAuditEvent(source.source, row)));
   }
 
   const filtered = rows.filter((row) => {
@@ -1245,9 +1282,12 @@ const listSecurityAuditEvents = async (
     return true;
   });
 
-  return filtered
+  return {
+    events: filtered
     .sort((left, right) => toText(right.createdAt).localeCompare(toText(left.createdAt)))
-    .slice(0, limit);
+    .slice(0, limit),
+    sourceStates,
+  };
 };
 
 const buildLiveOpsFlags = async (adminClient: SupabaseClientLike) => {
@@ -1386,6 +1426,7 @@ const buildLiveOpsFlags = async (adminClient: SupabaseClientLike) => {
 const buildOwnerSecurityChecklist = async (adminClient: SupabaseClientLike) => {
   const checkedAt = new Date().toISOString();
   const tableStatus = await adminClient.rpc("owner_security_center_table_status").catch((error: unknown) => ({ error }));
+  const tableStatusError = isRecord(tableStatus) && "error" in tableStatus;
   const tables = isRecord(tableStatus.data)
     && Array.isArray((tableStatus.data as JsonObject).tables)
     ? (tableStatus.data as JsonObject).tables as JsonObject[]
@@ -1394,6 +1435,10 @@ const buildOwnerSecurityChecklist = async (adminClient: SupabaseClientLike) => {
   const tablePassed = (name: string) => {
     const row = tableByName(name);
     return !!row && row.exists === true && row.rlsEnabled === true && Number(row.policyCount ?? 0) > 0;
+  };
+  const tableProofStatus = (name: string) => {
+    if (tableStatusError || !tables.length) return "not_connected";
+    return tablePassed(name) ? "passed" : "failed";
   };
   const item = (input: JsonObject): JsonObject => ({
     actionLabel: null,
@@ -1404,14 +1449,16 @@ const buildOwnerSecurityChecklist = async (adminClient: SupabaseClientLike) => {
     item({
       key: "service_role_not_client",
       proofSource: "repo guard required",
-      status: "manual",
+      status: "not_connected",
       title: "No service-role secrets in mobile/client",
-      whatItMeans: "Mobile code cannot prove its own bundle contents from the backend. Run the owner-security guard and release log audit.",
+      whatItMeans: "Backend cannot prove mobile bundle contents by itself. Run guard:owner-security-center and release log audit for this row.",
     }),
     item({
       key: "owner_security_tables_rls",
       proofSource: "rpc: owner_security_center_table_status",
-      status: tablePassed("owner_trusted_devices") && tablePassed("security_audit_events") ? "passed" : "failed",
+      status: tableStatusError || !tables.length
+        ? "not_connected"
+        : tablePassed("owner_trusted_devices") && tablePassed("security_audit_events") ? "passed" : "failed",
       title: "Owner/security tables have RLS and policies",
       whatItMeans: "Device trust and security audit rows are owner-gated by database policy.",
     }),
@@ -1423,11 +1470,39 @@ const buildOwnerSecurityChecklist = async (adminClient: SupabaseClientLike) => {
       whatItMeans: "The Owner Security Center endpoint fails closed unless the authenticated actor is owner.",
     }),
     item({
+      key: "rls_blocks_non_owner_access",
+      proofSource: "RLS: owner_trusted_devices + security_audit_events",
+      status: tableProofStatus("owner_trusted_devices") === "passed" && tableProofStatus("security_audit_events") === "passed" ? "passed" : tableProofStatus("owner_trusted_devices"),
+      title: "RLS blocks non-owner security reads",
+      whatItMeans: "Normal users, creators, moderators, and regular admins cannot list owner device or security event rows through table policy.",
+    }),
+    item({
+      key: "dangerous_actions_require_trusted_device",
+      proofSource: "edge guard: requireTrustedCurrentOwnerDevice",
+      status: "passed",
+      title: "Dangerous actions require trusted current device",
+      whatItMeans: "Device revoke and temporary-grant revoke actions fail closed unless the current device is backend-trusted.",
+    }),
+    item({
+      key: "dangerous_actions_require_reason_confirmation",
+      proofSource: "edge actions: revoke_owner_device / revoke_temporary_owner_grant / revoke_all_temporary_owner_grants",
+      status: "passed",
+      title: "Dangerous actions require reason and confirmation",
+      whatItMeans: "Revocation actions require an owner-entered reason and exact confirmation phrase before the backend mutates state.",
+    }),
+    item({
       key: "temporary_grants_expire",
       proofSource: "table: platform_staff_permission_grants",
-      status: tablePassed("platform_staff_permission_grants") ? "passed" : "warning",
+      status: tableProofStatus("platform_staff_permission_grants"),
       title: "Temporary grants expire",
       whatItMeans: "Active temporary/proof grants are read from the backed staff permission table and stale grants expire server-side.",
+    }),
+    item({
+      key: "revoked_grants_cannot_be_used",
+      proofSource: "permission read path filters status=active and expires_at",
+      status: tableProofStatus("platform_staff_permission_grants"),
+      title: "Revoked grants cannot be used",
+      whatItMeans: "The staff permission resolver only treats active, unexpired grants as usable permissions.",
     }),
     item({
       key: "temporary_grants_revoke",
@@ -1439,51 +1514,165 @@ const buildOwnerSecurityChecklist = async (adminClient: SupabaseClientLike) => {
     item({
       key: "sensitive_actions_audited",
       proofSource: "tables: security_audit_events + platform_staff_permission_audit",
-      status: tablePassed("security_audit_events") ? "passed" : "failed",
+      status: tableProofStatus("security_audit_events"),
       title: "Sensitive security actions write events",
       whatItMeans: "Device trust/revoke and temporary grant revoke write functional security audit rows.",
     }),
     item({
       key: "device_trust_protected",
       proofSource: "table: owner_trusted_devices",
-      status: tablePassed("owner_trusted_devices") ? "passed" : "failed",
+      status: tableProofStatus("owner_trusted_devices"),
       title: "Device trust table/function protected",
       whatItMeans: "Device trust rows are not public and mutation happens through the owner-only Edge Function.",
     }),
     item({
       key: "livekit_operator_path_protected",
       proofSource: "tables/functions: livekit registry + live ops",
-      status: tablePassed("livekit_servers") && tablePassed("admin_live_ops_incidents") ? "passed" : "manual",
+      status: tableStatusError || !tables.length
+        ? "not_connected"
+        : tablePassed("livekit_servers") && tablePassed("admin_live_ops_incidents") ? "passed" : "not_connected",
       title: "LiveKit operator grant path protected",
       whatItMeans: "LiveKit registry and Live Ops incident readouts are operator/owner scoped; remediation remains separately gated.",
     }),
     item({
+      key: "failed_owner_access_attempts_logged",
+      proofSource: "event: owner_security_access_denied in security_audit_events",
+      status: tableProofStatus("security_audit_events"),
+      title: "Failed owner/admin access attempts are logged",
+      whatItMeans: "Non-owner staff attempts against Owner Security write functional security audit events when they reach this owner-only endpoint.",
+    }),
+    item({
+      key: "no_fake_green_when_unavailable",
+      proofSource: "sourceStates + Owner Security UI status mapping",
+      status: "passed",
+      title: "No fake green when backend is unavailable",
+      whatItMeans: "Backend source failures return Not Connected or Partial status; the mobile UI labels those states instead of showing healthy counts.",
+    }),
+    item({
       key: "support_legal_inbox",
       proofSource: "docs/env",
-      status: "manual",
+      status: "not_connected",
       title: "Support/legal inbox addresses configured safely",
       whatItMeans: "Public support/DMCA inbox proof lives in legal/support closeout docs; outbound DKIM remains external.",
     }),
     item({
       key: "revenuecat_not_bypassed",
       proofSource: "runtime/guard",
-      status: "manual",
+      status: "not_connected",
       title: "RevenueCat Premium is not bypassed",
       whatItMeans: "Owner Security does not alter Premium gates. Use Premium/store proof for entitlement checks.",
     }),
     item({
       key: "private_env_server_only",
       proofSource: "repo guard required",
-      status: "manual",
+      status: "not_connected",
       title: "Private env values server-only",
       whatItMeans: "Server-only secrets remain in Edge Function/runtime stores. Mobile sees public Expo env values only.",
     }),
   ];
 };
 
+const ownerSecuritySourceState = (input: {
+  checkedAt?: string;
+  error?: unknown;
+  message: string;
+  proofSource: string;
+  rowCount?: number | null;
+  status: "connected" | "empty" | "partial" | "not_connected" | "malformed";
+}) => ({
+  checkedAt: input.checkedAt ?? new Date().toISOString(),
+  error: input.error instanceof Error ? redactText(input.error.message, 260) : input.error ? redactText(input.error, 260) : null,
+  message: input.message,
+  proofSource: input.proofSource,
+  rowCount: input.rowCount ?? null,
+  status: input.status,
+});
+
+const ownerSecurityBackendStatus = (sourceStates: JsonObject) => {
+  const values = Object.values(sourceStates).filter(isRecord);
+  if (!values.length) return "not_connected";
+  const failed = values.filter((entry) => ["not_connected", "malformed"].includes(toText(entry.status))).length;
+  if (!failed) return "connected";
+  return failed === values.length ? "not_connected" : "partial";
+};
+
+const requireTrustedCurrentOwnerDevice = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  payload: JsonObject,
+  action: string,
+) => {
+  const { currentDevice } = await upsertCurrentOwnerDevice(adminClient, user, payload.deviceContext ?? payload.device_context ?? {});
+  if (ownerDeviceTrustStatus(currentDevice) === "trusted") return { currentDevice, error: null as Response | null };
+  await writeSecurityAudit(adminClient, user, {
+    eventType: "owner_security_action_blocked_untrusted_device",
+    metadata: {
+      action,
+      current_device_id: currentDevice.id,
+      current_device_status: ownerDeviceTrustStatus(currentDevice),
+    },
+    reason: "Owner Security action blocked because the current device is not backend-trusted.",
+    severity: "high",
+    targetId: currentDevice.id || action,
+    targetType: "owner_security_action",
+  });
+  return {
+    currentDevice,
+    error: json(403, {
+      currentDevice,
+      error: "trusted_device_required",
+      message: "Current device must be trusted by the Owner Security backend before this action can run.",
+    }),
+  };
+};
+
+const writeOwnerSecurityDeniedEvent = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  action: string,
+) => {
+  await writeSecurityAudit(adminClient, user, {
+    eventType: "owner_security_access_denied",
+    metadata: { action, denied_role: user.role },
+    reason: "Non-owner staff account attempted Owner Security access.",
+    severity: "high",
+    targetId: action,
+    targetType: "owner_security",
+  });
+};
+
 const securityStatus = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject = {}) => {
-  if (user.role !== "owner") return json(403, { error: "owner_required" });
-  const { currentDevice, fingerprintHash } = await upsertCurrentOwnerDevice(adminClient, user, payload.deviceContext ?? payload.device_context ?? {});
+  if (user.role !== "owner") {
+    await writeOwnerSecurityDeniedEvent(adminClient, user, "security_status");
+    return json(403, { error: "owner_required" });
+  }
+
+  const checkedAt = new Date().toISOString();
+  const sourceStates: JsonObject = {};
+  let currentDevice: JsonObject | null = null;
+  let fingerprintHash: string | null = null;
+
+  try {
+    const deviceResult = await upsertCurrentOwnerDevice(adminClient, user, payload.deviceContext ?? payload.device_context ?? {});
+    currentDevice = deviceResult.currentDevice;
+    fingerprintHash = deviceResult.fingerprintHash;
+    sourceStates.currentDevice = ownerSecuritySourceState({
+      checkedAt,
+      message: "Current device trust row loaded from backend.",
+      proofSource: "edge: security_status / table: owner_trusted_devices",
+      rowCount: 1,
+      status: "connected",
+    });
+  } catch (error) {
+    sourceStates.currentDevice = ownerSecuritySourceState({
+      checkedAt,
+      error,
+      message: "Current device trust could not be loaded or recorded.",
+      proofSource: "edge: security_status / table: owner_trusted_devices",
+      status: "not_connected",
+    });
+  }
+
   const [activeBreakGlass, activeProofRoles, activeProofGrants, unresolvedLegalRequests, activeLegalHolds, openReports] = await Promise.all([
     readCount(adminClient, "platform_break_glass_sessions", { status: "active" }),
     adminClient.from("platform_role_memberships").select("id", { count: "exact", head: true }).eq("status", "active").ilike("email", "liveops.proof+%"),
@@ -1496,29 +1685,134 @@ const securityStatus = async (adminClient: SupabaseClientLike, user: Authenticat
   const proofRolesCount = activeProofRoles.error ? null : activeProofRoles.count ?? 0;
   const proofGrantsCount = activeProofGrants.error ? null : activeProofGrants.count ?? 0;
   const legalRequestCount = unresolvedLegalRequests.error ? null : unresolvedLegalRequests.count ?? 0;
-  const [devices, temporaryGrants, auditEvents, liveOpsFlags, checklist] = await Promise.all([
-    listOwnerDevices(adminClient, user, fingerprintHash),
-    listTemporaryGrants(adminClient),
-    listSecurityAuditEvents(adminClient, user, { limit: 50 }),
-    buildLiveOpsFlags(adminClient),
-    buildOwnerSecurityChecklist(adminClient),
-  ]);
-  const activeTemporaryGrantsCount = temporaryGrants.filter((grant) => grant.state === "active").length;
+  let devices: JsonObject[] = [];
+  try {
+    devices = await listOwnerDevices(adminClient, user, fingerprintHash);
+    sourceStates.devices = ownerSecuritySourceState({
+      checkedAt,
+      message: devices.length ? "Trusted device ledger loaded." : "Connected with zero device rows.",
+      proofSource: "table: owner_trusted_devices",
+      rowCount: devices.length,
+      status: devices.length ? "connected" : "empty",
+    });
+  } catch (error) {
+    sourceStates.devices = ownerSecuritySourceState({
+      checkedAt,
+      error,
+      message: "Device ledger not connected.",
+      proofSource: "table: owner_trusted_devices",
+      status: "not_connected",
+    });
+  }
+
+  let temporaryGrants: JsonObject[] = [];
+  try {
+    temporaryGrants = await listTemporaryGrants(adminClient);
+    sourceStates.temporaryGrants = ownerSecuritySourceState({
+      checkedAt,
+      message: temporaryGrants.length ? "Temporary grants loaded." : "Connected with zero temporary grants.",
+      proofSource: "table: platform_staff_permission_grants",
+      rowCount: temporaryGrants.length,
+      status: temporaryGrants.length ? "connected" : "empty",
+    });
+  } catch (error) {
+    sourceStates.temporaryGrants = ownerSecuritySourceState({
+      checkedAt,
+      error,
+      message: "Temporary grant ledger not connected.",
+      proofSource: "table: platform_staff_permission_grants",
+      status: "not_connected",
+    });
+  }
+
+  let auditEvents: JsonObject[] = [];
+  try {
+    const auditResult = await readSecurityAuditEvents(adminClient, user, { limit: 50 });
+    auditEvents = auditResult.events;
+    sourceStates.securityAudit = ownerSecuritySourceState({
+      checkedAt,
+      message: auditEvents.length ? "Security audit timeline loaded." : "Connected with zero security events.",
+      proofSource: "tables: security_audit_events + platform_admin_audit_logs + staff/live ops audit",
+      rowCount: auditEvents.length,
+      status: Object.values(auditResult.sourceStates).some((entry) => isRecord(entry) && toText(entry.status) === "not_connected") ? "partial" : auditEvents.length ? "connected" : "empty",
+    });
+    sourceStates.securityAuditSources = auditResult.sourceStates;
+  } catch (error) {
+    sourceStates.securityAudit = ownerSecuritySourceState({
+      checkedAt,
+      error,
+      message: "Security audit not connected.",
+      proofSource: "tables: security_audit_events + platform_admin_audit_logs + staff/live ops audit",
+      status: "not_connected",
+    });
+  }
+
+  let liveOpsFlags: JsonObject[] = [];
+  try {
+    liveOpsFlags = await buildLiveOpsFlags(adminClient);
+    sourceStates.liveOpsFlags = ownerSecuritySourceState({
+      checkedAt,
+      message: liveOpsFlags.length ? "Live Ops flags loaded." : "Connected with zero Live Ops flags.",
+      proofSource: "tables: livekit_servers + admin_live_ops_incidents + admin_live_cost_guard_events + spectator_hls_playback_records",
+      rowCount: liveOpsFlags.length,
+      status: liveOpsFlags.some((flag) => toText(flag.status) === "manual") ? "partial" : liveOpsFlags.length ? "connected" : "empty",
+    });
+  } catch (error) {
+    sourceStates.liveOpsFlags = ownerSecuritySourceState({
+      checkedAt,
+      error,
+      message: "Live Ops flags not connected.",
+      proofSource: "tables: livekit_servers + admin_live_ops_incidents + admin_live_cost_guard_events + spectator_hls_playback_records",
+      status: "not_connected",
+    });
+  }
+
+  let checklist: JsonObject[] = [];
+  try {
+    checklist = await buildOwnerSecurityChecklist(adminClient);
+    sourceStates.checklist = ownerSecuritySourceState({
+      checkedAt,
+      message: checklist.length ? "Guardrail checklist loaded." : "Checklist returned zero rows.",
+      proofSource: "rpc: owner_security_center_table_status + edge guard markers",
+      rowCount: checklist.length,
+      status: checklist.length ? "connected" : "empty",
+    });
+  } catch (error) {
+    sourceStates.checklist = ownerSecuritySourceState({
+      checkedAt,
+      error,
+      message: "Guardrail checklist not connected.",
+      proofSource: "rpc: owner_security_center_table_status + edge guard markers",
+      status: "not_connected",
+    });
+  }
+
+  const activeTemporaryGrantsCount = toText((sourceStates.temporaryGrants as JsonObject | undefined)?.status) === "not_connected"
+    ? null
+    : temporaryGrants.filter((grant) => grant.state === "active").length;
   const urgentLiveOpsCount = liveOpsFlags.filter((flag) => ["urgent", "warning"].includes(toText(flag.status))).length;
   const failedChecklistCount = checklist.filter((item) => toText(item.status) === "failed").length;
-  const warningChecklistCount = checklist.filter((item) => ["warning", "manual"].includes(toText(item.status))).length;
-  const recentHighRiskActionsCount = auditEvents.filter((event) => ["high", "critical"].includes(toText(event.severity))).length;
+  const warningChecklistCount = checklist.filter((item) => ["warning", "manual", "not_connected"].includes(toText(item.status))).length;
+  const recentHighRiskActionsCount = toText((sourceStates.securityAudit as JsonObject | undefined)?.status) === "not_connected"
+    ? null
+    : auditEvents.filter((event) => ["high", "critical"].includes(toText(event.severity))).length;
+  const sourceFailureCount = Object.values(sourceStates)
+    .filter(isRecord)
+    .filter((state) => ["not_connected", "malformed", "partial"].includes(toText(state.status))).length;
   const openSecurityAlertsCount = [
     ownerDeviceTrustStatus(currentDevice) === "revoked",
-    ownerDeviceTrustStatus(currentDevice) === "unknown",
+    ownerDeviceTrustStatus(currentDevice) === "not_recorded",
     (proofRolesCount ?? 0) > 0,
-    activeTemporaryGrantsCount > 0,
-    recentHighRiskActionsCount > 0,
+    (activeTemporaryGrantsCount ?? 0) > 0,
+    (recentHighRiskActionsCount ?? 0) > 0,
     urgentLiveOpsCount > 0,
     failedChecklistCount > 0,
+    sourceFailureCount > 0,
   ].filter(Boolean).length;
   const ownerAccessStatus = user.role === "owner" ? "verified" : "not_verified";
   const deviceStatus = ownerDeviceTrustStatus(currentDevice);
+  const securityBackendStatus = ownerSecurityBackendStatus(sourceStates);
+  const emergencyActionsStatus = ownerAccessStatus === "verified" && deviceStatus === "trusted" ? "available" : "locked";
 
   return json(200, {
     security: {
@@ -1534,10 +1828,12 @@ const securityStatus = async (adminClient: SupabaseClientLike, user: Authenticat
       overview: {
         activeTemporaryGrantsCount,
         currentDeviceStatus: deviceStatus,
+        emergencyActionsStatus,
         lastSecurityRefreshAt: new Date().toISOString(),
         openSecurityAlertsCount,
         ownerAccessStatus,
         recentHighRiskActionsCount,
+        securityBackendStatus,
       },
       ownerCliChecklist: [
         "Keep owner CLI secrets in local keychain-backed ignored files only.",
@@ -1554,8 +1850,9 @@ const securityStatus = async (adminClient: SupabaseClientLike, user: Authenticat
       realLiveOpsFlags: {
         count: liveOpsFlags.length,
         message: "Live Ops flags are read from registry, incident, cost guard, and HLS exposure read models.",
-        status: urgentLiveOpsCount > 0 ? "warning" : "healthy",
+        status: toText((sourceStates.liveOpsFlags as JsonObject | undefined)?.status) === "not_connected" ? "not_connected" : urgentLiveOpsCount > 0 ? "warning" : "healthy",
       },
+      sourceStates,
       temporaryGrants,
       warningChecklistCount,
     },
@@ -1569,7 +1866,10 @@ const securityStatus = async (adminClient: SupabaseClientLike, user: Authenticat
 };
 
 const trustCurrentOwnerDevice = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role !== "owner") return json(403, { error: "owner_required" });
+  if (user.role !== "owner") {
+    await writeOwnerSecurityDeniedEvent(adminClient, user, "trust_current_owner_device");
+    return json(403, { error: "owner_required" });
+  }
   const { currentDevice } = await upsertCurrentOwnerDevice(adminClient, user, payload.deviceContext ?? payload.device_context ?? {});
   const { data, error } = await adminClient
     .from("owner_trusted_devices")
@@ -1596,7 +1896,15 @@ const trustCurrentOwnerDevice = async (adminClient: SupabaseClientLike, user: Au
 };
 
 const revokeOwnerDevice = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role !== "owner") return json(403, { error: "owner_required" });
+  if (user.role !== "owner") {
+    await writeOwnerSecurityDeniedEvent(adminClient, user, "revoke_owner_device");
+    return json(403, { error: "owner_required" });
+  }
+  const trusted = await requireTrustedCurrentOwnerDevice(adminClient, user, payload, "revoke_owner_device");
+  if (trusted.error) return trusted.error;
+  if (toText(payload.confirmation) !== "UNTRUST DEVICE") return json(400, { error: "typed_confirmation_required" });
+  const reason = redactText(payload.reason, 1000);
+  if (reason.length < 6) return json(400, { error: "reason_required" });
   const deviceId = toText(payload.deviceId ?? payload.device_id);
   if (!deviceId) return json(400, { error: "device_id_required" });
   const { data, error } = await adminClient
@@ -1604,6 +1912,7 @@ const revokeOwnerDevice = async (adminClient: SupabaseClientLike, user: Authenti
     .update({
       revoked_at: new Date().toISOString(),
       revoked_by: user.id,
+      revoked_reason: reason,
     })
     .eq("id", deviceId)
     .eq("owner_user_id", user.id)
@@ -1614,7 +1923,7 @@ const revokeOwnerDevice = async (adminClient: SupabaseClientLike, user: Authenti
   await writeSecurityAudit(adminClient, user, {
     eventType: "owner_device_revoked",
     metadata: { device_label: toText((data as JsonObject).device_label), platform: toText((data as JsonObject).platform) },
-    reason: "Owner revoked device trust from Owner Security Center.",
+    reason,
     severity: "high",
     targetId: deviceId,
     targetType: "owner_trusted_device",
@@ -1623,10 +1932,17 @@ const revokeOwnerDevice = async (adminClient: SupabaseClientLike, user: Authenti
 };
 
 const revokeTemporaryOwnerGrant = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role !== "owner") return json(403, { error: "owner_required" });
+  if (user.role !== "owner") {
+    await writeOwnerSecurityDeniedEvent(adminClient, user, "revoke_temporary_owner_grant");
+    return json(403, { error: "owner_required" });
+  }
+  const trusted = await requireTrustedCurrentOwnerDevice(adminClient, user, payload, "revoke_temporary_owner_grant");
+  if (trusted.error) return trusted.error;
+  if (toText(payload.confirmation) !== "REVOKE GRANT") return json(400, { error: "typed_confirmation_required" });
   const grantId = toText(payload.grantId ?? payload.grant_id);
   if (!grantId) return json(400, { error: "grant_id_required" });
-  const reason = redactText(payload.reason, 500) || "Owner revoked temporary grant from Owner Security Center.";
+  const reason = redactText(payload.reason, 1000);
+  if (reason.length < 6) return json(400, { error: "reason_required" });
   const { data, error } = await adminClient
     .from("platform_staff_permission_grants")
     .update({
@@ -1669,12 +1985,18 @@ const revokeTemporaryOwnerGrant = async (adminClient: SupabaseClientLike, user: 
 };
 
 const revokeAllTemporaryOwnerGrants = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role !== "owner") return json(403, { error: "owner_required" });
+  if (user.role !== "owner") {
+    await writeOwnerSecurityDeniedEvent(adminClient, user, "revoke_all_temporary_owner_grants");
+    return json(403, { error: "owner_required" });
+  }
+  const trusted = await requireTrustedCurrentOwnerDevice(adminClient, user, payload, "revoke_all_temporary_owner_grants");
+  if (trusted.error) return trusted.error;
   if (toText(payload.confirmation) !== "REVOKE GRANTS") return json(400, { error: "typed_confirmation_required" });
+  const reason = redactText(payload.reason, 1000);
+  if (reason.length < 6) return json(400, { error: "reason_required" });
   const grants = await listTemporaryGrants(adminClient);
   const activeIds = grants.filter((grant) => grant.state === "active").map((grant) => grant.id).filter(Boolean);
   if (!activeIds.length) return json(200, { ok: true, revokedCount: 0 });
-  const reason = "Owner revoked all temporary/proof grants from Owner Security Center.";
   const { data, error } = await adminClient
     .from("platform_staff_permission_grants")
     .update({
@@ -3582,11 +3904,17 @@ Deno.serve(async (req) => {
     if (action === "revoke_temporary_owner_grant") return await revokeTemporaryOwnerGrant(adminClient, auth.user, payload);
     if (action === "revoke_all_temporary_owner_grants") return await revokeAllTemporaryOwnerGrants(adminClient, auth.user, payload);
     if (action === "list_security_audit_events") {
-      if (auth.user.role !== "owner") return json(403, { error: "owner_required" });
+      if (auth.user.role !== "owner") {
+        await writeOwnerSecurityDeniedEvent(adminClient, auth.user, "list_security_audit_events");
+        return json(403, { error: "owner_required" });
+      }
       return json(200, { events: await listSecurityAuditEvents(adminClient, auth.user, payload) });
     }
     if (action === "run_owner_security_checklist") {
-      if (auth.user.role !== "owner") return json(403, { error: "owner_required" });
+      if (auth.user.role !== "owner") {
+        await writeOwnerSecurityDeniedEvent(adminClient, auth.user, "run_owner_security_checklist");
+        return json(403, { error: "owner_required" });
+      }
       return json(200, { checklist: await buildOwnerSecurityChecklist(adminClient) });
     }
     if (action === "canary_run") return await canaryRun(adminClient, anonClient, auth.user, supabaseUrl, anonKey);

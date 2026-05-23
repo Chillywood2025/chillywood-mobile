@@ -120,6 +120,7 @@ export type OwnerControlSecurityStatus = {
   proofGrantCount?: number | null;
   proofRoleCount?: number | null;
   realLiveOpsFlags?: Record<string, unknown>;
+  sourceStates?: Record<string, OwnerSecuritySourceState>;
   temporaryGrants?: OwnerTemporaryGrant[];
   warningChecklistCount?: number | null;
 };
@@ -127,23 +128,30 @@ export type OwnerControlSecurityStatus = {
 export type OwnerSecurityOverview = {
   activeTemporaryGrantsCount?: number | null;
   currentDeviceStatus?: string | null;
+  emergencyActionsStatus?: string | null;
   lastSecurityRefreshAt?: string | null;
   openSecurityAlertsCount?: number | null;
   ownerAccessStatus?: string | null;
   recentHighRiskActionsCount?: number | null;
+  securityBackendStatus?: string | null;
 };
 
 export type OwnerSecurityDevice = {
   appVersion?: string | null;
   buildVersion?: string | null;
   createdAt?: string | null;
+  deviceHashShort?: string | null;
   deviceLabel?: string | null;
   id?: string | null;
   isCurrentDevice?: boolean;
   lastSeenAt?: string | null;
   platform?: string | null;
+  proofSource?: string | null;
   revokedAt?: string | null;
+  revokedBy?: string | null;
+  revokedReason?: string | null;
   trustedAt?: string | null;
+  trustedBy?: string | null;
   trustStatus?: string | null;
 };
 
@@ -154,8 +162,10 @@ export type OwnerTemporaryGrant = {
   grantType?: string | null;
   id?: string | null;
   isProofGrant?: boolean;
+  proofSource?: string | null;
   reason?: string | null;
   revokedAt?: string | null;
+  revokedBy?: string | null;
   state?: string | null;
   targetEmail?: string | null;
   targetUserId?: string | null;
@@ -191,9 +201,18 @@ export type OwnerSecurityChecklistItem = {
   key?: string | null;
   lastCheckedAt?: string | null;
   proofSource?: string | null;
-  status?: "passed" | "warning" | "failed" | "manual" | string;
+  status?: "passed" | "warning" | "failed" | "manual" | "not_connected" | string;
   title?: string | null;
   whatItMeans?: string | null;
+};
+
+export type OwnerSecuritySourceState = {
+  checkedAt?: string | null;
+  error?: string | null;
+  message?: string | null;
+  proofSource?: string | null;
+  rowCount?: number | null;
+  status?: "connected" | "empty" | "partial" | "not_connected" | "malformed" | string;
 };
 
 export type OwnerControlSafetyDashboard = {
@@ -329,16 +348,41 @@ export async function trustCurrentOwnerDevice() {
   });
 }
 
-export async function revokeOwnerDevice(deviceId: string) {
-  return requestOwnerControls("revoke_owner_device", { deviceId });
+export async function revokeOwnerDevice(input: {
+  confirmation: string;
+  deviceId: string;
+  reason: string;
+}) {
+  return requestOwnerControls("revoke_owner_device", {
+    confirmation: input.confirmation,
+    deviceContext: getOwnerSecurityDeviceContext(),
+    deviceId: input.deviceId,
+    reason: input.reason,
+  });
 }
 
-export async function revokeTemporaryOwnerGrant(grantId: string) {
-  return requestOwnerControls("revoke_temporary_owner_grant", { grantId });
+export async function revokeTemporaryOwnerGrant(input: {
+  confirmation: string;
+  grantId: string;
+  reason: string;
+}) {
+  return requestOwnerControls("revoke_temporary_owner_grant", {
+    confirmation: input.confirmation,
+    deviceContext: getOwnerSecurityDeviceContext(),
+    grantId: input.grantId,
+    reason: input.reason,
+  });
 }
 
-export async function revokeAllTemporaryOwnerGrants(confirmation: string) {
-  return requestOwnerControls("revoke_all_temporary_owner_grants", { confirmation });
+export async function revokeAllTemporaryOwnerGrants(input: {
+  confirmation: string;
+  reason: string;
+}) {
+  return requestOwnerControls("revoke_all_temporary_owner_grants", {
+    confirmation: input.confirmation,
+    deviceContext: getOwnerSecurityDeviceContext(),
+    reason: input.reason,
+  });
 }
 
 export async function listOwnerSecurityAuditEvents(filter = "all") {

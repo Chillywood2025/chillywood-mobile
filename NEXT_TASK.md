@@ -1,7 +1,10 @@
 # NEXT TASK
 
-## Admin Immutable Audit Overview Remaining Gaps
+## Owner Security Remaining Gaps
 
-Admin Immutable Audit Log overview is repo-side implemented, current-APK Android owner/admin proved, Audit Explorer shortcut proved, row-detail sheet proved, anon REST denial proved, and physical normal-user UI denial proved with the configured non-staff proof account.
+Owner Security Center backend hardening, Supabase deployment, Android release install, and non-owner denial proof are complete.
 
-No true Audit-tab gaps remain from this lane. The next task should be a separately scoped Admin or launch-readiness lane.
+True remaining gaps:
+- Run owner-session Android proof with a safe owner proof account: Owner Security tab loads, refresh works, current-device state is readable, empty/disconnected states are distinct, and emergency actions stay locked unless the device is backend-trusted.
+- Run a reversible owner-capable trusted-device drill only with an approved proof owner: trust current device if needed, prove dangerous actions require exact confirmation plus reason, perform one safe temporary-grant revoke or device-untrust mutation, verify immutable `security_audit_events`, then revert/cleanup.
+- Prove failed owner/admin access-attempt rows from a staff-but-not-owner account if a safe scoped proof account is available; regular non-staff denial is already proved.

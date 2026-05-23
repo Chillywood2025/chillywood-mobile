@@ -1339,6 +1339,25 @@ type OwnerControlTone = "default" | "success" | "danger" | "manual" | "locked" |
 type CanaryStatusFilter = "all" | "fail" | "manual_required" | "pass";
 type CanaryStatus = "pass" | "fail" | "manual_required";
 type OwnerSecurityAuditFilter = "all" | "critical" | "grants" | "devices" | "roles" | "live_ops" | "failed_access";
+type OwnerSecurityDangerAction =
+  | {
+    confirmation: "UNTRUST DEVICE";
+    deviceId: string;
+    isCurrentDevice: boolean;
+    kind: "revoke-device";
+    title: string;
+  }
+  | {
+    confirmation: "REVOKE GRANT";
+    grantId: string;
+    kind: "revoke-grant";
+    title: string;
+  }
+  | {
+    confirmation: "REVOKE GRANTS";
+    kind: "bulk-revoke-grants";
+    title: string;
+  };
 type LegalSubsection = "intake" | "evidence" | "holds" | "requests" | "exports" | "timeline";
 type LegalRequestStatusFilter =
   | "all"
@@ -1436,10 +1455,10 @@ const ownerStatusLabel = (status: unknown) => {
 const ownerSecurityToneForStatus = (status: unknown): OwnerControlTone => {
   const text = String(status ?? "").toLowerCase();
   if (!text) return "locked";
-  if (["verified", "trusted", "healthy", "passed", "active", "success", "connected"].includes(text)) return "success";
-  if (["urgent", "critical", "failed", "revoked", "not_verified", "denied", "danger"].includes(text)) return "danger";
-  if (["warning", "manual", "manual_required", "unknown", "not_connected", "needs_review", "limited"].includes(text)) return "manual";
-  if (["unavailable", "disabled", "closed", "expired"].includes(text)) return "locked";
+  if (["verified", "trusted", "healthy", "passed", "active", "success", "connected", "available"].includes(text)) return "success";
+  if (["urgent", "critical", "failed", "revoked", "untrusted", "not_verified", "denied", "danger"].includes(text)) return "danger";
+  if (["warning", "manual", "manual_required", "unknown", "needs_review", "limited", "partial"].includes(text)) return "manual";
+  if (["unavailable", "disabled", "closed", "expired", "empty", "locked", "not_connected", "not_recorded", "malformed"].includes(text)) return "locked";
   return "info";
 };
 
@@ -1448,6 +1467,10 @@ const ownerSecurityStatusLabel = (status: unknown) => {
   if (!text) return "Not Connected";
   if (text.toLowerCase() === "not_verified") return "Not Verified";
   if (text.toLowerCase() === "not_connected") return "Not Connected";
+  if (text.toLowerCase() === "not_recorded") return "Not Recorded";
+  if (text.toLowerCase() === "revoked") return "Untrusted";
+  if (text.toLowerCase() === "partial") return "Partial";
+  if (text.toLowerCase() === "malformed") return "Malformed";
   return formatModerationToken(text);
 };
 
@@ -1517,9 +1540,10 @@ const formatGrantExpiration = (grant: OwnerTemporaryGrant) => {
 
 const formatDeviceMeta = (device: OwnerSecurityDevice) => {
   const platform = formatModerationToken(device.platform || "unknown");
+  const deviceHash = device.deviceHashShort ? `Hash ${device.deviceHashShort}` : "Hash not connected";
   const appVersion = device.appVersion ? `App ${device.appVersion}` : "App version unavailable";
   const buildVersion = device.buildVersion ? `Build ${device.buildVersion}` : "Build unavailable";
-  return `${platform} · ${appVersion} · ${buildVersion}`;
+  return `${platform} · ${deviceHash} · ${appVersion} · ${buildVersion}`;
 };
 
 const formatLegalStatus = (value: unknown) => {
@@ -1626,7 +1650,7 @@ const ownerAttentionCountTone = (value: unknown): OwnerControlTone => {
 
 const OwnerStatusPill = ({ label, tone = "default" }: { label: string; tone?: OwnerControlTone }) => (
   <View style={[styles.ownerPill, ownerToneBadgeStyle(tone)]}>
-    <Text style={styles.ownerPillText}>{label}</Text>
+    <Text adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={styles.ownerPillText}>{label}</Text>
   </View>
 );
 
@@ -1641,7 +1665,7 @@ const OwnerMetricTile = ({
 }) => (
   <View style={[styles.ownerMetricTile, ownerMetricToneStyle(tone)]}>
     <Text style={styles.ownerMetricLabel}>{label}</Text>
-    <Text style={styles.ownerMetricValue}>{String(value)}</Text>
+    <Text adjustsFontSizeToFit minimumFontScale={0.68} numberOfLines={1} style={styles.ownerMetricValue}>{String(value)}</Text>
   </View>
 );
 
@@ -2579,6 +2603,8 @@ export default function AdminStudioScreen() {
   const [ownerSecurityActionBusy, setOwnerSecurityActionBusy] = useState<string | null>(null);
   const [ownerSecurityConfirmVisible, setOwnerSecurityConfirmVisible] = useState(false);
   const [ownerSecurityConfirmText, setOwnerSecurityConfirmText] = useState("");
+  const [ownerSecurityDangerAction, setOwnerSecurityDangerAction] = useState<OwnerSecurityDangerAction | null>(null);
+  const [ownerSecurityReason, setOwnerSecurityReason] = useState("");
   const [canaryRuns, setCanaryRuns] = useState<OwnerControlCanaryRun[]>([]);
   const [canaryBusy, setCanaryBusy] = useState(false);
   const [canaryStatusFilter, setCanaryStatusFilter] = useState<CanaryStatusFilter>("all");
@@ -5727,49 +5753,94 @@ export default function AdminStudioScreen() {
     }
   }, [canAccessOwnerSecurity, loadOwnerSecurity, ownerSecurityActionBusy]);
 
+  const openOwnerSecurityDangerAction = useCallback((action: OwnerSecurityDangerAction) => {
+    setOwnerSecurityDangerAction(action);
+    setOwnerSecurityConfirmText("");
+    setOwnerSecurityReason("");
+    setOwnerSecurityConfirmVisible(true);
+  }, []);
+
   const runOwnerSecurityRevokeDevice = useCallback(async (deviceId: string, isCurrentDevice = false) => {
     if (!canAccessOwnerSecurity || ownerSecurityActionBusy || !deviceId) return;
-    const apply = async () => {
-      try {
-        setOwnerSecurityActionBusy(`revoke-device-${deviceId}`);
-        setOwnerControlNotice(null);
-        await revokeOwnerDevice(deviceId);
-        await loadOwnerSecurity();
-        setOwnerControlNotice(isCurrentDevice ? "Current device marked untrusted." : "Device trust revoked.");
-      } catch (err: any) {
-        setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to revoke device trust."));
-      } finally {
-        setOwnerSecurityActionBusy(null);
-      }
-    };
-    if (isCurrentDevice) {
-      Alert.alert(
-        "Mark current device untrusted?",
-        "This keeps you signed in, but this device will be listed as untrusted until you trust it again.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Mark Untrusted", style: "destructive", onPress: () => void apply() },
-        ],
-      );
-      return;
-    }
-    await apply();
-  }, [canAccessOwnerSecurity, loadOwnerSecurity, ownerSecurityActionBusy]);
+    openOwnerSecurityDangerAction({
+      confirmation: "UNTRUST DEVICE",
+      deviceId,
+      isCurrentDevice,
+      kind: "revoke-device",
+      title: isCurrentDevice ? "Mark current device untrusted?" : "Revoke device trust?",
+    });
+  }, [canAccessOwnerSecurity, openOwnerSecurityDangerAction, ownerSecurityActionBusy]);
 
   const runOwnerSecurityRevokeGrant = useCallback(async (grantId: string) => {
     if (!canAccessOwnerSecurity || ownerSecurityActionBusy || !grantId) return;
+    openOwnerSecurityDangerAction({
+      confirmation: "REVOKE GRANT",
+      grantId,
+      kind: "revoke-grant",
+      title: "Revoke temporary grant?",
+    });
+  }, [canAccessOwnerSecurity, openOwnerSecurityDangerAction, ownerSecurityActionBusy]);
+
+  const runOwnerSecurityDangerConfirm = useCallback(async () => {
+    if (!canAccessOwnerSecurity || ownerSecurityActionBusy || !ownerSecurityDangerAction) return;
+    const reason = ownerSecurityReason.trim();
+    const confirmation = ownerSecurityConfirmText.trim();
+    if (reason.length < 6) {
+      setOwnerControlNotice("Owner Security actions require a reason.");
+      return;
+    }
+    if (confirmation !== ownerSecurityDangerAction.confirmation) {
+      setOwnerControlNotice(`Type ${ownerSecurityDangerAction.confirmation} to continue.`);
+      return;
+    }
     try {
-      setOwnerSecurityActionBusy(`revoke-grant-${grantId}`);
+      const busyKey = ownerSecurityDangerAction.kind === "revoke-device"
+        ? `revoke-device-${ownerSecurityDangerAction.deviceId}`
+        : ownerSecurityDangerAction.kind === "revoke-grant"
+          ? `revoke-grant-${ownerSecurityDangerAction.grantId}`
+          : "bulk-revoke-grants";
+      setOwnerSecurityActionBusy(busyKey);
       setOwnerControlNotice(null);
-      await revokeTemporaryOwnerGrant(grantId);
+      if (ownerSecurityDangerAction.kind === "revoke-device") {
+        await revokeOwnerDevice({
+          confirmation,
+          deviceId: ownerSecurityDangerAction.deviceId,
+          reason,
+        });
+      } else if (ownerSecurityDangerAction.kind === "revoke-grant") {
+        await revokeTemporaryOwnerGrant({
+          confirmation,
+          grantId: ownerSecurityDangerAction.grantId,
+          reason,
+        });
+      } else {
+        await revokeAllTemporaryOwnerGrants({ confirmation, reason });
+      }
       await loadOwnerSecurity();
-      setOwnerControlNotice("Temporary grant revoked and recorded.");
+      setOwnerSecurityConfirmVisible(false);
+      setOwnerSecurityDangerAction(null);
+      setOwnerSecurityConfirmText("");
+      setOwnerSecurityReason("");
+      setOwnerControlNotice(
+        ownerSecurityDangerAction.kind === "revoke-device"
+          ? ownerSecurityDangerAction.isCurrentDevice ? "Current device marked untrusted and recorded." : "Device trust revoked and recorded."
+          : ownerSecurityDangerAction.kind === "revoke-grant"
+            ? "Temporary grant revoked and recorded."
+            : "Temporary grant bulk revoke completed and recorded.",
+      );
     } catch (err: any) {
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to revoke temporary grant."));
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Owner Security action failed."));
     } finally {
       setOwnerSecurityActionBusy(null);
     }
-  }, [canAccessOwnerSecurity, loadOwnerSecurity, ownerSecurityActionBusy]);
+  }, [
+    canAccessOwnerSecurity,
+    loadOwnerSecurity,
+    ownerSecurityActionBusy,
+    ownerSecurityConfirmText,
+    ownerSecurityDangerAction,
+    ownerSecurityReason,
+  ]);
 
   const runOwnerSecurityChecklistRefresh = useCallback(async () => {
     if (!canAccessOwnerSecurity || ownerSecurityActionBusy) return;
@@ -5785,23 +5856,6 @@ export default function AdminStudioScreen() {
       setOwnerSecurityActionBusy(null);
     }
   }, [canAccessOwnerSecurity, ownerSecurityActionBusy]);
-
-  const runOwnerSecurityBulkRevoke = useCallback(async () => {
-    if (!canAccessOwnerSecurity || ownerSecurityActionBusy) return;
-    try {
-      setOwnerSecurityActionBusy("bulk-revoke-grants");
-      setOwnerControlNotice(null);
-      const result = await revokeAllTemporaryOwnerGrants(ownerSecurityConfirmText.trim());
-      await loadOwnerSecurity();
-      setOwnerSecurityConfirmVisible(false);
-      setOwnerSecurityConfirmText("");
-      setOwnerControlNotice(`Temporary grant revoke complete (${String(result.revokedCount ?? 0)} revoked).`);
-    } catch (err: any) {
-      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to revoke all temporary grants."));
-    } finally {
-      setOwnerSecurityActionBusy(null);
-    }
-  }, [canAccessOwnerSecurity, loadOwnerSecurity, ownerSecurityActionBusy, ownerSecurityConfirmText]);
 
   const loadCanaries = useCallback(async () => {
     if (!canAccessCanaryChecks) return;
@@ -5875,6 +5929,17 @@ export default function AdminStudioScreen() {
   const ownerSecurityActiveGrantsCount = ownerSecurityStatus?.activeTemporaryGrantsCount ?? ownerSecurityOverview?.activeTemporaryGrantsCount;
   const ownerSecurityHighRiskActions = ownerSecurityOverview?.recentHighRiskActionsCount;
   const ownerSecurityLastRefresh = ownerSecurityOverview?.lastSecurityRefreshAt ?? null;
+  const ownerSecuritySourceStates = ownerSecurityStatus?.sourceStates ?? {};
+  const ownerSecuritySourceStatus = useCallback((key: string) => {
+    const state = ownerSecuritySourceStates[key];
+    return String(state?.status ?? (ownerSecurityLoaded ? "not_connected" : "not_connected"));
+  }, [ownerSecurityLoaded, ownerSecuritySourceStates]);
+  const ownerSecuritySourceMessage = useCallback((key: string, fallback: string) => (
+    formatAuditDisplayText(ownerSecuritySourceStates[key]?.message) || fallback
+  ), [ownerSecuritySourceStates]);
+  const ownerSecurityCurrentDeviceTrusted = ownerSecurityCurrentDevice?.trustStatus === "trusted";
+  const ownerSecurityDangerActionsAvailable = ownerSecurityOverview?.emergencyActionsStatus === "available" && ownerSecurityCurrentDeviceTrusted;
+  const ownerSecurityBackendStatus = ownerSecurityOverview?.securityBackendStatus ?? (ownerSecurityLoaded ? "partial" : "not_connected");
 
   useEffect(() => {
     if (!canAccessAdmin) return;
@@ -7778,7 +7843,12 @@ export default function AdminStudioScreen() {
           </View>
         )}
 
-        <View style={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBar}
+          style={styles.tabBarScroller}
+        >
           {visibleOperatorTabs.map((tab) => {
             const active = operatorTab === tab.key;
             return (
@@ -7791,7 +7861,7 @@ export default function AdminStudioScreen() {
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
 
         {operatorTab === "home" ? (
         <View style={styles.adminHomeSurface}>
@@ -12126,12 +12196,32 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerPanelKicker}>OWNER SECURITY</Text>
                 <Text style={styles.ownerSecurityHeroTitle}>Owner Security Center</Text>
                 <Text style={styles.ownerSecurityHeroSubtitle}>
-                  Owner access authorized. Approved operators require scoped permission and reason-based records.
+                  {ownerSecurityOverview?.ownerAccessStatus === "verified" && ownerSecurityBackendStatus !== "connected"
+                    ? "Owner identity verified. Security telemetry is not fully connected."
+                    : "Owner-only security command center for device trust, proof grants, security events, and emergency guardrails."}
                 </Text>
               </View>
               <OwnerStatusPill
                 label={ownerSecurityStatusLabel(ownerSecurityOverview?.ownerAccessStatus ?? (canAccessOwnerSecurity ? "verified" : "not_verified"))}
                 tone={ownerSecurityToneForStatus(ownerSecurityOverview?.ownerAccessStatus ?? (canAccessOwnerSecurity ? "verified" : "not_verified"))}
+              />
+            </View>
+            <View style={styles.ownerSecurityHeroStatusRail}>
+              <OwnerStatusPill
+                label={`Owner Access: ${ownerSecurityStatusLabel(ownerSecurityOverview?.ownerAccessStatus ?? (canAccessOwnerSecurity ? "verified" : "denied"))}`}
+                tone={ownerSecurityToneForStatus(ownerSecurityOverview?.ownerAccessStatus ?? (canAccessOwnerSecurity ? "verified" : "denied"))}
+              />
+              <OwnerStatusPill
+                label={`Security Backend: ${ownerSecurityStatusLabel(ownerSecurityBackendStatus)}`}
+                tone={ownerSecurityToneForStatus(ownerSecurityBackendStatus)}
+              />
+              <OwnerStatusPill
+                label={`Current Device: ${ownerSecurityStatusLabel(ownerSecurityOverview?.currentDeviceStatus ?? ownerSecurityCurrentDevice?.trustStatus)}`}
+                tone={ownerSecurityToneForStatus(ownerSecurityOverview?.currentDeviceStatus ?? ownerSecurityCurrentDevice?.trustStatus)}
+              />
+              <OwnerStatusPill
+                label={`Emergency Actions: ${ownerSecurityStatusLabel(ownerSecurityOverview?.emergencyActionsStatus ?? "locked")}`}
+                tone={ownerSecurityToneForStatus(ownerSecurityOverview?.emergencyActionsStatus ?? "locked")}
               />
             </View>
             <View style={styles.ownerSecurityHeroMetaRow}>
@@ -12163,24 +12253,24 @@ export default function AdminStudioScreen() {
 
           <View style={styles.ownerSecurityMetricGrid}>
             <OwnerMetricTile
-              label="Device Trust"
+              label="Owner Access"
+              tone={ownerSecurityToneForStatus(ownerSecurityOverview?.ownerAccessStatus ?? (canAccessOwnerSecurity ? "verified" : "denied"))}
+              value={ownerSecurityStatusLabel(ownerSecurityOverview?.ownerAccessStatus ?? (canAccessOwnerSecurity ? "verified" : "denied"))}
+            />
+            <OwnerMetricTile
+              label="Security Backend"
+              tone={ownerSecurityToneForStatus(ownerSecurityBackendStatus)}
+              value={ownerSecurityStatusLabel(ownerSecurityBackendStatus)}
+            />
+            <OwnerMetricTile
+              label="Current Device"
               tone={ownerSecurityToneForStatus(ownerSecurityOverview?.currentDeviceStatus ?? ownerSecurityCurrentDevice?.trustStatus)}
               value={ownerSecurityStatusLabel(ownerSecurityOverview?.currentDeviceStatus ?? ownerSecurityCurrentDevice?.trustStatus)}
             />
             <OwnerMetricTile
-              label="Open Alerts"
-              tone={ownerSecurityRiskTone(ownerSecurityOpenAlerts)}
-              value={ownerSecurityMetricValue(ownerSecurityOpenAlerts)}
-            />
-            <OwnerMetricTile
-              label="Temporary Grants"
-              tone={ownerSecurityCountTone(ownerSecurityActiveGrantsCount)}
-              value={ownerSecurityMetricValue(ownerSecurityActiveGrantsCount)}
-            />
-            <OwnerMetricTile
-              label="High-Risk Actions"
-              tone={ownerSecurityRiskTone(ownerSecurityHighRiskActions)}
-              value={ownerSecurityMetricValue(ownerSecurityHighRiskActions)}
+              label="Emergency Actions"
+              tone={ownerSecurityToneForStatus(ownerSecurityOverview?.emergencyActionsStatus ?? "locked")}
+              value={ownerSecurityStatusLabel(ownerSecurityOverview?.emergencyActionsStatus ?? "locked")}
             />
           </View>
 
@@ -12199,7 +12289,7 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecuritySectionKicker}>CURRENT DEVICE TRUST</Text>
                 <Text style={styles.ownerSecuritySectionTitle}>{ownerSecurityCurrentDevice?.deviceLabel || "Current Device"}</Text>
                 <Text style={styles.ownerSecuritySectionBody}>
-                  {ownerSecurityCurrentDevice ? formatDeviceMeta(ownerSecurityCurrentDevice) : "Device trust table is not connected yet."}
+                  {ownerSecurityCurrentDevice ? formatDeviceMeta(ownerSecurityCurrentDevice) : ownerSecuritySourceMessage("currentDevice", "Device trust table is not connected yet.")}
                 </Text>
               </View>
               <OwnerStatusPill
@@ -12218,6 +12308,16 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecurityMiniValue}>{ownerSecurityCurrentDevice?.lastSeenAt ? formatModerationTimestamp(ownerSecurityCurrentDevice.lastSeenAt) : "Not connected"}</Text>
                 <Text style={styles.ownerSecurityMiniMeta}>{ownerSecurityCurrentDevice?.trustedAt ? `Trusted ${formatModerationTimestamp(ownerSecurityCurrentDevice.trustedAt)}` : "Trust not recorded"}</Text>
               </View>
+              <View style={styles.ownerSecurityIdentityCell}>
+                <Text style={styles.ownerSecurityMiniLabel}>Recorded</Text>
+                <Text style={styles.ownerSecurityMiniValue}>{ownerSecurityCurrentDevice?.createdAt ? formatModerationTimestamp(ownerSecurityCurrentDevice.createdAt) : "Not connected"}</Text>
+                <Text style={styles.ownerSecurityMiniMeta}>{ownerSecurityCurrentDevice?.proofSource || ownerSecuritySourceStates.currentDevice?.proofSource || "Proof source not connected"}</Text>
+              </View>
+              <View style={styles.ownerSecurityIdentityCell}>
+                <Text style={styles.ownerSecurityMiniLabel}>Device hash</Text>
+                <Text style={styles.ownerSecurityMiniValue}>{ownerSecurityCurrentDevice?.deviceHashShort || "Not connected"}</Text>
+                <Text style={styles.ownerSecurityMiniMeta}>Short backend fingerprint only</Text>
+              </View>
             </View>
             <View style={styles.ownerSecurityActionRow}>
               {ownerSecurityCurrentDevice && ownerSecurityCurrentDevice.trustStatus !== "trusted" ? (
@@ -12229,7 +12329,7 @@ export default function AdminStudioScreen() {
                   <Text style={styles.ownerPrimaryButtonText}>{ownerSecurityActionBusy === "trust-device" ? "Trusting..." : "Trust this device"}</Text>
                 </TouchableOpacity>
               ) : null}
-              {ownerSecurityCurrentDevice?.id && ownerSecurityCurrentDevice.trustStatus !== "revoked" ? (
+              {ownerSecurityCurrentDevice?.id && ownerSecurityCurrentDevice.trustStatus === "trusted" ? (
                 <TouchableOpacity
                   style={[styles.ownerSecondaryButton, ownerSecurityActionBusy === `revoke-device-${ownerSecurityCurrentDevice.id}` && styles.configSaveBtnDisabled]}
                   onPress={() => void runOwnerSecurityRevokeDevice(String(ownerSecurityCurrentDevice.id), true)}
@@ -12242,6 +12342,9 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecondaryButtonText}>Refresh Security</Text>
               </TouchableOpacity>
             </View>
+            {ownerSecurityCurrentDevice?.trustStatus !== "trusted" ? (
+              <OwnerDisabledReason reason="Emergency and revoke actions stay locked until the current device is trusted by the Owner Security backend." />
+            ) : null}
           </View>
 
           <View style={styles.ownerSecurityPanel}>
@@ -12253,9 +12356,17 @@ export default function AdminStudioScreen() {
                   App-level owner device sessions are backend-backed. Supabase Auth session force logout remains manual until a reviewed Admin API lane is added.
                 </Text>
               </View>
-              <OwnerStatusPill label={ownerSecurityLoaded ? `${ownerSecurityDevices.length}` : "Not Connected"} tone={ownerSecurityLoaded ? "info" : "locked"} />
+              <OwnerStatusPill
+                label={ownerSecurityLoaded && ownerSecuritySourceStatus("devices") !== "not_connected" ? `${ownerSecurityDevices.length}` : "Not Connected"}
+                tone={ownerSecurityLoaded && ownerSecuritySourceStatus("devices") !== "not_connected" ? "info" : "locked"}
+              />
             </View>
-            {ownerSecurityDevices.length ? (
+            {ownerSecuritySourceStatus("devices") === "not_connected" ? (
+              <OwnerEmptyState
+                body={ownerSecuritySourceMessage("devices", "Device ledger not connected.")}
+                title="Device Ledger Not Connected"
+              />
+            ) : ownerSecurityDevices.length ? (
               <View style={styles.ownerSecurityDeviceList}>
                 {ownerSecurityDevices.map((device) => (
                   <View key={String(device.id ?? device.deviceLabel)} style={styles.ownerSecurityDeviceRow}>
@@ -12265,15 +12376,23 @@ export default function AdminStudioScreen() {
                         {device.isCurrentDevice ? <OwnerStatusPill label="Pinned" tone="info" /> : null}
                       </View>
                       <Text style={styles.ownerSecuritySectionBody}>{formatDeviceMeta(device)}</Text>
-                      <Text style={styles.ownerSecurityMiniMeta}>{device.lastSeenAt ? `Last seen ${formatModerationTimestamp(device.lastSeenAt)}` : "Last seen not connected"}</Text>
+                      <Text style={styles.ownerSecurityMiniMeta}>
+                        {`${device.createdAt ? `Recorded ${formatModerationTimestamp(device.createdAt)}` : "Recorded time not connected"} · ${device.lastSeenAt ? `Last seen ${formatModerationTimestamp(device.lastSeenAt)}` : "Last seen not connected"}`}
+                      </Text>
+                      {device.revokedAt ? (
+                        <Text style={styles.ownerSecurityMiniMeta}>
+                          {`Revoked ${formatModerationTimestamp(device.revokedAt)}${device.revokedBy ? ` by ${formatCompactIdentifier(device.revokedBy)}` : ""}${device.revokedReason ? ` · ${formatAuditDisplayText(device.revokedReason)}` : ""}`}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.ownerSecurityMiniMeta}>{device.proofSource || "Proof source not connected"}</Text>
                     </View>
                     <View style={styles.ownerSecurityRowActions}>
                       <OwnerStatusPill label={ownerSecurityStatusLabel(device.trustStatus)} tone={ownerSecurityToneForStatus(device.trustStatus)} />
                       {device.id && device.trustStatus !== "revoked" ? (
                         <TouchableOpacity
-                          style={[styles.ownerSecuritySmallButton, ownerSecurityActionBusy === `revoke-device-${device.id}` && styles.configSaveBtnDisabled]}
+                          style={[styles.ownerSecuritySmallButton, (!ownerSecurityDangerActionsAvailable || ownerSecurityActionBusy === `revoke-device-${device.id}`) && styles.configSaveBtnDisabled]}
                           onPress={() => void runOwnerSecurityRevokeDevice(String(device.id), !!device.isCurrentDevice)}
-                          disabled={ownerSecurityActionBusy === `revoke-device-${device.id}`}
+                          disabled={!ownerSecurityDangerActionsAvailable || ownerSecurityActionBusy === `revoke-device-${device.id}`}
                         >
                           <Text style={styles.ownerSecuritySmallButtonText}>Revoke</Text>
                         </TouchableOpacity>
@@ -12284,8 +12403,8 @@ export default function AdminStudioScreen() {
               </View>
             ) : (
               <OwnerEmptyState
-                body={ownerSecurityLoaded ? "No app-level device session rows were returned." : "Owner device trust is not connected yet."}
-                title={ownerSecurityLoaded ? "No devices loaded" : "Device ledger unavailable"}
+                body={ownerSecurityLoaded ? "No trusted devices found." : "Owner device trust is not connected yet."}
+                title={ownerSecurityLoaded ? "No Trusted Devices" : "Device Ledger Not Connected"}
               />
             )}
           </View>
@@ -12298,11 +12417,16 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecuritySectionBody}>Temporary proof grants must expire and can be revoked here. Permanent hidden grants are not allowed.</Text>
               </View>
               <OwnerStatusPill
-                label={ownerSecurityLoaded ? `${ownerSecurityTemporaryGrants.filter((grant) => grant.state === "active").length} Active` : "Not Connected"}
+                label={ownerSecurityLoaded && ownerSecuritySourceStatus("temporaryGrants") !== "not_connected" ? `${ownerSecurityTemporaryGrants.filter((grant) => grant.state === "active").length} Active` : "Not Connected"}
                 tone={ownerSecurityCountTone(ownerSecurityActiveGrantsCount)}
               />
             </View>
-            {ownerSecurityTemporaryGrants.length ? (
+            {ownerSecuritySourceStatus("temporaryGrants") === "not_connected" ? (
+              <OwnerEmptyState
+                body={ownerSecuritySourceMessage("temporaryGrants", "Temporary grants not connected.")}
+                title="Grants Not Connected"
+              />
+            ) : ownerSecurityTemporaryGrants.length ? (
               <View style={styles.ownerSecurityGrantList}>
                 {ownerSecurityTemporaryGrants.map((grant) => {
                   const activeGrant = grant.state === "active";
@@ -12317,14 +12441,23 @@ export default function AdminStudioScreen() {
                         <Text style={styles.ownerSecurityMiniMeta}>
                           {`${formatGrantExpiration(grant)} · Created ${grant.createdAt ? formatModerationTimestamp(grant.createdAt) : "time unknown"}`}
                         </Text>
+                        <Text style={styles.ownerSecurityMiniMeta}>
+                          {`Granted by ${formatAuditDisplayText(grant.createdBy) || "unknown"} · Expires ${grant.expiresAt ? formatModerationTimestamp(grant.expiresAt) : "not connected"}`}
+                        </Text>
+                        {grant.revokedAt ? (
+                          <Text style={styles.ownerSecurityMiniMeta}>
+                            {`Revoked ${formatModerationTimestamp(grant.revokedAt)}${grant.revokedBy ? ` by ${formatCompactIdentifier(grant.revokedBy)}` : ""}`}
+                          </Text>
+                        ) : null}
+                        <Text style={styles.ownerSecurityMiniMeta}>{grant.proofSource || "Proof source not connected"}</Text>
                       </View>
                       <View style={styles.ownerSecurityRowActions}>
                         <OwnerStatusPill label={formatModerationToken(grant.state || "unknown")} tone={activeGrant ? "manual" : "locked"} />
                         {activeGrant && grant.id ? (
                           <TouchableOpacity
-                            style={[styles.ownerSecuritySmallButton, ownerSecurityActionBusy === `revoke-grant-${grant.id}` && styles.configSaveBtnDisabled]}
+                            style={[styles.ownerSecuritySmallButton, (!ownerSecurityDangerActionsAvailable || ownerSecurityActionBusy === `revoke-grant-${grant.id}`) && styles.configSaveBtnDisabled]}
                             onPress={() => void runOwnerSecurityRevokeGrant(String(grant.id))}
-                            disabled={ownerSecurityActionBusy === `revoke-grant-${grant.id}`}
+                            disabled={!ownerSecurityDangerActionsAvailable || ownerSecurityActionBusy === `revoke-grant-${grant.id}`}
                           >
                             <Text style={styles.ownerSecuritySmallButtonText}>Revoke</Text>
                           </TouchableOpacity>
@@ -12336,7 +12469,7 @@ export default function AdminStudioScreen() {
               </View>
             ) : (
               <OwnerEmptyState
-                body={ownerSecurityLoaded ? "No active temporary grants were proven by the backend." : "Temporary grant data has not loaded."}
+                body={ownerSecurityLoaded ? "No active temporary grants found." : "Temporary grant data has not loaded."}
                 title={ownerSecurityLoaded ? "No Active Grants" : "Grants Not Connected"}
               />
             )}
@@ -12349,10 +12482,18 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecuritySectionTitle}>Recent Security Timeline</Text>
                 <Text style={styles.ownerSecuritySectionBody}>Device trust, proof grants, role changes, Live Ops actions, and blocked access events when logged.</Text>
               </View>
-              <OwnerStatusPill label={ownerSecurityLoaded ? `${filteredOwnerSecurityAuditEvents.length}` : "Not Connected"} tone={ownerSecurityLoaded ? "info" : "locked"} />
+              <OwnerStatusPill
+                label={ownerSecurityLoaded && ownerSecuritySourceStatus("securityAudit") !== "not_connected" ? `${filteredOwnerSecurityAuditEvents.length}` : "Not Connected"}
+                tone={ownerSecurityLoaded && ownerSecuritySourceStatus("securityAudit") !== "not_connected" ? ownerSecurityToneForStatus(ownerSecuritySourceStatus("securityAudit")) : "locked"}
+              />
             </View>
             <OwnerFilterChips options={ownerSecurityAuditFilterOptions} value={ownerSecurityAuditFilter} onChange={setOwnerSecurityAuditFilter} />
-            {filteredOwnerSecurityAuditEvents.length ? (
+            {ownerSecuritySourceStatus("securityAudit") === "not_connected" ? (
+              <OwnerEmptyState
+                body={ownerSecuritySourceMessage("securityAudit", "Security audit not connected.")}
+                title="Security Audit Not Connected"
+              />
+            ) : filteredOwnerSecurityAuditEvents.length ? (
               <View style={styles.ownerSecurityTimeline}>
                 {filteredOwnerSecurityAuditEvents.map((event, index) => (
                   <View key={String(event.id ?? `${event.eventType}-${index}`)} style={styles.ownerSecurityTimelineRow}>
@@ -12374,8 +12515,8 @@ export default function AdminStudioScreen() {
               </View>
             ) : (
               <OwnerEmptyState
-                body={ownerSecurityLoaded ? "No audit events match this filter." : "Security audit feed is not connected yet."}
-                title={ownerSecurityLoaded ? "No Events In Filter" : "Audit Not Connected"}
+                body={ownerSecurityLoaded ? "No security events found for this filter." : "Security audit feed is not connected yet."}
+                title={ownerSecurityLoaded ? "No Security Events Found" : "Security Audit Not Connected"}
               />
             )}
           </View>
@@ -12387,9 +12528,17 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecuritySectionTitle}>Launch Operations Signals</Text>
                 <Text style={styles.ownerSecuritySectionBody}>Read-only signals from backed registry, incident, cost guard, and exposure models. No remediation runs here.</Text>
               </View>
-              <OwnerStatusPill label={ownerSecurityLoaded ? `${ownerSecurityLiveOpsFlags.length}` : "Not Connected"} tone={ownerSecurityLoaded ? "info" : "locked"} />
+              <OwnerStatusPill
+                label={ownerSecurityLoaded && ownerSecuritySourceStatus("liveOpsFlags") !== "not_connected" ? `${ownerSecurityLiveOpsFlags.length}` : "Not Connected"}
+                tone={ownerSecurityLoaded && ownerSecuritySourceStatus("liveOpsFlags") !== "not_connected" ? ownerSecurityToneForStatus(ownerSecuritySourceStatus("liveOpsFlags")) : "locked"}
+              />
             </View>
-            {ownerSecurityLiveOpsFlags.length ? (
+            {ownerSecuritySourceStatus("liveOpsFlags") === "not_connected" ? (
+              <OwnerEmptyState
+                body={ownerSecuritySourceMessage("liveOpsFlags", "Live Ops flags not connected.")}
+                title="Live Ops Flags Not Connected"
+              />
+            ) : ownerSecurityLiveOpsFlags.length ? (
               <View style={styles.ownerSecurityOpsGrid}>
                 {ownerSecurityLiveOpsFlags.map((flag: OwnerSecurityLiveOpsFlag) => (
                   <View key={String(flag.key ?? flag.title)} style={styles.ownerSecurityOpsTile}>
@@ -12433,7 +12582,12 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecondaryButtonText}>{ownerSecurityActionBusy === "checklist-refresh" ? "Checking..." : "Run Checklist"}</Text>
               </TouchableOpacity>
             </View>
-            {ownerSecurityChecklist.length ? (
+            {ownerSecuritySourceStatus("checklist") === "not_connected" ? (
+              <OwnerEmptyState
+                body={ownerSecuritySourceMessage("checklist", "Backend guardrail checklist not connected.")}
+                title="Checklist Not Connected"
+              />
+            ) : ownerSecurityChecklist.length ? (
               <View style={styles.ownerControlList}>
                 {ownerSecurityChecklist.map((item) => (
                   <OwnerControlRow
@@ -12461,23 +12615,30 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecuritySectionTitle}>Owner Safety Controls</Text>
                 <Text style={styles.ownerSecuritySectionBody}>Only backend-backed actions appear here. Dangerous actions require confirmation and write security events.</Text>
               </View>
-              <OwnerStatusPill label="Careful" tone="danger" />
+              <OwnerStatusPill
+                label={ownerSecurityStatusLabel(ownerSecurityOverview?.emergencyActionsStatus ?? "locked")}
+                tone={ownerSecurityToneForStatus(ownerSecurityOverview?.emergencyActionsStatus ?? "locked")}
+              />
             </View>
             <View style={styles.ownerSecurityActionRow}>
               <TouchableOpacity
-                style={[styles.ownerPrimaryButton, (!Number(ownerSecurityActiveGrantsCount ?? 0) || ownerSecurityActionBusy === "bulk-revoke-grants") && styles.configSaveBtnDisabled]}
+                style={[styles.ownerPrimaryButton, (!ownerSecurityDangerActionsAvailable || !Number(ownerSecurityActiveGrantsCount ?? 0) || ownerSecurityActionBusy === "bulk-revoke-grants") && styles.configSaveBtnDisabled]}
                 onPress={() => {
-                  setOwnerSecurityConfirmText("");
-                  setOwnerSecurityConfirmVisible(true);
+                  openOwnerSecurityDangerAction({
+                    confirmation: "REVOKE GRANTS",
+                    kind: "bulk-revoke-grants",
+                    title: "Revoke all temporary grants?",
+                  });
                 }}
-                disabled={!Number(ownerSecurityActiveGrantsCount ?? 0) || ownerSecurityActionBusy === "bulk-revoke-grants"}
+                disabled={!ownerSecurityDangerActionsAvailable || !Number(ownerSecurityActiveGrantsCount ?? 0) || ownerSecurityActionBusy === "bulk-revoke-grants"}
               >
                 <Text style={styles.ownerPrimaryButtonText}>{Number(ownerSecurityActiveGrantsCount ?? 0) ? "Revoke all grants" : "No grants to revoke"}</Text>
               </TouchableOpacity>
-              {ownerSecurityCurrentDevice?.id && ownerSecurityCurrentDevice.trustStatus !== "revoked" ? (
+              {ownerSecurityCurrentDevice?.id && ownerSecurityCurrentDevice.trustStatus === "trusted" ? (
                 <TouchableOpacity
-                  style={styles.ownerSecondaryButton}
+                  style={[styles.ownerSecondaryButton, !ownerSecurityDangerActionsAvailable && styles.configSaveBtnDisabled]}
                   onPress={() => void runOwnerSecurityRevokeDevice(String(ownerSecurityCurrentDevice.id), true)}
+                  disabled={!ownerSecurityDangerActionsAvailable}
                 >
                   <Text style={styles.ownerSecondaryButtonText}>Mark current untrusted</Text>
                 </TouchableOpacity>
@@ -12498,6 +12659,9 @@ export default function AdminStudioScreen() {
             ) : null}
             {!(ownerSecurityCurrentDevice?.id && ownerSecurityCurrentDevice.trustStatus !== "revoked") ? (
               <OwnerDisabledReason reason="Mark current untrusted is disabled until a trusted current device record is connected." />
+            ) : null}
+            {!ownerSecurityDangerActionsAvailable ? (
+              <OwnerDisabledReason reason="Emergency actions require backend-verified owner access plus a backend-trusted current device. Each action also requires a reason, confirmation phrase, and audit write." />
             ) : null}
           </View>
         </View>
@@ -14139,22 +14303,38 @@ export default function AdminStudioScreen() {
           if (!ownerSecurityActionBusy) {
             setOwnerSecurityConfirmVisible(false);
             setOwnerSecurityConfirmText("");
+            setOwnerSecurityDangerAction(null);
+            setOwnerSecurityReason("");
           }
         }}
       >
         <View style={styles.confirmBackdrop}>
           <View style={styles.confirmSheet}>
             <Text style={styles.confirmKicker}>Owner Security</Text>
-            <Text style={styles.confirmTitle}>Revoke all temporary grants?</Text>
+            <Text style={styles.confirmTitle}>{ownerSecurityDangerAction?.title ?? "Confirm security action"}</Text>
             <Text style={styles.confirmBody}>
-              This revokes every active temporary/proof grant returned by the backed staff-permission table and writes security audit events.
+              {ownerSecurityDangerAction?.kind === "bulk-revoke-grants"
+                ? "This revokes every active temporary/proof grant returned by the backed staff-permission table and writes security audit events."
+                : ownerSecurityDangerAction?.kind === "revoke-grant"
+                  ? "This revokes one backed temporary proof grant and writes security audit events."
+                  : "This marks the selected owner device as untrusted and writes a security audit event. It does not fake a Supabase Auth logout."}
             </Text>
             <View style={styles.confirmMetaBox}>
-              <Text style={styles.confirmMetaText}>Type REVOKE GRANTS to continue.</Text>
+              <Text style={styles.confirmMetaText}>
+                {`Requires a reason and exact phrase: ${ownerSecurityDangerAction?.confirmation ?? "CONFIRM"}`}
+              </Text>
             </View>
             <TextInput
+              style={[styles.input, styles.multilineInput]}
+              placeholder="Reason required"
+              placeholderTextColor="#8d8d8d"
+              multiline
+              value={ownerSecurityReason}
+              onChangeText={setOwnerSecurityReason}
+            />
+            <TextInput
               style={styles.input}
-              placeholder="REVOKE GRANTS"
+              placeholder={ownerSecurityDangerAction?.confirmation ?? "CONFIRM"}
               placeholderTextColor="#8d8d8d"
               autoCapitalize="characters"
               value={ownerSecurityConfirmText}
@@ -14166,17 +14346,25 @@ export default function AdminStudioScreen() {
                 onPress={() => {
                   setOwnerSecurityConfirmVisible(false);
                   setOwnerSecurityConfirmText("");
+                  setOwnerSecurityDangerAction(null);
+                  setOwnerSecurityReason("");
                 }}
-                disabled={ownerSecurityActionBusy === "bulk-revoke-grants"}
+                disabled={!!ownerSecurityActionBusy}
               >
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.dangerConfirmBtn, (ownerSecurityConfirmText.trim() !== "REVOKE GRANTS" || ownerSecurityActionBusy === "bulk-revoke-grants") && styles.configSaveBtnDisabled]}
-                onPress={() => void runOwnerSecurityBulkRevoke()}
-                disabled={ownerSecurityConfirmText.trim() !== "REVOKE GRANTS" || ownerSecurityActionBusy === "bulk-revoke-grants"}
+                style={[
+                  styles.dangerConfirmBtn,
+                  (!ownerSecurityDangerAction
+                    || ownerSecurityConfirmText.trim() !== ownerSecurityDangerAction.confirmation
+                    || ownerSecurityReason.trim().length < 6
+                    || !!ownerSecurityActionBusy) && styles.configSaveBtnDisabled,
+                ]}
+                onPress={() => void runOwnerSecurityDangerConfirm()}
+                disabled={!ownerSecurityDangerAction || ownerSecurityConfirmText.trim() !== ownerSecurityDangerAction.confirmation || ownerSecurityReason.trim().length < 6 || !!ownerSecurityActionBusy}
               >
-                {ownerSecurityActionBusy === "bulk-revoke-grants" ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Revoke Grants</Text>}
+                {ownerSecurityActionBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Confirm</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -15570,7 +15758,7 @@ const styles = StyleSheet.create({
   },
   ownerMetricValue: {
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "900",
   },
   ownerFilterRow: {
@@ -15827,6 +16015,11 @@ const styles = StyleSheet.create({
     gap: 10,
     justifyContent: "space-between",
   },
+  ownerSecurityHeroStatusRail: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   ownerSecurityHeroMeta: {
     color: "#9EABC3",
     flexShrink: 1,
@@ -16073,6 +16266,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(58,12,22,0.48)",
     padding: 13,
     gap: 12,
+  },
+  multilineInput: {
+    minHeight: 86,
+    textAlignVertical: "top",
   },
   adminHomeSurface: {
     gap: 12,
@@ -16670,7 +16867,6 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
     borderRadius: 18,
     borderWidth: 1,
@@ -16678,14 +16874,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(5,8,12,0.8)",
     padding: 6,
   },
+  tabBarScroller: {
+    marginHorizontal: -2,
+  },
   tabButton: {
-    flexGrow: 1,
-    flexBasis: 92,
     minHeight: 42,
+    minWidth: 104,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   tabButtonActive: {
     backgroundColor: "rgba(220,20,60,0.24)",
