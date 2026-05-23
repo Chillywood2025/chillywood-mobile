@@ -13,6 +13,8 @@ const helper = read("supabase/functions/_shared/security-request-context.ts");
 const ownerControls = read("supabase/functions/admin-owner-controls/index.ts");
 const adminUi = read("app/admin.tsx");
 const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
+const trustedProxyConfig = read("ops/trusted-network-proof-proxy/wrangler.toml");
+const trustedProxyWorker = read("ops/trusted-network-proof-proxy/src/index.js");
 
 [
   "x-chillywood-network-proof",
@@ -33,6 +35,36 @@ const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
 
 if (/captured_from_trusted_header|DEFAULT_TRUSTED_IP_HEADERS|SECURITY_CONTEXT_TRUSTED_IP_HEADERS|SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS/.test(helper)) {
   fail("helper must not trust direct proxy IP headers");
+}
+
+[
+  'name = "chillywood-network-proof-proxy"',
+  "network-proof.chillywoodstream.com",
+  'workers_dev = false',
+  'CHILLYWOOD_BACKEND_ORIGIN_URL = "https://bmkkhihfbmsnnmcqkoly.supabase.co"',
+].forEach((needle) => {
+  if (!trustedProxyConfig.includes(needle)) fail(`trusted proxy config missing marker: ${needle}`);
+});
+
+[
+  "STRIPPED_HEADERS",
+  "x-forwarded-for",
+  "x-real-ip",
+  "forwarded",
+  "x-client-ip",
+  "cf-connecting-ip",
+  "x-chillywood-network-proof",
+  "x-chillywood-network-proof-signature",
+  "CHILLYWOOD_NETWORK_PROOF_SECRET",
+  "CHILLYWOOD_NETWORK_PROOF_HASH_PEPPER",
+  "masked_ip_or_prefix",
+  "rawIpForwarded: false",
+].forEach((needle) => {
+  if (!trustedProxyWorker.includes(needle)) fail(`trusted proxy worker missing marker: ${needle}`);
+});
+
+if (/headers\.set\(["'](?:x-forwarded-for|x-real-ip|forwarded|x-client-ip|cf-connecting-ip)["']/i.test(trustedProxyWorker)) {
+  fail("trusted proxy worker must not forward direct IP headers");
 }
 
 const encodeBase64Url = (value) => Buffer.from(value, "utf8").toString("base64url");

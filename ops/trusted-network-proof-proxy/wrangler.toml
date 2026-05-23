@@ -1,0 +1,10 @@
+name = "chillywood-network-proof-proxy"
+main = "src/index.js"
+compatibility_date = "2026-05-23"
+workers_dev = false
+routes = [
+  { pattern = "network-proof.chillywoodstream.com", custom_domain = true },
+]
+
+[vars]
+CHILLYWOOD_BACKEND_ORIGIN_URL = "https://bmkkhihfbmsnnmcqkoly.supabase.co"

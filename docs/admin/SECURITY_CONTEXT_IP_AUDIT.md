@@ -41,19 +41,21 @@ Trusted IP capture is intentionally conservative:
 - The trusted path is signed proxy proof: `x-chillywood-network-proof`, `x-chillywood-network-proof-signature`, `x-chillywood-network-proof-timestamp`, and `x-chillywood-network-proof-version`.
 - A trusted ingress/proxy must hash and mask the real IP before forwarding. The backend verifies only the signed masked/hash proof and does not need raw IP.
 - Missing, invalid, expired, or malformed proof keeps `network_proof_verified=false` and records a clear proof error.
-- `SECURITY_CONTEXT_HASH_PEPPER` remains required for fallback session/user-agent hashing. Real network proof requires `CHILLYWOOD_NETWORK_PROOF_SECRET` plus a deployed trusted proxy.
+- `SECURITY_CONTEXT_HASH_PEPPER` remains required for fallback session/user-agent hashing. Real network proof requires `CHILLYWOOD_NETWORK_PROOF_SECRET` plus the deployed trusted proxy route.
 - Mobile payloads are never used as trusted IP/network source.
 
 ## Proxy/Header Proof Status
 
-Current closeout result: signed proof verification is implemented and deployed, but the actual trusted proxy route is not deployed/configured yet. Real IP proof remains fail-closed until the proxy creates valid signed proof.
+Current closeout result: signed proof verification is implemented and deployed, and the Cloudflare Worker trusted proxy is deployed at `https://network-proof.chillywoodstream.com`.
 
-- The deployed request path for this slice is Supabase Edge Functions on project `bmkkhihfbmsnnmcqkoly`. There is no app-owned Cloudflare, Hetzner, or custom proxy in front of those function URLs in repo truth.
+- The deployed proxy path for this slice is `ops/trusted-network-proof-proxy/`, routed as the custom domain `network-proof.chillywoodstream.com`, forwarding to Supabase project `bmkkhihfbmsnnmcqkoly`.
 - Supabase's edge gateway/proxy may inject request metadata, but this repo does not trust those direct headers as authoritative proof.
-- `CHILLYWOOD_NETWORK_PROOF_SECRET` must be configured on both the trusted proxy and Supabase Edge before any row can become `network_proof_verified=true`.
+- `CHILLYWOOD_NETWORK_PROOF_SECRET` is configured on both the trusted proxy and Supabase Edge; `CHILLYWOOD_NETWORK_PROOF_HASH_PEPPER` is configured only in the Worker, and `CHILLYWOOD_NETWORK_PROOF_MAX_AGE_SECONDS=300` is configured in Supabase.
+- The deprecated Supabase secret `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS` has been unset; direct header trust is no longer an environment-selectable mode.
 - `x-forwarded-for`, `x-real-ip`, `forwarded`, `x-client-ip`, and `cf-connecting-ip` are not trusted by Chi'llywood code unless the trusted proxy derives signed proof from its own ingress context.
-- A proof request that attempted to send spoofed `x-forwarded-for`, `x-real-ip`, and `cf-connecting-ip` headers to `livekit-token` returned `403` before a normal token/audit read path. That is useful evidence that spoofed client headers are not an accepted proof path, but it is not enough to declare a trustworthy real IP source.
-- Until the trusted proxy route is live, Owner Security and Audit Explorer must show `Network proof not verified`, `Missing trusted proxy proof`, `Invalid trusted proxy proof`, `Expired trusted proxy proof`, or `Malformed trusted proxy proof` instead of `Real IP verified`.
+- Route proof returned `200` from `/__network-proof-health` with `rawIpForwarded=false`; a spoofed unauthenticated POST through the proxy to `/functions/v1/livekit-token` returned `401 missing_authorization` from Supabase.
+- Direct Supabase Edge URLs remain technically reachable unless a future gateway/firewall lane blocks them, so high-risk proof-required actions must continue to enforce backend policy and treat direct paths as unverified/fallback.
+- Owner Security and Audit Explorer must show `Verified network proof` only when linked summary rows have `network_proof_verified=true`; otherwise they must show `Network proof not verified`, `Missing trusted proxy proof`, `Invalid trusted proxy proof`, `Expired trusted proxy proof`, or `Malformed trusted proxy proof`.
 
 ## Governing Decision
 
@@ -70,13 +72,13 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 
 | Capability | Repo truth | Current classification |
 | --- | --- | --- |
-| IP capture | `security_request_context` and shared Edge helper now exist. The helper no longer trusts direct proxy IP headers; it verifies signed trusted proxy proof and otherwise records missing/invalid/expired/malformed proof as unverified. Actual real-IP proof requires deploying the trusted proxy route and shared HMAC secret. | Signed contract implemented / proxy deployment pending |
-| IP hashing | `security_request_context.ip_hash` is populated from signed proxy proof only when the proxy HMAC verifies. Without valid proof it receives a synthetic unavailable hash, not client-supplied IP. Legacy `platform_admin_audit_logs.ip_hash` and `dmca_cases.submitted_ip_hash` remain hash-only fields and are not the new source of truth. | Signed contract implemented / proxy deployment pending |
+| IP capture | `security_request_context` and shared Edge helper now exist. The helper no longer trusts direct proxy IP headers; it verifies signed trusted proxy proof and otherwise records missing/invalid/expired/malformed proof as unverified. The Cloudflare Worker proxy is deployed at `network-proof.chillywoodstream.com`; release/runtime call routing and owner/operator read proof remain follow-up. | Signed contract implemented / proxy deployed / routing proof pending |
+| IP hashing | `security_request_context.ip_hash` is populated from signed proxy proof only when the proxy HMAC verifies. Without valid proof it receives a synthetic unavailable hash, not client-supplied IP. Legacy `platform_admin_audit_logs.ip_hash` and `dmca_cases.submitted_ip_hash` remain hash-only fields and are not the new source of truth. | Signed contract implemented / proxy deployed |
 | Masked IP display | Owner Security and Audit Explorer display masked/current-device/audit-row network proof from the safe summary path when linked context exists, including verified/unverified proof state. The high-level Audit tab and public UI do not display network proof. | Partially implemented |
 | Raw IP storage | No raw `ip_address` column was found in app-owned migrations. | Already avoids raw IP |
 | User-agent hashing | `platform_admin_audit_logs.user_agent_hash` and `dmca_cases.submitted_user_agent_hash` exist. No shared writer was found. | Partially present / not wired |
 | Device hash/session tracking | Owner Security stores `owner_trusted_devices.device_fingerprint_hash`, app/build/platform metadata, trusted/revoked state, and last seen. The hash is derived from authenticated user plus client device/app context, not backend network context. | Partially safe |
-| Security context table | `security_request_context` exists with RLS and no anon/authenticated direct table read grants. It now tracks signed proxy proof verification state. Safe masked summary is available through `get_security_request_context_summary(uuid)`. | Implemented / proxy deployment pending |
+| Security context table | `security_request_context` exists with RLS and no anon/authenticated direct table read grants. It now tracks signed proxy proof verification state. Safe masked summary is available through `get_security_request_context_summary(uuid)`. | Implemented / proxy deployed / owner read proof pending |
 | Admin audit events | `platform_admin_audit_logs` is append-only, backs Admin Audit overview, and now has nullable `security_context_id`. `admin-owner-controls` platform audit writes attach context ids. Other writers remain future work. | Partially implemented |
 | Immutable audit events | Admin audit rows are append-only; Owner Security also has append-only `security_audit_events`. | Already safe for event integrity |
 | Failed access events | Owner Security writes `owner_security_access_denied` events for owner-only actions where backed. Staff-but-not-owner failure proof remains a separate prior gap. | Partially safe |
@@ -105,7 +107,7 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 | Temporary grants | Partially implemented | Owner Security temporary-grant revoke paths attach context where available; grant create and expiry sweeps remain follow-up where a request actor exists. |
 | Kill switches | Needs backend-only capture | Future kill switch/emergency lock writes must require trusted device where policy says so and attach context. Read-only UI needs no IP. |
 | Live Ops / Live Cost Guard | Partially implemented | Operator-approved Live Ops and Live Cost Guard actions now attach context where Edge capture exists. Cost telemetry stays source metadata without raw IP. |
-| LiveKit token issuance | First slice implemented | `livekit_token_request_audit` records token request outcomes with `security_context_id` where capture is available. Signed proxy proof contract is deployed; actual trusted proxy route plus owner/operator live audit read proof remain pending. |
+| LiveKit token issuance | First slice implemented | `livekit_token_request_audit` records token request outcomes with `security_context_id` where capture is available. Signed proxy proof contract and trusted proxy route are deployed; owner/operator live audit read proof remains pending. |
 | Watch-Party Live | Should not store IP in room tables | Attach context at token issuance, speaker approval/high-risk room actions, and room abuse reports only. |
 | Live Watch-Party | Should not store IP in room tables | Same as Watch-Party Live: context on token/security events, not membership/chat content rows. |
 | Uploads / creator videos | Partially implemented | `media-storage` writes restricted media security events for URL/delete paths and links private media access audit; publish/unpublish/delete metadata rows outside media-storage remain follow-up. Do not put raw IP on `videos`. |
@@ -359,7 +361,8 @@ Proof outcomes:
 - Helper-bearing event-link Edge functions are deployed as `admin-live-ops-fix-center` v10, `admin-live-cost-guard-action` v18, `admin-live-cost-guard-webhook` v20, `media-storage` v52, `payout-release-preflight` v40, `provider-billing-import-preflight` v40, `sponsor-checkout-preflight` v40, `sponsor-brand-payment-preflight` v40, and `sponsor-reporting-fraud-preflight` v40.
 - Event-link migrations `202605230003` and `202605230004` are applied on the linked Supabase project; `202605230004` fixed the metadata validator uuid comparison and linked schema lint now reports no schema errors.
 - No-auth POST smokes with spoofed direct IP headers plus fake signed-proof headers returned `401` for all eleven helper-bearing Edge functions. Unauthenticated REST direct read of `security_request_context` returned `401`.
-- The linked project has `SECURITY_CONTEXT_HASH_PEPPER`; real verified network proof additionally requires `CHILLYWOOD_NETWORK_PROOF_SECRET` and the trusted proxy route. Direct trusted-header envs are no longer the proof model.
+- The linked project has `SECURITY_CONTEXT_HASH_PEPPER`, `CHILLYWOOD_NETWORK_PROOF_SECRET`, and `CHILLYWOOD_NETWORK_PROOF_MAX_AGE_SECONDS`; the deployed Cloudflare Worker has `CHILLYWOOD_NETWORK_PROOF_SECRET` and `CHILLYWOOD_NETWORK_PROOF_HASH_PEPPER`. The deprecated direct-header secret `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS` has been unset because direct trusted-header envs are no longer the proof model.
+- The Cloudflare Worker `chillywood-network-proof-proxy` is deployed on `network-proof.chillywoodstream.com`; `/__network-proof-health` returned `200` with `rawIpForwarded=false`, and a proxied spoofed unauthenticated LiveKit request returned `401 missing_authorization` from Supabase.
 - Anon direct reads against `security_request_context` returned `42501`; anon summary RPC returned `security_context_admin_required`.
 - A spoofed client-header probe using `x-forwarded-for`, `x-real-ip`, and `cf-connecting-ip` against `livekit-token` returned `403` before token handling; this does not prove a trusted real-IP source, so real IP capture remains disabled.
 - Grep proof found no mobile/client trusted-IP submission markers and no public raw-IP/network display. The only client-side IP-hash marker is the protected admin helper type field, which the Admin UI guard prevents from rendering.

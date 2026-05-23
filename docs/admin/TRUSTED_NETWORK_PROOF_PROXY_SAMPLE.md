@@ -1,8 +1,21 @@
-# Trusted Network Proof Proxy Sample
+# Trusted Network Proof Proxy Deployment
 
 Date: 2026-05-23
 
-Purpose: document the expected ingress layer for Chi'llywood signed network proof. This is a sample Cloudflare Worker-style proxy, not active app behavior. It should be deployed only after infrastructure ownership, routing, and secret management are approved.
+Purpose: document the expected ingress layer for Chi'llywood signed network proof. The production Worker source now lives at `ops/trusted-network-proof-proxy/` and is deployed as `chillywood-network-proof-proxy` on `https://network-proof.chillywoodstream.com`.
+
+## Current Deployment
+
+- Cloudflare Worker: `chillywood-network-proof-proxy`
+- Custom domain: `https://network-proof.chillywoodstream.com`
+- Source: `ops/trusted-network-proof-proxy/src/index.js`
+- Config: `ops/trusted-network-proof-proxy/wrangler.toml`
+- Supabase origin: `https://bmkkhihfbmsnnmcqkoly.supabase.co`
+- Required Worker secrets: `CHILLYWOOD_NETWORK_PROOF_SECRET`, `CHILLYWOOD_NETWORK_PROOF_HASH_PEPPER`
+- Required Supabase secrets: `CHILLYWOOD_NETWORK_PROOF_SECRET`, `CHILLYWOOD_NETWORK_PROOF_MAX_AGE_SECONDS`
+- Health proof: `GET /__network-proof-health` returns `rawIpForwarded=false` and `signedProofHeaders=true`.
+
+Release/runtime clients are not automatically routed through this proxy by repo source alone. Environments that require verified network proof must point their backend/Supabase Edge calls at `https://network-proof.chillywoodstream.com` or use a later gateway policy that enforces this route.
 
 ## Contract
 
@@ -27,7 +40,7 @@ Expected proxy env:
 - `CHILLYWOOD_NETWORK_PROOF_HASH_PEPPER`: server-only pepper used by the proxy to hash IP/user-agent before forwarding.
 - `CHILLYWOOD_BACKEND_ORIGIN_URL`: Supabase Edge origin, for example `https://PROJECT.supabase.co`.
 
-## Cloudflare Worker Sample
+## Cloudflare Worker Contract Sample
 
 ```js
 const PROOF_VERSION = "v1";
