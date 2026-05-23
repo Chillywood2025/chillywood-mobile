@@ -15,6 +15,10 @@ const adminUi = read("app/admin.tsx");
 const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
 const trustedProxyConfig = read("ops/trusted-network-proof-proxy/wrangler.toml");
 const trustedProxyWorker = read("ops/trusted-network-proof-proxy/src/index.js");
+const appConfig = read("app.config.ts");
+const runtimeConfig = read("_lib/runtimeConfig.ts");
+const mobileSupabaseClient = read("_lib/supabase.ts");
+const mediaStorageClient = read("_lib/mediaStorage.ts");
 
 [
   "x-chillywood-network-proof",
@@ -66,6 +70,42 @@ if (/captured_from_trusted_header|DEFAULT_TRUSTED_IP_HEADERS|SECURITY_CONTEXT_TR
 if (/headers\.set\(["'](?:x-forwarded-for|x-real-ip|forwarded|x-client-ip|cf-connecting-ip)["']/i.test(trustedProxyWorker)) {
   fail("trusted proxy worker must not forward direct IP headers");
 }
+
+[
+  "DEPLOYED_SUPABASE_FUNCTIONS_URL",
+  "DEPLOYED_LIVEKIT_TOKEN_ENDPOINT",
+  "EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL",
+  "${DEPLOYED_SUPABASE_FUNCTIONS_URL}/functions/v1/livekit-token",
+  "https://network-proof.chillywoodstream.com",
+].forEach((needle) => {
+  if (!appConfig.includes(needle)) fail(`app config missing trusted functions route marker: ${needle}`);
+});
+
+[
+  "supabaseFunctionsUrl",
+  "EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL",
+].forEach((needle) => {
+  if (!runtimeConfig.includes(needle)) fail(`runtime config missing trusted functions route marker: ${needle}`);
+});
+
+[
+  "SUPABASE_FUNCTIONS_URL",
+  "DEFAULT_SUPABASE_FUNCTIONS_URL",
+  "functionRoutingFetch",
+  "routeFunctionRequestUrl",
+  "SUPABASE_FUNCTIONS_ORIGIN",
+  "TRUSTED_FUNCTIONS_ORIGIN",
+  "network-proof.chillywoodstream.com",
+].forEach((needle) => {
+  if (!mobileSupabaseClient.includes(needle)) fail(`mobile Supabase client missing trusted function routing marker: ${needle}`);
+});
+
+[
+  "SUPABASE_FUNCTIONS_URL",
+  "functions/v1/media-storage",
+].forEach((needle) => {
+  if (!mediaStorageClient.includes(needle)) fail(`media storage client missing trusted function routing marker: ${needle}`);
+});
 
 const encodeBase64Url = (value) => Buffer.from(value, "utf8").toString("base64url");
 const signProof = ({ payload, secret, timestamp = String(Math.floor(Date.now() / 1000)), version = "v1" }) => {

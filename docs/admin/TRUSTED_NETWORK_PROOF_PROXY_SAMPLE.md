@@ -15,7 +15,7 @@ Purpose: document the expected ingress layer for Chi'llywood signed network proo
 - Required Supabase secrets: `CHILLYWOOD_NETWORK_PROOF_SECRET`, `CHILLYWOOD_NETWORK_PROOF_MAX_AGE_SECONDS`
 - Health proof: `GET /__network-proof-health` returns `rawIpForwarded=false` and `signedProofHeaders=true`.
 
-Release/runtime clients are not automatically routed through this proxy by repo source alone. Environments that require verified network proof must point their backend/Supabase Edge calls at `https://network-proof.chillywoodstream.com` or use a later gateway policy that enforces this route.
+Repo runtime clients now default intended Supabase Edge calls through this proxy: `app.config.ts` exposes `runtime.supabaseFunctionsUrl`, defaults it to `https://network-proof.chillywoodstream.com`, uses it for the default LiveKit token endpoint, and `_lib/supabase.ts` rewrites Supabase `.functions.invoke` calls from the Supabase functions origin to the trusted proxy. `_lib/mediaStorage.ts` also uses `SUPABASE_FUNCTIONS_URL` for direct media-storage function requests. Auth, REST, and storage stay on the direct Supabase origin. Direct Supabase Edge URLs remain technically reachable until a future gateway/firewall lane blocks that origin, so high-risk proof-required actions must keep backend policy checks.
 
 ## Contract
 

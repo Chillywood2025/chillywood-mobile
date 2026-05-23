@@ -1,7 +1,7 @@
 import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
-import { SUPABASE_URL, supabase } from "./supabase";
+import { SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
 
 export type MediaStorageProvider = "supabase" | "s3";
 export type MediaStorageSurfaceType = "creator_video" | "social_attachment";
@@ -22,7 +22,7 @@ type SignedDownloadResponse = {
   expiresAt: string;
 };
 
-const MEDIA_STORAGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/media-storage`;
+const MEDIA_STORAGE_FUNCTION_URL = `${SUPABASE_FUNCTIONS_URL.replace(/\/+$/g, "")}/functions/v1/media-storage`;
 const SLOW_DOWN_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
 
 const toText = (value: unknown) => String(value ?? "").trim();

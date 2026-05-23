@@ -23,6 +23,7 @@ export type LegalRuntimeConfig = {
 
 export type RuntimeConfig = {
   supabaseUrl: string;
+  supabaseFunctionsUrl: string;
   supabaseAnonKey: string;
   betaOperatorAllowlist: string[];
   betaEnvironment: RuntimeEnvironment;
@@ -72,6 +73,9 @@ export function getRuntimeConfig(): RuntimeConfig {
 
   cachedConfig = {
     supabaseUrl: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_URL || runtimeExtra.supabaseUrl),
+    supabaseFunctionsUrl: normalizeText(
+      process.env.EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL || runtimeExtra.supabaseFunctionsUrl,
+    ),
     supabaseAnonKey: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || runtimeExtra.supabaseAnonKey),
     betaOperatorAllowlist: normalizeAllowlist(
       process.env.EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST || runtimeExtra.betaOperatorAllowlist,
@@ -126,6 +130,7 @@ export function getRuntimeConfig(): RuntimeConfig {
 export function getRuntimeConfigIssues(config = getRuntimeConfig()) {
   const issues: string[] = [];
   if (!config.supabaseUrl) issues.push("Missing EXPO_PUBLIC_SUPABASE_URL runtime config.");
+  if (!config.supabaseFunctionsUrl) issues.push("Missing EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL runtime config.");
   if (!config.supabaseAnonKey) issues.push("Missing EXPO_PUBLIC_SUPABASE_ANON_KEY runtime config.");
   return issues;
 }

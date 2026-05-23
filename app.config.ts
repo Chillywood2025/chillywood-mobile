@@ -9,7 +9,8 @@ const normalizeRuntimeEnvironment = (value: unknown) => (
 );
 const CONFIG_DIR = process.cwd();
 const DEPLOYED_LIVEKIT_SERVER_URL = "wss://live.chillywoodstream.com";
-const DEPLOYED_LIVEKIT_TOKEN_ENDPOINT = "https://bmkkhihfbmsnnmcqkoly.supabase.co/functions/v1/livekit-token";
+const DEPLOYED_SUPABASE_FUNCTIONS_URL = "https://network-proof.chillywoodstream.com";
+const DEPLOYED_LIVEKIT_TOKEN_ENDPOINT = `${DEPLOYED_SUPABASE_FUNCTIONS_URL}/functions/v1/livekit-token`;
 const DEPLOYED_PRIVACY_POLICY_URL = "https://chillywoodstream.com/privacy";
 const DEPLOYED_TERMS_OF_SERVICE_URL = "https://chillywoodstream.com/terms";
 const DEPLOYED_ACCOUNT_DELETION_URL = "https://chillywoodstream.com/account-deletion";
@@ -127,6 +128,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       runtime: {
         ...existingRuntime,
         supabaseUrl: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_URL || existingRuntime.supabaseUrl),
+        supabaseFunctionsUrl: normalizeText(
+          process.env.EXPO_PUBLIC_SUPABASE_FUNCTIONS_URL
+          || existingRuntime.supabaseFunctionsUrl
+          || DEPLOYED_SUPABASE_FUNCTIONS_URL,
+        ),
         supabaseAnonKey: normalizeText(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || existingRuntime.supabaseAnonKey),
         betaOperatorAllowlist: normalizeText(
           process.env.EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST || existingRuntime.betaOperatorAllowlist,

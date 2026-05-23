@@ -147,6 +147,9 @@ const readConfigValue = (object, key) => String(object?.[key] ?? "").trim();
 const configPresenceIssues = [];
 
 if (!readConfigValue(runtime, "supabaseUrl")) configPresenceIssues.push("Expo public config missing runtime.supabaseUrl.");
+if (!readConfigValue(runtime, "supabaseFunctionsUrl")) {
+  configPresenceIssues.push("Expo public config missing runtime.supabaseFunctionsUrl.");
+}
 if (!readConfigValue(runtime, "supabaseAnonKey")) configPresenceIssues.push("Expo public config missing runtime.supabaseAnonKey.");
 if (!readConfigValue(livekit, "serverUrl")) configPresenceIssues.push("Expo public config missing runtime.livekit.serverUrl.");
 if (!readConfigValue(livekit, "tokenEndpoint")) configPresenceIssues.push("Expo public config missing runtime.livekit.tokenEndpoint.");
@@ -177,6 +180,7 @@ console.log(
       betaEnvironment: resolvedBetaEnvironment,
       productionEnvStrict: requireStrictProductionEnv,
       supabaseConfigured: true,
+      supabaseFunctionsUrl: readConfigValue(runtime, "supabaseFunctionsUrl"),
       livekitConfigured: true,
       legalUrlsConfigured: true,
       supportEmailConfigured: !!readConfigValue(legal, "supportEmail"),

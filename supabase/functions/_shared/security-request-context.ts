@@ -219,6 +219,19 @@ const normalizeNetworkProofPayload = (row: JsonObject): SignedNetworkProofPayloa
   };
 };
 
+const pathMatchesSignedProof = (currentPath: unknown, proofPath: unknown) => {
+  const current = safeShortText(currentPath, 200);
+  const proof = safeShortText(proofPath, 200);
+  if (!current || !proof) return false;
+  if (current === proof || current.endsWith(proof)) return true;
+
+  const currentSegments = current.split("/").filter(Boolean);
+  const proofSegments = proof.split("/").filter(Boolean);
+  if (!currentSegments.length || !proofSegments.length) return false;
+
+  return currentSegments.at(-1) === proofSegments.at(-1);
+};
+
 const spoofableHeadersPresent = (headers: Headers) =>
   SPOOFABLE_CLIENT_IP_HEADERS.filter((headerName) => !!toText(headers.get(headerName)));
 
@@ -330,7 +343,7 @@ export async function verifySignedNetworkProof(req: Request): Promise<SignedNetw
   }
 
   const currentPath = safeShortText(new URL(req.url).pathname, 200);
-  if (payload.requestPath && currentPath && payload.requestPath !== currentPath && !currentPath.endsWith(payload.requestPath)) {
+  if (payload.requestPath && !pathMatchesSignedProof(currentPath, payload.requestPath)) {
     return {
       error: "trusted_proxy_proof_path_mismatch",
       headerVersion: version,
