@@ -1468,9 +1468,9 @@ const ownerSecurityToneForStatus = (status: unknown): OwnerControlTone => {
   const text = String(status ?? "").toLowerCase();
   if (!text) return "locked";
   if (["verified", "trusted", "healthy", "passed", "active", "success", "connected", "available"].includes(text)) return "success";
-  if (["urgent", "critical", "failed", "revoked", "untrusted", "not_verified", "denied", "danger"].includes(text)) return "danger";
+  if (["urgent", "critical", "failed", "revoked", "untrusted", "not_verified", "denied", "danger", "invalid", "invalid_trusted_proxy_proof_signature"].includes(text)) return "danger";
   if (["warning", "manual", "manual_required", "unknown", "needs_review", "limited", "partial"].includes(text)) return "manual";
-  if (["unavailable", "disabled", "closed", "expired", "empty", "locked", "not_connected", "not_recorded", "malformed"].includes(text)) return "locked";
+  if (["unavailable", "disabled", "closed", "expired", "empty", "locked", "not_connected", "not_recorded", "malformed", "missing", "missing_trusted_proxy_proof", "expired_trusted_proxy_proof"].includes(text)) return "locked";
   return "info";
 };
 
@@ -1483,6 +1483,10 @@ const ownerSecurityStatusLabel = (status: unknown) => {
   if (text.toLowerCase() === "revoked") return "Untrusted";
   if (text.toLowerCase() === "partial") return "Partial";
   if (text.toLowerCase() === "malformed") return "Malformed";
+  if (text.toLowerCase() === "missing_trusted_proxy_proof") return "Missing trusted proxy proof";
+  if (text.toLowerCase() === "invalid_trusted_proxy_proof_signature") return "Invalid trusted proxy proof";
+  if (text.toLowerCase() === "expired_trusted_proxy_proof") return "Expired trusted proxy proof";
+  if (text.toLowerCase() === "malformed_trusted_proxy_proof_payload") return "Malformed trusted proxy proof";
   return formatModerationToken(text);
 };
 
@@ -1560,6 +1564,10 @@ const formatDeviceMeta = (device: OwnerSecurityDevice) => {
 
 const formatOwnerSecurityNetworkProof = (proof: OwnerSecurityNetworkProof | null | undefined) => {
   if (!proof) return "No security context linked";
+  if (proof.networkProofVerified === false || proof.networkProofError) {
+    const reason = ownerSecurityStatusLabel(proof.networkProofError || proof.captureStatus || "missing");
+    return reason.includes("Proof") ? reason : `${reason} trusted proxy proof`;
+  }
   const masked = formatAuditDisplayText(proof.maskedIp) || ownerSecurityStatusLabel(proof.captureStatus);
   const location = [proof.cityApprox, proof.region, proof.country].map(formatAuditDisplayText).filter(Boolean).join(", ");
   const network = [masked, location, formatAuditDisplayText(proof.asnOrIsp)].filter(Boolean).join(" · ");
@@ -1568,10 +1576,13 @@ const formatOwnerSecurityNetworkProof = (proof: OwnerSecurityNetworkProof | null
 
 const formatOwnerSecurityNetworkMeta = (proof: OwnerSecurityNetworkProof | null | undefined) => {
   if (!proof) return "Network proof has not been linked to this device row.";
-  const source = formatAuditDisplayText(proof.source) || "source not connected";
-  const checked = proof.createdAt ? formatModerationTimestamp(proof.createdAt) : "time not connected";
+  const source = formatAuditDisplayText(proof.networkProofSource || proof.trustedHeaderSource || proof.source) || "source not connected";
+  const checked = proof.networkProofTimestamp
+    ? formatModerationTimestamp(proof.networkProofTimestamp)
+    : proof.createdAt ? formatModerationTimestamp(proof.createdAt) : "time not connected";
   const context = proof.contextIdShort ? `Context ${proof.contextIdShort}` : "context id hidden";
-  return `${ownerSecurityStatusLabel(proof.captureStatus)} · ${source} · ${checked} · ${context}`;
+  const verified = proof.networkProofVerified ? "Verified network proof" : "Network proof not verified";
+  return `${verified} · ${ownerSecurityStatusLabel(proof.networkProofError || proof.captureStatus)} · ${source} · ${checked} · ${context}`;
 };
 
 const formatLegalStatus = (value: unknown) => {

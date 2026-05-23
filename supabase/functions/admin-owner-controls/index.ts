@@ -1063,11 +1063,17 @@ const normalizeSecurityContextSummary = (row: JsonObject | null | undefined) => 
     deviceHashShort: toText(row.deviceHashShort) || null,
     ipHashShort: toText(row.ipHashShort) || null,
     maskedIp: toText(row.maskedIp) || null,
+    networkProofError: toText(row.networkProofError) || null,
+    networkProofSource: toText(row.networkProofSource) || null,
+    networkProofTimestamp: toText(row.networkProofTimestamp) || null,
+    networkProofVerified: row.networkProofVerified === true,
+    networkProofVersion: toText(row.networkProofVersion) || null,
     proofSource: "rpc: get_security_request_context_summary",
     region: toText(row.region) || null,
     requestId: toText(row.requestId) || null,
     sessionIdHashShort: toText(row.sessionIdHashShort) || null,
     source: toText(row.source) || null,
+    trustedHeaderSource: toText(row.trustedHeaderSource) || null,
     userAgentHashShort: toText(row.userAgentHashShort) || null,
   };
 };

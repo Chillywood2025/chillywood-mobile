@@ -4,7 +4,7 @@ Date: 2026-05-23
 
 Lane: Security Context and IP Address Audit / Security Request Context Backend Implementation
 
-Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. The original audit was planning-only. The first backend slice is implemented by migration `202605230002_security_request_context_backend.sql` plus shared Edge helper `supabase/functions/_shared/security-request-context.ts`; the event-link expansion is implemented by migration `202605230003_security_context_event_link_expansion.sql` plus validator fix migration `202605230004_fix_security_context_metadata_validator.sql`.
+Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. The original audit was planning-only. The first backend slice is implemented by migration `202605230002_security_request_context_backend.sql` plus shared Edge helper `supabase/functions/_shared/security-request-context.ts`; the event-link expansion is implemented by migration `202605230003_security_context_event_link_expansion.sql` plus validator fix migration `202605230004_fix_security_context_metadata_validator.sql`; the signed trusted proxy proof contract is implemented by migration `202605230005_trusted_network_proof_contract.sql`.
 
 ## Backend Implementation Status
 
@@ -20,7 +20,9 @@ Implemented, Supabase-applied, and Edge-deployed in the first production slice:
 - `admin-owner-controls` now enriches Owner Security current/trusted device rows with safe masked `networkProof` from `get_security_request_context_summary(uuid)` when `last_security_context_id` exists; the full security context id is not returned to the mobile UI.
 - Audit Explorer now receives safe masked network proof for authorized audit rows with `security_context_id`, can filter for rows with or without linked proof, and includes `livekit_token_request_audit` rows without exposing tokens.
 - `livekit-token` captures backend request context and writes token request audit rows for success/denied/error outcomes without changing room routing, grants, tokens, or Premium gates.
-- Remote proof confirmed migration `202605230002` is applied, `admin-owner-controls` is ACTIVE version `26`, `livekit-token` is ACTIVE version `63`, and anon select/insert against `security_request_context` returns `42501 permission denied`.
+- Remote proof confirmed migration `202605230002` is applied, current `admin-owner-controls` is ACTIVE version `27`, current `livekit-token` is ACTIVE version `64`, and anon select/insert against `security_request_context` returns `42501 permission denied`.
+- `202605230005_trusted_network_proof_contract.sql` adds `network_proof_verified`, `network_proof_source`, `network_proof_version`, `network_proof_error`, `network_proof_timestamp`, and `trusted_header_source` to `security_request_context`, and exposes those safe fields through `get_security_request_context_summary(uuid)`.
+- `supabase/functions/_shared/security-request-context.ts` now verifies signed `x-chillywood-network-proof*` headers with server-only `CHILLYWOOD_NETWORK_PROOF_SECRET`. Direct `x-forwarded-for`, `x-real-ip`, `forwarded`, `x-client-ip`, and `cf-connecting-ip` are spoofable and ignored unless a trusted proxy signs the derived masked/hash proof.
 
 Event-link expansion is now remote-applied and adds nullable `security_context_id` references to restricted event/audit tables only:
 
@@ -31,25 +33,27 @@ Event-link expansion is now remote-applied and adds nullable `security_context_i
 - Payout/revenue/fraud foundations: `creator_payout_audit_log`, `network_billing_audit_logs`, and `fraud_audit_logs`.
 - SQL-only staff paths: `platform_staff_role_audit`; `platform_staff_permission_audit` was already linked in the first slice.
 - `security_context_id_from_metadata(jsonb)` validates metadata-carried context ids for SQL-only audit helpers. Service-role callers may reference existing contexts; authenticated callers may reference only their own context. Linked schema lint caught the first implementation's uuid/text comparison, and migration `202605230004_fix_security_context_metadata_validator.sql` corrects it to compare `security_request_context.user_id` directly to `auth.uid()`. This keeps future Edge wrappers link-ready without trusting arbitrary client-supplied network proof.
-- Edge paths now capturing/linking context without behavior changes: `admin-live-ops-fix-center` v9, `admin-live-cost-guard-action` v17, `admin-live-cost-guard-webhook` v19, `media-storage` v51, `payout-release-preflight` v39, `provider-billing-import-preflight` v39, `sponsor-checkout-preflight` v39, `sponsor-brand-payment-preflight` v39, and `sponsor-reporting-fraud-preflight` v39.
+- Edge paths now capturing/linking context without behavior changes: `admin-live-ops-fix-center` v10, `admin-live-cost-guard-action` v18, `admin-live-cost-guard-webhook` v20, `media-storage` v52, `payout-release-preflight` v40, `provider-billing-import-preflight` v40, `sponsor-checkout-preflight` v40, `sponsor-brand-payment-preflight` v40, and `sponsor-reporting-fraud-preflight` v40.
 
 Trusted IP capture is intentionally conservative:
 
-- The helper reads IP only from backend-configured trusted headers through `SECURITY_CONTEXT_TRUSTED_IP_HEADERS`.
-- Defaults are not trusted unless `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS=true` is explicitly set server-side. The linked project now explicitly sets `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS=false`.
-- `SECURITY_CONTEXT_HASH_PEPPER` is required before a real captured IP is hashed. The linked project now has this secret configured, but no trusted IP header is configured yet. Until the proxy/header chain is verified, context rows remain linked but marked `capture_status = unavailable` with `Not captured` masked proof.
+- Direct proxy headers are not trusted. `x-forwarded-for`, `x-real-ip`, `forwarded`, `x-client-ip`, and `cf-connecting-ip` may be present, but the helper records them only as ignored spoofable-header metadata.
+- The trusted path is signed proxy proof: `x-chillywood-network-proof`, `x-chillywood-network-proof-signature`, `x-chillywood-network-proof-timestamp`, and `x-chillywood-network-proof-version`.
+- A trusted ingress/proxy must hash and mask the real IP before forwarding. The backend verifies only the signed masked/hash proof and does not need raw IP.
+- Missing, invalid, expired, or malformed proof keeps `network_proof_verified=false` and records a clear proof error.
+- `SECURITY_CONTEXT_HASH_PEPPER` remains required for fallback session/user-agent hashing. Real network proof requires `CHILLYWOOD_NETWORK_PROOF_SECRET` plus a deployed trusted proxy.
 - Mobile payloads are never used as trusted IP/network source.
 
 ## Proxy/Header Proof Status
 
-Current closeout result: trusted network proof is not verified yet, so real IP capture remains fail-closed.
+Current closeout result: signed proof verification is implemented and deployed, but the actual trusted proxy route is not deployed/configured yet. Real IP proof remains fail-closed until the proxy creates valid signed proof.
 
 - The deployed request path for this slice is Supabase Edge Functions on project `bmkkhihfbmsnnmcqkoly`. There is no app-owned Cloudflare, Hetzner, or custom proxy in front of those function URLs in repo truth.
-- Supabase's edge gateway/proxy may inject request metadata, but this repo has not proved a specific authoritative IP header that cannot be spoofed or overwritten by the mobile client.
-- `SECURITY_CONTEXT_HASH_PEPPER` is configured, and `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS=false` is configured.
-- `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` is intentionally unset. Therefore `x-forwarded-for`, `x-real-ip`, `forwarded`, and `cf-connecting-ip` are not trusted by Chi'llywood code.
+- Supabase's edge gateway/proxy may inject request metadata, but this repo does not trust those direct headers as authoritative proof.
+- `CHILLYWOOD_NETWORK_PROOF_SECRET` must be configured on both the trusted proxy and Supabase Edge before any row can become `network_proof_verified=true`.
+- `x-forwarded-for`, `x-real-ip`, `forwarded`, `x-client-ip`, and `cf-connecting-ip` are not trusted by Chi'llywood code unless the trusted proxy derives signed proof from its own ingress context.
 - A proof request that attempted to send spoofed `x-forwarded-for`, `x-real-ip`, and `cf-connecting-ip` headers to `livekit-token` returned `403` before a normal token/audit read path. That is useful evidence that spoofed client headers are not an accepted proof path, but it is not enough to declare a trustworthy real IP source.
-- Until Supabase/platform documentation plus live owner/operator proof identifies a safe source, Owner Security and Audit Explorer must show `Network proof not verified` / `Not captured` style states rather than `Real IP verified`.
+- Until the trusted proxy route is live, Owner Security and Audit Explorer must show `Network proof not verified`, `Missing trusted proxy proof`, `Invalid trusted proxy proof`, `Expired trusted proxy proof`, or `Malformed trusted proxy proof` instead of `Real IP verified`.
 
 ## Governing Decision
 
@@ -66,13 +70,13 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 
 | Capability | Repo truth | Current classification |
 | --- | --- | --- |
-| IP capture | `security_request_context` and shared Edge helper now exist. The hash pepper is configured, default trusted headers are disabled, and real IP capture still requires a proved trusted server header before any captured network proof is claimed. | Partially implemented / fail-closed |
-| IP hashing | `security_request_context.ip_hash` is populated by the helper with a peppered hash only when trusted IP capture is configured; legacy `platform_admin_audit_logs.ip_hash` and `dmca_cases.submitted_ip_hash` remain hash-only fields and are not the new source of truth. | Partially implemented |
-| Masked IP display | Owner Security and Audit Explorer display masked/current-device/audit-row network proof from the safe summary path when linked context exists. The high-level Audit tab and public UI do not display network proof. | Partially implemented |
+| IP capture | `security_request_context` and shared Edge helper now exist. The helper no longer trusts direct proxy IP headers; it verifies signed trusted proxy proof and otherwise records missing/invalid/expired/malformed proof as unverified. Actual real-IP proof requires deploying the trusted proxy route and shared HMAC secret. | Signed contract implemented / proxy deployment pending |
+| IP hashing | `security_request_context.ip_hash` is populated from signed proxy proof only when the proxy HMAC verifies. Without valid proof it receives a synthetic unavailable hash, not client-supplied IP. Legacy `platform_admin_audit_logs.ip_hash` and `dmca_cases.submitted_ip_hash` remain hash-only fields and are not the new source of truth. | Signed contract implemented / proxy deployment pending |
+| Masked IP display | Owner Security and Audit Explorer display masked/current-device/audit-row network proof from the safe summary path when linked context exists, including verified/unverified proof state. The high-level Audit tab and public UI do not display network proof. | Partially implemented |
 | Raw IP storage | No raw `ip_address` column was found in app-owned migrations. | Already avoids raw IP |
 | User-agent hashing | `platform_admin_audit_logs.user_agent_hash` and `dmca_cases.submitted_user_agent_hash` exist. No shared writer was found. | Partially present / not wired |
 | Device hash/session tracking | Owner Security stores `owner_trusted_devices.device_fingerprint_hash`, app/build/platform metadata, trusted/revoked state, and last seen. The hash is derived from authenticated user plus client device/app context, not backend network context. | Partially safe |
-| Security context table | `security_request_context` exists with RLS and no anon/authenticated direct table read grants. Safe masked summary is available through `get_security_request_context_summary(uuid)`. | First slice implemented |
+| Security context table | `security_request_context` exists with RLS and no anon/authenticated direct table read grants. It now tracks signed proxy proof verification state. Safe masked summary is available through `get_security_request_context_summary(uuid)`. | Implemented / proxy deployment pending |
 | Admin audit events | `platform_admin_audit_logs` is append-only, backs Admin Audit overview, and now has nullable `security_context_id`. `admin-owner-controls` platform audit writes attach context ids. Other writers remain future work. | Partially implemented |
 | Immutable audit events | Admin audit rows are append-only; Owner Security also has append-only `security_audit_events`. | Already safe for event integrity |
 | Failed access events | Owner Security writes `owner_security_access_denied` events for owner-only actions where backed. Staff-but-not-owner failure proof remains a separate prior gap. | Partially safe |
@@ -101,7 +105,7 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 | Temporary grants | Partially implemented | Owner Security temporary-grant revoke paths attach context where available; grant create and expiry sweeps remain follow-up where a request actor exists. |
 | Kill switches | Needs backend-only capture | Future kill switch/emergency lock writes must require trusted device where policy says so and attach context. Read-only UI needs no IP. |
 | Live Ops / Live Cost Guard | Partially implemented | Operator-approved Live Ops and Live Cost Guard actions now attach context where Edge capture exists. Cost telemetry stays source metadata without raw IP. |
-| LiveKit token issuance | First slice implemented | `livekit_token_request_audit` records token request outcomes with `security_context_id` where capture is available. Real trusted-header proof and owner/operator live audit read proof remain pending. |
+| LiveKit token issuance | First slice implemented | `livekit_token_request_audit` records token request outcomes with `security_context_id` where capture is available. Signed proxy proof contract is deployed; actual trusted proxy route plus owner/operator live audit read proof remain pending. |
 | Watch-Party Live | Should not store IP in room tables | Attach context at token issuance, speaker approval/high-risk room actions, and room abuse reports only. |
 | Live Watch-Party | Should not store IP in room tables | Same as Watch-Party Live: context on token/security events, not membership/chat content rows. |
 | Uploads / creator videos | Partially implemented | `media-storage` writes restricted media security events for URL/delete paths and links private media access audit; publish/unpublish/delete metadata rows outside media-storage remain follow-up. Do not put raw IP on `videos`. |
@@ -129,6 +133,12 @@ create table public.security_request_context (
   asn_or_isp text,
   user_agent_hash text,
   request_id text,
+  network_proof_verified boolean,
+  network_proof_source text,
+  network_proof_version text,
+  network_proof_error text,
+  network_proof_timestamp timestamptz,
+  trusted_header_source text,
   source text not null,
   created_at timestamptz not null default timezone('utc', now()),
   retention_expires_at timestamptz
@@ -137,8 +147,9 @@ create table public.security_request_context (
 
 Implementation notes:
 
-- Confirm the trusted Supabase/Edge request IP source before setting `SECURITY_CONTEXT_TRUSTED_IP_HEADERS`. Candidate proxy headers like `x-forwarded-for`, `x-real-ip`, or `cf-connecting-ip` must be accepted only when supplied by trusted platform infrastructure, never from mobile payloads.
-- Hash normalized IP with the server-side pepper/secret that never leaves Edge/backend infrastructure.
+- Deploy a trusted ingress/proxy that strips spoofable client headers, derives masked/hash network proof from its own trusted request context, and signs the proof with `CHILLYWOOD_NETWORK_PROOF_SECRET`.
+- Verify signed `x-chillywood-network-proof*` headers in Edge before setting `network_proof_verified=true`.
+- Never use direct `x-forwarded-for`, `x-real-ip`, `forwarded`, `x-client-ip`, or `cf-connecting-ip` as trusted proof inside Supabase Edge.
 - Prefer not storing raw IP in v1. If raw IP is legally required, encrypt or restrict it behind service-role/owner-security RPCs and short retention.
 - Keep RLS denying anon and normal authenticated users. Writes should be service-role/backend only. Reads should go through safe RPCs returning masked fields only.
 - Keep indexes on `(user_id, created_at desc)`, `(ip_hash, created_at desc)`, `(device_hash, created_at desc)`, and `retention_expires_at`.
@@ -155,10 +166,11 @@ Repeat that reference only on event/audit/security tables that need proof. Do no
 
 ## Safe Capture Rules
 
-- Client never supplies trusted IP.
-- Backend captures request IP only from trusted request context/headers after infrastructure confirmation.
+- Client never supplies trusted IP or trusted network proof.
+- A trusted proxy captures request IP from its own spoof-resistant ingress context, hashes/masks it, signs the proof, and forwards only signed masked/hash proof to Supabase Edge.
+- Backend verifies signed proof before marking network proof verified.
 - Normalize IPv4/IPv6 before hashing or masking.
-- Store `ip_hash` for correlation and `ip_prefix_or_masked_ip` for UI. Do not show full raw IP by default.
+- Store `ip_hash` for correlation and `ip_prefix_or_masked_ip` for UI only from verified signed proof; otherwise store explicit missing/invalid/expired/malformed proof state. Do not show full raw IP by default.
 - Store approximate country/region/city/ASN only when a trusted backend enrichment source exists and legal/privacy review approves it.
 - High-risk actions fail closed if policy requires security context and context capture fails.
 - Low-risk read-only actions may proceed with `security_context_id = null` and an explicit `context_unavailable` audit metadata flag if product policy allows.
@@ -271,8 +283,8 @@ Do not publish exact raw-IP retention durations until legal/product owners appro
 
 2. Shared Edge helper:
    - Add one request-context capture helper.
-   - Confirm trusted header precedence.
-   - Hash/mask IP with backend-only secret.
+   - Verify signed trusted proxy proof.
+   - Hash/mask IP in the trusted proxy before forwarding.
    - Hash user agent.
    - Return explicit unavailable states.
 
@@ -341,11 +353,13 @@ The May 23, 2026 masked-readout closeout ran these repo and backend checks:
 
 Proof outcomes:
 
-- `admin-owner-controls` is deployed as ACTIVE version `26`; `livekit-token` remains ACTIVE version `63`.
+- Signed trusted network proof contract is implemented by `202605230005_trusted_network_proof_contract.sql`, applied on the linked Supabase project, and linked schema lint reports no schema errors.
+- The shared helper verifies `x-chillywood-network-proof*` HMAC/timestamp/payload proof and ignores direct spoofable IP headers. Local guard fixtures prove valid proof accepts, invalid signature rejects, expired proof rejects, and full-IP-looking masked proof rejects.
+- `admin-owner-controls` is deployed as ACTIVE version `27`; `livekit-token` is ACTIVE version `64`.
+- Helper-bearing event-link Edge functions are deployed as `admin-live-ops-fix-center` v10, `admin-live-cost-guard-action` v18, `admin-live-cost-guard-webhook` v20, `media-storage` v52, `payout-release-preflight` v40, `provider-billing-import-preflight` v40, `sponsor-checkout-preflight` v40, `sponsor-brand-payment-preflight` v40, and `sponsor-reporting-fraud-preflight` v40.
 - Event-link migrations `202605230003` and `202605230004` are applied on the linked Supabase project; `202605230004` fixed the metadata validator uuid comparison and linked schema lint now reports no schema errors.
-- Event-link Edge functions are deployed as `admin-live-ops-fix-center` v9, `admin-live-cost-guard-action` v17, `admin-live-cost-guard-webhook` v19, `media-storage` v51, `payout-release-preflight` v39, `provider-billing-import-preflight` v39, `sponsor-checkout-preflight` v39, `sponsor-brand-payment-preflight` v39, and `sponsor-reporting-fraud-preflight` v39.
-- No-auth POST smokes returned `401` for all nine event-link Edge functions. Unauthenticated REST direct read of `security_request_context` returned `401`.
-- The linked project has `SECURITY_CONTEXT_HASH_PEPPER` and `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS` configured. `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` is not configured.
+- No-auth POST smokes with spoofed direct IP headers plus fake signed-proof headers returned `401` for all eleven helper-bearing Edge functions. Unauthenticated REST direct read of `security_request_context` returned `401`.
+- The linked project has `SECURITY_CONTEXT_HASH_PEPPER`; real verified network proof additionally requires `CHILLYWOOD_NETWORK_PROOF_SECRET` and the trusted proxy route. Direct trusted-header envs are no longer the proof model.
 - Anon direct reads against `security_request_context` returned `42501`; anon summary RPC returned `security_context_admin_required`.
 - A spoofed client-header probe using `x-forwarded-for`, `x-real-ip`, and `cf-connecting-ip` against `livekit-token` returned `403` before token handling; this does not prove a trusted real-IP source, so real IP capture remains disabled.
 - Grep proof found no mobile/client trusted-IP submission markers and no public raw-IP/network display. The only client-side IP-hash marker is the protected admin helper type field, which the Admin UI guard prevents from rendering.
@@ -353,7 +367,7 @@ Proof outcomes:
 
 ## Known Limitations After First Backend Slice
 
-- Real IP capture remains unavailable until server-side `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` is configured and proved against the actual proxy/header chain. `SECURITY_CONTEXT_HASH_PEPPER` is configured and default trusted headers are explicitly disabled.
+- Real IP capture remains unavailable until a trusted proxy is deployed, `CHILLYWOOD_NETWORK_PROOF_SECRET` is configured on the proxy plus Supabase Edge, and live proof shows `network_proof_verified=true` from signed proxy proof.
 - Existing legacy `platform_admin_audit_logs.ip_hash` / `user_agent_hash` and DMCA submitted hash fields are not backfilled and remain secondary to `security_context_id`.
 - DMCA submitted hash fields exist but need backend-only trusted capture.
 - Restricted/link-ready rows now exist for DMCA, Reports, media-storage, Live Ops, Live Cost Guard, payout/network/fraud audit tables, and staff role audit, and the deployed Edge paths above attach context where request capture exists. Direct public SQL intake and SQL-only action paths still need trusted Edge wrappers before they can capture server request context.

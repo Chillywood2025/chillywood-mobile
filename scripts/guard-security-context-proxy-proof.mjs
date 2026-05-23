@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { createHmac } from "node:crypto";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -14,18 +15,73 @@ const adminUi = read("app/admin.tsx");
 const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
 
 [
-  "SECURITY_CONTEXT_TRUSTED_IP_HEADERS",
-  "SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS",
-  "trusted_ip_headers_not_configured",
-  "trusted_ip_header_missing",
-  "trusted_ip_header_malformed",
+  "x-chillywood-network-proof",
+  "x-chillywood-network-proof-signature",
+  "x-chillywood-network-proof-timestamp",
+  "x-chillywood-network-proof-version",
+  "CHILLYWOOD_NETWORK_PROOF_SECRET",
+  "verifySignedNetworkProof",
+  "missing_trusted_proxy_proof",
+  "invalid_trusted_proxy_proof_signature",
+  "expired_trusted_proxy_proof",
+  "malformed_trusted_proxy_proof_payload",
+  "spoofable_client_ip_headers_ignored",
   "raw_ip_retained: false",
 ].forEach((needle) => {
-  if (!helper.includes(needle)) fail(`missing explicit trusted-header/fallback marker: ${needle}`);
+  if (!helper.includes(needle)) fail(`missing explicit signed proxy proof marker: ${needle}`);
 });
 
-if (!/return \["1", "true", "yes"\]\.includes\(enableDefaults\) \? \[\.\.\.DEFAULT_TRUSTED_IP_HEADERS\] : \[\]/.test(helper)) {
-  fail("default proxy headers must remain disabled unless explicitly enabled server-side");
+if (/captured_from_trusted_header|DEFAULT_TRUSTED_IP_HEADERS|SECURITY_CONTEXT_TRUSTED_IP_HEADERS|SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS/.test(helper)) {
+  fail("helper must not trust direct proxy IP headers");
+}
+
+const encodeBase64Url = (value) => Buffer.from(value, "utf8").toString("base64url");
+const signProof = ({ payload, secret, timestamp = String(Math.floor(Date.now() / 1000)), version = "v1" }) => {
+  const proof = encodeBase64Url(JSON.stringify({ ...payload, timestamp, version }));
+  const signingInput = `${version}.${timestamp}.${proof}`;
+  const signature = `sha256=${createHmac("sha256", secret).update(signingInput).digest("hex")}`;
+  return { proof, signature, timestamp, version };
+};
+const verifyProofFixture = ({ proof, signature, timestamp, version }, { now = Date.now(), secret = "unit-secret" } = {}) => {
+  if (!proof || !signature || !timestamp || !version) return "malformed";
+  const parsedTimestamp = Number(timestamp) * 1000;
+  if (Math.abs(now - parsedTimestamp) > 300_000) return "expired";
+  const expected = `sha256=${createHmac("sha256", secret).update(`${version}.${timestamp}.${proof}`).digest("hex")}`;
+  if (expected !== signature) return "invalid";
+  const payload = JSON.parse(Buffer.from(proof, "base64url").toString("utf8"));
+  if (!/^[a-f0-9]{16,128}$/.test(String(payload.ip_hash || ""))) return "malformed";
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(String(payload.masked_ip_or_prefix || ""))) return "malformed";
+  return "verified";
+};
+
+const validFixture = signProof({
+  secret: "unit-secret",
+  payload: {
+    ip_hash: "a".repeat(64),
+    masked_ip_or_prefix: "203.0.113.0/24",
+    request_path: "/functions/v1/livekit-token",
+    user_agent_hash: "b".repeat(64),
+  },
+});
+
+if (verifyProofFixture(validFixture) !== "verified") {
+  fail("valid signed network proof fixture was not accepted");
+}
+if (verifyProofFixture({ ...validFixture, signature: "sha256=" + "0".repeat(64) }) !== "invalid") {
+  fail("invalid signed network proof fixture was not rejected");
+}
+if (verifyProofFixture(signProof({
+  secret: "unit-secret",
+  timestamp: "1700000000",
+  payload: { ip_hash: "c".repeat(64), masked_ip_or_prefix: "203.0.113.0/24" },
+})) !== "expired") {
+  fail("expired signed network proof fixture was not rejected");
+}
+if (verifyProofFixture(signProof({
+  secret: "unit-secret",
+  payload: { ip_hash: "d".repeat(64), masked_ip_or_prefix: "203.0.113.42" },
+})) !== "malformed") {
+  fail("raw full-IP-looking masked proof fixture was not rejected");
 }
 
 [
@@ -41,6 +97,7 @@ if (!/return \["1", "true", "yes"\]\.includes\(enableDefaults\) \? \[\.\.\.DEFAU
   "OwnerSecurityNetworkProof",
   "securityContext?: OwnerSecurityNetworkProof | null",
   "securityContextIdShort?: string | null",
+  "networkProofVerified?: boolean | null",
 ].forEach((needle) => {
   if (!adminOwnerControlsClient.includes(needle)) fail(`missing safe network proof client type marker: ${needle}`);
 });
@@ -50,6 +107,8 @@ if (!/return \["1", "true", "yes"\]\.includes\(enableDefaults\) \? \[\.\.\.DEFAU
   "Has Proof",
   "Missing Proof",
   "Network Proof",
+  "Verified network proof",
+  "Network proof not verified",
   "formatOwnerSecurityNetworkProof",
 ].forEach((needle) => {
   if (!adminUi.includes(needle)) fail(`missing Audit Explorer masked proof UI marker: ${needle}`);

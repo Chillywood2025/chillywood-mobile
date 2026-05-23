@@ -11,6 +11,7 @@ const fail = (message) => {
 const migration = read("supabase/migrations/202605230002_security_request_context_backend.sql");
 const expansionMigration = read("supabase/migrations/202605230003_security_context_event_link_expansion.sql");
 const validatorFixMigration = read("supabase/migrations/202605230004_fix_security_context_metadata_validator.sql");
+const trustedProofMigration = read("supabase/migrations/202605230005_trusted_network_proof_contract.sql");
 const helper = read("supabase/functions/_shared/security-request-context.ts");
 const ownerControls = read("supabase/functions/admin-owner-controls/index.ts");
 const livekitToken = read("supabase/functions/livekit-token/index.ts");
@@ -60,15 +61,33 @@ if (!validatorFixMigration.includes('context."user_id" = auth.uid()')) {
 }
 
 [
-  "SECURITY_CONTEXT_TRUSTED_IP_HEADERS",
+  "network_proof_verified",
+  "signed_chillywood_proxy",
+  "get_security_request_context_summary",
+].forEach((needle) => {
+  if (!trustedProofMigration.includes(needle)) fail(`missing trusted proof migration marker: ${needle}`);
+});
+
+[
+  "x-chillywood-network-proof",
+  "x-chillywood-network-proof-signature",
+  "x-chillywood-network-proof-timestamp",
+  "x-chillywood-network-proof-version",
+  "CHILLYWOOD_NETWORK_PROOF_SECRET",
   "SECURITY_CONTEXT_HASH_PEPPER",
   "captureSecurityRequestContext",
-  "trusted_ip_headers_not_configured",
+  "verifySignedNetworkProof",
+  "spoofable_client_ip_headers_ignored",
+  "network_proof_verified",
   "raw_ip_retained: false",
   "securityContextAuditMetadata",
 ].forEach((needle) => {
   if (!helper.includes(needle)) fail(`missing helper marker: ${needle}`);
 });
+
+if (/captured_from_trusted_header|DEFAULT_TRUSTED_IP_HEADERS|SECURITY_CONTEXT_TRUSTED_IP_HEADERS/.test(helper)) {
+  fail("helper must not capture network proof from direct trusted IP headers");
+}
 
 [
   "captureSecurityRequestContext",

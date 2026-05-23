@@ -20,11 +20,17 @@ export type OwnerSecurityNetworkProof = {
   deviceHashShort?: string | null;
   ipHashShort?: string | null;
   maskedIp?: string | null;
+  networkProofError?: string | null;
+  networkProofSource?: string | null;
+  networkProofTimestamp?: string | null;
+  networkProofVerified?: boolean | null;
+  networkProofVersion?: string | null;
   proofSource?: string | null;
   region?: string | null;
   requestId?: string | null;
   sessionIdHashShort?: string | null;
   source?: string | null;
+  trustedHeaderSource?: string | null;
   userAgentHashShort?: string | null;
 };
 
