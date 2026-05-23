@@ -3,6 +3,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { AccessToken, RoomServiceClient } from "npm:livekit-server-sdk@2";
 import {
+  captureSecurityRequestContext,
+  hashSecurityText,
+  securityContextAuditMetadata,
+  type SecurityRequestContextResult,
+} from "../_shared/security-request-context.ts";
+import {
   normalizeLiveKitRoutingRoomType,
   resolveLiveKitAssignment,
 } from "../_shared/livekit-routing.ts";
@@ -11,6 +17,7 @@ import { readLiveCostGuardTokenDecision } from "../_shared/live-cost-guard.ts";
 type LiveKitJoinSurface = "live-stage" | "watch-party-live" | "chat-call";
 type LiveKitParticipantRole = "host" | "speaker" | "viewer";
 type LiveKitTokenAction = "mint-token" | "enforce-participant-state";
+type SupabaseClientLike = any;
 
 type LiveKitRequestedGrants = {
   roomJoin: boolean;
@@ -82,6 +89,14 @@ type ResolvedRoomRecord =
       lastActivityAt: string | null;
       chatThreadId: string | null;
     };
+
+type LiveKitAuthenticatedUser = {
+  email?: string | null;
+  id: string;
+  user_metadata?: Record<string, unknown> | null;
+};
+
+type LiveKitAuthResult = { user: LiveKitAuthenticatedUser } | { error: Response };
 
 const JSON_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -271,7 +286,7 @@ const getAuthorizedWatchPartySpeakerSeatIds = (
 };
 
 async function fetchWatchPartyMemberships(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClientLike,
   roomName: string,
 ) {
   const memberships = await adminClient
@@ -293,7 +308,7 @@ const deriveLiveKitApiUrl = (serverUrl: string, internalApiUrl?: string | null) 
 };
 
 async function fetchExistingLiveKitAssignmentEndpoint(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClientLike,
   roomName: string,
 ) {
   const assignment = await adminClient
@@ -327,14 +342,14 @@ async function fetchExistingLiveKitAssignmentEndpoint(
 }
 
 async function enforceParticipantState(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClientLike,
   room: ResolvedRoomRecord,
   surface: LiveKitJoinSurface,
   targetUserId: string,
   actorUserId: string,
   livekitApiKey: string,
   livekitApiSecret: string,
-) {
+): Promise<Response> {
   if (room.kind !== "watch-party") {
     return json(400, {
       error: "unsupported_surface",
@@ -405,7 +420,7 @@ const readRequiredEnv = (key: string) => {
   return value;
 };
 
-async function authenticateRequest(req: Request, supabaseUrl: string, supabaseAnonKey: string) {
+async function authenticateRequest(req: Request, supabaseUrl: string, supabaseAnonKey: string): Promise<LiveKitAuthResult> {
   const authorization = sanitizeText(req.headers.get("Authorization"));
   if (!authorization.toLowerCase().startsWith("bearer ")) {
     return { error: json(401, { error: "missing_authorization", message: "Bearer authorization is required." }) };
@@ -428,11 +443,60 @@ async function authenticateRequest(req: Request, supabaseUrl: string, supabaseAn
     return { error: json(401, { error: "invalid_session", message: "Supabase could not verify the current user session." }) };
   }
 
-  return { user: data.user };
+  return { user: data.user as LiveKitAuthenticatedUser };
 }
 
+const writeLiveKitTokenRequestAudit = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    action?: LiveKitTokenAction | "unknown" | null;
+    actorUserId: string;
+    canPublish?: boolean | null;
+    canPublishData?: boolean | null;
+    canSubscribe?: boolean | null;
+    effectiveParticipantRole?: LiveKitParticipantRole | null;
+    errorCode?: string | null;
+    outcome: "success" | "denied" | "error";
+    requestedParticipantRole?: LiveKitParticipantRole | null;
+    room?: ResolvedRoomRecord | null;
+    roomJoin?: boolean | null;
+    roomName?: string | null;
+    securityContext?: SecurityRequestContextResult | null;
+    surface?: LiveKitJoinSurface | null;
+  },
+) => {
+  try {
+    const roomName = sanitizeText(input.room?.roomName ?? input.roomName).toUpperCase();
+    const roomHash = roomName ? await hashSecurityText(roomName, "livekit-token-request:room") : null;
+    await adminClient.from("livekit_token_request_audit").insert({
+      action: input.action ?? "unknown",
+      actor_user_id: input.actorUserId,
+      app_room_id_hash: roomHash,
+      can_publish: typeof input.canPublish === "boolean" ? input.canPublish : null,
+      can_publish_data: typeof input.canPublishData === "boolean" ? input.canPublishData : null,
+      can_subscribe: typeof input.canSubscribe === "boolean" ? input.canSubscribe : null,
+      effective_participant_role: input.effectiveParticipantRole ?? null,
+      error_code: input.errorCode ? sanitizeText(input.errorCode).slice(0, 120) : null,
+      metadata: {
+        ...securityContextAuditMetadata(input.securityContext),
+        token_stored: false,
+      },
+      outcome: input.outcome,
+      requested_participant_role: input.requestedParticipantRole ?? null,
+      room_join: typeof input.roomJoin === "boolean" ? input.roomJoin : null,
+      room_kind: input.room?.kind ?? null,
+      room_name_hash: roomHash,
+      room_type: input.room?.kind === "watch-party" ? input.room.roomType : input.room?.kind === "communication" ? "chat-call" : null,
+      security_context_id: input.securityContext?.id ?? null,
+      surface: input.surface ?? null,
+    });
+  } catch (error) {
+    console.error("livekit-token audit write failed", error instanceof Error ? error.message : String(error));
+  }
+};
+
 async function resolveTargetRoom(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClientLike,
   surface: LiveKitJoinSurface,
   roomName: string,
 ): Promise<ResolvedRoomRecord | null> {
@@ -486,7 +550,7 @@ async function resolveTargetRoom(
 }
 
 async function userCanAccessChatThread(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClientLike,
   threadId: string,
   userId: string,
 ) {
@@ -501,7 +565,7 @@ async function userCanAccessChatThread(
 }
 
 async function resolveEffectiveParticipantRole(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClientLike,
   room: ResolvedRoomRecord,
   surface: LiveKitJoinSurface,
   requestedParticipantRole: LiveKitParticipantRole,
@@ -643,7 +707,7 @@ async function resolveEffectiveParticipantRole(
   };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: JSON_HEADERS, status: 200 });
   }
@@ -662,9 +726,48 @@ Deno.serve(async (req) => {
     const authResult = await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
     if ("error" in authResult) return authResult.error;
 
+    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+    const userId = sanitizeText(authResult.user.id);
+    const securityContext = await captureSecurityRequestContext(adminClient, req, {
+      source: "livekit-token",
+      userId,
+    });
+    const auditAndJson = async (
+      status: number,
+      payload: Record<string, unknown>,
+      details: {
+        action?: LiveKitTokenAction | "unknown" | null;
+        canPublish?: boolean | null;
+        canPublishData?: boolean | null;
+        canSubscribe?: boolean | null;
+        effectiveParticipantRole?: LiveKitParticipantRole | null;
+        requestedParticipantRole?: LiveKitParticipantRole | null;
+        room?: ResolvedRoomRecord | null;
+        roomJoin?: boolean | null;
+        roomName?: string | null;
+        surface?: LiveKitJoinSurface | null;
+      } = {},
+    ) => {
+      await writeLiveKitTokenRequestAudit(adminClient, {
+        ...details,
+        actorUserId: userId,
+        errorCode: sanitizeText(payload.error) || null,
+        outcome: status >= 500 ? "error" : status >= 400 ? "denied" : "success",
+        securityContext,
+      });
+      return json(status, payload);
+    };
+
     const payload = await req.json().catch(() => null) as TokenRequestPayload | null;
     if (!payload || typeof payload !== "object") {
-      return json(400, { error: "invalid_body", message: "Request body must be a JSON object." });
+      return await auditAndJson(400, { error: "invalid_body", message: "Request body must be a JSON object." }, {
+        action: "unknown",
+      });
     }
 
     const surface = normalizeSurface(payload.surface);
@@ -673,48 +776,66 @@ Deno.serve(async (req) => {
     const participantRole = normalizeRole(payload);
 
     if (!action) {
-      return json(400, { error: "invalid_action", message: "action must be mint-token or enforce-participant-state." });
-    }
-
-    if (!surface) {
-      return json(400, { error: "invalid_surface", message: "surface must be live-stage, watch-party-live, or chat-call." });
-    }
-
-    if (!roomName) {
-      return json(400, { error: "missing_room_name", message: "roomName is required." });
-    }
-
-    if (action === "mint-token" && !participantRole) {
-      return json(400, { error: "invalid_role", message: "role must be host, speaker, or viewer." });
-    }
-
-    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
-    const room = await resolveTargetRoom(adminClient, surface, roomName);
-    if (!room) {
-      return json(404, {
-        error: "room_not_found",
-        message: "The requested Chi'llywood room does not exist in the current backend truth.",
+      return await auditAndJson(400, { error: "invalid_action", message: "action must be mint-token or enforce-participant-state." }, {
+        action: "unknown",
+        requestedParticipantRole: participantRole,
+        roomName,
+        surface,
       });
     }
 
-    const userId = sanitizeText(authResult.user.id);
+    if (!surface) {
+      return await auditAndJson(400, { error: "invalid_surface", message: "surface must be live-stage, watch-party-live, or chat-call." }, {
+        action,
+        requestedParticipantRole: participantRole,
+        roomName,
+      });
+    }
+
+    if (!roomName) {
+      return await auditAndJson(400, { error: "missing_room_name", message: "roomName is required." }, {
+        action,
+        requestedParticipantRole: participantRole,
+        surface,
+      });
+    }
+
+    if (action === "mint-token" && !participantRole) {
+      return await auditAndJson(400, { error: "invalid_role", message: "role must be host, speaker, or viewer." }, {
+        action,
+        roomName,
+        surface,
+      });
+    }
+
+    const room = await resolveTargetRoom(adminClient, surface, roomName);
+    if (!room) {
+      return await auditAndJson(404, {
+        error: "room_not_found",
+        message: "The requested Chi'llywood room does not exist in the current backend truth.",
+      }, {
+        action,
+        requestedParticipantRole: participantRole,
+        roomName,
+        surface,
+      });
+    }
 
     if (action === "enforce-participant-state") {
       const targetUserId = sanitizeText(payload.targetParticipantIdentity ?? payload.participantIdentity);
       if (!targetUserId) {
-        return json(400, {
+        return await auditAndJson(400, {
           error: "missing_target_participant",
           message: "targetParticipantIdentity is required for participant state enforcement.",
+        }, {
+          action,
+          room,
+          roomName,
+          surface,
         });
       }
 
-      return await enforceParticipantState(
+      const enforcementResponse = await enforceParticipantState(
         adminClient,
         room,
         surface,
@@ -723,40 +844,83 @@ Deno.serve(async (req) => {
         livekitApiKey,
         livekitApiSecret,
       );
+      await writeLiveKitTokenRequestAudit(adminClient, {
+        action,
+        actorUserId: userId,
+        errorCode: enforcementResponse.status >= 400 ? "participant_state_enforcement" : null,
+        outcome: enforcementResponse.status >= 500 ? "error" : enforcementResponse.status >= 400 ? "denied" : "success",
+        room,
+        roomName,
+        securityContext,
+        surface,
+      });
+      return enforcementResponse ?? json(500, {
+        error: "participant_enforcement_failed",
+        message: "Chi'llywood could not enforce the LiveKit participant downgrade on the assigned server.",
+      });
     }
 
     if (!participantRole) {
-      return json(400, { error: "invalid_role", message: "role must be host, speaker, or viewer." });
+      return await auditAndJson(400, { error: "invalid_role", message: "role must be host, speaker, or viewer." }, {
+        action,
+        room,
+        roomName,
+        surface,
+      });
     }
 
     if (room.kind === "watch-party") {
       if (!isWatchPartyRoomCurrentlyActive(room)) {
-        return json(410, {
+        return await auditAndJson(410, {
           error: "room_expired",
           message: "This Chi'llywood room has ended or expired. Return to the lobby to start or join a fresh room.",
+        }, {
+          action,
+          requestedParticipantRole: participantRole,
+          room,
+          roomName,
+          surface,
         });
       }
 
       const roomType = sanitizeText(room.roomType).toLowerCase();
       if (surface === "live-stage" && roomType !== "live") {
-        return json(409, {
+        return await auditAndJson(409, {
           error: "room_surface_mismatch",
           message: "Live Stage tokens can only be issued for Live Watch-Party rooms.",
+        }, {
+          action,
+          requestedParticipantRole: participantRole,
+          room,
+          roomName,
+          surface,
         });
       }
 
       if (surface === "watch-party-live" && roomType === "live") {
-        return json(409, {
+        return await auditAndJson(409, {
           error: "room_surface_mismatch",
           message: "Watch-Party Live tokens can only be issued for Party Room sources.",
+        }, {
+          action,
+          requestedParticipantRole: participantRole,
+          room,
+          roomName,
+          surface,
         });
       }
     }
 
     if (room.kind === "communication" && !isCommunicationRoomCurrentlyActive(room)) {
-      return json(410, {
+      return await auditAndJson(410, {
         error: "room_expired",
         message: "This Chi'llywood call has ended or expired. Return to the thread to start or join a fresh call.",
+      }, {
+        action,
+        requestedParticipantRole: participantRole,
+        room,
+        roomName,
+        surface,
       });
     }
 
@@ -770,9 +934,15 @@ Deno.serve(async (req) => {
     );
 
     if (!effectiveRole.ok) {
-      return json(effectiveRole.status, {
+      return await auditAndJson(effectiveRole.status, {
         error: effectiveRole.error,
         message: effectiveRole.message,
+      }, {
+        action,
+        requestedParticipantRole: participantRole,
+        room,
+        roomName,
+        surface,
       });
     }
 
@@ -794,22 +964,36 @@ Deno.serve(async (req) => {
         roomType: room.kind === "watch-party" ? room.roomType : null,
         surface,
       },
-      requestedRegion: tokenMetadata.requestedRegion ?? tokenMetadata.region ?? null,
+      requestedRegion: sanitizeText(tokenMetadata.requestedRegion ?? tokenMetadata.region) || null,
       roomType: routingRoomType,
     });
 
     if (!routing.ok) {
-      return json(routing.status, {
+      return await auditAndJson(routing.status, {
         error: routing.error,
         message: routing.message,
+      }, {
+        action,
+        effectiveParticipantRole,
+        requestedParticipantRole: participantRole,
+        room,
+        roomName,
+        surface,
       });
     }
 
     const liveCostGuardDecision = await readLiveCostGuardTokenDecision(adminClient, surface);
     if (liveCostGuardDecision.blockNewLiveRooms) {
-      return json(429, {
+      return await auditAndJson(429, {
         error: "live_cost_guard_pause_active",
         message: liveCostGuardDecision.reason ?? "Live Cost Guard is temporarily pausing new live room tokens.",
+      }, {
+        action,
+        effectiveParticipantRole,
+        requestedParticipantRole: participantRole,
+        room,
+        roomName,
+        surface,
       });
     }
 
@@ -841,12 +1025,23 @@ Deno.serve(async (req) => {
 
     const participantToken = await accessToken.toJwt();
 
-    return json(200, {
+    return await auditAndJson(200, {
       participantToken,
       participantRole: effectiveParticipantRole,
       requestedParticipantRole: participantRole,
       requestedGrants,
       serverUrl: routing.serverUrl,
+    }, {
+      action,
+      canPublish: requestedGrants.canPublish,
+      canPublishData: requestedGrants.canPublishData,
+      canSubscribe: requestedGrants.canSubscribe,
+      effectiveParticipantRole,
+      requestedParticipantRole: participantRole,
+      room,
+      roomJoin: requestedGrants.roomJoin,
+      roomName,
+      surface,
     });
   } catch (error) {
     console.error("livekit-token failure", error);

@@ -24,6 +24,7 @@
     "guard:stripe-connect-policy": "node ./scripts/guard-stripe-connect-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",
     "guard:owner-security-center": "node ./scripts/guard-owner-security-center.mjs",
+    "guard:security-request-context": "node ./scripts/guard-security-request-context.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs && npm run guard:live-stage-contract && npm run guard:live-stage-approved-seats",
     "guard:live-stage-contract": "node ./scripts/guard-live-stage-contract.mjs",

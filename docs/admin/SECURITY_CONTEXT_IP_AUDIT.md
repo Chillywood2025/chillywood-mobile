@@ -2,9 +2,30 @@
 
 Date: 2026-05-23
 
-Lane: Security Context and IP Address Audit
+Lane: Security Context and IP Address Audit / Security Request Context Backend Implementation
 
-Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. This is a planning/audit document only. It does not add IP columns, does not capture live IPs, and does not change runtime behavior.
+Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. The original audit was planning-only. The first backend slice is now implemented by migration `202605230002_security_request_context_backend.sql` plus shared Edge helper `supabase/functions/_shared/security-request-context.ts`.
+
+## Backend Implementation Status
+
+Implemented, Supabase-applied, and Edge-deployed in the first production slice:
+
+- `security_request_context` central restricted table for hashed/masked request context.
+- No raw `ip_address` or raw `ip_address_encrypted_or_restricted` column was added because the repo does not yet have an approved encryption/restricted raw-IP pattern.
+- `security_context_id` linkage on `platform_admin_audit_logs`, `security_audit_events`, and `platform_staff_permission_audit`.
+- `owner_trusted_devices.last_security_context_id` for current-device trust ledger linkage.
+- `livekit_token_request_audit` append-only table for token request outcomes without token storage.
+- `get_security_request_context_summary(uuid)` safe summary RPC for future Owner Security / Audit Explorer UI.
+- `admin-owner-controls` captures a backend request context once per action and attaches it to Owner Security audit, Owner device trust/revoke, temporary grant revoke, and platform audit writes from that Edge Function.
+- `livekit-token` captures backend request context and writes token request audit rows for success/denied/error outcomes without changing room routing, grants, tokens, or Premium gates.
+- Remote proof confirmed migration `202605230002` is applied, `admin-owner-controls` is ACTIVE version `22`, `livekit-token` is ACTIVE version `61`, and anon select/insert against `security_request_context` returns `42501 permission denied`.
+
+Trusted IP capture is intentionally conservative:
+
+- The helper reads IP only from backend-configured trusted headers through `SECURITY_CONTEXT_TRUSTED_IP_HEADERS`.
+- Defaults are not trusted unless `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS=true` is explicitly set server-side.
+- `SECURITY_CONTEXT_HASH_PEPPER` is required before a real captured IP is hashed. Without it, context rows are still linked but marked `capture_status = unavailable` with `Not captured` masked proof.
+- Mobile payloads are never used as trusted IP/network source.
 
 ## Governing Decision
 
@@ -21,20 +42,20 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 
 | Capability | Repo truth | Current classification |
 | --- | --- | --- |
-| IP capture | No shared backend IP capture helper or `security_request_context` table exists. Edge Functions read auth/provider headers, but no trusted network extraction path was found. | Missing shared context |
-| IP hashing | `platform_admin_audit_logs` has `ip_hash`; `dmca_cases` has `submitted_ip_hash`. Search found no active writer populating these from trusted request context. | Partially present / not wired |
+| IP capture | `security_request_context` and shared Edge helper now exist. Real IP capture requires server-side trusted header and hash-pepper env configuration; otherwise rows are linked with `capture_status = unavailable`. | Partially implemented / fail-closed |
+| IP hashing | `security_request_context.ip_hash` is populated by the helper with a peppered hash only when trusted IP capture is configured; legacy `platform_admin_audit_logs.ip_hash` and `dmca_cases.submitted_ip_hash` remain hash-only fields and are not the new source of truth. | Partially implemented |
 | Masked IP display | No app/Admin UI display of masked IP/network proof was found. | Missing UI by design |
 | Raw IP storage | No raw `ip_address` column was found in app-owned migrations. | Already avoids raw IP |
 | User-agent hashing | `platform_admin_audit_logs.user_agent_hash` and `dmca_cases.submitted_user_agent_hash` exist. No shared writer was found. | Partially present / not wired |
 | Device hash/session tracking | Owner Security stores `owner_trusted_devices.device_fingerprint_hash`, app/build/platform metadata, trusted/revoked state, and last seen. The hash is derived from authenticated user plus client device/app context, not backend network context. | Partially safe |
-| Security context table | No `security_request_context` table exists. | Missing |
-| Admin audit events | `platform_admin_audit_logs` is append-only and backs Admin Audit overview. It has request metadata columns but currently exposes only safe audit read fields. | Partially safe |
+| Security context table | `security_request_context` exists with RLS and no anon/authenticated direct table read grants. Safe masked summary is available through `get_security_request_context_summary(uuid)`. | First slice implemented |
+| Admin audit events | `platform_admin_audit_logs` is append-only, backs Admin Audit overview, and now has nullable `security_context_id`. `admin-owner-controls` platform audit writes attach context ids. Other writers remain future work. | Partially implemented |
 | Immutable audit events | Admin audit rows are append-only; Owner Security also has append-only `security_audit_events`. | Already safe for event integrity |
 | Failed access events | Owner Security writes `owner_security_access_denied` events for owner-only actions where backed. Staff-but-not-owner failure proof remains a separate prior gap. | Partially safe |
-| Owner device trust | `owner_trusted_devices` and Owner Security RPC paths are owner-only, backend written, and proof-backed. No network proof is attached. | Partially safe |
-| Temporary grant audit | Temporary scoped grants use `platform_staff_permission_grants.expires_at`; revoke paths write security audit. No network proof is attached. | Partially safe |
+| Owner device trust | `owner_trusted_devices` and Owner Security RPC paths are owner-only, backend written, proof-backed, and now support `last_security_context_id` from `admin-owner-controls`. | Partially implemented |
+| Temporary grant audit | Temporary scoped grants use `platform_staff_permission_grants.expires_at`; Owner Security revoke paths now attach `security_context_id` to security/staff-permission audit rows where the Edge context exists. | Partially implemented |
 | Live Ops security events | Live Ops Fix Center and Live Cost Guard have action/event/audit tables and service-role Edge writes where applicable. No network proof is attached. | Partially safe |
-| LiveKit token request events | `livekit-token` authenticates and enforces room/member/role truth, but no token-request audit/security-context table was found. | Missing context |
+| LiveKit token request events | `livekit_token_request_audit` records success/denied/error outcomes, surface/action, safe room hashes, publish grant booleans, actor id, and `security_context_id`. It never stores LiveKit tokens. | First slice implemented |
 | Payout/revenue security events | Payout/provider/fraud/revenue foundations write admin/audit rows and keep live money closed. No shared security context exists. | Partially safe |
 | Reports/moderation context | `safety_reports` and reports moderation audit exist. No security context id or trusted IP path was found. | Missing context |
 | DMCA context | DMCA cases include submitted hash columns, but public notice submission currently sends payload to RPC from the client and no trusted request-context writer was found. | Partially safe / needs backend-only capture |
@@ -269,13 +290,12 @@ Add proof:
 - Audit Explorer does not expose raw IP.
 - LiveKit token behavior and room routes are unchanged except for audited context linkage.
 
-## Known Limitations After This Audit
+## Known Limitations After First Backend Slice
 
-- No `security_request_context` table exists yet.
-- No shared Edge request-context helper exists yet.
-- Existing `ip_hash` and `user_agent_hash` fields are not wired to trusted capture.
+- Real IP capture remains unavailable until server-side `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` and `SECURITY_CONTEXT_HASH_PEPPER` are configured and proved.
+- Existing legacy `platform_admin_audit_logs.ip_hash` / `user_agent_hash` and DMCA submitted hash fields are not backfilled and remain secondary to `security_context_id`.
 - DMCA submitted hash fields exist but need backend-only trusted capture.
-- LiveKit token requests are not independently audit-linked to request context.
-- Owner Security device trust is backed, but network proof is not attached.
-- Reports, uploads, comments, chat abuse, payout, fraud, and Live Ops actions do not yet share a security context id.
+- Reports, uploads, comments, chat abuse, payout, fraud, Live Ops, DMCA intake, and SQL-only role/permission RPC actions do not yet share a security context id.
+- Owner Security and Audit Explorer do not yet render masked network proof from `get_security_request_context_summary`.
+- Authorized owner/admin masked summary read proof is still pending until a safe context row is created through a proof action.
 - Staff-but-not-owner failed owner-security denial proof remains a prior Owner Security follow-up if a safe scoped proof account is available.

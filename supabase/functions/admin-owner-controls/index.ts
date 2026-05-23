@@ -1,5 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
+  attachDeviceHashToSecurityContext,
+  captureSecurityRequestContext,
+  securityContextAuditMetadata,
+  type SecurityRequestContextResult,
+} from "../_shared/security-request-context.ts";
+import {
   CREATOR_UPLOAD_ACKNOWLEDGEMENT,
   LEGAL_POLICIES,
   LIVE_REPLAY_ACKNOWLEDGEMENT,
@@ -16,6 +22,7 @@ type AuthenticatedUser = {
   id: string;
   permissions: Set<string>;
   role: StaffRole;
+  securityContext?: SecurityRequestContextResult | null;
 };
 
 const CORS_HEADERS = {
@@ -345,6 +352,7 @@ const writePlatformAudit = async (
     ...sanitizeObject(input.metadata ?? {}),
     break_glass_active: !!user.activeBreakGlassSessionId,
     break_glass_session_id: user.activeBreakGlassSessionId,
+    ...securityContextAuditMetadata(user.securityContext),
   };
   const { error } = await adminClient.from("platform_admin_audit_logs").insert({
     action: input.action,
@@ -354,6 +362,7 @@ const writePlatformAudit = async (
     actor_user_id: user.id,
     metadata,
     reason: redactText(input.reason ?? "", 1000) || null,
+    security_context_id: user.securityContext?.id ?? null,
     severity: input.severity ?? "notice",
     target_id: input.targetId ?? null,
     target_type: input.targetType ?? null,
@@ -1081,7 +1090,9 @@ const upsertCurrentOwnerDevice = async (
       source: "owner_security_center",
     },
     platform: deviceContext.platform,
-  };
+  } as JsonObject;
+  if (user.securityContext?.id) patch.last_security_context_id = user.securityContext.id;
+  await attachDeviceHashToSecurityContext(adminClient, user.securityContext, fingerprintHash);
 
   if (existing.data) {
     const { data, error } = await adminClient
@@ -1124,8 +1135,12 @@ const writeSecurityAudit = async (
     actor_role: user.role,
     actor_user_id: user.id,
     event_type: input.eventType,
-    metadata: sanitizeObject(input.metadata ?? {}),
+    metadata: {
+      ...sanitizeObject(input.metadata ?? {}),
+      ...securityContextAuditMetadata(user.securityContext),
+    },
     reason: redactText(input.reason ?? "", 1000) || null,
+    security_context_id: user.securityContext?.id ?? null,
     severity: input.severity ?? "low",
     target_id: input.targetId ?? null,
     target_type: input.targetType ?? null,
@@ -1871,14 +1886,16 @@ const trustCurrentOwnerDevice = async (adminClient: SupabaseClientLike, user: Au
     return json(403, { error: "owner_required" });
   }
   const { currentDevice } = await upsertCurrentOwnerDevice(adminClient, user, payload.deviceContext ?? payload.device_context ?? {});
+  const trustPatch: JsonObject = {
+    revoked_at: null,
+    revoked_by: null,
+    trusted_at: new Date().toISOString(),
+    trusted_by: user.id,
+  };
+  if (user.securityContext?.id) trustPatch.last_security_context_id = user.securityContext.id;
   const { data, error } = await adminClient
     .from("owner_trusted_devices")
-    .update({
-      revoked_at: null,
-      revoked_by: null,
-      trusted_at: new Date().toISOString(),
-      trusted_by: user.id,
-    })
+    .update(trustPatch)
     .eq("id", currentDevice.id)
     .eq("owner_user_id", user.id)
     .select("*")
@@ -1907,13 +1924,15 @@ const revokeOwnerDevice = async (adminClient: SupabaseClientLike, user: Authenti
   if (reason.length < 6) return json(400, { error: "reason_required" });
   const deviceId = toText(payload.deviceId ?? payload.device_id);
   if (!deviceId) return json(400, { error: "device_id_required" });
+  const revokePatch: JsonObject = {
+    revoked_at: new Date().toISOString(),
+    revoked_by: user.id,
+    revoked_reason: reason,
+  };
+  if (user.securityContext?.id) revokePatch.last_security_context_id = user.securityContext.id;
   const { data, error } = await adminClient
     .from("owner_trusted_devices")
-    .update({
-      revoked_at: new Date().toISOString(),
-      revoked_by: user.id,
-      revoked_reason: reason,
-    })
+    .update(revokePatch)
     .eq("id", deviceId)
     .eq("owner_user_id", user.id)
     .select("*")
@@ -1963,9 +1982,13 @@ const revokeTemporaryOwnerGrant = async (adminClient: SupabaseClientLike, user: 
     actor_email: user.email,
     actor_role: user.role,
     actor_user_id: user.id,
-    metadata: { source: "owner_security_center" },
+    metadata: {
+      source: "owner_security_center",
+      ...securityContextAuditMetadata(user.securityContext),
+    },
     permission_key: toText((data as JsonObject).permission_key),
     reason,
+    security_context_id: user.securityContext?.id ?? null,
     target_email: toText((data as JsonObject).target_email) || null,
     target_user_id: toText((data as JsonObject).target_user_id) || null,
   });
@@ -2015,9 +2038,14 @@ const revokeAllTemporaryOwnerGrants = async (adminClient: SupabaseClientLike, us
       actor_email: user.email,
       actor_role: user.role,
       actor_user_id: user.id,
-      metadata: { bulk_revoke: true, source: "owner_security_center" },
+      metadata: {
+        bulk_revoke: true,
+        source: "owner_security_center",
+        ...securityContextAuditMetadata(user.securityContext),
+      },
       permission_key: toText(grant.permission_key),
       reason,
+      security_context_id: user.securityContext?.id ?? null,
       target_email: toText(grant.target_email) || null,
       target_user_id: toText(grant.target_user_id) || null,
     });
@@ -3886,6 +3914,10 @@ Deno.serve(async (req) => {
     const payload = await req.json().catch(() => null) as JsonObject | null;
     if (!isRecord(payload)) return json(400, { error: "invalid_body" });
     const action = toText(payload.action).toLowerCase();
+    auth.user.securityContext = await captureSecurityRequestContext(adminClient, req, {
+      source: `admin-owner-controls:${action || "unknown"}`,
+      userId: auth.user.id,
+    });
 
     if (action === "audit_list") return await auditList(adminClient, auth.user, payload);
     if (action === "template_list") return await templateList();
