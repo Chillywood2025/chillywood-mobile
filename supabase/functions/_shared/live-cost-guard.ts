@@ -279,6 +279,8 @@ export async function recordLiveCostGuardEvent(
     participantIdentity?: string | null;
     recommendedAction?: string | null;
     roomName?: string | null;
+    securityContextId?: string | null;
+    securityContextMetadata?: JsonObject;
     severity: LiveCostGuardSeverity;
     source: "prometheus" | "alertmanager" | "manual" | "system";
   },
@@ -290,10 +292,14 @@ export async function recordLiveCostGuardEvent(
       action_taken: input.actionTaken ?? null,
       admin_actor_id: input.adminActorId ?? null,
       estimated_usd_per_hour: input.estimatedUsdPerHour ?? null,
-      metric_snapshot_json: redactMetadata(input.metricSnapshot ?? {}),
+      metric_snapshot_json: redactMetadata({
+        ...(input.metricSnapshot ?? {}),
+        ...(input.securityContextMetadata ?? {}),
+      }),
       participant_identity: input.participantIdentity ?? null,
       recommended_action: input.recommendedAction ?? null,
       room_name: input.roomName ?? null,
+      security_context_id: input.securityContextId ?? null,
       severity: input.severity,
       source: input.source,
     })
@@ -316,6 +322,8 @@ export async function recordLiveCostGuardAction(
     participantIdentity?: string | null;
     reason: string;
     roomName?: string | null;
+    securityContextId?: string | null;
+    securityContextMetadata?: JsonObject;
     success: boolean;
   },
 ) {
@@ -325,12 +333,16 @@ export async function recordLiveCostGuardAction(
       action_type: input.actionType,
       actor_id: input.actorId ?? null,
       actor_type: input.actorType,
-      after_json: redactMetadata(input.after ?? {}),
+      after_json: redactMetadata({
+        ...(input.after ?? {}),
+        ...(input.securityContextMetadata ?? {}),
+      }),
       before_json: redactMetadata(input.before ?? {}),
       error_message: input.errorMessage ?? null,
       participant_identity: input.participantIdentity ?? null,
       reason: input.reason,
       room_name: input.roomName ?? null,
+      security_context_id: input.securityContextId ?? null,
       success: input.success,
     })
     .select("*")
@@ -352,7 +364,12 @@ export async function applyLiveCostGuardAction(
   adminClient: SupabaseClientLike,
   settings: LiveCostGuardSettings,
   input: LiveCostGuardActionRequest,
-  actor: { actorId?: string | null; actorType: "system" | "admin" },
+  actor: {
+    actorId?: string | null;
+    actorType: "system" | "admin";
+    securityContextId?: string | null;
+    securityContextMetadata?: JsonObject;
+  },
 ) {
   if (!settings.enabled) {
     return recordLiveCostGuardAction(adminClient, {

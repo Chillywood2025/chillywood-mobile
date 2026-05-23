@@ -1,4 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  captureSecurityRequestContext,
+  securityContextAuditMetadata,
+  type SecurityRequestContextResult,
+} from "../_shared/security-request-context.ts";
 
 type JsonObject = Record<string, unknown>;
 type SupabaseClientLike = any;
@@ -7,6 +12,7 @@ type AuthenticatedUser = {
   email: string | null;
   id: string;
   role: "owner" | "operator";
+  securityContext?: SecurityRequestContextResult | null;
 };
 
 const CORS_HEADERS = {
@@ -301,11 +307,13 @@ const writeAudit = async (
       ...(input.result ?? {}),
       break_glass_active: !!input.user.activeBreakGlassSessionId,
       break_glass_session_id: input.user.activeBreakGlassSessionId,
+      ...securityContextAuditMetadata(input.user.securityContext ?? null),
     }),
     risk_level: toText(input.incident.risk_level) || "low",
     rollback_note: toText(input.incident.rollback_note) || null,
     success: input.success,
     target: sanitizeObject(target),
+    security_context_id: input.user.securityContext?.id ?? null,
   });
 
   if (error) throw new Error(`Live Ops audit insert failed: ${error.message}`);
@@ -324,11 +332,13 @@ const writeAudit = async (
       incident_id: incidentId,
       ops_job_id: opsJobId,
       success: input.success,
+      ...securityContextAuditMetadata(input.user.securityContext ?? null),
     }),
     reason: `Live Ops Fix Center ${input.eventType}`,
     severity: input.success ? "notice" : "warning",
     target_id: incidentId,
     target_type: "admin_live_ops_incident",
+    security_context_id: input.user.securityContext?.id ?? null,
   });
 };
 
@@ -474,6 +484,10 @@ Deno.serve(async (req) => {
 
     const auth = await authenticate(req, adminClient, supabaseUrl, anonKey);
     if ("error" in auth) return auth.error;
+    auth.user.securityContext = await captureSecurityRequestContext(adminClient, req, {
+      source: "admin-live-ops-fix-center",
+      userId: auth.user.id,
+    });
 
     const payload = await req.json().catch(() => null) as JsonObject | null;
     if (!isRecord(payload)) return json(400, { error: "invalid_body" });

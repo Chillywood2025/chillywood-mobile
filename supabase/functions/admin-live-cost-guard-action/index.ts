@@ -10,6 +10,10 @@ import {
   sanitizeLiveCostGuardError,
   toLiveCostGuardText,
 } from "../_shared/live-cost-guard.ts";
+import {
+  captureSecurityRequestContext,
+  securityContextAuditMetadata,
+} from "../_shared/security-request-context.ts";
 
 type ActionPayload = {
   action_type?: unknown;
@@ -21,7 +25,7 @@ type ActionPayload = {
   roomName?: unknown;
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return liveCostGuardOptions();
   if (req.method !== "POST") {
     return liveCostGuardJson(405, { error: "method_not_allowed", message: "Use POST for Live Cost Guard action requests." });
@@ -29,7 +33,11 @@ Deno.serve(async (req) => {
 
   try {
     const auth = await authenticateLiveCostGuardAdmin(req);
-    if ("error" in auth) return auth.error;
+    if ("error" in auth) return auth.error ?? liveCostGuardJson(401, { error: "unauthenticated" });
+    const securityContext = await captureSecurityRequestContext(auth.adminClient, req, {
+      source: "admin-live-cost-guard-action",
+      userId: auth.userId,
+    });
 
     const payload = await req.json().catch(() => null) as ActionPayload | null;
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -55,7 +63,12 @@ Deno.serve(async (req) => {
         reason,
         roomName: toLiveCostGuardText(payload.roomName ?? payload.room_name) || null,
       },
-      { actorId: auth.userId, actorType: "admin" },
+      {
+        actorId: auth.userId,
+        actorType: "admin",
+        securityContextId: securityContext?.id ?? null,
+        securityContextMetadata: securityContextAuditMetadata(securityContext),
+      },
     );
 
     return liveCostGuardJson(200, {

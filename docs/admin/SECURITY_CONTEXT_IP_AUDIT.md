@@ -4,7 +4,7 @@ Date: 2026-05-23
 
 Lane: Security Context and IP Address Audit / Security Request Context Backend Implementation
 
-Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. The original audit was planning-only. The first backend slice is now implemented by migration `202605230002_security_request_context_backend.sql` plus shared Edge helper `supabase/functions/_shared/security-request-context.ts`.
+Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. The original audit was planning-only. The first backend slice is implemented by migration `202605230002_security_request_context_backend.sql` plus shared Edge helper `supabase/functions/_shared/security-request-context.ts`; the event-link expansion is implemented by migration `202605230003_security_context_event_link_expansion.sql`.
 
 ## Backend Implementation Status
 
@@ -21,6 +21,17 @@ Implemented, Supabase-applied, and Edge-deployed in the first production slice:
 - Audit Explorer now receives safe masked network proof for authorized audit rows with `security_context_id`, can filter for rows with or without linked proof, and includes `livekit_token_request_audit` rows without exposing tokens.
 - `livekit-token` captures backend request context and writes token request audit rows for success/denied/error outcomes without changing room routing, grants, tokens, or Premium gates.
 - Remote proof confirmed migration `202605230002` is applied, `admin-owner-controls` is ACTIVE version `26`, `livekit-token` is ACTIVE version `63`, and anon select/insert against `security_request_context` returns `42501 permission denied`.
+
+Repo-side event-link expansion now adds nullable `security_context_id` references to restricted event/audit tables only:
+
+- DMCA restricted records: `dmca_cases`, `dmca_counter_notices`, `dmca_attachments`, and `dmca_audit_log`.
+- Reports/moderation: `safety_reports`, plus `admin_reports_write_audit` can carry a validated context into `platform_admin_audit_logs` when a trusted backend path supplies one.
+- Media/storage: new restricted append-only `media_security_audit_events` for `media-storage` URL/delete events, plus private media access platform audit rows linked to context.
+- Live Ops: `admin_live_ops_action_audit`, `admin_live_cost_guard_events`, and `admin_live_cost_guard_actions`.
+- Payout/revenue/fraud foundations: `creator_payout_audit_log`, `network_billing_audit_logs`, and `fraud_audit_logs`.
+- SQL-only staff paths: `platform_staff_role_audit`; `platform_staff_permission_audit` was already linked in the first slice.
+- `security_context_id_from_metadata(jsonb)` validates metadata-carried context ids for SQL-only audit helpers. Service-role callers may reference existing contexts; authenticated callers may reference only their own context. This keeps future Edge wrappers link-ready without trusting arbitrary client-supplied network proof.
+- Edge paths now capturing/linking context without behavior changes: `admin-live-ops-fix-center`, `admin-live-cost-guard-action`, `admin-live-cost-guard-webhook`, `media-storage`, `payout-release-preflight`, `provider-billing-import-preflight`, `sponsor-checkout-preflight`, `sponsor-brand-payment-preflight`, and `sponsor-reporting-fraud-preflight`.
 
 Trusted IP capture is intentionally conservative:
 
@@ -67,15 +78,15 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 | Failed access events | Owner Security writes `owner_security_access_denied` events for owner-only actions where backed. Staff-but-not-owner failure proof remains a separate prior gap. | Partially safe |
 | Owner device trust | `owner_trusted_devices` and Owner Security RPC paths are owner-only, backend written, proof-backed, now support `last_security_context_id`, and return masked `networkProof` through `admin-owner-controls` without exposing raw context ids or raw IP. | Partially implemented |
 | Temporary grant audit | Temporary scoped grants use `platform_staff_permission_grants.expires_at`; Owner Security revoke paths now attach `security_context_id` to security/staff-permission audit rows where the Edge context exists. | Partially implemented |
-| Live Ops security events | Live Ops Fix Center and Live Cost Guard have action/event/audit tables and service-role Edge writes where applicable. No network proof is attached. | Partially safe |
+| Live Ops security events | Live Ops Fix Center and Live Cost Guard action/event/audit tables now have nullable `security_context_id`; the Edge functions attach context where capture is available. No room behavior, token grants, egress, or remediation policy changed. | Partially implemented |
 | LiveKit token request events | `livekit_token_request_audit` records success/denied/error outcomes, surface/action, safe room hashes, publish grant booleans, actor id, and `security_context_id`. It never stores LiveKit tokens. | First slice implemented |
-| Payout/revenue security events | Payout/provider/fraud/revenue foundations write admin/audit rows and keep live money closed. No shared security context exists. | Partially safe |
-| Reports/moderation context | `safety_reports` and reports moderation audit exist. No security context id or trusted IP path was found. | Missing context |
-| DMCA context | DMCA cases include submitted hash columns, but public notice submission currently sends payload to RPC from the client and no trusted request-context writer was found. | Partially safe / needs backend-only capture |
+| Payout/revenue security events | Payout/provider/fraud/revenue audit tables are link-ready, and the backend preflight/refusal Edge functions attach context to their immutable platform audit rows. Live money remains closed. Broader Stripe Connect/provider sync functions remain follow-up. | Partially implemented |
+| Reports/moderation context | `safety_reports` now has nullable `security_context_id`, and reports moderation audit helpers can attach a validated context when a trusted backend wrapper supplies one. Existing direct SQL report RPCs remain nullable/backward-compatible. | Link-ready / partially implemented |
+| DMCA context | DMCA cases preserve legacy submitted hash columns and now have nullable `security_context_id` on cases, counter-notices, attachments, and audit rows. Existing public SQL intake remains direct/client RPC and cannot capture trusted request headers until moved behind an Edge wrapper. | Link-ready / partially implemented |
 | Comments/replies context | Comment/reply tables and helpers do not store raw IP or security context. | Should not store IP on content rows |
-| Upload/media context | Creator video upload and media-storage helpers audit some private media access, but no request context is attached. | Missing context for high-risk media actions |
-| Chat abuse context | Chat messages and room messages do not store raw IP or security context. | Should not store IP on chat rows |
-| Fraud/suspicious activity | Fraud foundation tables and audit logs exist, but no shared network context or hash-pattern evidence table exists. | Partially safe |
+| Upload/media context | `media-storage` now captures request context and writes restricted `media_security_audit_events` for presigned URL/delete events; private media access platform audit rows also link context. Public `videos`, comments, chat messages, and room messages remain free of network proof. | Partially implemented |
+| Chat abuse context | Chat messages and room messages do not store raw IP or security context. Chat abuse remains deferred to restricted report/abuse event tables, not message display rows. | Should not store IP on chat rows |
+| Fraud/suspicious activity | Fraud foundation audit logs now have nullable `security_context_id`; sponsor reporting/fraud preflight rows attach context to platform audit rows. Enforcement/runtime fraud hooks remain future work. | Partially implemented |
 
 ## Gap Map
 
@@ -86,19 +97,19 @@ IP and network proof belongs in a shared backend security evidence path, not sca
 | Device trust | Partially safe | Keep device fingerprint hash. Add last security context reference for current-device proof and trusted-device ledger rows. |
 | Admin audit | Partially safe | Prefer `security_context_id` on future audit rows. Keep legacy `ip_hash`/`user_agent_hash` read-restricted or backfill only if needed. |
 | Audit Explorer | Partially implemented | Owner/admin-scoped audit rows with `security_context_id` now include masked network proof from the safe summary path. No raw IP. Owner/operator live read proof remains pending until a usable owner/operator session is available in the proof shell. |
-| Roles/users/premium admin changes | Missing security_context_id | Attach context for role grant/revoke, scoped permission updates, premium overrides, and owner/admin sensitive user changes. |
+| Roles/users/premium admin changes | Link-ready / partially implemented | Role and permission audit tables support `security_context_id`, and SQL helpers validate metadata-carried context ids. Direct SQL role/permission RPCs remain nullable until a request-context Edge wrapper is added. Premium overrides remain follow-up. |
 | Temporary grants | Partially implemented | Owner Security temporary-grant revoke paths attach context where available; grant create and expiry sweeps remain follow-up where a request actor exists. |
 | Kill switches | Needs backend-only capture | Future kill switch/emergency lock writes must require trusted device where policy says so and attach context. Read-only UI needs no IP. |
-| Live Ops / Live Cost Guard | Partially safe | Attach context to operator-approved actions and high-risk attempts. Cost/event telemetry can stay source metadata without user IP. |
+| Live Ops / Live Cost Guard | Partially implemented | Operator-approved Live Ops and Live Cost Guard actions now attach context where Edge capture exists. Cost telemetry stays source metadata without raw IP. |
 | LiveKit token issuance | First slice implemented | `livekit_token_request_audit` records token request outcomes with `security_context_id` where capture is available. Real trusted-header proof and owner/operator live audit read proof remain pending. |
 | Watch-Party Live | Should not store IP in room tables | Attach context at token issuance, speaker approval/high-risk room actions, and room abuse reports only. |
 | Live Watch-Party | Should not store IP in room tables | Same as Watch-Party Live: context on token/security events, not membership/chat content rows. |
-| Uploads / creator videos | Missing security_context_id | Attach context to upload-url creation, publish/unpublish/delete, takedown, and private media access audit. Do not put raw IP on `videos`. |
+| Uploads / creator videos | Partially implemented | `media-storage` writes restricted media security events for URL/delete paths and links private media access audit; publish/unpublish/delete metadata rows outside media-storage remain follow-up. Do not put raw IP on `videos`. |
 | Comments / replies | Should not store IP | Keep public content rows free of IP. Attach context to report/abuse/moderation events if needed. |
-| Reports / moderation | Missing security_context_id | Report intake and admin report actions should create context from backend request and link to report/audit rows. |
+| Reports / moderation | Link-ready / partially implemented | `safety_reports` and report audit writers are link-ready. Direct SQL client RPCs remain nullable until a backend wrapper captures request context. |
 | Chat abuse surfaces | Should not store IP on messages | Attach context to abuse reports, block/escalation events, and future anti-spam backend actions. |
-| Payouts / revenue | Missing security_context_id | Attach context to payout preflight, provider account actions, release attempts, premium overrides, source imports, and fraud review actions. |
-| Fraud / suspicious activity | Partially safe | Use hashed context patterns and aggregate risk signals. Fraud UI should show pattern/risk summaries, not raw IP. |
+| Payouts / revenue | Partially implemented | Preflight/refusal Edge functions for payout release, provider billing import, sponsor checkout, sponsor brand payment, and sponsor reporting/fraud attach context to platform audit rows. Provider account/sync/source-import/premium override paths remain follow-up. |
+| Fraud / suspicious activity | Partially implemented | Fraud audit tables are link-ready and sponsor fraud preflight attaches context to immutable audit. Fraud UI should show pattern/risk summaries, not raw IP. |
 
 ## Recommended Architecture
 
@@ -151,6 +162,7 @@ Repeat that reference only on event/audit/security tables that need proof. Do no
 - Store approximate country/region/city/ASN only when a trusted backend enrichment source exists and legal/privacy review approves it.
 - High-risk actions fail closed if policy requires security context and context capture fails.
 - Low-risk read-only actions may proceed with `security_context_id = null` and an explicit `context_unavailable` audit metadata flag if product policy allows.
+- Existing direct SQL public/client RPCs remain nullable until a backend Edge wrapper can capture trusted request headers. They must not accept client-supplied IP or raw network metadata.
 - Service-role secrets, hash peppers, provider secrets, and raw IP values must never enter React Native, docs, logs, screenshots, or committed artifacts.
 
 ## Event Attachment Rules
@@ -173,6 +185,12 @@ Attach `security_context_id` to these backed/future events as they are implement
 - comment/reply/chat abuse report events
 - payout/provider/fraud/revenue/premium override/admin money-control events
 - kill switch, emergency lock, break-glass, and owner security actions
+
+Current expansion status:
+
+- Attached/link-ready now: DMCA restricted records and audit, safety reports, media security audit events, Live Ops action audit, Live Cost Guard events/actions, payout/network/fraud audit tables, staff role audit, staff permission audit, platform admin audit, security audit events, owner trusted devices, and LiveKit token request audit.
+- Edge-captured now: Owner Security/admin-owner-controls, LiveKit token request audit, Live Ops Fix Center actions, Live Cost Guard action/webhook paths, media-storage URL/delete paths, and payout/provider/sponsor/fraud preflight refusal paths.
+- Deferred intentionally: public DMCA/report SQL intake wrappers, publish/unpublish metadata actions outside media-storage, normal chat abuse event table/wrapper, Stripe Connect account/sync/webhook context capture, revenue source import context capture, premium override context capture, and SQL-only staff role/permission RPC request wrappers.
 
 Do not attach raw IP to public profile, public channel, `videos`, comments, chat messages, room messages, or room membership rows unless a later legal/security design explicitly reclassifies those rows as restricted evidence tables.
 

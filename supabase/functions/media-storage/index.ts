@@ -1,4 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  captureSecurityRequestContext,
+  securityContextAuditMetadata,
+  type SecurityRequestContextResult,
+} from "../_shared/security-request-context.ts";
 
 type MediaStorageAction = "create_upload_url" | "create_download_url" | "delete_object";
 type MediaStorageSurfaceType = "creator_video" | "social_attachment";
@@ -14,6 +19,7 @@ type MediaStoragePayload = {
 };
 
 type SupabaseClient = any;
+type AuthenticatedMediaUser = { id: string; email: string };
 
 const JSON_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -345,15 +351,17 @@ const ownerMediaBlockedForStaff = async (
 
 const writePrivateMediaAccessAudit = async (
   adminClient: SupabaseClient,
-  user: { id: string; email: string },
+  user: AuthenticatedMediaUser,
   input: {
     action: "media_download_url" | "media_delete";
     objectKey: string;
     ownerId: string | null;
     recordId: string;
+    securityContext?: SecurityRequestContextResult | null;
     surfaceType: MediaStorageSurfaceType;
   },
 ) => {
+  const securityMetadata = securityContextAuditMetadata(input.securityContext ?? null);
   const { error } = await adminClient.from("platform_admin_audit_logs").insert({
     action: input.action,
     action_category: "content",
@@ -363,14 +371,69 @@ const writePrivateMediaAccessAudit = async (
     metadata: {
       object_key_owner: objectKeyOwner(input.objectKey),
       surface_type: input.surfaceType,
+      ...securityMetadata,
     },
     reason: "Scoped staff media access through media-storage.",
     severity: input.action === "media_delete" ? "warning" : "notice",
     target_id: input.recordId || input.objectKey,
     target_type: input.surfaceType,
     target_user_id: input.ownerId,
+    security_context_id: input.securityContext?.id ?? null,
   });
   if (error) throw new Error(`Private media audit write failed: ${error.message}`);
+
+  const mediaEventError = await adminClient.from("media_security_audit_events").insert({
+    action: input.action === "media_delete" ? "private_media_delete" : "private_media_download_url",
+    actor_email: user.email || null,
+    actor_user_id: user.id,
+    metadata: securityMetadata,
+    object_key_owner: objectKeyOwner(input.objectKey),
+    reason: "Scoped staff media access through media-storage.",
+    record_id: input.recordId || null,
+    result: "success",
+    security_context_id: input.securityContext?.id ?? null,
+    surface_type: input.surfaceType,
+  });
+  if (mediaEventError.error) throw new Error(`Private media security event write failed: ${mediaEventError.error.message}`);
+};
+
+const writeMediaSecurityEvent = async (
+  adminClient: SupabaseClient,
+  user: AuthenticatedMediaUser,
+  input: {
+    action: MediaStorageAction;
+    objectKey: string;
+    recordId?: string | null;
+    result?: "success" | "denied" | "blocked" | "error";
+    securityContext?: SecurityRequestContextResult | null;
+    surfaceType: MediaStorageSurfaceType;
+  },
+) => {
+  const securityMetadata = securityContextAuditMetadata(input.securityContext ?? null);
+  const { error } = await adminClient.from("media_security_audit_events").insert({
+    action: input.action,
+    actor_email: user.email || null,
+    actor_user_id: user.id,
+    metadata: securityMetadata,
+    object_key_owner: objectKeyOwner(input.objectKey),
+    record_id: input.recordId ?? null,
+    result: input.result ?? "success",
+    security_context_id: input.securityContext?.id ?? null,
+    surface_type: input.surfaceType,
+  });
+  if (error) throw new Error(`Media security event write failed: ${error.message}`);
+};
+
+const safeWriteMediaSecurityEvent = async (
+  adminClient: SupabaseClient,
+  user: AuthenticatedMediaUser,
+  input: Parameters<typeof writeMediaSecurityEvent>[2],
+) => {
+  try {
+    await writeMediaSecurityEvent(adminClient, user, input);
+  } catch (error) {
+    console.warn("media-storage security event skipped", error instanceof Error ? error.message : "unknown_error");
+  }
 };
 
 const validateUpload = (input: {
@@ -497,10 +560,11 @@ const userHasActiveEntitlement = async (
 
 const canReadCreatorVideoRendition = async (
   adminClient: SupabaseClient,
-  user: { id: string; email: string },
+  user: AuthenticatedMediaUser,
   recordId: string,
   bucket: string,
   objectKey: string,
+  securityContext?: SecurityRequestContextResult | null,
 ) => {
   const rendition = await readCreatorVideoRenditionForObject(adminClient, recordId, bucket, objectKey);
   if (!rendition) return null;
@@ -515,6 +579,7 @@ const canReadCreatorVideoRendition = async (
         objectKey,
         ownerId: rendition.ownerId,
         recordId,
+        securityContext,
         surfaceType: "creator_video",
       });
       return true;
@@ -532,12 +597,13 @@ const canReadCreatorVideoRendition = async (
 
 const canReadCreatorVideo = async (
   adminClient: SupabaseClient,
-  user: { id: string; email: string },
+  user: AuthenticatedMediaUser,
   recordId: string,
   bucket: string,
   objectKey: string,
+  securityContext?: SecurityRequestContextResult | null,
 ) => {
-  const renditionAllowed = await canReadCreatorVideoRendition(adminClient, user, recordId, bucket, objectKey);
+  const renditionAllowed = await canReadCreatorVideoRendition(adminClient, user, recordId, bucket, objectKey, securityContext);
   if (renditionAllowed !== null) return renditionAllowed;
 
   const video = await readCreatorVideoForObject(adminClient, recordId, bucket, objectKey);
@@ -556,6 +622,7 @@ const canReadCreatorVideo = async (
       objectKey,
       ownerId: toText(video.owner_id),
       recordId,
+      securityContext,
       surfaceType: "creator_video",
     });
     return true;
@@ -565,10 +632,11 @@ const canReadCreatorVideo = async (
 
 const canDeleteCreatorVideo = async (
   adminClient: SupabaseClient,
-  user: { id: string; email: string },
+  user: AuthenticatedMediaUser,
   recordId: string,
   bucket: string,
   objectKey: string,
+  securityContext?: SecurityRequestContextResult | null,
 ) => {
   const video = await readCreatorVideoForObject(adminClient, recordId, bucket, objectKey);
   if (!video) return objectKeyOwner(objectKey) === user.id;
@@ -580,6 +648,7 @@ const canDeleteCreatorVideo = async (
       objectKey,
       ownerId: toText(video.owner_id),
       recordId,
+      securityContext,
       surfaceType: "creator_video",
     });
     return true;
@@ -705,10 +774,11 @@ const canReadSocialAttachmentSurface = async (
 
 const canReadSocialAttachment = async (
   adminClient: SupabaseClient,
-  user: { id: string; email: string },
+  user: AuthenticatedMediaUser,
   recordId: string,
   bucket: string,
   objectKey: string,
+  securityContext?: SecurityRequestContextResult | null,
 ) => {
   const attachment = await readSocialAttachmentForObject(adminClient, recordId, bucket, objectKey);
   if (!attachment) return false;
@@ -721,6 +791,7 @@ const canReadSocialAttachment = async (
       objectKey,
       ownerId: toText(attachment.owner_user_id),
       recordId,
+      securityContext,
       surfaceType: "social_attachment",
     });
     return true;
@@ -730,10 +801,11 @@ const canReadSocialAttachment = async (
 
 const canDeleteSocialAttachment = async (
   adminClient: SupabaseClient,
-  user: { id: string; email: string },
+  user: AuthenticatedMediaUser,
   recordId: string,
   bucket: string,
   objectKey: string,
+  securityContext?: SecurityRequestContextResult | null,
 ) => {
   const attachment = await readSocialAttachmentForObject(adminClient, recordId, bucket, objectKey);
   if (!attachment) return objectKeyOwner(objectKey) === user.id;
@@ -745,6 +817,7 @@ const canDeleteSocialAttachment = async (
       objectKey,
       ownerId: toText(attachment.owner_user_id),
       recordId,
+      securityContext,
       surfaceType: "social_attachment",
     });
     return true;
@@ -798,6 +871,10 @@ Deno.serve(async (req): Promise<Response> => {
         persistSession: false,
       },
     });
+    const securityContext = await captureSecurityRequestContext(adminClient, req, {
+      source: "media-storage",
+      userId: user.id,
+    });
 
     if (action === "create_upload_url") {
       const mimeType = toText(payload.mimeType).toLowerCase() || "application/octet-stream";
@@ -824,6 +901,13 @@ Deno.serve(async (req): Promise<Response> => {
         secretAccessKey: s3SecretAccessKey,
         expiresSeconds,
       });
+      await safeWriteMediaSecurityEvent(adminClient, user, {
+        action,
+        objectKey,
+        recordId,
+        securityContext,
+        surfaceType,
+      });
 
       return json(200, {
         provider: "s3",
@@ -839,9 +923,9 @@ Deno.serve(async (req): Promise<Response> => {
       if (!recordId && objectKeyOwner(objectKey) === user.id) {
         allowed = true;
       } else if (surfaceType === "creator_video") {
-        allowed = await canReadCreatorVideo(adminClient, user, recordId, s3Bucket, objectKey);
+        allowed = await canReadCreatorVideo(adminClient, user, recordId, s3Bucket, objectKey, securityContext);
       } else {
-        allowed = await canReadSocialAttachment(adminClient, user, recordId, s3Bucket, objectKey);
+        allowed = await canReadSocialAttachment(adminClient, user, recordId, s3Bucket, objectKey, securityContext);
       }
 
       if (!allowed) return json(403, { error: "not_allowed", message: "You cannot access this media object." });
@@ -856,6 +940,13 @@ Deno.serve(async (req): Promise<Response> => {
         secretAccessKey: s3SecretAccessKey,
         expiresSeconds: DOWNLOAD_EXPIRES_SECONDS,
       });
+      await safeWriteMediaSecurityEvent(adminClient, user, {
+        action,
+        objectKey,
+        recordId,
+        securityContext,
+        surfaceType,
+      });
 
       return json(200, {
         downloadUrl,
@@ -864,8 +955,8 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     const allowed = surfaceType === "creator_video"
-      ? await canDeleteCreatorVideo(adminClient, user, recordId, s3Bucket, objectKey)
-      : await canDeleteSocialAttachment(adminClient, user, recordId, s3Bucket, objectKey);
+      ? await canDeleteCreatorVideo(adminClient, user, recordId, s3Bucket, objectKey, securityContext)
+      : await canDeleteSocialAttachment(adminClient, user, recordId, s3Bucket, objectKey, securityContext);
     if (!allowed) return json(403, { error: "not_allowed", message: "You cannot delete this media object." });
 
     const deleteUrl = await createPresignedS3Url({
@@ -882,6 +973,13 @@ Deno.serve(async (req): Promise<Response> => {
     if (!deleteResponse.ok && deleteResponse.status !== 404) {
       return json(502, { error: "delete_failed", message: "Unable to delete this media object right now." });
     }
+    await safeWriteMediaSecurityEvent(adminClient, user, {
+      action,
+      objectKey,
+      recordId,
+      securityContext,
+      surfaceType,
+    });
 
     return json(200, { ok: true });
   } catch (error) {

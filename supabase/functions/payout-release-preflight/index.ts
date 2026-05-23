@@ -14,6 +14,11 @@ import {
   type SupabaseClientLike,
   userHasPlatformRole,
 } from "../_shared/stripe-connect.ts";
+import {
+  captureSecurityRequestContext,
+  securityContextAuditMetadata,
+  type SecurityRequestContextResult,
+} from "../_shared/security-request-context.ts";
 
 type PayoutReleasePreflightPayload = {
   amount?: unknown;
@@ -122,6 +127,7 @@ const writeAuditLog = async (
     beforeState?: unknown;
     metadata?: Record<string, unknown>;
     reason: string;
+    securityContext?: SecurityRequestContextResult | null;
     severity?: string;
     targetId?: string | null;
     targetType?: string | null;
@@ -140,6 +146,7 @@ const writeAuditLog = async (
       before_state: input.beforeState == null ? null : redactValue(input.beforeState),
       metadata: redactValue({
         ...input.metadata,
+        ...securityContextAuditMetadata(input.securityContext ?? null),
         function_name: FUNCTION_NAME,
         live_money_action: false,
         payout_release_created: false,
@@ -151,6 +158,7 @@ const writeAuditLog = async (
       target_id: input.targetId ?? null,
       target_type: input.targetType ?? "payout_release_preflight",
       target_user_id: input.targetUserId ?? null,
+      security_context_id: input.securityContext?.id ?? null,
     })
     .select("id")
     .single();
@@ -187,6 +195,7 @@ Deno.serve(async (req) => {
   let targetId: string | null = null;
   let targetUserId: string | null = null;
   let requestedAuditLogId: string | null = null;
+  let securityContext: SecurityRequestContextResult | null = null;
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -228,6 +237,10 @@ Deno.serve(async (req) => {
       );
     }
     adminClient = adminConfig.client;
+    securityContext = await captureSecurityRequestContext(adminClient, req, {
+      source: FUNCTION_NAME,
+      userId: currentUser.id,
+    });
 
     const hasOperatorRole = await userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]);
     if (!hasOperatorRole) {
@@ -257,6 +270,7 @@ Deno.serve(async (req) => {
         target_user_id: targetUserId,
       },
       reason: "Production payout release preflight requested; release remains blocked by required gates.",
+      securityContext,
       targetId,
       targetType: targetId ? "payout_release_candidate" : "payout_release_preflight",
       targetUserId,
@@ -289,6 +303,7 @@ Deno.serve(async (req) => {
       },
       reason:
         "Production payout release remains unavailable until legal/accounting, provider, KYC/tax, fraud, admin review, hold, audit, support, and rollout gates are proved.",
+      securityContext,
       targetId,
       targetType: targetId ? "payout_release_candidate" : "payout_release_preflight",
       targetUserId,
@@ -318,6 +333,7 @@ Deno.serve(async (req) => {
         target_id: targetId,
         target_user_id: targetUserId,
       },
+      securityContext,
       reason: "Payout release preflight failed; no payout release occurred.",
       severity: "warning",
       targetId,

@@ -13,6 +13,11 @@ import {
   type SupabaseClientLike,
   userHasPlatformRole,
 } from "../_shared/stripe-connect.ts";
+import {
+  captureSecurityRequestContext,
+  securityContextAuditMetadata,
+  type SecurityRequestContextResult,
+} from "../_shared/security-request-context.ts";
 
 type SponsorReportingFraudPreflightPayload = {
   brand_id?: unknown;
@@ -170,6 +175,7 @@ const writeAuditLog = async (
     beforeState?: unknown;
     metadata?: Record<string, unknown>;
     reason: string;
+    securityContext?: SecurityRequestContextResult | null;
     severity?: string;
     targetId?: string | null;
     targetType?: string | null;
@@ -187,6 +193,7 @@ const writeAuditLog = async (
       before_state: input.beforeState == null ? null : redactValue(input.beforeState),
       metadata: redactValue({
         ...input.metadata,
+        ...securityContextAuditMetadata(input.securityContext ?? null),
         function_name: FUNCTION_NAME,
         backend_only: true,
         foundation_only: true,
@@ -210,6 +217,7 @@ const writeAuditLog = async (
       severity: input.severity ?? "notice",
       target_id: input.targetId ?? null,
       target_type: input.targetType ?? "sponsor_reporting_fraud_preflight",
+      security_context_id: input.securityContext?.id ?? null,
     })
     .select("id")
     .single();
@@ -253,6 +261,7 @@ Deno.serve(async (req) => {
   let requestedCreatorUserId: string | null = null;
   let requestedReportId: string | null = null;
   let requestedSponsorDealId: string | null = null;
+  let securityContext: SecurityRequestContextResult | null = null;
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -300,6 +309,10 @@ Deno.serve(async (req) => {
       );
     }
     adminClient = adminConfig.client;
+    securityContext = await captureSecurityRequestContext(adminClient, req, {
+      source: FUNCTION_NAME,
+      userId: currentUser.id,
+    });
 
     const hasOperatorRole = await userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]);
     if (!hasOperatorRole) {
@@ -334,6 +347,7 @@ Deno.serve(async (req) => {
       },
       reason:
         "Sponsor reporting/fraud preflight requested; reporting imports and enforcement remain blocked by backed reporting, review, audit, and appeal gates.",
+      securityContext,
       targetId: requestedSponsorDealId,
       targetType: requestedSponsorDealId ? "sponsor_deal_record" : "sponsor_reporting_fraud_preflight",
     });
@@ -366,6 +380,7 @@ Deno.serve(async (req) => {
       },
       reason:
         "Sponsor reporting imports and fraud integration remain unavailable until backed reporting, disclosure/safety/fraud review, immutable audit, and appeal/review gates are proved.",
+      securityContext,
       targetId: requestedSponsorDealId,
       targetType: requestedSponsorDealId ? "sponsor_deal_record" : "sponsor_reporting_fraud_preflight",
     });
@@ -399,6 +414,7 @@ Deno.serve(async (req) => {
         sponsor_deal_id: requestedSponsorDealId,
       },
       reason: "Sponsor reporting/fraud preflight failed; no reporting import or fraud enforcement occurred.",
+      securityContext,
       severity: "warning",
       targetId: requestedSponsorDealId,
       targetType: requestedSponsorDealId ? "sponsor_deal_record" : "sponsor_reporting_fraud_preflight",

@@ -15,6 +15,10 @@ import {
   toLiveCostGuardText,
   type LiveCostGuardSeverity,
 } from "../_shared/live-cost-guard.ts";
+import {
+  captureSecurityRequestContext,
+  securityContextAuditMetadata,
+} from "../_shared/security-request-context.ts";
 
 type AlertmanagerAlert = {
   annotations?: Record<string, unknown>;
@@ -106,6 +110,10 @@ Deno.serve(async (req) => {
     }
 
     const adminClient = createLiveCostGuardAdminClient();
+    const securityContext = await captureSecurityRequestContext(adminClient, req, {
+      source: "admin-live-cost-guard-webhook",
+    });
+    const securityContextMetadata = securityContextAuditMetadata(securityContext);
     const settings = await readLiveCostGuardSettings(adminClient);
     const alerts = Array.isArray(payload.alerts) && payload.alerts.length ? payload.alerts : [{ labels: payload.commonLabels, annotations: payload.commonAnnotations, status: payload.status }];
     const insertedEvents = [];
@@ -146,6 +154,8 @@ Deno.serve(async (req) => {
         participantIdentity,
         recommendedAction,
         roomName,
+        securityContextId: securityContext?.id ?? null,
+        securityContextMetadata,
         severity,
         source: "alertmanager",
       });
@@ -161,7 +171,11 @@ Deno.serve(async (req) => {
             reason: `Auto-protect response for ${severity} Live Cost Guard alert.`,
             roomName,
           },
-          { actorType: "system" },
+          {
+            actorType: "system",
+            securityContextId: securityContext?.id ?? null,
+            securityContextMetadata,
+          },
         );
         insertedActions.push(action);
       }

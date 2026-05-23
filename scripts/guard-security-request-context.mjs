@@ -9,9 +9,12 @@ const fail = (message) => {
 };
 
 const migration = read("supabase/migrations/202605230002_security_request_context_backend.sql");
+const expansionMigration = read("supabase/migrations/202605230003_security_context_event_link_expansion.sql");
 const helper = read("supabase/functions/_shared/security-request-context.ts");
 const ownerControls = read("supabase/functions/admin-owner-controls/index.ts");
 const livekitToken = read("supabase/functions/livekit-token/index.ts");
+const liveOpsFixCenter = read("supabase/functions/admin-live-ops-fix-center/index.ts");
+const mediaStorage = read("supabase/functions/media-storage/index.ts");
 const adminUi = read("app/admin.tsx");
 const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
 
@@ -29,6 +32,27 @@ const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
 ].forEach((needle) => {
   if (!migration.includes(needle)) fail(`missing migration marker: ${needle}`);
 });
+
+[
+  "security_context_id_from_metadata",
+  "dmca_cases",
+  "dmca_audit_log",
+  "safety_reports",
+  "admin_live_ops_action_audit",
+  "admin_live_cost_guard_events",
+  "admin_live_cost_guard_actions",
+  "creator_payout_audit_log",
+  "network_billing_audit_logs",
+  "fraud_audit_logs",
+  "platform_staff_role_audit",
+  "media_security_audit_events",
+].forEach((needle) => {
+  if (!expansionMigration.includes(needle)) fail(`missing expansion migration marker: ${needle}`);
+});
+
+if (/\"ip_address\"|\"raw_ip\"|ip_address_encrypted/i.test(expansionMigration)) {
+  fail("event-link expansion migration must not add raw IP storage");
+}
 
 [
   "SECURITY_CONTEXT_TRUSTED_IP_HEADERS",
@@ -62,6 +86,23 @@ const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
   "participantToken",
 ].forEach((needle) => {
   if (!livekitToken.includes(needle)) fail(`missing LiveKit audit marker: ${needle}`);
+});
+
+[
+  "captureSecurityRequestContext",
+  "security_context_id",
+  "securityContextAuditMetadata",
+].forEach((needle) => {
+  if (!liveOpsFixCenter.includes(needle)) fail(`missing Live Ops security context marker: ${needle}`);
+});
+
+[
+  "captureSecurityRequestContext",
+  "media_security_audit_events",
+  "security_context_id",
+  "object_key_owner",
+].forEach((needle) => {
+  if (!mediaStorage.includes(needle)) fail(`missing media security context marker: ${needle}`);
 });
 
 if (/livekit_token_request_audit[\s\S]{0,600}participantToken/i.test(livekitToken)) {

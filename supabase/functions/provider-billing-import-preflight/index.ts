@@ -13,6 +13,11 @@ import {
   type SupabaseClientLike,
   userHasPlatformRole,
 } from "../_shared/stripe-connect.ts";
+import {
+  captureSecurityRequestContext,
+  securityContextAuditMetadata,
+  type SecurityRequestContextResult,
+} from "../_shared/security-request-context.ts";
 
 type ProviderBillingImportPreflightPayload = {
   billing_period?: unknown;
@@ -153,6 +158,7 @@ const writeAuditLog = async (
     beforeState?: unknown;
     metadata?: Record<string, unknown>;
     reason: string;
+    securityContext?: SecurityRequestContextResult | null;
     severity?: string;
     targetId?: string | null;
     targetType?: string | null;
@@ -170,6 +176,7 @@ const writeAuditLog = async (
       before_state: input.beforeState == null ? null : redactValue(input.beforeState),
       metadata: redactValue({
         ...input.metadata,
+        ...securityContextAuditMetadata(input.securityContext ?? null),
         function_name: FUNCTION_NAME,
         backend_only: true,
         foundation_only: true,
@@ -188,6 +195,7 @@ const writeAuditLog = async (
       severity: input.severity ?? "notice",
       target_id: input.targetId ?? null,
       target_type: input.targetType ?? "provider_billing_import_preflight",
+      security_context_id: input.securityContext?.id ?? null,
     })
     .select("id")
     .single();
@@ -228,6 +236,7 @@ Deno.serve(async (req) => {
   let requestedNetworkAccountId: string | null = null;
   let requestedProvider = "unspecified";
   let requestedBillingPeriod: string | null = null;
+  let securityContext: SecurityRequestContextResult | null = null;
 
   try {
     const { supabaseAnonKey, supabaseUrl } = createAuthClient();
@@ -270,6 +279,10 @@ Deno.serve(async (req) => {
       );
     }
     adminClient = adminConfig.client;
+    securityContext = await captureSecurityRequestContext(adminClient, req, {
+      source: FUNCTION_NAME,
+      userId: currentUser.id,
+    });
 
     const hasOperatorRole = await userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]);
     if (!hasOperatorRole) {
@@ -303,6 +316,7 @@ Deno.serve(async (req) => {
       },
       reason:
         "Provider billing API import preflight requested; import remains blocked by credential, idempotency, reconciliation, audit, and legal/accounting gates.",
+      securityContext,
       targetId: requestedNetworkAccountId,
       targetType: requestedNetworkAccountId ? "network_billing_account" : "provider_billing_import_preflight",
     });
@@ -333,6 +347,7 @@ Deno.serve(async (req) => {
       },
       reason:
         "Provider billing API import remains unavailable until server-side credentials, idempotency, trusted usage, reconciliation, audit, and legal/accounting gates are proved.",
+      securityContext,
       targetId: requestedNetworkAccountId,
       targetType: requestedNetworkAccountId ? "network_billing_account" : "provider_billing_import_preflight",
     });
@@ -364,6 +379,7 @@ Deno.serve(async (req) => {
         requested_audit_log_id: requestedAuditLogId,
       },
       reason: "Provider billing API import preflight failed; no provider bill import or billing execution occurred.",
+      securityContext,
       severity: "warning",
       targetId: requestedNetworkAccountId,
       targetType: requestedNetworkAccountId ? "network_billing_account" : "provider_billing_import_preflight",
