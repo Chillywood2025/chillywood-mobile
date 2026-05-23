@@ -2,6 +2,6 @@
 
 ## Admin Immutable Audit Overview Remaining Gaps
 
-Admin Immutable Audit Log overview is repo-side implemented, current-APK Android owner/admin proved, Audit Explorer shortcut proved, row-detail sheet proved, and anon REST denial proved. True remaining Audit-tab gap only:
+Admin Immutable Audit Log overview is repo-side implemented, current-APK Android owner/admin proved, Audit Explorer shortcut proved, row-detail sheet proved, anon REST denial proved, and physical normal-user UI denial proved with the configured non-staff proof account.
 
-- Prove physical normal-user UI denial on a disposable normal account; backend anon proof already denies `platform_admin_audit_logs` reads with `401` / `42501 permission denied`, and `guard:admin-auth-safety` still passes.
+No true Audit-tab gaps remain from this lane. The next task should be a separately scoped Admin or launch-readiness lane.
