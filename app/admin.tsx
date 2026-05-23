@@ -484,6 +484,49 @@ type AdminImmutableAuditReadModelWithLoading = AdminImmutableAuditReadModel & {
   loading: boolean;
 };
 
+type AuditOverviewCategoryFilter =
+  | "all"
+  | "role"
+  | "permission"
+  | "reports"
+  | "dmca"
+  | "content"
+  | "security"
+  | "live_ops"
+  | "premium"
+  | "system"
+  | "unknown";
+
+const auditOverviewCategoryFilterOptions: readonly {
+  key: AuditOverviewCategoryFilter;
+  label: string;
+}[] = [
+  { key: "all", label: "All" },
+  { key: "role", label: "Role" },
+  { key: "permission", label: "Permission" },
+  { key: "reports", label: "Reports" },
+  { key: "dmca", label: "DMCA" },
+  { key: "content", label: "Content" },
+  { key: "security", label: "Security" },
+  { key: "live_ops", label: "Live Ops" },
+  { key: "premium", label: "Premium" },
+  { key: "system", label: "System" },
+];
+
+const auditOverviewCategoryLabels: Record<AuditOverviewCategoryFilter, string> = {
+  all: "All",
+  role: "Role",
+  permission: "Permission",
+  reports: "Reports",
+  dmca: "DMCA",
+  content: "Content",
+  security: "Security",
+  live_ops: "Live Ops",
+  premium: "Premium",
+  system: "System",
+  unknown: "Unknown",
+};
+
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
 const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "home", label: "Home" },
@@ -2029,6 +2072,89 @@ const formatImmutableAuditTarget = (entry: PlatformAdminAuditLogRow) => {
   return entry.targetId ? `${targetType} ${formatCompactIdentifier(entry.targetId)}` : targetType;
 };
 
+const auditOverviewSearchText = (entry: PlatformAdminAuditLogRow) => [
+  entry.action,
+  entry.actionCategory,
+  entry.targetType,
+  entry.targetId,
+  entry.actorRole,
+  entry.reason,
+  ...Object.entries(entry.metadata ?? {}).flatMap(([key, value]) => [key, String(value ?? "")]),
+].join(" ").toLowerCase();
+
+const resolveAuditOverviewCategory = (entry: PlatformAdminAuditLogRow): AuditOverviewCategoryFilter => {
+  const category = String(entry.actionCategory ?? "").toLowerCase();
+  const targetType = String(entry.targetType ?? "").toLowerCase();
+  const action = String(entry.action ?? "").toLowerCase();
+  const searchable = auditOverviewSearchText(entry);
+
+  if (targetType.includes("permission") || action.includes("permission") || searchable.includes("permission_key")) return "permission";
+  if (category === "role" || targetType.includes("staff") || action.includes("platform_staff_role")) return "role";
+  if (searchable.includes("dmca") || searchable.includes("copyright")) return "dmca";
+  if (category === "moderation" || searchable.includes("safety_report") || searchable.includes("report")) return "reports";
+  if (category === "content" || searchable.includes("title") || searchable.includes("homepage") || searchable.includes("creator_grant")) return "content";
+  if (category === "admin_access" || searchable.includes("security") || searchable.includes("break_glass") || searchable.includes("trusted_device")) return "security";
+  if (searchable.includes("live_ops") || searchable.includes("live ops") || searchable.includes("cost_guard") || searchable.includes("remediation")) return "live_ops";
+  if (searchable.includes("premium") || searchable.includes("revenuecat") || searchable.includes("entitlement")) return "premium";
+  if (["settings", "system", "usage", "ads", "foundation"].includes(category)) return "system";
+  return "unknown";
+};
+
+const auditOverviewSeverityTone = (severity: unknown): OwnerControlTone => {
+  const normalized = String(severity ?? "").toLowerCase();
+  if (normalized === "critical") return "danger";
+  if (normalized === "warning") return "manual";
+  if (normalized === "notice") return "info";
+  return "default";
+};
+
+const auditOverviewCategoryTone = (category: AuditOverviewCategoryFilter): OwnerControlTone => {
+  if (category === "permission" || category === "security") return "manual";
+  if (category === "role" || category === "dmca") return "info";
+  if (category === "unknown") return "locked";
+  return "default";
+};
+
+const isHighRiskAuditEvent = (entry: PlatformAdminAuditLogRow) => {
+  const searchable = auditOverviewSearchText(entry);
+  if (String(entry.severity ?? "").toLowerCase() === "critical") return true;
+  return [
+    "role_grant",
+    "role_revoke",
+    "permission_grant",
+    "permission_revoke",
+    "permission_update",
+    "bulk_permission",
+    "break_glass",
+    "owner_security",
+    "security",
+    "content_unpublished",
+    "content_archived",
+    "dmca",
+    "takedown",
+    "counter_notice",
+    "target_removed",
+    "live_ops_remediation",
+    "fraud",
+    "payout",
+    "money",
+  ].some((token) => searchable.includes(token));
+};
+
+const summarizeAuditMetadata = (metadata: Record<string, unknown>) => {
+  const entries = Object.entries(metadata ?? {})
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .slice(0, 6);
+  if (!entries.length) return "";
+  return entries
+    .map(([key, value]) => `${formatModerationToken(key)}: ${formatOwnerDetailValue(value)}`)
+    .join(" · ");
+};
+
+const auditOverviewTitle = (entry: PlatformAdminAuditLogRow) => (
+  `${formatModerationToken(entry.actionCategory)} · ${formatModerationToken(entry.action)}`
+);
+
 const getCreatorVideoModerationActionLabel = (status: ReportTargetModerationStatus) => {
   if (status === "hidden") return "Hide From Public";
   if (status === "removed") return "Remove From Public";
@@ -2326,6 +2452,10 @@ export default function AdminStudioScreen() {
   const [adminAuditLogSummary, setAdminAuditLogSummary] =
     useState<AdminAuditLogReadModel["summary"] | null>(null);
   const [adminAuditLogLoading, setAdminAuditLogLoading] = useState(false);
+  const [auditOverviewCategoryFilter, setAuditOverviewCategoryFilter] =
+    useState<AuditOverviewCategoryFilter>("all");
+  const [selectedAuditOverviewRow, setSelectedAuditOverviewRow] =
+    useState<PlatformAdminAuditLogRow | null>(null);
   const [safetyReports, setSafetyReports] = useState<SafetyReportQueueItem[]>([]);
   const [safetyReportQueueSummary, setSafetyReportQueueSummary] = useState<SafetyReportQueueSummary | null>(null);
   const [safetyReportsLoading, setSafetyReportsLoading] = useState(false);
@@ -2856,6 +2986,8 @@ export default function AdminStudioScreen() {
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
+      setAuditOverviewCategoryFilter("all");
+      setSelectedAuditOverviewRow(null);
       return;
     }
     void loadPlatformRoles();
@@ -2942,6 +3074,8 @@ export default function AdminStudioScreen() {
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
+      setAuditOverviewCategoryFilter("all");
+      setSelectedAuditOverviewRow(null);
       return;
     }
     if (!canAccessContentProgramming) {
@@ -2964,7 +3098,7 @@ export default function AdminStudioScreen() {
       setLiveOpsActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
-      setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
+      void loadAdminImmutableAuditReadModel();
       return;
     }
     loadTitles();
@@ -4039,6 +4173,80 @@ export default function AdminStudioScreen() {
     return actions.filter((action) => isVisible(action.destination));
   }, [visibleOperatorTabs]);
 
+  const auditOverviewRows = adminImmutableAuditReadModel.latestRows;
+  const auditOverviewConnected = adminImmutableAuditReadModel.connected;
+  const auditOverviewCount = auditOverviewConnected
+    ? adminImmutableAuditReadModel.auditLogCount ?? auditOverviewRows.length
+    : null;
+  const canViewAuditOverview = canManagePrivilegedWrites || canReviewSafetyReports || canAccessAuditExplorer;
+  const auditOverviewPartial = auditOverviewConnected && !!adminOpsNotice;
+  const auditOverviewStatus = adminImmutableAuditReadModel.loading
+    ? { label: "Loading", tone: "info" as OwnerControlTone }
+    : !canViewAuditOverview
+      ? { label: "Permission Denied", tone: "danger" as OwnerControlTone }
+      : auditOverviewPartial
+        ? { label: "Partial Visibility", tone: "manual" as OwnerControlTone }
+        : auditOverviewConnected
+          ? { label: "Connected", tone: "success" as OwnerControlTone }
+          : { label: "Not Connected", tone: "locked" as OwnerControlTone };
+  const auditOverviewCategoryCounts = useMemo(() => {
+    const counts = auditOverviewCategoryFilterOptions.reduce((acc, option) => {
+      acc[option.key] = 0;
+      return acc;
+    }, {} as Record<AuditOverviewCategoryFilter, number>);
+    for (const row of auditOverviewRows) {
+      const category = resolveAuditOverviewCategory(row);
+      counts[category] = (counts[category] ?? 0) + 1;
+      counts.all += 1;
+    }
+    return counts;
+  }, [auditOverviewRows]);
+  const filteredAuditOverviewRows = useMemo(() => {
+    if (auditOverviewCategoryFilter === "all") return auditOverviewRows;
+    return auditOverviewRows.filter((row) => resolveAuditOverviewCategory(row) === auditOverviewCategoryFilter);
+  }, [auditOverviewCategoryFilter, auditOverviewRows]);
+  const auditOverviewHighRiskRows = useMemo(
+    () => auditOverviewRows.filter(isHighRiskAuditEvent),
+    [auditOverviewRows],
+  );
+  const auditOverviewRecentAdminActions = useMemo(
+    () => auditOverviewRows.filter((row) => !row.foundationProof && row.actorRole !== "foundation").length,
+    [auditOverviewRows],
+  );
+  const auditOverviewRolePermissionChanges = useMemo(
+    () => auditOverviewRows.filter((row) => {
+      const category = resolveAuditOverviewCategory(row);
+      return category === "role" || category === "permission";
+    }).length,
+    [auditOverviewRows],
+  );
+  const auditOverviewVisibleMetric = adminImmutableAuditReadModel.loading
+    ? "Loading"
+    : auditOverviewConnected
+      ? String(auditOverviewCount)
+      : "Unavailable";
+  const auditOverviewRecentMetric = adminImmutableAuditReadModel.loading
+    ? "Loading"
+    : auditOverviewConnected
+      ? String(auditOverviewRecentAdminActions)
+      : "Unavailable";
+  const auditOverviewRoleMetric = adminImmutableAuditReadModel.loading
+    ? "Loading"
+    : auditOverviewConnected
+      ? String(auditOverviewRolePermissionChanges)
+      : "Unavailable";
+  const auditOverviewHighRiskMetric = adminImmutableAuditReadModel.loading
+    ? "Loading"
+    : auditOverviewConnected
+      ? String(auditOverviewHighRiskRows.length)
+      : "Unavailable";
+  const auditOverviewMetadataRows = selectedAuditOverviewRow
+    ? Object.entries(selectedAuditOverviewRow.metadata ?? {})
+      .filter(([, value]) => value !== null && value !== undefined && value !== "")
+      .slice(0, 8)
+      .map(([key, value]) => ({ label: formatModerationToken(key), value: formatOwnerDetailValue(value) }))
+    : [];
+
   const systemStatusCards = useMemo<readonly AdminDashboardCard[]>(() => {
     const hasRevenueCatPublicKey = !!(
       runtimeConfig.revenueCat.androidPublicSdkKey
@@ -4950,7 +5158,7 @@ export default function AdminStudioScreen() {
   const loadAdminImmutableAuditReadModel = useCallback(async () => {
     setAdminImmutableAuditReadModel((current) => ({ ...current, loading: true }));
 
-    const immutableAuditReadModel = await readAdminImmutableAuditReadModel({ limit: 8 });
+    const immutableAuditReadModel = await readAdminImmutableAuditReadModel({ limit: 16 });
     setAdminImmutableAuditReadModel({ ...immutableAuditReadModel, loading: false });
   }, []);
 
@@ -6023,6 +6231,13 @@ export default function AdminStudioScreen() {
       loadStaffAndAuditVisibility(),
     ]);
   }, [loadPlatformRoles, loadStaffAndAuditVisibility]);
+
+  const refreshAuditOverview = useCallback(async () => {
+    await Promise.all([
+      loadAdminImmutableAuditReadModel(),
+      loadStaffAndAuditVisibility(),
+    ]);
+  }, [loadAdminImmutableAuditReadModel, loadStaffAndAuditVisibility]);
 
   const runStaffRoleGrant = useCallback(async () => {
     const email = staffRoleEmail.trim().toLowerCase();
@@ -8262,60 +8477,103 @@ export default function AdminStudioScreen() {
 
         {operatorTab === "roles" || operatorTab === "audit" ? (
         <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>{operatorTab === "roles" ? "ROLES" : "AUDIT"}</Text>
-                <Text style={styles.configTitle}>
-                  {operatorTab === "roles" ? "Platform role visibility" : "Immutable admin audit log"}
-                </Text>
+          {operatorTab === "roles" ? (
+          <>
+            <View style={styles.configHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configKicker}>ROLES</Text>
+                <Text style={styles.configTitle}>Platform role visibility</Text>
                 <Text style={styles.configBody}>
-                {operatorTab === "roles"
-                  ? "Platform role records are backend staff truth. Owner can manage Admins and Moderators; Admins need scoped grants."
-                  : adminImmutableAuditReadModel.connected
-                    ? "Immutable admin audit log foundation is connected. The derived role/safety summary stays separate below."
-                    : "Immutable admin audit logs are not connected yet. The derived role/safety summary stays separate below where permitted."}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.dashboardGrid}>
-            {staffAndAuditCards
-              .filter((card) => operatorTab === "roles" ? card.label === "Staff & Roles" : card.label === "Audit Visibility")
-              .map((card) => (
-              <View
-                key={card.label}
-                style={[
-                  styles.dashboardMetricCard,
-                  card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
-                ]}
-              >
-                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
-                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
-                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+                  Platform role records are backend staff truth. Owner can manage Admins and Moderators; Admins need scoped grants.
+                </Text>
               </View>
-            ))}
-          </View>
+            </View>
 
-          <View style={styles.badgesRow}>
-            {operatorTab === "roles" ? (
+            <View style={styles.dashboardGrid}>
+              {staffAndAuditCards
+                .filter((card) => card.label === "Staff & Roles")
+                .map((card) => (
+                <View
+                  key={card.label}
+                  style={[
+                    styles.dashboardMetricCard,
+                    card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
+                  ]}
+                >
+                  <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+                  <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+                  <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.badgesRow}>
               <View style={[styles.badge, canViewStaffRoles ? styles.badgeOn : styles.badgeOff]}>
                 <Text style={styles.badgeText}>{canViewStaffRoles ? "Role Roster Visible" : "Role Roster Locked"}</Text>
               </View>
-            ) : (
-              <View
-                style={[
-                  styles.badge,
-                  canManagePrivilegedWrites || canReviewSafetyReports ? styles.badgeScheduled : styles.badgeOff,
-                ]}
-              >
-                <Text style={styles.badgeText}>
-                  {canManagePrivilegedWrites || canReviewSafetyReports ? "Audit Context Visible" : "Audit Context Locked"}
-                </Text>
-              </View>
-            )}
-          </View>
+            </View>
+          </>
+          ) : (
+          <>
+            <OwnerControlPanelHeader
+              actions={(
+                <>
+                  <TouchableOpacity
+                    style={[styles.ownerSecondaryButton, (adminImmutableAuditReadModel.loading || adminAuditLogLoading) && styles.configSaveBtnDisabled]}
+                    onPress={() => void refreshAuditOverview()}
+                    disabled={adminImmutableAuditReadModel.loading || adminAuditLogLoading}
+                  >
+                    <Text style={styles.ownerSecondaryButtonText}>
+                      {adminImmutableAuditReadModel.loading || adminAuditLogLoading ? "Refreshing" : "Refresh"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.ownerSecondaryButton, !canAccessAuditExplorer && styles.configSaveBtnDisabled]}
+                    onPress={() => setOperatorTab("audit-explorer")}
+                    disabled={!canAccessAuditExplorer}
+                  >
+                    <Text style={styles.ownerSecondaryButtonText}>
+                      {canAccessAuditExplorer ? "Open Audit Explorer" : "Explorer Locked"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              badgeLabel={auditOverviewStatus.label}
+              badgeTone={auditOverviewStatus.tone}
+              kicker="AUDIT OVERVIEW"
+              lastRunLabel={adminImmutableAuditReadModel.generatedAt && adminImmutableAuditReadModel.generatedAt !== EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL.generatedAt
+                ? `Last refreshed ${formatModerationTimestamp(adminImmutableAuditReadModel.generatedAt)}`
+                : "Last refreshed not connected"}
+              subtitle="Append-only overview of admin, role, safety, content, and platform actions. Deeper search stays in Audit Explorer."
+              title="Immutable Audit Log"
+            />
 
-          {adminOpsNotice ? (
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile
+                label="Visible Audit Rows"
+                tone={auditOverviewConnected ? "success" : "locked"}
+                value={auditOverviewVisibleMetric}
+              />
+              <OwnerMetricTile
+                label="Recent Admin Actions"
+                tone={auditOverviewConnected ? "info" : "locked"}
+                value={auditOverviewRecentMetric}
+              />
+              <OwnerMetricTile
+                label="Role / Permission"
+                tone={auditOverviewRolePermissionChanges > 0 ? "manual" : auditOverviewConnected ? "success" : "locked"}
+                value={auditOverviewRoleMetric}
+              />
+              <OwnerMetricTile
+                label="High-Risk Events"
+                tone={auditOverviewHighRiskRows.length > 0 ? "danger" : auditOverviewConnected ? "success" : "locked"}
+                value={auditOverviewHighRiskMetric}
+              />
+            </View>
+          </>
+          )}
+
+          {operatorTab === "roles" && adminOpsNotice ? (
             <View style={[styles.notice, styles.noticeWarn]}>
               <Text style={styles.noticeText}>{adminOpsNotice}</Text>
             </View>
@@ -8684,137 +8942,198 @@ export default function AdminStudioScreen() {
 
             {operatorTab === "audit" ? (
             <>
-              <View style={styles.configListRow}>
-                <View style={styles.configListCopy}>
-                  <Text style={styles.configListTitle}>Immutable admin audit log foundation</Text>
-                  <Text style={styles.configListBody}>
-                    {adminImmutableAuditReadModel.connected
-                      ? "Immutable admin audit log foundation is connected."
-                      : "Immutable admin audit logs are not connected yet."}
-                  </Text>
-                  <Text style={styles.configListBody}>
-                    {formatImmutableAuditCount(
-                      adminImmutableAuditReadModel.auditLogCount,
-                      adminImmutableAuditReadModel.loading,
-                    )}
-                  </Text>
-                  <Text style={styles.configListBody}>Audit rows are append-only.</Text>
-                  <Text style={styles.configListBody}>Dangerous money/fraud actions are still not active.</Text>
+              <View style={styles.contentPanel}>
+                <View style={styles.ownerSectionHeaderRow}>
+                  <Text style={styles.ownerSectionTitle}>Visibility / Scope</Text>
+                  <OwnerStatusPill label={auditOverviewStatus.label} tone={auditOverviewStatus.tone} />
                 </View>
-                <View style={[styles.badge, adminImmutableAuditReadModel.connected ? styles.badgeOn : styles.badgeOff]}>
-                  <Text style={styles.badgeText}>
-                    {adminImmutableAuditReadModel.connected ? "Connected" : "Not connected"}
-                  </Text>
-                </View>
+                <OwnerDetailGrid
+                  rows={[
+                    {
+                      label: "Audit Source",
+                      value: adminImmutableAuditReadModel.loading
+                        ? "loading immutable rows"
+                        : auditOverviewConnected
+                          ? "platform_admin_audit_logs connected"
+                          : "immutable audit source not connected",
+                    },
+                    {
+                      label: "Visible Rows",
+                      value: auditOverviewConnected
+                        ? formatAdminAuditFoundationCount(auditOverviewCount)
+                        : "Unavailable",
+                    },
+                    {
+                      label: "Scope",
+                      value: canManagePrivilegedWrites
+                        ? "Owner/Admin privileged scope"
+                        : canReviewSafetyReports
+                          ? "Scoped review-capable operator view"
+                          : canAccessAuditExplorer
+                            ? "Audit Explorer scoped view"
+                          : "No backed audit permission",
+                    },
+                    {
+                      label: "Staff / Role Summary",
+                      value: adminAuditLogLoading
+                        ? "loading role/safety context"
+                        : adminAuditLogSummary
+                          ? `${adminAuditLogSummary.roleRecordCount} role context · ${adminAuditLogSummary.safetyReportCount} safety context`
+                          : "Role/safety context unavailable",
+                    },
+                  ]}
+                />
+                {adminOpsNotice ? (
+                  <OwnerDisabledReason reason={`Partial visibility: ${adminOpsNotice}`} />
+                ) : null}
+                {!auditOverviewConnected && !adminImmutableAuditReadModel.loading ? (
+                  <OwnerDisabledReason reason="The immutable audit source did not return rows for this account. This is shown as unavailable instead of a fake zero." />
+                ) : null}
               </View>
 
-              {adminImmutableAuditReadModel.loading ? (
-                <View style={styles.configLoadingRow}>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={styles.configLoadingText}>Loading immutable audit rows…</Text>
+              <View style={styles.contentPanel}>
+                <View style={styles.ownerSectionHeaderRow}>
+                  <Text style={styles.ownerSectionTitle}>Recent Audit Timeline</Text>
+                  <OwnerStatusPill
+                    label={adminImmutableAuditReadModel.loading ? "Loading" : auditOverviewConnected ? `${filteredAuditOverviewRows.length} visible` : "Not Connected"}
+                    tone={auditOverviewConnected ? "info" : "locked"}
+                  />
                 </View>
-              ) : adminImmutableAuditReadModel.connected && adminImmutableAuditReadModel.latestRows.length ? (
-                adminImmutableAuditReadModel.latestRows.map((entry) => (
-                  <View key={`immutable-audit-${entry.id}`} style={styles.configListRow}>
-                    <View style={styles.configListCopy}>
-                      <Text style={styles.configListTitle}>{formatModerationToken(entry.action)}</Text>
-                      <Text style={styles.configListBody}>
-                        {entry.createdAt ? formatModerationTimestamp(entry.createdAt) : "Audit timestamp unavailable"}
-                      </Text>
-                      <Text style={styles.configListBody}>{`Category ${formatModerationToken(entry.actionCategory)}`}</Text>
-                      <Text style={styles.configListBody}>{`Actor ${formatImmutableAuditActor(entry)}`}</Text>
-                      <Text style={styles.configListBody}>{`Target ${formatImmutableAuditTarget(entry)}`}</Text>
-                      {entry.reason ? (
-                        <Text style={styles.configListBody}>{formatAuditDisplayText(entry.reason)}</Text>
-                      ) : null}
-                    </View>
-
-                    <View style={styles.badgesRow}>
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{formatModerationToken(entry.severity)}</Text>
-                      </View>
-                      {entry.foundationProof ? (
-                        <View style={[styles.badge, styles.badgeDraft]}>
-                          <Text style={styles.badgeText}>Proof-only</Text>
-                        </View>
-                      ) : null}
-                    </View>
+                <Text style={styles.contentSignalBody}>
+                  Newest immutable rows only. Use Audit Explorer for actor, target, date, and deeper investigation filters.
+                </Text>
+                <OwnerFilterChips
+                  options={auditOverviewCategoryFilterOptions}
+                  value={auditOverviewCategoryFilter}
+                  onChange={setAuditOverviewCategoryFilter}
+                />
+                {adminImmutableAuditReadModel.loading ? (
+                  <View style={styles.configLoadingRow}>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.configLoadingText}>Loading immutable audit rows...</Text>
                   </View>
-                ))
-              ) : adminImmutableAuditReadModel.connected ? (
-                <View style={styles.configListRow}>
-                  <View style={styles.configListCopy}>
-                    <Text style={styles.configListTitle}>No immutable audit rows visible</Text>
-                    <Text style={styles.configListBody}>
-                      The immutable audit table is readable, but no rows are visible in the latest slice yet.
-                    </Text>
+                ) : auditOverviewConnected && filteredAuditOverviewRows.length ? (
+                  <View style={styles.ownerControlList}>
+                    {filteredAuditOverviewRows.map((entry) => {
+                      const category = resolveAuditOverviewCategory(entry);
+                      return (
+                        <OwnerControlRow
+                          key={`audit-overview-${entry.id}`}
+                          message={entry.reason ? formatAuditDisplayText(entry.reason) : summarizeAuditMetadata(entry.metadata) || "Immutable audit row recorded."}
+                          meta={`${entry.createdAt ? formatModerationTimestamp(entry.createdAt) : "Time unknown"} · ${formatImmutableAuditActor(entry)} · ${formatImmutableAuditTarget(entry)}`}
+                          onPress={() => setSelectedAuditOverviewRow(entry)}
+                          statusLabel={entry.foundationProof ? "Foundation Only" : formatModerationToken(entry.severity)}
+                          title={auditOverviewTitle(entry)}
+                          tone={entry.foundationProof ? "locked" : auditOverviewSeverityTone(entry.severity)}
+                        >
+                          <OwnerDetailGrid
+                            rows={[
+                              { label: "Category", value: auditOverviewCategoryLabels[category] },
+                              { label: "Actor", value: formatImmutableAuditActor(entry) },
+                              { label: "Target", value: formatImmutableAuditTarget(entry) },
+                            ]}
+                          />
+                        </OwnerControlRow>
+                      );
+                    })}
                   </View>
-                </View>
-              ) : null}
+                ) : auditOverviewConnected ? (
+                  <OwnerEmptyState
+                    body={auditOverviewCategoryFilter === "all"
+                      ? "The immutable audit query succeeded, but no audit rows are visible for the current scope."
+                      : "No immutable audit rows in this loaded slice match the selected category."}
+                    title={auditOverviewCategoryFilter === "all" ? "No audit rows visible for current scope" : "No rows in this category"}
+                  />
+                ) : (
+                  <OwnerEmptyState
+                    body="The audit overview did not receive an immutable row set. Retry or open Audit Explorer if your account has deeper audit permission."
+                    title="Audit source unavailable"
+                  />
+                )}
+              </View>
 
-              <View style={styles.configListRow}>
-                <View style={styles.configListCopy}>
-                  <Text style={styles.configListTitle}>Derived audit summary</Text>
-                  <Text style={styles.configListBody}>
-                    This summary is separate from immutable audit logs. It is limited to current role-record metadata and safety-report audit context.
-                  </Text>
+              <View style={styles.contentPanel}>
+                <View style={styles.ownerSectionHeaderRow}>
+                  <Text style={styles.ownerSectionTitle}>High-Risk Changes</Text>
+                  <OwnerStatusPill
+                    label={auditOverviewConnected ? `${auditOverviewHighRiskRows.length} detected` : "Unavailable"}
+                    tone={auditOverviewHighRiskRows.length ? "danger" : auditOverviewConnected ? "success" : "locked"}
+                  />
                 </View>
+                {auditOverviewConnected && auditOverviewHighRiskRows.length ? (
+                  <View style={styles.ownerControlList}>
+                    {auditOverviewHighRiskRows.slice(0, 4).map((entry) => (
+                      <OwnerControlRow
+                        key={`audit-high-risk-${entry.id}`}
+                        message={entry.reason ? formatAuditDisplayText(entry.reason) : "Known high-risk audit type detected in the loaded immutable slice."}
+                        meta={entry.createdAt ? formatModerationTimestamp(entry.createdAt) : "Time unknown"}
+                        onPress={() => setSelectedAuditOverviewRow(entry)}
+                        statusLabel={formatModerationToken(entry.severity)}
+                        title={auditOverviewTitle(entry)}
+                        tone="danger"
+                      />
+                    ))}
+                  </View>
+                ) : auditOverviewConnected ? (
+                  <OwnerEmptyState
+                    body="No role, permission, DMCA, security, fraud, payout, takedown, or public-impacting changes were detected in the loaded immutable slice."
+                    title="No high-risk audit events detected in current scope"
+                  />
+                ) : (
+                  <OwnerEmptyState
+                    body="High-risk classification needs a readable immutable audit slice. No fake healthy state is shown."
+                    title="High-risk classification unavailable"
+                  />
+                )}
+              </View>
+
+              <View style={styles.contentPanel}>
+                <View style={styles.ownerSectionHeaderRow}>
+                  <Text style={styles.ownerSectionTitle}>Audit Category Summary</Text>
+                  <OwnerStatusPill label={auditOverviewConnected ? "Loaded Slice" : "Unavailable"} tone={auditOverviewConnected ? "info" : "locked"} />
+                </View>
+                <View style={styles.ownerMetricGrid}>
+                  {auditOverviewCategoryFilterOptions.filter((option) => option.key !== "all").map((option) => {
+                    const count = auditOverviewCategoryCounts[option.key] ?? 0;
+                    const active = auditOverviewCategoryFilter === option.key;
+                    return (
+                      <TouchableOpacity
+                        key={`audit-category-${option.key}`}
+                        style={[
+                          styles.ownerMetricTile,
+                          ownerMetricToneStyle(active ? "info" : auditOverviewCategoryTone(option.key)),
+                        ]}
+                        onPress={() => setAuditOverviewCategoryFilter(option.key)}
+                        disabled={!auditOverviewConnected}
+                      >
+                        <Text style={styles.ownerMetricLabel}>{option.label}</Text>
+                        <Text style={styles.ownerMetricValue}>{auditOverviewConnected ? count : "Unavailable"}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {auditOverviewConnected && (auditOverviewCategoryCounts.unknown ?? 0) > 0 ? (
+                  <OwnerDisabledReason reason={`${auditOverviewCategoryCounts.unknown} loaded audit row${auditOverviewCategoryCounts.unknown === 1 ? "" : "s"} could not be confidently categorized and stay labeled Unknown.`} />
+                ) : null}
+              </View>
+
+              <View style={styles.contentPanel}>
+                <View style={styles.ownerSectionHeaderRow}>
+                  <Text style={styles.ownerSectionTitle}>Audit Explorer Shortcut</Text>
+                  <OwnerStatusPill label={canAccessAuditExplorer ? "Available" : "Locked"} tone={canAccessAuditExplorer ? "info" : "locked"} />
+                </View>
+                <Text style={styles.contentSignalBody}>
+                  Need deeper search by actor, target, category, break-glass state, or date? Open Audit Explorer.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.ownerPrimaryButton, !canAccessAuditExplorer && styles.configSaveBtnDisabled]}
+                  onPress={() => setOperatorTab("audit-explorer")}
+                  disabled={!canAccessAuditExplorer}
+                >
+                  <Text style={styles.ownerPrimaryButtonText}>{canAccessAuditExplorer ? "Open Audit Explorer" : "Audit Explorer permission required"}</Text>
+                </TouchableOpacity>
               </View>
             </>
-            ) : null}
-
-            {operatorTab === "audit" && (canManagePrivilegedWrites || canReviewSafetyReports) ? (
-              adminAuditLogLoading ? (
-                <View style={styles.configLoadingRow}>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={styles.configLoadingText}>Loading derived audit summary…</Text>
-                </View>
-              ) : adminAuditLog.length ? (
-	                adminAuditLog.map((entry) => (
-	                  <View key={entry.id} style={styles.configListRow}>
-	                    <View style={styles.configListCopy}>
-	                      <Text style={styles.configListTitle}>{entry.title}</Text>
-                      <Text style={styles.configListBody}>
-                        {entry.occurredAt ? formatModerationTimestamp(entry.occurredAt) : "Audit timestamp unavailable"}
-                      </Text>
-	                      <Text style={styles.configListBody}>{formatAuditDisplayText(entry.detail)}</Text>
-	                      {entry.actorLabel ? (
-	                        <Text style={styles.configListBody}>{`Actor ${formatAuditDisplayText(entry.actorLabel)}`}</Text>
-	                      ) : null}
-	                      {entry.auditOwnerKey ? (
-	                        <Text style={styles.configListBody}>{`Audit owner ${formatCompactIdentifier(entry.auditOwnerKey)}`}</Text>
-	                      ) : null}
-                    </View>
-
-                    <View style={styles.badgesRow}>
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{formatModerationToken(entry.kind)}</Text>
-                      </View>
-                      <View style={[styles.badge, entry.tone === "review" ? styles.badgeScheduled : styles.badgeDraft]}>
-                        <Text style={styles.badgeText}>{entry.tone === "review" ? "Review Context" : "Role Record"}</Text>
-                      </View>
-                    </View>
-                  </View>
-                ))
-              ) : (
-                <View style={styles.configListRow}>
-                  <View style={styles.configListCopy}>
-                    <Text style={styles.configListTitle}>No recent derived audit visibility records</Text>
-                    <Text style={styles.configListBody}>
-                      Current bounded audit visibility is ready, but there are no recent role-record or safety-report audit entries in this slice yet.
-                    </Text>
-                  </View>
-                </View>
-              )
-            ) : operatorTab === "audit" ? (
-              <View style={styles.configListRow}>
-                <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Audit visibility stays permission-bound</Text>
-                <Text style={styles.configListBody}>
-                    Audit visibility requires privileged Owner access or a review-capable moderation role. No fake admin audit dashboard is shown otherwise.
-                  </Text>
-                </View>
-              </View>
             ) : null}
           </View>
         </View>
@@ -13607,6 +13926,89 @@ export default function AdminStudioScreen() {
         </>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={selectedAuditOverviewRow !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedAuditOverviewRow(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Audit Row Detail</Text>
+                <Text style={styles.ownerPanelMeta}>
+                  {selectedAuditOverviewRow
+                    ? `Audit ${formatCompactIdentifier(selectedAuditOverviewRow.id)}`
+                    : "Audit row"}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedAuditOverviewRow(null)}>
+                <Text style={styles.closeText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            {selectedAuditOverviewRow ? (
+              <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={{ gap: 12, paddingBottom: 18 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>{auditOverviewTitle(selectedAuditOverviewRow)}</Text>
+                    <OwnerStatusPill
+                      label={selectedAuditOverviewRow.foundationProof ? "Foundation Only" : formatModerationToken(selectedAuditOverviewRow.severity)}
+                      tone={selectedAuditOverviewRow.foundationProof ? "locked" : auditOverviewSeverityTone(selectedAuditOverviewRow.severity)}
+                    />
+                  </View>
+                  <OwnerDetailGrid
+                    rows={[
+                      { label: "Event Type", value: formatModerationToken(selectedAuditOverviewRow.action) },
+                      { label: "Category", value: auditOverviewCategoryLabels[resolveAuditOverviewCategory(selectedAuditOverviewRow)] },
+                      { label: "Actor", value: formatImmutableAuditActor(selectedAuditOverviewRow) },
+                      { label: "Actor Role", value: selectedAuditOverviewRow.actorRole ? formatModerationToken(selectedAuditOverviewRow.actorRole) : "not captured" },
+                      { label: "Target", value: formatImmutableAuditTarget(selectedAuditOverviewRow) },
+                      { label: "Target ID", value: formatCompactIdentifier(selectedAuditOverviewRow.targetId) },
+                      { label: "Timestamp", value: selectedAuditOverviewRow.createdAt ? formatModerationTimestamp(selectedAuditOverviewRow.createdAt) : "timestamp unavailable" },
+                      { label: "Reason", value: selectedAuditOverviewRow.reason ? formatAuditDisplayText(selectedAuditOverviewRow.reason) : "no reason recorded" },
+                    ]}
+                  />
+                </View>
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Technical Metadata</Text>
+                    <OwnerStatusPill label={auditOverviewMetadataRows.length ? `${auditOverviewMetadataRows.length} fields` : "No Fields"} tone={auditOverviewMetadataRows.length ? "info" : "locked"} />
+                  </View>
+                  {auditOverviewMetadataRows.length ? (
+                    <OwnerDetailGrid rows={auditOverviewMetadataRows} />
+                  ) : (
+                    <OwnerEmptyState
+                      body="This audit row did not return readable metadata fields."
+                      title="No metadata preview"
+                    />
+                  )}
+                </View>
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Related Navigation</Text>
+                    <OwnerStatusPill label="Read Only" tone="info" />
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.ownerSecondaryButton, !canAccessAuditExplorer && styles.configSaveBtnDisabled]}
+                    onPress={() => {
+                      setSelectedAuditOverviewRow(null);
+                      setOperatorTab("audit-explorer");
+                    }}
+                    disabled={!canAccessAuditExplorer}
+                  >
+                    <Text style={styles.ownerSecondaryButtonText}>{canAccessAuditExplorer ? "Open Audit Explorer" : "Audit Explorer locked"}</Text>
+                  </TouchableOpacity>
+                  {!canAccessAuditExplorer ? (
+                    <OwnerDisabledReason reason="Deeper investigation requires Audit Explorer permission and remains server-side scoped." />
+                  ) : null}
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={roleConfirm !== null}

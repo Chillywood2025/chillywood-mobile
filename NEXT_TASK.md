@@ -1,7 +1,7 @@
 # NEXT TASK
 
-## Admin Roles & Permissions Remaining Gaps
+## Admin Immutable Audit Overview Remaining Gaps
 
-Admin Roles & Permissions Center is repo-side implemented, Supabase-applied, backend-denial proved, Android read/scan proved, and Supabase live multi-permission mutation/audit proved. True remaining Roles-tab gap only:
+Admin Immutable Audit Log overview is repo-side implemented, current-APK Android owner/admin proved, Audit Explorer shortcut proved, row-detail sheet proved, and anon REST denial proved. True remaining Audit-tab gap only:
 
-- Prove physical normal-user UI denial on a disposable normal account; backend proof already denies anon and the local non-staff proof account from role audit, permission read, and permission write RPCs.
+- Prove physical normal-user UI denial on a disposable normal account; backend anon proof already denies `platform_admin_audit_logs` reads with `401` / `42501 permission denied`, and `guard:admin-auth-safety` still passes.
