@@ -10,6 +10,7 @@ const fail = (message) => {
 
 const migration = read("supabase/migrations/202605230002_security_request_context_backend.sql");
 const expansionMigration = read("supabase/migrations/202605230003_security_context_event_link_expansion.sql");
+const validatorFixMigration = read("supabase/migrations/202605230004_fix_security_context_metadata_validator.sql");
 const helper = read("supabase/functions/_shared/security-request-context.ts");
 const ownerControls = read("supabase/functions/admin-owner-controls/index.ts");
 const livekitToken = read("supabase/functions/livekit-token/index.ts");
@@ -52,6 +53,10 @@ const adminOwnerControlsClient = read("_lib/adminOwnerControls.ts");
 
 if (/\"ip_address\"|\"raw_ip\"|ip_address_encrypted/i.test(expansionMigration)) {
   fail("event-link expansion migration must not add raw IP storage");
+}
+
+if (!validatorFixMigration.includes('context."user_id" = auth.uid()')) {
+  fail("security context validator fix must compare uuid user_id to auth.uid()");
 }
 
 [

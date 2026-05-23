@@ -4,7 +4,7 @@ Date: 2026-05-23
 
 Lane: Security Context and IP Address Audit / Security Request Context Backend Implementation
 
-Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. The original audit was planning-only. The first backend slice is implemented by migration `202605230002_security_request_context_backend.sql` plus shared Edge helper `supabase/functions/_shared/security-request-context.ts`; the event-link expansion is implemented by migration `202605230003_security_context_event_link_expansion.sql`.
+Purpose: record repo-backed truth for IP address, request metadata, device trust, session, audit, fraud, live ops, upload, report, payout, and admin security logging. The original audit was planning-only. The first backend slice is implemented by migration `202605230002_security_request_context_backend.sql` plus shared Edge helper `supabase/functions/_shared/security-request-context.ts`; the event-link expansion is implemented by migration `202605230003_security_context_event_link_expansion.sql` plus validator fix migration `202605230004_fix_security_context_metadata_validator.sql`.
 
 ## Backend Implementation Status
 
@@ -22,7 +22,7 @@ Implemented, Supabase-applied, and Edge-deployed in the first production slice:
 - `livekit-token` captures backend request context and writes token request audit rows for success/denied/error outcomes without changing room routing, grants, tokens, or Premium gates.
 - Remote proof confirmed migration `202605230002` is applied, `admin-owner-controls` is ACTIVE version `26`, `livekit-token` is ACTIVE version `63`, and anon select/insert against `security_request_context` returns `42501 permission denied`.
 
-Repo-side event-link expansion now adds nullable `security_context_id` references to restricted event/audit tables only:
+Event-link expansion is now remote-applied and adds nullable `security_context_id` references to restricted event/audit tables only:
 
 - DMCA restricted records: `dmca_cases`, `dmca_counter_notices`, `dmca_attachments`, and `dmca_audit_log`.
 - Reports/moderation: `safety_reports`, plus `admin_reports_write_audit` can carry a validated context into `platform_admin_audit_logs` when a trusted backend path supplies one.
@@ -30,8 +30,8 @@ Repo-side event-link expansion now adds nullable `security_context_id` reference
 - Live Ops: `admin_live_ops_action_audit`, `admin_live_cost_guard_events`, and `admin_live_cost_guard_actions`.
 - Payout/revenue/fraud foundations: `creator_payout_audit_log`, `network_billing_audit_logs`, and `fraud_audit_logs`.
 - SQL-only staff paths: `platform_staff_role_audit`; `platform_staff_permission_audit` was already linked in the first slice.
-- `security_context_id_from_metadata(jsonb)` validates metadata-carried context ids for SQL-only audit helpers. Service-role callers may reference existing contexts; authenticated callers may reference only their own context. This keeps future Edge wrappers link-ready without trusting arbitrary client-supplied network proof.
-- Edge paths now capturing/linking context without behavior changes: `admin-live-ops-fix-center`, `admin-live-cost-guard-action`, `admin-live-cost-guard-webhook`, `media-storage`, `payout-release-preflight`, `provider-billing-import-preflight`, `sponsor-checkout-preflight`, `sponsor-brand-payment-preflight`, and `sponsor-reporting-fraud-preflight`.
+- `security_context_id_from_metadata(jsonb)` validates metadata-carried context ids for SQL-only audit helpers. Service-role callers may reference existing contexts; authenticated callers may reference only their own context. Linked schema lint caught the first implementation's uuid/text comparison, and migration `202605230004_fix_security_context_metadata_validator.sql` corrects it to compare `security_request_context.user_id` directly to `auth.uid()`. This keeps future Edge wrappers link-ready without trusting arbitrary client-supplied network proof.
+- Edge paths now capturing/linking context without behavior changes: `admin-live-ops-fix-center` v9, `admin-live-cost-guard-action` v17, `admin-live-cost-guard-webhook` v19, `media-storage` v51, `payout-release-preflight` v39, `provider-billing-import-preflight` v39, `sponsor-checkout-preflight` v39, `sponsor-brand-payment-preflight` v39, and `sponsor-reporting-fraud-preflight` v39.
 
 Trusted IP capture is intentionally conservative:
 
@@ -342,6 +342,9 @@ The May 23, 2026 masked-readout closeout ran these repo and backend checks:
 Proof outcomes:
 
 - `admin-owner-controls` is deployed as ACTIVE version `26`; `livekit-token` remains ACTIVE version `63`.
+- Event-link migrations `202605230003` and `202605230004` are applied on the linked Supabase project; `202605230004` fixed the metadata validator uuid comparison and linked schema lint now reports no schema errors.
+- Event-link Edge functions are deployed as `admin-live-ops-fix-center` v9, `admin-live-cost-guard-action` v17, `admin-live-cost-guard-webhook` v19, `media-storage` v51, `payout-release-preflight` v39, `provider-billing-import-preflight` v39, `sponsor-checkout-preflight` v39, `sponsor-brand-payment-preflight` v39, and `sponsor-reporting-fraud-preflight` v39.
+- No-auth POST smokes returned `401` for all nine event-link Edge functions. Unauthenticated REST direct read of `security_request_context` returned `401`.
 - The linked project has `SECURITY_CONTEXT_HASH_PEPPER` and `SECURITY_CONTEXT_USE_DEFAULT_TRUSTED_IP_HEADERS` configured. `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` is not configured.
 - Anon direct reads against `security_request_context` returned `42501`; anon summary RPC returned `security_context_admin_required`.
 - A spoofed client-header probe using `x-forwarded-for`, `x-real-ip`, and `cf-connecting-ip` against `livekit-token` returned `403` before token handling; this does not prove a trusted real-IP source, so real IP capture remains disabled.
@@ -353,7 +356,7 @@ Proof outcomes:
 - Real IP capture remains unavailable until server-side `SECURITY_CONTEXT_TRUSTED_IP_HEADERS` is configured and proved against the actual proxy/header chain. `SECURITY_CONTEXT_HASH_PEPPER` is configured and default trusted headers are explicitly disabled.
 - Existing legacy `platform_admin_audit_logs.ip_hash` / `user_agent_hash` and DMCA submitted hash fields are not backfilled and remain secondary to `security_context_id`.
 - DMCA submitted hash fields exist but need backend-only trusted capture.
-- Reports, uploads, comments, chat abuse, payout, fraud, Live Ops, DMCA intake, and SQL-only role/permission RPC actions do not yet share a security context id.
+- Restricted/link-ready rows now exist for DMCA, Reports, media-storage, Live Ops, Live Cost Guard, payout/network/fraud audit tables, and staff role audit, and the deployed Edge paths above attach context where request capture exists. Direct public SQL intake and SQL-only action paths still need trusted Edge wrappers before they can capture server request context.
 - Owner Security and Audit Explorer render masked network proof for linked rows.
 - Authorized owner/admin masked summary read proof remains pending because the only local credential available in this shell is non-staff/non-owner and correctly cannot read `livekit_token_request_audit` or security context summaries. Non-staff proof returned `42501` for direct context table reads and `security_context_admin_required` for summary RPC reads.
 - Staff-but-not-owner failed owner-security denial proof remains a prior Owner Security follow-up if a safe scoped proof account is available.
