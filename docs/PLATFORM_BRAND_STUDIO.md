@@ -26,10 +26,12 @@ Remote-applied migrations:
 - `202605240002_platform_brand_studio_review_workflow.sql`: append-only `platform_brand_asset_review_events`, `review_platform_brand_asset(uuid,text,text)`, admin audit writes, and public RPC sanitization for unsafe asset references.
 - `202605240003_platform_brand_studio_reference_casts.sql`: fixes Spotlight video reference validation to avoid UUID/text comparison failures.
 - `202605240004_platform_brand_studio_review_queue_access.sql`: lets authorized owner/operator/moderation reviewers read pending brand assets and private storage objects for review while public reads remain limited to published moderation-safe assets.
+- `202605240005_platform_brand_asset_cleanup_candidates.sql`: service-role-only cleanup candidate helper for archived, terminal moderation, deleted, and old orphaned draft assets. It lists candidates only and never returns published or still-referenced assets.
+- `202605240006_platform_brand_cleanup_service_role_guard.sql`: hardens the cleanup helper with an explicit runtime service-role check so normal authenticated clients cannot call it.
 
 Uploads start as `draft` assets with `pending_review` moderation. Public reads require published state, moderation-safe status, and not-deleted assets.
 
-`supabase/database.types.ts` was regenerated from the linked schema on May 24, 2026 after `202605240001` and `202605240002` applied. The later `202605240003` and `202605240004` migrations do not add new type signatures.
+`supabase/database.types.ts` was regenerated from the linked schema on May 24, 2026 after `202605240005` applied. `202605240006` keeps the same RPC signature. Generated types include `platform_brand_asset_review_events`, `platform_brand_asset_public_safe`, `review_platform_brand_asset`, and `platform_brand_asset_cleanup_candidates`.
 
 ## Review Workflow
 
@@ -58,7 +60,7 @@ Backed/source-checked friendly states:
 - Public Hero Reel playback. Hero video fields exist for future support, but the normal UI keeps Hero Reel unavailable until reviewed video processing, muted autoplay, poster fallback, and public rendering are backed.
 - Video watermark rendering. Brand Mark stays unavailable and does not change Player behavior.
 - Full cross-platform gesture cropper proof.
-- Automated cleanup job for old/rejected/orphaned brand storage objects.
+- Automatic deletion job for old/rejected/orphaned brand storage objects. The service-role cleanup candidate helper exists, but deletion remains a manual ops decision until retention and storage-deletion automation are separately approved.
 
 ## Cropper Level
 
@@ -76,13 +78,24 @@ Next levels:
 - Level 3: true crop box with a gesture editor.
 - Level 4: server-side image transform/export.
 
+Decision for launch closeout: stay at Level 1. Level 2 is the next safe product step only after choosing a lightweight Android-proved gesture pattern. Do not jump to Level 3 or Level 4 until the app has cross-device proof and a rollback path.
+
 Do not claim drag crop or destructive crop export until Android proof exists.
 
 ## Storage Cleanup Policy
 
 Cleanup must be service-role/admin-only and must never delete currently published assets or assets still referenced by profile rows.
 
-Recommended future runbook:
+Implemented helper:
+
+- `platform_brand_asset_cleanup_candidates(retention_days integer default 30, limit integer default 100)` is executable by `service_role` only.
+- It raises `platform_brand_cleanup_service_role_required` for anon/authenticated callers.
+- It lists archived/deleted assets, rejected/removed/hidden assets, and old orphaned draft/pending-review assets.
+- It excludes every asset still referenced by `platform_brand_profiles`.
+- It excludes every asset whose `asset_state` is `published`.
+- It returns raw storage bucket/path values only to service-role callers so normal creator/public UI never sees object internals.
+
+Manual cleanup runbook:
 
 - Find archived/deleted assets older than the retention window.
 - Find rejected assets older than the retention window.

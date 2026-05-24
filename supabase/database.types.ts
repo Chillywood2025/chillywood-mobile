@@ -8971,6 +8971,22 @@ export type Database = {
         }
         Returns: boolean
       }
+      platform_brand_asset_cleanup_candidates: {
+        Args: { p_limit?: number; p_retention_days?: number }
+        Returns: {
+          asset_id: string
+          asset_state: string
+          asset_type: string
+          cleanup_reason: string
+          created_at: string
+          deleted_at: string
+          moderation_status: string
+          owner_user_id: string
+          storage_bucket: string
+          storage_path: string
+          updated_at: string
+        }[]
+      }
       platform_brand_asset_public_safe: {
         Args: { p_asset_id: string; p_owner_user_id?: string }
         Returns: boolean
