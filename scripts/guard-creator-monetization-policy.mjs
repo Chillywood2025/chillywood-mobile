@@ -55,7 +55,7 @@ assertIncludes(creatorMonetization, "CREATOR_SCHEDULED_PAYOUT_FEE_CENTS = 0", "s
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_BPS = 150", "instant cash-out fee");
 assertIncludes(creatorMonetization, "CREATOR_INSTANT_CASHOUT_FEE_CAP_CENTS: number | null = null", "no instant cash-out cap");
 assertIncludes(creatorMonetization, "calculateScheduledPayoutFeeCents", "scheduled payout fee helper");
-assertIncludes(creatorMonetization, "readCreatorMiniPlatformCommerceSurface", "public mini platform commerce readout");
+assertIncludes(creatorMonetization, "readCreatorMiniPlatformCommerceSurface", "public platform commerce readout");
 assertIncludes(creatorMonetization, "setCreatorContentPrice", "creator pricing client helper");
 assertIncludes(creatorMonetization, "requestCreatorPayout", "cash-out request client helper");
 assertIncludes(creatorMonetization, "creatorMonetizationCheckoutPreflight", "checkout preflight client helper");
@@ -97,9 +97,9 @@ assertIncludes(channelSettings, "Tips do not unlock digital perks or paid access
 assertIncludes(channelSettings, "Monetize", "Platform Studio Monetize tab");
 assertIncludes(channelSettings, "Paid content", "Platform Studio paid content copy");
 assertIncludes(channelSettings, "Merch/products", "Platform Studio product copy");
-assertIncludes(channelSettings, "Run your mini platform from one place", "Platform Studio mini platform copy");
-assertIncludes(publicChannel, "Mini Platform Store", "public mini platform store state");
-assertIncludes(publicChannel, "Checkout pending", "public mini platform checkout disabled copy");
+assertIncludes(channelSettings, "Run your platform from one place", "Platform Studio platform copy");
+assertIncludes(publicChannel, "Platform Store", "public platform store state");
+assertIncludes(publicChannel, "Checkout pending", "public platform checkout disabled copy");
 assertIncludes(player, "creatorVideoPaidContentLocked", "Player paid creator-content lock");
 assertIncludes(player, "Buying creator-paid content does not require Premium", "Player paid-content doctrine copy");
 assertIncludes(admin, "No checkout success, payout release, fake purchase, fake order, fake tip, or live money action", "Admin money safety copy");

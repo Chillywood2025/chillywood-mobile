@@ -98,7 +98,7 @@ assertIncludes(premiumLiveAccess, "requireWatchPartyLivePremium", "Watch-Party L
 if (/setInterval\s*\(/.test(home)) fail("Home feed must not add auto-polling; use open/focus/manual refresh.");
 if (/setInterval\s*\(/.test(channel)) fail("Public Channel must not add auto-polling in this lane.");
 if (/setInterval\s*\(/.test(profile)) fail("Profile must not add auto-polling in this lane.");
-if (/setInterval\s*\(/.test(studio)) fail("Channel Studio must not add auto-polling in this lane.");
+if (/setInterval\s*\(/.test(studio)) fail("Platform Studio must not add auto-polling in this lane.");
 
 if (process.exitCode) {
   process.exit();

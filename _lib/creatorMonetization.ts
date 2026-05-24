@@ -340,7 +340,7 @@ export async function readCreatorMiniPlatformCommerceSurface(
       tipsStatus: "disabled",
       paidContentCheckoutStatus: "disabled",
       merchCheckoutStatus: "disabled",
-      message: "Mini platform commerce needs a creator id.",
+      message: "Platform commerce needs a creator id.",
     };
   }
 
@@ -365,8 +365,8 @@ export async function readCreatorMiniPlatformCommerceSurface(
       paidContentCheckoutStatus: settings.paidContentCheckoutEnabled && settings.liveMoneyEnabled ? "enabled_later" : "disabled",
       merchCheckoutStatus: settings.merchStoreEnabled && settings.liveMoneyEnabled ? "enabled_later" : "disabled",
       message: settings.liveMoneyEnabled
-        ? "Mini platform commerce still needs provider/legal proof before checkout can open."
-        : "Mini platform commerce is foundation-only; checkout, tips, orders, and cash-out are disabled.",
+        ? "Platform commerce still needs provider and legal readiness before checkout can open."
+        : "Platform commerce is not active yet; checkout, tips, orders, and cash-out are disabled.",
     };
   } catch {
     return {
@@ -376,7 +376,7 @@ export async function readCreatorMiniPlatformCommerceSurface(
       tipsStatus: "disabled",
       paidContentCheckoutStatus: "disabled",
       merchCheckoutStatus: "disabled",
-      message: "Mini platform commerce tables are not connected in this environment yet.",
+      message: "Platform commerce is not available yet.",
     };
   }
 }

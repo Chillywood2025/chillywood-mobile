@@ -102,10 +102,10 @@ assertIncludes(creatorPayouts, "canRequestInstantCashout", "instant cash-out rea
 assertIncludes(creatorPayouts, "Live money is disabled.", "live money disabled blocker");
 assertIncludes(creatorPayouts, "Tax/1099 readiness is pending.", "tax readiness blocker");
 assertIncludes(creatorPayouts, "No payable balance can be created by the mobile app.", "mobile balance write blocker");
-assertIncludes(creatorPayouts, "Owner approval is required before any payout execution lane can move beyond dry-run.", "owner approval blocker");
+assertIncludes(creatorPayouts, "Owner approval is required before any payout execution can move forward.", "owner approval blocker");
 assertIncludes(creatorPayouts, "canExecuteProductionPayout: false", "production payout execution disabled");
 
-assertIncludes(channelSettings, "backend test-mode Stripe setup", "Studio Connect setup copy");
+assertIncludes(channelSettings, "Payout setup and review can be checked. Production payout execution remains blocked.", "Studio payout setup copy");
 assertIncludes(channelSettings, "Blocked reasons", "Studio payout blocked reasons");
 assertIncludes(channelSettings, "Instant cash-out", "Studio instant cash-out readout");
 assertIncludes(channelSettings, "$100 instant preview = $1.50", "Studio cash-out fee proof copy");

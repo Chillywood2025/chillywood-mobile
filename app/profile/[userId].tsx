@@ -1429,7 +1429,7 @@ export default function ProfileScreen() {
         : "No room context is attached yet, but this channel's live posture still stays visible.";
   const openChannelSettings = (params?: { focus?: "content"; action?: "upload" }) => {
     if (!creatorSettingsEnabled) {
-      Alert.alert("Channel Studio", "Creator channel controls are currently hidden by app configuration.");
+      Alert.alert("Platform Studio", "Creator platform controls are currently hidden by app configuration.");
       return;
     }
     if (params) {
@@ -2777,7 +2777,7 @@ export default function ProfileScreen() {
           title: "Channel Read",
           kicker: "CHANNEL",
           body: isSelfProfile
-            ? "Keep this surface public-facing first. Channel Studio stays the deeper editing handoff while access and audience posture stay easy to read here."
+            ? "Keep this surface public-facing first. Platform Studio stays the deeper editing handoff while access and audience posture stay easy to read here."
             : "This route stays a public channel destination where access posture, audience cues, and follow-up stay easy to read.",
         },
       ];
@@ -2981,7 +2981,7 @@ export default function ProfileScreen() {
   ] : [];
   const ownerQuickActions: readonly OwnerQuickAction[] = isSelfProfile ? [
     {
-      label: "Channel Studio",
+      label: "Platform Studio",
       onPress: onPressManageChannel,
     },
     {
@@ -3023,10 +3023,10 @@ export default function ProfileScreen() {
         ? "Start by adding a sharper channel line and uploading the first playable channel video."
         : ownerNextSteps[0] === "add a sharper channel line"
           ? "Give visitors a clearer first read on your lane with a short tagline."
-          : "Upload a real video from this Profile so your Channel starts feeling like a mini streaming platform.",
+          : "Upload a real video from this Profile so your Channel starts feeling like a platform.",
       actionLabel: ownerNextSteps.length === 1 && ownerNextSteps[0] === "upload your first video"
         ? "Upload Video"
-        : "Open Channel Studio",
+        : "Open Platform Studio",
       onPress: ownerNextSteps.length === 1 && ownerNextSteps[0] === "upload your first video"
         ? onPressUploadVideo
         : onPressManageChannel,
@@ -3764,7 +3764,7 @@ export default function ProfileScreen() {
         <Text style={styles.ownerModeKicker}>OWNER HANDOFF</Text>
         <Text style={styles.ownerModeTitle}>Keep the public channel in front.</Text>
         <Text style={styles.ownerModeBody}>
-          Use Channel Studio for deeper edits while this route keeps the public read, live posture, and access truth easy to scan.
+          Use Platform Studio for deeper edits while this route keeps the public read, live posture, and access truth easy to scan.
         </Text>
         {ownerQuickActions.length ? (
           <View style={styles.ownerQuickActionRow}>
@@ -3992,7 +3992,7 @@ export default function ProfileScreen() {
                     activeOpacity={0.86}
                     onPress={onPressManageChannel}
                   >
-                    <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Channel Studio</Text>
+                    <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Platform Studio</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.actionBtnSecondary]}

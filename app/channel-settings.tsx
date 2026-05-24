@@ -136,11 +136,12 @@ type SummaryMetricCard = {
   tone?: "default" | "unavailable";
 };
 
-type StudioTabId = "home" | "content" | "monetize" | "live" | "audience" | "insights" | "payouts" | "revenue" | "brand";
+type StudioTabId = "home" | "content" | "live" | "audience" | "monetize" | "moderation" | "insights" | "payouts" | "revenue" | "brand";
 type ContentStatusFilter = "all" | "published" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 type VideoLifecycleState = "idle" | "file_selected" | "uploading" | "succeeded" | "failed";
+type StudioHomeSectionId = "create" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
 
 const createPayoutSetupRedirectUrl = (status: "return" | "refresh") => (
   `chillywoodmobile://channel-studio?tab=payouts&payout_setup=${status}`
@@ -337,7 +338,7 @@ const getChannelAccessSummaryBody = (resolution: ChannelAccessResolution | null)
     return "Checking saved defaults and creator grants.";
   }
   if (resolution.reason === "channel_defaults_subscriber") {
-    return "Both defaults are gated, so public mini platform copy should prepare visitors for member-style access.";
+    return "Both defaults are gated, so public platform copy should prepare visitors for member-style access.";
   }
   if (resolution.reason === "channel_defaults_private") {
     return "Watch-party entry is locked by default, so private room behavior should stay explicit on public surfaces.";
@@ -380,11 +381,11 @@ const formatChannelLayoutPresetLabel = (value?: UserProfile["channelLayoutPreset
 const getChannelLayoutPresetBody = (value?: UserProfile["channelLayoutPreset"] | null) => {
   switch (value) {
     case "live_first":
-      return "The public mini platform home leads with live presence first.";
+      return "The public platform home leads with live presence first.";
     case "library_first":
-      return "The public mini platform home leads with content/library context first.";
+      return "The public platform home leads with content/library context first.";
     default:
-      return "The public mini platform home keeps the featured spotlight first.";
+      return "The public platform home keeps the featured spotlight first.";
   }
 };
 
@@ -424,6 +425,35 @@ const formatAudienceActionStatus = (value: ChannelAudienceActionStatus) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
 const formatReadModelStatusValue = (value: Exclude<ChannelReadModelFieldStatus, "available">) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (match: string) => match.toUpperCase());
+
+const getCreatorFacingPayoutSetupLabel = (summary: CreatorPayoutDashboardReadModel) => {
+  if (summary.setupStatus === "provider_not_configured") return "Setup required";
+  if (summary.setupStatus === "payouts_disabled") return "Not active";
+  return summary.setupStatusLabel;
+};
+
+const getCreatorFacingPayoutSetupBody = (summary: CreatorPayoutDashboardReadModel) => {
+  switch (summary.setupStatus) {
+    case "provider_not_configured":
+      return "Payout setup is not available yet.";
+    case "setup_required":
+      return "Connect a payout method when setup is available. Payouts are still not active.";
+    case "onboarding_in_progress":
+      return "Continue payout setup. Withdrawals remain inactive.";
+    case "action_required":
+      return "More payout setup information is needed before readiness can be reviewed.";
+    case "under_review":
+      return "Provider or platform review is pending. No payout action is available.";
+    case "provider_ready_payouts_not_active":
+      return "Payout setup is ready, but withdrawals are not active yet.";
+    case "on_hold":
+      return "A policy or review hold is active. No payout action is available.";
+    case "payouts_disabled":
+      return "Payouts are disabled. No payout action is available.";
+    default:
+      return "Creator payouts are not active yet.";
+  }
+};
 
 const formatStudioSectionStatusLabel = (status: ChannelSettingsSectionStatus) => {
   if (status === "current") return "CURRENT";
@@ -472,9 +502,10 @@ const analyticsUnavailableMetricDefinitions: readonly {
 const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "content", label: "Content" },
-  { id: "monetize", label: "Monetize" },
   { id: "live", label: "Live" },
   { id: "audience", label: "Audience" },
+  { id: "monetize", label: "Monetize" },
+  { id: "moderation", label: "Moderation" },
   { id: "insights", label: "Insights" },
   { id: "payouts", label: "Payouts" },
   { id: "revenue", label: "Revenue" },
@@ -500,6 +531,7 @@ const normalizeStudioTabId = (value: unknown): StudioTabId | null => {
     || normalized === "monetize"
     || normalized === "live"
     || normalized === "audience"
+    || normalized === "moderation"
     || normalized === "insights"
     || normalized === "payouts"
     || normalized === "revenue"
@@ -552,7 +584,7 @@ const getVideoLifecycleCopy = (input: {
   if (input.lifecycleState === "succeeded") {
     return {
       label: "Upload Succeeded",
-      body: "The video was saved to creator storage and added to your mini platform library.",
+      body: "The video was saved to creator storage and added to your platform library.",
       tone: "success" as const,
     };
   }
@@ -595,6 +627,9 @@ export function ChannelStudioScreen() {
     ?? (routeAction === "upload" ? "content" : null)
     ?? "home";
   const [activeStudioTab, setActiveStudioTab] = useState<StudioTabId>(initialStudioTab);
+  const [expandedHomeSections, setExpandedHomeSections] = useState<ReadonlySet<StudioHomeSectionId>>(
+    () => new Set<StudioHomeSectionId>(["create"]),
+  );
   const [contentStatusFilter, setContentStatusFilter] = useState<ContentStatusFilter>("all");
   const [contentSearchQuery, setContentSearchQuery] = useState("");
   const [contentSort, setContentSort] = useState<ContentSortId>("newest");
@@ -666,6 +701,28 @@ export function ChannelStudioScreen() {
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Platform Studio");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
+  const openStudioTab = (
+    tab: StudioTabId,
+    options?: { filter?: ContentStatusFilter; focus?: string },
+  ) => {
+    setActiveStudioTab(tab);
+    if (options?.filter) setContentStatusFilter(options.filter);
+    router.setParams({
+      tab,
+      focus: options?.focus ?? "",
+    });
+  };
+  const showStudioUnavailable = (title: string, body: string) => {
+    Alert.alert(title, body);
+  };
+  const toggleHomeSection = (id: StudioHomeSectionId) => {
+    setExpandedHomeSections((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const nextTab = normalizeStudioTabId(routeParams.tab)
@@ -674,6 +731,7 @@ export function ChannelStudioScreen() {
     if (nextTab) {
       setActiveStudioTab(nextTab);
     }
+    if (routeAction === "upload") setContentStatusFilter("all");
   }, [routeAction, routeParams.focus, routeParams.tab]);
 
   useEffect(() => {
@@ -763,7 +821,7 @@ export function ChannelStudioScreen() {
     try {
       const accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
       if (accountPayload.status === "not_configured") {
-        setPayoutSetupNotice(accountPayload.message || "Stripe Connect test-mode setup is not configured yet.");
+        setPayoutSetupNotice("Payout setup is not available yet.");
         await refreshCreatorPayouts();
         return;
       }
@@ -795,7 +853,7 @@ export function ChannelStudioScreen() {
       }
 
       await Linking.openURL(onboardingUrl);
-      setPayoutSetupNotice("Test-mode payout setup opened. Withdrawals are not active yet.");
+      setPayoutSetupNotice("Payout setup opened. Withdrawals are not active yet.");
       await refreshCreatorPayouts();
     } catch {
       setPayoutSetupNotice("Payout setup could not be started. No payout or transfer was created.");
@@ -1227,7 +1285,7 @@ export function ChannelStudioScreen() {
     if (video.visibility === "public") {
       Alert.alert(
         "Unpublish Video",
-        `Move "${video.title}" back to draft? It will stop appearing publicly but stays in your mini platform library.`,
+        `Move "${video.title}" back to draft? It will stop appearing publicly but stays in your platform library.`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -1249,7 +1307,7 @@ export function ChannelStudioScreen() {
 
     Alert.alert(
       "Publish Video",
-      `Publish "${video.title}" to your public mini platform? Public videos can appear on your Profile/Mini Platform and open in Player.`,
+      `Publish "${video.title}" to your public platform? Public videos can appear on your Profile/Platform and open in Player.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -1265,7 +1323,7 @@ export function ChannelStudioScreen() {
   const onDeleteVideo = (video: CreatorVideo) => {
     Alert.alert(
       "Delete Video",
-      `Remove "${video.title}" from your mini platform?`,
+      `Remove "${video.title}" from your platform?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -1390,7 +1448,7 @@ export function ChannelStudioScreen() {
   const studioSectionGroups: readonly ChannelSettingsSectionGroup[] = [
     {
       title: "Content",
-      body: "Creator-owned videos and the future mini platform library shape.",
+      body: "Creator-owned videos and the future platform library shape.",
       sections: [
         {
           title: "Creator Content",
@@ -1411,12 +1469,12 @@ export function ChannelStudioScreen() {
     },
     {
       title: "Monetize",
-      body: "Default-off paid content, tips, merch, and checkout foundation.",
+      body: "Paid content, tips, merch, and checkout are not active yet.",
       sections: [
         {
           title: "Paid Content Pricing",
           status: "near_term",
-          body: "Premium creators can price their own items only after server flags, provider proof, and entitlement proof are ready.",
+          body: "Premium creators can price their own items only after server flags, provider readiness, and entitlement checks are ready.",
         },
         {
           title: "Tips / Support",
@@ -1426,7 +1484,7 @@ export function ChannelStudioScreen() {
         {
           title: "Merch / Products",
           status: "near_term",
-          body: "Product listings are foundation-only until commerce checkout, fulfillment, refund, and tax paths are proved.",
+          body: "Product listings stay unavailable until commerce checkout, fulfillment, refund, and tax paths are approved.",
         },
       ],
     },
@@ -1496,18 +1554,18 @@ export function ChannelStudioScreen() {
     },
     {
       title: "Payouts",
-      body: "Read-only payout readiness and foundation ledger status.",
+      body: "Read-only payout readiness and setup status.",
       sections: [
         {
           title: "Payout Dashboard",
           status: "current",
-          body: "Creator payouts are not active yet; this shows foundation status only.",
+          body: "Creator payouts are not active yet.",
         },
       ],
     },
     {
       title: "Revenue",
-      body: "Read-only creator revenue-share foundation status with no earnings shown.",
+      body: "Read-only creator revenue status with no earnings shown.",
       sections: [
         {
           title: "Revenue Dashboard",
@@ -1744,7 +1802,7 @@ export function ChannelStudioScreen() {
         : String(safetyAdminSummary?.recentSafetyReportCount),
       body: safetyAdminSummary?.recentSafetyReportCount == null
         ? "The current account does not have report-queue review access."
-        : "Current review-queue summary from the existing safety-report foundation.",
+        : "Current review-queue summary from existing safety-report access.",
       tone: safetyAdminSummary?.recentSafetyReportCount == null ? "unavailable" : "default",
     },
     {
@@ -1779,16 +1837,16 @@ export function ChannelStudioScreen() {
     {
       label: "Status",
       value: "Not active yet",
-      body: "Creator payouts are read-only foundation only.",
+      body: "Creator payouts are not active yet.",
     },
     {
-      label: "Ledger Rows",
+      label: "Ledger",
       value: creatorPayoutSummary.ledgerConnected
         ? formatCreatorPayoutLedgerCount(creatorPayoutSummary.ledgerRowCount)
-        : "Not connected",
+        : "Not available",
       body: creatorPayoutSummary.ledgerConnected
-        ? "Rows are read-only and not payable."
-        : "Payout ledger is not connected for creators yet.",
+        ? "Read-only entries are not payable."
+        : "Payout ledger is not available for creators yet.",
       tone: creatorPayoutSummary.ledgerConnected ? "default" : "unavailable",
     },
     {
@@ -1802,13 +1860,13 @@ export function ChannelStudioScreen() {
     {
       label: "Revenue sharing",
       value: "Not active yet",
-      body: "Creator revenue share rows are foundation-only until real source money is imported.",
+      body: "Creator revenue sharing is not active until real source money is imported.",
       tone: "unavailable",
     },
     {
       label: "Source imports",
-      value: "Not connected",
-      body: "AppLovin, sponsor payments, tips, paid content, and network billing imports are not connected here.",
+      value: "Not active",
+      body: "Ad, sponsor, tip, paid content, and network billing imports are not active here.",
       tone: "unavailable",
     },
     {
@@ -1837,12 +1895,12 @@ export function ChannelStudioScreen() {
     {
       label: "Merch/products",
       value: "Future commerce",
-      body: "Channel mini-platform commerce is managed from Platform Studio and needs product listings, inventory or fulfillment status where needed, provider proof, refunds, tax review, and payout ledger truth before launch.",
+      body: "Platform commerce is managed from Platform Studio and needs product listings, inventory or fulfillment status where needed, provider readiness, refunds, tax review, and payout ledger truth before launch.",
     },
     {
       label: "Paid content",
       value: "80% net later",
-      body: "Only after paid-content purchase, refund, tax, and provider proof exist.",
+      body: "Only after paid-content purchase, refund, tax, and provider readiness exist.",
     },
   ];
   const creatorMonetizationSettings =
@@ -1877,7 +1935,7 @@ export function ChannelStudioScreen() {
     {
       label: "Paid checkout",
       value: creatorMonetizationSettings.paidContentCheckoutEnabled ? "Enabled later" : "Off",
-      body: "Checkout remains blocked until provider, policy, webhook, refund, and access-grant proof pass.",
+      body: "Checkout remains blocked until provider, policy, webhook, refund, and access-grant readiness pass.",
       tone: creatorMonetizationSettings.paidContentCheckoutEnabled ? "default" : "unavailable",
     },
     {
@@ -1889,45 +1947,45 @@ export function ChannelStudioScreen() {
     {
       label: "Merch/products",
       value: creatorMonetizationSettings.merchStoreEnabled ? "Enabled later" : "Off",
-      body: "Mini platform product listings need checkout, tax, fulfillment, refund, and payout proof before launch.",
+      body: "Platform product listings need checkout, tax, fulfillment, refund, and payout readiness before launch.",
       tone: creatorMonetizationSettings.merchStoreEnabled ? "default" : "unavailable",
     },
     {
       label: "Live money",
       value: creatorMonetizationSettings.liveMoneyEnabled ? "On" : "Off",
-      body: "Live money must stay off until legal, provider, tax, fraud, and Owner-approved rollout proof passes.",
+      body: "Live money must stay off until legal, provider, tax, fraud, and Owner-approved rollout readiness passes.",
       tone: creatorMonetizationSettings.liveMoneyEnabled ? "default" : "unavailable",
     },
   ];
   const creatorMonetizationCountCards: readonly SummaryMetricCard[] = [
     {
-      label: "Price rows",
+      label: "Pricing",
       value: formatCount(creatorMonetizationSummary?.pricingRows ?? null),
-      body: "Backed paid-content pricing rows for this creator, if the foundation migration is applied.",
+      body: "Backed paid-content pricing records for this creator when pricing becomes available.",
       tone: creatorMonetizationSummary?.pricingRows == null ? "unavailable" : "default",
     },
     {
-      label: "Product rows",
+      label: "Products",
       value: formatCount(creatorMonetizationSummary?.productRows ?? null),
-      body: "Backed product/merch rows for this creator; checkout remains disabled.",
+      body: "Backed product or merch records for this creator; checkout remains disabled.",
       tone: creatorMonetizationSummary?.productRows == null ? "unavailable" : "default",
     },
     {
-      label: "Tip rows",
+      label: "Tips",
       value: formatCount(creatorMonetizationSummary?.tipRows ?? null),
-      body: "Webhook-confirmed tip rows only; no fake tips are created by Platform Studio.",
+      body: "Webhook-confirmed tip records only; no fake tips are created by Platform Studio.",
       tone: creatorMonetizationSummary?.tipRows == null ? "unavailable" : "default",
     },
     {
-      label: "Ledger rows",
+      label: "Ledger",
       value: formatCount(creatorMonetizationSummary?.ledgerRows ?? null),
-      body: "Immutable ledger rows only; balances are derived and cannot be edited here.",
+      body: "Immutable ledger records only; balances are derived and cannot be edited here.",
       tone: creatorMonetizationSummary?.ledgerRows == null ? "unavailable" : "default",
     },
     {
       label: "Payout requests",
       value: formatCount(creatorMonetizationSummary?.payoutRequestRows ?? null),
-      body: "Scheduled and instant cash-out request foundation only; no payout execution exists.",
+      body: "Scheduled and instant cash-out requests are not active; no payout execution exists.",
       tone: creatorMonetizationSummary?.payoutRequestRows == null ? "unavailable" : "default",
     },
   ];
@@ -2033,7 +2091,7 @@ export function ChannelStudioScreen() {
       tone: eventsWithReminderInterest.length ? "default" : "unavailable",
     },
   ];
-  const channelName = String(profile?.displayName || profile?.username || "Your Mini Platform").trim();
+  const channelName = String(profile?.displayName || profile?.username || "Your Platform").trim();
   const channelTagline = String(profile?.tagline ?? "").trim();
   const channelInitial = channelName.charAt(0).toUpperCase() || "C";
   const publishedVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
@@ -2072,69 +2130,7 @@ export function ChannelStudioScreen() {
     ? safetyAdminSummary.recentSafetyReportCount
     : null;
   const channelRoleLabel = formatChannelRoleLabel(profile?.channelRole ?? null);
-  const snapshotCards: readonly {
-    label: string;
-    value: string;
-    body: string;
-    tab: StudioTabId;
-  }[] = [
-    {
-      label: "Published",
-      value: videosLoading ? "..." : String(publishedVideoCount),
-      body: publishedVideoCount ? "Public videos" : "No public videos",
-      tab: "content",
-    },
-    {
-      label: "Drafts",
-      value: videosLoading ? "..." : String(draftVideoCount),
-      body: draftVideoCount ? "Waiting to publish" : "No drafts",
-      tab: "content",
-    },
-    {
-      label: "Monetize",
-      value: creatorMonetizationSettings.liveMoneyEnabled ? "On" : "Off",
-      body: "Foundation only",
-      tab: "monetize",
-    },
-    {
-      label: "Events",
-      value: eventsLoading ? "..." : String(upcomingEvents.length),
-      body: upcomingEvents.length ? "Upcoming" : "None scheduled",
-      tab: "live",
-    },
-    {
-      label: "Payouts",
-      value: "Not active yet",
-      body: creatorPayoutSummary.ledgerConnected
-        ? formatCreatorPayoutLedgerCount(creatorPayoutSummary.ledgerRowCount)
-        : "Foundation only",
-      tab: "payouts",
-    },
-    ...(audienceFollowerCount == null ? [] : [{
-      label: "Followers",
-      value: String(audienceFollowerCount),
-      body: audienceFollowerCount ? "Channel audience" : "No followers",
-      tab: "audience" as const,
-    }]),
-    ...(pendingAudienceRequestCount == null ? [] : [{
-      label: "Requests",
-      value: String(pendingAudienceRequestCount),
-      body: pendingAudienceRequestCount ? "Needs review" : "None waiting",
-      tab: "audience" as const,
-    }]),
-    ...(blockedAudienceCount == null ? [] : [{
-      label: "Blocks",
-      value: String(blockedAudienceCount),
-      body: blockedAudienceCount ? "Blocked audience" : "No blocks",
-      tab: "audience" as const,
-    }]),
-    ...(audienceSubscriberCount == null ? [] : [{
-      label: "Subscribers",
-      value: String(audienceSubscriberCount),
-      body: audienceSubscriberCount ? "Backed signal" : "No subscribers",
-      tab: "audience" as const,
-    }]),
-  ];
+  const platformIdentityPillLabel = channelRoleLabel === "Viewer" ? "Platform access" : channelRoleLabel;
   const needsAttentionItems: readonly {
     title: string;
     body: string;
@@ -2153,8 +2149,39 @@ export function ChannelStudioScreen() {
     ...((recentSafetyReportCount ?? 0) > 0 ? [{
       title: "Safety review",
       body: `${recentSafetyReportCount} recent report${recentSafetyReportCount === 1 ? "" : "s"} are visible to this account.`,
-      tab: "insights" as const,
+      tab: "moderation" as const,
     }] : []),
+  ];
+  const todayCards: readonly {
+    label: string;
+    value: string;
+    body: string;
+    tab: StudioTabId;
+  }[] = [
+    {
+      label: "Published",
+      value: videosLoading ? "..." : String(publishedVideoCount),
+      body: publishedVideoCount ? "Public videos" : "No public videos",
+      tab: "content",
+    },
+    {
+      label: "Drafts",
+      value: videosLoading ? "..." : String(draftVideoCount),
+      body: draftVideoCount ? "Waiting to publish" : "No drafts",
+      tab: "content",
+    },
+    {
+      label: "Events",
+      value: eventsLoading ? "..." : String(upcomingEvents.length),
+      body: upcomingEvents.length ? "Upcoming" : "No events scheduled",
+      tab: "live",
+    },
+    {
+      label: "Needs attention",
+      value: needsAttentionItems.length ? String(needsAttentionItems.length) : "Clear",
+      body: needsAttentionItems.length ? "Review tasks" : "All clear",
+      tab: needsAttentionItems[0]?.tab ?? "home",
+    },
   ];
   const insightMetricCards: readonly SummaryMetricCard[] = [
     {
@@ -2199,18 +2226,18 @@ export function ChannelStudioScreen() {
       ? "No published videos yet. Publish a draft when it is ready."
       : contentStatusFilter === "drafts"
         ? "No drafts right now."
-        : "No mini platform videos yet. Upload your first video.";
+        : "No platform videos yet. Upload your first video.";
 
     return (
     <View style={[styles.panel, styles.creatorContentPanel]}>
       <View style={styles.panelHeader}>
         <View style={styles.panelHeaderCopy}>
           <Text style={styles.panelTitle}>Content</Text>
-          <Text style={styles.panelSubtitle}>Manage your mini platform videos, drafts, and published uploads.</Text>
+          <Text style={styles.panelSubtitle}>Manage your platform videos, drafts, and published uploads.</Text>
         </View>
       </View>
       <Text style={styles.permissionCopy}>
-        Upload playable videos to your public mini platform. Drafts stay visible only to you; public videos can appear on your Profile/Mini Platform and open in Player.
+        Upload playable videos to your public platform. Drafts stay visible only to you; public videos can appear on your Profile/Platform and open in Player.
       </Text>
 
       {videoNotice ? (
@@ -2223,7 +2250,7 @@ export function ChannelStudioScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Videos</Text>
           <Text style={styles.summaryValue}>{videosLoading ? "..." : String(creatorVideos.length)}</Text>
-          <Text style={styles.summaryBody}>creator-owned uploads in this mini platform library</Text>
+          <Text style={styles.summaryBody}>creator-owned uploads in this platform library</Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Published</Text>
@@ -2325,9 +2352,9 @@ export function ChannelStudioScreen() {
         </View>
       ) : (
         <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>No mini platform videos yet</Text>
+          <Text style={styles.eventEmptyTitle}>No platform videos yet</Text>
           <Text style={styles.eventEmptyBody}>
-            {"No mini platform videos yet. Use the Video Upload form below when you're ready."}
+            {"No platform videos yet. Use the Video Upload form below when you're ready."}
           </Text>
         </View>
       )}
@@ -2471,8 +2498,8 @@ export function ChannelStudioScreen() {
           activeOpacity={0.86}
           disabled
         >
-          <Text style={styles.studioActionButtonText}>Preview Mini Platform</Text>
-          <Text style={styles.studioActionButtonCopy}>Profile required to preview mini platform.</Text>
+          <Text style={styles.studioActionButtonText}>Preview Platform</Text>
+          <Text style={styles.studioActionButtonCopy}>Profile required to preview platform.</Text>
         </TouchableOpacity>
       );
     }
@@ -2484,12 +2511,12 @@ export function ChannelStudioScreen() {
         onPress={() => {
           router.push({
             pathname: "/channel/[userId]",
-            params: { userId: previewUserId },
+            params: { userId: previewUserId, preview: "public" },
           });
         }}
       >
-        <Text style={styles.studioActionButtonText}>Preview Mini Platform</Text>
-        <Text style={styles.studioActionButtonCopy}>Open public mini platform</Text>
+        <Text style={styles.studioActionButtonText}>Preview Platform</Text>
+        <Text style={styles.studioActionButtonCopy}>Open public platform</Text>
       </TouchableOpacity>
     );
   };
@@ -2497,7 +2524,7 @@ export function ChannelStudioScreen() {
   const renderStudioHeader = () => (
     <View style={styles.studioHeaderCard}>
       <Text style={styles.heroTitle}>Platform Studio</Text>
-      <Text style={styles.studioSubtitle}>Run your mini platform from one place.</Text>
+      <Text style={styles.studioSubtitle}>Run your platform from one place.</Text>
       <Text style={styles.studioClarifier}>Profile settings stay separate.</Text>
       {profile ? (
         <View style={styles.channelIdentityRow}>
@@ -2510,8 +2537,8 @@ export function ChannelStudioScreen() {
           )}
           <View style={styles.channelIdentityCopy}>
             <Text style={styles.channelIdentityName} numberOfLines={1}>{channelName}</Text>
-            {channelRoleLabel ? (
-              <Text style={styles.channelRoleChip}>{channelRoleLabel}</Text>
+            {platformIdentityPillLabel ? (
+              <Text style={styles.channelRoleChip}>{platformIdentityPillLabel}</Text>
             ) : null}
             {channelTagline ? (
               <Text style={styles.channelIdentityTagline} numberOfLines={1}>{channelTagline}</Text>
@@ -2524,7 +2551,7 @@ export function ChannelStudioScreen() {
         <TouchableOpacity
           style={styles.studioActionButton}
           activeOpacity={0.88}
-          onPress={() => setActiveStudioTab("brand")}
+          onPress={() => openStudioTab("brand", { focus: "brand" })}
         >
           <Text style={styles.studioActionButtonText}>Edit Brand</Text>
           <Text style={styles.studioActionButtonCopy}>Open Brand</Text>
@@ -2557,6 +2584,91 @@ export function ChannelStudioScreen() {
       })}
     </ScrollView>
   );
+
+  const renderStudioStatusPill = (label: string, tone: "default" | "muted" | "warning" = "default") => (
+    <View style={[
+      styles.studioStatusPill,
+      tone === "muted" && styles.studioStatusPillMuted,
+      tone === "warning" && styles.studioStatusPillWarning,
+    ]}>
+      <Text style={styles.studioStatusPillText}>{label}</Text>
+    </View>
+  );
+
+  const renderStudioActionRow = ({
+    title,
+    body,
+    value,
+    onPress,
+    tone = "default",
+  }: {
+    title: string;
+    body: string;
+    value?: string;
+    onPress: () => void;
+    tone?: "default" | "muted" | "warning";
+  }) => (
+    <TouchableOpacity
+      style={[
+        styles.studioActionRow,
+        tone === "warning" && styles.studioActionRowWarning,
+        tone === "muted" && styles.studioActionRowMuted,
+      ]}
+      activeOpacity={0.86}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${body}`}
+    >
+      <View style={styles.studioActionRowCopy}>
+        <Text style={styles.studioActionRowTitle}>{title}</Text>
+        <Text style={styles.studioActionRowBody}>{body}</Text>
+      </View>
+      <View style={styles.studioActionRowMeta}>
+        {value ? renderStudioStatusPill(value, tone === "warning" ? "warning" : "muted") : null}
+        <Text style={styles.studioActionChevron}>›</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderHomeAccordion = ({
+    id,
+    title,
+    summary,
+    status,
+    statusTone = "default",
+    children,
+  }: {
+    id: StudioHomeSectionId;
+    title: string;
+    summary: string;
+    status?: string;
+    statusTone?: "default" | "muted" | "warning";
+    children: React.ReactNode;
+  }) => {
+    const expanded = expandedHomeSections.has(id);
+    return (
+      <View style={styles.studioAccordionCard}>
+        <TouchableOpacity
+          style={styles.studioAccordionHeader}
+          activeOpacity={0.86}
+          onPress={() => toggleHomeSection(id)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={`${title}. ${summary}`}
+        >
+          <View style={styles.studioAccordionCopy}>
+            <Text style={styles.studioAccordionTitle}>{title}</Text>
+            <Text style={styles.studioAccordionSummary}>{summary}</Text>
+          </View>
+          <View style={styles.studioAccordionMeta}>
+            {status ? renderStudioStatusPill(status, statusTone) : null}
+            <Text style={styles.studioAccordionChevron}>{expanded ? "⌄" : "›"}</Text>
+          </View>
+        </TouchableOpacity>
+        {expanded ? <View style={styles.studioAccordionBody}>{children}</View> : null}
+      </View>
+    );
+  };
 
   const renderQuickActionCard = ({
     title,
@@ -2606,8 +2718,8 @@ export function ChannelStudioScreen() {
     if (!latestCreatorVideo) {
       return (
         <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>No mini platform videos yet</Text>
-          <Text style={styles.eventEmptyBody}>No mini platform videos yet. Upload your first video to start building your mini platform.</Text>
+          <Text style={styles.eventEmptyTitle}>No platform videos yet</Text>
+          <Text style={styles.eventEmptyBody}>No platform videos yet. Upload your first video to start building your platform.</Text>
         </View>
       );
     }
@@ -2660,16 +2772,17 @@ export function ChannelStudioScreen() {
       <View style={styles.dashboardPanel}>
         <View style={styles.panelHeader}>
           <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Today’s Snapshot</Text>
+            <Text style={styles.panelTitle}>Today</Text>
+            <Text style={styles.panelSubtitle}>A short read on what is real right now.</Text>
           </View>
         </View>
         <View style={styles.homeSnapshotGrid}>
-          {snapshotCards.map((card) => (
+          {todayCards.map((card) => (
             <TouchableOpacity
               key={card.label}
               style={styles.homeSnapshotCard}
               activeOpacity={0.86}
-              onPress={() => setActiveStudioTab(card.tab)}
+              onPress={() => openStudioTab(card.tab)}
             >
               <Text style={styles.homeSnapshotValue}>{card.value}</Text>
               <Text style={styles.homeSnapshotLabel}>{card.label}</Text>
@@ -2679,113 +2792,300 @@ export function ChannelStudioScreen() {
         </View>
       </View>
 
-      <View style={styles.dashboardPanel}>
-        <View style={styles.panelHeader}>
-          <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Quick Actions</Text>
+      {needsAttentionItems.length ? (
+        <View style={styles.dashboardPanel}>
+          <View style={styles.panelHeader}>
+            <View style={styles.panelHeaderCopy}>
+              <Text style={styles.panelTitle}>Needs Attention</Text>
+              <Text style={styles.panelSubtitle}>Only backed, actionable items show here.</Text>
+            </View>
           </View>
-        </View>
-        <View style={styles.homeActionGrid}>
-          {renderHomeActionCard({
-            title: "Upload",
-            body: "Add video",
-            onPress: () => setActiveStudioTab("content"),
-          })}
-          {renderHomeActionCard({
-            title: "Content",
-            body: "Library",
-            onPress: () => setActiveStudioTab("content"),
-          })}
-          {renderHomeActionCard({
-            title: "Monetize",
-            body: "Foundation",
-            onPress: () => setActiveStudioTab("monetize"),
-          })}
-          {renderHomeActionCard({
-            title: "Go Live",
-            body: "Not wired",
-            disabled: true,
-          })}
-          {renderHomeActionCard({
-            title: "Live",
-            body: "Events",
-            onPress: () => setActiveStudioTab("live"),
-          })}
-          {renderHomeActionCard({
-            title: "Audience",
-            body: "Requests",
-            onPress: () => setActiveStudioTab("audience"),
-          })}
-          {renderHomeActionCard({
-            title: "Insights",
-            body: "Signals",
-            onPress: () => setActiveStudioTab("insights"),
-          })}
-          {renderHomeActionCard({
-            title: "Payouts",
-            body: "Not active yet",
-            onPress: () => setActiveStudioTab("payouts"),
-          })}
-          {renderHomeActionCard({
-            title: "Revenue",
-            body: "No earnings yet",
-            onPress: () => setActiveStudioTab("revenue"),
-          })}
-          {renderHomeActionCard({
-            title: "Brand",
-            body: "Identity",
-            onPress: () => setActiveStudioTab("brand"),
-          })}
-        </View>
-      </View>
-
-      <View style={styles.dashboardPanel}>
-        <View style={styles.panelHeader}>
-          <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Needs Attention</Text>
-          </View>
-        </View>
-        {needsAttentionItems.length ? (
           <View style={styles.eventList}>
             {needsAttentionItems.map((item) => (
               <TouchableOpacity
                 key={item.title}
                 style={styles.attentionCard}
                 activeOpacity={0.86}
-                onPress={() => setActiveStudioTab(item.tab)}
+                onPress={() => openStudioTab(item.tab, item.tab === "content" ? { filter: "drafts", focus: "drafts" } : undefined)}
               >
                 <Text style={styles.attentionTitle}>{item.title}</Text>
                 <Text style={styles.attentionBody}>{item.body}</Text>
               </TouchableOpacity>
             ))}
           </View>
-        ) : (
-          <View style={styles.homeEmptyTaskCard}>
-            <Text style={styles.homeEmptyTaskText}>No urgent channel tasks right now.</Text>
-          </View>
-        )}
-      </View>
+        </View>
+      ) : (
+        <View style={styles.homeEmptyTaskCard}>
+          <Text style={styles.homeEmptyTaskText}>All clear. Nothing needs attention right now.</Text>
+        </View>
+      )}
 
-      <View style={styles.dashboardPanel}>
-        <View style={styles.panelHeader}>
-          <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Latest Content</Text>
-          </View>
-        </View>
-        {renderLatestContentCard()}
-      </View>
+      <View style={styles.studioAccordionStack}>
+        {renderHomeAccordion({
+          id: "create",
+          title: "Create and Manage",
+          summary: "Upload, drafts, library, and latest content.",
+          status: draftVideoCount ? `${draftVideoCount} draft${draftVideoCount === 1 ? "" : "s"}` : "Ready",
+          statusTone: draftVideoCount ? "warning" : "default",
+          children: (
+            <>
+              {renderStudioActionRow({
+                title: "Upload video",
+                body: uploadsEnabled ? "Open the existing upload form." : "Uploads are temporarily paused by app configuration.",
+                value: uploadsEnabled ? "Open" : "Paused",
+                tone: uploadsEnabled ? "default" : "warning",
+                onPress: () => openStudioTab("content", { filter: "all", focus: "upload" }),
+              })}
+              {renderStudioActionRow({
+                title: "Drafts",
+                body: draftVideoCount ? `${draftVideoCount} draft${draftVideoCount === 1 ? "" : "s"} waiting.` : "No drafts right now.",
+                value: draftVideoCount ? String(draftVideoCount) : "Clear",
+                onPress: () => openStudioTab("content", { filter: "drafts", focus: "drafts" }),
+              })}
+              {renderStudioActionRow({
+                title: "Published library",
+                body: publishedVideoCount ? `${publishedVideoCount} public video${publishedVideoCount === 1 ? "" : "s"}.` : "No public videos yet.",
+                value: publishedVideoCount ? String(publishedVideoCount) : "Empty",
+                onPress: () => openStudioTab("content", { filter: "published", focus: "library" }),
+              })}
+              {renderStudioActionRow({
+                title: "View all content",
+                body: "Open the full content manager.",
+                value: "Open",
+                onPress: () => openStudioTab("content", { filter: "all", focus: "library" }),
+              })}
+              <View style={styles.accordionInlineBlock}>
+                <Text style={styles.sectionLabel}>Latest Content</Text>
+                {renderLatestContentCard()}
+              </View>
+            </>
+          ),
+        })}
 
-      <View style={[styles.dashboardPanel, styles.roadmapPanel]}>
-        <View style={styles.panelHeader}>
-          <View style={styles.panelHeaderCopy}>
-            <Text style={styles.roadmapTitle}>Later</Text>
-          </View>
-        </View>
-        <View style={styles.roadmapList}>
-          <Text style={styles.roadmapItem}>Featured Video / Trailer — Coming later</Text>
-          <Text style={styles.roadmapItem}>Playlists / Shelves — Coming later</Text>
-          <Text style={styles.roadmapItem}>Channel IQ / Rachi Platform Studio Assistant — Coming later</Text>
-        </View>
+        {renderHomeAccordion({
+          id: "live",
+          title: "Live and Events",
+          summary: "Go live, schedule events, and manage reminders.",
+          status: upcomingEvents.length ? `${upcomingEvents.length} upcoming` : "No events",
+          children: (
+            <>
+              {renderStudioActionRow({
+                title: "Go Live",
+                body: "Open the existing Live Watch-Party start flow. Premium gates still apply.",
+                value: "Open",
+                onPress: () => {
+                  router.push({ pathname: "/watch-party", params: { mode: "live", source: "platform-studio" } });
+                },
+              })}
+              {renderStudioActionRow({
+                title: "Live Events",
+                body: nextUpcomingEvent ? `Next: ${nextUpcomingEvent.eventTitle}` : "No events scheduled.",
+                value: upcomingEvents.length ? String(upcomingEvents.length) : "Empty",
+                onPress: () => openStudioTab("live", { focus: "events" }),
+              })}
+              {renderStudioActionRow({
+                title: "Watch-Party Live from content",
+                body: latestCreatorVideo?.visibility === "public"
+                  ? "Open a public video, then start Watch-Party Live from Player."
+                  : "Publish a video first, then start Watch-Party Live from Player.",
+                value: latestCreatorVideo?.visibility === "public" ? "Player" : "Setup required",
+                tone: latestCreatorVideo?.visibility === "public" ? "default" : "warning",
+                onPress: () => {
+                  if (latestCreatorVideo?.visibility === "public" && hasPlayableCreatorVideoSource(latestCreatorVideo)) {
+                    router.push({ pathname: "/player/[id]", params: { id: latestCreatorVideo.id, source: "creator-video" } });
+                    return;
+                  }
+                  showStudioUnavailable(
+                    "Setup required",
+                    "Watch-Party Live from content starts from a playable public video. Publish a video first, then open it in Player.",
+                  );
+                },
+              })}
+              {renderStudioActionRow({
+                title: "Schedule event",
+                body: "Use the backed creator event form.",
+                value: "Open",
+                onPress: () => openStudioTab("live", { focus: "schedule" }),
+              })}
+            </>
+          ),
+        })}
+
+        {renderHomeAccordion({
+          id: "audience",
+          title: "Audience",
+          summary: "Followers, subscribers, requests, and audience activity.",
+          status: audienceFollowerCount == null ? "Protected" : `${audienceFollowerCount} followers`,
+          children: (
+            <>
+              {renderStudioActionRow({
+                title: "Audience dashboard",
+                body: "Open follower, subscriber, request, and visibility tools.",
+                value: "Open",
+                onPress: () => openStudioTab("audience", { focus: "overview" }),
+              })}
+              {renderStudioActionRow({
+                title: "Requests",
+                body: pendingAudienceRequestCount ? `${pendingAudienceRequestCount} request${pendingAudienceRequestCount === 1 ? "" : "s"} waiting.` : "No requests waiting.",
+                value: pendingAudienceRequestCount ? String(pendingAudienceRequestCount) : "Clear",
+                onPress: () => openStudioTab("audience", { focus: "requests" }),
+              })}
+              {renderStudioActionRow({
+                title: "Blocked accounts",
+                body: blockedAudienceCount ? `${blockedAudienceCount} blocked account${blockedAudienceCount === 1 ? "" : "s"}.` : "No blocked accounts.",
+                value: blockedAudienceCount ? String(blockedAudienceCount) : "Clear",
+                onPress: () => openStudioTab("moderation", { focus: "blocks" }),
+              })}
+            </>
+          ),
+        })}
+
+        {renderHomeAccordion({
+          id: "monetization",
+          title: "Monetization",
+          summary: "Revenue and payout tools stay honest until eligible.",
+          status: creatorMonetizationSettings.liveMoneyEnabled ? "On" : "Not active",
+          statusTone: creatorMonetizationSettings.liveMoneyEnabled ? "default" : "muted",
+          children: (
+            <>
+              {renderStudioActionRow({
+                title: "Monetization status",
+                body: "Review eligibility and locked creator monetization tools.",
+                value: "Open",
+                onPress: () => openStudioTab("monetize", { focus: "status" }),
+              })}
+              {renderStudioActionRow({
+                title: "Revenue",
+                body: "No creator earnings are available until real source money is imported.",
+                value: "Not active",
+                tone: "muted",
+                onPress: () => openStudioTab("revenue", { focus: "status" }),
+              })}
+              {renderStudioActionRow({
+                title: "Payouts",
+                body: getCreatorFacingPayoutSetupBody(creatorPayoutSummary),
+                value: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary),
+                tone: "muted",
+                onPress: () => openStudioTab("payouts", { focus: "status" }),
+              })}
+              {renderStudioActionRow({
+                title: "Creator monetization policy",
+                body: "Open the public policy for creator monetization and revenue.",
+                value: "Policy",
+                onPress: () => router.push("/creator-monetization" as Parameters<typeof router.push>[0]),
+              })}
+            </>
+          ),
+        })}
+
+        {renderHomeAccordion({
+          id: "moderation",
+          title: "Moderation and Safety",
+          summary: "Reports, blocks, comments, and platform safety.",
+          status: recentSafetyReportCount == null ? "Protected" : recentSafetyReportCount ? `${recentSafetyReportCount} reports` : "Clear",
+          statusTone: recentSafetyReportCount ? "warning" : "default",
+          children: (
+            <>
+              {renderStudioActionRow({
+                title: "Reports",
+                body: recentSafetyReportCount == null ? "Creator-facing report review is not available to this account." : recentSafetyReportCount ? "Reports are visible to this account." : "No reports waiting.",
+                value: recentSafetyReportCount == null ? "Not available" : recentSafetyReportCount ? String(recentSafetyReportCount) : "Clear",
+                tone: recentSafetyReportCount ? "warning" : "muted",
+                onPress: () => openStudioTab("moderation", { focus: "reports" }),
+              })}
+              {renderStudioActionRow({
+                title: "Blocked accounts",
+                body: blockedAudienceCount ? "Manage real channel-owned audience blocks." : "No blocked accounts.",
+                value: blockedAudienceCount ? String(blockedAudienceCount) : "Clear",
+                onPress: () => openStudioTab("moderation", { focus: "blocks" }),
+              })}
+              {renderStudioActionRow({
+                title: "Comments and replies",
+                body: "Content-specific comments stay with each video for now.",
+                value: "Content",
+                onPress: () => openStudioTab("content", { filter: "all", focus: "comments" }),
+              })}
+              {renderStudioActionRow({
+                title: "Live safety",
+                body: "Live room safety follows the existing Live and room controls.",
+                value: "Live",
+                onPress: () => openStudioTab("live", { focus: "safety" }),
+              })}
+              {renderStudioActionRow({
+                title: "Community rules",
+                body: "Open the community rules creators and viewers follow.",
+                value: "Policy",
+                onPress: () => router.push("/community-guidelines" as Parameters<typeof router.push>[0]),
+              })}
+              {renderStudioActionRow({
+                title: "Appeals and enforcement",
+                body: "Open the moderation and appeals policy.",
+                value: "Policy",
+                onPress: () => router.push("/moderation-policy" as Parameters<typeof router.push>[0]),
+              })}
+            </>
+          ),
+        })}
+
+        {renderHomeAccordion({
+          id: "insights",
+          title: "Insights",
+          summary: "Backed signals only; unsupported analytics stay unavailable.",
+          status: creatorAnalyticsSummary ? "Signals" : "Preparing",
+          statusTone: creatorAnalyticsSummary ? "default" : "muted",
+          children: (
+            <>
+              {renderStudioActionRow({
+                title: "Insights overview",
+                body: creatorAnalyticsSummary ? "Open backed room, event, and audience signals." : "Insights will appear after your platform has activity.",
+                value: "Open",
+                onPress: () => openStudioTab("insights", { focus: "overview" }),
+              })}
+              {renderStudioActionRow({
+                title: "Activity signals",
+                body: "Review hosted rooms, events, follower, and subscriber signals.",
+                value: "Signals",
+                onPress: () => openStudioTab("insights", { focus: "activity" }),
+              })}
+            </>
+          ),
+        })}
+
+        {renderHomeAccordion({
+          id: "brand",
+          title: "Brand Settings",
+          summary: "Name, tagline, layout, access defaults, and preview.",
+          status: "Ready",
+          children: (
+            <>
+              {renderStudioActionRow({
+                title: "Edit Brand",
+                body: "Open platform identity, layout, and room defaults.",
+                value: "Open",
+                onPress: () => openStudioTab("brand", { focus: "brand" }),
+              })}
+              {renderStudioActionRow({
+                title: "Preview Platform",
+                body: "Open the public platform preview as visitors see it.",
+                value: "Preview",
+                onPress: () => {
+                  const previewUserId = String(user?.id ?? "").trim();
+                  if (!previewUserId) {
+                    showStudioUnavailable("Preview unavailable", "Sign in with a profile before previewing your platform.");
+                    return;
+                  }
+                  router.push({ pathname: "/channel/[userId]", params: { userId: previewUserId, preview: "public" } });
+                },
+              })}
+              {renderStudioActionRow({
+                title: "Profile settings",
+                body: "Profile settings stay separate from Platform settings.",
+                value: "Settings",
+                onPress: () => router.push("/settings" as Parameters<typeof router.push>[0]),
+              })}
+            </>
+          ),
+        })}
       </View>
     </>
   );
@@ -2796,12 +3096,12 @@ export function ChannelStudioScreen() {
         <View style={styles.panelHeader}>
           <View style={styles.panelHeaderCopy}>
             <Text style={styles.panelTitle}>Monetize</Text>
-            <Text style={styles.panelSubtitle}>Paid content, tips, and mini platform commerce are foundation-only.</Text>
+            <Text style={styles.panelSubtitle}>Paid content, tips, and platform commerce are not active yet.</Text>
           </View>
           <Text style={styles.panelStatusMuted}>OFF</Text>
         </View>
         <Text style={styles.permissionCopy}>
-          Platform Studio can show the safe monetization control plane, but it cannot create purchases, tips, orders, ledger earnings, cash-out, payouts, or Stripe production transfers while live money is off.
+          Platform Studio can show monetization readiness, but it cannot create purchases, tips, orders, earnings, cash-out, payouts, or transfers while live money is off.
         </Text>
       </View>
 
@@ -2833,7 +3133,7 @@ export function ChannelStudioScreen() {
           {[
             {
               title: "Paid creator content",
-              body: `Premium creators will be able to price their own content after ${CREATOR_MONETIZATION_DOCTRINE.premiumEntitlement} entitlement proof, server flags, and provider checkout proof. Viewers will not need Premium to buy creator-paid content.`,
+              body: `Premium creators will be able to price their own content after ${CREATOR_MONETIZATION_DOCTRINE.premiumEntitlement} eligibility, server flags, and provider checkout are ready. Viewers will not need Premium to buy creator-paid content.`,
             },
             {
               title: "Tips / support",
@@ -2841,7 +3141,7 @@ export function ChannelStudioScreen() {
             },
             {
               title: "Merch / products / clothing",
-              body: "Product listings belong to the creator mini platform, but checkout, taxes, inventory, fulfillment, refunds, and payout ledger entries are not live.",
+              body: "Product listings belong to the creator platform, but checkout, taxes, inventory, fulfillment, refunds, and payout ledger entries are not live.",
             },
             {
               title: "Cash-out",
@@ -2858,8 +3158,8 @@ export function ChannelStudioScreen() {
 
       <View style={styles.panel}>
         <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Foundation rows</Text>
-          <Text style={styles.panelStatusMuted}>{creatorMonetizationSummary ? "Read-only" : "Not connected"}</Text>
+          <Text style={styles.panelTitle}>Read-only setup signals</Text>
+          <Text style={styles.panelStatusMuted}>{creatorMonetizationSummary ? "Read-only" : "Not active"}</Text>
         </View>
         <Text style={styles.permissionCopy}>
           Counts here are not earnings, payable balances, purchases, orders, or payout eligibility.
@@ -2926,23 +3226,23 @@ export function ChannelStudioScreen() {
           <Text style={styles.panelStatusMuted}>READ-ONLY</Text>
         </View>
         <Text style={styles.permissionCopy}>
-          This dashboard is foundation-only. It can open backend test-mode Stripe setup, but it does not create a balance, withdrawal, KYC approval, tax form, payout approval, transfer, or payable obligation.
+          This dashboard can open payout setup when available, but it does not create a balance, withdrawal, KYC approval, tax form, payout approval, transfer, or payable obligation.
         </Text>
       </View>
 
       <View style={styles.panel}>
         <View style={styles.panelHeader}>
           <Text style={styles.panelTitle}>Payout setup</Text>
-          <Text style={styles.panelStatusMuted}>{creatorPayoutSummary.setupStatusLabel}</Text>
+          <Text style={styles.panelStatusMuted}>{getCreatorFacingPayoutSetupLabel(creatorPayoutSummary)}</Text>
         </View>
         <View style={styles.eventSnapshotCard}>
           <Text style={styles.accessSummaryKicker}>PAYOUT SETUP</Text>
-          <Text style={styles.accessSummaryTitle}>{creatorPayoutSummary.setupStatusLabel}</Text>
+          <Text style={styles.accessSummaryTitle}>{getCreatorFacingPayoutSetupLabel(creatorPayoutSummary)}</Text>
           <Text style={styles.accessSummaryBody}>
-            {creatorPayoutSummary.setupStatusBody}
+            {getCreatorFacingPayoutSetupBody(creatorPayoutSummary)}
           </Text>
           <Text style={styles.accessSummaryBody}>
-            This is backend-only Stripe Connect test-mode setup. Withdrawals, payout release, transfers, checkout, and payable balances are not active.
+            Withdrawals, payout release, transfers, checkout, and payable balances are not active.
           </Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
@@ -2953,9 +3253,9 @@ export function ChannelStudioScreen() {
             <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>KYC / Tax</Text>
               <Text style={styles.summaryValue}>
-                {creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Provider ready" : "Not connected"}
+                {creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Provider ready" : "Not available"}
               </Text>
-              <Text style={styles.summaryBody}>{"Stripe setup, tax readiness, and Chi'llywood legal/accounting review are required before payouts."}</Text>
+              <Text style={styles.summaryBody}>{"Provider setup, tax readiness, and Chi'llywood legal/accounting review are required before payouts."}</Text>
             </View>
             <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
               <Text style={styles.summaryLabel}>Payout execution</Text>
@@ -2968,7 +3268,7 @@ export function ChannelStudioScreen() {
                 {creatorPayoutReadiness.canRequestScheduledPayout ? "Ready" : "Disabled"}
               </Text>
               <Text style={styles.summaryBody}>
-                Scheduled payout fee is ${formatCreatorPayoutFoundationAmount(creatorPayoutReadiness.scheduledPayoutFeeCents, "usd").replace("USD ", "")}; requests remain blocked until provider and platform proof pass.
+                Scheduled payout fee is ${formatCreatorPayoutFoundationAmount(creatorPayoutReadiness.scheduledPayoutFeeCents, "usd").replace("USD ", "")}; requests remain blocked until provider and platform readiness pass.
               </Text>
             </View>
             <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
@@ -2984,7 +3284,7 @@ export function ChannelStudioScreen() {
               <Text style={styles.summaryLabel}>Test workflow</Text>
               <Text style={styles.summaryValue}>{creatorInstantCashoutDryRunPreview100.safetyLabel}</Text>
               <Text style={styles.summaryBody}>
-                Stripe Connect test setup and dry-run review can be tested. Production payout execution remains blocked.
+                Payout setup and review can be checked. Production payout execution remains blocked.
               </Text>
             </View>
             <View style={styles.summaryCard}>
@@ -3002,7 +3302,7 @@ export function ChannelStudioScreen() {
               <Text style={styles.summaryLabel}>Owner approval</Text>
               <Text style={styles.summaryValue}>{creatorInstantCashoutDryRunPreview100.ownerApprovalRequired ? "Required" : "Not required"}</Text>
               <Text style={styles.summaryBody}>
-                Admin can review payout readiness only. Owner-approved workflow and provider/legal proof are required before any execution lane.
+                Chi'llywood can review payout readiness only. Owner-approved workflow and provider/legal readiness are required before any execution lane.
               </Text>
             </View>
           </View>
@@ -3079,11 +3379,11 @@ export function ChannelStudioScreen() {
 
       <View style={styles.panel}>
         <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Payout ledger foundation</Text>
+          <Text style={styles.panelTitle}>Payout ledger</Text>
           <Text style={styles.panelStatusMuted}>Read-only</Text>
         </View>
         <Text style={styles.permissionCopy}>
-          Counts and rows here are not available balance, earnings, paid status, or withdrawal eligibility.
+          Entries here are not available balance, earnings, paid status, or withdrawal eligibility.
         </Text>
         <View style={styles.summaryGrid}>
           {payoutLedgerSummaryCards.map((card) => (
@@ -3100,8 +3400,8 @@ export function ChannelStudioScreen() {
 
         {!creatorPayoutSummary.ledgerConnected ? (
           <View style={styles.eventEmptyCard}>
-            <Text style={styles.eventEmptyTitle}>Payout ledger is not connected for creators yet.</Text>
-            <Text style={styles.eventEmptyBody}>No payout ledger rows are exposed to this creator dashboard.</Text>
+            <Text style={styles.eventEmptyTitle}>Payout ledger is not available yet.</Text>
+            <Text style={styles.eventEmptyBody}>No payout ledger entries are exposed to this creator dashboard.</Text>
           </View>
         ) : creatorPayoutSummary.latestRows.length ? (
           <View style={styles.eventList}>
@@ -3119,23 +3419,23 @@ export function ChannelStudioScreen() {
                   </View>
                 </View>
                 <Text style={styles.eventCardBody}>
-                  Foundation amount: {formatCreatorPayoutFoundationAmount(row.amountMinor, row.currency)} · Not payable.
+                  Recorded amount: {formatCreatorPayoutFoundationAmount(row.amountMinor, row.currency)} · Not payable.
                 </Text>
                 {row.holdReason || row.holdUntil ? (
                   <Text style={styles.eventCardBody}>
-                    Hold status: {row.holdReason || "Foundation hold"}{row.holdUntil ? ` until ${formatIsoDate(row.holdUntil)}` : ""}.
+                    Hold status: {row.holdReason || "Review hold"}{row.holdUntil ? ` until ${formatIsoDate(row.holdUntil)}` : ""}.
                   </Text>
                 ) : null}
                 <Text style={styles.eventCardBody}>
-                  Foundation only. This row does not create a creator payable balance.
+                  Read-only setup row. This row does not create a creator payable balance.
                 </Text>
               </View>
             ))}
           </View>
         ) : (
           <View style={styles.eventEmptyCard}>
-            <Text style={styles.eventEmptyTitle}>No payout ledger rows yet.</Text>
-            <Text style={styles.eventEmptyBody}>Creator payouts are not active yet, and there are no read-only foundation rows for this creator.</Text>
+            <Text style={styles.eventEmptyTitle}>No payout ledger entries yet.</Text>
+            <Text style={styles.eventEmptyBody}>Creator payouts are not active yet, and there are no read-only setup entries for this creator.</Text>
           </View>
         )}
       </View>
@@ -3150,17 +3450,17 @@ export function ChannelStudioScreen() {
             <Text style={styles.panelTitle}>Revenue</Text>
             <Text style={styles.panelSubtitle}>Creator revenue sharing is not active yet.</Text>
           </View>
-          <Text style={styles.panelStatusMuted}>FOUNDATION</Text>
+          <Text style={styles.panelStatusMuted}>READ-ONLY</Text>
         </View>
         <Text style={styles.permissionCopy}>
-          This dashboard is a read-only foundation. It does not import source money, calculate creator earnings, create payout ledger entries, show payable balances, or enable withdrawals.
+          This dashboard is read-only. It does not import source money, calculate creator earnings, create payout ledger entries, show payable balances, or enable withdrawals.
         </Text>
       </View>
 
       <View style={styles.panel}>
         <View style={styles.panelHeader}>
           <Text style={styles.panelTitle}>Source money status</Text>
-          <Text style={styles.panelStatusMuted}>Not connected</Text>
+          <Text style={styles.panelStatusMuted}>Not active</Text>
         </View>
         <View style={styles.summaryGrid}>
           {creatorRevenueSummaryCards.map((card) => (
@@ -3182,7 +3482,7 @@ export function ChannelStudioScreen() {
           <Text style={styles.panelStatusMuted}>Planned only</Text>
         </View>
         <Text style={styles.permissionCopy}>
-          Rules below are product planning labels only. They are not creator earnings and cannot become payable without real provider-backed source money, fraud review, payout review, tax/KYC readiness, and immutable audit proof.
+          Rules below are product planning labels only. They are not creator earnings and cannot become payable without real provider-backed source money, fraud review, payout review, tax/KYC readiness, and immutable audit.
         </Text>
         <View style={styles.summaryGrid}>
           {creatorRevenueRuleCards.map((card) => (
@@ -3204,6 +3504,119 @@ export function ChannelStudioScreen() {
           <Text style={styles.eventEmptyTitle}>No creator earnings are available.</Text>
           <Text style={styles.eventEmptyBody}>No source money has been imported for this creator.</Text>
           <Text style={styles.eventEmptyBody}>No fake earnings, payable balances, paid status, withdrawal, payout release, or creator payout obligation exists.</Text>
+        </View>
+      </View>
+    </>
+  );
+
+  const renderModerationTab = () => (
+    <>
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <View style={styles.panelHeaderCopy}>
+            <Text style={styles.panelTitle}>Moderation and Safety</Text>
+            <Text style={styles.panelSubtitle}>Reports, blocks, comments, and platform safety.</Text>
+          </View>
+          <Text style={styles.panelStatusMuted}>CREATOR SAFE</Text>
+        </View>
+        <Text style={styles.permissionCopy}>
+          Platform Studio shows creator-safe safety controls here. Admin-only queues and enforcement tools stay in Admin unless this account already has backed review access.
+        </Text>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Safety status</Text>
+          <Text style={styles.panelStatusMuted}>
+            {recentSafetyReportCount == null ? "Protected" : recentSafetyReportCount ? "Needs review" : "Clear"}
+          </Text>
+        </View>
+        <View style={styles.summaryGrid}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Reports</Text>
+            <Text style={styles.summaryValue}>
+              {recentSafetyReportCount == null ? "Not available" : String(recentSafetyReportCount)}
+            </Text>
+            <Text style={styles.summaryBody}>
+              {recentSafetyReportCount == null
+                ? "Creator-facing report review is not available to this account."
+                : recentSafetyReportCount
+                  ? "Reports are visible to this account through backed review access."
+                  : "No reports waiting."}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Blocked accounts</Text>
+            <Text style={styles.summaryValue}>{blockedAudienceCount == null ? "Protected" : String(blockedAudienceCount)}</Text>
+            <Text style={styles.summaryBody}>
+              {blockedAudienceCount ? "Channel-owned audience blocks are backed here." : "No blocked accounts."}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Comments</Text>
+            <Text style={styles.summaryValue}>Per video</Text>
+            <Text style={styles.summaryBody}>Comment and reply controls stay with each content item for now.</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Safety paths</Text>
+          <Text style={styles.panelStatusMuted}>Open</Text>
+        </View>
+        <View style={styles.studioActionList}>
+          {renderStudioActionRow({
+            title: "Reports",
+            body: recentSafetyReportCount == null ? "Not available yet for normal creator review." : recentSafetyReportCount ? "Open report signal details." : "No reports waiting.",
+            value: recentSafetyReportCount == null ? "Not available" : recentSafetyReportCount ? String(recentSafetyReportCount) : "Clear",
+            tone: recentSafetyReportCount ? "warning" : "muted",
+            onPress: () => {
+              if (recentSafetyReportCount == null) {
+                showStudioUnavailable(
+                  "Not available yet",
+                  "Creator-facing report review is not available to this account yet. Platform reports are still handled through the existing safety review flow.",
+                );
+                return;
+              }
+              showStudioUnavailable(
+                recentSafetyReportCount ? "Reports visible" : "No reports waiting",
+                recentSafetyReportCount
+                  ? "This account has backed report visibility. Use Admin for operator review actions; Platform Studio keeps creator-facing controls here."
+                  : "No reports are waiting for this platform right now.",
+              );
+            },
+          })}
+          {renderStudioActionRow({
+            title: "Blocked accounts",
+            body: "Open audience block controls.",
+            value: "Audience",
+            onPress: () => openStudioTab("audience", { focus: "blocks" }),
+          })}
+          {renderStudioActionRow({
+            title: "Comments and replies",
+            body: "Open content management. Comment controls stay with each video.",
+            value: "Content",
+            onPress: () => openStudioTab("content", { filter: "all", focus: "comments" }),
+          })}
+          {renderStudioActionRow({
+            title: "Live safety",
+            body: "Open live events and room defaults. Existing LiveKit behavior is unchanged.",
+            value: "Live",
+            onPress: () => openStudioTab("live", { focus: "safety" }),
+          })}
+          {renderStudioActionRow({
+            title: "Community rules",
+            body: "Open the rules for platform participation.",
+            value: "Policy",
+            onPress: () => router.push("/community-guidelines" as Parameters<typeof router.push>[0]),
+          })}
+          {renderStudioActionRow({
+            title: "Content moderation policy",
+            body: "Open enforcement, moderation, and appeals policy.",
+            value: "Policy",
+            onPress: () => router.push("/moderation-policy" as Parameters<typeof router.push>[0]),
+          })}
         </View>
       </View>
     </>
@@ -3253,18 +3666,29 @@ export function ChannelStudioScreen() {
       <View style={styles.quickActionGrid}>
         {renderQuickActionCard({
           title: "Go Live",
-          body: "Live route not wired from Platform Studio yet.",
-          disabled: true,
+          body: "Open the existing Live Watch-Party start flow.",
+          onPress: () => {
+            router.push({ pathname: "/watch-party", params: { mode: "live", source: "platform-studio" } });
+          },
         })}
         {renderQuickActionCard({
           title: "Schedule Event",
           body: "Use the backed creator event form below.",
-          onPress: () => undefined,
+          onPress: () => openStudioTab("live", { focus: "schedule" }),
         })}
         {renderQuickActionCard({
           title: "Watch-Party Tools",
-          body: "Premium Watch-Party tools stay on existing routes for now.",
-          disabled: true,
+          body: "Open a public video, then start Watch-Party Live from Player.",
+          onPress: () => {
+            if (latestCreatorVideo?.visibility === "public" && hasPlayableCreatorVideoSource(latestCreatorVideo)) {
+              router.push({ pathname: "/player/[id]", params: { id: latestCreatorVideo.id, source: "creator-video" } });
+              return;
+            }
+            showStudioUnavailable(
+              "Setup required",
+              "Watch-Party Live from content starts from a playable public video. Publish a video first, then open it in Player.",
+            );
+          },
         })}
       </View>
     </View>
@@ -3338,6 +3762,7 @@ export function ChannelStudioScreen() {
             {activeStudioTab === "home" ? renderStudioHomeTab() : null}
             {activeStudioTab === "content" ? renderContentPanel() : null}
             {activeStudioTab === "monetize" ? renderMonetizeTab() : null}
+            {activeStudioTab === "moderation" ? renderModerationTab() : null}
             {activeStudioTab === "payouts" ? renderPayoutsTab() : null}
             {activeStudioTab === "revenue" ? renderRevenueTab() : null}
 
@@ -3347,7 +3772,7 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Brand</Text>
-                  <Text style={styles.panelSubtitle}>Control how your public mini platform presents itself.</Text>
+                  <Text style={styles.panelSubtitle}>Control how your public platform presents itself.</Text>
                 </View>
               </View>
               <Text style={styles.permissionCopy}>
@@ -3609,7 +4034,7 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Live</Text>
-                  <Text style={styles.panelSubtitle}>Manage live events and future Watch-Party tools for your mini platform.</Text>
+                  <Text style={styles.panelSubtitle}>Manage live events and future Watch-Party tools for your platform.</Text>
                 </View>
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
@@ -3867,7 +4292,7 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Audience</Text>
-                  <Text style={styles.panelSubtitle}>Manage followers, requests, blocks, and subscriber signals for your mini platform.</Text>
+                  <Text style={styles.panelSubtitle}>Manage followers, requests, blocks, and subscriber signals for your platform.</Text>
                 </View>
                 <Text style={styles.panelStatus}>CURRENT CONTROL</Text>
               </View>
@@ -4154,7 +4579,7 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Insights</Text>
-                  <Text style={styles.panelSubtitle}>Track what is actually backed by your mini platform data today.</Text>
+                  <Text style={styles.panelSubtitle}>Track what is actually backed by your platform data today.</Text>
                 </View>
                 <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
               </View>
@@ -4193,39 +4618,6 @@ export function ChannelStudioScreen() {
               </View>
             </View>
 
-            <View style={styles.panel}>
-              <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Safety/Admin</Text>
-                <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
-              </View>
-              <Text style={styles.permissionCopy}>
-                This section shows only the role, access, and report signals the current moderation model already supports.
-              </Text>
-              <View style={styles.summaryGrid}>
-                {safetySummaryCards.map((card) => (
-                  <View key={card.label} style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>{card.label}</Text>
-                    <Text style={styles.summaryValue}>{card.value}</Text>
-                    <Text style={styles.summaryBody}>{card.body}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.summaryGrid}>
-                {safetySummarySecondaryCards.map((card) => (
-                  <View
-                    key={card.label}
-                    style={[
-                      styles.summaryCard,
-                      card.tone === "unavailable" && styles.summaryCardUnavailable,
-                    ]}
-                  >
-                    <Text style={styles.summaryLabel}>{card.label}</Text>
-                    <Text style={styles.summaryValue}>{card.value}</Text>
-                    <Text style={styles.summaryBody}>{card.body}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
               </>
             ) : null}
           </>
@@ -4435,6 +4827,135 @@ const styles = StyleSheet.create({
   },
   studioTabButtonTextActive: {
     color: "#fff",
+  },
+  studioStatusPill: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(45,153,92,0.34)",
+    backgroundColor: "rgba(45,153,92,0.14)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  studioStatusPillMuted: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  studioStatusPillWarning: {
+    borderColor: "rgba(255,183,77,0.34)",
+    backgroundColor: "rgba(255,183,77,0.13)",
+  },
+  studioStatusPillText: {
+    color: "#F4F7FF",
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+  },
+  studioAccordionStack: {
+    gap: 10,
+  },
+  studioAccordionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(12,16,24,0.86)",
+    overflow: "hidden",
+  },
+  studioAccordionHeader: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  studioAccordionCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  studioAccordionTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  studioAccordionSummary: {
+    color: "#AEB8CE",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  studioAccordionMeta: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 8,
+  },
+  studioAccordionChevron: {
+    color: "#DDE6F8",
+    fontSize: 18,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  studioAccordionBody: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    padding: 12,
+    gap: 9,
+  },
+  studioActionList: {
+    gap: 9,
+  },
+  studioActionRow: {
+    minHeight: 60,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  studioActionRowMuted: {
+    backgroundColor: "rgba(255,255,255,0.035)",
+  },
+  studioActionRowWarning: {
+    borderColor: "rgba(255,183,77,0.24)",
+    backgroundColor: "rgba(255,183,77,0.08)",
+  },
+  studioActionRowCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  studioActionRowTitle: {
+    color: "#F5F7FF",
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  studioActionRowBody: {
+    color: "#AAB5CA",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  studioActionRowMeta: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 6,
+  },
+  studioActionChevron: {
+    color: "#DDE6F8",
+    fontSize: 18,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  accordionInlineBlock: {
+    gap: 8,
+    marginTop: 2,
   },
   quickActionGrid: {
     flexDirection: "row",

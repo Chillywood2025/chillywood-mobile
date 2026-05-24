@@ -222,9 +222,9 @@ const payoutClient = supabase as unknown as {
 
 export const CREATOR_PAYOUT_REQUIREMENTS: readonly CreatorPayoutSetupRequirement[] = [
   { label: "Payout provider", value: "Stripe Connect later" },
-  { label: "KYC", value: "Not connected yet" },
-  { label: "Tax forms", value: "Not connected yet" },
-  { label: "Payout account", value: "Not connected yet" },
+  { label: "KYC", value: "Not available yet" },
+  { label: "Tax forms", value: "Not available yet" },
+  { label: "Payout account", value: "Not available yet" },
   { label: "Fraud review", value: "Required before release" },
   { label: "Hold period", value: "7–30 days" },
   { label: "Minimum payout", value: "Undecided" },
@@ -253,8 +253,8 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 };
 
 export const formatCreatorPayoutLedgerCount = (value: number | null) => {
-  if (value === null) return "Not connected";
-  return `${value} ${value === 1 ? "foundation row" : "foundation rows"}`;
+  if (value === null) return "Not available";
+  return `${value} ${value === 1 ? "record" : "records"}`;
 };
 
 export const formatCreatorPayoutFoundationAmount = (amountMinor: number, currency: string) => {
@@ -265,38 +265,38 @@ export const formatCreatorPayoutFoundationAmount = (amountMinor: number, currenc
 const formatEntryTypeLabel = (value: string) => {
   switch (value) {
     case "hold":
-      return "Hold foundation record";
+      return "Hold record";
     case "release":
-      return "Release foundation record";
+      return "Release record";
     case "payout":
-      return "Payout foundation record";
+      return "Payout record";
     case "reversal":
-      return "Reversal foundation record";
+      return "Reversal record";
     case "adjustment":
-      return "Adjustment foundation record";
+      return "Adjustment record";
     default:
-      return "Foundation ledger record";
+      return "Ledger record";
   }
 };
 
 const formatStatusLabel = (value: string) => {
   switch (value) {
     case "pending":
-      return "Pending foundation record";
+      return "Pending record";
     case "held":
-      return "Held foundation record";
+      return "Held record";
     case "available":
-      return "Foundation record";
+      return "Read-only record";
     case "scheduled":
-      return "Scheduled foundation record";
+      return "Scheduled record";
     case "paid":
       return "Read-only historical record";
     case "canceled":
-      return "Canceled foundation record";
+      return "Canceled record";
     case "reversed":
-      return "Reversed foundation record";
+      return "Reversed record";
     default:
-      return value ? value.replaceAll("_", " ") : "Foundation record";
+      return value ? value.replaceAll("_", " ") : "Read-only record";
   }
 };
 
@@ -359,17 +359,17 @@ const formatSetupStatusBody = (
 
   switch (status) {
     case "provider_not_configured":
-      return "Stripe Connect test-mode setup is not configured on the backend yet.";
+      return "Payout setup is not available yet.";
     case "setup_required":
-      return "Set up the test-mode payout provider account. Withdrawals are still not active.";
+      return "Set up the payout provider account when available. Withdrawals are still not active.";
     case "onboarding_in_progress":
-      return "Continue the test-mode provider setup. Withdrawals remain inactive.";
+      return "Continue provider setup. Withdrawals remain inactive.";
     case "action_required":
       return "The provider needs setup information before readiness can be reviewed.";
     case "under_review":
       return "Provider or platform review is pending. No payout action is available.";
     case "provider_ready_payouts_not_active":
-      return "Payout provider is ready in test mode. Withdrawals are not active yet.";
+      return "Payout provider readiness is available. Withdrawals are not active yet.";
     case "on_hold":
       return "A fraud, policy, or review hold is active. No payout action is available.";
     case "payouts_disabled":
@@ -554,10 +554,10 @@ export function resolveCreatorPayoutReadiness(
 
   const blockedReasons = uniqueStrings([
     liveMoneyEnabled ? "" : "Live money is disabled.",
-    productionConnectEnabled ? "" : "Stripe Connect production mode is disabled.",
+    productionConnectEnabled ? "" : "Production payout provider readiness is disabled.",
     payoutFeatureEnabled ? "" : "Payouts are disabled.",
     cashoutFeatureEnabled ? "" : "Cash-out is disabled.",
-    summary.providerReady ? "" : "Stripe Connect provider readiness is not complete.",
+    summary.providerReady ? "" : "Payout provider readiness is not complete.",
     summary.eligibleForPayouts ? "" : "Creator payout eligibility is not approved.",
     summary.minimumPayoutMet ? "" : "Minimum payout is not met or not implemented.",
     summary.holdPeriodCleared ? "" : "Required payout hold period is not cleared.",
@@ -569,7 +569,7 @@ export function resolveCreatorPayoutReadiness(
   ]);
 
   const nextRequiredActions = uniqueStrings([
-    summary.setupStatus === "setup_required" ? "Create or continue Stripe Connect test-mode onboarding." : "",
+    summary.setupStatus === "setup_required" ? "Create or continue payout provider onboarding." : "",
     summary.setupStatus === "onboarding_in_progress" ? "Finish Stripe Connect onboarding." : "",
     summary.setupStatus === "action_required" ? "Resolve provider-required account information." : "",
     taxOrKycPending ? "Complete provider-backed KYC/tax readiness before payouts." : "",
@@ -619,18 +619,18 @@ export function previewCreatorPayoutPreproductionWorkflow(
     readiness.liveMoneyDisabled ? "Production live money is disabled." : "",
     readiness.payoutFeatureDisabled ? "Production payout execution is disabled." : "",
     payoutType === "instant" && readiness.cashoutFeatureDisabled ? "Production cash-out execution is disabled." : "",
-    STRIPE_CONNECT_TEST_ENABLED ? "" : "Stripe Connect test mode is disabled.",
-    TEST_PAYOUT_WORKFLOW_ENABLED ? "" : "Test payout workflow is disabled.",
-    PAYOUT_DRY_RUN_ENABLED ? "" : "Dry-run payout workflow is disabled.",
-    amountCents > 0 ? "" : "A positive test amount is required.",
-    summary.providerReady ? "" : "Stripe Connect provider readiness is not complete.",
+    STRIPE_CONNECT_TEST_ENABLED ? "" : "Payout provider setup is disabled.",
+    TEST_PAYOUT_WORKFLOW_ENABLED ? "" : "Payout setup review is disabled.",
+    PAYOUT_DRY_RUN_ENABLED ? "" : "Payout setup preview is disabled.",
+    amountCents > 0 ? "" : "A positive payout amount is required.",
+    summary.providerReady ? "" : "Payout provider readiness is not complete.",
     summary.kycReady ? "" : "KYC readiness is pending.",
     summary.taxReady ? "" : "Tax/1099 readiness is pending.",
     summary.minimumPayoutMet ? "" : "Minimum payout is not met by a real provider-backed balance.",
     summary.holdPeriodCleared ? "" : "Payout hold period has not cleared.",
     summary.eligibleForPayouts ? "" : "Creator payout eligibility is not approved.",
-    "Owner approval is required before any payout execution lane can move beyond dry-run.",
-    "No Stripe production transfer or bank payout is allowed from this preview.",
+    "Owner approval is required before any payout execution can move forward.",
+    "No production transfer or bank payout is allowed from this preview.",
   ]);
 
   const canCreateDryRunRequest =
@@ -657,13 +657,13 @@ export function previewCreatorPayoutPreproductionWorkflow(
     canExecuteProductionPayout: false,
     blockedReasons,
     approvalSteps: [
-      "Creator requests payout or cash-out in test/dry-run mode.",
+      "Creator payout or cash-out setup can be reviewed before any money moves.",
       "Server checks derived available balance, Connect readiness, KYC, tax/1099, holds, and minimum payout.",
       "Admin can review readiness but cannot release money.",
       "Owner approval is required before any later execution workflow.",
-      "Production execution remains blocked until provider, legal/accounting, and live-money flags are proved.",
+      "Production execution remains blocked until provider, legal/accounting, and payout readiness are approved.",
     ],
-    safetyLabel: "TEST / DRY-RUN ONLY",
+    safetyLabel: "SETUP CHECK ONLY",
   };
 }
 
@@ -676,7 +676,7 @@ const assertSafePayoutFunctionPayload = (payload: CreatorPayoutFunctionPayload |
     throw new Error("Unexpected live money action response.");
   }
   if (payload.mode && payload.mode !== "test") {
-    throw new Error("Only Stripe Connect test-mode setup is supported.");
+    throw new Error("Only payout provider setup preview mode is supported.");
   }
 };
 
