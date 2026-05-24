@@ -82,6 +82,24 @@ The app intentionally says: "Preview crop is used for display. Final export edit
 
 Do not claim any of these are active until a backed renderer/export path exists and Android release proof passes.
 
+## Proof Status
+
+Implementation commit: `40c6fea9554fbb6ce084241daaa7c35b5792eecb`.
+
+Android release proof on `R5CR120QCBF` captured screenshots under `/tmp/chillywood-clip-studio-proof-20260524/` for:
+
+- Platform Studio `Create Clip`
+- Clip Studio empty state
+- Android video picker
+- selected-video preview
+- Format/Fit controls
+- cover picker and selected-cover state
+- Title Card, Template, Platform Brand, and Coming Later sections
+- Save Draft controls and rights acknowledgement
+- Content Library draft card with `Edit Clip`
+
+The proof also attempted a real new-video Save Draft after selecting a video and cover. That attempt did not produce a new visible draft in Content Library during the session, so the project must not claim full new-import Save Draft proof yet. The next Clip Studio lane should fix or prove that path with visible draft/public-private evidence.
+
 ## Brand Studio Integration
 
 Clip Studio can preview a Platform brand mark only if Brand Studio already has a published, moderation-safe avatar, logo, or watermark asset. Pending, rejected, archived, deleted, and draft brand assets are not eligible.
@@ -115,11 +133,11 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 - Do not expose draft/private videos publicly.
 - Do not expose private Brand Studio assets publicly.
 - Do not change Premium gates, RevenueCat, LiveKit, Watch-Party Live, Live Watch-Party, payout, revenue, or creator monetization logic from Clip Studio work.
-- Do not use user-facing "Mini Platform" copy.
+- Do not use legacy diminutive Platform copy.
 
 ## Validation
 
-Use:
+Latest closeout validation used:
 
 - `npm run typecheck`
 - `npm run validate:runtime`
@@ -128,8 +146,9 @@ Use:
 - `npm run guard:creator-monetization-policy`
 - `npm run guard:stripe-connect-policy`
 - `npm run guard:vod-quality-policy`
+- `npm run guard:platform-brand-studio-policy`
 - `npm run guard:clip-studio-policy`
 - existing Watch-Party/LiveKit and old-room guards
-- Supabase linked dry-run/typegen proof when schema changes
-- targeted no-Mini-Platform/no-debug-copy grep
+- Supabase linked dry-run, lint, migration list, and linked typegen proof
+- targeted no-Mini-Platform/no-debug-copy/no-fake-export grep
 - Android proof on `R5CR120QCBF`
