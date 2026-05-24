@@ -872,7 +872,7 @@ export default function SettingsScreen() {
             <Text style={styles.utilityButtonText}>Open Profile</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressManageChannel}>
-            <Text style={styles.utilityButtonText}>Channel Studio</Text>
+            <Text style={styles.utilityButtonText}>Platform Studio</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressManagePremium}>
             <Text style={styles.utilityButtonText}>Manage Premium</Text>
@@ -991,7 +991,7 @@ export default function SettingsScreen() {
         />
         <SettingsRow
           title="Public presentation"
-          subtitle="Profile and Channel Studio control how your public presence appears."
+          subtitle="Profile and Platform Studio control how your public presence appears."
         >
           <View style={styles.utilityRow}>
             <TouchableOpacity
@@ -1003,7 +1003,7 @@ export default function SettingsScreen() {
               <Text style={styles.utilityButtonText}>Open Profile</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressManageChannel}>
-              <Text style={styles.utilityButtonText}>Channel Studio</Text>
+              <Text style={styles.utilityButtonText}>Platform Studio</Text>
             </TouchableOpacity>
           </View>
         </SettingsRow>
@@ -1031,7 +1031,7 @@ export default function SettingsScreen() {
         onToggle={toggleSection}
       >
         <SettingsRow title="Open Profile" subtitle="Review your public profile and profile feed." value="Open" onPress={onPressOpenProfile} />
-        <SettingsRow title="Channel Studio" subtitle="Manage channel presentation and creator tools." value="Open" onPress={onPressManageChannel} />
+        <SettingsRow title="Platform Studio" subtitle="Manage channel presentation and creator tools." value="Open" onPress={onPressManageChannel} />
         <SettingsRow title="Chi'lly Circle" subtitle="Open your private circle and activity surface." value="Open" onPress={onPressChillyCircle} />
         {canOpenAdminDashboard ? (
           <SettingsRow title="Admin Dashboard" subtitle="Available only for authorized staff accounts." value="Open" onPress={onPressAdminDashboard} />
