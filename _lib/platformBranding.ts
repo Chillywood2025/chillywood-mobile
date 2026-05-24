@@ -21,6 +21,7 @@ export type PlatformBrandFitMode = "fill" | "fit" | "center";
 export type PlatformBrandThemePreset = "city_night" | "studio_red" | "clean_dark" | "spotlight" | "classic";
 export type PlatformBrandAssetState = "draft" | "published" | "archived";
 export type PlatformBrandModerationStatus = "pending_review" | "clean" | "reported" | "hidden" | "removed" | "rejected";
+export type PlatformBrandReviewAction = "approve" | "reject" | "archive";
 
 export type PlatformBrandAssetFile = {
   uri: string;
@@ -91,6 +92,17 @@ export type PlatformBrandingBundle = {
   watermark: PlatformBrandAsset | null;
 };
 
+export type PlatformBrandReviewResult = {
+  id: string;
+  ownerUserId: string;
+  assetType: PlatformBrandAssetType;
+  assetState: PlatformBrandAssetState;
+  moderationStatus: PlatformBrandModerationStatus;
+  moderationReason: string | null;
+  moderatedAt: string | null;
+  reviewEventId: string | null;
+};
+
 type PlatformBrandAssetRow = Tables<"platform_brand_assets">;
 type PlatformBrandAssetInsert = TablesInsert<"platform_brand_assets">;
 type PlatformBrandAssetUpdate = TablesUpdate<"platform_brand_assets">;
@@ -110,6 +122,9 @@ const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 
 const toText = (value: unknown) => String(value ?? "").trim();
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
 
 const clamp = (value: unknown, fallback: number, min: number, max: number) => {
   const parsed = Number(value);
@@ -253,6 +268,7 @@ export const formatPlatformBrandAssetStatus = (asset?: PlatformBrandAsset | null
   if (!asset) return "Not set";
   if (asset.deletedAt) return "Removed";
   if (asset.assetState === "published" && ["clean", "reported"].includes(asset.moderationStatus)) return "Published";
+  if (asset.assetState === "draft" && ["clean", "reported"].includes(asset.moderationStatus)) return "Approved";
   if (asset.moderationStatus === "pending_review") return "Needs review";
   if (asset.moderationStatus === "rejected" || asset.moderationStatus === "removed" || asset.moderationStatus === "hidden") {
     return "Needs changes";
@@ -393,6 +409,21 @@ export async function readPlatformBrandStudio(ownerUserId: string): Promise<Plat
     ? []
     : await Promise.all(assetResult.data.map((row) => parseAsset(row)));
   return createBundle(profile, assets);
+}
+
+export async function readPlatformBrandReviewQueue(limit = 24): Promise<PlatformBrandAsset[]> {
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(Number(limit) || 24)));
+  const { data, error } = await supabase
+    .from("platform_brand_assets")
+    .select(PLATFORM_BRAND_ASSET_SELECT)
+    .is("deleted_at", null)
+    .in("moderation_status", ["pending_review", "rejected", "hidden"])
+    .order("updated_at", { ascending: false })
+    .limit(safeLimit)
+    .returns<PlatformBrandAssetRow[]>();
+
+  if (error || !data) return [];
+  return Promise.all(data.map((row) => parseAsset(row)));
 }
 
 export async function readPublicPlatformBranding(ownerUserId: string): Promise<PlatformBrandingBundle | null> {
@@ -580,4 +611,41 @@ export async function removePlatformBrandAsset(asset: PlatformBrandAsset): Promi
     .eq("id", assetId)
     .eq("owner_user_id", asset.ownerUserId);
   if (error) throw error;
+}
+
+const parsePlatformBrandReviewResult = (value: unknown): PlatformBrandReviewResult => {
+  const row = isRecord(value) ? value : {};
+  return {
+    id: toText(row.id),
+    ownerUserId: toText(row.ownerUserId),
+    assetType: normalizeAssetType(row.assetType),
+    assetState: normalizeAssetState(row.assetState),
+    moderationStatus: normalizeModerationStatus(row.moderationStatus),
+    moderationReason: toText(row.moderationReason) || null,
+    moderatedAt: toText(row.moderatedAt) || null,
+    reviewEventId: toText(row.reviewEventId) || null,
+  };
+};
+
+export async function reviewPlatformBrandAsset(
+  assetId: string,
+  action: PlatformBrandReviewAction,
+  reason?: string | null,
+): Promise<PlatformBrandReviewResult> {
+  const normalizedAssetId = toText(assetId);
+  if (!normalizedAssetId) throw new Error("Choose a Platform asset before reviewing it.");
+
+  const rpc = supabase.rpc as unknown as (
+    fn: "review_platform_brand_asset",
+    args: { p_asset_id: string; p_action: string; p_reason: string | null },
+  ) => Promise<{ data: unknown; error: Error | null }>;
+
+  const { data, error } = await rpc("review_platform_brand_asset", {
+    p_asset_id: normalizedAssetId,
+    p_action: action,
+    p_reason: toText(reason) || null,
+  });
+
+  if (error) throw error;
+  return parsePlatformBrandReviewResult(data);
 }

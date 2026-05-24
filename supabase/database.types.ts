@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_canary_runs: {
+        Row: {
+          created_at: string
+          id: string
+          requested_by_email: string | null
+          requested_by_role: string | null
+          requested_by_user_id: string | null
+          results: Json
+          status: string
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          requested_by_email?: string | null
+          requested_by_role?: string | null
+          requested_by_user_id?: string | null
+          results?: Json
+          status?: string
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          requested_by_email?: string | null
+          requested_by_role?: string | null
+          requested_by_user_id?: string | null
+          results?: Json
+          status?: string
+          summary?: Json
+        }
+        Relationships: []
+      }
       admin_live_cost_guard_actions: {
         Row: {
           action_type: string
@@ -27,6 +60,7 @@ export type Database = {
           participant_identity: string | null
           reason: string
           room_name: string | null
+          security_context_id: string | null
           success: boolean
         }
         Insert: {
@@ -41,6 +75,7 @@ export type Database = {
           participant_identity?: string | null
           reason: string
           room_name?: string | null
+          security_context_id?: string | null
           success?: boolean
         }
         Update: {
@@ -55,9 +90,18 @@ export type Database = {
           participant_identity?: string | null
           reason?: string
           room_name?: string | null
+          security_context_id?: string | null
           success?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_live_cost_guard_actions_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_live_cost_guard_events: {
         Row: {
@@ -71,6 +115,7 @@ export type Database = {
           participant_identity: string | null
           recommended_action: string | null
           room_name: string | null
+          security_context_id: string | null
           severity: string
           source: string
         }
@@ -85,6 +130,7 @@ export type Database = {
           participant_identity?: string | null
           recommended_action?: string | null
           room_name?: string | null
+          security_context_id?: string | null
           severity: string
           source: string
         }
@@ -99,10 +145,19 @@ export type Database = {
           participant_identity?: string | null
           recommended_action?: string | null
           room_name?: string | null
+          security_context_id?: string | null
           severity?: string
           source?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_live_cost_guard_events_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_live_cost_guard_settings: {
         Row: {
@@ -149,6 +204,174 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           warning_threshold_mbps?: number | null
+        }
+        Relationships: []
+      }
+      admin_live_ops_action_audit: {
+        Row: {
+          action_type: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          dry_run: boolean
+          error_message: string | null
+          event_type: string
+          id: string
+          idempotency_key: string
+          incident_id: string | null
+          ops_job_id: string | null
+          result: Json
+          risk_level: string
+          rollback_note: string | null
+          security_context_id: string | null
+          success: boolean
+          target: Json
+        }
+        Insert: {
+          action_type: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          dry_run?: boolean
+          error_message?: string | null
+          event_type: string
+          id?: string
+          idempotency_key: string
+          incident_id?: string | null
+          ops_job_id?: string | null
+          result?: Json
+          risk_level?: string
+          rollback_note?: string | null
+          security_context_id?: string | null
+          success?: boolean
+          target?: Json
+        }
+        Update: {
+          action_type?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          dry_run?: boolean
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          incident_id?: string | null
+          ops_job_id?: string | null
+          result?: Json
+          risk_level?: string
+          rollback_note?: string | null
+          security_context_id?: string | null
+          success?: boolean
+          target?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_live_ops_action_audit_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "admin_live_ops_incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_live_ops_action_audit_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_live_ops_incidents: {
+        Row: {
+          affected_call_id: string | null
+          affected_platform: string
+          affected_purpose: string
+          affected_rooms: string[]
+          affected_route: string
+          affected_server_id: string | null
+          affected_thread_id: string | null
+          call_mode: string | null
+          confidence: string
+          created_at: string
+          detected_symptoms: string[]
+          dry_run_result: Json | null
+          id: string
+          idempotency_key: string
+          last_action_at: string | null
+          likely_cause: string
+          metadata: Json
+          ops_job_id: string | null
+          recommended_action: string
+          risk_level: string
+          rollback_note: string
+          runbook_path: string
+          runbook_url: string | null
+          status: string
+          suggested_fix: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          affected_call_id?: string | null
+          affected_platform?: string
+          affected_purpose?: string
+          affected_rooms?: string[]
+          affected_route: string
+          affected_server_id?: string | null
+          affected_thread_id?: string | null
+          call_mode?: string | null
+          confidence?: string
+          created_at?: string
+          detected_symptoms?: string[]
+          dry_run_result?: Json | null
+          id?: string
+          idempotency_key: string
+          last_action_at?: string | null
+          likely_cause: string
+          metadata?: Json
+          ops_job_id?: string | null
+          recommended_action?: string
+          risk_level?: string
+          rollback_note: string
+          runbook_path?: string
+          runbook_url?: string | null
+          status?: string
+          suggested_fix: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          affected_call_id?: string | null
+          affected_platform?: string
+          affected_purpose?: string
+          affected_rooms?: string[]
+          affected_route?: string
+          affected_server_id?: string | null
+          affected_thread_id?: string | null
+          call_mode?: string | null
+          confidence?: string
+          created_at?: string
+          detected_symptoms?: string[]
+          dry_run_result?: Json | null
+          id?: string
+          idempotency_key?: string
+          last_action_at?: string | null
+          likely_cause?: string
+          metadata?: Json
+          ops_job_id?: string | null
+          recommended_action?: string
+          risk_level?: string
+          rollback_note?: string
+          runbook_path?: string
+          runbook_url?: string | null
+          status?: string
+          suggested_fix?: string
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -646,6 +869,140 @@ export type Database = {
         }
         Relationships: []
       }
+      content_access_grants: {
+        Row: {
+          active: boolean
+          content_id: string
+          content_type: string
+          created_at: string
+          id: string
+          purchase_id: string | null
+          revoked_at: string | null
+          source: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          content_id: string
+          content_type: string
+          created_at?: string
+          id?: string
+          purchase_id?: string | null
+          revoked_at?: string | null
+          source: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          purchase_id?: string | null
+          revoked_at?: string | null
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_access_grants_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "paid_content_purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_content_prices: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          creator_id: string
+          currency: string
+          id: string
+          is_paid: boolean
+          price_cents: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          creator_id: string
+          currency?: string
+          id?: string
+          is_paid?: boolean
+          price_cents?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          id?: string
+          is_paid?: boolean
+          price_cents?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      creator_earnings_ledger: {
+        Row: {
+          created_at: string
+          creator_id: string
+          currency: string
+          gross_amount_cents: number
+          hold_until: string | null
+          id: string
+          ledger_status: string
+          metadata: Json
+          net_creator_amount_cents: number
+          platform_fee_cents: number
+          provider_fee_cents: number
+          source_id: string | null
+          source_type: string
+          tax_cents: number
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          currency?: string
+          gross_amount_cents: number
+          hold_until?: string | null
+          id?: string
+          ledger_status?: string
+          metadata?: Json
+          net_creator_amount_cents: number
+          platform_fee_cents?: number
+          provider_fee_cents?: number
+          source_id?: string | null
+          source_type: string
+          tax_cents?: number
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          gross_amount_cents?: number
+          hold_until?: string | null
+          id?: string
+          ledger_status?: string
+          metadata?: Json
+          net_creator_amount_cents?: number
+          platform_fee_cents?: number
+          provider_fee_cents?: number
+          source_id?: string | null
+          source_type?: string
+          tax_cents?: number
+        }
+        Relationships: []
+      }
       creator_events: {
         Row: {
           created_at: string
@@ -701,6 +1058,59 @@ export type Database = {
             columns: ["linked_title_id"]
             isOneToOne: false
             referencedRelation: "titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_monetization_profiles: {
+        Row: {
+          age_verified: boolean
+          connect_account_id: string | null
+          connect_status: string
+          created_at: string
+          creator_id: string
+          eligibility_status: string
+          is_premium_creator: boolean
+          monetization_enabled: boolean
+          payout_status: string
+          public_channel: boolean
+          strikes_count: number
+          updated_at: string
+        }
+        Insert: {
+          age_verified?: boolean
+          connect_account_id?: string | null
+          connect_status?: string
+          created_at?: string
+          creator_id: string
+          eligibility_status?: string
+          is_premium_creator?: boolean
+          monetization_enabled?: boolean
+          payout_status?: string
+          public_channel?: boolean
+          strikes_count?: number
+          updated_at?: string
+        }
+        Update: {
+          age_verified?: boolean
+          connect_account_id?: string | null
+          connect_status?: string
+          created_at?: string
+          creator_id?: string
+          eligibility_status?: string
+          is_premium_creator?: boolean
+          monetization_enabled?: boolean
+          payout_status?: string
+          public_channel?: boolean
+          strikes_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_monetization_profiles_connect_account_id_fkey"
+            columns: ["connect_account_id"]
+            isOneToOne: false
+            referencedRelation: "creator_payout_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -834,6 +1244,7 @@ export type Database = {
           platform_admin_audit_log_id: string | null
           previous_status: string | null
           reason: string | null
+          security_context_id: string | null
           target_id: string
           target_table: string
         }
@@ -849,6 +1260,7 @@ export type Database = {
           platform_admin_audit_log_id?: string | null
           previous_status?: string | null
           reason?: string | null
+          security_context_id?: string | null
           target_id: string
           target_table: string
         }
@@ -864,6 +1276,7 @@ export type Database = {
           platform_admin_audit_log_id?: string | null
           previous_status?: string | null
           reason?: string | null
+          security_context_id?: string | null
           target_id?: string
           target_table?: string
         }
@@ -873,6 +1286,13 @@ export type Database = {
             columns: ["platform_admin_audit_log_id"]
             isOneToOne: false
             referencedRelation: "platform_admin_audit_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payout_audit_log_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
             referencedColumns: ["id"]
           },
         ]
@@ -1468,6 +1888,45 @@ export type Database = {
           },
         ]
       }
+      creator_payout_requests: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          creator_id: string
+          currency: string
+          id: string
+          instant_fee_cents: number
+          payout_type: string
+          provider_payout_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          creator_id: string
+          currency?: string
+          id?: string
+          instant_fee_cents?: number
+          payout_type: string
+          provider_payout_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          id?: string
+          instant_fee_cents?: number
+          payout_type?: string
+          provider_payout_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       creator_payout_review_notes: {
         Row: {
           actor_user_id: string | null
@@ -1606,6 +2065,113 @@ export type Database = {
           can_use_sponsor_placements?: boolean
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      creator_product_orders: {
+        Row: {
+          buyer_id: string
+          created_at: string
+          creator_id: string
+          currency: string
+          fulfillment_status: string
+          id: string
+          order_status: string
+          price_cents: number
+          product_id: string | null
+          provider: string
+          provider_payment_id: string | null
+          quantity: number
+          refund_status: string
+          updated_at: string
+        }
+        Insert: {
+          buyer_id: string
+          created_at?: string
+          creator_id: string
+          currency?: string
+          fulfillment_status?: string
+          id?: string
+          order_status?: string
+          price_cents: number
+          product_id?: string | null
+          provider?: string
+          provider_payment_id?: string | null
+          quantity?: number
+          refund_status?: string
+          updated_at?: string
+        }
+        Update: {
+          buyer_id?: string
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          fulfillment_status?: string
+          id?: string
+          order_status?: string
+          price_cents?: number
+          product_id?: string | null
+          provider?: string
+          provider_payment_id?: string | null
+          quantity?: number
+          refund_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_product_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "creator_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_products: {
+        Row: {
+          created_at: string
+          creator_id: string
+          currency: string
+          description: string | null
+          id: string
+          image_path: string | null
+          inventory_mode: string
+          inventory_quantity: number | null
+          price_cents: number
+          product_type: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          currency?: string
+          description?: string | null
+          id?: string
+          image_path?: string | null
+          inventory_mode?: string
+          inventory_quantity?: number | null
+          price_cents: number
+          product_type?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          image_path?: string | null
+          inventory_mode?: string
+          inventory_quantity?: number | null
+          price_cents?: number
+          product_type?: string
+          status?: string
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1798,6 +2364,57 @@ export type Database = {
           source_period_start?: string | null
           source_type?: string
           status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      creator_tip_transactions: {
+        Row: {
+          created_at: string
+          creator_id: string
+          currency: string
+          id: string
+          payment_status: string
+          payout_status: string
+          provider: string
+          provider_fee_cents: number
+          provider_payment_id: string | null
+          sender_id: string
+          service_fee_cents: number
+          tip_amount_cents: number
+          total_paid_cents: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          currency?: string
+          id?: string
+          payment_status?: string
+          payout_status?: string
+          provider?: string
+          provider_fee_cents?: number
+          provider_payment_id?: string | null
+          sender_id: string
+          service_fee_cents?: number
+          tip_amount_cents: number
+          total_paid_cents: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          id?: string
+          payment_status?: string
+          payout_status?: string
+          provider?: string
+          provider_fee_cents?: number
+          provider_payment_id?: string | null
+          sender_id?: string
+          service_fee_cents?: number
+          tip_amount_cents?: number
+          total_paid_cents?: number
           updated_at?: string
         }
         Relationships: []
@@ -2017,6 +2634,94 @@ export type Database = {
         }
         Relationships: []
       }
+      dmca_attachments: {
+        Row: {
+          bucket_id: string
+          counter_notice_id: string | null
+          created_at: string
+          dmca_case_id: string
+          id: string
+          mime_type: string
+          object_path: string
+          original_filename: string
+          preserved_for_evidence: boolean
+          retention_status: string
+          scan_notes: string
+          scan_provider: string
+          scan_status: string
+          security_context_id: string | null
+          size_bytes: number
+          source: string
+          submitted_by_role: string
+          submitted_by_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bucket_id?: string
+          counter_notice_id?: string | null
+          created_at?: string
+          dmca_case_id: string
+          id?: string
+          mime_type: string
+          object_path: string
+          original_filename: string
+          preserved_for_evidence?: boolean
+          retention_status?: string
+          scan_notes?: string
+          scan_provider?: string
+          scan_status?: string
+          security_context_id?: string | null
+          size_bytes: number
+          source: string
+          submitted_by_role: string
+          submitted_by_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bucket_id?: string
+          counter_notice_id?: string | null
+          created_at?: string
+          dmca_case_id?: string
+          id?: string
+          mime_type?: string
+          object_path?: string
+          original_filename?: string
+          preserved_for_evidence?: boolean
+          retention_status?: string
+          scan_notes?: string
+          scan_provider?: string
+          scan_status?: string
+          security_context_id?: string | null
+          size_bytes?: number
+          source?: string
+          submitted_by_role?: string
+          submitted_by_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dmca_attachments_case_fkey"
+            columns: ["dmca_case_id"]
+            isOneToOne: false
+            referencedRelation: "dmca_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dmca_attachments_counter_notice_fkey"
+            columns: ["counter_notice_id"]
+            isOneToOne: false
+            referencedRelation: "dmca_counter_notices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dmca_attachments_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dmca_audit_log: {
         Row: {
           actor_role: string
@@ -2027,6 +2732,7 @@ export type Database = {
           id: string
           metadata: Json | null
           reason: string | null
+          security_context_id: string | null
         }
         Insert: {
           actor_role: string
@@ -2037,6 +2743,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           reason?: string | null
+          security_context_id?: string | null
         }
         Update: {
           actor_role?: string
@@ -2047,6 +2754,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           reason?: string | null
+          security_context_id?: string | null
         }
         Relationships: [
           {
@@ -2054,6 +2762,13 @@ export type Database = {
             columns: ["dmca_case_id"]
             isOneToOne: false
             referencedRelation: "dmca_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dmca_audit_log_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
             referencedColumns: ["id"]
           },
         ]
@@ -2064,17 +2779,21 @@ export type Database = {
           admin_notes: string | null
           allegedly_infringing_content_id: string | null
           allegedly_infringing_content_type: string
+          allegedly_infringing_material_description: string | null
           allegedly_infringing_url: string | null
           assigned_admin_id: string | null
           authorized_agent_name: string | null
           case_number: string
           closed_at: string | null
+          copyright_owner_name: string | null
           copyrighted_work_description: string
           copyrighted_work_urls: Json
           created_at: string
           electronic_signature: string
           good_faith_statement: boolean
           id: string
+          is_test_case: boolean
+          public_attachment_token: string | null
           public_safe_summary: string | null
           received_at: string
           report_type: string
@@ -2085,6 +2804,7 @@ export type Database = {
           reporter_name: string
           reporter_phone: string | null
           reporter_user_id: string | null
+          security_context_id: string | null
           source: string
           status: string
           submitted_ip_hash: string | null
@@ -2098,17 +2818,21 @@ export type Database = {
           admin_notes?: string | null
           allegedly_infringing_content_id?: string | null
           allegedly_infringing_content_type?: string
+          allegedly_infringing_material_description?: string | null
           allegedly_infringing_url?: string | null
           assigned_admin_id?: string | null
           authorized_agent_name?: string | null
           case_number: string
           closed_at?: string | null
+          copyright_owner_name?: string | null
           copyrighted_work_description: string
           copyrighted_work_urls?: Json
           created_at?: string
           electronic_signature: string
           good_faith_statement?: boolean
           id?: string
+          is_test_case?: boolean
+          public_attachment_token?: string | null
           public_safe_summary?: string | null
           received_at?: string
           report_type?: string
@@ -2119,6 +2843,7 @@ export type Database = {
           reporter_name: string
           reporter_phone?: string | null
           reporter_user_id?: string | null
+          security_context_id?: string | null
           source?: string
           status?: string
           submitted_ip_hash?: string | null
@@ -2132,17 +2857,21 @@ export type Database = {
           admin_notes?: string | null
           allegedly_infringing_content_id?: string | null
           allegedly_infringing_content_type?: string
+          allegedly_infringing_material_description?: string | null
           allegedly_infringing_url?: string | null
           assigned_admin_id?: string | null
           authorized_agent_name?: string | null
           case_number?: string
           closed_at?: string | null
+          copyright_owner_name?: string | null
           copyrighted_work_description?: string
           copyrighted_work_urls?: Json
           created_at?: string
           electronic_signature?: string
           good_faith_statement?: boolean
           id?: string
+          is_test_case?: boolean
+          public_attachment_token?: string | null
           public_safe_summary?: string | null
           received_at?: string
           report_type?: string
@@ -2153,6 +2882,7 @@ export type Database = {
           reporter_name?: string
           reporter_phone?: string | null
           reporter_user_id?: string | null
+          security_context_id?: string | null
           source?: string
           status?: string
           submitted_ip_hash?: string | null
@@ -2161,7 +2891,15 @@ export type Database = {
           uploader_channel_id?: string | null
           uploader_user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "dmca_cases_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       dmca_content_actions: {
         Row: {
@@ -2226,6 +2964,7 @@ export type Database = {
           response_deadline_start_at: string | null
           restore_not_after_at: string | null
           restore_not_before_at: string | null
+          security_context_id: string | null
           service_acceptance_statement: boolean
           status: string
           submitter_address: string | null
@@ -2250,6 +2989,7 @@ export type Database = {
           response_deadline_start_at?: string | null
           restore_not_after_at?: string | null
           restore_not_before_at?: string | null
+          security_context_id?: string | null
           service_acceptance_statement?: boolean
           status?: string
           submitter_address?: string | null
@@ -2274,6 +3014,7 @@ export type Database = {
           response_deadline_start_at?: string | null
           restore_not_after_at?: string | null
           restore_not_before_at?: string | null
+          security_context_id?: string | null
           service_acceptance_statement?: boolean
           status?: string
           submitter_address?: string | null
@@ -2289,6 +3030,13 @@ export type Database = {
             columns: ["dmca_case_id"]
             isOneToOne: false
             referencedRelation: "dmca_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dmca_counter_notices_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
             referencedColumns: ["id"]
           },
         ]
@@ -2491,6 +3239,7 @@ export type Database = {
           id: string
           metadata: Json
           reason: string | null
+          security_context_id: string | null
           target_id: string | null
           target_table: string | null
         }
@@ -2502,6 +3251,7 @@ export type Database = {
           id?: string
           metadata?: Json
           reason?: string | null
+          security_context_id?: string | null
           target_id?: string | null
           target_table?: string | null
         }
@@ -2513,6 +3263,7 @@ export type Database = {
           id?: string
           metadata?: Json
           reason?: string | null
+          security_context_id?: string | null
           target_id?: string | null
           target_table?: string | null
         }
@@ -2522,6 +3273,13 @@ export type Database = {
             columns: ["fraud_hold_id"]
             isOneToOne: false
             referencedRelation: "platform_fraud_holds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fraud_audit_logs_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
             referencedColumns: ["id"]
           },
         ]
@@ -2744,6 +3502,309 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      legal_evidence_audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          reason: string
+          request_id: string | null
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason: string
+          request_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string
+          request_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: []
+      }
+      legal_evidence_requests: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          export_hash: string | null
+          export_manifest: Json | null
+          id: string
+          legal_request_id: string | null
+          preview: Json
+          reason: string
+          request_kind: string
+          requested_by_email: string | null
+          requested_by_user_id: string | null
+          search_scope: Json
+          status: string
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          export_hash?: string | null
+          export_manifest?: Json | null
+          id?: string
+          legal_request_id?: string | null
+          preview?: Json
+          reason: string
+          request_kind: string
+          requested_by_email?: string | null
+          requested_by_user_id?: string | null
+          search_scope?: Json
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          export_hash?: string | null
+          export_manifest?: Json | null
+          id?: string
+          legal_request_id?: string | null
+          preview?: Json
+          reason?: string
+          request_kind?: string
+          requested_by_email?: string | null
+          requested_by_user_id?: string | null
+          search_scope?: Json
+          status?: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_evidence_requests_legal_request_id_fkey"
+            columns: ["legal_request_id"]
+            isOneToOne: false
+            referencedRelation: "legal_request_intake"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_holds: {
+        Row: {
+          id: string
+          legal_request_id: string | null
+          metadata: Json
+          placed_at: string
+          placed_by_email: string | null
+          placed_by_user_id: string | null
+          reason: string
+          release_reason: string | null
+          released_at: string | null
+          released_by_email: string | null
+          released_by_user_id: string | null
+          status: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          id?: string
+          legal_request_id?: string | null
+          metadata?: Json
+          placed_at?: string
+          placed_by_email?: string | null
+          placed_by_user_id?: string | null
+          reason: string
+          release_reason?: string | null
+          released_at?: string | null
+          released_by_email?: string | null
+          released_by_user_id?: string | null
+          status?: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          id?: string
+          legal_request_id?: string | null
+          metadata?: Json
+          placed_at?: string
+          placed_by_email?: string | null
+          placed_by_user_id?: string | null
+          reason?: string
+          release_reason?: string | null
+          released_at?: string | null
+          released_by_email?: string | null
+          released_by_user_id?: string | null
+          status?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_holds_legal_request_id_fkey"
+            columns: ["legal_request_id"]
+            isOneToOne: false
+            referencedRelation: "legal_request_intake"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_request_events: {
+        Row: {
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          legal_request_id: string
+          message: string | null
+          metadata: Json
+          reason: string | null
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          legal_request_id: string
+          message?: string | null
+          metadata?: Json
+          reason?: string | null
+        }
+        Update: {
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          legal_request_id?: string
+          message?: string | null
+          metadata?: Json
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_request_events_legal_request_id_fkey"
+            columns: ["legal_request_id"]
+            isOneToOne: false
+            referencedRelation: "legal_request_intake"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_request_intake: {
+        Row: {
+          case_number: string | null
+          closed_at: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          date_from: string | null
+          date_to: string | null
+          due_at: string | null
+          exported_summary: string | null
+          handled_by_email: string | null
+          handled_by_user_id: string | null
+          id: string
+          legal_hold_status: string
+          metadata: Json
+          notes: string | null
+          reopened_at: string | null
+          request_reason: string
+          request_type: string
+          requesting_agency: string
+          reviewed_summary: string | null
+          status: string
+          target_content_id: string | null
+          target_report_id: string | null
+          target_room_id: string | null
+          target_thread_id: string | null
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          case_number?: string | null
+          closed_at?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          date_from?: string | null
+          date_to?: string | null
+          due_at?: string | null
+          exported_summary?: string | null
+          handled_by_email?: string | null
+          handled_by_user_id?: string | null
+          id?: string
+          legal_hold_status?: string
+          metadata?: Json
+          notes?: string | null
+          reopened_at?: string | null
+          request_reason: string
+          request_type?: string
+          requesting_agency: string
+          reviewed_summary?: string | null
+          status?: string
+          target_content_id?: string | null
+          target_report_id?: string | null
+          target_room_id?: string | null
+          target_thread_id?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          case_number?: string | null
+          closed_at?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          date_from?: string | null
+          date_to?: string | null
+          due_at?: string | null
+          exported_summary?: string | null
+          handled_by_email?: string | null
+          handled_by_user_id?: string | null
+          id?: string
+          legal_hold_status?: string
+          metadata?: Json
+          notes?: string | null
+          reopened_at?: string | null
+          request_reason?: string
+          request_type?: string
+          requesting_agency?: string
+          reviewed_summary?: string | null
+          status?: string
+          target_content_id?: string | null
+          target_report_id?: string | null
+          target_room_id?: string | null
+          target_thread_id?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       livekit_room_assignments: {
         Row: {
@@ -2997,6 +4058,268 @@ export type Database = {
         }
         Relationships: []
       }
+      livekit_token_request_audit: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          app_room_id_hash: string | null
+          can_publish: boolean | null
+          can_publish_data: boolean | null
+          can_subscribe: boolean | null
+          created_at: string
+          effective_participant_role: string | null
+          error_code: string | null
+          id: string
+          metadata: Json
+          outcome: string
+          requested_participant_role: string | null
+          room_join: boolean | null
+          room_kind: string | null
+          room_name_hash: string | null
+          room_type: string | null
+          security_context_id: string | null
+          surface: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          app_room_id_hash?: string | null
+          can_publish?: boolean | null
+          can_publish_data?: boolean | null
+          can_subscribe?: boolean | null
+          created_at?: string
+          effective_participant_role?: string | null
+          error_code?: string | null
+          id?: string
+          metadata?: Json
+          outcome: string
+          requested_participant_role?: string | null
+          room_join?: boolean | null
+          room_kind?: string | null
+          room_name_hash?: string | null
+          room_type?: string | null
+          security_context_id?: string | null
+          surface?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          app_room_id_hash?: string | null
+          can_publish?: boolean | null
+          can_publish_data?: boolean | null
+          can_subscribe?: boolean | null
+          created_at?: string
+          effective_participant_role?: string | null
+          error_code?: string | null
+          id?: string
+          metadata?: Json
+          outcome?: string
+          requested_participant_role?: string | null
+          room_join?: boolean | null
+          room_kind?: string | null
+          room_name_hash?: string | null
+          room_type?: string | null
+          security_context_id?: string | null
+          surface?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "livekit_token_request_audit_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_security_audit_events: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          object_key_owner: string | null
+          reason: string | null
+          record_id: string | null
+          result: string
+          security_context_id: string | null
+          surface_type: string
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          object_key_owner?: string | null
+          reason?: string | null
+          record_id?: string | null
+          result?: string
+          security_context_id?: string | null
+          surface_type: string
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          object_key_owner?: string | null
+          reason?: string | null
+          record_id?: string | null
+          result?: string
+          security_context_id?: string | null
+          surface_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_security_audit_events_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monetization_audit_log: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          target_id: string | null
+          target_type: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          target_id?: string | null
+          target_type: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          target_id?: string | null
+          target_type?: string
+        }
+        Relationships: []
+      }
+      monetization_system_settings: {
+        Row: {
+          cashout_enabled: boolean
+          created_at: string
+          creator_pricing_enabled: boolean
+          id: boolean
+          instant_cashout_fee_bps: number
+          instant_cashout_fee_cap_cents: number | null
+          live_money_enabled: boolean
+          max_price_cents: number
+          merch_store_enabled: boolean
+          min_price_cents: number
+          paid_content_checkout_enabled: boolean
+          payout_hold_days_max: number
+          payout_hold_days_min: number
+          payouts_enabled: boolean
+          premium_purchase_enabled: boolean
+          scheduled_payout_fee_bps: number
+          stripe_connect_production_enabled: boolean
+          tips_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          cashout_enabled?: boolean
+          created_at?: string
+          creator_pricing_enabled?: boolean
+          id?: boolean
+          instant_cashout_fee_bps?: number
+          instant_cashout_fee_cap_cents?: number | null
+          live_money_enabled?: boolean
+          max_price_cents?: number
+          merch_store_enabled?: boolean
+          min_price_cents?: number
+          paid_content_checkout_enabled?: boolean
+          payout_hold_days_max?: number
+          payout_hold_days_min?: number
+          payouts_enabled?: boolean
+          premium_purchase_enabled?: boolean
+          scheduled_payout_fee_bps?: number
+          stripe_connect_production_enabled?: boolean
+          tips_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          cashout_enabled?: boolean
+          created_at?: string
+          creator_pricing_enabled?: boolean
+          id?: boolean
+          instant_cashout_fee_bps?: number
+          instant_cashout_fee_cap_cents?: number | null
+          live_money_enabled?: boolean
+          max_price_cents?: number
+          merch_store_enabled?: boolean
+          min_price_cents?: number
+          paid_content_checkout_enabled?: boolean
+          payout_hold_days_max?: number
+          payout_hold_days_min?: number
+          payouts_enabled?: boolean
+          premium_purchase_enabled?: boolean
+          scheduled_payout_fee_bps?: number
+          stripe_connect_production_enabled?: boolean
+          tips_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      monetization_webhook_events: {
+        Row: {
+          created_at: string
+          event_id: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          processed_at: string | null
+          provider: string
+          raw_event_hash: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          processed_at?: string | null
+          provider: string
+          raw_event_hash: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          processed_at?: string | null
+          provider?: string
+          raw_event_hash?: string
+          status?: string
+        }
+        Relationships: []
+      }
       network_account_plan_assignments: {
         Row: {
           created_at: string
@@ -3105,6 +4428,7 @@ export type Database = {
           metadata: Json
           network_account_id: number | null
           reason: string | null
+          security_context_id: string | null
           target_id: string | null
           target_table: string | null
         }
@@ -3116,6 +4440,7 @@ export type Database = {
           metadata?: Json
           network_account_id?: number | null
           reason?: string | null
+          security_context_id?: string | null
           target_id?: string | null
           target_table?: string | null
         }
@@ -3127,6 +4452,7 @@ export type Database = {
           metadata?: Json
           network_account_id?: number | null
           reason?: string | null
+          security_context_id?: string | null
           target_id?: string | null
           target_table?: string | null
         }
@@ -3136,6 +4462,13 @@ export type Database = {
             columns: ["network_account_id"]
             isOneToOne: false
             referencedRelation: "network_billing_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "network_billing_audit_logs_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
             referencedColumns: ["id"]
           },
         ]
@@ -3652,6 +4985,128 @@ export type Database = {
         }
         Relationships: []
       }
+      owner_trusted_devices: {
+        Row: {
+          app_version: string | null
+          build_version: string | null
+          created_at: string
+          device_fingerprint_hash: string
+          device_label: string | null
+          id: string
+          last_security_context_id: string | null
+          last_seen_at: string
+          metadata: Json
+          owner_user_id: string
+          platform: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          revoked_reason: string | null
+          trusted_at: string | null
+          trusted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          app_version?: string | null
+          build_version?: string | null
+          created_at?: string
+          device_fingerprint_hash: string
+          device_label?: string | null
+          id?: string
+          last_security_context_id?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          owner_user_id: string
+          platform?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          revoked_reason?: string | null
+          trusted_at?: string | null
+          trusted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          app_version?: string | null
+          build_version?: string | null
+          created_at?: string
+          device_fingerprint_hash?: string
+          device_label?: string | null
+          id?: string
+          last_security_context_id?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          owner_user_id?: string
+          platform?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          revoked_reason?: string | null
+          trusted_at?: string | null
+          trusted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_trusted_devices_last_security_context_id_fkey"
+            columns: ["last_security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_content_purchases: {
+        Row: {
+          access_status: string
+          buyer_id: string
+          charged_back_at: string | null
+          content_id: string
+          content_type: string
+          created_at: string
+          creator_id: string
+          currency: string
+          id: string
+          payment_status: string
+          price_cents: number
+          provider: string
+          provider_payment_id: string | null
+          refunded_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_status?: string
+          buyer_id: string
+          charged_back_at?: string | null
+          content_id: string
+          content_type: string
+          created_at?: string
+          creator_id: string
+          currency?: string
+          id?: string
+          payment_status?: string
+          price_cents: number
+          provider?: string
+          provider_payment_id?: string | null
+          refunded_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_status?: string
+          buyer_id?: string
+          charged_back_at?: string | null
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          creator_id?: string
+          currency?: string
+          id?: string
+          payment_status?: string
+          price_cents?: number
+          provider?: string
+          provider_payment_id?: string | null
+          refunded_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       platform_admin_audit_logs: {
         Row: {
           action: string
@@ -3667,6 +5122,7 @@ export type Database = {
           metadata: Json
           reason: string | null
           request_id: string | null
+          security_context_id: string | null
           severity: string
           target_channel_user_id: string | null
           target_id: string | null
@@ -3688,6 +5144,7 @@ export type Database = {
           metadata?: Json
           reason?: string | null
           request_id?: string | null
+          security_context_id?: string | null
           severity?: string
           target_channel_user_id?: string | null
           target_id?: string | null
@@ -3709,12 +5166,372 @@ export type Database = {
           metadata?: Json
           reason?: string | null
           request_id?: string | null
+          security_context_id?: string | null
           severity?: string
           target_channel_user_id?: string | null
           target_id?: string | null
           target_type?: string | null
           target_user_id?: string | null
           user_agent_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_admin_audit_logs_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_brand_asset_review_events: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          after_state: Json | null
+          asset_id: string
+          before_state: Json | null
+          created_at: string
+          id: string
+          owner_user_id: string
+          reason: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after_state?: Json | null
+          asset_id: string
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          owner_user_id: string
+          reason?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after_state?: Json | null
+          asset_id?: string
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          owner_user_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_brand_asset_review_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_brand_assets: {
+        Row: {
+          asset_state: string
+          asset_type: string
+          created_at: string
+          deleted_at: string | null
+          duration_ms: number | null
+          file_size_bytes: number
+          height: number | null
+          id: string
+          mime_type: string
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_reason: string | null
+          moderation_status: string
+          original_file_name: string | null
+          owner_user_id: string
+          storage_bucket: string
+          storage_object_key: string
+          storage_path: string
+          storage_provider: string
+          updated_at: string
+          width: number | null
+        }
+        Insert: {
+          asset_state?: string
+          asset_type: string
+          created_at?: string
+          deleted_at?: string | null
+          duration_ms?: number | null
+          file_size_bytes?: number
+          height?: number | null
+          id?: string
+          mime_type: string
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          original_file_name?: string | null
+          owner_user_id: string
+          storage_bucket?: string
+          storage_object_key: string
+          storage_path: string
+          storage_provider?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Update: {
+          asset_state?: string
+          asset_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          duration_ms?: number | null
+          file_size_bytes?: number
+          height?: number | null
+          id?: string
+          mime_type?: string
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          original_file_name?: string | null
+          owner_user_id?: string
+          storage_bucket?: string
+          storage_object_key?: string
+          storage_path?: string
+          storage_provider?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
+      platform_brand_profiles: {
+        Row: {
+          accent_color: string
+          avatar_asset_id: string | null
+          background_fit_mode: string
+          background_focal_x: number
+          background_focal_y: number
+          background_image_asset_id: string | null
+          blur_strength: number
+          created_at: string
+          hero_crop_scale: number
+          hero_fit_mode: string
+          hero_focal_x: number
+          hero_focal_y: number
+          hero_image_asset_id: string | null
+          hero_poster_asset_id: string | null
+          hero_video_asset_id: string | null
+          logo_asset_id: string | null
+          overlay_strength: number
+          owner_user_id: string
+          published_at: string | null
+          spotlight_video_id: string | null
+          theme_preset: string
+          updated_at: string
+          watermark_asset_id: string | null
+        }
+        Insert: {
+          accent_color?: string
+          avatar_asset_id?: string | null
+          background_fit_mode?: string
+          background_focal_x?: number
+          background_focal_y?: number
+          background_image_asset_id?: string | null
+          blur_strength?: number
+          created_at?: string
+          hero_crop_scale?: number
+          hero_fit_mode?: string
+          hero_focal_x?: number
+          hero_focal_y?: number
+          hero_image_asset_id?: string | null
+          hero_poster_asset_id?: string | null
+          hero_video_asset_id?: string | null
+          logo_asset_id?: string | null
+          overlay_strength?: number
+          owner_user_id: string
+          published_at?: string | null
+          spotlight_video_id?: string | null
+          theme_preset?: string
+          updated_at?: string
+          watermark_asset_id?: string | null
+        }
+        Update: {
+          accent_color?: string
+          avatar_asset_id?: string | null
+          background_fit_mode?: string
+          background_focal_x?: number
+          background_focal_y?: number
+          background_image_asset_id?: string | null
+          blur_strength?: number
+          created_at?: string
+          hero_crop_scale?: number
+          hero_fit_mode?: string
+          hero_focal_x?: number
+          hero_focal_y?: number
+          hero_image_asset_id?: string | null
+          hero_poster_asset_id?: string | null
+          hero_video_asset_id?: string | null
+          logo_asset_id?: string | null
+          overlay_strength?: number
+          owner_user_id?: string
+          published_at?: string | null
+          spotlight_video_id?: string | null
+          theme_preset?: string
+          updated_at?: string
+          watermark_asset_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_brand_profiles_avatar_asset_id_fkey"
+            columns: ["avatar_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_background_image_asset_id_fkey"
+            columns: ["background_image_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_hero_image_asset_id_fkey"
+            columns: ["hero_image_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_hero_poster_asset_id_fkey"
+            columns: ["hero_poster_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_hero_video_asset_id_fkey"
+            columns: ["hero_video_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_logo_asset_id_fkey"
+            columns: ["logo_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_watermark_asset_id_fkey"
+            columns: ["watermark_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_break_glass_audit: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          reason: string
+          session_id: string | null
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason: string
+          session_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          reason?: string
+          session_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_break_glass_audit_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "platform_break_glass_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_break_glass_sessions: {
+        Row: {
+          activated_at: string
+          actor_email: string | null
+          actor_role: string
+          actor_user_id: string | null
+          case_id: string | null
+          ended_at: string | null
+          ended_by_email: string | null
+          ended_by_user_id: string | null
+          expires_at: string | null
+          id: string
+          metadata: Json
+          reason: string
+          report_id: string | null
+          status: string
+        }
+        Insert: {
+          activated_at?: string
+          actor_email?: string | null
+          actor_role: string
+          actor_user_id?: string | null
+          case_id?: string | null
+          ended_at?: string | null
+          ended_by_email?: string | null
+          ended_by_user_id?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          reason: string
+          report_id?: string | null
+          status?: string
+        }
+        Update: {
+          activated_at?: string
+          actor_email?: string | null
+          actor_role?: string
+          actor_user_id?: string | null
+          case_id?: string | null
+          ended_at?: string | null
+          ended_by_email?: string | null
+          ended_by_user_id?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string
+          report_id?: string | null
+          status?: string
         }
         Relationships: []
       }
@@ -3871,6 +5688,107 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_staff_permission_audit: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          permission_key: string
+          reason: string | null
+          security_context_id: string | null
+          target_email: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          permission_key: string
+          reason?: string | null
+          security_context_id?: string | null
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          permission_key?: string
+          reason?: string | null
+          security_context_id?: string | null
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_staff_permission_audit_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_staff_permission_grants: {
+        Row: {
+          expires_at: string | null
+          granted_at: string
+          granted_by: string | null
+          id: string
+          metadata: Json
+          permission_key: string
+          reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          status: string
+          target_email: string
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          expires_at?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          metadata?: Json
+          permission_key: string
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+          target_email: string
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          expires_at?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          metadata?: Json
+          permission_key?: string
+          reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+          target_email?: string
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       platform_staff_role_audit: {
         Row: {
           action: string
@@ -3882,6 +5800,7 @@ export type Database = {
           metadata: Json
           reason: string | null
           role: string
+          security_context_id: string | null
           target_email: string | null
           target_user_id: string | null
         }
@@ -3895,6 +5814,7 @@ export type Database = {
           metadata?: Json
           reason?: string | null
           role: string
+          security_context_id?: string | null
           target_email?: string | null
           target_user_id?: string | null
         }
@@ -3908,10 +5828,19 @@ export type Database = {
           metadata?: Json
           reason?: string | null
           role?: string
+          security_context_id?: string | null
           target_email?: string | null
           target_user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "platform_staff_role_audit_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       platform_usage_daily_rollups: {
         Row: {
@@ -4497,40 +6426,209 @@ export type Database = {
       }
       safety_reports: {
         Row: {
+          actioned_at: string | null
           category: string
           context: Json
           created_at: string
+          escalated_at: string | null
           id: number
           note: string | null
           reporter_user_id: string
+          resolution_reason: string | null
+          resolution_type: string | null
+          resolved_at: string | null
+          resolved_by: string | null
           room_id: string | null
+          security_context_id: string | null
+          severity: string
+          status: string
           target_id: string
           target_type: string
           title_id: string | null
+          updated_at: string
         }
         Insert: {
+          actioned_at?: string | null
           category: string
           context?: Json
           created_at?: string
+          escalated_at?: string | null
           id?: number
           note?: string | null
           reporter_user_id: string
+          resolution_reason?: string | null
+          resolution_type?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           room_id?: string | null
+          security_context_id?: string | null
+          severity?: string
+          status?: string
           target_id: string
           target_type: string
           title_id?: string | null
+          updated_at?: string
         }
         Update: {
+          actioned_at?: string | null
           category?: string
           context?: Json
           created_at?: string
+          escalated_at?: string | null
           id?: number
           note?: string | null
           reporter_user_id?: string
+          resolution_reason?: string | null
+          resolution_type?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           room_id?: string | null
+          security_context_id?: string | null
+          severity?: string
+          status?: string
           target_id?: string
           target_type?: string
           title_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_reports_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      security_audit_events: {
+        Row: {
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          reason: string | null
+          security_context_id: string | null
+          severity: string
+          target_id: string | null
+          target_type: string | null
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          security_context_id?: string | null
+          severity?: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Update: {
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          security_context_id?: string | null
+          severity?: string
+          target_id?: string | null
+          target_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_audit_events_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      security_request_context: {
+        Row: {
+          asn_or_isp: string | null
+          capture_status: string
+          city_approx: string | null
+          country: string | null
+          created_at: string
+          device_hash: string | null
+          id: string
+          ip_hash: string
+          ip_prefix_or_masked_ip: string | null
+          metadata: Json
+          network_proof_error: string | null
+          network_proof_source: string | null
+          network_proof_timestamp: string | null
+          network_proof_verified: boolean
+          network_proof_version: string | null
+          region: string | null
+          request_id: string | null
+          retention_expires_at: string | null
+          session_id: string | null
+          source: string
+          trusted_header_source: string | null
+          user_agent_hash: string | null
+          user_id: string | null
+        }
+        Insert: {
+          asn_or_isp?: string | null
+          capture_status?: string
+          city_approx?: string | null
+          country?: string | null
+          created_at?: string
+          device_hash?: string | null
+          id?: string
+          ip_hash: string
+          ip_prefix_or_masked_ip?: string | null
+          metadata?: Json
+          network_proof_error?: string | null
+          network_proof_source?: string | null
+          network_proof_timestamp?: string | null
+          network_proof_verified?: boolean
+          network_proof_version?: string | null
+          region?: string | null
+          request_id?: string | null
+          retention_expires_at?: string | null
+          session_id?: string | null
+          source: string
+          trusted_header_source?: string | null
+          user_agent_hash?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          asn_or_isp?: string | null
+          capture_status?: string
+          city_approx?: string | null
+          country?: string | null
+          created_at?: string
+          device_hash?: string | null
+          id?: string
+          ip_hash?: string
+          ip_prefix_or_masked_ip?: string | null
+          metadata?: Json
+          network_proof_error?: string | null
+          network_proof_source?: string | null
+          network_proof_timestamp?: string | null
+          network_proof_verified?: boolean
+          network_proof_version?: string | null
+          region?: string | null
+          request_id?: string | null
+          retention_expires_at?: string | null
+          session_id?: string | null
+          source?: string
+          trusted_header_source?: string | null
+          user_agent_hash?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -5585,206 +7683,6 @@ export type Database = {
         }
         Relationships: []
       }
-      platform_brand_assets: {
-        Row: {
-          asset_state: string
-          asset_type: string
-          created_at: string
-          deleted_at: string | null
-          duration_ms: number | null
-          file_size_bytes: number
-          height: number | null
-          id: string
-          mime_type: string
-          moderated_at: string | null
-          moderated_by: string | null
-          moderation_reason: string | null
-          moderation_status: string
-          original_file_name: string | null
-          owner_user_id: string
-          storage_bucket: string
-          storage_object_key: string
-          storage_path: string
-          storage_provider: string
-          updated_at: string
-          width: number | null
-        }
-        Insert: {
-          asset_state?: string
-          asset_type: string
-          created_at?: string
-          deleted_at?: string | null
-          duration_ms?: number | null
-          file_size_bytes?: number
-          height?: number | null
-          id?: string
-          mime_type: string
-          moderated_at?: string | null
-          moderated_by?: string | null
-          moderation_reason?: string | null
-          moderation_status?: string
-          original_file_name?: string | null
-          owner_user_id: string
-          storage_bucket?: string
-          storage_object_key: string
-          storage_path: string
-          storage_provider?: string
-          updated_at?: string
-          width?: number | null
-        }
-        Update: {
-          asset_state?: string
-          asset_type?: string
-          created_at?: string
-          deleted_at?: string | null
-          duration_ms?: number | null
-          file_size_bytes?: number
-          height?: number | null
-          id?: string
-          mime_type?: string
-          moderated_at?: string | null
-          moderated_by?: string | null
-          moderation_reason?: string | null
-          moderation_status?: string
-          original_file_name?: string | null
-          owner_user_id?: string
-          storage_bucket?: string
-          storage_object_key?: string
-          storage_path?: string
-          storage_provider?: string
-          updated_at?: string
-          width?: number | null
-        }
-        Relationships: []
-      }
-      platform_brand_profiles: {
-        Row: {
-          accent_color: string
-          avatar_asset_id: string | null
-          background_fit_mode: string
-          background_focal_x: number
-          background_focal_y: number
-          background_image_asset_id: string | null
-          blur_strength: number
-          created_at: string
-          hero_crop_scale: number
-          hero_fit_mode: string
-          hero_focal_x: number
-          hero_focal_y: number
-          hero_image_asset_id: string | null
-          hero_poster_asset_id: string | null
-          hero_video_asset_id: string | null
-          logo_asset_id: string | null
-          overlay_strength: number
-          owner_user_id: string
-          published_at: string | null
-          spotlight_video_id: string | null
-          theme_preset: string
-          updated_at: string
-          watermark_asset_id: string | null
-        }
-        Insert: {
-          accent_color?: string
-          avatar_asset_id?: string | null
-          background_fit_mode?: string
-          background_focal_x?: number
-          background_focal_y?: number
-          background_image_asset_id?: string | null
-          blur_strength?: number
-          created_at?: string
-          hero_crop_scale?: number
-          hero_fit_mode?: string
-          hero_focal_x?: number
-          hero_focal_y?: number
-          hero_image_asset_id?: string | null
-          hero_poster_asset_id?: string | null
-          hero_video_asset_id?: string | null
-          logo_asset_id?: string | null
-          overlay_strength?: number
-          owner_user_id: string
-          published_at?: string | null
-          spotlight_video_id?: string | null
-          theme_preset?: string
-          updated_at?: string
-          watermark_asset_id?: string | null
-        }
-        Update: {
-          accent_color?: string
-          avatar_asset_id?: string | null
-          background_fit_mode?: string
-          background_focal_x?: number
-          background_focal_y?: number
-          background_image_asset_id?: string | null
-          blur_strength?: number
-          created_at?: string
-          hero_crop_scale?: number
-          hero_fit_mode?: string
-          hero_focal_x?: number
-          hero_focal_y?: number
-          hero_image_asset_id?: string | null
-          hero_poster_asset_id?: string | null
-          hero_video_asset_id?: string | null
-          logo_asset_id?: string | null
-          overlay_strength?: number
-          owner_user_id?: string
-          published_at?: string | null
-          spotlight_video_id?: string | null
-          theme_preset?: string
-          updated_at?: string
-          watermark_asset_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "platform_brand_profiles_avatar_asset_id_fkey"
-            columns: ["avatar_asset_id"]
-            isOneToOne: false
-            referencedRelation: "platform_brand_assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_brand_profiles_background_image_asset_id_fkey"
-            columns: ["background_image_asset_id"]
-            isOneToOne: false
-            referencedRelation: "platform_brand_assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_brand_profiles_hero_image_asset_id_fkey"
-            columns: ["hero_image_asset_id"]
-            isOneToOne: false
-            referencedRelation: "platform_brand_assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_brand_profiles_hero_poster_asset_id_fkey"
-            columns: ["hero_poster_asset_id"]
-            isOneToOne: false
-            referencedRelation: "platform_brand_assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_brand_profiles_hero_video_asset_id_fkey"
-            columns: ["hero_video_asset_id"]
-            isOneToOne: false
-            referencedRelation: "platform_brand_assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_brand_profiles_logo_asset_id_fkey"
-            columns: ["logo_asset_id"]
-            isOneToOne: false
-            referencedRelation: "platform_brand_assets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_brand_profiles_watermark_asset_id_fkey"
-            columns: ["watermark_asset_id"]
-            isOneToOne: false
-            referencedRelation: "platform_brand_assets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_profiles: {
         Row: {
           avatar_index: number
@@ -6326,21 +8224,24 @@ export type Database = {
     Functions: {
       acknowledge_beta_onboarding: { Args: never; Returns: Json }
       activate_beta_membership: { Args: never; Returns: Json }
-      admin_grant_platform_role_by_email: {
-        Args: {
-          p_reason?: string | null
-          p_role: string
-          p_target_email: string
-        }
-        Returns: Json
+      admin_content_assert_operator: { Args: never; Returns: string }
+      admin_content_title_patch_allowed: {
+        Args: { p_patch: Json }
+        Returns: boolean
       }
-      admin_revoke_platform_role_by_email: {
+      admin_content_write_audit: {
         Args: {
-          p_reason?: string | null
-          p_role: string
-          p_target_email: string
+          p_action: string
+          p_after_state?: Json
+          p_before_state?: Json
+          p_metadata?: Json
+          p_reason: string
+          p_severity?: string
+          p_target_id: string
+          p_target_type: string
+          p_target_user_id?: string
         }
-        Returns: Json
+        Returns: string
       }
       admin_dmca_add_strike: {
         Args: {
@@ -6373,6 +8274,54 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_dmca_create_case: {
+        Args: { p_payload: Json; p_source?: string }
+        Returns: {
+          accuracy_penalty_perjury_statement: boolean
+          admin_notes: string | null
+          allegedly_infringing_content_id: string | null
+          allegedly_infringing_content_type: string
+          allegedly_infringing_material_description: string | null
+          allegedly_infringing_url: string | null
+          assigned_admin_id: string | null
+          authorized_agent_name: string | null
+          case_number: string
+          closed_at: string | null
+          copyright_owner_name: string | null
+          copyrighted_work_description: string
+          copyrighted_work_urls: Json
+          created_at: string
+          electronic_signature: string
+          good_faith_statement: boolean
+          id: string
+          is_test_case: boolean
+          public_attachment_token: string | null
+          public_safe_summary: string | null
+          received_at: string
+          report_type: string
+          reporter_address: string | null
+          reporter_company: string | null
+          reporter_email: string
+          reporter_is_owner: boolean
+          reporter_name: string
+          reporter_phone: string | null
+          reporter_user_id: string | null
+          security_context_id: string | null
+          source: string
+          status: string
+          submitted_ip_hash: string | null
+          submitted_user_agent_hash: string | null
+          updated_at: string
+          uploader_channel_id: string | null
+          uploader_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_cases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_dmca_forward_counter_notice: {
         Args: { p_counter_notice_id: string; p_reason: string }
         Returns: {
@@ -6390,6 +8339,7 @@ export type Database = {
           response_deadline_start_at: string | null
           restore_not_after_at: string | null
           restore_not_before_at: string | null
+          security_context_id: string | null
           service_acceptance_statement: boolean
           status: string
           submitter_address: string | null
@@ -6406,6 +8356,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_dmca_get_content_state: {
+        Args: { p_content_id: string; p_content_type: string }
+        Returns: Json
+      }
       admin_dmca_mark_restore_eligible: {
         Args: {
           p_case_id: string
@@ -6417,17 +8371,21 @@ export type Database = {
           admin_notes: string | null
           allegedly_infringing_content_id: string | null
           allegedly_infringing_content_type: string
+          allegedly_infringing_material_description: string | null
           allegedly_infringing_url: string | null
           assigned_admin_id: string | null
           authorized_agent_name: string | null
           case_number: string
           closed_at: string | null
+          copyright_owner_name: string | null
           copyrighted_work_description: string
           copyrighted_work_urls: Json
           created_at: string
           electronic_signature: string
           good_faith_statement: boolean
           id: string
+          is_test_case: boolean
+          public_attachment_token: string | null
           public_safe_summary: string | null
           received_at: string
           report_type: string
@@ -6438,6 +8396,7 @@ export type Database = {
           reporter_name: string
           reporter_phone: string | null
           reporter_user_id: string | null
+          security_context_id: string | null
           source: string
           status: string
           submitted_ip_hash: string | null
@@ -6501,6 +8460,7 @@ export type Database = {
           response_deadline_start_at: string | null
           restore_not_after_at: string | null
           restore_not_before_at: string | null
+          security_context_id: string | null
           service_acceptance_statement: boolean
           status: string
           submitter_address: string | null
@@ -6534,6 +8494,7 @@ export type Database = {
           response_deadline_start_at: string | null
           restore_not_after_at: string | null
           restore_not_before_at: string | null
+          security_context_id: string | null
           service_acceptance_statement: boolean
           status: string
           submitter_address: string | null
@@ -6585,17 +8546,21 @@ export type Database = {
           admin_notes: string | null
           allegedly_infringing_content_id: string | null
           allegedly_infringing_content_type: string
+          allegedly_infringing_material_description: string | null
           allegedly_infringing_url: string | null
           assigned_admin_id: string | null
           authorized_agent_name: string | null
           case_number: string
           closed_at: string | null
+          copyright_owner_name: string | null
           copyrighted_work_description: string
           copyrighted_work_urls: Json
           created_at: string
           electronic_signature: string
           good_faith_statement: boolean
           id: string
+          is_test_case: boolean
+          public_attachment_token: string | null
           public_safe_summary: string | null
           received_at: string
           report_type: string
@@ -6606,6 +8571,7 @@ export type Database = {
           reporter_name: string
           reporter_phone: string | null
           reporter_user_id: string | null
+          security_context_id: string | null
           source: string
           status: string
           submitted_ip_hash: string | null
@@ -6621,6 +8587,147 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_dmca_update_strike_status: {
+        Args: { p_reason: string; p_status: string; p_strike_id: string }
+        Returns: {
+          channel_id: string | null
+          content_id: string
+          content_type: string
+          created_at: string
+          dmca_case_id: string
+          id: string
+          reason: string
+          removed_at: string | null
+          removed_reason: string | null
+          severity: string
+          strike_status: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_strikes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_grant_platform_role_by_email: {
+        Args: { p_reason?: string; p_role: string; p_target_email: string }
+        Returns: Json
+      }
+      admin_grant_platform_staff_permission_by_email: {
+        Args: {
+          p_expires_at?: string
+          p_permission_key: string
+          p_reason?: string
+          p_target_email: string
+        }
+        Returns: Json
+      }
+      admin_reports_actor_can_review: { Args: never; Returns: boolean }
+      admin_reports_actor_can_target_action: { Args: never; Returns: boolean }
+      admin_reports_assert_reviewer: { Args: never; Returns: undefined }
+      admin_reports_assert_target_operator: { Args: never; Returns: undefined }
+      admin_reports_classify_severity: {
+        Args: { p_category: string; p_context?: Json; p_note: string }
+        Returns: string
+      }
+      admin_reports_safe_uuid: { Args: { p_value: string }; Returns: string }
+      admin_reports_target_state: {
+        Args: { p_target_id: string; p_target_type: string }
+        Returns: Json
+      }
+      admin_reports_write_audit: {
+        Args: {
+          p_action_type: string
+          p_after_state: Json
+          p_before_state: Json
+          p_metadata?: Json
+          p_new_severity: string
+          p_new_status: string
+          p_old_severity: string
+          p_old_status: string
+          p_reason: string
+          p_report_id: number
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: string
+      }
+      admin_revoke_platform_role_by_email: {
+        Args: { p_reason?: string; p_role: string; p_target_email: string }
+        Returns: Json
+      }
+      admin_revoke_platform_staff_permission_by_email: {
+        Args: {
+          p_permission_key: string
+          p_reason?: string
+          p_target_email: string
+        }
+        Returns: Json
+      }
+      admin_update_platform_staff_permissions_by_email: {
+        Args: {
+          p_expires_at?: string
+          p_permission_keys: string[]
+          p_reason: string
+          p_target_email: string
+        }
+        Returns: Json
+      }
+      apply_admin_report_target_action: {
+        Args: {
+          p_action_type: string
+          p_reason: string
+          p_report_id: number
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: {
+          actioned_at: string | null
+          category: string
+          context: Json
+          created_at: string
+          escalated_at: string | null
+          id: number
+          note: string | null
+          reporter_user_id: string
+          resolution_reason: string | null
+          resolution_type: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          room_id: string | null
+          security_context_id: string | null
+          severity: string
+          status: string
+          target_id: string
+          target_type: string
+          title_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "safety_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      apply_admin_title_programming_action: {
+        Args: {
+          p_action_type: string
+          p_patch?: Json
+          p_reason?: string
+          p_title_id: string
+        }
+        Returns: Json
+      }
+      calculate_creator_instant_cashout_fee: {
+        Args: { p_amount_cents: number }
+        Returns: number
+      }
+      calculate_creator_payout_balances: {
+        Args: { p_creator_id?: string }
+        Returns: Json
+      }
       can_access_chat_thread: {
         Args: { target_thread_id: string }
         Returns: boolean
@@ -6633,9 +8740,31 @@ export type Database = {
         Args: { profile_user_id: string }
         Returns: boolean
       }
+      chat_thread_has_platform_owner: {
+        Args: { target_thread_id: string }
+        Returns: boolean
+      }
       communication_room_join_allowed: {
         Args: { joining_user_id: string; target_room_id: string }
         Returns: boolean
+      }
+      create_creator_product_listing: {
+        Args: {
+          p_currency?: string
+          p_description: string
+          p_price_cents: number
+          p_product_type?: string
+          p_title: string
+        }
+        Returns: Json
+      }
+      creator_monetization_checkout_preflight: {
+        Args: {
+          p_amount_cents?: number
+          p_checkout_type: string
+          p_target_id?: string
+        }
+        Returns: Json
       }
       discovery_feed_item_blocked_for_current_user: {
         Args: { target_feed_item_id: string }
@@ -6646,6 +8775,19 @@ export type Database = {
         Returns: string
       }
       dmca_assert_owner_operator: { Args: never; Returns: undefined }
+      dmca_can_access_admin: { Args: never; Returns: boolean }
+      dmca_detect_test_case: {
+        Args: {
+          p_reporter_email: string
+          p_reporter_name: string
+          p_source?: string
+        }
+        Returns: boolean
+      }
+      dmca_evidence_storage_insert_allowed: {
+        Args: { p_name: string }
+        Returns: boolean
+      }
       dmca_next_case_number: { Args: never; Returns: string }
       dmca_resolve_uploader_user_id: {
         Args: { content_id: string; content_type: string }
@@ -6662,12 +8804,244 @@ export type Database = {
         }
         Returns: string
       }
+      get_admin_content_config: { Args: never; Returns: Json }
+      get_admin_report_detail: { Args: { p_report_id: number }; Returns: Json }
+      get_admin_reports_overview: { Args: never; Returns: Json }
+      get_security_request_context_summary: {
+        Args: { p_context_id: string }
+        Returns: Json
+      }
       has_active_beta_access: { Args: never; Returns: boolean }
+      has_platform_permission: {
+        Args: { p_permission_key: string }
+        Returns: boolean
+      }
       has_platform_role: {
         Args: { required_roles: string[] }
         Returns: boolean
       }
+      is_current_platform_owner: { Args: never; Returns: boolean }
+      is_platform_owner_user: {
+        Args: { target_user_id: string }
+        Returns: boolean
+      }
+      list_admin_content_audit_events: {
+        Args: { p_limit?: number }
+        Returns: {
+          action: string
+          action_category: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          id: string
+          ip_hash: string | null
+          metadata: Json
+          reason: string | null
+          request_id: string | null
+          security_context_id: string | null
+          severity: string
+          target_channel_user_id: string | null
+          target_id: string | null
+          target_type: string | null
+          target_user_id: string | null
+          user_agent_hash: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "platform_admin_audit_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      list_admin_report_audit_events: {
+        Args: { p_report_id: number }
+        Returns: {
+          action: string
+          action_category: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          id: string
+          ip_hash: string | null
+          metadata: Json
+          reason: string | null
+          request_id: string | null
+          security_context_id: string | null
+          severity: string
+          target_channel_user_id: string | null
+          target_id: string | null
+          target_type: string | null
+          target_user_id: string | null
+          user_agent_hash: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "platform_admin_audit_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      list_admin_reports: {
+        Args: {
+          p_cursor?: string
+          p_filter?: string
+          p_limit?: number
+          p_severity?: string
+          p_status?: string
+          p_target_type?: string
+        }
+        Returns: {
+          actioned_at: string | null
+          category: string
+          context: Json
+          created_at: string
+          escalated_at: string | null
+          id: number
+          note: string | null
+          reporter_user_id: string
+          resolution_reason: string | null
+          resolution_type: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          room_id: string | null
+          security_context_id: string | null
+          severity: string
+          status: string
+          target_id: string
+          target_type: string
+          title_id: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "safety_reports"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      list_admin_role_audit_events: {
+        Args: { p_filter?: string; p_limit?: number }
+        Returns: {
+          action: string
+          actor_email: string
+          actor_role: string
+          actor_user_id: string
+          audit_kind: string
+          created_at: string
+          id: string
+          metadata: Json
+          permission_key: string
+          reason: string
+          role: string
+          target_email: string
+          target_user_id: string
+        }[]
+      }
+      list_staff_scoped_permissions_by_email: {
+        Args: { p_target_email: string }
+        Returns: string[]
+      }
+      monetization_has_active_premium: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      monetization_settings_json: { Args: never; Returns: Json }
+      monetization_write_audit: {
+        Args: {
+          p_action: string
+          p_actor_user_id: string
+          p_metadata?: Json
+          p_target_id?: string
+          p_target_type: string
+        }
+        Returns: undefined
+      }
+      owner_security_center_table_status: { Args: never; Returns: Json }
+      platform_actor_should_write_app_audit: {
+        Args: {
+          p_actor_email: string
+          p_actor_role: string
+          p_actor_user_id: string
+        }
+        Returns: boolean
+      }
+      platform_brand_asset_public_safe: {
+        Args: { p_asset_id: string; p_owner_user_id?: string }
+        Returns: boolean
+      }
+      platform_break_glass_active_for_actor: {
+        Args: { p_actor_email: string; p_actor_user_id: string }
+        Returns: boolean
+      }
+      platform_current_break_glass_session_id: {
+        Args: { p_actor_email?: string; p_actor_user_id?: string }
+        Returns: string
+      }
       platform_staff_actor_role: { Args: never; Returns: string }
+      platform_staff_normalize_email: {
+        Args: { p_email: string }
+        Returns: string
+      }
+      platform_staff_normalize_permission_key: {
+        Args: { p_permission_key: string }
+        Returns: string
+      }
+      platform_staff_normalize_role: {
+        Args: { p_role: string }
+        Returns: string
+      }
+      platform_staff_target_has_role: {
+        Args: { p_allowed_roles: string[]; p_target_email: string }
+        Returns: boolean
+      }
+      platform_staff_write_audit: {
+        Args: {
+          p_action: string
+          p_actor_email: string
+          p_actor_role: string
+          p_actor_user_id: string
+          p_metadata?: Json
+          p_reason: string
+          p_role: string
+          p_target_email: string
+        }
+        Returns: undefined
+      }
+      platform_staff_write_permission_audit: {
+        Args: {
+          p_action: string
+          p_actor_email: string
+          p_actor_role: string
+          p_actor_user_id: string
+          p_metadata?: Json
+          p_permission_key: string
+          p_reason: string
+          p_target_email: string
+          p_target_user_id: string
+        }
+        Returns: undefined
+      }
+      read_my_dmca_counter_notice_case: {
+        Args: { p_case_id: string }
+        Returns: {
+          case_number: string
+          content_id: string
+          content_type: string
+          content_url: string
+          existing_counter_notice_count: number
+          id: string
+          public_safe_summary: string
+          received_at: string
+          status: string
+        }[]
+      }
+      read_my_platform_staff_permission_keys: { Args: never; Returns: string[] }
       read_public_channel_profile: {
         Args: { profile_user_id: string }
         Returns: {
@@ -6695,27 +9069,27 @@ export type Database = {
         Args: { profile_user_id: string }
         Returns: {
           accent_color: string
-          avatar_asset_id: string | null
+          avatar_asset_id: string
           background_fit_mode: string
           background_focal_x: number
           background_focal_y: number
-          background_image_asset_id: string | null
+          background_image_asset_id: string
           blur_strength: number
           hero_crop_scale: number
           hero_fit_mode: string
           hero_focal_x: number
           hero_focal_y: number
-          hero_image_asset_id: string | null
-          hero_poster_asset_id: string | null
-          hero_video_asset_id: string | null
-          logo_asset_id: string | null
+          hero_image_asset_id: string
+          hero_poster_asset_id: string
+          hero_video_asset_id: string
+          logo_asset_id: string
           overlay_strength: number
           owner_user_id: string
-          published_at: string | null
-          spotlight_video_id: string | null
+          published_at: string
+          spotlight_video_id: string
           theme_preset: string
           updated_at: string
-          watermark_asset_id: string | null
+          watermark_asset_id: string
         }[]
       }
       record_creator_video_upload_usage: {
@@ -6724,6 +9098,10 @@ export type Database = {
       }
       record_video_original_rendition: {
         Args: { p_video_id: string }
+        Returns: Json
+      }
+      request_creator_payout: {
+        Args: { p_amount_cents: number; p_payout_type?: string }
         Returns: Json
       }
       request_friendship: {
@@ -6745,6 +9123,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_creator_content_access: {
+        Args: { p_content_id: string; p_content_type: string }
+        Returns: Json
+      }
+      resolve_video_playback: {
+        Args: { target_video_id: string }
+        Returns: Json
+      }
       respond_to_friendship: {
         Args: { next_action: string; target_user_id: string }
         Returns: {
@@ -6764,25 +9150,143 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      rollup_creator_video_upload_usage_daily: {
-        Args: { target_usage_date?: string }
+      review_platform_brand_asset: {
+        Args: { p_action: string; p_asset_id: string; p_reason?: string }
         Returns: Json
       }
-      resolve_video_playback: {
-        Args: { target_video_id: string }
+      rollup_creator_video_upload_usage_daily: {
+        Args: { target_usage_date?: string }
         Returns: Json
       }
       sanitize_app_configuration: {
         Args: { input_config: Json }
         Returns: Json
       }
+      save_admin_content_config: {
+        Args: { p_config_patch: Json; p_reason: string }
+        Returns: Json
+      }
+      save_admin_creator_grants: {
+        Args: { p_grants: Json; p_reason: string; p_target_user_id: string }
+        Returns: Json
+      }
+      security_context_id_from_metadata: {
+        Args: { p_metadata: Json }
+        Returns: string
+      }
+      set_creator_content_price: {
+        Args: {
+          p_content_id: string
+          p_content_type: string
+          p_currency?: string
+          p_is_paid: boolean
+          p_price_cents: number
+        }
+        Returns: Json
+      }
+      submit_dmca_attachment_metadata: {
+        Args: { p_payload: Json }
+        Returns: {
+          bucket_id: string
+          counter_notice_id: string | null
+          created_at: string
+          dmca_case_id: string
+          id: string
+          mime_type: string
+          object_path: string
+          original_filename: string
+          preserved_for_evidence: boolean
+          retention_status: string
+          scan_notes: string
+          scan_provider: string
+          scan_status: string
+          security_context_id: string | null
+          size_bytes: number
+          source: string
+          submitted_by_role: string
+          submitted_by_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_attachments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      submit_dmca_counter_notice: {
+        Args: { p_case_id: string; p_payload: Json }
+        Returns: {
+          court_action_notice_received_at: string | null
+          created_at: string
+          dmca_case_id: string
+          electronic_signature: string
+          forwarded_to_claimant_at: string | null
+          good_faith_mistake_statement: boolean
+          id: string
+          jurisdiction_consent_statement: boolean
+          received_at: string
+          removed_material_description: string
+          removed_material_url_or_location: string
+          response_deadline_start_at: string | null
+          restore_not_after_at: string | null
+          restore_not_before_at: string | null
+          security_context_id: string | null
+          service_acceptance_statement: boolean
+          status: string
+          submitter_address: string | null
+          submitter_email: string
+          submitter_name: string
+          submitter_phone: string | null
+          submitter_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dmca_counter_notices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       submit_dmca_notice: {
         Args: { p_payload: Json }
         Returns: {
+          attachment_token: string
           case_number: string
           id: string
           status: string
         }[]
+      }
+      update_admin_report_status: {
+        Args: { p_reason: string; p_report_id: number; p_status_action: string }
+        Returns: {
+          actioned_at: string | null
+          category: string
+          context: Json
+          created_at: string
+          escalated_at: string | null
+          id: number
+          note: string | null
+          reporter_user_id: string
+          resolution_reason: string | null
+          resolution_type: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          room_id: string | null
+          security_context_id: string | null
+          severity: string
+          status: string
+          target_id: string
+          target_type: string
+          title_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "safety_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       user_has_active_entitlement: {
         Args: { required_entitlement_keys: string[]; target_user_id: string }

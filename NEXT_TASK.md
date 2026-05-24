@@ -1,14 +1,16 @@
 # NEXT TASK
 
-## Recommended Lane: Brand Studio Review and Publishing Completion
+## Recommended Lane: Authorized Brand Asset Review Proof and Cleanup Automation
 
-The Platform Studio Brand Studio and Hero Media Production Pass is implemented at `32b46780132b6755e356afbd259e836a83bff5ad`. The next lane should finish the backend proof path for public-safe brand assets rather than adding more UI surface area.
+The Platform Brand Studio review/failure-state closeout remote-applied the Brand Studio migrations, regenerated linked database types, added the review RPC, added reviewer-only pending asset/storage queue access, and proved that the available proof login can upload real draft assets but cannot approve them (`brand_review_forbidden`) because it is not an owner/operator/moderation reviewer. The next lane should use a real authorized reviewer or a safe temporary grant, not a fake approval.
 
 Scope for the next lane:
 
-- Apply and prove migration `202605240001_platform_brand_studio_assets.sql` on the linked Supabase project.
-- Add or connect owner/admin review workflow for `platform_brand_assets` so pending-review hero/background/avatar/logo assets can become public-safe without client-trusting moderation.
-- Prove a real published hero image and background image render on `/channel/[userId]?preview=public` without drafts, raw object internals, or owner controls.
+- Use a real owner/operator/moderation reviewer to approve and reject pending `platform_brand_assets` through `review_platform_brand_asset`.
+- Prove review events and immutable admin audit rows for approve, reject, and archive actions.
+- Prove a real approved + published hero image, background image, avatar, and logo render on `/channel/[userId]?preview=public`.
+- Prove rejected, archived, pending, and draft assets do not leak through `read_public_platform_brand_profile`, public table reads, or public Platform UI.
+- Add a service-role/admin-only cleanup helper or runbook implementation for archived, rejected, orphaned draft, and replaced brand assets; never delete currently published or still-referenced assets.
 - Add a backed crop/reposition gesture editor only after choosing an approved lightweight pattern; keep current Fit/Fill/Center and safe-area metadata until then.
 - Keep Hero Reel as unavailable unless reviewed video processing, poster fallback, muted autoplay, and public rendering are fully backed.
 - Keep Platform, Profile, and Platform Studio language separate; do not reintroduce Mini Platform copy.

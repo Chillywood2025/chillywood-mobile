@@ -958,7 +958,7 @@ export async function grantPlatformStaffRoleByEmail(input: {
   if (!role) throw new Error("Choose a supported staff role.");
 
   const { data, error } = await supabase.rpc("admin_grant_platform_role_by_email", {
-    p_reason: normalizeText(input.reason) || null,
+    p_reason: normalizeText(input.reason) || undefined,
     p_role: role,
     p_target_email: email,
   });
@@ -1004,7 +1004,7 @@ export async function revokePlatformStaffRoleByEmail(input: {
   if (!role) throw new Error("Choose a supported staff role.");
 
   const { data, error } = await supabase.rpc("admin_revoke_platform_role_by_email", {
-    p_reason: normalizeText(input.reason) || null,
+    p_reason: normalizeText(input.reason) || undefined,
     p_role: role,
     p_target_email: email,
   });

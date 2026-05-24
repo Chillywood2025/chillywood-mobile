@@ -74,6 +74,12 @@ import {
   type CreatorPermissionSet,
 } from "../_lib/monetization";
 import {
+  hasPlatformRoleMembership,
+  hasPlatformStaffPermission,
+  readMyPlatformRoleMemberships,
+  type PlatformRoleMembership,
+} from "../_lib/moderation";
+import {
   CREATOR_UPLOAD_ACKNOWLEDGEMENT,
   LIVE_REPLAY_ACKNOWLEDGEMENT,
 } from "../_lib/legalPolicies";
@@ -104,15 +110,18 @@ import {
   getPlatformBrandAssetValidationMessage,
   normalizePlatformBrandFitMode,
   normalizePlatformBrandThemePreset,
+  readPlatformBrandReviewQueue,
   publishPlatformBrandProfile,
   readPlatformBrandStudio,
   removePlatformBrandAsset,
+  reviewPlatformBrandAsset,
   savePlatformBrandProfileDraft,
   uploadPlatformBrandAsset,
   type PlatformBrandAsset,
   type PlatformBrandAssetFile,
   type PlatformBrandAssetType,
   type PlatformBrandFitMode,
+  type PlatformBrandReviewAction,
   type PlatformBrandingBundle,
   type PlatformBrandProfile,
   type PlatformBrandThemePreset,
@@ -161,7 +170,7 @@ type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 type VideoLifecycleState = "idle" | "file_selected" | "uploading" | "succeeded" | "failed";
 type StudioHomeSectionId = "create" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
-type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scenePresets" | "preview" | "defaults";
+type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scenePresets" | "review" | "preview" | "defaults";
 
 const createPayoutSetupRedirectUrl = (status: "return" | "refresh") => (
   `chillywoodmobile://channel-studio?tab=payouts&payout_setup=${status}`
@@ -414,10 +423,32 @@ const formatBrandThemeLabel = (value?: PlatformBrandThemePreset | null) => {
   return option?.label ?? "City Night";
 };
 
+const formatPlatformBrandAssetTypeLabel = (value?: PlatformBrandAssetType | null) => {
+  switch (value) {
+    case "background_image":
+      return "Background";
+    case "avatar":
+      return "Platform Avatar";
+    case "logo":
+      return "Logo Mark";
+    case "hero_video":
+      return "Hero Reel";
+    case "hero_poster":
+      return "Hero Poster";
+    case "watermark":
+      return "Watermark";
+    default:
+      return "Hero Image";
+  }
+};
+
 const getBrandAssetReviewCopy = (asset?: PlatformBrandAsset | null) => {
   if (!asset) return "No asset selected yet.";
   if (asset.assetState === "published" && ["clean", "reported"].includes(asset.moderationStatus)) {
     return "Published on the public Platform.";
+  }
+  if (asset.assetState === "draft" && ["clean", "reported"].includes(asset.moderationStatus)) {
+    return "Approved. Publish changes to show it on the public Platform.";
   }
   if (asset.moderationStatus === "pending_review") {
     return "Saved as draft and waiting for review before public display.";
@@ -721,6 +752,11 @@ export function ChannelStudioScreen() {
   const [brandSaving, setBrandSaving] = useState(false);
   const [brandNotice, setBrandNotice] = useState<string | null>(null);
   const [brandBusyAssetType, setBrandBusyAssetType] = useState<PlatformBrandAssetType | null>(null);
+  const [brandReviewReason, setBrandReviewReason] = useState("");
+  const [brandReviewBusyAssetId, setBrandReviewBusyAssetId] = useState<string | null>(null);
+  const [brandReviewQueueAssets, setBrandReviewQueueAssets] = useState<PlatformBrandAsset[]>([]);
+  const [brandReviewQueueLoading, setBrandReviewQueueLoading] = useState(false);
+  const [platformRoleMemberships, setPlatformRoleMemberships] = useState<PlatformRoleMembership[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -786,6 +822,11 @@ export function ChannelStudioScreen() {
         : "Enter a title to enable upload.";
   const isVideoSubmitDisabled = videoSaving || !!videoSubmitRequirement;
   const canUseChannelSettings = isSignedIn && isActive && !!user?.id;
+  const canReviewPlatformBrandAssets = useMemo(
+    () => hasPlatformRoleMembership(platformRoleMemberships, ["owner", "operator"])
+      || hasPlatformStaffPermission(platformRoleMemberships, ["content_moderation", "reports_review"]),
+    [platformRoleMemberships],
+  );
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Platform Studio");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
   const openStudioTab = (
@@ -836,6 +877,8 @@ export function ChannelStudioScreen() {
       setPayoutSetupNotice(null);
       setPlatformBranding(null);
       setBrandDraft(null);
+      setPlatformRoleMemberships([]);
+      setBrandReviewQueueAssets([]);
       setLoading(false);
       return;
     }
@@ -851,6 +894,7 @@ export function ChannelStudioScreen() {
       readCreatorPayoutDashboardSummary({ creatorUserId: String(user?.id ?? ""), limit: 5 }),
       readCreatorMonetizationFoundationSummary(String(user?.id ?? "")).catch(() => null),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
+      readMyPlatformRoleMemberships().catch(() => []),
     ])
       .then(([
         resolvedProfile,
@@ -862,6 +906,7 @@ export function ChannelStudioScreen() {
         resolvedCreatorPayoutSummary,
         resolvedCreatorMonetizationSummary,
         resolvedPlatformBranding,
+        resolvedPlatformRoleMemberships,
       ]) => {
         if (!active) return;
         setProfile(normalizeUserProfile(resolvedProfile));
@@ -878,6 +923,7 @@ export function ChannelStudioScreen() {
         setCreatorMonetizationSummary(resolvedCreatorMonetizationSummary);
         setPlatformBranding(resolvedPlatformBranding);
         setBrandDraft(resolvedPlatformBranding?.profile ?? null);
+        setPlatformRoleMemberships(resolvedPlatformRoleMemberships);
         setLoading(false);
       })
       .catch(() => {
@@ -891,6 +937,8 @@ export function ChannelStudioScreen() {
         setCreatorAnalyticsSummary(null);
         setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
         setCreatorMonetizationSummary(null);
+        setPlatformRoleMemberships([]);
+        setBrandReviewQueueAssets([]);
         setLoading(false);
       });
 
@@ -1209,6 +1257,50 @@ export function ChannelStudioScreen() {
     }
   };
 
+  const loadPlatformBrandReviewQueue = async () => {
+    if (!canReviewPlatformBrandAssets) {
+      setBrandReviewQueueAssets([]);
+      return [];
+    }
+
+    setBrandReviewQueueLoading(true);
+    try {
+      const assets = await readPlatformBrandReviewQueue(30);
+      setBrandReviewQueueAssets(assets);
+      return assets;
+    } catch {
+      setBrandReviewQueueAssets([]);
+      return [];
+    } finally {
+      setBrandReviewQueueLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    if (!canUseChannelSettings || !canReviewPlatformBrandAssets) {
+      setBrandReviewQueueAssets([]);
+      setBrandReviewQueueLoading(false);
+      return;
+    }
+
+    setBrandReviewQueueLoading(true);
+    readPlatformBrandReviewQueue(30)
+      .then((assets) => {
+        if (active) setBrandReviewQueueAssets(assets);
+      })
+      .catch(() => {
+        if (active) setBrandReviewQueueAssets([]);
+      })
+      .finally(() => {
+        if (active) setBrandReviewQueueLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canReviewPlatformBrandAssets, canUseChannelSettings]);
+
   const resetVideoEditor = (nextLifecycleState: VideoLifecycleState = "idle") => {
     setVideoEditor(createEmptyVideoEditorState());
     setSelectedVideoFile(null);
@@ -1416,6 +1508,41 @@ export function ChannelStudioScreen() {
       setBrandNotice("Unable to choose or save that Platform media right now.");
     } finally {
       setBrandBusyAssetType(null);
+    }
+  };
+
+  const handleReviewPlatformBrandAsset = async (
+    asset: PlatformBrandAsset,
+    action: PlatformBrandReviewAction,
+  ) => {
+    const reason = brandReviewReason.trim();
+    if ((action === "reject" || action === "archive") && reason.length < 6) {
+      setBrandNotice("Add a short review reason before rejecting or archiving a Platform asset.");
+      return;
+    }
+
+    setBrandReviewBusyAssetId(`${asset.id}:${action}`);
+    setBrandNotice(null);
+    try {
+      await reviewPlatformBrandAsset(
+        asset.id,
+        action,
+        action === "approve" ? reason || "Approved for public Platform display." : reason,
+      );
+      setBrandReviewReason("");
+      await loadPlatformBranding();
+      await loadPlatformBrandReviewQueue();
+      setBrandNotice(
+        action === "approve"
+          ? "Platform asset approved. It still appears publicly only after Publish Changes."
+          : action === "reject"
+            ? "Platform asset rejected with a review note."
+            : "Platform asset archived and removed from public eligibility.",
+      );
+    } catch {
+      setBrandNotice("Unable to update that review state. Check review access and try again.");
+    } finally {
+      setBrandReviewBusyAssetId(null);
     }
   };
 
@@ -2394,6 +2521,16 @@ export function ChannelStudioScreen() {
   const brandBackgroundStatus = formatPlatformBrandAssetStatus(platformBranding?.backgroundImage);
   const brandKitReady = !!(platformBranding?.avatar || platformBranding?.logo || profile?.avatarUrl);
   const brandHasPendingReview = (platformBranding?.assets ?? []).some((asset) => asset.moderationStatus === "pending_review");
+  const brandReviewAssets = (platformBranding?.assets ?? []).filter((asset) => (
+    !asset.deletedAt
+    && asset.assetState !== "archived"
+    && ["hero_image", "background_image", "avatar", "logo"].includes(asset.assetType)
+  ));
+  const brandPendingReviewCount = brandReviewAssets.filter((asset) => asset.moderationStatus === "pending_review").length;
+  const brandReviewQueuePendingCount = brandReviewQueueAssets.filter((asset) => asset.moderationStatus === "pending_review").length;
+  const brandReviewDisplayAssets = Array.from(
+    new Map([...brandReviewQueueAssets, ...brandReviewAssets].map((asset) => [asset.id, asset])).values(),
+  );
   const brandPublished = !!activeBrandProfile?.publishedAt;
   const brandStatusLabel = brandHasPendingReview ? "Needs review" : brandPublished ? "Published" : "Draft changes";
   const publishedVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
@@ -3042,6 +3179,71 @@ export function ChannelStudioScreen() {
       </View>
     </View>
   );
+
+  const renderBrandReviewAsset = (asset: PlatformBrandAsset) => {
+    const status = formatPlatformBrandAssetStatus(asset);
+    const approved = ["clean", "reported"].includes(asset.moderationStatus);
+    const busyPrefix = `${asset.id}:`;
+    const busy = brandReviewBusyAssetId?.startsWith(busyPrefix) ?? false;
+    const approveBusy = brandReviewBusyAssetId === `${asset.id}:approve`;
+    const rejectBusy = brandReviewBusyAssetId === `${asset.id}:reject`;
+    const archiveBusy = brandReviewBusyAssetId === `${asset.id}:archive`;
+
+    return (
+      <View key={asset.id} style={styles.eventEmptyCard}>
+        <View style={styles.eventCardHeader}>
+          <View style={styles.eventCardCopy}>
+            <Text style={styles.eventEmptyTitle}>{formatPlatformBrandAssetTypeLabel(asset.assetType)}</Text>
+            <Text style={styles.eventCardMeta}>
+              {status}{asset.fileSizeBytes ? ` · ${formatPlatformBrandFileSize(asset.fileSizeBytes)}` : ""}
+            </Text>
+          </View>
+          {renderStudioStatusPill(status, asset.moderationStatus === "pending_review" ? "warning" : "muted")}
+        </View>
+        <Text style={styles.eventEmptyBody}>{getBrandAssetReviewCopy(asset)}</Text>
+        {asset.moderationReason ? (
+          <Text style={styles.eventEmptyBody}>Review note: {asset.moderationReason}</Text>
+        ) : null}
+        <View style={styles.brandReviewActions}>
+          <TouchableOpacity
+            style={[styles.eventPrimaryButton, styles.brandReviewButton, (busy || approved) && styles.eventPrimaryButtonDisabled]}
+            activeOpacity={0.88}
+            disabled={busy || approved}
+            onPress={() => {
+              void handleReviewPlatformBrandAsset(asset, "approve");
+            }}
+          >
+            {approveBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.eventPrimaryButtonText}>Approve</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.eventSecondaryButton, styles.brandReviewButton, busy && styles.eventPrimaryButtonDisabled]}
+            activeOpacity={0.88}
+            disabled={busy}
+            onPress={() => {
+              void handleReviewPlatformBrandAsset(asset, "reject");
+            }}
+          >
+            {rejectBusy ? <ActivityIndicator color="#D9E0EE" /> : <Text style={styles.eventSecondaryButtonText}>Reject</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.eventSecondaryButton,
+              styles.brandReviewButton,
+              styles.brandReviewArchiveButton,
+              busy && styles.eventPrimaryButtonDisabled,
+            ]}
+            activeOpacity={0.88}
+            disabled={busy}
+            onPress={() => {
+              void handleReviewPlatformBrandAsset(asset, "archive");
+            }}
+          >
+            {archiveBusy ? <ActivityIndicator color="#D9E0EE" /> : <Text style={styles.eventSecondaryButtonText}>Archive</Text>}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
 
   const renderQuickActionCard = ({
     title,
@@ -3862,6 +4064,49 @@ export function ChannelStudioScreen() {
               </>
             ),
           })}
+
+          {canReviewPlatformBrandAssets ? renderBrandAccordion({
+            id: "review",
+            title: "Review and Publishing",
+            summary: "Approve or reject public-facing Platform assets.",
+            status: brandReviewQueueLoading
+              ? "Loading"
+              : (brandReviewQueuePendingCount || brandPendingReviewCount)
+                ? `${brandReviewQueuePendingCount || brandPendingReviewCount} waiting`
+                : "Ready",
+            statusTone: (brandReviewQueuePendingCount || brandPendingReviewCount) ? "warning" : "default",
+            children: (
+              <>
+                <Text style={styles.permissionCopy}>
+                  Approval means moderation-safe. Creators still publish Brand Studio changes before approved assets appear publicly.
+                </Text>
+                <TextInput
+                  style={[styles.input, styles.brandReviewReasonInput]}
+                  placeholder="Review reason for reject or archive"
+                  placeholderTextColor="#8d8d8d"
+                  value={brandReviewReason}
+                  onChangeText={setBrandReviewReason}
+                  multiline
+                  textAlignVertical="top"
+                />
+                {brandReviewQueueLoading ? (
+                  <View style={styles.loadingCard}>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.loadingText}>Loading review queue...</Text>
+                  </View>
+                ) : brandReviewDisplayAssets.length ? (
+                  <View style={styles.eventList}>
+                    {brandReviewDisplayAssets.map(renderBrandReviewAsset)}
+                  </View>
+                ) : (
+                  <View style={styles.eventEmptyCard}>
+                    <Text style={styles.eventEmptyTitle}>No brand assets waiting.</Text>
+                    <Text style={styles.eventEmptyBody}>Upload Hero Media, Background, Avatar, or Logo assets before review.</Text>
+                  </View>
+                )}
+              </>
+            ),
+          }) : null}
 
           {renderBrandAccordion({
             id: "preview",
@@ -5977,6 +6222,22 @@ const styles = StyleSheet.create({
   brandButtonRow: {
     flexDirection: "row",
     gap: 10,
+  },
+  brandReviewReasonInput: {
+    minHeight: 76,
+  },
+  brandReviewActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+  },
+  brandReviewButton: {
+    minWidth: 96,
+    flexGrow: 1,
+  },
+  brandReviewArchiveButton: {
+    borderColor: "rgba(242,194,91,0.34)",
   },
   brandKitGrid: {
     gap: 10,
