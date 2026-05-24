@@ -22,6 +22,7 @@ const assertNotIncludes = (source, needle, label) => {
 const brandAssetsMigration = read("supabase/migrations/202605240001_platform_brand_studio_assets.sql");
 const reviewMigration = read("supabase/migrations/202605240002_platform_brand_studio_review_workflow.sql");
 const reviewQueueMigration = read("supabase/migrations/202605240004_platform_brand_studio_review_queue_access.sql");
+const reviewContextMigration = read("supabase/migrations/202605240007_platform_brand_review_rpc_trigger_context.sql");
 const cleanupMigration = [
   read("supabase/migrations/202605240005_platform_brand_asset_cleanup_candidates.sql"),
   read("supabase/migrations/202605240006_platform_brand_cleanup_service_role_guard.sql"),
@@ -60,6 +61,8 @@ assertIncludes(reviewMigration, `if v_action in ('reject', 'archive') and length
 assertIncludes(reviewMigration, `insert into public."platform_brand_asset_review_events"`, "review event insert");
 assertIncludes(reviewMigration, `insert into public."platform_admin_audit_logs"`, "admin audit insert");
 assertIncludes(reviewMigration, `'fake_approval', false`, "no fake approval audit marker");
+assertIncludes(reviewContextMigration, `set_config('app.platform_brand_review_context', 'review_platform_brand_asset', true)`, "review RPC trigger context set");
+assertIncludes(reviewContextMigration, `v_review_context <> 'review_platform_brand_asset'`, "asset trigger context gate");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('reports_review')`, "review queue reports access");
 assertIncludes(channelSettings, `canReviewPlatformBrandAssets ? renderBrandAccordion({`, "review accordion role gate");

@@ -13,6 +13,7 @@
     "proof:watch-party-seat-request": "node ./scripts/proof-watch-party-seat-request.mjs",
     "proof:live-stage-seat-approval": "node ./scripts/proof-live-stage-seat-approval.mjs",
     "proof:brand-review-account": "node ./scripts/create-brand-review-proof-account.mjs",
+    "proof:brand-review-account:revoke": "node ./scripts/revoke-brand-review-proof-account.mjs",
     "proof:checkpoint": "bash ./scripts/proof-checkpoint.sh",
     "proof:livekit-logcat": "bash ./scripts/livekit-proof-logcat.sh",
     "legal-site:build": "node ./public-site/legal-site/build.mjs",

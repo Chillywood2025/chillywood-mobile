@@ -116,6 +116,97 @@ async function upsertPermissionGrant(adminClient, input) {
   return data?.id ?? null;
 }
 
+async function upsertModeratorRole(adminClient, input) {
+  const { data: existing, error: existingError } = await adminClient
+    .from("platform_role_memberships")
+    .select("id,status")
+    .eq("role", "moderator")
+    .ilike("email", input.email)
+    .order("granted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existingError) throw existingError;
+
+  const payload = {
+    role: "moderator",
+    user_id: input.userId,
+    email: input.email,
+    status: "active",
+    notes: input.reason,
+    granted_by: "create-brand-review-proof-account",
+    granted_at: input.nowIso,
+    revoked_by: null,
+    revoked_at: null,
+    updated_at: input.nowIso,
+  };
+
+  if (existing?.id) {
+    const { error } = await adminClient
+      .from("platform_role_memberships")
+      .update(payload)
+      .eq("id", existing.id);
+    if (error) throw error;
+    return existing.id;
+  }
+
+  const { data, error } = await adminClient
+    .from("platform_role_memberships")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
+async function writeRoleAudit(adminClient, input) {
+  const roleAudit = await adminClient.from("platform_staff_role_audit").insert({
+    actor_user_id: "create-brand-review-proof-account",
+    actor_email: null,
+    actor_role: "system",
+    target_user_id: input.userId,
+    target_email: input.email,
+    action: "grant",
+    role: "moderator",
+    reason: input.reason,
+    metadata: {
+      brand_review_proof: true,
+      expires_at: input.expiresAt,
+      membership_id: input.membershipId,
+      broad_admin_role_granted: false,
+      owner_operator_granted: false,
+    },
+  });
+  if (roleAudit.error) throw roleAudit.error;
+
+  const adminAudit = await adminClient.from("platform_admin_audit_logs").insert({
+    actor_user_id: "create-brand-review-proof-account",
+    actor_email: null,
+    actor_role: "service_role_script",
+    action: "platform_brand_review_proof_moderator_role_granted",
+    action_category: "role",
+    target_type: "platform_role_membership",
+    target_id: String(input.membershipId ?? `${input.email}:moderator`),
+    target_user_id: input.userId,
+    target_channel_user_id: input.userId,
+    reason: input.reason,
+    severity: "notice",
+    before_state: null,
+    after_state: {
+      role: "moderator",
+      status: "active",
+      expires_at: input.expiresAt,
+    },
+    metadata: {
+      brand_review_proof: true,
+      membership_id: input.membershipId,
+      broad_admin_role_granted: false,
+      owner_operator_granted: false,
+      raw_password_logged: false,
+    },
+  });
+  if (adminAudit.error) throw adminAudit.error;
+}
+
 async function writeGrantAudit(adminClient, input) {
   const permissionAudit = await adminClient.from("platform_staff_permission_audit").insert({
     actor_user_id: "create-brand-review-proof-account",
@@ -195,7 +286,7 @@ async function main() {
   const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
   const nowIso = new Date().toISOString();
   const permissions = readPermissions();
-  const reason = `Temporary Brand Studio review proof account; expires ${expiresAt}.`;
+  const reason = `Temporary Brand Studio review proof account; revoke moderator role after proof; scoped permission expires ${expiresAt}.`;
   const credentialFile = String(process.env.BRAND_REVIEW_PROOF_ENV_FILE || ".env.brand-review-proof.local").trim();
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -234,6 +325,21 @@ async function main() {
 
   if (!user?.id) throw new Error("Proof account bootstrap did not return a valid user id.");
 
+  const membershipId = await upsertModeratorRole(adminClient, {
+    email,
+    userId: user.id,
+    reason,
+    expiresAt,
+    nowIso,
+  });
+  await writeRoleAudit(adminClient, {
+    email,
+    userId: user.id,
+    reason,
+    expiresAt,
+    membershipId,
+  });
+
   const grantIds = [];
   for (const permissionKey of permissions) {
     const grantId = await upsertPermissionGrant(adminClient, {
@@ -261,6 +367,7 @@ async function main() {
     `BRAND_REVIEW_PROOF_EMAIL=${email}`,
     `BRAND_REVIEW_PROOF_PASSWORD=${password}`,
     `BRAND_REVIEW_PROOF_USER_ID=${user.id}`,
+    `BRAND_REVIEW_PROOF_MODERATOR_MEMBERSHIP_ID=${membershipId ?? ""}`,
     `BRAND_REVIEW_PROOF_EXPIRES_AT=${expiresAt}`,
     `BRAND_REVIEW_PROOF_PERMISSIONS=${permissions.join(",")}`,
     "",
@@ -271,6 +378,7 @@ async function main() {
   console.log("Brand review proof account ready.");
   console.log(`Email: ${email}`);
   console.log(`User id: ${user.id}`);
+  console.log(`Moderator membership id: ${membershipId ?? "unknown"}`);
   console.log(`Permissions: ${permissions.join(", ")}`);
   console.log(`Grant ids: ${grantIds.join(", ")}`);
   console.log(`Expires at: ${expiresAt}`);
