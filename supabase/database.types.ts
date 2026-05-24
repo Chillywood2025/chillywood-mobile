@@ -5585,6 +5585,206 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_brand_assets: {
+        Row: {
+          asset_state: string
+          asset_type: string
+          created_at: string
+          deleted_at: string | null
+          duration_ms: number | null
+          file_size_bytes: number
+          height: number | null
+          id: string
+          mime_type: string
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_reason: string | null
+          moderation_status: string
+          original_file_name: string | null
+          owner_user_id: string
+          storage_bucket: string
+          storage_object_key: string
+          storage_path: string
+          storage_provider: string
+          updated_at: string
+          width: number | null
+        }
+        Insert: {
+          asset_state?: string
+          asset_type: string
+          created_at?: string
+          deleted_at?: string | null
+          duration_ms?: number | null
+          file_size_bytes?: number
+          height?: number | null
+          id?: string
+          mime_type: string
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          original_file_name?: string | null
+          owner_user_id: string
+          storage_bucket?: string
+          storage_object_key: string
+          storage_path: string
+          storage_provider?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Update: {
+          asset_state?: string
+          asset_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          duration_ms?: number | null
+          file_size_bytes?: number
+          height?: number | null
+          id?: string
+          mime_type?: string
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
+          original_file_name?: string | null
+          owner_user_id?: string
+          storage_bucket?: string
+          storage_object_key?: string
+          storage_path?: string
+          storage_provider?: string
+          updated_at?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
+      platform_brand_profiles: {
+        Row: {
+          accent_color: string
+          avatar_asset_id: string | null
+          background_fit_mode: string
+          background_focal_x: number
+          background_focal_y: number
+          background_image_asset_id: string | null
+          blur_strength: number
+          created_at: string
+          hero_crop_scale: number
+          hero_fit_mode: string
+          hero_focal_x: number
+          hero_focal_y: number
+          hero_image_asset_id: string | null
+          hero_poster_asset_id: string | null
+          hero_video_asset_id: string | null
+          logo_asset_id: string | null
+          overlay_strength: number
+          owner_user_id: string
+          published_at: string | null
+          spotlight_video_id: string | null
+          theme_preset: string
+          updated_at: string
+          watermark_asset_id: string | null
+        }
+        Insert: {
+          accent_color?: string
+          avatar_asset_id?: string | null
+          background_fit_mode?: string
+          background_focal_x?: number
+          background_focal_y?: number
+          background_image_asset_id?: string | null
+          blur_strength?: number
+          created_at?: string
+          hero_crop_scale?: number
+          hero_fit_mode?: string
+          hero_focal_x?: number
+          hero_focal_y?: number
+          hero_image_asset_id?: string | null
+          hero_poster_asset_id?: string | null
+          hero_video_asset_id?: string | null
+          logo_asset_id?: string | null
+          overlay_strength?: number
+          owner_user_id: string
+          published_at?: string | null
+          spotlight_video_id?: string | null
+          theme_preset?: string
+          updated_at?: string
+          watermark_asset_id?: string | null
+        }
+        Update: {
+          accent_color?: string
+          avatar_asset_id?: string | null
+          background_fit_mode?: string
+          background_focal_x?: number
+          background_focal_y?: number
+          background_image_asset_id?: string | null
+          blur_strength?: number
+          created_at?: string
+          hero_crop_scale?: number
+          hero_fit_mode?: string
+          hero_focal_x?: number
+          hero_focal_y?: number
+          hero_image_asset_id?: string | null
+          hero_poster_asset_id?: string | null
+          hero_video_asset_id?: string | null
+          logo_asset_id?: string | null
+          overlay_strength?: number
+          owner_user_id?: string
+          published_at?: string | null
+          spotlight_video_id?: string | null
+          theme_preset?: string
+          updated_at?: string
+          watermark_asset_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_brand_profiles_avatar_asset_id_fkey"
+            columns: ["avatar_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_background_image_asset_id_fkey"
+            columns: ["background_image_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_hero_image_asset_id_fkey"
+            columns: ["hero_image_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_hero_poster_asset_id_fkey"
+            columns: ["hero_poster_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_hero_video_asset_id_fkey"
+            columns: ["hero_video_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_logo_asset_id_fkey"
+            columns: ["logo_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_brand_profiles_watermark_asset_id_fkey"
+            columns: ["watermark_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           avatar_index: number
@@ -6489,6 +6689,33 @@ export type Database = {
           tagline: string
           user_id: string
           username: string
+        }[]
+      }
+      read_public_platform_brand_profile: {
+        Args: { profile_user_id: string }
+        Returns: {
+          accent_color: string
+          avatar_asset_id: string | null
+          background_fit_mode: string
+          background_focal_x: number
+          background_focal_y: number
+          background_image_asset_id: string | null
+          blur_strength: number
+          hero_crop_scale: number
+          hero_fit_mode: string
+          hero_focal_x: number
+          hero_focal_y: number
+          hero_image_asset_id: string | null
+          hero_poster_asset_id: string | null
+          hero_video_asset_id: string | null
+          logo_asset_id: string | null
+          overlay_strength: number
+          owner_user_id: string
+          published_at: string | null
+          spotlight_video_id: string | null
+          theme_preset: string
+          updated_at: string
+          watermark_asset_id: string | null
         }[]
       }
       record_creator_video_upload_usage: {

@@ -29,6 +29,11 @@ import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
 import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
+import {
+  readPublicPlatformBranding,
+  type PlatformBrandFitMode,
+  type PlatformBrandingBundle,
+} from "../../_lib/platformBranding";
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -57,6 +62,18 @@ const formatCountLabel = (value: number, singular: string, plural: string) => {
 const formatStatValue = (value: number | null) => {
   if (value === null) return "—";
   return String(Math.max(0, Math.floor(Number(value) || 0)));
+};
+
+const resolveBrandResizeMode = (value?: PlatformBrandFitMode | null) => {
+  if (value === "fit") return "contain";
+  if (value === "center") return "center";
+  return "cover";
+};
+
+const buildBrandOverlayColor = (strength?: number | null) => {
+  const parsed = Number(strength);
+  const alpha = Number.isFinite(parsed) ? Math.max(0.42, Math.min(0.84, parsed)) : 0.7;
+  return `rgba(3,6,12,${alpha})`;
 };
 
 const formatDate = (value?: string | null) => {
@@ -109,6 +126,7 @@ export default function PublicChannelScreen() {
   const [videos, setVideos] = useState<CreatorVideo[]>([]);
   const [events, setEvents] = useState<CreatorEventSummary[]>([]);
   const [commerceSurface, setCommerceSurface] = useState<CreatorMiniPlatformCommerceSurface | null>(null);
+  const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -127,6 +145,7 @@ export default function PublicChannelScreen() {
       setVideos([]);
       setEvents([]);
       setCommerceSurface(null);
+      setPlatformBranding(null);
 
       if (!routeUserId) {
         setLoadState("not_found");
@@ -162,10 +181,11 @@ export default function PublicChannelScreen() {
         return;
       }
 
-      const [publicVideos, publicEvents, nextCommerceSurface] = await Promise.all([
+      const [publicVideos, publicEvents, nextCommerceSurface, nextPlatformBranding] = await Promise.all([
         readCreatorVideos(routeUserId, { includeDrafts: false, limit: 24 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
+        readPublicPlatformBranding(routeUserId).catch(() => null),
       ]);
 
       if (!active) return;
@@ -173,6 +193,7 @@ export default function PublicChannelScreen() {
       setVideos(publicVideos);
       setEvents(publicEvents.filter((event) => event.isLiveNow || event.isUpcoming));
       setCommerceSurface(nextCommerceSurface);
+      setPlatformBranding(nextPlatformBranding);
       setLoadState("ready");
     };
 
@@ -209,6 +230,13 @@ export default function PublicChannelScreen() {
     }
     return cards;
   }, [featuredVideo, followerCount, liveNowEvents.length, upcomingEvents.length, videos.length]);
+  const brandHeroSource = platformBranding?.heroImage?.signedUrl || platformBranding?.heroPoster?.signedUrl || "";
+  const brandBackgroundSource = platformBranding?.backgroundImage?.signedUrl || "";
+  const brandAvatarSource = platformBranding?.avatar?.signedUrl || channel?.avatarUrl || "";
+  const brandLogoSource = platformBranding?.logo?.signedUrl || "";
+  const heroResizeMode = resolveBrandResizeMode(platformBranding?.profile.heroFitMode);
+  const backgroundResizeMode = resolveBrandResizeMode(platformBranding?.profile.backgroundFitMode);
+  const heroOverlayColor = buildBrandOverlayColor(platformBranding?.profile.overlayStrength);
 
   const aboutItems = useMemo(() => {
     if (!channel) return [];
@@ -250,7 +278,7 @@ export default function PublicChannelScreen() {
 
   const shareChannel = async () => {
     if (!channel?.id) {
-      Alert.alert("Share unavailable", "This channel is missing the identity needed to share it.");
+      Alert.alert("Share unavailable", "This Platform is missing the identity needed to share it.");
       return;
     }
 
@@ -273,7 +301,7 @@ export default function PublicChannelScreen() {
     if (!routeUserId || followBusy || isOwner) return;
 
     if (viewerFollowState === "signed_out") {
-      Alert.alert("Follow channel", "Sign in to follow this channel.");
+      Alert.alert("Follow Platform", "Sign in to follow this Platform.");
       return;
     }
 
@@ -289,13 +317,13 @@ export default function PublicChannelScreen() {
       }
 
       if (result.reason === "signed_out") {
-        Alert.alert("Follow channel", "Sign in to follow this channel.");
+        Alert.alert("Follow Platform", "Sign in to follow this Platform.");
         return;
       }
 
-      Alert.alert("Follow channel", "Unable to update this follow relationship right now.");
+      Alert.alert("Follow Platform", "Unable to update this follow relationship right now.");
     } catch {
-      Alert.alert("Follow channel", "Unable to update this follow relationship right now.");
+      Alert.alert("Follow Platform", "Unable to update this follow relationship right now.");
     } finally {
       setFollowBusy(false);
     }
@@ -304,7 +332,7 @@ export default function PublicChannelScreen() {
   const openReport = () => {
     if (!channel || isOwner) return;
     if (!viewerUserId) {
-      Alert.alert("Report channel", "Sign in to report this channel.");
+      Alert.alert("Report Platform", "Sign in to report this Platform.");
       return;
     }
     trackModerationActionUsed({
@@ -344,7 +372,7 @@ export default function PublicChannelScreen() {
       setReportVisible(false);
     } catch (error) {
       Alert.alert(
-        "Report channel",
+        "Report Platform",
         error instanceof Error && error.message
           ? error.message
           : "Unable to send this report right now.",
@@ -390,12 +418,19 @@ export default function PublicChannelScreen() {
 
     return (
       <View style={styles.hero}>
-        <ImageBackground source={SKYLINE_SOURCE} resizeMode="cover" style={styles.heroBackdrop}>
-          <View style={styles.heroOverlay} />
+        <ImageBackground
+          source={brandHeroSource ? { uri: brandHeroSource } : SKYLINE_SOURCE}
+          resizeMode={heroResizeMode}
+          style={styles.heroBackdrop}
+        >
+          <View style={[styles.heroOverlay, { backgroundColor: heroOverlayColor }]} />
           <View style={styles.heroContent}>
+            {brandLogoSource ? (
+              <Image source={{ uri: brandLogoSource }} style={styles.heroLogoMark} resizeMode="contain" />
+            ) : null}
             <View style={styles.avatarWrap}>
-              {channel.avatarUrl ? (
-                <Image source={{ uri: channel.avatarUrl }} style={styles.avatarImage} />
+              {brandAvatarSource ? (
+                <Image source={{ uri: brandAvatarSource }} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarInitial}>
                   {(channel.displayName || "U").slice(0, 1).toUpperCase()}
@@ -483,7 +518,7 @@ export default function PublicChannelScreen() {
         )}
         <View style={styles.mediaScrim} />
         <View style={styles.featuredMediaFooter}>
-          <Text style={styles.cardKicker}>Latest from this channel</Text>
+          <Text style={styles.cardKicker}>Latest from this Platform</Text>
           <Text style={styles.featuredCardTitle} numberOfLines={2}>{video.title}</Text>
         </View>
       </View>
@@ -700,6 +735,14 @@ export default function PublicChannelScreen() {
 
   return (
     <View style={styles.screen}>
+      {brandBackgroundSource ? (
+        <Image
+          source={{ uri: brandBackgroundSource }}
+          resizeMode={backgroundResizeMode}
+          style={styles.platformBackgroundImage}
+        />
+      ) : null}
+      {brandBackgroundSource ? <View style={styles.platformBackgroundScrim} /> : null}
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: 40 + safeAreaInsets.bottom }]}
         showsVerticalScrollIndicator={false}
@@ -716,8 +759,8 @@ export default function PublicChannelScreen() {
       </ScrollView>
       <ReportSheet
         visible={reportVisible}
-        title="Report channel"
-        description={channel ? `Send a safety report for ${channel.displayName}.` : "Send a safety report for this channel."}
+        title="Report Platform"
+        description={channel ? `Send a safety report for ${channel.displayName}.` : "Send a safety report for this Platform."}
         busy={reportBusy}
         onSubmit={submitChannelReport}
         onClose={() => {
@@ -733,6 +776,16 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#07080D",
+  },
+  platformBackgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    opacity: 0.42,
+  },
+  platformBackgroundScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(3,6,12,0.72)",
   },
   content: {
     paddingBottom: 40,
@@ -811,6 +864,15 @@ const styles = StyleSheet.create({
     paddingTop: 78,
     paddingBottom: 20,
     gap: 11,
+  },
+  heroLogoMark: {
+    position: "absolute",
+    top: 22,
+    right: 22,
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    backgroundColor: "rgba(6,9,16,0.62)",
   },
   avatarWrap: {
     width: 94,
