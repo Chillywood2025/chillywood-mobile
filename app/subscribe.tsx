@@ -1,18 +1,13 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ImageBackground, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import {
-  getRevenueCatProductionReadiness,
-  type RevenueCatProductionReadiness,
-} from "../_lib/revenuecat";
-import {
   getCachedMonetizationSnapshot,
   isPremiumPurchaseShellAvailable,
   openManageSubscriptionFlow,
-  PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE,
   purchaseMonetizationTarget,
   readMonetizationSnapshot,
   restoreMonetizationAccess,
@@ -21,39 +16,103 @@ import {
 } from "../_lib/monetization";
 import { useSession } from "../_lib/session";
 
-const buildStatusLabel = (snapshot: MonetizationSnapshot) => {
-  if (!snapshot.configuration.shouldConfigure) return "Premium setup is not enabled in this build.";
-  if (snapshot.status === "ready") return "Premium billing and entitlement checks are available.";
-  if (snapshot.status === "store_unavailable") return "Billing is unavailable on this device or account.";
-  if (snapshot.status === "partial") return "Premium setup is partially configured. Access checks stay cautious.";
-  return "Premium is unavailable right now.";
-};
+const FRIENDLY_UNAVAILABLE_MESSAGE =
+  "Premium purchases are temporarily unavailable while setup is being finalized.";
+const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 
-const buildOfferLabel = (snapshot: MonetizationSnapshot) => {
+const PREMIUM_UNLOCKS = [
+  "Creator video upload",
+  "Watch-Party Live from Player",
+  "Live Watch-Party hosting",
+  "Channel customization",
+  "Premium creator tools",
+];
+
+const buildPurchaseReady = (snapshot: MonetizationSnapshot) => {
   const target = snapshot.targets.premium_subscription;
-  if (target.hasEntitlement) return "Premium is already active for this account.";
-  if (target.offeringResolution === "fallback" && target.offeringAvailable && target.packageCount > 0) {
-    return "A fallback RevenueCat offer is available because the configured Premium offer is missing or empty.";
-  }
-  if (target.offeringAvailable && target.packageCount > 0) return "A Premium subscription offer is configured.";
-  if (snapshot.configuration.shouldConfigure) return "No Premium offer is available in the current store configuration.";
-  return snapshot.configuration.reason ?? "Store configuration is required before purchases can run.";
+  return isPremiumPurchaseShellAvailable()
+    && snapshot.configuration.shouldConfigure
+    && snapshot.canMakePayments
+    && target.offeringAvailable
+    && target.packageCount > 0;
 };
 
-const buildAndroidKeyLabel = (readiness: RevenueCatProductionReadiness) => (
-  readiness.androidProductionPublicKeyConfigured ? "Present" : "Missing"
-);
-
-const buildOfferSourceLabel = (snapshot: MonetizationSnapshot) => {
-  const target = snapshot.targets.premium_subscription;
-  if (target.offeringResolution === "fallback") {
-    return `Fallback offer${target.resolvedOfferingId ? `: ${target.resolvedOfferingId}` : ""}`;
-  }
-  if (target.offeringResolution === "configured" && target.resolvedOfferingId) {
-    return `Configured offer: ${target.resolvedOfferingId}`;
-  }
-  return `Configured offer missing: ${target.configuredOfferingId}`;
+const buildStatusSummary = (snapshot: MonetizationSnapshot) => {
+  const hasPremium = !!snapshot.targets.premium_subscription.hasEntitlement;
+  if (hasPremium) return "Premium is active on this account.";
+  return "Premium-only features stay locked until your account has an active Premium subscription.";
 };
+
+function PremiumAccordion({
+  id,
+  title,
+  summary,
+  expanded,
+  onToggle,
+  children,
+}: {
+  id: string;
+  title: string;
+  summary: string;
+  expanded: Record<string, boolean>;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}) {
+  const isOpen = !!expanded[id];
+
+  return (
+    <View style={styles.accordion}>
+      <TouchableOpacity
+        style={styles.accordionHeader}
+        activeOpacity={0.86}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isOpen }}
+        onPress={() => onToggle(id)}
+      >
+        <View style={styles.accordionCopy}>
+          <Text style={styles.accordionTitle}>{title}</Text>
+          <Text style={styles.accordionSummary}>{summary}</Text>
+        </View>
+        <Text style={styles.chevron}>{isOpen ? "⌄" : "›"}</Text>
+      </TouchableOpacity>
+      {isOpen ? <View style={styles.accordionBody}>{children}</View> : null}
+    </View>
+  );
+}
+
+function StatusLine({
+  label,
+  value,
+  body,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  body: string;
+  tone?: "default" | "muted" | "warning";
+}) {
+  return (
+    <View style={styles.statusLine}>
+      <View style={styles.statusLineCopy}>
+        <Text style={styles.statusLabel}>{label}</Text>
+        <Text style={styles.statusBody}>{body}</Text>
+      </View>
+      <View style={[
+        styles.statusPill,
+        tone === "muted" && styles.statusPillMuted,
+        tone === "warning" && styles.statusPillWarning,
+      ]}>
+        <Text style={[
+          styles.statusPillText,
+          tone === "muted" && styles.statusPillTextMuted,
+          tone === "warning" && styles.statusPillTextWarning,
+        ]}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export default function SubscribeScreen() {
   const router = useRouter();
@@ -65,6 +124,7 @@ export default function SubscribeScreen() {
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const unsubscribe = subscribeToMonetizationSnapshot(() => {
@@ -92,30 +152,23 @@ export default function SubscribeScreen() {
     void refreshSnapshot(false);
   }, [refreshSnapshot, sessionLoading]);
 
+  const toggleAccordion = useCallback((id: string) => {
+    setExpanded((current) => ({ ...current, [id]: !current[id] }));
+  }, []);
+
   const premiumTarget = snapshot.targets.premium_subscription;
   const hasPremium = !!premiumTarget.hasEntitlement;
-  const premiumPurchaseShellAvailable = isPremiumPurchaseShellAvailable();
-  const canPurchase = premiumPurchaseShellAvailable
-    && isSignedIn
-    && snapshot.configuration.shouldConfigure
-    && snapshot.canMakePayments
-    && premiumTarget.offeringAvailable
-    && premiumTarget.packageCount > 0
-    && !hasPremium;
-  const canRestore = premiumPurchaseShellAvailable && isSignedIn && snapshot.configuration.shouldConfigure;
-  const canManage = premiumPurchaseShellAvailable && isSignedIn && snapshot.configuration.shouldConfigure;
-
-  const statusLabel = useMemo(() => (
-    premiumPurchaseShellAvailable ? buildStatusLabel(snapshot) : PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE
-  ), [premiumPurchaseShellAvailable, snapshot]);
-  const offerLabel = useMemo(() => (
-    premiumPurchaseShellAvailable ? buildOfferLabel(snapshot) : "Premium offers are hidden while proof is rechecked."
-  ), [premiumPurchaseShellAvailable, snapshot]);
-  const revenueCatReadiness = getRevenueCatProductionReadiness();
-  const activeProductLabel = useMemo(() => {
-    if (!snapshot.activeProductIds.length) return "No active store product on this account.";
-    return snapshot.activeProductIds.join(", ");
-  }, [snapshot.activeProductIds]);
+  const purchaseReady = buildPurchaseReady(snapshot);
+  const canPurchase = isSignedIn && purchaseReady && !hasPremium;
+  const canRestore = isSignedIn && snapshot.configuration.shouldConfigure;
+  const canManage = isSignedIn && snapshot.configuration.shouldConfigure;
+  const busy = loading || purchaseBusy || restoreBusy || manageBusy;
+  const statusSummary = useMemo(() => buildStatusSummary(snapshot), [snapshot]);
+  const purchaseStatusLabel = purchaseReady || hasPremium ? "Available" : "Temporarily unavailable";
+  const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
+  const availabilitySummary = purchaseReady
+    ? "A verified store subscription is ready for this account."
+    : FRIENDLY_UNAVAILABLE_MESSAGE;
 
   const onSignIn = useCallback(() => {
     router.push({ pathname: "/(auth)/login", params: { redirectTo: "/subscribe" } });
@@ -128,12 +181,12 @@ export default function SubscribeScreen() {
     }
 
     if (!canPurchase) {
-      setNotice(snapshot.issues[0] ?? offerLabel);
+      setNotice(FRIENDLY_UNAVAILABLE_MESSAGE);
       return;
     }
 
     setPurchaseBusy(true);
-    setNotice("Opening the configured Premium offer...");
+    setNotice("Opening Premium...");
     trackEvent("premium_subscribe_purchase_requested", {
       source: "subscribe",
       snapshotStatus: snapshot.status,
@@ -145,14 +198,14 @@ export default function SubscribeScreen() {
         userId: user?.id ?? null,
         packageId: premiumTarget.recommendedPackageId,
       });
-      setNotice(result.message);
+      setNotice(result.ok ? result.message : FRIENDLY_UNAVAILABLE_MESSAGE);
       setSnapshot(result.snapshot);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Unable to start Premium purchase right now.");
+    } catch {
+      setNotice("Unable to start Premium purchase right now.");
     } finally {
       setPurchaseBusy(false);
     }
-  }, [canPurchase, isSignedIn, offerLabel, onSignIn, premiumTarget.recommendedPackageId, snapshot, user?.id]);
+  }, [canPurchase, isSignedIn, onSignIn, premiumTarget.recommendedPackageId, snapshot.status, user?.id]);
 
   const onRestore = useCallback(async () => {
     if (!isSignedIn) {
@@ -161,7 +214,7 @@ export default function SubscribeScreen() {
     }
 
     if (!canRestore) {
-      setNotice(snapshot.configuration.reason ?? "Restore purchases is unavailable in this build.");
+      setNotice("Restore purchases is temporarily unavailable while setup is being finalized.");
       return;
     }
 
@@ -174,14 +227,15 @@ export default function SubscribeScreen() {
 
     try {
       const result = await restoreMonetizationAccess({ userId: user?.id ?? null });
-      setNotice(result.message);
+      const restoredPremium = !!result.snapshot.targets.premium_subscription.hasEntitlement;
+      setNotice(restoredPremium ? "Purchases restored. Premium is active." : "Restore complete. Premium is not active.");
       setSnapshot(result.snapshot);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Unable to restore purchases right now.");
+    } catch {
+      setNotice("Unable to restore purchases right now.");
     } finally {
       setRestoreBusy(false);
     }
-  }, [canRestore, isSignedIn, onSignIn, snapshot.configuration.reason, snapshot.status, user?.id]);
+  }, [canRestore, isSignedIn, onSignIn, snapshot.status, user?.id]);
 
   const onManage = useCallback(async () => {
     if (!isSignedIn) {
@@ -190,7 +244,7 @@ export default function SubscribeScreen() {
     }
 
     if (!canManage) {
-      setNotice(snapshot.configuration.reason ?? "Subscription management is unavailable in this build.");
+      setNotice("Subscription management is temporarily unavailable while setup is being finalized.");
       return;
     }
 
@@ -201,22 +255,22 @@ export default function SubscribeScreen() {
     } finally {
       setManageBusy(false);
     }
-  }, [canManage, isSignedIn, onSignIn, snapshot.configuration.reason]);
-
-  const busy = loading || purchaseBusy || restoreBusy || manageBusy;
+  }, [canManage, isSignedIn, onSignIn]);
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[
-        styles.content,
-        {
-          paddingTop: Math.max(insets.top + 18, 28),
-          paddingBottom: Math.max(insets.bottom + 28, 34),
-        },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
+    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
+      <View style={styles.backgroundOverlay} />
+      <ScrollView
+        style={[styles.screen, { marginTop: insets.top }]}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: 18,
+            paddingBottom: Math.max(insets.bottom + 28, 34),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
@@ -227,10 +281,8 @@ export default function SubscribeScreen() {
 
       <View style={styles.heroCard}>
         <Text style={styles.heroKicker}>CHI&apos;LLYWOOD PREMIUM</Text>
-        <Text style={styles.heroTitle}>Premium keeps protected rooms and playback tied to your account.</Text>
-        <Text style={styles.heroBody}>
-          Chi&apos;llywood checks your signed-in account before unlocking Premium-only Watch-Party or playback surfaces. If store setup is unavailable, access stays locked.
-        </Text>
+        <Text style={styles.heroTitle}>{hasPremium ? "Premium is active." : "Premium is not active."}</Text>
+        <Text style={styles.heroBody}>{statusSummary}</Text>
       </View>
 
       {sessionLoading ? (
@@ -252,102 +304,51 @@ export default function SubscribeScreen() {
       ) : (
         <>
           <View style={styles.card}>
-            <Text style={styles.cardKicker}>ACCESS STATUS</Text>
-            <Text style={styles.cardTitle}>{hasPremium ? "Premium is active" : "Premium is not active"}</Text>
-            <Text style={styles.body}>{statusLabel}</Text>
-            {!premiumPurchaseShellAvailable ? (
-              <View style={styles.warningCard}>
-                <Text style={styles.warningLabel}>Proof hold</Text>
-                <Text style={styles.warningText}>
-                  {PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE} This does not grant Premium or fake access.
-                </Text>
-              </View>
-            ) : null}
-
-            <View style={styles.statusGrid}>
-              <View style={styles.statusTile}>
-                <Text style={styles.statusLabel}>Entitlement</Text>
-                <Text style={styles.statusValue}>{hasPremium ? "Active" : "Missing"}</Text>
-              </View>
-              <View style={styles.statusTile}>
-                <Text style={styles.statusLabel}>Store</Text>
-                <Text style={styles.statusValue}>{snapshot.canMakePayments ? "Available" : "Unavailable"}</Text>
-              </View>
-              <View style={styles.statusTile}>
-                <Text style={styles.statusLabel}>RevenueCat</Text>
-                <Text style={styles.statusValue}>{snapshot.configuration.shouldConfigure ? "Configured" : "Blocked"}</Text>
-              </View>
-              <View style={styles.statusTile}>
-                <Text style={styles.statusLabel}>Android key</Text>
-                <Text style={styles.statusValue}>{buildAndroidKeyLabel(revenueCatReadiness)}</Text>
-              </View>
-            </View>
-
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Offer readiness</Text>
-              <Text style={styles.infoText}>{offerLabel}</Text>
-            </View>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Offer source</Text>
-              <Text style={styles.infoText}>{buildOfferSourceLabel(snapshot)}</Text>
-            </View>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Active products</Text>
-              <Text style={styles.infoText}>{activeProductLabel}</Text>
-            </View>
-            {snapshot.issues.length ? (
-              <View style={styles.warningCard}>
-                <Text style={styles.warningLabel}>Setup note</Text>
-                <Text style={styles.warningText}>{snapshot.issues[0]}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {notice ? (
-            <View style={styles.noticeCard}>
-              <Text style={styles.noticeText}>{notice}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.card}>
-            <Text style={styles.cardKicker}>ACTIONS</Text>
-            <Text style={styles.cardTitle}>Purchase and restore</Text>
-            <Text style={styles.body}>
-              Purchase, restore, and manage actions stay disabled while Premium proof is being rechecked. Chi&apos;llywood will not unlock Premium from a local-only state.
-            </Text>
-            <TouchableOpacity
-              style={[styles.primaryButton, (!canPurchase || busy) && styles.primaryButtonDisabled]}
-              activeOpacity={0.88}
-              disabled={!canPurchase || busy}
-              onPress={onPurchase}
-            >
-              {purchaseBusy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryButtonText}>
-                  {hasPremium ? "Premium Active" : premiumPurchaseShellAvailable ? "Unlock Premium" : "Premium Proof Hold"}
-                </Text>
-              )}
-            </TouchableOpacity>
+            <Text style={styles.cardKicker}>ACCOUNT STATUS</Text>
+            <StatusLine
+              label="Premium status"
+              value={hasPremium ? "Active" : "Not active"}
+              body={statusSummary}
+              tone={hasPremium ? "default" : "muted"}
+            />
+            <StatusLine
+              label="Purchase status"
+              value={purchaseStatusLabel}
+              body={availabilitySummary}
+              tone={purchaseStatusTone}
+            />
 
             <View style={styles.actionRow}>
               <TouchableOpacity
-                style={[styles.secondaryButton, (!canRestore || busy) && styles.secondaryButtonDisabled]}
+                style={[styles.secondaryButton, busy && styles.secondaryButtonDisabled]}
                 activeOpacity={0.86}
-                disabled={!canRestore || busy}
+                disabled={busy}
                 onPress={onRestore}
               >
-                {restoreBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Restore</Text>}
+                {restoreBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Restore purchases</Text>}
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.secondaryButton, (!canManage || busy) && styles.secondaryButtonDisabled]}
-                activeOpacity={0.86}
-                disabled={!canManage || busy}
-                onPress={onManage}
-              >
-                {manageBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Manage</Text>}
-              </TouchableOpacity>
+              {canManage ? (
+                <TouchableOpacity
+                  style={[styles.secondaryButton, busy && styles.secondaryButtonDisabled]}
+                  activeOpacity={0.86}
+                  disabled={busy}
+                  onPress={onManage}
+                >
+                  {manageBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Manage subscription</Text>}
+                </TouchableOpacity>
+              ) : null}
             </View>
+
+            {canPurchase ? (
+              <TouchableOpacity
+                style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
+                activeOpacity={0.88}
+                disabled={busy}
+                onPress={onPurchase}
+              >
+                {purchaseBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Subscribe to Premium</Text>}
+              </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.ghostButton, loading && styles.secondaryButtonDisabled]}
@@ -357,19 +358,63 @@ export default function SubscribeScreen() {
                 void refreshSnapshot(true);
               }}
             >
-              <Text style={styles.ghostButtonText}>{loading ? "Checking..." : "Recheck Access"}</Text>
+              <Text style={styles.ghostButtonText}>{loading ? "Checking..." : "Recheck status"}</Text>
             </TouchableOpacity>
           </View>
+
+          {notice ? (
+            <View style={styles.noticeCard}>
+              <Text style={styles.noticeText}>{notice}</Text>
+            </View>
+          ) : null}
+
+          <PremiumAccordion
+            id="premium-unlocks"
+            title="What Premium unlocks"
+            summary="Creator, live, channel, and watch-party tools"
+            expanded={expanded}
+            onToggle={toggleAccordion}
+          >
+            {PREMIUM_UNLOCKS.map((item) => (
+              <View key={item} style={styles.unlockRow}>
+                <Text style={styles.unlockDot}>•</Text>
+                <Text style={styles.unlockText}>{item}</Text>
+              </View>
+            ))}
+          </PremiumAccordion>
+
+          {!hasPremium && !purchaseReady ? (
+            <PremiumAccordion
+              id="premium-unavailable"
+              title="Why can't I subscribe yet?"
+              summary="Premium setup is still being finalized"
+              expanded={expanded}
+              onToggle={toggleAccordion}
+            >
+              <Text style={styles.body}>
+                Premium setup is still being finalized. Access stays locked until a real store product and entitlement are verified.
+              </Text>
+            </PremiumAccordion>
+          ) : null}
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  background: {
     flex: 1,
     backgroundColor: "#06070B",
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(3,5,10,0.72)",
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: "transparent",
     paddingHorizontal: 18,
   },
   content: {
@@ -397,37 +442,37 @@ const styles = StyleSheet.create({
     width: 20,
   },
   heroCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.22)",
-    backgroundColor: "rgba(25,12,18,0.94)",
-    padding: 20,
-    gap: 10,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(16,18,25,0.96)",
+    padding: 18,
+    gap: 8,
   },
   heroKicker: {
     color: "#FFB8C5",
     fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 1.3,
+    letterSpacing: 1.2,
   },
   heroTitle: {
     color: "#FFFFFF",
-    fontSize: 28,
-    lineHeight: 33,
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: "900",
   },
   heroBody: {
     color: "#D8E1F3",
-    fontSize: 14,
+    fontSize: 13.5,
     lineHeight: 20,
     fontWeight: "600",
   },
   card: {
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(16,18,25,0.96)",
-    padding: 18,
+    padding: 16,
     gap: 12,
   },
   cardKicker: {
@@ -438,8 +483,8 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     color: "#F4F7FC",
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: "900",
   },
   body: {
@@ -448,88 +493,73 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: "600",
   },
-  statusGrid: {
+  statusLine: {
+    minHeight: 72,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  statusLineCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  statusLabel: {
+    color: "#F4F7FC",
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  statusBody: {
+    color: "#9CA7BA",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  statusPill: {
+    minHeight: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(112,211,166,0.26)",
+    backgroundColor: "rgba(112,211,166,0.12)",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusPillMuted: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  statusPillWarning: {
+    borderColor: "rgba(244,181,84,0.32)",
+    backgroundColor: "rgba(244,181,84,0.12)",
+  },
+  statusPillText: {
+    color: "#CFF7E3",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+  },
+  statusPillTextMuted: {
+    color: "#C4CEE2",
+  },
+  statusPillTextWarning: {
+    color: "#FFE0A8",
+  },
+  actionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
-  statusTile: {
-    flex: 1,
-    minWidth: "46%",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 13,
-    gap: 4,
-  },
-  statusLabel: {
-    color: "#8490A7",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  statusValue: {
-    color: "#F5F8FE",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  infoCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 13,
-    gap: 4,
-  },
-  infoLabel: {
-    color: "#8793AA",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  infoText: {
-    color: "#E8EEFB",
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "700",
-  },
-  warningCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.25)",
-    backgroundColor: "rgba(69,18,28,0.62)",
-    padding: 13,
-    gap: 4,
-  },
-  warningLabel: {
-    color: "#FFD4DD",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-  warningText: {
-    color: "#FFE8ED",
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "700",
-  },
-  noticeCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    padding: 14,
-  },
-  noticeText: {
-    color: "#F2F6FF",
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: "700",
-  },
   primaryButton: {
     minHeight: 48,
-    borderRadius: 15,
+    borderRadius: 14,
     backgroundColor: "#DC143C",
     alignItems: "center",
     justifyContent: "center",
@@ -543,13 +573,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
   },
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
   secondaryButton: {
     flex: 1,
-    minHeight: 44,
+    minWidth: 142,
+    minHeight: 46,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -577,5 +604,82 @@ const styles = StyleSheet.create({
     color: "#B9C4D8",
     fontSize: 13,
     fontWeight: "800",
+  },
+  noticeCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    padding: 14,
+  },
+  noticeText: {
+    color: "#F2F6FF",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+  },
+  accordion: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(15,17,24,0.95)",
+    overflow: "hidden",
+  },
+  accordionHeader: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+  },
+  accordionCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  accordionTitle: {
+    color: "#F6F8FE",
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "900",
+  },
+  accordionSummary: {
+    color: "#9EA9BC",
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  chevron: {
+    color: "#DCE4F2",
+    fontSize: 23,
+    lineHeight: 24,
+    fontWeight: "700",
+  },
+  accordionBody: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 9,
+  },
+  unlockRow: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  unlockDot: {
+    color: "#FFB8C5",
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  unlockText: {
+    flex: 1,
+    color: "#E7EDF8",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
   },
 });

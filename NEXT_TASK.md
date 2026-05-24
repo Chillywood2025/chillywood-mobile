@@ -1,16 +1,20 @@
 # NEXT TASK
 
-## Security Context Follow-Up Lane
+## Recommended UI Lane: Profile / Channel / Platform Studio Compression
 
-Security Request Context Backend Implementation, Event Link Expansion, Trusted Proxy Network Proof backend contract, release-runtime proxy routing, and Owner Security owner-session masked readout are implemented, remote-applied, Edge-deployed, Android-proved, and backed by a deployed Cloudflare Worker proxy. Remote migrations through `202605230005` are applied. The helper now verifies signed `x-chillywood-network-proof*` headers and ignores spoofable direct proxy IP headers. The Worker at `https://network-proof.chillywoodstream.com` strips spoofable incoming headers, signs masked/hash proof server-side, and forwards to the Supabase origin; Supabase and Cloudflare both have `CHILLYWOOD_NETWORK_PROOF_SECRET` configured. App runtime config now defaults `runtime.supabaseFunctionsUrl` to the proxy, rewrites Supabase `.functions.invoke` calls through it, and points default LiveKit token/media-storage function calls at it.
+The Settings and Premium UI/UX Compression Pass is implemented and Android-proved. The best next UI lane is to apply the same compact, production-facing treatment to Profile, Public Channel, and Platform Studio surfaces without changing backed visibility, upload, Premium, or creator behavior.
 
-True remaining gaps:
+Scope for the next lane:
 
-- Run Audit Explorer row-level owner/operator proof for a linked audit row with network proof. Owner Security owner-session proof is complete on physical Android `R5CR120QCBF`; it showed masked `/24` prefix, approximate city/region/country, ISP, `Verified network proof`, `Captured`, `signed_chillywood_proxy`, and a shortened context id without raw IP. Audit Explorer still needs a small manual proof that a linked row detail displays the same safe fields.
-- Add gateway/firewall policy if product wants to block direct Supabase Edge origin bypass entirely. Current app runtime routes intended function calls through `https://network-proof.chillywoodstream.com`, but direct Supabase Edge URLs remain technically reachable unless infrastructure blocks them, so high-risk proof-required actions must keep backend policy checks.
-- Add trusted Edge wrappers only where they can be proved for remaining direct SQL/public paths: public DMCA intake/counter-notice, public report intake, report admin actions currently called directly as SQL RPCs, SQL-only staff role/permission RPC request wrappers, publish/unpublish metadata actions outside `media-storage`, and premium override actions.
-- Add restricted chat abuse/security event linkage when a backed chat abuse report table/wrapper exists. Do not put security context on normal `chat_messages`, `watch_party_room_messages`, comment, reply, or room membership display rows.
-- Finish broader finance/revenue context capture for Stripe Connect account/sync/webhook, revenue-source import, provider usage/import/sync, and fraud review hooks without changing live-money behavior.
-- Add owner/operator-visible live proof that `livekit_token_request_audit` records success/denied token outcomes without storing token strings and without changing Watch-Party Live, Live Watch-Party, chat-call, or Premium behavior. A non-staff proof session produced a safe `400 invalid_body` denied response, but could not read the protected audit row, which is the correct access outcome for that account.
-- Keep public content tables free of raw IP: profiles, channels, videos, comments, replies, chat messages, room messages, and room memberships should link only through restricted abuse/security/audit events when needed.
-- Complete the prior Owner Security optional proof only if a safe staff-but-not-owner proof account is available: failed owner/admin access-attempt rows for staff-but-not-owner access. Regular non-staff denial and owner device trust/revoke audit proof are already complete.
+- Compress Profile settings/presentation areas into short grouped sections with rows, accordions, and concise summaries.
+- Compress Public Channel viewer/owner surfaces so public content, follow state, channel identity, and creator controls are easier to scan.
+- Compress Platform Studio sections where creator tools still read as long stacked panels.
+- Keep Profile, Channel, Platform Studio, Follow, Chi'lly Circle, and Subscribers conceptually separate.
+- Keep the Chi'llwood branded dark background where it supports readability, and keep all content below mobile safe areas.
+- Preserve all public/private/draft visibility behavior, creator upload behavior, Premium gates, RevenueCat logic, LiveKit behavior, Watch-Party behavior, admin behavior, auth/session behavior, and legal/support/account deletion links.
+
+Validation should include `npm run typecheck`, `npm run validate:runtime`, relevant guards, targeted no-fake-access/no-debug-copy greps, Android screenshots on `R5CR120QCBF`, and `git diff --check`.
+
+## Still-Open Non-UI Follow-Ups
+
+Security Request Context follow-ups from the previous checkpoint remain valid but are not part of the next UI lane: Audit Explorer row-level owner/operator proof for a linked network-proof row, gateway/firewall policy if product wants to block direct Supabase Edge origin bypass, and trusted Edge wrappers for remaining direct SQL/public intake paths.

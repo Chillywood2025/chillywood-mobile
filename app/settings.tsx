@@ -1,11 +1,12 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ActivityIndicator, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, ActivityIndicator, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import {
   getCachedMonetizationSnapshot,
+  isPremiumPurchaseShellAvailable,
   readMonetizationSnapshot,
   subscribeToMonetizationSnapshot,
 } from "../_lib/monetization";
@@ -39,6 +40,272 @@ import { supabase } from "../_lib/supabase";
 import { useSession } from "../_lib/session";
 import { readMyProfileVisibility, updateMyProfileVisibility } from "../_lib/userData";
 
+const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
+
+type NotificationPreferenceKey = keyof Omit<NotificationPreferenceSettings, "updatedAt">;
+
+type NotificationPreferenceItem = {
+  key: NotificationPreferenceKey;
+  label: string;
+  description: string;
+};
+
+type SettingsAccordionProps = {
+  id: string;
+  kicker?: string;
+  title: string;
+  summary: string;
+  value?: string;
+  expandedSections: Record<string, boolean>;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+};
+
+type SettingsRowProps = {
+  title: string;
+  subtitle?: string;
+  value?: string;
+  onPress?: () => void;
+  tone?: "default" | "muted" | "danger";
+  children?: React.ReactNode;
+};
+
+const NOTIFICATION_GROUPS: {
+  id: string;
+  title: string;
+  summary: string;
+  items: readonly NotificationPreferenceItem[];
+}[] = [
+  {
+    id: "notification-push",
+    title: "Push alerts",
+    summary: "Device push notifications and registration status",
+    items: [
+      {
+        key: "pushEnabled",
+        label: "Push alerts",
+        description: "Allow this device to receive Android push notifications.",
+      },
+    ],
+  },
+  {
+    id: "notification-activity",
+    title: "Activity alerts",
+    summary: "In-app activity and account updates",
+    items: [
+      {
+        key: "inAppEnabled",
+        label: "In-app activity",
+        description: "Keep recent activity visible in your Profile News Feed.",
+      },
+    ],
+  },
+  {
+    id: "notification-live",
+    title: "Live alerts",
+    summary: "Followed creators and Chi'lly Circle live sessions",
+    items: [
+      {
+        key: "followedCreatorLiveEnabled",
+        label: "Followed creators live",
+        description: "A followed creator starts an eligible public live session.",
+      },
+      {
+        key: "circleFriendLiveEnabled",
+        label: "Chi'lly Circle live",
+        description: "A mutual Chi'lly Circle connection starts an eligible public live session.",
+      },
+    ],
+  },
+  {
+    id: "notification-upload-event",
+    title: "Upload and event alerts",
+    summary: "Saved events, public uploads, and replays",
+    items: [
+      {
+        key: "eventStartsSoonEnabled",
+        label: "Events starting soon",
+        description: "A saved public event is about 15 minutes away.",
+      },
+      {
+        key: "publicUploadEnabled",
+        label: "Public uploads",
+        description: "A followed creator publishes a public rights-safe upload.",
+      },
+      {
+        key: "replayLaterEnabled",
+        label: "Replay later",
+        description: "An eligible saved replay becomes available.",
+      },
+    ],
+  },
+];
+
+const LEGAL_POLICY_DESCRIPTIONS: Record<string, string> = {
+  "account-deletion": "How to request account and data deletion.",
+  "community-guidelines": "Rules for safe participation across Chi'llywood.",
+  copyright: "Copyright reports, counter notices, and DMCA process.",
+  "creator-monetization": "Creator revenue disclaimers and monetization boundaries.",
+  "creator-rules": "Creator publishing and channel rules.",
+  "law-enforcement": "How legal requests are handled.",
+  "live-chat-rules": "Rules for live rooms, watch parties, and chat.",
+  "moderation-policy": "Moderation, enforcement, and appeal process.",
+  "premium-terms": "Subscription terms and Premium billing support.",
+  privacy: "How account, app, and provider data is handled.",
+  "support-help": "Support contact, account help, and safety routing.",
+  terms: "Core service terms for using Chi'llywood.",
+};
+
+const LEGAL_POLICY_CATEGORIES = [
+  {
+    id: "legal-core",
+    title: "Core policies",
+    summary: "Terms, privacy, and community rules",
+    slugs: ["terms", "privacy", "community-guidelines"],
+  },
+  {
+    id: "legal-creator-premium",
+    title: "Creator and Premium",
+    summary: "Creator terms, subscriptions, and monetization",
+    slugs: ["creator-rules", "premium-terms", "creator-monetization"],
+  },
+  {
+    id: "legal-safety",
+    title: "Safety and Enforcement",
+    summary: "Moderation, live rules, and copyright",
+    slugs: ["moderation-policy", "live-chat-rules", "copyright"],
+  },
+  {
+    id: "legal-account",
+    title: "Account and Support",
+    summary: "Support, account deletion, and legal requests",
+    slugs: ["support-help", "account-deletion", "law-enforcement"],
+  },
+] as const;
+
+function StatusPill({ label, tone = "default" }: { label: string; tone?: "default" | "muted" | "warning" | "danger" }) {
+  return (
+    <View style={[
+      styles.statusPill,
+      tone === "warning" && styles.statusPillWarning,
+      tone === "danger" && styles.statusPillDanger,
+      tone === "muted" && styles.statusPillMuted,
+    ]}>
+      <Text style={[
+        styles.statusPillText,
+        tone === "warning" && styles.statusPillTextWarning,
+        tone === "danger" && styles.statusPillTextDanger,
+        tone === "muted" && styles.statusPillTextMuted,
+      ]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function SettingsAccordion({
+  id,
+  kicker,
+  title,
+  summary,
+  value,
+  expandedSections,
+  onToggle,
+  children,
+}: SettingsAccordionProps) {
+  const isOpen = !!expandedSections[id];
+
+  return (
+    <View style={styles.groupCard}>
+      <TouchableOpacity
+        style={styles.groupHeader}
+        activeOpacity={0.86}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isOpen }}
+        onPress={() => onToggle(id)}
+      >
+        <View style={styles.groupCopy}>
+          {kicker ? <Text style={styles.groupKicker}>{kicker}</Text> : null}
+          <Text style={styles.groupTitle}>{title}</Text>
+          <Text style={styles.groupSummary}>{summary}</Text>
+        </View>
+        <View style={styles.groupRight}>
+          {value ? <StatusPill label={value} tone="muted" /> : null}
+          <Text style={styles.chevron}>{isOpen ? "⌄" : "›"}</Text>
+        </View>
+      </TouchableOpacity>
+      {isOpen ? <View style={styles.groupBody}>{children}</View> : null}
+    </View>
+  );
+}
+
+function InlineAccordion({
+  id,
+  title,
+  summary,
+  expandedSections,
+  onToggle,
+  children,
+}: Omit<SettingsAccordionProps, "kicker" | "value">) {
+  const isOpen = !!expandedSections[id];
+
+  return (
+    <View style={styles.inlineAccordion}>
+      <TouchableOpacity
+        style={styles.inlineAccordionHeader}
+        activeOpacity={0.86}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isOpen }}
+        onPress={() => onToggle(id)}
+      >
+        <View style={styles.inlineAccordionCopy}>
+          <Text style={styles.inlineAccordionTitle}>{title}</Text>
+          <Text style={styles.inlineAccordionSummary}>{summary}</Text>
+        </View>
+        <Text style={styles.inlineChevron}>{isOpen ? "⌄" : "›"}</Text>
+      </TouchableOpacity>
+      {isOpen ? <View style={styles.inlineAccordionBody}>{children}</View> : null}
+    </View>
+  );
+}
+
+function SettingsRow({ title, subtitle, value, onPress, tone = "default", children }: SettingsRowProps) {
+  const content = (
+    <>
+      <View style={styles.settingsRowMain}>
+        <View style={styles.settingsRowCopy}>
+          <Text style={[
+            styles.settingsRowTitle,
+            tone === "danger" && styles.settingsRowTitleDanger,
+            tone === "muted" && styles.settingsRowTitleMuted,
+          ]}>
+            {title}
+          </Text>
+          {subtitle ? <Text style={styles.settingsRowSubtitle}>{subtitle}</Text> : null}
+        </View>
+        {value ? <Text style={styles.settingsRowValue}>{value}</Text> : null}
+        {onPress ? <Text style={styles.rowChevron}>›</Text> : null}
+      </View>
+      {children ? <View style={styles.settingsRowChildren}>{children}</View> : null}
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        style={styles.settingsRow}
+        activeOpacity={0.86}
+        accessibilityRole="button"
+        onPress={onPress}
+      >
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return <View style={styles.settingsRow}>{content}</View>;
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -60,6 +327,7 @@ export default function SettingsScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
   const moderationAccess = useMemo(() => getModerationAccess({
     email: user?.email ?? null,
@@ -214,35 +482,37 @@ export default function SettingsScreen() {
     }
   }, [notificationSavingKey]);
 
-  const monetizationStatusLabel = useMemo(() => {
-    if (!monetizationSnapshot.configuration.shouldConfigure) return "Premium is not enabled on this build";
-    if (monetizationSnapshot.status === "ready") return "Premium can resolve on supported locked routes";
-    if (monetizationSnapshot.status === "store_unavailable") return "Premium billing is unavailable on this device";
-    if (monetizationSnapshot.status === "partial") return "Premium configuration is still being finalized";
-    return "Premium is not currently available";
-  }, [monetizationSnapshot.configuration.shouldConfigure, monetizationSnapshot.status]);
+  const toggleSection = useCallback((id: string) => {
+    setExpandedSections((current) => ({ ...current, [id]: !current[id] }));
+  }, []);
 
-  const planLabel = useMemo(() => (
-    monetizationSnapshot.targets.premium_subscription?.hasEntitlement ? "Premium is active on this account" : "No active Premium access on this account"
-  ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
+  const premiumTarget = monetizationSnapshot.targets.premium_subscription;
+  const hasPremium = !!premiumTarget?.hasEntitlement;
+  const premiumPurchaseAvailable = isPremiumPurchaseShellAvailable()
+    && monetizationSnapshot.configuration.shouldConfigure
+    && monetizationSnapshot.canMakePayments
+    && !!premiumTarget?.offeringAvailable
+    && (premiumTarget?.packageCount ?? 0) > 0;
+  const premiumStatusLabel = hasPremium ? "Active" : "Not active";
+  const premiumPurchaseLabel = premiumPurchaseAvailable ? "Available" : "Temporarily unavailable";
+  const premiumSummary = hasPremium
+    ? "Premium is active on this account."
+    : "Premium-only features stay locked until your account has an active Premium subscription.";
+  const premiumAvailabilitySummary = premiumPurchaseAvailable
+    ? "A real store subscription is ready for this account."
+    : "Premium purchases are temporarily unavailable while setup is being finalized.";
 
-  const entitlementsLabel = useMemo(() => (
-    monetizationSnapshot.targets.premium_subscription?.hasEntitlement
-      ? "This account already clears Premium-gated routes."
-      : "Premium-gated routes still need an active Premium entitlement."
-  ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
+  const pushStatusLabel = useMemo(() => {
+    if (pushRegistration?.status === "registered") return "Registered";
+    if (pushRegistration?.permissionState === "denied") return "Off";
+    return "Not registered";
+  }, [pushRegistration?.permissionState, pushRegistration?.status]);
 
-  const offeringsLabel = useMemo(() => {
-    if (monetizationSnapshot.currentOfferingId) return "A Premium offer is configured for supported unlock surfaces";
-    if (monetizationSnapshot.availableOfferingIds.length) return "Premium offer configuration is present for supported unlock surfaces";
-    return "No premium offer is currently available";
-  }, [monetizationSnapshot.availableOfferingIds, monetizationSnapshot.currentOfferingId]);
+  const profileVisibilityLabel = profileVisibilityLoading ? "Loading" : getProfileVisibilityLabel(profileVisibility);
 
-  const issueLabel = useMemo(() => (
-    monetizationSnapshot.targets.premium_subscription?.hasEntitlement
-      ? "Manage Premium opens the account-owned Premium surface for restore, subscription management, and rechecking entitlement truth."
-      : "Manage Premium opens the account-owned Premium surface. It will not grant access unless store billing and backend entitlement truth are active."
-  ), [monetizationSnapshot.targets.premium_subscription?.hasEntitlement]);
+  const legalPolicyBySlug = useMemo(() => (
+    new Map(LEGAL_POLICY_ROUTES.map((policy) => [policy.slug, policy]))
+  ), []);
 
   const onPressSignOut = async () => {
     if (signingOut) return;
@@ -500,6 +770,53 @@ export default function SettingsScreen() {
     router.push("/subscribe" as Parameters<typeof router.push>[0]);
   }, [monetizationSnapshot.status, monetizationSnapshot.targets.premium_subscription?.hasEntitlement, router]);
 
+  const renderNotificationToggle = useCallback((item: NotificationPreferenceItem) => {
+    if (!notificationPreferences) {
+      return (
+        <SettingsRow
+          key={item.key}
+          title={item.label}
+          subtitle="Refresh notification settings to edit this alert."
+          value="Loading"
+        />
+      );
+    }
+
+    const value = !!notificationPreferences[item.key];
+    return (
+      <View key={item.key} style={styles.preferenceRow}>
+        <View style={styles.preferenceTextWrap}>
+          <Text style={styles.preferenceLabel}>{item.label}</Text>
+          <Text style={styles.preferenceDescription}>{item.description}</Text>
+        </View>
+        <Switch
+          value={value}
+          disabled={!!notificationSavingKey}
+          onValueChange={(nextValue) => {
+            void onToggleNotificationPreference(item.key, nextValue);
+          }}
+          thumbColor={value ? "#FFE4EA" : "#A5AEC0"}
+          trackColor={{ false: "rgba(255,255,255,0.16)", true: "rgba(220,20,60,0.52)" }}
+        />
+      </View>
+    );
+  }, [notificationPreferences, notificationSavingKey, onToggleNotificationPreference]);
+
+  const renderLegalPolicyRow = useCallback((slug: string) => {
+    const policy = legalPolicyBySlug.get(slug);
+    if (!policy) return null;
+
+    return (
+      <SettingsRow
+        key={policy.slug}
+        title={policy.title}
+        subtitle={LEGAL_POLICY_DESCRIPTIONS[policy.slug] ?? policy.summary}
+        value="View policy"
+        onPress={() => onPressLegalPolicy(policy)}
+      />
+    );
+  }, [legalPolicyBySlug, onPressLegalPolicy]);
+
   if (isLoading) {
     return (
       <View style={styles.loadingWrap}>
@@ -510,17 +827,19 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[
-        styles.content,
-        {
-          paddingTop: Math.max(insets.top + 16, 24),
-          paddingBottom: Math.max(insets.bottom + 28, 28),
-        },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
+    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
+      <View style={styles.backgroundOverlay} />
+      <ScrollView
+        style={[styles.screen, { marginTop: insets.top }]}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: 16,
+            paddingBottom: Math.max(insets.bottom + 28, 28),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
@@ -529,15 +848,19 @@ export default function SettingsScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardKicker}>ACCOUNT</Text>
-        <Text style={styles.title}>Account</Text>
-        <Text style={styles.body}>
-          Keep sign-out and account-level access here. Public channel presentation still stays on your profile surface.
-        </Text>
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Signed in as</Text>
-          <Text style={styles.identityValue}>{String(user?.email ?? "Unknown account")}</Text>
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryHeader}>
+          <View style={styles.summaryCopy}>
+            <Text style={styles.cardKicker}>CONTROL CENTER</Text>
+            <Text style={styles.title}>Settings</Text>
+            <Text style={styles.body}>Signed in as {String(user?.email ?? "Unknown account")}.</Text>
+          </View>
+          {monetizationLoading || notificationLoading ? <ActivityIndicator color="#DC143C" size="small" /> : null}
+        </View>
+        <View style={styles.statusRow}>
+          <StatusPill label={`Premium ${premiumStatusLabel}`} tone={hasPremium ? "default" : "muted"} />
+          <StatusPill label={`Push ${pushStatusLabel}`} tone={pushStatusLabel === "Registered" ? "default" : "muted"} />
+          <StatusPill label={profileVisibilityLabel} tone="muted" />
         </View>
         <View style={styles.utilityRow}>
           <TouchableOpacity
@@ -551,20 +874,70 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressManageChannel}>
             <Text style={styles.utilityButtonText}>Channel Studio</Text>
           </TouchableOpacity>
-        </View>
-        {canOpenAdminDashboard ? (
-          <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressAdminDashboard}>
-            <Text style={styles.secondaryActionButtonText}>Admin Dashboard</Text>
+          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressManagePremium}>
+            <Text style={styles.utilityButtonText}>Manage Premium</Text>
           </TouchableOpacity>
-        ) : adminAccessLoading ? (
-          <Text style={styles.metaText}>Checking admin access...</Text>
-        ) : null}
-        <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressChillyCircle}>
-          <Text style={styles.secondaryActionButtonText}>{"Chi'lly Circle"}</Text>
-        </TouchableOpacity>
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Change password</Text>
-          <Text style={styles.statusNote}>Update the password for this signed-in account.</Text>
+        </View>
+      </View>
+
+      <SettingsAccordion
+        id="account"
+        kicker="ACCOUNT"
+        title="Account"
+        summary="Password, visibility, activity presentation, and logout"
+        value="Signed in"
+        expandedSections={expandedSections}
+        onToggle={toggleSection}
+      >
+        <InlineAccordion
+          id="account-privacy"
+          title="Profile visibility"
+          summary={`Current visibility: ${profileVisibilityLabel}`}
+          expandedSections={expandedSections}
+          onToggle={toggleSection}
+        >
+          <Text style={styles.statusNote}>
+            Choose who can see your full Profile posts, comments, attachments, and activity. Follow remains separate.
+          </Text>
+          <View style={styles.privacyOptionRow}>
+            {PROFILE_VISIBILITY_OPTIONS.map((option) => {
+              const active = profileVisibility === option.value;
+              const saving = profileVisibilitySaving === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.privacyOptionButton,
+                    active && styles.privacyOptionButtonActive,
+                    (profileVisibilityLoading || !!profileVisibilitySaving) && styles.utilityButtonDisabled,
+                  ]}
+                  activeOpacity={0.86}
+                  disabled={profileVisibilityLoading || !!profileVisibilitySaving}
+                  onPress={() => {
+                    void onPressProfileVisibility(option.value);
+                  }}
+                >
+                  {saving ? <ActivityIndicator color="#FFE4EA" size="small" /> : null}
+                  <Text style={[
+                    styles.privacyOptionButtonText,
+                    active && styles.privacyOptionButtonTextActive,
+                  ]}>
+                    {saving ? "Saving" : option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {profileVisibilityNotice ? <Text style={styles.metaText}>{profileVisibilityNotice}</Text> : null}
+        </InlineAccordion>
+
+        <InlineAccordion
+          id="account-password"
+          title="Password and security"
+          summary="Change the password for this signed-in account"
+          expandedSections={expandedSections}
+          onToggle={toggleSection}
+        >
           <TextInput
             style={styles.input}
             placeholder="New password"
@@ -608,78 +981,81 @@ export default function SettingsScreen() {
               : <Text style={styles.utilityButtonText}>Change Password</Text>}
           </TouchableOpacity>
           {passwordNotice ? <Text style={styles.metaText}>{passwordNotice}</Text> : null}
-        </View>
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Profile privacy</Text>
-          <Text style={styles.identityValue}>
-            {profileVisibilityLoading ? "Loading privacy" : getProfileVisibilityLabel(profileVisibility)}
-          </Text>
-          <Text style={styles.statusNote}>
-            Choose who can see your full Profile posts, comments, attachments, and activity. Follow remains separate.
-          </Text>
-          <View style={styles.privacyOptionRow}>
-            {PROFILE_VISIBILITY_OPTIONS.map((option) => {
-              const active = profileVisibility === option.value;
-              const saving = profileVisibilitySaving === option.value;
-              return (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.privacyOptionButton,
-                    active && styles.privacyOptionButtonActive,
-                    (profileVisibilityLoading || !!profileVisibilitySaving) && styles.utilityButtonDisabled,
-                  ]}
-                  activeOpacity={0.86}
-                  disabled={profileVisibilityLoading || !!profileVisibilitySaving}
-                  onPress={() => {
-                    void onPressProfileVisibility(option.value);
-                  }}
-                >
-                  {saving ? <ActivityIndicator color="#FFE4EA" size="small" /> : null}
-                  <Text style={[
-                    styles.privacyOptionButtonText,
-                    active && styles.privacyOptionButtonTextActive,
-                  ]}>
-                    {saving ? "Saving" : option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          {profileVisibilityNotice ? (
-            <Text style={styles.metaText}>{profileVisibilityNotice}</Text>
-          ) : null}
-        </View>
-        <TouchableOpacity
-          style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]}
-          activeOpacity={0.86}
-          onPress={onPressSignOut}
-          disabled={signingOut}
-          accessibilityRole="button"
-          accessibilityLabel="Log out"
-          testID="settings-logout-button"
+        </InlineAccordion>
+
+        <SettingsRow
+          title="Chi'lly Circle and activity visibility"
+          subtitle="Review your private circle and social activity surface."
+          value="Open"
+          onPress={onPressChillyCircle}
+        />
+        <SettingsRow
+          title="Public presentation"
+          subtitle="Profile and Channel Studio control how your public presence appears."
         >
-          <Text style={styles.signOutButtonText}>{signingOut ? "Logging out..." : "Log Out"}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.cardHeaderText}>
-            <Text style={styles.cardKicker}>NOTIFICATIONS</Text>
-            <Text style={styles.secondaryTitle}>Activity and Android alerts</Text>
+          <View style={styles.utilityRow}>
+            <TouchableOpacity
+              style={[styles.utilityButton, !user?.id && styles.utilityButtonDisabled]}
+              activeOpacity={0.86}
+              onPress={onPressOpenProfile}
+              disabled={!user?.id}
+            >
+              <Text style={styles.utilityButtonText}>Open Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressManageChannel}>
+              <Text style={styles.utilityButtonText}>Channel Studio</Text>
+            </TouchableOpacity>
           </View>
-          {notificationLoading ? <ActivityIndicator color="#DC143C" size="small" /> : null}
-        </View>
-        <Text style={styles.body}>
-          {"Choose which backed Chi'llywood activity can notify you. Private, blocked, ticketed, protected, or ineligible items stay silent."}
-        </Text>
+        </SettingsRow>
+        <SettingsRow title="Account actions" subtitle="Log out of this device when you are finished." tone="danger">
+          <TouchableOpacity
+            style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]}
+            activeOpacity={0.86}
+            onPress={onPressSignOut}
+            disabled={signingOut}
+            accessibilityRole="button"
+            accessibilityLabel="Log out"
+            testID="settings-logout-button"
+          >
+            <Text style={styles.signOutButtonText}>{signingOut ? "Logging out..." : "Log Out"}</Text>
+          </TouchableOpacity>
+        </SettingsRow>
+      </SettingsAccordion>
 
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Android push status</Text>
-          <Text style={styles.identityValue}>{pushRegistration?.message ?? "Register this Android device for production push alerts."}</Text>
+      <SettingsAccordion
+        id="profile-channel"
+        kicker="PROFILE"
+        title="Profile and Channel"
+        summary="Quick links for your public profile, creator tools, and circle"
+        expandedSections={expandedSections}
+        onToggle={toggleSection}
+      >
+        <SettingsRow title="Open Profile" subtitle="Review your public profile and profile feed." value="Open" onPress={onPressOpenProfile} />
+        <SettingsRow title="Channel Studio" subtitle="Manage channel presentation and creator tools." value="Open" onPress={onPressManageChannel} />
+        <SettingsRow title="Chi'lly Circle" subtitle="Open your private circle and activity surface." value="Open" onPress={onPressChillyCircle} />
+        {canOpenAdminDashboard ? (
+          <SettingsRow title="Admin Dashboard" subtitle="Available only for authorized staff accounts." value="Open" onPress={onPressAdminDashboard} />
+        ) : adminAccessLoading ? (
+          <SettingsRow title="Admin Dashboard" subtitle="Checking access for this account." value="Checking" />
+        ) : null}
+      </SettingsAccordion>
+
+      <SettingsAccordion
+        id="notifications"
+        kicker="ALERTS"
+        title="Notifications"
+        summary="Device push, activity, live, upload, and event alerts"
+        value={pushStatusLabel}
+        expandedSections={expandedSections}
+        onToggle={toggleSection}
+      >
+        <SettingsRow
+          title="Device push status"
+          subtitle={pushRegistration?.message ?? "Register this Android device for production push alerts."}
+          value={pushStatusLabel}
+        >
           {pushRegistration?.tokenFingerprint ? (
-            <Text style={styles.statusNote}>Device fingerprint {pushRegistration.tokenFingerprint}</Text>
+            <Text style={styles.metaText}>Device fingerprint {pushRegistration.tokenFingerprint}</Text>
           ) : null}
           <View style={styles.utilityRow}>
             <TouchableOpacity
@@ -704,119 +1080,49 @@ export default function SettingsScreen() {
               <Text style={styles.utilityButtonText}>Refresh</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SettingsRow>
+        {NOTIFICATION_GROUPS.map((group) => (
+          <InlineAccordion
+            key={group.id}
+            id={group.id}
+            title={group.title}
+            summary={group.summary}
+            expandedSections={expandedSections}
+            onToggle={toggleSection}
+          >
+            <View style={styles.preferenceList}>
+              {group.items.map(renderNotificationToggle)}
+            </View>
+          </InlineAccordion>
+        ))}
+      </SettingsAccordion>
 
-        {notificationPreferences ? (
-          <View style={styles.preferenceList}>
-            {[
-              ["pushEnabled", "Push alerts", "Allow this device to receive Android push notifications."],
-              ["inAppEnabled", "In-app activity", "Keep recent activity visible in your Profile News Feed."],
-              ["followedCreatorLiveEnabled", "Followed creators live", "A followed creator starts an eligible public live session."],
-              ["circleFriendLiveEnabled", "Chi'lly Circle live", "A mutual Chi'lly Circle connection starts an eligible public live session."],
-              ["eventStartsSoonEnabled", "Events starting soon", "A saved public event is about 15 minutes away."],
-              ["publicUploadEnabled", "Public uploads", "A followed creator publishes a public rights-safe upload."],
-              ["replayLaterEnabled", "Replay later", "An eligible saved replay becomes available."],
-            ].map(([key, label, description]) => {
-              const preferenceKey = key as keyof Omit<NotificationPreferenceSettings, "updatedAt">;
-              const value = !!notificationPreferences[preferenceKey];
-              return (
-                <View key={key} style={styles.preferenceRow}>
-                  <View style={styles.preferenceTextWrap}>
-                    <Text style={styles.preferenceLabel}>{label}</Text>
-                    <Text style={styles.preferenceDescription}>{description}</Text>
-                  </View>
-                  <Switch
-                    value={value}
-                    disabled={!!notificationSavingKey}
-                    onValueChange={(nextValue) => {
-                      void onToggleNotificationPreference(preferenceKey, nextValue);
-                    }}
-                    thumbColor={value ? "#FFE4EA" : "#A5AEC0"}
-                    trackColor={{ false: "rgba(255,255,255,0.16)", true: "rgba(220,20,60,0.52)" }}
-                  />
-                </View>
-              );
-            })}
-          </View>
-        ) : null}
-      </View>
+      <SettingsAccordion
+        id="privacy-safety"
+        kicker="PRIVACY"
+        title="Privacy and Safety"
+        summary="Visibility, community rules, copyright reports, and account help"
+        value={profileVisibilityLabel}
+        expandedSections={expandedSections}
+        onToggle={toggleSection}
+      >
+        <SettingsRow title="Profile visibility" subtitle="Change detailed visibility from the Account section." value={profileVisibilityLabel} />
+        <SettingsRow title="Community Guidelines" subtitle="Rules for safe participation." value="View policy" onPress={() => openLocalLegalRoute("/community-guidelines")} />
+        <SettingsRow title="Report Copyright" subtitle="Open the copyright report flow." value="Open" onPress={onPressCopyrightReport} />
+        <SettingsRow title="Account deletion" subtitle="Open account and data deletion policy." value="View policy" onPress={onPressAccountDeletion} />
+      </SettingsAccordion>
 
-      <View style={styles.card}>
-        <Text style={styles.cardKicker}>LEGAL & SUPPORT</Text>
-        <Text style={styles.secondaryTitle}>Legal-ready policy center</Text>
-        <Text style={styles.body}>
-          Open the full Chi&apos;llwood policies, request account deletion help, or contact support from one polished launch surface.
-        </Text>
-        <View style={styles.legalStatusCard}>
-          <Text style={styles.legalStatusLabel}>Production policy bundle</Text>
-          <Text style={styles.legalStatusValue}>Version 1.0 · Effective May 21, 2026</Text>
-          <Text style={styles.legalStatusBody}>
-            Full bundled policies are available in-app; public web links stay available where configured for store and browser review.
-          </Text>
-        </View>
-        <View style={styles.legalPolicyGrid}>
-          {LEGAL_POLICY_ROUTES.map((policy) => (
-            <TouchableOpacity
-              key={policy.slug}
-              style={styles.legalPolicyButton}
-              activeOpacity={0.86}
-              onPress={() => onPressLegalPolicy(policy)}
-            >
-              <Text style={styles.legalPolicyButtonTitle}>{policy.title}</Text>
-              <Text style={styles.legalPolicyButtonMeta}>{policy.wordCount.toLocaleString()} words</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <View style={styles.utilityRow}>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyrightReport}>
-            <Text style={styles.utilityButtonText}>Report Copyright</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCounterNotice}>
-            <Text style={styles.utilityButtonText}>Counter Notice</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupportContact}>
-            <Text style={styles.utilityButtonText}>Contact Support</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupportEmail}>
-            <Text style={styles.utilityButtonText}>Email Support</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressAccountDeletion}>
-          <Text style={styles.secondaryActionButtonText}>Open Account Deletion Policy</Text>
-        </TouchableOpacity>
-        <Text style={styles.metaText}>
-          Short Settings copy is only a launcher; the full bundled policy pages control where policy details are needed.
-        </Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardKicker}>PREMIUM ACCOUNT</Text>
-        <Text style={styles.secondaryTitle}>Premium access on this account</Text>
-        <Text style={styles.body}>
-          Settings shows the Premium status Chi&apos;llywood can verify for this signed-in account. Manage Premium opens restore, purchase, and subscription-management options when they are available.
-        </Text>
-
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Account status</Text>
-          <Text style={styles.identityValue}>{planLabel}</Text>
-        </View>
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Purchase readiness</Text>
-          <Text style={styles.identityValue}>{monetizationStatusLabel}</Text>
-        </View>
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Protected access</Text>
-          <Text style={styles.identityValue}>{entitlementsLabel}</Text>
-        </View>
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Offer readiness</Text>
-          <Text style={styles.identityValue}>{offeringsLabel}</Text>
-        </View>
-        <View style={styles.identityBlock}>
-          <Text style={styles.identityLabel}>Next step</Text>
-          <Text style={styles.statusNote}>{issueLabel}</Text>
-        </View>
-
+      <SettingsAccordion
+        id="premium"
+        kicker="PREMIUM"
+        title="Premium"
+        summary={premiumSummary}
+        value={premiumStatusLabel}
+        expandedSections={expandedSections}
+        onToggle={toggleSection}
+      >
+        <SettingsRow title="Premium status" subtitle={premiumSummary} value={premiumStatusLabel} />
+        <SettingsRow title="Purchase status" subtitle={premiumAvailabilitySummary} value={premiumPurchaseLabel} />
         <View style={styles.utilityRow}>
           <TouchableOpacity
             style={[styles.utilityButton, monetizationLoading && styles.utilityButtonDisabled]}
@@ -839,15 +1145,90 @@ export default function SettingsScreen() {
             <Text style={styles.utilityButtonText}>Manage Premium</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </ScrollView>
+      </SettingsAccordion>
+
+      <SettingsAccordion
+        id="legal-support"
+        kicker="LEGAL"
+        title="Legal and Support"
+        summary="Policies, support, copyright requests, and account deletion"
+        value="Version 1.0"
+        expandedSections={expandedSections}
+        onToggle={toggleSection}
+      >
+        <SettingsRow
+          title="Policy bundle"
+          subtitle="Version 1.0. Effective May 21, 2026."
+          value="In-app"
+        />
+        {LEGAL_POLICY_CATEGORIES.map((category) => (
+          <InlineAccordion
+            key={category.id}
+            id={category.id}
+            title={category.title}
+            summary={category.summary}
+            expandedSections={expandedSections}
+            onToggle={toggleSection}
+          >
+            {category.slugs.map(renderLegalPolicyRow)}
+          </InlineAccordion>
+        ))}
+        <InlineAccordion
+          id="legal-help-requests"
+          title="Help and Requests"
+          summary="Copyright, counter notice, support, email, and account deletion"
+          expandedSections={expandedSections}
+          onToggle={toggleSection}
+        >
+          <View style={styles.utilityRow}>
+            <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCopyrightReport}>
+              <Text style={styles.utilityButtonText}>Report Copyright</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressCounterNotice}>
+              <Text style={styles.utilityButtonText}>Counter Notice</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupportContact}>
+              <Text style={styles.utilityButtonText}>Contact Support</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.utilityButton} activeOpacity={0.86} onPress={onPressSupportEmail}>
+              <Text style={styles.utilityButtonText}>Email Support</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.86} onPress={onPressAccountDeletion}>
+            <Text style={styles.secondaryActionButtonText}>Open Account Deletion Policy</Text>
+          </TouchableOpacity>
+        </InlineAccordion>
+      </SettingsAccordion>
+
+      <SettingsAccordion
+        id="app-info"
+        kicker="APP"
+        title="App Info"
+        summary="Launch policy references and support routing"
+        expandedSections={expandedSections}
+        onToggle={toggleSection}
+      >
+        <SettingsRow title="Privacy Policy" subtitle="Open the bundled privacy policy." value="View policy" onPress={() => openLocalLegalRoute("/privacy")} />
+        <SettingsRow title="Terms of Use" subtitle="Open the bundled service terms." value="View policy" onPress={() => openLocalLegalRoute("/terms")} />
+        <SettingsRow title="Support" subtitle={`Contact ${legalConfig.supportEmail || LEGAL_SUPPORT_EMAIL} for help.`} value="Open" onPress={onPressSupportContact} />
+      </SettingsAccordion>
+      </ScrollView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  background: {
     flex: 1,
     backgroundColor: "#06070B",
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(3,5,10,0.72)",
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: "transparent",
     paddingHorizontal: 18,
   },
   content: {
@@ -1162,6 +1543,216 @@ const styles = StyleSheet.create({
     color: "#EAF0FF",
     fontSize: 11,
     fontWeight: "900",
+  },
+  summaryCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(16,18,25,0.96)",
+    padding: 16,
+    gap: 12,
+  },
+  summaryHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  summaryCopy: {
+    flex: 1,
+    gap: 6,
+  },
+  statusRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusPill: {
+    minHeight: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(112,211,166,0.26)",
+    backgroundColor: "rgba(112,211,166,0.12)",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusPillMuted: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  statusPillWarning: {
+    borderColor: "rgba(244,181,84,0.32)",
+    backgroundColor: "rgba(244,181,84,0.12)",
+  },
+  statusPillDanger: {
+    borderColor: "rgba(220,20,60,0.32)",
+    backgroundColor: "rgba(220,20,60,0.13)",
+  },
+  statusPillText: {
+    color: "#CFF7E3",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+  },
+  statusPillTextMuted: {
+    color: "#C4CEE2",
+  },
+  statusPillTextWarning: {
+    color: "#FFE0A8",
+  },
+  statusPillTextDanger: {
+    color: "#FFD4DD",
+  },
+  groupCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(15,17,24,0.95)",
+    overflow: "hidden",
+  },
+  groupHeader: {
+    minHeight: 74,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+  },
+  groupCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  groupKicker: {
+    color: "#7F8AA0",
+    fontSize: 9.5,
+    lineHeight: 13,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+  },
+  groupTitle: {
+    color: "#F6F8FE",
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  groupSummary: {
+    color: "#9EA9BC",
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  groupRight: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 6,
+  },
+  chevron: {
+    color: "#DCE4F2",
+    fontSize: 23,
+    lineHeight: 24,
+    fontWeight: "700",
+  },
+  groupBody: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  inlineAccordion: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 10,
+  },
+  inlineAccordionHeader: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  inlineAccordionCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  inlineAccordionTitle: {
+    color: "#F4F7FC",
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "900",
+  },
+  inlineAccordionSummary: {
+    color: "#9EA9BC",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  inlineChevron: {
+    color: "#C9D2E5",
+    fontSize: 21,
+    lineHeight: 22,
+    fontWeight: "700",
+  },
+  inlineAccordionBody: {
+    gap: 10,
+    paddingBottom: 4,
+  },
+  settingsRow: {
+    minHeight: 58,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 10,
+  },
+  settingsRowMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  settingsRowCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  settingsRowTitle: {
+    color: "#F4F7FC",
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  settingsRowTitleMuted: {
+    color: "#C2CBDB",
+  },
+  settingsRowTitleDanger: {
+    color: "#FFD4DD",
+  },
+  settingsRowSubtitle: {
+    color: "#9AA6BA",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  settingsRowValue: {
+    color: "#DDE6F8",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+    textAlign: "right",
+    flexShrink: 1,
+  },
+  rowChevron: {
+    color: "#D5DDEC",
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: "700",
+  },
+  settingsRowChildren: {
+    gap: 10,
   },
   secondaryActionButton: {
     minHeight: 46,

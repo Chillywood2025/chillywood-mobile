@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { countPolicyWords, type LegalPolicy } from "../../_lib/legalPolicies";
+import { type LegalPolicy } from "../../_lib/legalPolicies";
 
 type LegalPolicyViewerProps = {
   policy: LegalPolicy;
@@ -27,7 +27,6 @@ export function LegalPolicyViewer({ policy }: LegalPolicyViewerProps) {
     Object.fromEntries(policy.sections.map((section) => [section.heading, true])),
   );
   const normalizedQuery = normalize(query);
-  const wordCount = countPolicyWords(policy);
 
   const visibleSections = useMemo(() => {
     if (!normalizedQuery) return policy.sections;
@@ -60,10 +59,6 @@ export function LegalPolicyViewer({ policy }: LegalPolicyViewerProps) {
             <View style={[styles.metaTile, dark ? styles.metaTileDark : styles.metaTileLight]}>
               <Text style={[styles.metaLabel, dark ? styles.metaLabelDark : styles.metaLabelLight]}>Version</Text>
               <Text style={[styles.metaValue, dark ? styles.metaValueDark : styles.metaValueLight]}>{policy.version}</Text>
-            </View>
-            <View style={[styles.metaTile, dark ? styles.metaTileDark : styles.metaTileLight]}>
-              <Text style={[styles.metaLabel, dark ? styles.metaLabelDark : styles.metaLabelLight]}>Length</Text>
-              <Text style={[styles.metaValue, dark ? styles.metaValueDark : styles.metaValueLight]}>{wordCount.toLocaleString()} words</Text>
             </View>
           </View>
         </View>
@@ -384,4 +379,3 @@ const styles = StyleSheet.create({
     color: "#E5EAF3",
   },
 });
-
