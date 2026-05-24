@@ -28,10 +28,11 @@ Remote-applied migrations:
 - `202605240004_platform_brand_studio_review_queue_access.sql`: lets authorized owner/operator/moderation reviewers read pending brand assets and private storage objects for review while public reads remain limited to published moderation-safe assets.
 - `202605240005_platform_brand_asset_cleanup_candidates.sql`: service-role-only cleanup candidate helper for archived, terminal moderation, deleted, and old orphaned draft assets. It lists candidates only and never returns published or still-referenced assets.
 - `202605240006_platform_brand_cleanup_service_role_guard.sql`: hardens the cleanup helper with an explicit runtime service-role check so normal authenticated clients cannot call it.
+- `202605240007_platform_brand_review_rpc_trigger_context.sql`: lets the authorized `review_platform_brand_asset` RPC pass the safety-field trigger through a transaction-local review context while normal authenticated clients remain blocked from changing moderation fields directly.
 
 Uploads start as `draft` assets with `pending_review` moderation. Public reads require published state, moderation-safe status, and not-deleted assets.
 
-`supabase/database.types.ts` was regenerated from the linked schema on May 24, 2026 after `202605240005` applied. `202605240006` keeps the same RPC signature. Generated types include `platform_brand_asset_review_events`, `platform_brand_asset_public_safe`, `review_platform_brand_asset`, and `platform_brand_asset_cleanup_candidates`.
+`supabase/database.types.ts` was regenerated from the linked schema on May 24, 2026 after `202605240007` applied. Generated types include `platform_brand_asset_review_events`, `platform_brand_asset_public_safe`, `review_platform_brand_asset`, `platform_brand_asset_cleanup_candidates`, and the linked `graphql_public` schema block.
 
 ## Review Workflow
 
@@ -44,7 +45,7 @@ Uploads start as `draft` assets with `pending_review` moderation. Public reads r
 
 ## Proof Reviewer Bootstrap
 
-Use `npm run proof:brand-review-account` only with a local `SUPABASE_SERVICE_ROLE_KEY`. The script creates or updates one temporary Brand Studio review proof account, grants only scoped `content_moderation` by default, writes staff/admin audit rows for the grant, verifies sign-in through the anon client, and writes the generated password to `.env.brand-review-proof.local`. That local credential file is ignored by git through `.env*.local`.
+Use `npm run proof:brand-review-account` only with a local `SUPABASE_SERVICE_ROLE_KEY`. The script creates or updates one temporary Brand Studio review proof account, grants the required `moderator` staff role plus scoped `content_moderation` by default, writes staff/admin audit rows for the role and permission grants, verifies sign-in through the anon client, and writes the generated password to `.env.brand-review-proof.local`. It does not grant Owner, Operator/Admin, or broad admin permissions. That local credential file is ignored by git through `.env*.local`.
 
 Optional environment:
 
@@ -54,7 +55,28 @@ Optional environment:
 - `BRAND_REVIEW_PROOF_PERMISSIONS`: comma-separated scoped permissions. Only `content_moderation` and `reports_review` are allowed.
 - `BRAND_REVIEW_PROOF_ENV_FILE`: local credential output path. Defaults to `.env.brand-review-proof.local`.
 
-Do not commit proof credentials or service-role keys. Revoke or let the scoped grant expire after approve/reject/archive proof is complete.
+Do not commit proof credentials or service-role keys. Revoke the proof `moderator` role after approve/reject/archive proof is complete; the scoped permission grant also expires automatically. Use `npm run proof:brand-review-account:revoke` with the local service-role key to revoke the temporary moderator membership and scoped permission grants while writing role/permission/admin audit rows.
+
+## May 24, 2026 Happy-Path Proof
+
+Implementation commit: `4fc475d78ab4384c72939c276f7b9f988e1cbf54`.
+
+The Supabase CLI listed the existing project API keys for project `bmkkhihfbmsnnmcqkoly`; the service-role key was used only as a local shell variable and was not printed or committed.
+
+Backend proof passed with real repo image assets:
+
+- uploaded hero image, background image, avatar, and logo as draft/pending-review assets;
+- approved those four assets through the temporary scoped reviewer;
+- published the four approved assets through the creator path;
+- rejected one control hero asset, archived one control background asset, and left one control logo pending review;
+- verified `read_public_platform_brand_profile` returned exactly the four approved/published assets;
+- verified public table reads returned zero rejected, archived, or pending-control assets;
+- verified review events and immutable admin audit rows were written for approve, reject, and archive;
+- verified cleanup candidates include rejected/archived assets and exclude approved/published assets;
+- verified unsupported text upload was rejected by storage MIME policy;
+- revoked the temporary proof reviewer role/grant and verified review RPC access then fails with `brand_review_forbidden`.
+
+Proof summary was written outside the repo at `/tmp/chillywood-brand-review-happy-path-proof.json`. Android screenshots were captured on `R5CR120QCBF` outside the repo at `/tmp/chillywood-brand-review-closeout-20260524/`: Platform Studio launch, Brand Studio first view, public Platform preview with approved media, Hero Media published state, and grouped Brand Studio sections.
 
 ## Failure States
 
