@@ -19,6 +19,7 @@ type CreatorVideoCardProps = {
   busy?: boolean;
   onOpen: () => void;
   onEdit?: () => void;
+  onEditClip?: () => void;
   onToggleVisibility?: () => void;
   onDelete?: () => void;
   onShare?: () => void;
@@ -99,6 +100,7 @@ export function CreatorVideoCard({
   busy = false,
   onOpen,
   onEdit,
+  onEditClip,
   onToggleVisibility,
   onDelete,
   onShare,
@@ -189,6 +191,11 @@ export function CreatorVideoCard({
             {onEdit ? (
               <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={onEdit}>
                 <Text style={styles.secondaryActionText}>Edit</Text>
+              </TouchableOpacity>
+            ) : null}
+            {onEditClip ? (
+              <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={onEditClip}>
+                <Text style={styles.secondaryActionText}>Edit Clip</Text>
               </TouchableOpacity>
             ) : null}
             {onToggleVisibility ? (

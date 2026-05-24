@@ -598,6 +598,7 @@ export async function deleteCreatorVideo(
 
   const provider = normalizeMediaStorageProvider(video.storageProvider);
   const objectKey = toText(video.storageObjectKey) || toText(video.storagePath);
+  const thumbnailPath = toText(video.thumbStoragePath);
   if (provider === "s3" && objectKey) {
     await deleteStoredMediaObject({
       surfaceType: "creator_video",
@@ -606,8 +607,11 @@ export async function deleteCreatorVideo(
       objectKey,
       recordId: videoId,
     }).catch(() => undefined);
+    if (thumbnailPath) {
+      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([thumbnailPath]).catch(() => undefined);
+    }
   } else {
-    const paths = [toText(video.storagePath), toText(video.thumbStoragePath)].filter(Boolean);
+    const paths = [toText(video.storagePath), thumbnailPath].filter(Boolean);
     if (paths.length) {
       await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove(paths).catch(() => undefined);
     }

@@ -147,3 +147,7 @@ No automatic deletion job is implemented in this lane.
 - Do not expose raw object internals in normal creator UI.
 - Do not fake uploaded media, moderation approval, crop results, Premium state, hero video readiness, or public preview.
 - Do not change Premium gates, RevenueCat logic, LiveKit, Watch-Party behavior, creator-video upload/delete behavior, auth/session behavior, or admin role boundaries from Brand Studio work.
+
+## Clip Studio Touchpoint
+
+Clip Studio may preview a Platform brand mark only from an approved, published, not-deleted Brand Studio avatar, logo, or watermark asset. Pending, rejected, archived, deleted, and draft brand assets remain ineligible. Clip Studio does not burn the mark into video, does not enable watermark rendering globally, and does not change Player behavior.

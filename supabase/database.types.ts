@@ -938,6 +938,84 @@ export type Database = {
           },
         ]
       }
+      creator_clip_edits: {
+        Row: {
+          brand_asset_id: string | null
+          brand_mark_enabled: boolean
+          clip_format: string
+          cover_file_size_bytes: number | null
+          cover_mime_type: string | null
+          cover_storage_path: string | null
+          created_at: string
+          fit_mode: string
+          owner_user_id: string
+          template_preset: string
+          title_overlay_position: string
+          title_overlay_style: string
+          title_overlay_subtitle: string | null
+          title_overlay_text: string | null
+          trim_end_ms: number | null
+          trim_start_ms: number | null
+          updated_at: string
+          video_id: string
+        }
+        Insert: {
+          brand_asset_id?: string | null
+          brand_mark_enabled?: boolean
+          clip_format?: string
+          cover_file_size_bytes?: number | null
+          cover_mime_type?: string | null
+          cover_storage_path?: string | null
+          created_at?: string
+          fit_mode?: string
+          owner_user_id: string
+          template_preset?: string
+          title_overlay_position?: string
+          title_overlay_style?: string
+          title_overlay_subtitle?: string | null
+          title_overlay_text?: string | null
+          trim_end_ms?: number | null
+          trim_start_ms?: number | null
+          updated_at?: string
+          video_id: string
+        }
+        Update: {
+          brand_asset_id?: string | null
+          brand_mark_enabled?: boolean
+          clip_format?: string
+          cover_file_size_bytes?: number | null
+          cover_mime_type?: string | null
+          cover_storage_path?: string | null
+          created_at?: string
+          fit_mode?: string
+          owner_user_id?: string
+          template_preset?: string
+          title_overlay_position?: string
+          title_overlay_style?: string
+          title_overlay_subtitle?: string | null
+          title_overlay_text?: string | null
+          trim_end_ms?: number | null
+          trim_start_ms?: number | null
+          updated_at?: string
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_clip_edits_brand_asset_id_fkey"
+            columns: ["brand_asset_id"]
+            isOneToOne: false
+            referencedRelation: "platform_brand_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_clip_edits_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: true
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_content_prices: {
         Row: {
           content_id: string
