@@ -42,6 +42,20 @@ Uploads start as `draft` assets with `pending_review` moderation. Public reads r
 - Rejected, pending, hidden, removed, archived, deleted, and draft assets do not render publicly.
 - Review actions write `platform_brand_asset_review_events` and `platform_admin_audit_logs` when the audit table is present.
 
+## Proof Reviewer Bootstrap
+
+Use `npm run proof:brand-review-account` only with a local `SUPABASE_SERVICE_ROLE_KEY`. The script creates or updates one temporary Brand Studio review proof account, grants only scoped `content_moderation` by default, writes staff/admin audit rows for the grant, verifies sign-in through the anon client, and writes the generated password to `.env.brand-review-proof.local`. That local credential file is ignored by git through `.env*.local`.
+
+Optional environment:
+
+- `BRAND_REVIEW_PROOF_EMAIL`: proof account email. Defaults to a generated `brand-review-proof-...@chillywood.test` address.
+- `BRAND_REVIEW_PROOF_PASSWORD`: fixed password if rotation is needed. Defaults to a generated strong password.
+- `BRAND_REVIEW_PROOF_TTL_HOURS`: grant TTL from 1 to 168 hours. Defaults to 24.
+- `BRAND_REVIEW_PROOF_PERMISSIONS`: comma-separated scoped permissions. Only `content_moderation` and `reports_review` are allowed.
+- `BRAND_REVIEW_PROOF_ENV_FILE`: local credential output path. Defaults to `.env.brand-review-proof.local`.
+
+Do not commit proof credentials or service-role keys. Revoke or let the scoped grant expire after approve/reject/archive proof is complete.
+
 ## Failure States
 
 Backed/source-checked friendly states:

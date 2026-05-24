@@ -7,6 +7,7 @@ The Platform Brand Studio review/failure-state closeout remote-applied the Brand
 Scope for the next lane:
 
 - Use a real owner/operator/moderation reviewer to approve and reject pending `platform_brand_assets` through `review_platform_brand_asset`.
+- If a temporary reviewer is needed, run `npm run proof:brand-review-account` with local `SUPABASE_SERVICE_ROLE_KEY`; it creates a scoped proof account and writes credentials to ignored `.env.brand-review-proof.local`.
 - Prove review events and immutable admin audit rows for approve, reject, and archive actions.
 - Prove a real approved + published hero image, background image, avatar, and logo render on `/channel/[userId]?preview=public`.
 - Prove rejected, archived, pending, and draft assets do not leak through `read_public_platform_brand_profile`, public table reads, or public Platform UI.
