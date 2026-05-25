@@ -2,6 +2,7 @@
 
 Date: 2026-05-06
 Updated: 2026-05-25 for Profile production UI, user-facing Platform terminology, Chi'lly Chat access, and Platform Studio upload separation.
+Updated: 2026-05-25 for Profile viewer-state Android proof closeout.
 
 This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Platform work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.
 
@@ -47,6 +48,8 @@ Public viewers may see identity, backed Follow/Following, Chi'lly Chat, View Pla
 Public viewers must not see owner controls, Platform Studio controls, upload, edit, publish, unpublish, delete, audience management, insights/analytics, drafts, private/hidden/removed videos, or admin controls.
 
 Profile post owners may create and delete their own text-only posts. Public viewers may read public clean Profile posts and report them where backed. Public viewers must not edit/delete posts or see draft/hidden/removed posts.
+
+Android `R5CR120QCBF` proof on 2026-05-25 confirmed the available runtime states: signed-out public Profile shows no owner controls/composer/Attach/delete/draft badges, signed-out Follow and Chi'lly Chat show sign-in-required handoffs, signed-out View Platform opens public Platform, signed-in non-owner official Profile proof shows no owner controls and routes Chi'lly Chat/View Platform safely, and owner regression keeps Platform Studio, Preview Platform public view, Chi'lly Chat inbox, Chi'lly Circle, Settings, composer, Attach, owner delete, and owner draft markers. True second-account and blocked/private runtime fixtures were not available and must remain explicit follow-up work rather than faked proof; static guards cover the current privacy/block path until that fixture lane runs. Validation passed with the requested type/runtime/Profile/payment/creator/Clip/Brand/Watch-Party/provider guard stack, targeted Profile grep/static proof, and diff whitespace checks.
 
 ## 6. Where Creator Uploads Appear
 

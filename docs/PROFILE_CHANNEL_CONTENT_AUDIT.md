@@ -12,6 +12,7 @@ Updated: 2026-04-29 for remote social-basics schema/RLS proof
 Updated: 2026-04-29 for Profile post engagement backing
 Updated: 2026-05-06 for pushed Public Channel and Platform Studio route truth
 Updated: 2026-05-25 for Profile production UI, Platform terminology, Chi'lly Chat routing, and Platform Studio upload separation
+Updated: 2026-05-25 for signed-out, signed-in non-owner, owner-regression, Platform routing, and Chi'lly Chat Android proof closeout
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -49,6 +50,22 @@ Current governing truth:
 - DEV/proof/debug copy is not added to normal Profile UI; any proof-looking strings in content should be treated as backed test data, not UI labels.
 
 Validation for the production UI pass includes the Profile production guard, the standard type/runtime/payment/creator/Clip/Brand/Watch-Party guard stack, targeted terminology/upload/chat/attachment/owner-control/draft-leak greps, Android `R5CR120QCBF` proof outside the repo at `/tmp/chillywood-profile-production-ui-proof-20260525/`, and diff whitespace checks.
+
+## 2026-05-25 Profile Viewer State Runtime Proof Closeout
+
+Android proof ran on `R5CR120QCBF`; screenshots and UI dumps are outside the repo at `/tmp/chillywood-profile-viewer-state-proof-20260525/`.
+
+Runtime proof results:
+
+- Signed-out public Profile opened after clearing app data. Owner controls, Platform Studio, Preview Platform, Settings, delete controls, owner draft/reported badges, composer, and Attach were absent.
+- Signed-out Follow produced the `Follow Platform` sign-in-required handoff. Signed-out Chi'lly Chat produced the sign-in-required Chi'lly Chat handoff without creating a fake thread.
+- Signed-out View Platform opened the public Platform route and did not show Platform Studio, owner controls, drafts, or delete controls.
+- Signed-in non-owner proof used the available authenticated account viewing the official Rachi Profile because no true second-account credential was available. The viewer saw no Platform Studio, Preview Platform, Settings, delete controls, draft/reported badges, composer, or Attach; Chi'lly Chat opened the backed official thread; View Platform opened public Platform, not Studio.
+- Owner regression after viewer tests confirmed Platform Studio, Preview Platform, Chi'lly Chat, Chi'lly Circle, Settings, composer, Attach, owner delete controls, owner draft badge, Platform Studio route, public Preview Platform, and owner Chat inbox still work.
+- Blocked/private runtime proof was not faked. Anonymous private-profile discovery was RLS-denied and `channel_audience_blocks` returned no client-visible fixtures. Static proof covers `resolveProfilePrivacyAccess`, `getChillyCircleStatus`, `readChillyCircleBlockOverride`, Profile `canViewFullProfile` gates, blocked Chi'lly Circle action guards, public Platform `isViewerBlocked`, and public Platform `includeDrafts: false`.
+- Validation passed with `npm run typecheck`, `npm run validate:runtime`, `npm run guard:refresh-policy`, `npm run guard:payment-rail-policy`, `npm run guard:creator-monetization-policy`, `npm run guard:stripe-connect-policy`, `npm run guard:vod-quality-policy`, `npm run guard:clip-studio-policy`, `npm run guard:platform-brand-studio-policy`, `npm run guard:watch-party-livekit`, `npm run guard:old-room-handling`, `npm run guard:provider-readiness-policy`, `npm run guard:profile-production-policy`, targeted Profile grep/static proof, `git diff --check`, and `git diff --cached --check`.
+
+Remaining limitation: a later safe-fixture lane should create or identify real second-account, blocked-viewer, and private-profile/private-Platform fixtures, then re-run Profile, Platform, Chi'lly Chat, Follow/Chi'lly Circle, and social interaction smoke without fake data or bypassed privacy.
 
 ## 2026-04-29 Profile / Channel Contract Addendum
 

@@ -4,6 +4,8 @@
 
 2026-05-25 terminology note: user-facing Profile copy must say `Platform` for the public creator/channel surface and `Platform Studio` for owner tools. The internal `/channel/[userId]` route and channel-named database/helpers remain stable unless a separate migration/route lane proves a safe rename.
 
+2026-05-25 viewer-state proof note: Android `R5CR120QCBF` proof closed the available signed-out, signed-in non-owner, owner-regression, public Platform routing, and Chi'lly Chat smoke. Signed-out public Profile has no owner controls/composer/Attach/delete/draft badges; Follow and Chi'lly Chat show sign-in-required handoffs; View Platform opens public Platform without Studio/drafts. Signed-in non-owner proof used the available authenticated account against the official Rachi Profile because no true second-account credential was available. Blocked/private runtime fixtures were unavailable and were not faked; the current source/guard proof relies on `resolveProfilePrivacyAccess`, `canViewFullProfile`, blocked Chi'lly Circle guards, public Platform `isViewerBlocked`, and `includeDrafts: false` until a safe-fixture lane runs. Validation passed with the requested type/runtime/Profile/payment/creator/Clip/Brand/Watch-Party/provider guard stack, targeted Profile grep/static proof, and diff whitespace checks.
+
 ## 1. Purpose And Scope
 This document translates the full profile/channel product blueprint into the current Chi'llywood repo structure.
 

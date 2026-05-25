@@ -1,32 +1,33 @@
 # NEXT TASK
 
-## Recommended Lane: Profile Social Runtime Proof And Privacy Smoke
+## Recommended Lane: Profile Blocked/Private Fixture And Social Interaction Runtime Proof
 
-The Profile Production UI/UX and Navigation Pass is now closed repo-side. Profile is the social identity hub, public creator/channel copy is user-facing `Platform`, and creator operations stay in Platform Studio.
+The Profile Viewer State Runtime Proof Closeout is now closed repo-side for the backed states available on `R5CR120QCBF`.
 
 Closed truth:
 
-- Owner Profile actions are `Platform Studio`, `Preview Platform`, `Chi'lly Chat`, `Chi'lly Circle`, and `Settings`.
-- Viewer Profile actions are Follow/Following or sign-in follow handoff, `Chi'lly Chat`, `View Platform`, Share/Profile safety actions where backed, and no owner controls.
-- The Profile header `Upload` CTA and Profile creator-video upload composer are removed.
-- Profile post attachments remain available for social posts and comments.
-- Creator video upload, Clip Studio, Brand Studio, readiness, and monetization operations remain in Platform Studio.
-- Profile tabs are `Posts`, `Platform`, `Live`, `Community`, and `About`.
-- The Posts composer, feed notices, items, and empty states now live in one connected feed surface.
-- Public Platform preview uses `/channel/[userId]?preview=public`, hides owner controls, and reads public creator videos with drafts excluded.
-- Chi'lly Chat entry uses the existing inbox/direct-thread helpers and respects sign-in, chat runtime control, and thread availability without fake messages or fake threads.
-- No Premium gate, LiveKit, Watch-Party Live, Live Watch-Party, Clip Studio, Brand Studio, monetization/provider readiness, creator upload/publish/delete backend behavior, public Platform renderer, comments/replies/likes/share/delete controls, social attachment validation, auth/session behavior, native config, migrations, or Supabase remote state changed.
+- Signed-out public Profile opens after app-data clear with no Platform Studio, Preview Platform, Settings, delete controls, owner draft/reported badges, composer, or Attach controls.
+- Signed-out Follow shows the sign-in-required `Follow Platform` handoff, and signed-out Chi'lly Chat shows the sign-in-required Chi'lly Chat handoff without creating a fake thread.
+- Signed-out View Platform opens the public Platform route, not Studio, and public Platform hides owner controls/drafts.
+- Signed-in non-owner proof used the available authenticated account viewing Rachi's official Profile: no owner controls, no delete controls, no draft/reported badges, no composer/Attach; Chi'lly Chat opened the backed official thread; View Platform opened public Platform.
+- Owner regression after viewer tests confirmed Platform Studio, Preview Platform, Chi'lly Chat, Chi'lly Circle, Settings, composer, Attach, owner delete, owner draft badge, Platform Studio route, public Preview Platform, and owner Chat inbox still work.
+- `npm run guard:profile-production-policy` now statically covers signed-out follow/chat handoffs, Profile privacy gates, owner/viewer action split, owner-only delete/draft/reported controls, blocked Chi'lly Circle guard, public Platform blocked-viewer guard, and public Platform draft exclusion.
+- Android screenshots/UI dumps live outside the repo at `/tmp/chillywood-profile-viewer-state-proof-20260525/`.
+- Validation passed with `npm run typecheck`, `npm run validate:runtime`, the refresh/payment/creator-monetization/Stripe Connect/VOD/Clip Studio/Platform Brand Studio/Watch-Party LiveKit/old-room/provider-readiness/Profile production guards, targeted Profile grep/static proof, `git diff --check`, and `git diff --cached --check`.
+
+Remaining limitations:
+
+- A true second-account credential was not available in the local proof setup, so signed-in non-owner proof used an existing authenticated account against the official Rachi Profile rather than logging into a separate viewer account.
+- Blocked/private runtime proof was not faked. Anonymous private-profile discovery was RLS-denied and `channel_audience_blocks` had zero client-visible rows. Static source proof covers the privacy/block path, but a safe fixture is still needed for full runtime proof.
+- Broader social interaction proof should still exercise post create, Attach picker, comment/reply, like, share, owner delete, and viewer no-delete in one current-build pass.
 
 Recommended next lane:
 
-- Runtime-smoke owner, signed-in viewer, signed-out viewer, and blocked/private Profile states on Android with real backed accounts or safe fixtures.
-- Prove viewers do not see Platform Studio, Settings, owner draft markers, post delete controls for someone else's posts, or private/draft creator content.
-- Prove signed-out users can view public Profile/Platform surfaces and are asked to sign in for follow/message/comment/post actions.
-- Prove blocked/private viewers cannot bypass chat, private activity, or private Platform content.
-- Recheck post create, attachment, comment, reply, like, share, and owner delete flows after the UI pass.
-- Capture proof outside the repo and keep any screenshots/logs out of git unless project policy changes.
-
-Validation should include `npm run guard:profile-production-policy`, the existing type/runtime/payment/creator/Clip/Brand/Watch-Party guard stack, targeted Profile terminology/upload/chat/attachment/owner-control/draft-leak greps, Android proof, and diff whitespace checks.
+- Create or identify safe test accounts for owner, second-account viewer, blocked viewer, and private-profile/private-Platform states.
+- Prove blocked/private runtime behavior on Android without bypassing RLS, block rules, privacy rules, or chat thread permissions.
+- Re-run signed-in second-account Profile, View Platform, Chi'lly Chat, Follow/Chi'lly Circle, comment/like/share, and viewer no-owner-control proof.
+- Recheck owner post create with Attach, comment/reply with Attach, Like/Share, owner Delete, and public/draft/private visibility boundaries.
+- Keep screenshots outside the repo, leave `artifacts/` and `supabase/.temp/` untouched, and keep creator-video upload/Clip Studio/Brand Studio/monetization/LiveKit behavior out of scope unless a regression is found.
 
 ## Still-Open Non-UI Follow-Ups
 
