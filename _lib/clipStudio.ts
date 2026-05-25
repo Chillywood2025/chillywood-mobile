@@ -12,11 +12,13 @@ import {
 import { supabase } from "./supabase";
 
 export const CLIP_STUDIO_COVER_MAX_BYTES = 20 * 1024 * 1024;
+export const CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH = 80;
+export const CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH = 140;
 
 export type ClipStudioFormat = "vertical_9_16" | "square_1_1" | "landscape_16_9";
 export type ClipStudioFitMode = "fill" | "fit" | "center";
 export type ClipStudioOverlayPosition = "top" | "center" | "bottom";
-export type ClipStudioOverlayStyle = "clean" | "bold" | "spotlight";
+export type ClipStudioOverlayStyle = "clean" | "bold" | "spotlight" | "trailer";
 export type ClipStudioTemplatePreset =
   | "trailer"
   | "highlight"
@@ -71,6 +73,16 @@ export type ClipStudioCoverUpload = {
   mimeType: string;
   fileSizeBytes: number;
   signedUrl: string;
+};
+
+export type ClipStudioTemplatePresetConfig = {
+  preset: ClipStudioTemplatePreset;
+  titleOverlayStyle: ClipStudioOverlayStyle;
+  titleOverlayPosition: ClipStudioOverlayPosition;
+  clipFormat: ClipStudioFormat;
+  fitMode: ClipStudioFitMode;
+  coverLayoutSuggestion: string;
+  formatSuggestion: string;
 };
 
 type ClipStudioEditRow = Tables<"creator_clip_edits">;
@@ -180,6 +192,18 @@ export const getClipStudioCoverValidationMessage = (file: CreatorVideoFile | nul
   return null;
 };
 
+export const getClipStudioTitleOverlayValidationMessage = (title: unknown, subtitle: unknown) => {
+  const normalizedTitle = toText(title);
+  const normalizedSubtitle = toText(subtitle);
+  if (normalizedTitle.length > CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH) {
+    return `Keep the title card title to ${CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH} characters or fewer.`;
+  }
+  if (normalizedSubtitle.length > CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH) {
+    return `Keep the title card subtitle to ${CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH} characters or fewer.`;
+  }
+  return null;
+};
+
 export const normalizeClipStudioFormat = (value: unknown): ClipStudioFormat => {
   const normalized = toText(value).toLowerCase();
   if (normalized === "square_1_1" || normalized === "landscape_16_9") return normalized;
@@ -200,7 +224,7 @@ export const normalizeClipStudioOverlayPosition = (value: unknown): ClipStudioOv
 
 export const normalizeClipStudioOverlayStyle = (value: unknown): ClipStudioOverlayStyle => {
   const normalized = toText(value).toLowerCase();
-  if (normalized === "bold" || normalized === "spotlight") return normalized;
+  if (normalized === "bold" || normalized === "spotlight" || normalized === "trailer") return normalized;
   return "clean";
 };
 
@@ -238,6 +262,74 @@ export const formatClipStudioTemplateLabel = (preset: ClipStudioTemplatePreset) 
       return "Platform Intro";
     default:
       return "Highlight";
+  }
+};
+
+export const getClipStudioTemplatePresetConfig = (
+  preset: unknown,
+): ClipStudioTemplatePresetConfig => {
+  const normalizedPreset = normalizeClipStudioTemplatePreset(preset);
+  switch (normalizedPreset) {
+    case "trailer":
+      return {
+        preset: "trailer",
+        titleOverlayStyle: "trailer",
+        titleOverlayPosition: "center",
+        clipFormat: "landscape_16_9",
+        fitMode: "fill",
+        coverLayoutSuggestion: "Centered title with a cinematic cover crop.",
+        formatSuggestion: "Landscape 16:9",
+      };
+    case "promo":
+      return {
+        preset: "promo",
+        titleOverlayStyle: "bold",
+        titleOverlayPosition: "bottom",
+        clipFormat: "vertical_9_16",
+        fitMode: "fill",
+        coverLayoutSuggestion: "Strong lower title over a phone-first cover.",
+        formatSuggestion: "Vertical 9:16",
+      };
+    case "event":
+      return {
+        preset: "event",
+        titleOverlayStyle: "spotlight",
+        titleOverlayPosition: "top",
+        clipFormat: "landscape_16_9",
+        fitMode: "fit",
+        coverLayoutSuggestion: "Top title with room for venue or stage visuals.",
+        formatSuggestion: "Landscape 16:9",
+      };
+    case "reaction":
+      return {
+        preset: "reaction",
+        titleOverlayStyle: "clean",
+        titleOverlayPosition: "bottom",
+        clipFormat: "vertical_9_16",
+        fitMode: "fit",
+        coverLayoutSuggestion: "Readable lower title while keeping the subject visible.",
+        formatSuggestion: "Vertical 9:16",
+      };
+    case "platform_intro":
+      return {
+        preset: "platform_intro",
+        titleOverlayStyle: "spotlight",
+        titleOverlayPosition: "center",
+        clipFormat: "square_1_1",
+        fitMode: "center",
+        coverLayoutSuggestion: "Centered title for a branded intro card.",
+        formatSuggestion: "Square 1:1",
+      };
+    default:
+      return {
+        preset: "highlight",
+        titleOverlayStyle: "clean",
+        titleOverlayPosition: "bottom",
+        clipFormat: "vertical_9_16",
+        fitMode: "fill",
+        coverLayoutSuggestion: "Simple lower title over the selected cover.",
+        formatSuggestion: "Vertical 9:16",
+      };
   }
 };
 
@@ -302,6 +394,23 @@ export async function readClipStudioEdit(videoId: string): Promise<ClipStudioEdi
 
   if (error || !data) return null;
   return parseClipEdit(data);
+}
+
+export async function readClipStudioEditsForVideos(videoIds: string[]): Promise<Map<string, ClipStudioEdit>> {
+  const normalizedVideoIds = Array.from(new Set(videoIds.map(toText).filter(Boolean))).slice(0, 100);
+  if (!normalizedVideoIds.length) return new Map();
+
+  const { data, error } = await supabase
+    .from("creator_clip_edits")
+    .select(CLIP_STUDIO_EDIT_SELECT)
+    .in("video_id", normalizedVideoIds)
+    .returns<ClipStudioEditRow[]>();
+
+  if (error || !data) return new Map();
+  return new Map(data.map((row) => {
+    const edit = parseClipEdit(row);
+    return [edit.videoId, edit];
+  }));
 }
 
 export async function saveClipStudioEdit(

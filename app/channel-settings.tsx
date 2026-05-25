@@ -99,6 +99,7 @@ import {
   getCreatorVideoTooLargeMessage,
   isCreatorVideoFileOverChannelMovieLimit,
   readCreatorVideoForOwner,
+  readCreatorVideoForPlayer,
   readCreatorVideos,
   updateCreatorVideoMetadata,
   uploadCreatorVideo,
@@ -107,15 +108,20 @@ import {
   type CreatorVideoVisibility,
 } from "../_lib/creatorVideos";
 import {
+  CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH,
+  CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH,
   formatClipStudioFormatLabel,
   formatClipStudioTemplateLabel,
   getClipStudioCoverValidationMessage,
+  getClipStudioTemplatePresetConfig,
+  getClipStudioTitleOverlayValidationMessage,
   normalizeClipStudioFitMode,
   normalizeClipStudioFormat,
   normalizeClipStudioOverlayPosition,
   normalizeClipStudioOverlayStyle,
   normalizeClipStudioTemplatePreset,
   readClipStudioEdit,
+  readClipStudioEditsForVideos,
   saveClipStudioEdit,
   uploadClipStudioCoverImage,
   type ClipStudioCoverUpload,
@@ -204,7 +210,7 @@ type ClipStudioSaveState =
   | "retrying";
 type StudioHomeSectionId = "create" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
 type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scenePresets" | "review" | "preview" | "defaults";
-type ClipStudioSectionId = "format" | "cover" | "title" | "template" | "brand" | "advanced";
+type ClipStudioSectionId = "media" | "cover" | "title" | "templates" | "format" | "brand" | "save" | "advanced";
 
 const createPayoutSetupRedirectUrl = (status: "return" | "refresh") => (
   `chillywoodmobile://channel-studio?tab=payouts&payout_setup=${status}`
@@ -237,6 +243,7 @@ type ClipStudioEditorState = {
   title: string;
   description: string;
   visibility: CreatorVideoVisibility;
+  videoPreviewUrl: string;
   clipFormat: ClipStudioFormat;
   fitMode: ClipStudioFitMode;
   trimStartMs: string;
@@ -281,6 +288,7 @@ const createEmptyClipStudioEditorState = (): ClipStudioEditorState => ({
   title: "",
   description: "",
   visibility: "draft",
+  videoPreviewUrl: "",
   clipFormat: "vertical_9_16",
   fitMode: "fill",
   trimStartMs: "",
@@ -699,24 +707,25 @@ const CLIP_FIT_OPTIONS: readonly { id: ClipStudioFitMode; label: string }[] = [
 ];
 
 const CLIP_OVERLAY_POSITION_OPTIONS: readonly { id: ClipStudioOverlayPosition; label: string }[] = [
-  { id: "bottom", label: "Bottom" },
-  { id: "center", label: "Center" },
   { id: "top", label: "Top" },
+  { id: "center", label: "Center" },
+  { id: "bottom", label: "Bottom" },
 ];
 
 const CLIP_OVERLAY_STYLE_OPTIONS: readonly { id: ClipStudioOverlayStyle; label: string }[] = [
   { id: "clean", label: "Clean" },
   { id: "bold", label: "Bold" },
   { id: "spotlight", label: "Spotlight" },
+  { id: "trailer", label: "Trailer" },
 ];
 
 const CLIP_TEMPLATE_OPTIONS: readonly { id: ClipStudioTemplatePreset; label: string; body: string }[] = [
-  { id: "trailer", label: "Trailer", body: "A short intro shape for promoting a longer video." },
-  { id: "highlight", label: "Highlight", body: "A direct, content-first preset." },
-  { id: "promo", label: "Promo", body: "Launch copy and stronger title placement." },
-  { id: "event", label: "Event", body: "A format for premieres, shows, and creator moments." },
-  { id: "reaction", label: "Reaction", body: "Simple title treatment for response clips." },
-  { id: "platform_intro", label: "Platform Intro", body: "A branded intro-style preset." },
+  { id: "trailer", label: "Trailer", body: "Trailer style, centered title, landscape frame." },
+  { id: "highlight", label: "Highlight", body: "Clean style, bottom title, vertical frame." },
+  { id: "promo", label: "Promo", body: "Bold style, bottom title, vertical frame." },
+  { id: "event", label: "Event", body: "Spotlight style, top title, landscape frame." },
+  { id: "reaction", label: "Reaction", body: "Clean style, bottom title, fit preview." },
+  { id: "platform_intro", label: "Platform Intro", body: "Spotlight style, centered title, square frame." },
 ];
 
 const BRAND_FIT_OPTIONS: readonly { id: PlatformBrandFitMode; label: string }[] = [
@@ -865,7 +874,7 @@ export function ChannelStudioScreen() {
     () => new Set<BrandStudioSectionId>(["hero"]),
   );
   const [expandedClipSections, setExpandedClipSections] = useState<ReadonlySet<ClipStudioSectionId>>(
-    () => new Set<ClipStudioSectionId>(["format", "cover"]),
+    () => new Set<ClipStudioSectionId>(["media", "title", "templates", "save"]),
   );
   const [contentStatusFilter, setContentStatusFilter] = useState<ContentStatusFilter>("all");
   const [contentSearchQuery, setContentSearchQuery] = useState("");
@@ -908,6 +917,7 @@ export function ChannelStudioScreen() {
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
+  const [creatorVideoClipEdits, setCreatorVideoClipEdits] = useState<Record<string, ClipStudioEdit>>({});
   const [creatorReminderSummaries, setCreatorReminderSummaries] = useState<CreatorEventReminderSummary[]>([]);
   const [audienceActionNotice, setAudienceActionNotice] = useState<string | null>(null);
   const [audienceActionResult, setAudienceActionResult] = useState<ChannelAudienceActionResult | null>(null);
@@ -1022,6 +1032,7 @@ export function ChannelStudioScreen() {
       setBrandDraft(null);
       setPlatformRoleMemberships([]);
       setBrandReviewQueueAssets([]);
+      setCreatorVideoClipEdits({});
       setLoading(false);
       return;
     }
@@ -1208,6 +1219,7 @@ export function ChannelStudioScreen() {
       setCreatorEvents([]);
       setCreatorReminderSummaries([]);
       setCreatorVideos([]);
+      setCreatorVideoClipEdits({});
       setEventsLoading(false);
       setVideosLoading(false);
       return () => {
@@ -1251,14 +1263,18 @@ export function ChannelStudioScreen() {
     setVideosLoading(true);
     setVideosLoadError(null);
     void readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 })
-      .then((videos) => {
+      .then(async (videos) => {
         if (!active) return;
         setCreatorVideos(videos);
+        const editMap = await readClipStudioEditsForVideos(videos.map((video) => video.id)).catch(() => new Map());
+        if (!active) return;
+        setCreatorVideoClipEdits(Object.fromEntries(editMap));
         setVideosLoading(false);
       })
       .catch(() => {
         if (!active) return;
         setCreatorVideos([]);
+        setCreatorVideoClipEdits({});
         setVideosLoadError("Unable to load creator videos right now. Check your connection and retry.");
         setVideosLoading(false);
       });
@@ -1295,6 +1311,19 @@ export function ChannelStudioScreen() {
     setClipEditor((prev) => ({ ...prev, ...patch }));
     markClipStudioDirty();
     setClipNotice(null);
+  };
+
+  const applyClipTemplatePreset = (preset: ClipStudioTemplatePreset) => {
+    const templateConfig = getClipStudioTemplatePresetConfig(preset);
+    updateClipEditor({
+      templatePreset: templateConfig.preset,
+      titleOverlayStyle: templateConfig.titleOverlayStyle,
+      titleOverlayPosition: templateConfig.titleOverlayPosition,
+      clipFormat: templateConfig.clipFormat,
+      fitMode: templateConfig.fitMode,
+    });
+    setExpandedClipSections((current) => new Set<ClipStudioSectionId>([...current, "title", "format"]));
+    setClipNotice(`${formatClipStudioTemplateLabel(templateConfig.preset)} template selected. Preview updated.`);
   };
 
   const resetClipStudio = () => {
@@ -1336,6 +1365,7 @@ export function ChannelStudioScreen() {
       title: video.title,
       description: video.description,
       visibility: video.visibility,
+      videoPreviewUrl: video.playbackUrl,
       coverStoragePath: video.thumbStoragePath || null,
       coverPreviewUrl: video.thumbnailUrl,
     });
@@ -1346,14 +1376,23 @@ export function ChannelStudioScreen() {
     setClipRightsAccepted(false);
     setClipNotice("Loading Clip Studio settings for this video...");
     openStudioTab("clip", { focus: "edit" });
-    void readClipStudioEdit(video.id)
-      .then((edit) => {
+    void Promise.all([
+      readClipStudioEdit(video.id),
+      readCreatorVideoForPlayer(video.id).catch(() => null),
+    ])
+      .then(([edit, previewVideo]) => {
         if (!edit) {
+          setClipEditor((current) => ({
+            ...current,
+            videoPreviewUrl: previewVideo?.playbackUrl || current.videoPreviewUrl,
+            coverPreviewUrl: previewVideo?.thumbnailUrl || current.coverPreviewUrl,
+          }));
           setClipNotice("Clip Studio is ready. Existing videos keep their public state until you save or publish.");
           return;
         }
         setClipEditor((current) => ({
           ...current,
+          videoPreviewUrl: previewVideo?.playbackUrl || current.videoPreviewUrl,
           clipFormat: edit.clipFormat,
           fitMode: edit.fitMode,
           trimStartMs: edit.trimStartMs == null ? "" : String(edit.trimStartMs),
@@ -1361,6 +1400,7 @@ export function ChannelStudioScreen() {
           coverStoragePath: edit.coverStoragePath,
           coverMimeType: edit.coverMimeType,
           coverFileSizeBytes: edit.coverFileSizeBytes,
+          coverPreviewUrl: previewVideo?.thumbnailUrl || current.coverPreviewUrl,
           titleOverlayText: edit.titleOverlayText,
           titleOverlaySubtitle: edit.titleOverlaySubtitle,
           titleOverlayPosition: edit.titleOverlayPosition,
@@ -1459,9 +1499,12 @@ export function ChannelStudioScreen() {
     try {
       const videos = await readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 });
       setCreatorVideos(videos);
+      const editMap = await readClipStudioEditsForVideos(videos.map((video) => video.id)).catch(() => new Map());
+      setCreatorVideoClipEdits(Object.fromEntries(editMap));
       return videos;
     } catch (error) {
       setCreatorVideos([]);
+      setCreatorVideoClipEdits({});
       setVideosLoadError(formatCreatorVideoUiError(
         error,
         "Unable to load creator videos right now. Check your connection and retry.",
@@ -1668,13 +1711,19 @@ export function ChannelStudioScreen() {
       }
 
       setSelectedClipVideoFile(pickedFile);
+      setSelectedClipCoverFile(null);
       setClipSavedVideoId(null);
       setClipSaveState("video_selected");
       setClipEditor((current) => ({
         ...current,
         editingVideoId: null,
+        videoPreviewUrl: "",
         title: current.title.trim() || (asset?.name ? asset.name.replace(/\.[^.]+$/, "") : current.title),
         visibility: "draft",
+        coverStoragePath: null,
+        coverMimeType: null,
+        coverFileSizeBytes: null,
+        coverPreviewUrl: "",
       }));
       setClipNotice("Video selected. Preview, cover, format, and metadata can be saved as a draft.");
       logClipStudioUi("clip_video_selected", {
@@ -2115,6 +2164,17 @@ export function ChannelStudioScreen() {
       return;
     }
 
+    const titleOverlayValidation = getClipStudioTitleOverlayValidationMessage(
+      clipEditor.titleOverlayText,
+      clipEditor.titleOverlaySubtitle,
+    );
+    if (titleOverlayValidation) {
+      setClipSaveState("save_failed");
+      setClipNotice(titleOverlayValidation);
+      logClipStudioUi("clip_save_draft_failed", { reason: "title_overlay_too_long", targetVisibility });
+      return;
+    }
+
     if (!clipEditor.editingVideoId && !uploadsEnabled) {
       setClipSaveState("save_failed");
       setClipNotice("Creator video uploads are temporarily paused. Existing clips can still be managed.");
@@ -2207,6 +2267,10 @@ export function ChannelStudioScreen() {
       if (!confirmedEdit) {
         throw new Error("Clip Studio settings could not be confirmed.");
       }
+      if (!intendedEditPatch || !clipStudioEditMatchesPatch(confirmedEdit, intendedEditPatch)) {
+        throw new Error("Clip Studio settings could not be confirmed.");
+      }
+      const confirmedPlayerVideo = await readCreatorVideoForPlayer(savedVideoId).catch(() => null);
       if (coverUpload && confirmedVideo.thumbStoragePath !== coverUpload.storagePath) {
         throw new Error("Clip Studio cover could not be confirmed.");
       }
@@ -2224,10 +2288,20 @@ export function ChannelStudioScreen() {
           title: confirmedVideo.title,
           description: confirmedVideo.description,
           visibility: confirmedVideo.visibility,
+          videoPreviewUrl: confirmedPlayerVideo?.playbackUrl || current.videoPreviewUrl,
+          clipFormat: confirmedEdit.clipFormat,
+          fitMode: confirmedEdit.fitMode,
+          trimStartMs: confirmedEdit.trimStartMs == null ? "" : String(confirmedEdit.trimStartMs),
+          trimEndMs: confirmedEdit.trimEndMs == null ? "" : String(confirmedEdit.trimEndMs),
           coverStoragePath: confirmedEdit.coverStoragePath ?? confirmedVideo.thumbStoragePath ?? null,
           coverMimeType: confirmedEdit.coverMimeType,
           coverFileSizeBytes: confirmedEdit.coverFileSizeBytes,
-          coverPreviewUrl: coverUpload?.signedUrl || confirmedVideo.thumbnailUrl || current.coverPreviewUrl,
+          coverPreviewUrl: coverUpload?.signedUrl || confirmedPlayerVideo?.thumbnailUrl || confirmedVideo.thumbnailUrl || current.coverPreviewUrl,
+          titleOverlayText: confirmedEdit.titleOverlayText,
+          titleOverlaySubtitle: confirmedEdit.titleOverlaySubtitle,
+          titleOverlayPosition: confirmedEdit.titleOverlayPosition,
+          titleOverlayStyle: confirmedEdit.titleOverlayStyle,
+          templatePreset: confirmedEdit.templatePreset,
           brandMarkEnabled: confirmedEdit.brandMarkEnabled,
           brandAssetId: confirmedEdit.brandAssetId,
         }));
@@ -2244,10 +2318,20 @@ export function ChannelStudioScreen() {
         title: confirmedVideo.title,
         description: confirmedVideo.description,
         visibility: confirmedVideo.visibility,
+        videoPreviewUrl: confirmedPlayerVideo?.playbackUrl || current.videoPreviewUrl,
+        clipFormat: confirmedEdit.clipFormat,
+        fitMode: confirmedEdit.fitMode,
+        trimStartMs: confirmedEdit.trimStartMs == null ? "" : String(confirmedEdit.trimStartMs),
+        trimEndMs: confirmedEdit.trimEndMs == null ? "" : String(confirmedEdit.trimEndMs),
         coverStoragePath: confirmedEdit.coverStoragePath ?? confirmedVideo.thumbStoragePath ?? null,
         coverMimeType: confirmedEdit.coverMimeType,
         coverFileSizeBytes: confirmedEdit.coverFileSizeBytes,
-        coverPreviewUrl: coverUpload?.signedUrl || confirmedVideo.thumbnailUrl || current.coverPreviewUrl,
+        coverPreviewUrl: coverUpload?.signedUrl || confirmedPlayerVideo?.thumbnailUrl || confirmedVideo.thumbnailUrl || current.coverPreviewUrl,
+        titleOverlayText: confirmedEdit.titleOverlayText,
+        titleOverlaySubtitle: confirmedEdit.titleOverlaySubtitle,
+        titleOverlayPosition: confirmedEdit.titleOverlayPosition,
+        titleOverlayStyle: confirmedEdit.titleOverlayStyle,
+        templatePreset: confirmedEdit.templatePreset,
         brandMarkEnabled: confirmedEdit.brandMarkEnabled,
         brandAssetId: confirmedEdit.brandAssetId,
       }));
@@ -2267,6 +2351,7 @@ export function ChannelStudioScreen() {
         const confirmedPartialVideo = await readCreatorVideoForOwner(savedVideoId).catch(() => null);
         if (confirmedPartialVideo) {
           const confirmedPartialEdit = await readClipStudioEdit(savedVideoId).catch(() => null);
+          const confirmedPartialPlayerVideo = await readCreatorVideoForPlayer(savedVideoId).catch(() => null);
           const refreshedVideos = await loadCreatorVideos().catch(() => []);
           const partialDraftIsVisible = refreshedVideos.some((video) => video.id === confirmedPartialVideo.id);
           const partialSaveConfirmed =
@@ -2283,10 +2368,20 @@ export function ChannelStudioScreen() {
               title: confirmedPartialVideo.title,
               description: confirmedPartialVideo.description,
               visibility: confirmedPartialVideo.visibility,
+              videoPreviewUrl: confirmedPartialPlayerVideo?.playbackUrl || current.videoPreviewUrl,
+              clipFormat: confirmedPartialEdit.clipFormat,
+              fitMode: confirmedPartialEdit.fitMode,
+              trimStartMs: confirmedPartialEdit.trimStartMs == null ? "" : String(confirmedPartialEdit.trimStartMs),
+              trimEndMs: confirmedPartialEdit.trimEndMs == null ? "" : String(confirmedPartialEdit.trimEndMs),
               coverStoragePath: confirmedPartialEdit.coverStoragePath ?? confirmedPartialVideo.thumbStoragePath ?? null,
               coverMimeType: confirmedPartialEdit.coverMimeType,
               coverFileSizeBytes: confirmedPartialEdit.coverFileSizeBytes,
-              coverPreviewUrl: confirmedPartialVideo.thumbnailUrl || current.coverPreviewUrl,
+              coverPreviewUrl: confirmedPartialPlayerVideo?.thumbnailUrl || confirmedPartialVideo.thumbnailUrl || current.coverPreviewUrl,
+              titleOverlayText: confirmedPartialEdit.titleOverlayText,
+              titleOverlaySubtitle: confirmedPartialEdit.titleOverlaySubtitle,
+              titleOverlayPosition: confirmedPartialEdit.titleOverlayPosition,
+              titleOverlayStyle: confirmedPartialEdit.titleOverlayStyle,
+              templatePreset: confirmedPartialEdit.templatePreset,
               brandMarkEnabled: confirmedPartialEdit.brandMarkEnabled,
               brandAssetId: confirmedPartialEdit.brandAssetId,
             }));
@@ -2310,10 +2405,20 @@ export function ChannelStudioScreen() {
             title: confirmedPartialVideo.title,
             description: confirmedPartialVideo.description,
             visibility: confirmedPartialVideo.visibility,
+            videoPreviewUrl: confirmedPartialPlayerVideo?.playbackUrl || current.videoPreviewUrl,
+            clipFormat: confirmedPartialEdit?.clipFormat ?? current.clipFormat,
+            fitMode: confirmedPartialEdit?.fitMode ?? current.fitMode,
+            trimStartMs: confirmedPartialEdit?.trimStartMs == null ? current.trimStartMs : String(confirmedPartialEdit.trimStartMs),
+            trimEndMs: confirmedPartialEdit?.trimEndMs == null ? current.trimEndMs : String(confirmedPartialEdit.trimEndMs),
             coverStoragePath: confirmedPartialEdit?.coverStoragePath ?? confirmedPartialVideo.thumbStoragePath ?? current.coverStoragePath,
             coverMimeType: confirmedPartialEdit?.coverMimeType ?? current.coverMimeType,
             coverFileSizeBytes: confirmedPartialEdit?.coverFileSizeBytes ?? current.coverFileSizeBytes,
-            coverPreviewUrl: confirmedPartialVideo.thumbnailUrl || current.coverPreviewUrl,
+            coverPreviewUrl: confirmedPartialPlayerVideo?.thumbnailUrl || confirmedPartialVideo.thumbnailUrl || current.coverPreviewUrl,
+            titleOverlayText: confirmedPartialEdit?.titleOverlayText ?? current.titleOverlayText,
+            titleOverlaySubtitle: confirmedPartialEdit?.titleOverlaySubtitle ?? current.titleOverlaySubtitle,
+            titleOverlayPosition: confirmedPartialEdit?.titleOverlayPosition ?? current.titleOverlayPosition,
+            titleOverlayStyle: confirmedPartialEdit?.titleOverlayStyle ?? current.titleOverlayStyle,
+            templatePreset: confirmedPartialEdit?.templatePreset ?? current.templatePreset,
             brandMarkEnabled: confirmedPartialEdit?.brandMarkEnabled ?? current.brandMarkEnabled,
             brandAssetId: confirmedPartialEdit?.brandAssetId ?? current.brandAssetId,
           }));
@@ -3467,6 +3572,7 @@ export function ChannelStudioScreen() {
               key={video.id}
               video={video}
               mode="owner"
+              clipEdit={creatorVideoClipEdits[video.id] ?? null}
               busy={videoSaving}
               onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
               onEdit={() => onEditVideo(video)}
@@ -3621,13 +3727,17 @@ export function ChannelStudioScreen() {
   };
 
   const renderClipStudioTab = () => {
-    const previewVideoUri = selectedClipVideoFile?.uri ?? "";
+    const previewVideoUri = selectedClipVideoFile?.uri || clipEditor.videoPreviewUrl || "";
     const coverPreviewUri = selectedClipCoverFile?.uri || clipEditor.coverPreviewUrl;
     const hasSavedVideo = !!clipEditor.editingVideoId;
     const hasWorkingVideo = !!previewVideoUri || hasSavedVideo;
     const clipTitleReady = clipEditor.title.trim().length > 0;
     const isClipVideoTooLarge = !!selectedClipVideoFile
       && isCreatorVideoFileOverChannelMovieLimit(selectedClipVideoFile, maxUploadSizeMb);
+    const titleOverlayValidation = getClipStudioTitleOverlayValidationMessage(
+      clipEditor.titleOverlayText,
+      clipEditor.titleOverlaySubtitle,
+    );
     const clipSaveDraftRequirement = !hasSavedVideo && !selectedClipVideoFile
       ? "Choose a video to enable Save Draft."
       : !clipTitleReady
@@ -3638,9 +3748,11 @@ export function ChannelStudioScreen() {
             ? "Confirm creator rights before saving this draft."
             : isClipVideoTooLarge
               ? getCreatorVideoTooLargeMessage(selectedClipVideoFile?.size, maxUploadSizeMb)
-              : clipEditor.brandMarkEnabled && !approvedClipBrandAsset
-                ? "Publish and approve a Platform avatar or logo before using the brand mark."
-                : "";
+              : titleOverlayValidation
+                ? titleOverlayValidation
+                : clipEditor.brandMarkEnabled && !approvedClipBrandAsset
+                  ? "Publish and approve a Platform avatar or logo before using the brand mark."
+                  : "";
     const clipPublishRequirement = !hasWorkingVideo
       ? "Choose a video before publishing."
       : !clipTitleReady
@@ -3649,7 +3761,9 @@ export function ChannelStudioScreen() {
           ? "Confirm creator rights before publishing."
           : isClipVideoTooLarge
             ? getCreatorVideoTooLargeMessage(selectedClipVideoFile?.size, maxUploadSizeMb)
-            : "";
+            : titleOverlayValidation
+              ? titleOverlayValidation
+              : "";
     const previewAspectRatio = clipEditor.clipFormat === "square_1_1"
       ? 1
       : clipEditor.clipFormat === "landscape_16_9"
@@ -3695,6 +3809,9 @@ export function ChannelStudioScreen() {
     const isPublishClipDisabled = clipSaving || !!clipPublishRequirement;
     const brandMarkReady = !!approvedClipBrandAsset;
     const selectedTemplateLabel = formatClipStudioTemplateLabel(clipEditor.templatePreset);
+    const selectedTemplateConfig = getClipStudioTemplatePresetConfig(clipEditor.templatePreset);
+    const titleOverlayCharacterCount = clipEditor.titleOverlayText.trim().length;
+    const subtitleOverlayCharacterCount = clipEditor.titleOverlaySubtitle.trim().length;
 
     return (
       <View style={[styles.panel, styles.clipStudioPanel]}>
@@ -3735,6 +3852,7 @@ export function ChannelStudioScreen() {
                   clipEditor.titleOverlayPosition === "center" && styles.clipTitleOverlayCenter,
                   clipEditor.titleOverlayStyle === "bold" && styles.clipTitleOverlayBold,
                   clipEditor.titleOverlayStyle === "spotlight" && styles.clipTitleOverlaySpotlight,
+                  clipEditor.titleOverlayStyle === "trailer" && styles.clipTitleOverlayTrailer,
                 ]}
               >
                 {clipEditor.titleOverlayText.trim() ? (
@@ -3750,6 +3868,7 @@ export function ChannelStudioScreen() {
             ) : null}
           </View>
           <View style={styles.clipPreviewCopy}>
+            <Text style={styles.clipPreviewKicker}>Preview</Text>
             <Text style={styles.brandPreviewTitle}>
               {hasWorkingVideo ? (clipEditor.title.trim() || "Untitled Clip") : "No video selected"}
             </Text>
@@ -3759,30 +3878,13 @@ export function ChannelStudioScreen() {
                 : "Choose a video from your device to preview a Clip Studio draft."}
             </Text>
             <Text style={styles.brandPreviewMeta}>
-              Preview crop is used for display. Final export editing is coming later.
+              {previewVideoUri
+                ? "Preview crop is used for display. Final export editing is coming later."
+                : coverPreviewUri
+                  ? "Preview is using the selected cover."
+                  : "Preview uses a neutral placeholder until media or cover is ready."}
             </Text>
           </View>
-        </View>
-
-        <View style={styles.studioHeaderActions}>
-          <TouchableOpacity
-            style={[styles.studioActionButton, styles.studioActionButtonPrimary, clipSaving && styles.studioActionButtonDisabled]}
-            activeOpacity={0.88}
-            onPress={onPickClipVideoFile}
-            disabled={clipSaving}
-          >
-            <Text style={styles.studioActionButtonText}>{selectedClipVideoFile || hasSavedVideo ? "Replace Video" : "Choose Video"}</Text>
-            <Text style={styles.studioActionButtonCopy}>Use safe picker</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.studioActionButton}
-            activeOpacity={0.88}
-            onPress={() => openStudioTab("home")}
-            disabled={clipSaving}
-          >
-            <Text style={styles.studioActionButtonText}>Back to Studio</Text>
-            <Text style={styles.studioActionButtonCopy}>Return home</Text>
-          </TouchableOpacity>
         </View>
 
         {clipNotice ? (
@@ -3812,13 +3914,180 @@ export function ChannelStudioScreen() {
             <Text style={styles.summaryBody}>{coverPreviewUri ? "Cover preview is staged." : "Upload a cover image when ready."}</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Export</Text>
-            <Text style={styles.summaryValue}>Deferred</Text>
-            <Text style={styles.summaryBody}>Advanced export tools stay locked until fully backed.</Text>
+            <Text style={styles.summaryLabel}>Public display</Text>
+            <Text style={styles.summaryValue}>Editor preview only</Text>
+            <Text style={styles.summaryBody}>Title cards and templates reopen here after Save Draft.</Text>
           </View>
         </View>
 
         <View style={styles.studioAccordionStack}>
+          {renderClipAccordion({
+            id: "media",
+            title: "Media",
+            summary: "Choose or replace the video source.",
+            status: selectedClipVideoFile ? "Selected" : hasSavedVideo ? "Saved" : "Needed",
+            statusTone: hasWorkingVideo ? "default" : "muted",
+            children: (
+              <>
+                <View style={styles.studioHeaderActions}>
+                  <TouchableOpacity
+                    style={[styles.studioActionButton, styles.studioActionButtonPrimary, clipSaving && styles.studioActionButtonDisabled]}
+                    activeOpacity={0.88}
+                    onPress={onPickClipVideoFile}
+                    disabled={clipSaving}
+                  >
+                    <Text style={styles.studioActionButtonText}>{selectedClipVideoFile || hasSavedVideo ? "Replace Video" : "Choose Video"}</Text>
+                    <Text style={styles.studioActionButtonCopy}>Open picker</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.studioActionButton}
+                    activeOpacity={0.88}
+                    onPress={() => openStudioTab("home")}
+                    disabled={clipSaving}
+                  >
+                    <Text style={styles.studioActionButtonText}>Back to Studio</Text>
+                    <Text style={styles.studioActionButtonCopy}>Return home</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.brandPreviewMeta}>
+                  {selectedClipVideoFile?.name || (hasSavedVideo ? "Using the saved creator video." : "Choose a video to start a draft.")}
+                </Text>
+              </>
+            ),
+          })}
+
+          {renderClipAccordion({
+            id: "cover",
+            title: "Cover Image",
+            summary: "Upload a private cover image for this creator video.",
+            status: coverPreviewUri ? "Selected" : "Optional",
+            statusTone: coverPreviewUri ? "default" : "muted",
+            children: (
+              <>
+                <TouchableOpacity
+                  style={[styles.eventSecondaryButton, clipSaving && styles.eventPrimaryButtonDisabled]}
+                  activeOpacity={0.86}
+                  onPress={onPickClipCoverFile}
+                  disabled={clipSaving}
+                >
+                  <Text style={styles.eventSecondaryButtonText}>{coverPreviewUri ? "Replace Cover Image" : "Choose Cover Image"}</Text>
+                </TouchableOpacity>
+                {coverPreviewUri ? (
+                  <Image source={{ uri: coverPreviewUri }} style={styles.clipCoverPreview} resizeMode="cover" />
+                ) : (
+                  <View style={styles.eventEmptyCard}>
+                    <Text style={styles.eventEmptyTitle}>No cover selected</Text>
+                    <Text style={styles.eventEmptyBody}>
+                      Upload a JPG, PNG, or WebP image. Frame picking from video is deferred until real extraction support exists.
+                    </Text>
+                  </View>
+                )}
+              </>
+            ),
+          })}
+
+          {renderClipAccordion({
+            id: "title",
+            title: "Title Card",
+            summary: "Add a title for this clip.",
+            status: clipEditor.titleOverlayText.trim() ? "Set" : "Optional",
+            statusTone: clipEditor.titleOverlayText.trim() ? "default" : "muted",
+            children: (
+              <>
+                <Text style={styles.brandPreviewMeta}>Add a title for this clip.</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Title text"
+                  placeholderTextColor="#8d8d8d"
+                  value={clipEditor.titleOverlayText}
+                  onChangeText={(text) => updateClipEditor({ titleOverlayText: text })}
+                  maxLength={CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH}
+                />
+                <Text style={styles.inputMeta}>
+                  {titleOverlayCharacterCount}/{CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Subtitle text"
+                  placeholderTextColor="#8d8d8d"
+                  value={clipEditor.titleOverlaySubtitle}
+                  onChangeText={(text) => updateClipEditor({ titleOverlaySubtitle: text })}
+                  maxLength={CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH}
+                />
+                <Text style={styles.inputMeta}>
+                  {subtitleOverlayCharacterCount}/{CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH}
+                </Text>
+                <Text style={styles.sectionLabel}>Placement</Text>
+                <View style={styles.segmentRow}>
+                  {CLIP_OVERLAY_POSITION_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.segmentButton, clipEditor.titleOverlayPosition === option.id && styles.segmentButtonActive]}
+                      activeOpacity={0.86}
+                      onPress={() => updateClipEditor({ titleOverlayPosition: option.id })}
+                    >
+                      <Text style={[styles.segmentButtonText, clipEditor.titleOverlayPosition === option.id && styles.segmentButtonTextActive]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.sectionLabel}>Style</Text>
+                <View style={styles.segmentRow}>
+                  {CLIP_OVERLAY_STYLE_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.segmentButton, clipEditor.titleOverlayStyle === option.id && styles.segmentButtonActive]}
+                      activeOpacity={0.86}
+                      onPress={() => updateClipEditor({ titleOverlayStyle: option.id })}
+                    >
+                      <Text style={[styles.segmentButtonText, clipEditor.titleOverlayStyle === option.id && styles.segmentButtonTextActive]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Public display</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Editor preview only. Title cards save with your draft and reopen here.
+                  </Text>
+                </View>
+              </>
+            ),
+          })}
+
+          {renderClipAccordion({
+            id: "templates",
+            title: "Templates",
+            summary: "Pick a metadata preset for this clip.",
+            status: selectedTemplateLabel,
+            children: (
+              <>
+                <View style={styles.brandThemeGrid}>
+                  {CLIP_TEMPLATE_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.brandThemeCard, clipEditor.templatePreset === option.id && styles.brandThemeCardActive]}
+                      activeOpacity={0.86}
+                      onPress={() => applyClipTemplatePreset(option.id)}
+                      disabled={clipSaving}
+                    >
+                      <Text style={styles.brandThemeTitle}>{option.label}</Text>
+                      <Text style={styles.brandThemeBody}>{option.body}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>{selectedTemplateLabel} selected</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    {`${selectedTemplateConfig.formatSuggestion}. ${selectedTemplateConfig.coverLayoutSuggestion}`}
+                  </Text>
+                </View>
+              </>
+            ),
+          })}
+
           {renderClipAccordion({
             id: "format",
             title: "Format",
@@ -3868,114 +4137,81 @@ export function ChannelStudioScreen() {
           })}
 
           {renderClipAccordion({
-            id: "cover",
-            title: "Cover Image",
-            summary: "Upload a private cover image for this creator video.",
-            status: coverPreviewUri ? "Selected" : "Optional",
-            statusTone: coverPreviewUri ? "default" : "muted",
+            id: "save",
+            title: "Save",
+            summary: "Confirm details and save the draft.",
+            status: clipSaveState === "saved" ? "Confirmed" : "Save Draft",
+            statusTone: clipSaveState === "save_failed" ? "warning" : clipSaveState === "saved" ? "default" : "muted",
             children: (
               <>
+                <Text style={styles.sectionLabel}>Clip Details</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Clip title"
+                  placeholderTextColor="#8d8d8d"
+                  value={clipEditor.title}
+                  onChangeText={(text) => updateClipEditor({ title: text })}
+                />
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Description"
+                  placeholderTextColor="#8d8d8d"
+                  value={clipEditor.description}
+                  onChangeText={(text) => updateClipEditor({ description: text })}
+                  multiline
+                />
                 <TouchableOpacity
-                  style={[styles.eventSecondaryButton, clipSaving && styles.eventPrimaryButtonDisabled]}
+                  style={[styles.legalAcknowledgementRow, clipRightsAccepted && styles.legalAcknowledgementRowActive]}
                   activeOpacity={0.86}
-                  onPress={onPickClipCoverFile}
+                  onPress={() => setClipRightsAccepted((current) => !current)}
                   disabled={clipSaving}
                 >
-                  <Text style={styles.eventSecondaryButtonText}>{coverPreviewUri ? "Replace Cover Image" : "Choose Cover Image"}</Text>
-                </TouchableOpacity>
-                {coverPreviewUri ? (
-                  <Image source={{ uri: coverPreviewUri }} style={styles.clipCoverPreview} resizeMode="cover" />
-                ) : (
-                  <View style={styles.eventEmptyCard}>
-                    <Text style={styles.eventEmptyTitle}>No cover selected</Text>
-                    <Text style={styles.eventEmptyBody}>
-                      Upload a JPG, PNG, or WebP image. Frame picking from video is deferred until real extraction support exists.
-                    </Text>
+                  <View style={[styles.legalCheckbox, clipRightsAccepted && styles.legalCheckboxActive]}>
+                    <Text style={styles.legalCheckboxMark}>{clipRightsAccepted ? "✓" : ""}</Text>
                   </View>
-                )}
-              </>
-            ),
-          })}
+                  <Text style={styles.legalAcknowledgementText}>{CREATOR_UPLOAD_ACKNOWLEDGEMENT}</Text>
+                </TouchableOpacity>
 
-          {renderClipAccordion({
-            id: "title",
-            title: "Title Card",
-            summary: "Add preview-only title overlay metadata.",
-            status: clipEditor.titleOverlayText.trim() ? "Set" : "Optional",
-            statusTone: clipEditor.titleOverlayText.trim() ? "default" : "muted",
-            children: (
-              <>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Overlay title"
-                  placeholderTextColor="#8d8d8d"
-                  value={clipEditor.titleOverlayText}
-                  onChangeText={(text) => updateClipEditor({ titleOverlayText: text })}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Subtitle (optional)"
-                  placeholderTextColor="#8d8d8d"
-                  value={clipEditor.titleOverlaySubtitle}
-                  onChangeText={(text) => updateClipEditor({ titleOverlaySubtitle: text })}
-                />
-                <Text style={styles.sectionLabel}>Placement</Text>
-                <View style={styles.segmentRow}>
-                  {CLIP_OVERLAY_POSITION_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.segmentButton, clipEditor.titleOverlayPosition === option.id && styles.segmentButtonActive]}
-                      activeOpacity={0.86}
-                      onPress={() => updateClipEditor({ titleOverlayPosition: option.id })}
-                    >
-                      <Text style={[styles.segmentButtonText, clipEditor.titleOverlayPosition === option.id && styles.segmentButtonTextActive]}>
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={styles.sectionLabel}>Style</Text>
-                <View style={styles.segmentRow}>
-                  {CLIP_OVERLAY_STYLE_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.segmentButton, clipEditor.titleOverlayStyle === option.id && styles.segmentButtonActive]}
-                      activeOpacity={0.86}
-                      onPress={() => updateClipEditor({ titleOverlayStyle: option.id })}
-                    >
-                      <Text style={[styles.segmentButtonText, clipEditor.titleOverlayStyle === option.id && styles.segmentButtonTextActive]}>
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={styles.brandPreviewMeta}>
-                  Title overlay is preview metadata only until a backed public overlay renderer exists.
-                </Text>
-              </>
-            ),
-          })}
-
-          {renderClipAccordion({
-            id: "template",
-            title: "Template",
-            summary: "Pick a metadata preset for this clip.",
-            status: selectedTemplateLabel,
-            children: (
-              <View style={styles.brandThemeGrid}>
-                {CLIP_TEMPLATE_OPTIONS.map((option) => (
+                <View style={styles.eventActionRow}>
                   <TouchableOpacity
-                    key={option.id}
-                    style={[styles.brandThemeCard, clipEditor.templatePreset === option.id && styles.brandThemeCardActive]}
-                    activeOpacity={0.86}
-                    onPress={() => updateClipEditor({ templatePreset: option.id })}
-                    disabled={clipSaving}
+                    style={[styles.eventPrimaryButton, isPrimaryClipActionDisabled && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    onPress={() => {
+                      if (shouldShowViewDraftAction) {
+                        openStudioTab("content", { filter: "drafts", focus: "library" });
+                        return;
+                      }
+                      onSaveClipDraft();
+                    }}
+                    disabled={isPrimaryClipActionDisabled}
                   >
-                    <Text style={styles.brandThemeTitle}>{option.label}</Text>
-                    <Text style={styles.brandThemeBody}>{option.body}</Text>
+                    {clipSaving ? (
+                      <View style={styles.eventPrimaryButtonBusyRow}>
+                        <ActivityIndicator color="#fff" />
+                        <Text style={styles.eventPrimaryButtonText}>{primaryClipActionLabel}</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.eventPrimaryButtonText}>{primaryClipActionLabel}</Text>
+                    )}
                   </TouchableOpacity>
-                ))}
-              </View>
+                  <TouchableOpacity
+                    style={[styles.eventSecondaryButton, isPublishClipDisabled && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    onPress={onPublishClip}
+                    disabled={isPublishClipDisabled}
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Publish Clip</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={styles.eventSecondaryButton}
+                  activeOpacity={0.88}
+                  onPress={() => openStudioTab("content", { filter: "all", focus: "library" })}
+                  disabled={clipSaving}
+                >
+                  <Text style={styles.eventSecondaryButtonText}>Back to Content Library</Text>
+                </TouchableOpacity>
+              </>
             ),
           })}
 
@@ -4004,7 +4240,7 @@ export function ChannelStudioScreen() {
                   </Text>
                 </TouchableOpacity>
                 <Text style={styles.brandPreviewMeta}>
-                  Brand mark display is preview metadata. It is not burned into video or enabled globally.
+                  Brand mark display is preview metadata for this draft.
                 </Text>
               </>
             ) : (
@@ -4032,74 +4268,6 @@ export function ChannelStudioScreen() {
             ),
           })}
         </View>
-
-        <Text style={styles.sectionLabel}>Clip Details</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Clip title"
-          placeholderTextColor="#8d8d8d"
-          value={clipEditor.title}
-          onChangeText={(text) => updateClipEditor({ title: text })}
-        />
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Description"
-          placeholderTextColor="#8d8d8d"
-          value={clipEditor.description}
-          onChangeText={(text) => updateClipEditor({ description: text })}
-          multiline
-        />
-        <TouchableOpacity
-          style={[styles.legalAcknowledgementRow, clipRightsAccepted && styles.legalAcknowledgementRowActive]}
-          activeOpacity={0.86}
-          onPress={() => setClipRightsAccepted((current) => !current)}
-          disabled={clipSaving}
-        >
-          <View style={[styles.legalCheckbox, clipRightsAccepted && styles.legalCheckboxActive]}>
-            <Text style={styles.legalCheckboxMark}>{clipRightsAccepted ? "✓" : ""}</Text>
-          </View>
-          <Text style={styles.legalAcknowledgementText}>{CREATOR_UPLOAD_ACKNOWLEDGEMENT}</Text>
-        </TouchableOpacity>
-
-        <View style={styles.eventActionRow}>
-          <TouchableOpacity
-            style={[styles.eventPrimaryButton, isPrimaryClipActionDisabled && styles.eventPrimaryButtonDisabled]}
-            activeOpacity={0.88}
-            onPress={() => {
-              if (shouldShowViewDraftAction) {
-                openStudioTab("content", { filter: "drafts", focus: "library" });
-                return;
-              }
-              onSaveClipDraft();
-            }}
-            disabled={isPrimaryClipActionDisabled}
-          >
-            {clipSaving ? (
-              <View style={styles.eventPrimaryButtonBusyRow}>
-                <ActivityIndicator color="#fff" />
-                <Text style={styles.eventPrimaryButtonText}>{primaryClipActionLabel}</Text>
-              </View>
-            ) : (
-              <Text style={styles.eventPrimaryButtonText}>{primaryClipActionLabel}</Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.eventSecondaryButton, isPublishClipDisabled && styles.eventPrimaryButtonDisabled]}
-            activeOpacity={0.88}
-            onPress={onPublishClip}
-            disabled={isPublishClipDisabled}
-          >
-            <Text style={styles.eventSecondaryButtonText}>Publish Clip</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity
-          style={styles.eventSecondaryButton}
-          activeOpacity={0.88}
-          onPress={() => openStudioTab("content", { filter: "all", focus: "library" })}
-          disabled={clipSaving}
-        >
-          <Text style={styles.eventSecondaryButtonText}>Back to Content Library</Text>
-        </TouchableOpacity>
       </View>
     );
   };
@@ -7805,6 +7973,13 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: "rgba(8,12,18,0.86)",
   },
+  clipPreviewKicker: {
+    color: "#7ED7FF",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
   clipTitleOverlay: {
     position: "absolute",
     left: 18,
@@ -7831,6 +8006,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(8,12,18,0.72)",
     borderWidth: 1,
     borderColor: "rgba(242,194,91,0.38)",
+  },
+  clipTitleOverlayTrailer: {
+    backgroundColor: "rgba(3,4,8,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.32)",
+    paddingVertical: 14,
   },
   clipTitleOverlayText: {
     color: "#FFFFFF",
@@ -7860,6 +8041,14 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     borderRadius: 14,
     backgroundColor: "#080A10",
+  },
+  inputMeta: {
+    color: "#8490A6",
+    fontSize: 10.5,
+    fontWeight: "800",
+    textAlign: "right",
+    marginTop: -6,
+    marginBottom: 4,
   },
   panelSubtle: {
     borderColor: "rgba(255,255,255,0.08)",

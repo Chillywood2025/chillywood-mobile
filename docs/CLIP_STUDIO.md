@@ -1,8 +1,8 @@
 # Chi'llwood Clip Studio
 
-Updated: 2026-05-24
+Updated: 2026-05-25
 
-Clip Studio is the creator-facing video preparation area inside Platform Studio. It helps creators choose a source video, preview framing, stage a cover image, add title/template metadata, and save or publish through the existing creator-video flow.
+Clip Studio is the creator-facing video preparation area inside Platform Studio. It lets creators choose a source video, stage a cover image, add title/template metadata, preview the result, and save or publish through the existing creator-video flow. It is not a timeline editor and it does not export a new video file.
 
 ## Implemented
 
@@ -10,22 +10,27 @@ Clip Studio is the creator-facing video preparation area inside Platform Studio.
 - `Create Clip` entry from Platform Studio header, Home Create and Manage, and Content.
 - `Edit Clip` action on owner creator-video cards.
 - Safe document-picker video selection for MP4, MOV, WebM, and M4V.
-- Local selected-video preview using native controls with muted playback.
+- Local selected-video preview using native controls when a selected/saved video URL is available.
+- Cover image picker/upload for JPG, PNG, and WebP with a 20 MB limit, hardened through the existing media-storage signed upload path and readable-byte verification.
 - Format metadata: Vertical 9:16, Square 1:1, and Landscape 16:9.
 - Fit metadata: Fill, Fit, and Center.
-- Cover image picker/upload for JPG, PNG, and WebP with a 20 MB limit, hardened through the existing media-storage signed upload path and readable-byte verification.
-- Simple title card metadata: title, subtitle, placement, and style.
-- Template metadata: Trailer, Highlight, Promo, Event, Reaction, and Platform Intro.
-- Optional Platform brand mark preview only when a published approved Brand Studio avatar/logo/watermark asset exists.
+- Title Card metadata: optional title text, optional subtitle text, Top/Center/Bottom placement, and Clean/Bold/Spotlight/Trailer style.
+- Template metadata presets: Trailer, Highlight, Promo, Event, Reaction, and Platform Intro.
+- Preview overlay drawn over selected video when available, cover/poster when available, or a neutral placeholder.
+- Optional Platform brand mark preview when a published approved Brand Studio avatar/logo/watermark asset exists.
 - Hardened Save Draft and Publish Clip actions using `uploadCreatorVideo`, `updateCreatorVideoMetadata`, `creator_clip_edits`, owner read-back, and Content Library refresh confirmation.
+- Owner-only Content Library cards can show title/template preview metadata for drafts and owned videos.
 - Existing public Player remains the playback owner for published videos.
+
+Title Card text can be empty. The normal clip/video title is still required for saving a creator video, but a creator does not have to add overlay text.
 
 ## Data Model
 
-Remote-applied migration:
+Remote-applied migrations:
 
 - `202605240008_creator_clip_studio_metadata.sql`: adds private owner-only `creator_clip_edits`, updates the private `creator-videos` bucket to also allow cover image MIME types, and keeps Clip Studio metadata out of anon/public reads.
-- `202605240009_creator_clip_studio_owner_cast_fix.sql`: fixes the Clip Studio metadata trigger for older `videos.owner_id` UUID schemas by comparing `videos.owner_id::text` to `creator_clip_edits.owner_user_id`. This was the real backend blocker found during Save Draft proof.
+- `202605240009_creator_clip_studio_owner_cast_fix.sql`: fixes the Clip Studio metadata trigger for older `videos.owner_id` UUID schemas by comparing `videos.owner_id::text` to `creator_clip_edits.owner_user_id`.
+- `202605250001_creator_clip_studio_title_templates.sql`: allows the `trailer` title overlay style, adds title/subtitle length checks, and documents that template metadata does not create transitions, audio sync, timeline effects, or export rendering.
 
 `creator_clip_edits` stores display/edit metadata only:
 
@@ -33,11 +38,69 @@ Remote-applied migration:
 - `fit_mode`
 - reserved trim fields
 - cover metadata
-- title overlay metadata
-- template preset
+- `title_overlay_text`
+- `title_overlay_subtitle`
+- `title_overlay_position`
+- `title_overlay_style`
+- `template_preset`
 - optional brand mark reference
 
-The table is owner-only. Public routes do not read it in the MVP, so title overlays, templates, trim fields, and brand mark settings are not presented as public rendering promises.
+The table is owner-only. Public routes do not read it in this lane.
+
+## Title Cards
+
+The Title Card section uses creator-facing copy:
+
+- "Title Card"
+- "Add a title for this clip."
+- "Preview"
+- "Public display"
+- "Editor preview only"
+
+Length limits:
+
+- title overlay text: 80 characters
+- subtitle overlay text: 140 characters
+
+Placement presets:
+
+- Top
+- Center
+- Bottom
+
+Style presets:
+
+- Clean
+- Bold
+- Spotlight
+- Trailer
+
+The visibility decision for this lane is "Editor preview only" plus owner-only Content Library preview. Title cards are not presented as public video edits.
+
+## Templates
+
+Template presets set metadata recommendations only:
+
+| Template | Recommendation |
+| --- | --- |
+| Trailer | Trailer style, centered title, Landscape 16:9, Fill |
+| Highlight | Clean style, bottom title, Vertical 9:16, Fill |
+| Promo | Bold style, bottom title, Vertical 9:16, Fill |
+| Event | Spotlight style, top title, Landscape 16:9, Fit |
+| Reaction | Clean style, bottom title, Vertical 9:16, Fit |
+| Platform Intro | Spotlight style, centered title, Square 1:1, Center |
+
+Templates do not add transitions, audio sync, AI edits, timeline effects, or export rendering.
+
+## Preview Behavior
+
+Clip Studio preview chooses the safest available visual source:
+
+1. selected/signed video preview
+2. cover/poster preview
+3. neutral preview placeholder
+
+The preview reflects title/subtitle text, placement, style, selected template, format, fit, and safe brand styling where already available. Missing video or cover media must not crash the editor.
 
 ## Save Draft Contract
 
@@ -53,16 +116,62 @@ Save Draft uses an explicit state model:
 - save_failed
 - retrying
 
-The Save Draft button is disabled until a video, title, rights acknowledgement, upload availability, file-size check, and Brand mark requirement are satisfied. While saving, duplicate taps are blocked by an in-flight ref. A successful new-video save must complete all of these steps before the UI says saved:
+The Save Draft button is disabled until a video, normal clip title, rights acknowledgement, upload availability, file-size check, and brand mark requirement are satisfied. While saving, duplicate taps are blocked by an in-flight ref. A successful save must complete all of these steps before the UI says saved:
 
 - create or update a real `videos` row
 - upload the optional cover and attach it to the owned video when selected
 - upsert the `creator_clip_edits` row
 - read back the owned video row with `readCreatorVideoForOwner`
 - read back the Clip Studio edit row with `readClipStudioEdit`
+- confirm persisted metadata matches the intended edit patch
 - refresh the Content Library query and confirm the saved id appears with the target visibility
 
+Save Draft persists:
+
+- `title_overlay_text`
+- `title_overlay_subtitle`
+- `title_overlay_position`
+- `title_overlay_style`
+- `template_preset`
+- existing `clip_format`
+- existing `fit_mode`
+- cover metadata when selected
+
 If video upload succeeds but metadata or refresh confirmation fails, Clip Studio keeps the saved video id and selected media state where useful, shows `Retry Save Draft`, and retries against the existing draft instead of creating a duplicate blank row. `View Draft` appears only after read-back and Content Library confirmation.
+
+Reopening a draft loads the saved `creator_clip_edits` row, restores title/template/format/fit/cover state, and uses a signed owned video or thumbnail preview when available.
+
+## Content Library
+
+Owner Content Library cards may show:
+
+- the normal creator-video title
+- draft/public status
+- media readiness
+- template badge
+- owner-only title/subtitle overlay preview on the card image/placeholder
+- `Clip Studio: Title Card` or `Clip Studio: No Title Card` summary
+
+This is owner-only. Public users do not receive draft/private cards and public routes do not read Clip Studio edit rows.
+
+## Renderer Decision
+
+| Field | Current status |
+| --- | --- |
+| `cover_storage_path` / poster | Owner Content Library and existing published thumbnail surfaces only. Draft covers stay owner-only. |
+| `clip_format` | Editor-preview-only; saved to draft/edit state. Public renderer deferred. |
+| `fit_mode` | Editor-preview-only; saved to draft/edit state. Public renderer deferred. |
+| `title_overlay_text` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
+| `title_overlay_subtitle` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
+| `title_overlay_position` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
+| `title_overlay_style` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
+| `template_preset` | Editor-preview-only plus Content Library owner-only badge/summary. Public renderer deferred. |
+| `brand_mark_enabled` | Editor-preview-only. Public watermark renderer deferred. |
+| `brand_asset_id` | Editor-preview-only. Public watermark renderer deferred. |
+| `trim_start_ms` | Deferred; no real trim/export is active. |
+| `trim_end_ms` | Deferred; no real trim/export is active. |
+
+Public title/template rendering is deferred because the current public Channel, Home, and Player surfaces do not have a dedicated published-video overlay renderer and should not read private edit rows by default. If a later lane enables public rendering, it must apply only to published public-safe videos and must prove drafts/private videos do not expose metadata.
 
 ## Cover Images
 
@@ -76,41 +185,15 @@ Public cover access remains governed by existing creator-video visibility and mo
 - public covers require the video to be public
 - moderation-hidden/removed/banned videos do not become public through Clip Studio
 
-Creator-video thumbnail resolution now signs the cover/poster through the video's real storage provider. S3-backed videos use media-storage signed downloads for their cover path; Supabase-backed legacy cover paths keep the existing Supabase signed URL path.
+Creator-video thumbnail resolution signs the cover/poster through the video's real storage provider. S3-backed videos use media-storage signed downloads for their cover path; Supabase-backed legacy cover paths keep the existing Supabase signed URL path.
 
 Deleting a creator video best-effort removes its cover path according to the associated storage provider.
-
-## Renderer Decision
-
-| Field | Current public behavior |
-| --- | --- |
-| `cover_storage_path` / poster | Renders where existing creator-video thumbnail UI is used. Draft covers stay owner-only; published covers can render only through published video queries. |
-| `clip_format` | Stored and shown in Clip Studio/editor preview only. Public renderer deferred. |
-| `fit_mode` | Stored and shown in Clip Studio/editor preview only. Public renderer deferred. |
-| `title_overlay_text` | Stored as metadata only. Public overlay renderer deferred. |
-| `title_overlay_subtitle` | Stored as metadata only. Public overlay renderer deferred. |
-| `title_overlay_position` | Stored as metadata only. Public overlay renderer deferred. |
-| `title_overlay_style` | Stored as metadata only. Public overlay renderer deferred. |
-| `template_preset` | Stored and shown in Clip Studio/editor preview only. Public renderer deferred. |
-| `brand_mark_enabled` | Stored for preview intent only. Video watermark/public renderer deferred. |
-| `brand_asset_id` | Stored for preview intent only. Video watermark/public renderer deferred. |
-| `trim_start_ms` | Reserved/deferred; no real trim/export is active. |
-| `trim_end_ms` | Reserved/deferred; no real trim/export is active. |
-
-The following remain metadata/preview only in this MVP:
-
-- format/crop mode
-- fit mode
-- title card overlay
-- template preset
-- brand mark setting
-
-The app intentionally says: "Preview crop is used for display. Final export editing is coming later."
 
 ## Deferred
 
 - real trim/export
 - permanent rendered crop
+- permanent rendered title/subtitle overlay
 - multi-clip timeline
 - split clip
 - transitions
@@ -135,43 +218,34 @@ Save Draft hardening implementation commit: `a716ee1ed5a880922b8d6dc49896655392f
 
 Cover/poster hardening implementation commit: `84a9109b2ccd939da85ed3595301d5a578bc6165`.
 
-Android release proof on `R5CR120QCBF` captured screenshots under `/tmp/chillywood-clip-studio-proof-20260524/` for:
+Title Card and Template Preview implementation: May 25, 2026 closeout commit for this lane.
 
-- Platform Studio `Create Clip`
-- Clip Studio empty state
-- Android video picker
-- selected-video preview
-- Format/Fit controls
-- cover picker and selected-cover state
-- Title Card, Template, Platform Brand, and Coming Later sections
-- Save Draft controls and rights acknowledgement
-- Content Library draft card with `Edit Clip`
+Backend persistence proof for title/templates used draft video `3804dbca-e1f7-4251-b5fa-8603014c66bf`:
 
-The Save Draft hardening lane found the real failed-save blocker: the `creator_clip_edits` trigger compared `videos.owner_id` UUID directly to `owner_user_id` text, producing `operator does not exist: uuid = text` after the video draft row had already been created. Migration `202605240009` is remote-applied and fixes that trigger comparison.
+- saved title overlay: `Trailer Night Proof`
+- saved subtitle overlay: `Template metadata read-back`
+- saved placement/style/template: `center` / `trailer` / `trailer`
+- saved format/fit: `landscape_16_9` / `fill`
+- owned read-back matched every saved metadata field
+- owner Content Library saw the draft
+- public unauthenticated video query returned zero rows for the draft
+- unauthenticated `creator_clip_edits` read returned zero rows with table permission denial
 
-Android/device and backend proof for the hardening lane is stored outside the repo under `/tmp/chillywood-clip-save-draft-proof-20260524/`:
+Android current-bundle proof on `R5CR120QCBF` is outside the repo under `/tmp/chillywood-proof-2026-05-25T12-44-56-358Z-clip-studio-title-template-preview/screenshots/`:
 
-- `74-save-draft-started.png`: Save Draft entered the real saving state after selected video and rights acknowledgement.
-- `75-save-draft-after-wait.png`: the old build did not fake success; it showed retry after metadata confirmation failed.
-- backend proof confirmed draft video `14af2be6-57ee-473b-aabd-f0225746a680` exists as `draft`, belongs to the signed-in proof creator, and has a matching `creator_clip_edits` row after the trigger fix.
-- `78-content-draft-list-visible.png`: Content Library shows the saved draft as Draft / Media Ready.
-- `79-public-preview-no-draft.png`: public Platform preview shows only public-safe content and does not show the saved draft title.
+- current dev build loaded after temporarily moving ignored `.env.brand-review-proof.local` out of Metro's file scan, then restoring it
+- Clip Studio current UI
+- Title Card section with length counters, placement, styles, and editor-preview copy
+- Templates section with selected preset and all MVP presets
+- owner Content Library draft cards with Clip Studio summary
 
-The same proof query returned `publicRowCount: 0` for the saved draft id, and source proof remains `readCreatorVideos(routeUserId, { includeDrafts: false })` plus `showOwnerControls = isOwner && !publicPreviewMode` on the public Platform route.
-
-Cover/poster closeout proof is stored outside the repo under `/tmp/chillywood-clip-cover-proof-20260524/`:
-
-- Android proof reopened the saved draft from Content Library, showed selected cover state, showed friendly retry/no-fake-success copy when confirmation was incomplete, and showed the owner Content Library draft card with cover art.
-- Backend proof file `/tmp/chillywood-clip-cover-proof-20260524/backend-cover-proof-final.json` confirmed draft video `3804dbca-e1f7-4251-b5fa-8603014c66bf` belongs to the signed-in proof creator, remains `draft`, has a matching `creator_clip_edits` row, and has matching `videos.thumb_storage_path` / `creator_clip_edits.cover_storage_path`.
-- The signed cover range probe returned `206` with readable bytes for the private cover object.
-- Public/published row count for that draft id was `0`, so neither the draft video nor its cover/poster renders through public published-video queries.
-- The earlier zero-byte cover object behavior was treated as a real bug and fixed by moving cover upload onto the existing media-storage upload/verification helper path.
+Android visual proof gap: on-device Save Draft/reopen for title/template fields was not completed because the keyboard/back interaction returned to Home during the proof attempt. Persistence and reopen behavior are therefore closed by backend read-back/source proof in this lane, with Android happy-path visual proof recommended next.
 
 ## Brand Studio Integration
 
 Clip Studio can preview a Platform brand mark only if Brand Studio already has a published, moderation-safe avatar, logo, or watermark asset. Pending, rejected, archived, deleted, and draft brand assets are not eligible.
 
-The brand mark is not burned into video and does not change Player behavior.
+The brand mark remains preview metadata and does not change Player behavior.
 
 ## Failure States
 
@@ -184,6 +258,8 @@ Creator-facing failure copy covers:
 - no cover selected
 - unsupported cover type
 - oversized cover
+- title overlay too long
+- subtitle overlay too long
 - upload paused by runtime config
 - save failure
 - read-back failure
@@ -191,6 +267,7 @@ Creator-facing failure copy covers:
 - publish failure
 - missing approved Platform brand mark
 - trim/export unavailable
+- session expired through the existing signed-in Platform Studio boundary
 
 Raw storage paths, signed URL internals, RLS messages, backend wording, and debug/proof copy are not shown in normal Clip Studio UI.
 
@@ -199,15 +276,16 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 - Do not fake trim/export.
 - Do not fake public title-overlay rendering.
 - Do not fake cover upload success.
-- Do not show Save Draft success until the video row, Clip Studio edit row, and Content Library read-back are confirmed.
+- Do not show Save Draft success until the video row, Clip Studio edit row, metadata read-back, and Content Library read-back are confirmed.
 - Do not expose draft/private videos publicly.
-- Do not expose private Brand Studio assets publicly.
+- Do not expose draft/private cover images publicly.
+- Do not expose owner-only title/template metadata publicly.
 - Do not change Premium gates, RevenueCat, LiveKit, Watch-Party Live, Live Watch-Party, payout, revenue, or creator monetization logic from Clip Studio work.
 - Do not use legacy diminutive Platform copy.
 
 ## Validation
 
-Latest Clip Studio cover/poster closeout validation used:
+Latest Title Card and Template Preview validation used:
 
 - `npm run typecheck`
 - `npm run validate:runtime`
@@ -218,15 +296,18 @@ Latest Clip Studio cover/poster closeout validation used:
 - `npm run guard:vod-quality-policy`
 - `npm run guard:platform-brand-studio-policy`
 - `npm run guard:clip-studio-policy`
-- existing Watch-Party/LiveKit and old-room guards
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
 - `supabase migration list`
 - `supabase db lint --linked`
-- `supabase db push --dry-run`
-- targeted no-Mini-Platform/no-debug-copy/no-fake-export grep
-- backend proof that the saved draft has a real video row, real Clip Studio edit row, owner match, matching cover/poster path, readable non-empty cover object, `draft` visibility, and zero public rows
+- sequential `supabase db push --dry-run`
+- scoped no-Mini-Platform/no-debug-copy/no-fake-export greps for Clip Studio/public surfaces
+- backend proof that title/template metadata persists after Save Draft read-back
+- backend/source proof that reopened draft state restores from `creator_clip_edits`
+- backend/source proof that draft/private video/title/cover metadata does not render publicly
 - source proof that public Platform reads creator videos with `includeDrafts: false` and hides owner controls in public-preview mode
-- Android proof on `R5CR120QCBF`
+- Android current-bundle proof on `R5CR120QCBF`
 - `git diff --check`
 - `git diff --cached --check`
 
-`supabase/database.types.ts` did not change in the Save Draft hardening lane because `202605240009` replaces a function body only and adds no table, column, enum, or RPC signature.
+`supabase/database.types.ts` did not change in this lane because `202605250001` changes constraints/comments only and adds no table, column, enum, or RPC signature.

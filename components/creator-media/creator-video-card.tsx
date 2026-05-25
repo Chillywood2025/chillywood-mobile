@@ -9,6 +9,10 @@ import {
 
 import type { CreatorVideo } from "../../_lib/creatorVideos";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import {
+  formatClipStudioTemplateLabel,
+  type ClipStudioEdit,
+} from "../../_lib/clipStudio";
 import { formatVodRenditionStatusSummary, getVodQualityPolicyCopy } from "../../_lib/vodQuality";
 
 type CreatorVideoCardMode = "owner" | "public";
@@ -16,6 +20,7 @@ type CreatorVideoCardMode = "owner" | "public";
 type CreatorVideoCardProps = {
   video: CreatorVideo;
   mode: CreatorVideoCardMode;
+  clipEdit?: ClipStudioEdit | null;
   busy?: boolean;
   onOpen: () => void;
   onEdit?: () => void;
@@ -97,6 +102,7 @@ const formatCreatorVideoDisplayTitle = (value: string) => {
 export function CreatorVideoCard({
   video,
   mode,
+  clipEdit,
   busy = false,
   onOpen,
   onEdit,
@@ -111,6 +117,7 @@ export function CreatorVideoCard({
   const playable = hasPlayableSource(video);
   const shareable = isCreatorVideoPubliclyShareable(video);
   const ownerMode = mode === "owner";
+  const ownerClipEdit = ownerMode ? clipEdit ?? null : null;
   const { displayTitle, rawTitleDetected } = formatCreatorVideoDisplayTitle(video.title);
   const moderationBlocked = video.moderationStatus === "hidden"
     || video.moderationStatus === "removed"
@@ -122,6 +129,10 @@ export function CreatorVideoCard({
   ].filter(Boolean);
   const renditionStatusSummary = ownerMode ? formatVodRenditionStatusSummary(video.renditionStatuses) : "";
   const qualityPolicyCopy = ownerMode ? getVodQualityPolicyCopy() : null;
+  const titleOverlayText = ownerClipEdit?.titleOverlayText.trim() ?? "";
+  const titleOverlaySubtitle = ownerClipEdit?.titleOverlaySubtitle.trim() ?? "";
+  const hasOwnerTitleOverlay = !!(titleOverlayText || titleOverlaySubtitle);
+  const ownerTemplateLabel = ownerClipEdit ? formatClipStudioTemplateLabel(ownerClipEdit.templatePreset) : "";
 
   return (
     <View style={[styles.card, !playable && styles.cardUnavailable]}>
@@ -155,7 +166,32 @@ export function CreatorVideoCard({
               <Text style={styles.badgeText}>{moderationLabel}</Text>
             </View>
           ) : null}
+          {ownerClipEdit ? (
+            <View style={[styles.badge, styles.badgeTemplate]}>
+              <Text style={styles.badgeText}>{ownerTemplateLabel}</Text>
+            </View>
+          ) : null}
         </View>
+        {hasOwnerTitleOverlay ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.ownerTitleOverlay,
+              ownerClipEdit?.titleOverlayPosition === "top" && styles.ownerTitleOverlayTop,
+              ownerClipEdit?.titleOverlayPosition === "center" && styles.ownerTitleOverlayCenter,
+              ownerClipEdit?.titleOverlayStyle === "bold" && styles.ownerTitleOverlayBold,
+              ownerClipEdit?.titleOverlayStyle === "spotlight" && styles.ownerTitleOverlaySpotlight,
+              ownerClipEdit?.titleOverlayStyle === "trailer" && styles.ownerTitleOverlayTrailer,
+            ]}
+          >
+            {titleOverlayText ? (
+              <Text style={styles.ownerTitleOverlayText} numberOfLines={2}>{titleOverlayText}</Text>
+            ) : null}
+            {titleOverlaySubtitle ? (
+              <Text style={styles.ownerTitleOverlaySubtitle} numberOfLines={2}>{titleOverlaySubtitle}</Text>
+            ) : null}
+          </View>
+        ) : null}
       </TouchableOpacity>
 
       <View style={styles.body}>
@@ -180,6 +216,11 @@ export function CreatorVideoCard({
         {ownerMode ? (
           <Text style={styles.ownerGuidance}>
             {`VOD ladder: ${renditionStatusSummary}. Free max ${qualityPolicyCopy?.freeMax}; Premium max ${qualityPolicyCopy?.premiumMax} when renditions exist.`}
+          </Text>
+        ) : null}
+        {ownerClipEdit ? (
+          <Text style={styles.ownerGuidance}>
+            {`Clip Studio: ${hasOwnerTitleOverlay ? "Title Card" : "No Title Card"} · ${ownerTemplateLabel}`}
           </Text>
         ) : null}
 
@@ -329,11 +370,58 @@ const styles = StyleSheet.create({
   badgeModeration: {
     borderColor: "rgba(242,194,91,0.5)",
   },
+  badgeTemplate: {
+    borderColor: "rgba(126,215,255,0.46)",
+  },
   badgeText: {
     color: "#F8FAFF",
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.5,
+  },
+  ownerTitleOverlay: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 58,
+    borderRadius: 12,
+    backgroundColor: "rgba(5,7,12,0.62)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  ownerTitleOverlayTop: {
+    top: 58,
+    bottom: undefined,
+  },
+  ownerTitleOverlayCenter: {
+    top: "40%",
+    bottom: undefined,
+  },
+  ownerTitleOverlayBold: {
+    backgroundColor: "rgba(220,20,60,0.64)",
+  },
+  ownerTitleOverlaySpotlight: {
+    backgroundColor: "rgba(8,12,18,0.74)",
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.4)",
+  },
+  ownerTitleOverlayTrailer: {
+    backgroundColor: "rgba(3,4,8,0.8)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.32)",
+  },
+  ownerTitleOverlayText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  ownerTitleOverlaySubtitle: {
+    color: "#DDE5F5",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
   },
   body: {
     padding: 14,
