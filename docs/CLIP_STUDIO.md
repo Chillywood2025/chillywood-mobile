@@ -20,6 +20,7 @@ Clip Studio is the creator-facing video preparation area inside Platform Studio.
 - Optional Platform brand mark preview when a published approved Brand Studio avatar/logo/watermark asset exists.
 - Hardened Save Draft and Publish Clip actions using `uploadCreatorVideo`, `updateCreatorVideoMetadata`, `creator_clip_edits`, owner read-back, and Content Library refresh confirmation.
 - Owner-only Content Library cards can show title/template preview metadata for drafts and owned videos.
+- Public creator-video cards can show safe cover/poster images for published, moderation-safe videos through the `public-creator-video-cards` resolver.
 - Existing public Player remains the playback owner for published videos.
 
 Title Card text can be empty. The normal clip/video title is still required for saving a creator video, but a creator does not have to add overlay text.
@@ -31,6 +32,8 @@ Remote-applied migrations:
 - `202605240008_creator_clip_studio_metadata.sql`: adds private owner-only `creator_clip_edits`, updates the private `creator-videos` bucket to also allow cover image MIME types, and keeps Clip Studio metadata out of anon/public reads.
 - `202605240009_creator_clip_studio_owner_cast_fix.sql`: fixes the Clip Studio metadata trigger for older `videos.owner_id` UUID schemas by comparing `videos.owner_id::text` to `creator_clip_edits.owner_user_id`.
 - `202605250001_creator_clip_studio_title_templates.sql`: allows the `trailer` title overlay style, adds title/subtitle length checks, and documents that template metadata does not create transitions, audio sync, timeline effects, or export rendering.
+
+The public cover/poster card lane adds no migration. It adds the `public-creator-video-cards` Edge Function and registers it in `supabase/config.toml`.
 
 `creator_clip_edits` stores display/edit metadata only:
 
@@ -158,7 +161,7 @@ This is owner-only. Public users do not receive draft/private cards and public r
 
 | Field | Current status |
 | --- | --- |
-| `cover_storage_path` / poster | Owner Content Library and existing published thumbnail surfaces only. Draft covers stay owner-only. |
+| `cover_storage_path` / poster | Owner Content Library plus safe public card cover/poster display for published, moderation-safe videos. Draft covers stay owner-only. |
 | `clip_format` | Editor-preview-only; saved to draft/edit state. Public renderer deferred. |
 | `fit_mode` | Editor-preview-only; saved to draft/edit state. Public renderer deferred. |
 | `title_overlay_text` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
@@ -186,6 +189,22 @@ Public cover access remains governed by existing creator-video visibility and mo
 - moderation-hidden/removed/banned videos do not become public through Clip Studio
 
 Creator-video thumbnail resolution signs the cover/poster through the video's real storage provider. S3-backed videos use media-storage signed downloads for their cover path; Supabase-backed legacy cover paths keep the existing Supabase signed URL path.
+
+Public card surfaces now use a separate safe resolver:
+
+- `readCreatorVideos`, `readCreatorVideosForOwners`, and `readLatestPublicCreatorVideos` route public-card reads through `public-creator-video-cards`.
+- The resolver uses service-role reads internally, but returns only sanitized public card fields.
+- It filters to `visibility='public'` and `moderation_status` `clean` or `reported`.
+- It signs `thumb_storage_path` only when the cover path is under the matching owner/video prefix.
+- It returns `thumbnailUrl` but does not return raw storage paths, object keys, playback URLs, or Clip Studio edit metadata.
+- Public cards fall back to the existing thumbnail/default card state if no safe cover/poster is available.
+
+Current public cover/card surfaces:
+
+- public Channel Featured card
+- public Channel Latest Uploads cards
+- Home creator-video rails
+- public Profile creator-video cards
 
 Deleting a creator video best-effort removes its cover path according to the associated storage provider.
 
@@ -220,6 +239,8 @@ Cover/poster hardening implementation commit: `84a9109b2ccd939da85ed3595301d5a57
 
 Title Card and Template Preview implementation: May 25, 2026 closeout commit for this lane.
 
+Public Cover Poster Card Renderer implementation: May 25, 2026 closeout commit for this lane.
+
 Backend persistence proof for title/templates used draft video `3804dbca-e1f7-4251-b5fa-8603014c66bf`:
 
 - saved title overlay: `Trailer Night Proof`
@@ -251,6 +272,25 @@ Android Save Draft/reopen visual proof for this layer is closed on `R5CR120QCBF`
 Keyboard/back behavior did not require a code fix in this closeout. Source inspection found no Clip Studio-specific `BackHandler` override, and the clean proof avoided relying on hardware Back for keyboard dismissal; the previous Home return is documented as a proof-flow navigation issue, not a confirmed Save Draft or reopen route bug.
 
 Backend confirmation for the Android closeout used the same draft and returned `visibility: draft`, restored title/template metadata, owner library visibility, zero public video rows, and anonymous denial for `creator_clip_edits`.
+
+Android public cover/poster card proof on `R5CR120QCBF` is outside the repo under `/tmp/chillywood-proof-2026-05-25T15-17-45-3NZ-clip-studio-public-cover-cards/screenshots/`:
+
+- `10-public-featured-cover-card-rendered.png` shows a published public card rendering the saved cover image on the public Channel Featured card, with the same cover also visible in Latest Uploads.
+- `12-owner-content-library-drafts-section.png` shows the owner-only Content Library draft card still rendering the Trailer badge and title/subtitle overlay preview only to the creator.
+- `02-public-platform-preview-no-owner-controls.png` and `09-public-cover-proof-channel-loaded.png` show public viewer state with no owner controls.
+
+Backend public-cover proof is stored in the same `/tmp` proof directory:
+
+- seeded published video `4c0b42c4-fe11-44ce-8c31-d6a1fd41821b` uses real media-storage uploads and a real public video row
+- `public-creator-video-cards` returned a cover URL for that published, moderation-safe video
+- the cover range probe returned `206` and `image/png`
+- returned public card keys did not include raw storage/path/object/playback fields
+- returned public card keys did not include title/template/overlay fields
+- draft `3804dbca-e1f7-4251-b5fa-8603014c66bf` was not returned by the public resolver
+- public video rows for that draft remained `0`
+- unauthenticated `creator_clip_edits` read returned permission denial
+
+No public title/template display was enabled in the public cover/poster lane.
 
 ## Brand Studio Integration
 
@@ -296,7 +336,7 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 
 ## Validation
 
-Latest Android Reopen Proof Closeout validation used:
+Latest Public Cover Poster Card Renderer validation used:
 
 - `npm run typecheck`
 - `npm run validate:runtime`
@@ -311,14 +351,16 @@ Latest Android Reopen Proof Closeout validation used:
 - `npm run guard:old-room-handling`
 - `supabase migration list`
 - `supabase db lint --linked`
-- sequential `supabase db push --dry-run`
-- scoped no-Mini-Platform/no-debug-copy/no-fake-export greps for Clip Studio/public surfaces
-- backend proof that title/template metadata still persists after Save Draft read-back
-- Android visual proof that reopened draft state restores from `creator_clip_edits`
-- Android and backend/source proof that draft/private video/title/cover metadata does not render publicly
-- source proof that public Platform reads creator videos with `includeDrafts: false` and hides owner controls in public-preview mode
-- Android current-bundle reopen proof on `R5CR120QCBF`
+- `supabase db push --dry-run`
+- targeted grep proof that no public title/template display claim was added
+- targeted grep proof that no fake export claim was added
+- targeted grep proof that no user-facing Mini Platform/debug copy was added
+- backend proof that public cards only receive safe published cover/poster URLs
+- backend proof that draft/private cover and title/template metadata do not render publicly
+- backend proof that unauthenticated `creator_clip_edits` direct read remains denied
+- Android public-cover proof on `R5CR120QCBF`
+- Android owner Content Library proof that owner-only title/template preview remains owner-only
 - `git diff --check`
 - `git diff --cached --check`
 
-`supabase/database.types.ts` did not change in this lane because `202605250001` changes constraints/comments only and adds no table, column, enum, or RPC signature.
+`supabase/database.types.ts` did not change in this lane because no schema migration was added.

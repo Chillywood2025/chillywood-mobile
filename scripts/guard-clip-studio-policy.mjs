@@ -5,6 +5,9 @@ const read = (path) => readFileSync(path, "utf8");
 const studio = read("app/channel-settings.tsx");
 const clipHelper = read("_lib/clipStudio.ts");
 const creatorVideoCard = read("components/creator-media/creator-video-card.tsx");
+const creatorVideos = read("_lib/creatorVideos.ts");
+const publicCreatorVideoCardsFunction = read("supabase/functions/public-creator-video-cards/index.ts");
+const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
 const migration = read("supabase/migrations/202605240008_creator_clip_studio_metadata.sql");
 const ownerCastMigration = read("supabase/migrations/202605240009_creator_clip_studio_owner_cast_fix.sql");
 const titleTemplateMigration = read("supabase/migrations/202605250001_creator_clip_studio_title_templates.sql");
@@ -58,6 +61,20 @@ for (const needle of requiredHelperTerms) {
   }
 }
 
+const requiredPublicCoverResolverTerms = [
+  "PUBLIC_CREATOR_VIDEO_CARDS_URL",
+  "readPublicCreatorVideoCards",
+  'action: "list_by_owner"',
+  'action: "list_for_owners"',
+  'action: "list_latest"',
+];
+
+for (const needle of requiredPublicCoverResolverTerms) {
+  if (!creatorVideos.includes(needle)) {
+    throw new Error(`Clip Studio guard failed: public creator-video card reads must use the safe resolver term "${needle}".`);
+  }
+}
+
 const requiredMigrationTerms = [
   'create table if not exists public."creator_clip_edits"',
   '"owner_user_id" = auth.uid()::text',
@@ -96,6 +113,38 @@ if (/grant\s+select\s+on\s+table\s+public\."creator_clip_edits"\s+to\s+anon/i.te
 
 if (!creatorVideoCard.includes("const ownerClipEdit = ownerMode ? clipEdit ?? null : null;")) {
   throw new Error("Clip Studio guard failed: Content Library title/template display must stay owner-mode only.");
+}
+
+if (!creatorVideoCard.includes("const playable = ownerMode ? hasPlayableSource(video) : shareable;")) {
+  throw new Error("Clip Studio guard failed: public creator-video cards must not depend on raw storage paths for playability.");
+}
+
+const requiredPublicCoverFunctionTerms = [
+  ".eq(\"visibility\", \"public\")",
+  ".in(\"moderation_status\", PUBLIC_MODERATION_STATUSES)",
+  "thumbnailUrl: await createThumbnailUrl",
+  "thumb_storage_path",
+  "isSafeVideoThumbnailPath",
+  "thumbnailPath.startsWith(`${ownerId}/${videoId}/`)",
+];
+
+for (const needle of requiredPublicCoverFunctionTerms) {
+  if (!publicCreatorVideoCardsFunction.includes(needle)) {
+    throw new Error(`Clip Studio guard failed: public cover resolver is missing "${needle}".`);
+  }
+}
+
+const publicFunctionSelect = publicCreatorVideoCardsFunction.match(/const PUBLIC_CREATOR_VIDEO_SELECT = \[([\s\S]*?)\]\.join/)?.[1] ?? "";
+for (const forbidden of ['"playback_url"', '"storage_path"', '"storage_object_key"']) {
+  if (publicFunctionSelect.includes(forbidden)) {
+    throw new Error(`Clip Studio guard failed: public creator-video card resolver must not return raw ${forbidden}.`);
+  }
+}
+
+for (const requiredCoverMime of ['"image/jpeg"', '"image/png"', '"image/webp"', '"image/gif"']) {
+  if (!mediaStorageFunction.includes(requiredCoverMime)) {
+    throw new Error(`Clip Studio guard failed: media-storage creator-video uploads must allow Clip Studio cover MIME ${requiredCoverMime}.`);
+  }
 }
 
 for (const [path, source] of [

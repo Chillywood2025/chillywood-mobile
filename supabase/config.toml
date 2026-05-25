@@ -7,6 +7,9 @@ verify_jwt = false
 [functions.media-storage]
 verify_jwt = false
 
+[functions.public-creator-video-cards]
+verify_jwt = false
+
 [functions.provider-usage-import]
 verify_jwt = false
 

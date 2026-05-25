@@ -12,7 +12,7 @@ import {
   type MediaStorageProvider,
 } from "./mediaStorage";
 import { recordCreatorVideoUploadUsage } from "./platformUsage";
-import { supabase } from "./supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL, supabase } from "./supabase";
 import {
   resolveCreatorContentAccess,
   type CreatorContentAccessResolution,
@@ -76,9 +76,27 @@ export type CreatorVideo = {
 type CreatorVideoRow = Tables<"videos">;
 type CreatorVideoInsert = TablesInsert<"videos">;
 type CreatorVideoUpdate = TablesUpdate<"videos">;
+type PublicCreatorVideoCardAction = "list_by_owner" | "list_for_owners" | "list_latest";
+type PublicCreatorVideoCardRow = {
+  id?: unknown;
+  ownerId?: unknown;
+  title?: unknown;
+  description?: unknown;
+  visibility?: unknown;
+  moderationStatus?: unknown;
+  moderationReason?: unknown;
+  moderatedAt?: unknown;
+  moderatedBy?: unknown;
+  thumbnailUrl?: unknown;
+  mimeType?: unknown;
+  fileSizeBytes?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
 
 const CREATOR_VIDEO_SELECT =
   "id,owner_id,title,description,playback_url,thumb_url,created_at,visibility,moderation_status,moderation_reason,moderated_at,moderated_by,storage_provider,storage_bucket,storage_object_key,storage_path,thumb_storage_path,mime_type,file_size_bytes,updated_at";
+const PUBLIC_CREATOR_VIDEO_CARDS_URL = `${SUPABASE_FUNCTIONS_URL.replace(/\/+$/g, "")}/functions/v1/public-creator-video-cards`;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -285,6 +303,52 @@ async function parseCreatorVideo(
   };
 }
 
+const parsePublicCreatorVideoCard = (row: PublicCreatorVideoCardRow): CreatorVideo => ({
+  id: toText(row.id),
+  ownerId: toText(row.ownerId),
+  title: toText(row.title) || "Untitled Video",
+  description: toText(row.description),
+  visibility: "public",
+  moderationStatus: normalizeModerationStatus(row.moderationStatus),
+  moderationReason: toText(row.moderationReason) || null,
+  moderatedAt: toText(row.moderatedAt) || null,
+  moderatedBy: toText(row.moderatedBy) || null,
+  playbackUrl: "",
+  thumbnailUrl: toText(row.thumbnailUrl),
+  storageProvider: "supabase",
+  storageBucket: "",
+  storageObjectKey: "",
+  storagePath: "",
+  thumbStoragePath: "",
+  mimeType: toText(row.mimeType),
+  fileSizeBytes: typeof row.fileSizeBytes === "number" ? row.fileSizeBytes : null,
+  playbackResolution: null,
+  playbackQualityLabel: null,
+  paidContentAccess: null,
+  renditionStatuses: [],
+  createdAt: toText(row.createdAt) || new Date().toISOString(),
+  updatedAt: toText(row.updatedAt) || toText(row.createdAt) || new Date().toISOString(),
+});
+
+async function readPublicCreatorVideoCards(input: {
+  action: PublicCreatorVideoCardAction;
+  ownerId?: string;
+  ownerIds?: string[];
+  limit?: number;
+}): Promise<CreatorVideo[]> {
+  const response = await fetch(PUBLIC_CREATOR_VIDEO_CARDS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(input),
+  });
+  const payload = await response.json().catch(() => null) as { videos?: PublicCreatorVideoCardRow[] } | null;
+  if (!response.ok || !Array.isArray(payload?.videos)) return [];
+  return payload.videos.map(parsePublicCreatorVideoCard).filter((video) => !!video.id && video.visibility === "public");
+}
+
 async function attachRenditionStatuses(videos: CreatorVideo[]): Promise<CreatorVideo[]> {
   if (!videos.length) return videos;
   const statusMap = await readVideoRenditionStatuses(videos.map((video) => video.id));
@@ -310,6 +374,13 @@ export async function readCreatorVideos(
 ): Promise<CreatorVideo[]> {
   const normalizedOwnerId = toText(ownerId);
   if (!normalizedOwnerId) return [];
+  if (!options?.includeDrafts) {
+    return readPublicCreatorVideoCards({
+      action: "list_by_owner",
+      ownerId: normalizedOwnerId,
+      limit: options?.limit ?? 24,
+    }).catch(() => []);
+  }
 
   let query = supabase
     .from("videos")
@@ -317,12 +388,6 @@ export async function readCreatorVideos(
     .eq("owner_id", normalizedOwnerId)
     .order("created_at", { ascending: false })
     .limit(options?.limit ?? 24);
-
-  if (!options?.includeDrafts) {
-    query = query
-      .eq("visibility", "public")
-      .in("moderation_status", ["clean", "reported"]);
-  }
 
   const { data, error } = await query.returns<CreatorVideoRow[]>();
   if (error || !data) return [];
@@ -339,18 +404,11 @@ export async function readCreatorVideosForOwners(
   if (!normalizedOwnerIds.length) return [];
 
   const limit = Math.max(1, Math.min(50, Math.floor(Number(options?.limit ?? 12))));
-  const { data, error } = await supabase
-    .from("videos")
-    .select(CREATOR_VIDEO_SELECT)
-    .in("owner_id", normalizedOwnerIds)
-    .eq("visibility", "public")
-    .in("moderation_status", ["clean", "reported"])
-    .order("created_at", { ascending: false })
-    .limit(limit)
-    .returns<CreatorVideoRow[]>();
-
-  if (error || !data) return [];
-  return attachRenditionStatuses(await Promise.all(data.map((row) => parseCreatorVideo(row))));
+  return readPublicCreatorVideoCards({
+    action: "list_for_owners",
+    ownerIds: normalizedOwnerIds,
+    limit,
+  }).catch(() => []);
 }
 
 export async function readCreatorVideoForOwner(videoId: string): Promise<CreatorVideo | null> {
@@ -375,17 +433,10 @@ export async function readLatestPublicCreatorVideos(
   options?: { limit?: number },
 ): Promise<CreatorVideo[]> {
   const limit = Math.max(1, Math.min(50, Math.floor(Number(options?.limit ?? 12))));
-  const { data, error } = await supabase
-    .from("videos")
-    .select(CREATOR_VIDEO_SELECT)
-    .eq("visibility", "public")
-    .in("moderation_status", ["clean", "reported"])
-    .order("created_at", { ascending: false })
-    .limit(limit)
-    .returns<CreatorVideoRow[]>();
-
-  if (error || !data) return [];
-  return attachRenditionStatuses(await Promise.all(data.map((row) => parseCreatorVideo(row))));
+  return readPublicCreatorVideoCards({
+    action: "list_latest",
+    limit,
+  }).catch(() => []);
 }
 
 export async function readCreatorVideoForPlayer(videoId: string): Promise<CreatorVideo | null> {

@@ -39,6 +39,10 @@ const CREATOR_VIDEO_MIME_TYPES = new Set([
   "video/quicktime",
   "video/webm",
   "video/x-m4v",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
 ]);
 
 const SOCIAL_ATTACHMENT_MIME_TYPES = new Set([

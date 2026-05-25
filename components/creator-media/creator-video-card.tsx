@@ -114,9 +114,9 @@ export function CreatorVideoCard({
   const moderationLabel = formatModerationLabel(video);
   const fileSize = formatFileSize(video.fileSizeBytes);
   const updatedDate = formatDate(video.updatedAt || video.createdAt);
-  const playable = hasPlayableSource(video);
   const shareable = isCreatorVideoPubliclyShareable(video);
   const ownerMode = mode === "owner";
+  const playable = ownerMode ? hasPlayableSource(video) : shareable;
   const ownerClipEdit = ownerMode ? clipEdit ?? null : null;
   const { displayTitle, rawTitleDetected } = formatCreatorVideoDisplayTitle(video.title);
   const moderationBlocked = video.moderationStatus === "hidden"

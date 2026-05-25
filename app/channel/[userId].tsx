@@ -25,6 +25,7 @@ import {
   readCreatorMiniPlatformCommerceSurface,
   type CreatorMiniPlatformCommerceSurface,
 } from "../../_lib/creatorMonetization";
+import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
 import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
@@ -107,7 +108,7 @@ const formatEventStatus = (event: CreatorEventSummary) => {
   return event.status.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase());
 };
 
-const hasPlayableVideo = (video: CreatorVideo) => !!(video.playbackUrl || video.storagePath);
+const hasPlayableVideo = (video: CreatorVideo) => isCreatorVideoPubliclyShareable(video);
 
 export default function PublicChannelScreen() {
   const router = useRouter();
