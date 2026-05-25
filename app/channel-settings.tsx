@@ -37,13 +37,10 @@ import {
   type CreatorAnalyticsReadModel,
 } from "../_lib/channelReadModels";
 import {
-  CREATOR_PAYOUT_REQUIREMENTS,
   createCreatorPayoutOnboardingLink,
   createEmptyCreatorPayoutDashboardReadModel,
   createOrReuseCreatorPayoutProviderAccount,
   formatCreatorPayoutFoundationAmount,
-  formatCreatorPayoutLedgerCount,
-  previewCreatorPayoutPreproductionWorkflow,
   readCreatorPayoutDashboardSummary,
   resolveCreatorPayoutReadiness,
   syncCreatorPayoutProviderStatus,
@@ -52,11 +49,11 @@ import {
 import {
   CREATOR_MONETIZATION_DOCTRINE,
   DEFAULT_CREATOR_MONETIZATION_RUNTIME_FLAGS,
-  calculateInstantCashoutFeeCents,
   formatMonetizationCurrency,
   readCreatorMonetizationFoundationSummary,
   type CreatorMonetizationFoundationSummary,
 } from "../_lib/creatorMonetization";
+import { getRevenueCatProductionReadiness } from "../_lib/revenuecat";
 import {
   approveChannelAudienceRequest,
   blockChannelAudienceMember,
@@ -193,7 +190,7 @@ type SummaryMetricCard = {
   tone?: "default" | "unavailable";
 };
 
-type StudioTabId = "home" | "content" | "clip" | "live" | "audience" | "monetize" | "moderation" | "insights" | "payouts" | "revenue" | "brand";
+type StudioTabId = "home" | "content" | "clip" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
 type ContentStatusFilter = "all" | "published" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
@@ -209,11 +206,12 @@ type ClipStudioSaveState =
   | "save_failed"
   | "retrying";
 type StudioHomeSectionId = "create" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
+type MonetizationSectionId = "overview" | "premium" | "revenue" | "payouts" | "stripe" | "store" | "future" | "technical";
 type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scenePresets" | "review" | "preview" | "defaults";
 type ClipStudioSectionId = "media" | "cover" | "title" | "templates" | "format" | "brand" | "save" | "advanced";
 
 const createPayoutSetupRedirectUrl = (status: "return" | "refresh") => (
-  `chillywoodmobile://channel-studio?tab=payouts&payout_setup=${status}`
+  `chillywoodmobile://channel-studio?tab=monetization&focus=payouts&payout_setup=${status}`
 );
 
 type ChannelEventEditorState = {
@@ -619,7 +617,7 @@ const getCreatorFacingPayoutSetupBody = (summary: CreatorPayoutDashboardReadMode
     case "on_hold":
       return "A policy or review hold is active. No payout action is available.";
     case "payouts_disabled":
-      return "Payouts are disabled. No payout action is available.";
+      return "Payouts are unavailable. No payout action is available.";
     default:
       return "Creator payouts are not active yet.";
   }
@@ -673,13 +671,11 @@ const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "content", label: "Content" },
   { id: "clip", label: "Clip" },
+  { id: "monetization", label: "Monetization" },
   { id: "live", label: "Live" },
   { id: "audience", label: "Audience" },
-  { id: "monetize", label: "Monetize" },
   { id: "moderation", label: "Moderation" },
   { id: "insights", label: "Insights" },
-  { id: "payouts", label: "Payouts" },
-  { id: "revenue", label: "Revenue" },
   { id: "brand", label: "Brand" },
 ];
 
@@ -763,22 +759,45 @@ const BRAND_BLUR_OPTIONS: readonly { label: string; value: number }[] = [
 
 const normalizeStudioTabId = (value: unknown): StudioTabId | null => {
   const normalized = String(Array.isArray(value) ? value[0] : value ?? "").trim().toLowerCase();
+  if (normalized === "monetize" || normalized === "payouts" || normalized === "revenue") {
+    return "monetization";
+  }
   if (
     normalized === "home"
     || normalized === "content"
     || normalized === "clip"
-    || normalized === "monetize"
     || normalized === "live"
     || normalized === "audience"
+    || normalized === "monetization"
     || normalized === "moderation"
     || normalized === "insights"
-    || normalized === "payouts"
-    || normalized === "revenue"
     || normalized === "brand"
   ) {
     return normalized;
   }
   return null;
+};
+
+const normalizeMonetizationSectionId = (value: unknown): MonetizationSectionId | null => {
+  const normalized = String(Array.isArray(value) ? value[0] : value ?? "").trim().toLowerCase();
+  if (normalized === "monetize" || normalized === "status" || normalized === "overview") return "overview";
+  if (normalized === "premium" || normalized === "subscriptions" || normalized === "subscription") return "premium";
+  if (normalized === "revenue" || normalized === "earnings") return "revenue";
+  if (normalized === "payout" || normalized === "payouts") return "payouts";
+  if (normalized === "stripe" || normalized === "connect") return "stripe";
+  if (normalized === "store" || normalized === "google" || normalized === "revenuecat" || normalized === "google-play") {
+    return "store";
+  }
+  if (normalized === "future" || normalized === "tools") return "future";
+  if (normalized === "technical" || normalized === "checks") return "technical";
+  return null;
+};
+
+const createInitialMonetizationSections = (tab: unknown, focus: unknown) => {
+  const sections = new Set<MonetizationSectionId>(["overview"]);
+  const routedSection = normalizeMonetizationSectionId(tab) ?? normalizeMonetizationSectionId(focus);
+  if (routedSection) sections.add(routedSection);
+  return sections;
 };
 
 const getCreatorVideoCreatedTimestamp = (video: CreatorVideo) => {
@@ -869,6 +888,9 @@ export function ChannelStudioScreen() {
   const [activeStudioTab, setActiveStudioTab] = useState<StudioTabId>(initialStudioTab);
   const [expandedHomeSections, setExpandedHomeSections] = useState<ReadonlySet<StudioHomeSectionId>>(
     () => new Set<StudioHomeSectionId>(["create"]),
+  );
+  const [expandedMonetizationSections, setExpandedMonetizationSections] = useState<ReadonlySet<MonetizationSectionId>>(
+    () => createInitialMonetizationSections(routeParams.tab, routeParams.focus),
   );
   const [expandedBrandSections, setExpandedBrandSections] = useState<ReadonlySet<BrandStudioSectionId>>(
     () => new Set<BrandStudioSectionId>(["hero"]),
@@ -971,6 +993,11 @@ export function ChannelStudioScreen() {
       || hasPlatformStaffPermission(platformRoleMemberships, ["content_moderation", "reports_review"]),
     [platformRoleMemberships],
   );
+  const canSeeMonetizationTechnicalChecks = useMemo(
+    () => __DEV__ || hasPlatformRoleMembership(platformRoleMemberships, ["owner", "operator"]),
+    [platformRoleMemberships],
+  );
+  const revenueCatReadiness = useMemo(() => getRevenueCatProductionReadiness(), []);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Platform Studio");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
   const openStudioTab = (
@@ -979,6 +1006,12 @@ export function ChannelStudioScreen() {
   ) => {
     setActiveStudioTab(tab);
     if (options?.filter) setContentStatusFilter(options.filter);
+    if (tab === "monetization") {
+      const routedSection = normalizeMonetizationSectionId(options?.focus);
+      if (routedSection) {
+        setExpandedMonetizationSections((current) => new Set([...current, routedSection]));
+      }
+    }
     router.setParams({
       tab,
       focus: options?.focus ?? "",
@@ -989,6 +1022,14 @@ export function ChannelStudioScreen() {
   };
   const toggleHomeSection = (id: StudioHomeSectionId) => {
     setExpandedHomeSections((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleMonetizationSection = (id: MonetizationSectionId) => {
+    setExpandedMonetizationSections((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -1019,6 +1060,11 @@ export function ChannelStudioScreen() {
       ?? (routeAction === "upload" ? "content" : null);
     if (nextTab) {
       setActiveStudioTab(nextTab);
+    }
+    const monetizationSection = normalizeMonetizationSectionId(routeParams.tab)
+      ?? normalizeMonetizationSectionId(routeParams.focus);
+    if (nextTab === "monetization" && monetizationSection) {
+      setExpandedMonetizationSections((current) => new Set([...current, monetizationSection]));
     }
     if (routeAction === "upload") setContentStatusFilter("all");
   }, [routeAction, routeParams.focus, routeParams.tab]);
@@ -2657,23 +2703,28 @@ export function ChannelStudioScreen() {
       ],
     },
     {
-      title: "Monetize",
-      body: "Paid content, tips, merch, and checkout are not active yet.",
+      title: "Monetization",
+      body: "Premium, revenue, and payout readiness in one place.",
       sections: [
         {
-          title: "Paid Content Pricing",
-          status: "near_term",
-          body: "Premium creators can price their own items only after server flags, provider readiness, and entitlement checks are ready.",
+          title: "Premium and Subscriptions",
+          status: "current",
+          body: "Premium access stays governed by the existing store and entitlement checks.",
         },
         {
-          title: "Tips / Support",
+          title: "Revenue",
           status: "near_term",
-          body: "Tips stay separate from Premium and do not unlock digital perks or paid access.",
+          body: "No creator earnings are available until store, payment, and review checks are ready.",
         },
         {
-          title: "Merch / Products",
+          title: "Payouts",
           status: "near_term",
-          body: "Product listings stay unavailable until commerce checkout, fulfillment, refund, and tax paths are approved.",
+          body: "Payouts stay unavailable until setup, review, and payout checks are ready.",
+        },
+        {
+          title: "Future Tools",
+          status: "near_term",
+          body: "Tips, paid content, commerce, sponsorships, ads, and subscriptions stay planned until backed.",
         },
       ],
     },
@@ -2738,28 +2789,6 @@ export function ChannelStudioScreen() {
           title: "Channel IQ / Rachi Platform Studio Assistant",
           status: "later_phase",
           body: "Coming later; no assistant implementation is wired in this pass.",
-        },
-      ],
-    },
-    {
-      title: "Payouts",
-      body: "Read-only payout readiness and setup status.",
-      sections: [
-        {
-          title: "Payout Dashboard",
-          status: "current",
-          body: "Creator payouts are not active yet.",
-        },
-      ],
-    },
-    {
-      title: "Revenue",
-      body: "Read-only creator revenue status with no earnings shown.",
-      sections: [
-        {
-          title: "Revenue Dashboard",
-          status: "near_term",
-          body: "Revenue sharing is not active yet; source money imports must exist before earnings can be shown.",
         },
       ],
     },
@@ -3017,167 +3046,32 @@ export function ChannelStudioScreen() {
       tone: safetyAdminSummary?.recentPlatformOwnedTargetCount == null ? "unavailable" : "default",
     },
   ];
-  const payoutRequirementCards: readonly SummaryMetricCard[] = CREATOR_PAYOUT_REQUIREMENTS.map((requirement) => ({
-    label: requirement.label,
-    value: requirement.value,
-    body: "Future requirement",
-  }));
-  const payoutLedgerSummaryCards: readonly SummaryMetricCard[] = [
-    {
-      label: "Status",
-      value: "Not active yet",
-      body: "Creator payouts are not active yet.",
-    },
-    {
-      label: "Ledger",
-      value: creatorPayoutSummary.ledgerConnected
-        ? formatCreatorPayoutLedgerCount(creatorPayoutSummary.ledgerRowCount)
-        : "Not available",
-      body: creatorPayoutSummary.ledgerConnected
-        ? "Read-only entries are not payable."
-        : "Payout ledger is not available for creators yet.",
-      tone: creatorPayoutSummary.ledgerConnected ? "default" : "unavailable",
-    },
-    {
-      label: "Money Movement",
-      value: "Blocked",
-      body: "No withdrawal, transfer, approval, or payout release exists.",
-      tone: "unavailable",
-    },
-  ];
   const creatorRevenueSummaryCards: readonly SummaryMetricCard[] = [
     {
       label: "Revenue sharing",
       value: "Not active yet",
-      body: "Creator revenue sharing is not active until real source money is imported.",
+      body: "Creator revenue sharing stays locked until store, payment, and review checks are ready.",
       tone: "unavailable",
     },
     {
-      label: "Source imports",
+      label: "Revenue sources",
       value: "Not active",
-      body: "Ad, sponsor, tip, paid content, and network billing imports are not active here.",
+      body: "Ads, sponsorships, tips, paid content, and commerce are planned, not active.",
       tone: "unavailable",
     },
     {
       label: "Creator earnings",
-      value: "None shown",
-      body: "This dashboard does not show earnings, payable balance, paid status, or withdrawal eligibility.",
+      value: "No earnings yet",
+      body: "No earnings, balances, paid status, or withdrawals are available.",
       tone: "unavailable",
-    },
-  ];
-  const creatorRevenueRuleCards: readonly SummaryMetricCard[] = [
-    {
-      label: "Creator-page ads",
-      value: "70% net later",
-      body: "Only after real provider ad revenue reports exist.",
-    },
-    {
-      label: "Creator-sold sponsors",
-      value: "80% net later",
-      body: "Only after brand payment, review, disclosure, fraud checks, and hold rules are backed.",
-    },
-    {
-      label: "Tips",
-      value: "100% to creator later",
-      body: "Any Chi'llywood service, platform, cash-out, or provider fee must be shown separately where allowed. Tips do not unlock digital perks or paid access.",
-    },
-    {
-      label: "Merch/products",
-      value: "Future commerce",
-      body: "Platform commerce is managed from Platform Studio and needs product listings, inventory or fulfillment status where needed, provider readiness, refunds, tax review, and payout ledger truth before launch.",
-    },
-    {
-      label: "Paid content",
-      value: "80% net later",
-      body: "Only after paid-content purchase, refund, tax, and provider readiness exist.",
     },
   ];
   const creatorMonetizationSettings =
     creatorMonetizationSummary?.settings ?? DEFAULT_CREATOR_MONETIZATION_RUNTIME_FLAGS;
-  const calculateInstantCashoutFeePreviewCents = calculateInstantCashoutFeeCents(10_000);
   const creatorPayoutReadiness = resolveCreatorPayoutReadiness(
     creatorPayoutSummary,
     creatorMonetizationSettings,
   );
-  const creatorScheduledPayoutDryRunPreview = previewCreatorPayoutPreproductionWorkflow(
-    creatorPayoutSummary,
-    { amountCents: 10_000, payoutType: "scheduled" },
-    creatorMonetizationSettings,
-  );
-  const creatorInstantCashoutDryRunPreview100 = previewCreatorPayoutPreproductionWorkflow(
-    creatorPayoutSummary,
-    { amountCents: 10_000, payoutType: "instant" },
-    creatorMonetizationSettings,
-  );
-  const creatorInstantCashoutDryRunPreview1000 = previewCreatorPayoutPreproductionWorkflow(
-    creatorPayoutSummary,
-    { amountCents: 100_000, payoutType: "instant" },
-    creatorMonetizationSettings,
-  );
-  const creatorMonetizationFoundationCards: readonly SummaryMetricCard[] = [
-    {
-      label: "Creator pricing",
-      value: creatorMonetizationSettings.creatorPricingEnabled ? "Enabled later" : "Off",
-      body: "Server-backed creator pricing is required before Premium creators can mark content paid.",
-      tone: creatorMonetizationSettings.creatorPricingEnabled ? "default" : "unavailable",
-    },
-    {
-      label: "Paid checkout",
-      value: creatorMonetizationSettings.paidContentCheckoutEnabled ? "Enabled later" : "Off",
-      body: "Checkout remains blocked until provider, policy, webhook, refund, and access-grant readiness pass.",
-      tone: creatorMonetizationSettings.paidContentCheckoutEnabled ? "default" : "unavailable",
-    },
-    {
-      label: "Tips",
-      value: creatorMonetizationSettings.tipsEnabled ? "Enabled later" : "Off",
-      body: "Creators keep 100% of the tip amount; fees must be separate and disclosed where allowed.",
-      tone: creatorMonetizationSettings.tipsEnabled ? "default" : "unavailable",
-    },
-    {
-      label: "Merch/products",
-      value: creatorMonetizationSettings.merchStoreEnabled ? "Enabled later" : "Off",
-      body: "Platform product listings need checkout, tax, fulfillment, refund, and payout readiness before launch.",
-      tone: creatorMonetizationSettings.merchStoreEnabled ? "default" : "unavailable",
-    },
-    {
-      label: "Live money",
-      value: creatorMonetizationSettings.liveMoneyEnabled ? "On" : "Off",
-      body: "Live money must stay off until legal, provider, tax, fraud, and Owner-approved rollout readiness passes.",
-      tone: creatorMonetizationSettings.liveMoneyEnabled ? "default" : "unavailable",
-    },
-  ];
-  const creatorMonetizationCountCards: readonly SummaryMetricCard[] = [
-    {
-      label: "Pricing",
-      value: formatCount(creatorMonetizationSummary?.pricingRows ?? null),
-      body: "Backed paid-content pricing records for this creator when pricing becomes available.",
-      tone: creatorMonetizationSummary?.pricingRows == null ? "unavailable" : "default",
-    },
-    {
-      label: "Products",
-      value: formatCount(creatorMonetizationSummary?.productRows ?? null),
-      body: "Backed product or merch records for this creator; checkout remains disabled.",
-      tone: creatorMonetizationSummary?.productRows == null ? "unavailable" : "default",
-    },
-    {
-      label: "Tips",
-      value: formatCount(creatorMonetizationSummary?.tipRows ?? null),
-      body: "Webhook-confirmed tip records only; no fake tips are created by Platform Studio.",
-      tone: creatorMonetizationSummary?.tipRows == null ? "unavailable" : "default",
-    },
-    {
-      label: "Ledger",
-      value: formatCount(creatorMonetizationSummary?.ledgerRows ?? null),
-      body: "Immutable ledger records only; balances are derived and cannot be edited here.",
-      tone: creatorMonetizationSummary?.ledgerRows == null ? "unavailable" : "default",
-    },
-    {
-      label: "Payout requests",
-      value: formatCount(creatorMonetizationSummary?.payoutRequestRows ?? null),
-      body: "Scheduled and instant cash-out requests are not active; no payout execution exists.",
-      tone: creatorMonetizationSummary?.payoutRequestRows == null ? "unavailable" : "default",
-    },
-  ];
   const upcomingEvents = useMemo(
     () => creatorEvents.filter((event) => event.isUpcoming),
     [creatorEvents],
@@ -4365,7 +4259,7 @@ export function ChannelStudioScreen() {
             key={tab.id}
             style={[styles.studioTabButton, active && styles.studioTabButtonActive]}
             activeOpacity={0.86}
-            onPress={() => setActiveStudioTab(tab.id)}
+            onPress={() => openStudioTab(tab.id)}
           >
             <Text style={[styles.studioTabButtonText, active && styles.studioTabButtonTextActive]}>
               {tab.label}
@@ -4443,6 +4337,46 @@ export function ChannelStudioScreen() {
           style={styles.studioAccordionHeader}
           activeOpacity={0.86}
           onPress={() => toggleHomeSection(id)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={`${title}. ${summary}`}
+        >
+          <View style={styles.studioAccordionCopy}>
+            <Text style={styles.studioAccordionTitle}>{title}</Text>
+            <Text style={styles.studioAccordionSummary}>{summary}</Text>
+          </View>
+          <View style={styles.studioAccordionMeta}>
+            {status ? renderStudioStatusPill(status, statusTone) : null}
+            <Text style={styles.studioAccordionChevron}>{expanded ? "⌄" : "›"}</Text>
+          </View>
+        </TouchableOpacity>
+        {expanded ? <View style={styles.studioAccordionBody}>{children}</View> : null}
+      </View>
+    );
+  };
+
+  const renderMonetizationAccordion = ({
+    id,
+    title,
+    summary,
+    status,
+    statusTone = "default",
+    children,
+  }: {
+    id: MonetizationSectionId;
+    title: string;
+    summary: string;
+    status?: string;
+    statusTone?: "default" | "muted" | "warning";
+    children: React.ReactNode;
+  }) => {
+    const expanded = expandedMonetizationSections.has(id);
+    return (
+      <View style={styles.studioAccordionCard}>
+        <TouchableOpacity
+          style={styles.studioAccordionHeader}
+          activeOpacity={0.86}
+          onPress={() => toggleMonetizationSection(id)}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={`${title}. ${summary}`}
@@ -4915,30 +4849,30 @@ export function ChannelStudioScreen() {
         {renderHomeAccordion({
           id: "monetization",
           title: "Monetization",
-          summary: "Revenue and payout tools stay honest until eligible.",
+          summary: "Premium, revenue, and payout readiness in one place.",
           status: creatorMonetizationSettings.liveMoneyEnabled ? "On" : "Not active",
           statusTone: creatorMonetizationSettings.liveMoneyEnabled ? "default" : "muted",
           children: (
             <>
               {renderStudioActionRow({
                 title: "Monetization status",
-                body: "Review eligibility and locked creator monetization tools.",
+                body: "Review Premium, revenue, and payout readiness in one place.",
                 value: "Open",
-                onPress: () => openStudioTab("monetize", { focus: "status" }),
+                onPress: () => openStudioTab("monetization", { focus: "overview" }),
               })}
               {renderStudioActionRow({
                 title: "Revenue",
-                body: "No creator earnings are available until real source money is imported.",
+                body: "No creator earnings are available until setup and review checks are ready.",
                 value: "Not active",
                 tone: "muted",
-                onPress: () => openStudioTab("revenue", { focus: "status" }),
+                onPress: () => openStudioTab("monetization", { focus: "revenue" }),
               })}
               {renderStudioActionRow({
                 title: "Payouts",
                 body: getCreatorFacingPayoutSetupBody(creatorPayoutSummary),
                 value: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary),
                 tone: "muted",
-                onPress: () => openStudioTab("payouts", { focus: "status" }),
+                onPress: () => openStudioTab("monetization", { focus: "payouts" }),
               })}
               {renderStudioActionRow({
                 title: "Creator monetization policy",
@@ -5673,424 +5607,376 @@ export function ChannelStudioScreen() {
     );
   };
 
-  const renderMonetizeTab = () => (
-    <>
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Monetize</Text>
-            <Text style={styles.panelSubtitle}>Paid content, tips, and platform commerce are not active yet.</Text>
-          </View>
-          <Text style={styles.panelStatusMuted}>OFF</Text>
+  const renderSummaryMetricCards = (cards: readonly SummaryMetricCard[]) => (
+    <View style={styles.summaryGrid}>
+      {cards.map((card) => (
+        <View
+          key={card.label}
+          style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
+        >
+          <Text style={styles.summaryLabel}>{card.label}</Text>
+          <Text style={styles.summaryValue}>{card.value}</Text>
+          <Text style={styles.summaryBody}>{card.body}</Text>
         </View>
-        <Text style={styles.permissionCopy}>
-          Platform Studio can show monetization readiness, but it cannot create purchases, tips, orders, earnings, cash-out, payouts, or transfers while live money is off.
-        </Text>
-      </View>
-
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Creator monetization gates</Text>
-          <Text style={styles.panelStatusMuted}>Server-backed</Text>
-        </View>
-        <View style={styles.summaryGrid}>
-          {creatorMonetizationFoundationCards.map((card) => (
-            <View
-              key={card.label}
-              style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
-            >
-              <Text style={styles.summaryLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
-              <Text style={styles.summaryBody}>{card.body}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Safe tool states</Text>
-          <Text style={styles.panelStatusMuted}>Blocked</Text>
-        </View>
-        <View style={styles.eventList}>
-          {[
-            {
-              title: "Paid creator content",
-              body: `Premium creators will be able to price their own content after ${CREATOR_MONETIZATION_DOCTRINE.premiumEntitlement} eligibility, server flags, and provider checkout are ready. Viewers will not need Premium to buy creator-paid content.`,
-            },
-            {
-              title: "Tips / support",
-              body: "Creators keep 100% of the tip amount. Tips do not unlock digital perks, VIP access, badges, rankings, special content, or paid access.",
-            },
-            {
-              title: "Merch / products / clothing",
-              body: "Product listings belong to the creator platform, but checkout, taxes, inventory, fulfillment, refunds, and payout ledger entries are not live.",
-            },
-            {
-              title: "Cash-out",
-              body: `Scheduled payouts are free later. Optional instant cash-out is ${CREATOR_MONETIZATION_DOCTRINE.instantCashoutFeeBps / 100}% with no default cap, separate from the creator tip amount.`,
-            },
-          ].map((item) => (
-            <View key={item.title} style={styles.eventEmptyCard}>
-              <Text style={styles.eventEmptyTitle}>{item.title}</Text>
-              <Text style={styles.eventEmptyBody}>{item.body}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Read-only setup signals</Text>
-          <Text style={styles.panelStatusMuted}>{creatorMonetizationSummary ? "Read-only" : "Not active"}</Text>
-        </View>
-        <Text style={styles.permissionCopy}>
-          Counts here are not earnings, payable balances, purchases, orders, or payout eligibility.
-        </Text>
-        <View style={styles.summaryGrid}>
-          {creatorMonetizationCountCards.map((card) => (
-            <View
-              key={card.label}
-              style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
-            >
-              <Text style={styles.summaryLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
-              <Text style={styles.summaryBody}>{card.body}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Split doctrine</Text>
-          <Text style={styles.panelStatusMuted}>Planning truth</Text>
-        </View>
-        <View style={styles.summaryGrid}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Paid content</Text>
-            <Text style={styles.summaryValue}>80% / 20%</Text>
-            <Text style={styles.summaryBody}>
-              {"Creator gets 80% of net receipts; Chi'llywood gets 20% after fees, taxes, refunds, chargebacks, and adjustments."}
-            </Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Tips</Text>
-            <Text style={styles.summaryValue}>100%</Text>
-            <Text style={styles.summaryBody}>Creator keeps 100% of the tip amount. Service, platform, provider, or cash-out fees must be separate where allowed.</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Premium</Text>
-            <Text style={styles.summaryValue}>{CREATOR_MONETIZATION_DOCTRINE.premiumPrice}</Text>
-            <Text style={styles.summaryBody}>
-              {"Premium revenue belongs to Chi'llywood and is not split with creators."}
-            </Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Cash-out fee</Text>
-            <Text style={styles.summaryValue}>
-              {formatMonetizationCurrency(calculateInstantCashoutFeePreviewCents, "usd")}
-            </Text>
-            <Text style={styles.summaryBody}>Example instant fee on a $100 cash-out; scheduled payout fee is $0.</Text>
-          </View>
-        </View>
-      </View>
-    </>
+      ))}
+    </View>
   );
 
-  const renderPayoutsTab = () => (
-    <>
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Payouts</Text>
-            <Text style={styles.panelSubtitle}>Creator payouts are not active yet.</Text>
-          </View>
-          <Text style={styles.panelStatusMuted}>READ-ONLY</Text>
-        </View>
-        <Text style={styles.permissionCopy}>
-          This dashboard can open payout setup when available, but it does not create a balance, withdrawal, KYC approval, tax form, payout approval, transfer, or payable obligation.
-        </Text>
-      </View>
+  const renderMonetizationTab = () => {
+    const monetizationActive = creatorMonetizationSettings.liveMoneyEnabled === true;
+    const topStatus = monetizationActive ? "Active" : "Not active";
+    const storeStatus = revenueCatReadiness.anyPublicKeyConfigured ? "Ready for review" : "Store setup needed";
+    const stripeStatus = creatorPayoutSummary.providerReady ? "Ready for review" : "Stripe setup needed";
+    const premiumStatus = revenueCatReadiness.anyPublicKeyConfigured ? "Setup needed" : "Store setup needed";
+    const futureToolCards: readonly SummaryMetricCard[] = [
+      { label: "Tips", value: "Planned", body: "Creator support stays unavailable until payment and policy checks are ready.", tone: "unavailable" },
+      { label: "Paid content", value: "Planned", body: "Paid access stays unavailable until purchase, refund, tax, and access checks are ready.", tone: "unavailable" },
+      { label: "Platform commerce", value: "Planned", body: "Products need checkout, fulfillment, refund, tax, and payout checks first.", tone: "unavailable" },
+      { label: "Sponsorships", value: "Planned", body: "Sponsorship tools need review, disclosure, brand safety, and payment checks.", tone: "unavailable" },
+      { label: "Ad revenue", value: "Planned", body: "Creator ad revenue waits for real ad reporting and payout checks.", tone: "unavailable" },
+      { label: "Subscriptions", value: "Premium only", body: "Premium remains the existing Chi'llywood subscription, not creator payout revenue.", tone: "unavailable" },
+    ];
+    const premiumCards: readonly SummaryMetricCard[] = [
+      {
+        label: "Premium access",
+        value: "Unchanged",
+        body: "Premium gates still use the existing entitlement checks.",
+      },
+      {
+        label: "Subscription",
+        value: CREATOR_MONETIZATION_DOCTRINE.premiumPrice,
+        body: "Premium revenue belongs to Chi'llywood and is not split with creators.",
+      },
+      {
+        label: "Store setup",
+        value: storeStatus,
+        body: revenueCatReadiness.anyPublicKeyConfigured
+          ? "Store checks can be reviewed from the subscription screen."
+          : "Premium purchase setup still needs store configuration before purchase can open.",
+        tone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "unavailable",
+      },
+    ];
+    const payoutCards: readonly SummaryMetricCard[] = [
+      {
+        label: "Payout setup",
+        value: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary),
+        body: getCreatorFacingPayoutSetupBody(creatorPayoutSummary),
+        tone: creatorPayoutSummary.providerReady ? "default" : "unavailable",
+      },
+      {
+        label: "KYC / Tax",
+        value: creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Ready for review" : "Setup needed",
+        body: "Identity and tax checks must be ready before payouts can be reviewed.",
+        tone: creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "default" : "unavailable",
+      },
+      {
+        label: "Withdrawals",
+        value: "Unavailable",
+        body: "No withdrawal, transfer, cash-out, or payout release action is available.",
+        tone: "unavailable",
+      },
+      {
+        label: "Scheduled payout",
+        value: creatorPayoutReadiness.canRequestScheduledPayout ? "Ready for review" : "Setup required",
+        body: `Scheduled payout fee is ${formatMonetizationCurrency(creatorPayoutReadiness.scheduledPayoutFeeCents, "usd")}. Requests stay locked until all checks are ready.`,
+        tone: creatorPayoutReadiness.canRequestScheduledPayout ? "default" : "unavailable",
+      },
+      {
+        label: "Instant cash-out",
+        value: creatorPayoutReadiness.canRequestInstantCashout ? "Ready for review" : "Setup required",
+        body: `Optional instant cash-out is ${creatorPayoutReadiness.instantCashoutFeeBps / 100}% with no default cap when a future payout lane is approved.`,
+        tone: creatorPayoutReadiness.canRequestInstantCashout ? "default" : "unavailable",
+      },
+    ];
+    const stripeCards: readonly SummaryMetricCard[] = [
+      {
+        label: "Stripe setup",
+        value: stripeStatus,
+        body: creatorPayoutSummary.providerReady
+          ? "Stripe setup can be reviewed, but payouts are still unavailable."
+          : "Stripe setup is needed before payout readiness can move forward.",
+        tone: creatorPayoutSummary.providerReady ? "default" : "unavailable",
+      },
+      {
+        label: "Money movement",
+        value: "Unavailable",
+        body: "No checkout, withdrawal, transfer, cash-out, or payout release starts from this screen.",
+        tone: "unavailable",
+      },
+      {
+        label: "Review",
+        value: creatorPayoutSummary.adminReviewStatus ? "Review needed" : "Setup needed",
+        body: "Platform review is required before any future payout action can be considered.",
+        tone: "unavailable",
+      },
+    ];
+    const storeCards: readonly SummaryMetricCard[] = [
+      {
+        label: "Google Play",
+        value: revenueCatReadiness.applicationId === revenueCatReadiness.expectedAndroidPackage ? "Package matched" : "Setup needed",
+        body: "Premium purchase readiness still depends on the existing store and subscription screen.",
+        tone: revenueCatReadiness.applicationId === revenueCatReadiness.expectedAndroidPackage ? "default" : "unavailable",
+      },
+      {
+        label: "RevenueCat",
+        value: storeStatus,
+        body: revenueCatReadiness.anyPublicKeyConfigured
+          ? "Subscription setup can be reviewed from the existing Premium flow."
+          : "Store setup is needed before purchase setup can be reviewed.",
+        tone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "unavailable",
+      },
+      {
+        label: "Entitlement",
+        value: "Premium",
+        body: "The existing Premium entitlement remains the access source for Premium gates.",
+      },
+    ];
+    const technicalCards: readonly SummaryMetricCard[] = [
+      {
+        label: "RevenueCat public key",
+        value: revenueCatReadiness.anyPublicKeyConfigured ? "Present" : "Missing",
+        body: "Public runtime status only. No credentials are shown.",
+        tone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "unavailable",
+      },
+      {
+        label: "Offering",
+        value: "premium",
+        body: "Public model id only; purchase availability is still checked by the subscription flow.",
+      },
+      {
+        label: "Product",
+        value: CREATOR_MONETIZATION_DOCTRINE.premiumProduct,
+        body: "Google Play product id is public setup metadata, not a credential.",
+      },
+      {
+        label: "Stripe Connect",
+        value: creatorPayoutSummary.providerReady ? "Ready for review" : "Not active",
+        body: "No credentials, webhook signing values, transfers, or payout actions are exposed.",
+        tone: creatorPayoutSummary.providerReady ? "default" : "unavailable",
+      },
+      {
+        label: "Payment rails",
+        value: "Guarded",
+        body: "Premium remains Google Play plus RevenueCat; creator payouts remain separate.",
+      },
+    ];
 
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Payout setup</Text>
-          <Text style={styles.panelStatusMuted}>{getCreatorFacingPayoutSetupLabel(creatorPayoutSummary)}</Text>
-        </View>
-        <View style={styles.eventSnapshotCard}>
-          <Text style={styles.accessSummaryKicker}>PAYOUT SETUP</Text>
-          <Text style={styles.accessSummaryTitle}>{getCreatorFacingPayoutSetupLabel(creatorPayoutSummary)}</Text>
-          <Text style={styles.accessSummaryBody}>
-            {getCreatorFacingPayoutSetupBody(creatorPayoutSummary)}
+    return (
+      <>
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <View style={styles.panelHeaderCopy}>
+              <Text style={styles.panelTitle}>Monetization</Text>
+              <Text style={styles.panelSubtitle}>Track Premium, revenue, and payout readiness from one place.</Text>
+            </View>
+            {renderStudioStatusPill(topStatus, monetizationActive ? "default" : "muted")}
+          </View>
+          <Text style={styles.permissionCopy}>
+            {monetizationActive
+              ? "Monetization is active. Keep store, payment, and payout checks reviewed before adding new money tools."
+              : "Monetization is not active yet. Tools stay locked until the required store, payment, and payout checks are ready."}
           </Text>
-          <Text style={styles.accessSummaryBody}>
-            Withdrawals, payout release, transfers, checkout, and payable balances are not active.
-          </Text>
-          <View style={styles.summaryGrid}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Provider readiness</Text>
-              <Text style={styles.summaryValue}>{creatorPayoutSummary.providerReady ? "Ready later" : "Not ready"}</Text>
-              <Text style={styles.summaryBody}>Provider readiness does not make creator payouts active.</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>KYC / Tax</Text>
-              <Text style={styles.summaryValue}>
-                {creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Provider ready" : "Not available"}
-              </Text>
-              <Text style={styles.summaryBody}>{"Provider setup, tax readiness, and Chi'llywood legal/accounting review are required before payouts."}</Text>
-            </View>
-            <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
-              <Text style={styles.summaryLabel}>Payout execution</Text>
-              <Text style={styles.summaryValue}>Inactive</Text>
-              <Text style={styles.summaryBody}>No withdrawal, approval, release, transfer, or cash-out action exists.</Text>
-            </View>
-            <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
-              <Text style={styles.summaryLabel}>Scheduled payout</Text>
-              <Text style={styles.summaryValue}>
-                {creatorPayoutReadiness.canRequestScheduledPayout ? "Ready" : "Disabled"}
-              </Text>
-              <Text style={styles.summaryBody}>
-                Scheduled payout fee is ${formatCreatorPayoutFoundationAmount(creatorPayoutReadiness.scheduledPayoutFeeCents, "usd").replace("USD ", "")}; requests remain blocked until provider and platform readiness pass.
-              </Text>
-            </View>
-            <View style={[styles.summaryCard, styles.summaryCardUnavailable]}>
-              <Text style={styles.summaryLabel}>Instant cash-out</Text>
-              <Text style={styles.summaryValue}>
-                {creatorPayoutReadiness.canRequestInstantCashout ? "Ready" : "Disabled"}
-              </Text>
-              <Text style={styles.summaryBody}>
-                Optional instant cash-out is {creatorPayoutReadiness.instantCashoutFeeBps / 100}% with no default cap, shown separately before confirmation when live.
-              </Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Test workflow</Text>
-              <Text style={styles.summaryValue}>{creatorInstantCashoutDryRunPreview100.safetyLabel}</Text>
-              <Text style={styles.summaryBody}>
-                Payout setup and review can be checked. Production payout execution remains blocked.
-              </Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Cash-out math</Text>
-              <Text style={styles.summaryValue}>
-                {formatMonetizationCurrency(creatorInstantCashoutDryRunPreview100.instantFeeCents, "usd")}
-                {" / "}
-                {formatMonetizationCurrency(creatorInstantCashoutDryRunPreview1000.instantFeeCents, "usd")}
-              </Text>
-              <Text style={styles.summaryBody}>
-                $100 instant preview = $1.50. $1,000 instant preview = $15.00. Scheduled payout preview fee is {formatMonetizationCurrency(creatorScheduledPayoutDryRunPreview.scheduledFeeCents, "usd")}.
-              </Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Owner approval</Text>
-              <Text style={styles.summaryValue}>{creatorInstantCashoutDryRunPreview100.ownerApprovalRequired ? "Required" : "Not required"}</Text>
-              <Text style={styles.summaryBody}>
-                Chi'llywood can review payout readiness only. Owner-approved workflow and provider/legal readiness are required before any execution lane.
-              </Text>
-            </View>
-          </View>
-          <View style={styles.eventEmptyCard}>
-            <Text style={styles.eventEmptyTitle}>Blocked reasons</Text>
-            <Text style={styles.eventEmptyBody}>
-              {[
-                ...creatorPayoutReadiness.blockedReasons,
-                ...creatorInstantCashoutDryRunPreview100.blockedReasons,
-              ].slice(0, 8).map((reason) => `- ${reason}`).join("\n")}
-            </Text>
-          </View>
-          <View style={styles.eventEmptyCard}>
-            <Text style={styles.eventEmptyTitle}>Next required actions</Text>
-            <Text style={styles.eventEmptyBody}>
-              {[
-                ...creatorPayoutReadiness.nextRequiredActions,
-                ...creatorInstantCashoutDryRunPreview100.approvalSteps,
-              ].slice(0, 8).map((action) => `- ${action}`).join("\n")}
-            </Text>
-          </View>
           <View style={styles.eventActionRow}>
-            {creatorPayoutSummary.setupActionLabel ? (
-              <TouchableOpacity
-                style={[styles.eventPrimaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
-                activeOpacity={0.88}
-                disabled={payoutSetupBusy !== null}
-                onPress={handleStartPayoutProviderSetup}
-              >
-                {payoutSetupBusy === "setup" ? (
-                  <View style={styles.eventPrimaryButtonBusyRow}>
-                    <ActivityIndicator color="#fff" />
-                    <Text style={styles.eventPrimaryButtonText}>Opening setup</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel}</Text>
-                )}
-              </TouchableOpacity>
-            ) : null}
             <TouchableOpacity
-              style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
+              style={styles.eventPrimaryButton}
               activeOpacity={0.88}
-              disabled={payoutSetupBusy !== null}
-              onPress={handleRefreshPayoutProviderStatus}
+              onPress={() => {
+                setExpandedMonetizationSections(new Set<MonetizationSectionId>([
+                  "overview",
+                  "premium",
+                  "revenue",
+                  "payouts",
+                  "stripe",
+                  "store",
+                ]));
+              }}
             >
-              {payoutSetupBusy === "sync" ? (
-                <ActivityIndicator color="#3F2D20" />
-              ) : (
-                <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
-              )}
+              <Text style={styles.eventPrimaryButtonText}>Check readiness</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eventSecondaryButton}
+              activeOpacity={0.88}
+              onPress={() => router.push("/subscribe" as Parameters<typeof router.push>[0])}
+            >
+              <Text style={styles.eventSecondaryButtonText}>Manage Premium</Text>
             </TouchableOpacity>
           </View>
-          {payoutSetupNotice ? (
-            <Text style={styles.noticeText}>{payoutSetupNotice}</Text>
-          ) : null}
-        </View>
-      </View>
-
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Future payout requirements</Text>
-          <Text style={styles.panelStatusMuted}>Future requirement</Text>
-        </View>
-        <View style={styles.summaryGrid}>
-          {payoutRequirementCards.map((card) => (
-            <View key={card.label} style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
-              <Text style={styles.summaryBody}>{card.body}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Payout ledger</Text>
-          <Text style={styles.panelStatusMuted}>Read-only</Text>
-        </View>
-        <Text style={styles.permissionCopy}>
-          Entries here are not available balance, earnings, paid status, or withdrawal eligibility.
-        </Text>
-        <View style={styles.summaryGrid}>
-          {payoutLedgerSummaryCards.map((card) => (
-            <View
-              key={card.label}
-              style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
-            >
-              <Text style={styles.summaryLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
-              <Text style={styles.summaryBody}>{card.body}</Text>
-            </View>
-          ))}
         </View>
 
-        {!creatorPayoutSummary.ledgerConnected ? (
-          <View style={styles.eventEmptyCard}>
-            <Text style={styles.eventEmptyTitle}>Payout ledger is not available yet.</Text>
-            <Text style={styles.eventEmptyBody}>No payout ledger entries are exposed to this creator dashboard.</Text>
-          </View>
-        ) : creatorPayoutSummary.latestRows.length ? (
-          <View style={styles.eventList}>
-            {creatorPayoutSummary.latestRows.map((row) => (
-              <View key={row.id} style={styles.eventCard}>
-                <View style={styles.eventCardHeader}>
-                  <View style={styles.eventCardCopy}>
-                    <Text style={styles.eventCardTitle}>{row.statusLabel}</Text>
-                    <Text style={styles.eventCardMeta}>
-                      {row.entryTypeLabel} · {formatIsoDate(row.createdAt)}
-                    </Text>
-                  </View>
-                  <View style={[styles.contentStatusChip, styles.contentStatusChipUnavailable]}>
-                    <Text style={styles.contentStatusChipText}>Not payable</Text>
-                  </View>
-                </View>
-                <Text style={styles.eventCardBody}>
-                  Recorded amount: {formatCreatorPayoutFoundationAmount(row.amountMinor, row.currency)} · Not payable.
-                </Text>
-                {row.holdReason || row.holdUntil ? (
-                  <Text style={styles.eventCardBody}>
-                    Hold status: {row.holdReason || "Review hold"}{row.holdUntil ? ` until ${formatIsoDate(row.holdUntil)}` : ""}.
+        <View style={styles.studioAccordionStack}>
+          {renderMonetizationAccordion({
+            id: "overview",
+            title: "Overview",
+            summary: "A quick read on what is active and what is locked.",
+            status: topStatus,
+            statusTone: monetizationActive ? "default" : "muted",
+            children: (
+              <>
+                {renderSummaryMetricCards([
+                  { label: "Premium", value: premiumStatus, body: "Premium access and purchases stay on the existing subscription path.", tone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "unavailable" },
+                  { label: "Revenue", value: "No earnings yet", body: "Creator revenue is not active and no earnings are shown.", tone: "unavailable" },
+                  { label: "Payouts", value: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary), body: getCreatorFacingPayoutSetupBody(creatorPayoutSummary), tone: creatorPayoutSummary.providerReady ? "default" : "unavailable" },
+                ])}
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Next required step</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Finish store, payment, tax, safety, and owner review checks before enabling creator money tools.
                   </Text>
+                </View>
+              </>
+            ),
+          })}
+
+          {renderMonetizationAccordion({
+            id: "premium",
+            title: "Premium and Subscriptions",
+            summary: "Existing Premium access, store setup, and subscription readiness.",
+            status: premiumStatus,
+            statusTone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "muted",
+            children: (
+              <>
+                {renderSummaryMetricCards(premiumCards)}
+                {renderStudioActionRow({
+                  title: "Manage Premium",
+                  body: "Open the subscription screen for Premium status, purchase, restore, or account subscription management.",
+                  value: "Open",
+                  onPress: () => router.push("/subscribe" as Parameters<typeof router.push>[0]),
+                })}
+              </>
+            ),
+          })}
+
+          {renderMonetizationAccordion({
+            id: "revenue",
+            title: "Revenue",
+            summary: "Read-only revenue status with no fake earnings.",
+            status: "No earnings yet",
+            statusTone: "muted",
+            children: (
+              <>
+                {renderSummaryMetricCards(creatorRevenueSummaryCards)}
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Revenue is not active yet.</Text>
+                  <Text style={styles.eventEmptyBody}>No earnings, balances, paid status, or payout eligibility is available here.</Text>
+                </View>
+              </>
+            ),
+          })}
+
+          {renderMonetizationAccordion({
+            id: "payouts",
+            title: "Payouts",
+            summary: "Setup status, KYC/tax readiness, and unavailable payout actions.",
+            status: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary),
+            statusTone: creatorPayoutSummary.providerReady ? "default" : "muted",
+            children: (
+              <>
+                {renderSummaryMetricCards(payoutCards)}
+                {creatorPayoutSummary.setupActionLabel || creatorPayoutSummary.canRefreshProviderStatus ? (
+                  <View style={styles.eventActionRow}>
+                    {creatorPayoutSummary.setupActionLabel ? (
+                      <TouchableOpacity
+                        style={[styles.eventPrimaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
+                        activeOpacity={0.88}
+                        disabled={payoutSetupBusy !== null}
+                        onPress={handleStartPayoutProviderSetup}
+                      >
+                        {payoutSetupBusy === "setup" ? (
+                          <View style={styles.eventPrimaryButtonBusyRow}>
+                            <ActivityIndicator color="#fff" />
+                            <Text style={styles.eventPrimaryButtonText}>Opening setup</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel}</Text>
+                        )}
+                      </TouchableOpacity>
+                    ) : null}
+                    {creatorPayoutSummary.canRefreshProviderStatus ? (
+                      <TouchableOpacity
+                        style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
+                        activeOpacity={0.88}
+                        disabled={payoutSetupBusy !== null}
+                        onPress={handleRefreshPayoutProviderStatus}
+                      >
+                        {payoutSetupBusy === "sync" ? (
+                          <ActivityIndicator color="#3F2D20" />
+                        ) : (
+                          <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
+                        )}
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 ) : null}
-                <Text style={styles.eventCardBody}>
-                  Read-only setup row. This row does not create a creator payable balance.
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.eventEmptyCard}>
-            <Text style={styles.eventEmptyTitle}>No payout ledger entries yet.</Text>
-            <Text style={styles.eventEmptyBody}>Creator payouts are not active yet, and there are no read-only setup entries for this creator.</Text>
-          </View>
-        )}
-      </View>
-    </>
-  );
+                {payoutSetupNotice ? <Text style={styles.noticeText}>{payoutSetupNotice}</Text> : null}
+                {creatorPayoutSummary.ledgerConnected && creatorPayoutSummary.latestRows.length ? (
+                  <View style={styles.eventList}>
+                    {creatorPayoutSummary.latestRows.map((row) => (
+                      <View key={row.id} style={styles.eventCard}>
+                        <View style={styles.eventCardHeader}>
+                          <View style={styles.eventCardCopy}>
+                            <Text style={styles.eventCardTitle}>{row.statusLabel}</Text>
+                            <Text style={styles.eventCardMeta}>{row.entryTypeLabel} · {formatIsoDate(row.createdAt)}</Text>
+                          </View>
+                          <View style={[styles.contentStatusChip, styles.contentStatusChipUnavailable]}>
+                            <Text style={styles.contentStatusChipText}>Not payable</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.eventCardBody}>Recorded amount: {formatCreatorPayoutFoundationAmount(row.amountMinor, row.currency)} · Not available for payout.</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            ),
+          })}
 
-  const renderRevenueTab = () => (
-    <>
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <View style={styles.panelHeaderCopy}>
-            <Text style={styles.panelTitle}>Revenue</Text>
-            <Text style={styles.panelSubtitle}>Creator revenue sharing is not active yet.</Text>
-          </View>
-          <Text style={styles.panelStatusMuted}>READ-ONLY</Text>
-        </View>
-        <Text style={styles.permissionCopy}>
-          This dashboard is read-only. It does not import source money, calculate creator earnings, create payout ledger entries, show payable balances, or enable withdrawals.
-        </Text>
-      </View>
+          {renderMonetizationAccordion({
+            id: "stripe",
+            title: "Stripe Setup",
+            summary: "Public-safe setup status only. No money movement.",
+            status: stripeStatus,
+            statusTone: creatorPayoutSummary.providerReady ? "default" : "muted",
+            children: renderSummaryMetricCards(stripeCards),
+          })}
 
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Source money status</Text>
-          <Text style={styles.panelStatusMuted}>Not active</Text>
-        </View>
-        <View style={styles.summaryGrid}>
-          {creatorRevenueSummaryCards.map((card) => (
-            <View
-              key={card.label}
-              style={[styles.summaryCard, card.tone === "unavailable" && styles.summaryCardUnavailable]}
-            >
-              <Text style={styles.summaryLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
-              <Text style={styles.summaryBody}>{card.body}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
+          {renderMonetizationAccordion({
+            id: "store",
+            title: "Google Play / RevenueCat Status",
+            summary: "Subscription store readiness without exposing credentials.",
+            status: storeStatus,
+            statusTone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "muted",
+            children: renderSummaryMetricCards(storeCards),
+          })}
 
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Future revenue rules</Text>
-          <Text style={styles.panelStatusMuted}>Planned only</Text>
-        </View>
-        <Text style={styles.permissionCopy}>
-          Rules below are product planning labels only. They are not creator earnings and cannot become payable without real provider-backed source money, fraud review, payout review, tax/KYC readiness, and immutable audit.
-        </Text>
-        <View style={styles.summaryGrid}>
-          {creatorRevenueRuleCards.map((card) => (
-            <View key={card.label} style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
-              <Text style={styles.summaryBody}>{card.body}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
+          {renderMonetizationAccordion({
+            id: "future",
+            title: "Future Tools",
+            summary: "Money tools that stay planned until backed.",
+            status: "Planned",
+            statusTone: "muted",
+            children: (
+              <>
+                {renderSummaryMetricCards(futureToolCards)}
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>No money action is available here.</Text>
+                  <Text style={styles.eventEmptyBody}>Setup required states do not create balances, transfers, checkout, withdrawals, or earnings.</Text>
+                </View>
+              </>
+            ),
+          })}
 
-      <View style={styles.panel}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>Revenue guardrails</Text>
-          <Text style={styles.panelStatusMuted}>Blocked</Text>
+          {canSeeMonetizationTechnicalChecks ? renderMonetizationAccordion({
+            id: "technical",
+            title: "Technical checks",
+            summary: "Owner/dev-only public-safe readiness details.",
+            status: "Owner/dev",
+            statusTone: "muted",
+            children: renderSummaryMetricCards(technicalCards),
+          }) : null}
         </View>
-        <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>No creator earnings are available.</Text>
-          <Text style={styles.eventEmptyBody}>No source money has been imported for this creator.</Text>
-          <Text style={styles.eventEmptyBody}>No fake earnings, payable balances, paid status, withdrawal, payout release, or creator payout obligation exists.</Text>
-        </View>
-      </View>
-    </>
-  );
+      </>
+    );
+  };
 
   const renderModerationTab = () => (
     <>
@@ -6345,10 +6231,8 @@ export function ChannelStudioScreen() {
             {activeStudioTab === "home" ? renderStudioHomeTab() : null}
             {activeStudioTab === "content" ? renderContentPanel() : null}
             {activeStudioTab === "clip" ? renderClipStudioTab() : null}
-            {activeStudioTab === "monetize" ? renderMonetizeTab() : null}
+            {activeStudioTab === "monetization" ? renderMonetizationTab() : null}
             {activeStudioTab === "moderation" ? renderModerationTab() : null}
-            {activeStudioTab === "payouts" ? renderPayoutsTab() : null}
-            {activeStudioTab === "revenue" ? renderRevenueTab() : null}
 
             {activeStudioTab === "brand" ? renderBrandStudioTab() : null}
 

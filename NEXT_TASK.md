@@ -1,50 +1,35 @@
 # NEXT TASK
 
-## Recommended Lane: Clip Studio Metadata-Only Trim Preview Spec
+## Recommended Lane: Monetization Provider Readiness Proof Pass
 
-Clip Studio Save Draft, cover/poster proof, public cover cards, title/template metadata preview, sanitized public published-card metadata rendering, and trim/export research are no longer known blockers.
+Platform Studio money navigation is no longer a known UI blocker.
 
 Closed truth:
 
-- Save Draft hardening is implemented at `a716ee1ed5a880922b8d6dc49896655392fc9b25`.
-- Cover/poster hardening is implemented at `84a9109b2ccd939da85ed3595301d5a578bc6165`.
-- Title Card and Templates are implemented in the May 25, 2026 closeout commit for this lane.
-- Public cover/poster cards are implemented in the May 25, 2026 Clip Studio Cover Poster Public Card Renderer closeout.
-- Public title/subtitle/template published-card metadata rendering is implemented in the May 25, 2026 Clip Studio Public Metadata Renderer closeout.
-- Android Save Draft/reopen visual proof for title/template metadata is closed on `R5CR120QCBF`; screenshots are outside the repo at `/tmp/chillywood-proof-2026-05-25T13-47-05-881Z-clip-studio-android-reopen-proof/screenshots/`.
-- Android public-cover proof is closed on `R5CR120QCBF`; screenshots are outside the repo at `/tmp/chillywood-proof-2026-05-25T15-17-45-3NZ-clip-studio-public-cover-cards/screenshots/`.
-- Android public-metadata proof is closed on `R5CR120QCBF`; screenshots and backend proof are outside the repo at `/tmp/chillywood-proof-2026-05-25T16-49-37Z-clip-studio-public-metadata-renderer/`.
-- Remote migrations `202605240009` and `202605250001` are applied and aligned.
-- Draft metadata now persists title/subtitle overlay text, placement, style, template preset, and existing format/fit suggestions.
-- Reopening a draft restores the saved title/template state from `creator_clip_edits`.
-- Content Library owner cards can show title/template preview metadata to the creator only.
-- Public creator-video cards now receive cover/poster URLs from the safe `public-creator-video-cards` resolver only for public, moderation-safe videos, with no raw storage path/object/playback fields returned.
-- The same safe public resolver now returns only sanitized Clip Studio published-card metadata fields: `clip_metadata_public`, `clip_title_text`, `clip_subtitle_text`, `clip_template_preset`, `clip_title_style`, and `clip_title_position`.
-- Public Channel Featured/Latest, public Profile creator-video cards, and Home creator-video rails can render sanitized metadata for published public-safe videos.
-- Public Platform still excludes drafts, public-preview mode hides owner controls, and public Channel/Player/Home do not read Clip Studio edit rows.
-- Trim/export research is recorded in `docs/CLIP_STUDIO_TRIM_EXPORT_RESEARCH.md`.
-- Current repo truth has reserved `trim_start_ms` / `trim_end_ms` edit fields, but no trim controls, no native export, no server export, no public trim renderer, and no burned-in output.
-- No native export, permanent video rendering, fake public overlay renderer, fake Premium access, LiveKit, Watch-Party, RevenueCat, payout/revenue, creator gate, auth/session, or Brand Studio public-safety behavior changed.
+- Platform Studio now has one user-facing `Monetization` tab instead of separate `Monetize`, `Payouts`, and `Revenue` tabs.
+- Monetization contains collapsible sections for Overview, Premium and Subscriptions, Revenue, Payouts, Stripe Setup, Google Play / RevenueCat Status, Future Tools, and owner/dev-only Technical checks.
+- Legacy route params map safely: `tab=monetize`, `tab=payouts`, and `tab=revenue` normalize to `tab=monetization`, and section focus params open the relevant Monetization accordion.
+- Quick Actions now route money-related entry points into Monetization sections instead of dead duplicate tabs.
+- Money tools remain locked unless backed. The UI creates no fake earnings, balances, withdrawals, transfers, checkout, paid products, payout release, fake Premium access, or live money movement.
+- Premium gates, RevenueCat entitlement checks, Stripe live-money behavior, creator gates, LiveKit, Watch-Party Live, Live Watch-Party, Clip Studio, Brand Studio, creator video upload/publish/delete, packages, native Android/Gradle config, migrations, and public card rendering were not changed.
+- Android proof on `R5CR120QCBF` is outside the repo at `/tmp/chillywood-proof-2026-05-25T19-11-29Z-platform-studio-monetization/`.
 
-The next launch-strength Clip Studio lane should stay narrow and metadata-only:
+The next monetization lane should be proof-only unless product explicitly asks for implementation:
 
-- Add start/end trim metadata controls only if product wants a creator-facing preview range before launch.
-- Persist `trim_start_ms` and `trim_end_ms` to `creator_clip_edits` through the existing Save Draft/read-back/reopen pattern.
-- Preview the range in Clip Studio only where the existing player APIs can do so safely.
-- Keep public cards and public Player unchanged unless a separate VOD renderer lane is explicitly requested and proved.
-- Use copy such as `Preview range`; do not call it exported, rendered, or permanently cut.
-- Never read anonymous `creator_clip_edits` directly from public UI.
-- Do not introduce native export, burned-in video text, timeline editing, or public player overlays in the metadata-only lane.
-- Keep LiveKit, Watch-Party routes, Premium gates, public resolver behavior, creator upload/publish behavior, native Android files, Gradle files, Expo config, and package files untouched unless a future exact lane explicitly owns them.
-- Continue proving public draft/private non-leakage before claiming any broader renderer.
-- Keep the existing Android reopen and public-cover proofs as the baseline regression path.
+- Verify current Premium store readiness from the existing subscription flow without changing entitlement logic.
+- Verify RevenueCat public runtime status and Google Play product/offering status without printing private keys or credentials.
+- Verify Stripe Connect setup/readiness state through existing backend/test-mode paths only.
+- Keep payouts unavailable unless provider readiness, KYC/tax, legal/accounting review, owner approval, and production-live flags are truly proved.
+- Do not add checkout, paid products, tips, paid content, balances, withdrawals, transfers, payout release, creator earnings, fake revenue, or fake Premium access.
+- Keep the consolidated Monetization tab as the only creator-facing Platform Studio money area.
+- Keep LiveKit, Watch-Party routes, Premium gates, public renderer behavior, creator upload/publish behavior, native Android files, Gradle files, Expo config, and package files untouched unless a future exact lane explicitly owns them.
 
-Validation should include `npm run typecheck`, `npm run validate:runtime`, `npm run guard:refresh-policy`, `npm run guard:payment-rail-policy`, `npm run guard:creator-monetization-policy`, `npm run guard:stripe-connect-policy`, `npm run guard:vod-quality-policy`, `npm run guard:platform-brand-studio-policy`, `npm run guard:clip-studio-policy`, existing Watch-Party LiveKit and old-room handling guards, targeted no-fake-export/no-public-trim-renderer/no-package/no-native/no-LiveKit-change proofs, public draft non-leak proof if behavior changes, Android proof if UI changes, and `git diff --check`.
-
-Server-side render/export remains the recommended true-export path after the metadata-only lane: queue a trusted worker job, render a new VOD asset, store output metadata, require review/publish, and keep LiveKit untouched. Native Android Media3 Transformer should remain a prototype-only option until release-build proof, APK-size impact, codec support, backgrounding, cleanup, and iOS parity are accepted.
+Validation should include `npm run typecheck`, `npm run validate:runtime`, `npm run guard:refresh-policy`, `npm run guard:payment-rail-policy`, `npm run guard:creator-monetization-policy`, `npm run guard:stripe-connect-policy`, `npm run guard:vod-quality-policy`, `npm run guard:platform-brand-studio-policy`, `npm run guard:clip-studio-policy`, existing Watch-Party LiveKit and old-room handling guards, targeted no-fake-money/no-secret/no-debug-copy/no-old-money-tab proofs, Android proof if UI changes, and `git diff --check`.
 
 ## Still-Open Non-UI Follow-Ups
 
-Platform Brand Studio Cropper and Cleanup Automation remains a valid later lane: Level 2 focal-point drag/reposition, service-role/admin-only cleanup execution, and continued Hero Reel/watermark honesty. Keep existing Level 1 Fit/Fill/Center, overlay, blur, safe-area preview, and metadata behavior as fallback.
+Clip Studio Metadata-Only Trim Preview remains a valid later lane: add `trim_start_ms` / `trim_end_ms` metadata-only controls only if product wants preview range before launch, keep public Player unchanged unless a separate VOD renderer lane owns it, and do not claim export or permanent cuts.
 
-Security Request Context follow-ups remain valid but are not part of the next Clip Studio lane: Audit Explorer row-level owner/operator proof for a linked network-proof row, gateway/firewall policy if product wants to block direct Supabase Edge origin bypass, and trusted Edge wrappers for remaining direct SQL/public intake paths.
+Platform Brand Studio Cropper and Cleanup Automation remains a valid later lane: Level 2 focal-point drag/reposition, service-role/admin-only cleanup execution, and continued Hero Reel/watermark honesty.
+
+Security Request Context follow-ups remain valid: Audit Explorer row-level owner/operator proof for a linked network-proof row, gateway/firewall policy if product wants to block direct Supabase Edge origin bypass, and trusted Edge wrappers for remaining direct SQL/public intake paths.

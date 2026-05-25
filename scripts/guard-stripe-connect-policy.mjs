@@ -105,11 +105,11 @@ assertIncludes(creatorPayouts, "No payable balance can be created by the mobile 
 assertIncludes(creatorPayouts, "Owner approval is required before any payout execution can move forward.", "owner approval blocker");
 assertIncludes(creatorPayouts, "canExecuteProductionPayout: false", "production payout execution disabled");
 
-assertIncludes(channelSettings, "Payout setup and review can be checked. Production payout execution remains blocked.", "Studio payout setup copy");
-assertIncludes(channelSettings, "Blocked reasons", "Studio payout blocked reasons");
+assertIncludes(channelSettings, "Stripe setup can be reviewed, but payouts are still unavailable.", "Studio Stripe setup copy");
+assertIncludes(channelSettings, "No withdrawal, transfer, cash-out, or payout release action is available.", "Studio payout action lock copy");
 assertIncludes(channelSettings, "Instant cash-out", "Studio instant cash-out readout");
-assertIncludes(channelSettings, "$100 instant preview = $1.50", "Studio cash-out fee proof copy");
-assertIncludes(channelSettings, "Owner-approved workflow", "Studio owner approval copy");
+assertIncludes(channelSettings, "Optional instant cash-out is", "Studio cash-out fee copy");
+assertIncludes(channelSettings, "Platform review is required before any future payout action can be considered.", "Studio review copy");
 assertIncludes(admin, "Creator-facing Connect Stripe setup is test-mode only", "Admin Connect read-only copy");
 assertIncludes(admin, "tax/1099 readiness", "Admin tax readiness copy");
 assertIncludes(admin, "Owner approval is required", "Admin owner approval copy");

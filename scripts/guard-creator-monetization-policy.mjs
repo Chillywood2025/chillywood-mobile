@@ -93,10 +93,13 @@ assertIncludes(monetization, "isPremiumPurchaseShellAvailable", "Premium purchas
 assertIncludes(premiumEntitlements, "entitlement_key", "backed entitlement helper");
 assertIncludes(premiumEntitlements, "revoked_at", "revoked entitlement blocking");
 
-assertIncludes(channelSettings, "Tips do not unlock digital perks or paid access", "tip no-perks copy");
-assertIncludes(channelSettings, "Monetize", "Platform Studio Monetize tab");
+assertIncludes(channelSettings, "Creator support stays unavailable until payment and policy checks are ready.", "tip unavailable copy");
+assertIncludes(channelSettings, "Monetization", "Platform Studio Monetization tab");
 assertIncludes(channelSettings, "Paid content", "Platform Studio paid content copy");
-assertIncludes(channelSettings, "Merch/products", "Platform Studio product copy");
+assertIncludes(channelSettings, "Platform commerce", "Platform Studio commerce copy");
+assertIncludes(channelSettings, "tab=monetization&focus=payouts", "old payout deep link maps to Monetization");
+assertNotIncludes(channelSettings, "{ id: \"payouts\", label: \"Payouts\" }", "separate Payouts tab");
+assertNotIncludes(channelSettings, "{ id: \"revenue\", label: \"Revenue\" }", "separate Revenue tab");
 assertIncludes(channelSettings, "Run your platform from one place", "Platform Studio platform copy");
 assertIncludes(publicChannel, "Platform Store", "public platform store state");
 assertIncludes(publicChannel, "Checkout pending", "public platform checkout disabled copy");
