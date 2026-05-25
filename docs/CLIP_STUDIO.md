@@ -239,7 +239,18 @@ Android current-bundle proof on `R5CR120QCBF` is outside the repo under `/tmp/ch
 - Templates section with selected preset and all MVP presets
 - owner Content Library draft cards with Clip Studio summary
 
-Android visual proof gap: on-device Save Draft/reopen for title/template fields was not completed because the keyboard/back interaction returned to Home during the proof attempt. Persistence and reopen behavior are therefore closed by backend read-back/source proof in this lane, with Android happy-path visual proof recommended next.
+Android Save Draft/reopen visual proof for this layer is closed on `R5CR120QCBF`. Screenshots are outside the repo under `/tmp/chillywood-proof-2026-05-25T13-47-05-881Z-clip-studio-android-reopen-proof/screenshots/`:
+
+- `03-content-library-list-top.png` and `15-content-library-draft-section-after-save.png` show the owner-only Content Library card with the Trailer badge, title/subtitle overlay preview, and `Clip Studio: Title Card · Trailer`.
+- `04-reopened-draft-preview.png` shows the existing saved draft opened in Clip Studio with the overlay preview restored.
+- `05-reopened-title-card-controls.png` shows title `Trailer Night Proof`, subtitle `Template metadata read-back`, Center placement, Trailer style, and editor-preview-only public display state restored.
+- `06-reopened-template-controls.png` shows the Trailer template selected with the full MVP preset list still available.
+- `08-save-draft-confirmed.png` shows Save Draft returning to confirmed saved state after read-back on the existing draft.
+- `16-public-platform-preview-no-draft.png` and `17-public-platform-videos-no-draft.png` show public-preview mode with viewer state, no owner controls, and no draft/title-template card exposure.
+
+Keyboard/back behavior did not require a code fix in this closeout. Source inspection found no Clip Studio-specific `BackHandler` override, and the clean proof avoided relying on hardware Back for keyboard dismissal; the previous Home return is documented as a proof-flow navigation issue, not a confirmed Save Draft or reopen route bug.
+
+Backend confirmation for the Android closeout used the same draft and returned `visibility: draft`, restored title/template metadata, owner library visibility, zero public video rows, and anonymous denial for `creator_clip_edits`.
 
 ## Brand Studio Integration
 
@@ -285,7 +296,7 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 
 ## Validation
 
-Latest Title Card and Template Preview validation used:
+Latest Android Reopen Proof Closeout validation used:
 
 - `npm run typecheck`
 - `npm run validate:runtime`
@@ -302,11 +313,11 @@ Latest Title Card and Template Preview validation used:
 - `supabase db lint --linked`
 - sequential `supabase db push --dry-run`
 - scoped no-Mini-Platform/no-debug-copy/no-fake-export greps for Clip Studio/public surfaces
-- backend proof that title/template metadata persists after Save Draft read-back
-- backend/source proof that reopened draft state restores from `creator_clip_edits`
-- backend/source proof that draft/private video/title/cover metadata does not render publicly
+- backend proof that title/template metadata still persists after Save Draft read-back
+- Android visual proof that reopened draft state restores from `creator_clip_edits`
+- Android and backend/source proof that draft/private video/title/cover metadata does not render publicly
 - source proof that public Platform reads creator videos with `includeDrafts: false` and hides owner controls in public-preview mode
-- Android current-bundle proof on `R5CR120QCBF`
+- Android current-bundle reopen proof on `R5CR120QCBF`
 - `git diff --check`
 - `git diff --cached --check`
 
