@@ -1,8 +1,8 @@
 # NEXT TASK
 
-## Recommended Lane: Clip Studio Published Metadata Polish / Player Detail Decision
+## Recommended Lane: Clip Studio Metadata-Only Trim Preview Spec
 
-Clip Studio Save Draft, cover/poster proof, public cover cards, title/template metadata preview, and sanitized public published-card metadata rendering are no longer known blockers.
+Clip Studio Save Draft, cover/poster proof, public cover cards, title/template metadata preview, sanitized public published-card metadata rendering, and trim/export research are no longer known blockers.
 
 Closed truth:
 
@@ -22,18 +22,26 @@ Closed truth:
 - The same safe public resolver now returns only sanitized Clip Studio published-card metadata fields: `clip_metadata_public`, `clip_title_text`, `clip_subtitle_text`, `clip_template_preset`, `clip_title_style`, and `clip_title_position`.
 - Public Channel Featured/Latest, public Profile creator-video cards, and Home creator-video rails can render sanitized metadata for published public-safe videos.
 - Public Platform still excludes drafts, public-preview mode hides owner controls, and public Channel/Player/Home do not read Clip Studio edit rows.
+- Trim/export research is recorded in `docs/CLIP_STUDIO_TRIM_EXPORT_RESEARCH.md`.
+- Current repo truth has reserved `trim_start_ms` / `trim_end_ms` edit fields, but no trim controls, no native export, no server export, no public trim renderer, and no burned-in output.
 - No native export, permanent video rendering, fake public overlay renderer, fake Premium access, LiveKit, Watch-Party, RevenueCat, payout/revenue, creator gate, auth/session, or Brand Studio public-safety behavior changed.
 
-The next launch-strength Clip Studio lane should stay narrow:
+The next launch-strength Clip Studio lane should stay narrow and metadata-only:
 
-- Polish the published-card metadata treatment for accessibility, small screens, long titles, and visual consistency; or decide whether the public Player detail screen should show sanitized metadata outside the video surface.
-- Keep the current public card resolver as the only public metadata path.
+- Add start/end trim metadata controls only if product wants a creator-facing preview range before launch.
+- Persist `trim_start_ms` and `trim_end_ms` to `creator_clip_edits` through the existing Save Draft/read-back/reopen pattern.
+- Preview the range in Clip Studio only where the existing player APIs can do so safely.
+- Keep public cards and public Player unchanged unless a separate VOD renderer lane is explicitly requested and proved.
+- Use copy such as `Preview range`; do not call it exported, rendered, or permanently cut.
 - Never read anonymous `creator_clip_edits` directly from public UI.
-- Do not introduce native export, burned-in video text, timeline editing, or public player overlays unless a dedicated renderer/export lane is explicitly requested and proved.
+- Do not introduce native export, burned-in video text, timeline editing, or public player overlays in the metadata-only lane.
+- Keep LiveKit, Watch-Party routes, Premium gates, public resolver behavior, creator upload/publish behavior, native Android files, Gradle files, Expo config, and package files untouched unless a future exact lane explicitly owns them.
 - Continue proving public draft/private non-leakage before claiming any broader renderer.
 - Keep the existing Android reopen and public-cover proofs as the baseline regression path.
 
-Validation should include `npm run typecheck`, `npm run validate:runtime`, `npm run guard:refresh-policy`, `npm run guard:payment-rail-policy`, `npm run guard:creator-monetization-policy`, `npm run guard:stripe-connect-policy`, `npm run guard:vod-quality-policy`, `npm run guard:platform-brand-studio-policy`, `npm run guard:clip-studio-policy`, targeted no-debug-copy/no-Mini-Platform/no-fake-export greps, public draft non-leak proof, sanitized resolver proof, Android current-bundle proof, and `git diff --check`.
+Validation should include `npm run typecheck`, `npm run validate:runtime`, `npm run guard:refresh-policy`, `npm run guard:payment-rail-policy`, `npm run guard:creator-monetization-policy`, `npm run guard:stripe-connect-policy`, `npm run guard:vod-quality-policy`, `npm run guard:platform-brand-studio-policy`, `npm run guard:clip-studio-policy`, existing Watch-Party LiveKit and old-room handling guards, targeted no-fake-export/no-public-trim-renderer/no-package/no-native/no-LiveKit-change proofs, public draft non-leak proof if behavior changes, Android proof if UI changes, and `git diff --check`.
+
+Server-side render/export remains the recommended true-export path after the metadata-only lane: queue a trusted worker job, render a new VOD asset, store output metadata, require review/publish, and keep LiveKit untouched. Native Android Media3 Transformer should remain a prototype-only option until release-build proof, APK-size impact, codec support, backgrounding, cleanup, and iOS parity are accepted.
 
 ## Still-Open Non-UI Follow-Ups
 

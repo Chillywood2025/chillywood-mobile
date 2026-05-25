@@ -26,6 +26,24 @@ Clip Studio is the creator-facing video preparation area inside Platform Studio.
 
 Title Card text can be empty. The normal clip/video title is still required for saving a creator video, but a creator does not have to add overlay text.
 
+## Trim/Export Research Status
+
+Trim/export research is recorded in [CLIP_STUDIO_TRIM_EXPORT_RESEARCH.md](./CLIP_STUDIO_TRIM_EXPORT_RESEARCH.md). The audit was docs-only and added no implementation, package, native dependency, Gradle change, Expo config change, migration, Edge deploy, LiveKit change, Watch-Party change, public renderer change, Premium change, or creator upload/publish behavior change.
+
+Current trim truth:
+
+- `creator_clip_edits` already has reserved `trim_start_ms` and `trim_end_ms` fields.
+- Clip Studio currently saves those fields as empty metadata.
+- There are no trim controls, no native Android export, no server-side export worker, no public Player trim renderer, and no permanent cut output.
+
+Recommended path:
+
+1. Add metadata-only trim preview later if product wants a preview range: persist `trim_start_ms` and `trim_end_ms`, preview locally in Clip Studio, and keep public playback unchanged unless a separate VOD renderer lane explicitly changes it.
+2. Build true export as a separate server-side render/worker lane: queue an owned draft, render a new VOD asset, store export status/output metadata, require review/publish, and keep LiveKit untouched.
+3. Consider native Android Media3 Transformer only as a later prototype after release-build proof, APK-size measurement, codec/device proof, backgrounding/cancel/temp-cleanup proof, and product acceptance of any iOS parity gap.
+
+Trim/export can be isolated from LiveKit if future work is limited to Clip Studio/VOD upload/render paths and does not touch LiveKit/Watch-Party routes.
+
 ## Data Model
 
 Remote-applied migrations:
@@ -356,6 +374,28 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 - Do not use legacy diminutive Platform copy.
 
 ## Validation
+
+Latest Trim Export Research validation used:
+
+- `git status --short`
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:refresh-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:stripe-connect-policy`
+- `npm run guard:vod-quality-policy`
+- `npm run guard:clip-studio-policy`
+- `npm run guard:platform-brand-studio-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- targeted proof that no package or lockfile changed
+- targeted proof that no Android, Gradle, EAS, or Expo config changed
+- targeted proof that no LiveKit, Watch-Party, or Player route changed
+- targeted proof that no fake export availability claim was added
+- targeted proof that staged changes are docs-only
+- `git diff --check`
+- `git diff --cached --check`
 
 Latest Public Metadata Renderer validation used:
 
