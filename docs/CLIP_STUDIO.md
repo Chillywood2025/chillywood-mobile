@@ -21,6 +21,7 @@ Clip Studio is the creator-facing video preparation area inside Platform Studio.
 - Hardened Save Draft and Publish Clip actions using `uploadCreatorVideo`, `updateCreatorVideoMetadata`, `creator_clip_edits`, owner read-back, and Content Library refresh confirmation.
 - Owner-only Content Library cards can show title/template preview metadata for drafts and owned videos.
 - Public creator-video cards can show safe cover/poster images for published, moderation-safe videos through the `public-creator-video-cards` resolver.
+- Public published creator-video cards can show sanitized Clip Studio title/subtitle/template metadata through the same safe resolver.
 - Existing public Player remains the playback owner for published videos.
 
 Title Card text can be empty. The normal clip/video title is still required for saving a creator video, but a creator does not have to add overlay text.
@@ -33,7 +34,7 @@ Remote-applied migrations:
 - `202605240009_creator_clip_studio_owner_cast_fix.sql`: fixes the Clip Studio metadata trigger for older `videos.owner_id` UUID schemas by comparing `videos.owner_id::text` to `creator_clip_edits.owner_user_id`.
 - `202605250001_creator_clip_studio_title_templates.sql`: allows the `trailer` title overlay style, adds title/subtitle length checks, and documents that template metadata does not create transitions, audio sync, timeline effects, or export rendering.
 
-The public cover/poster card lane adds no migration. It adds the `public-creator-video-cards` Edge Function and registers it in `supabase/config.toml`.
+The public cover/poster and public metadata card lanes add no migration. They use the `public-creator-video-cards` Edge Function registered in `supabase/config.toml`.
 
 `creator_clip_edits` stores display/edit metadata only:
 
@@ -48,7 +49,7 @@ The public cover/poster card lane adds no migration. It adds the `public-creator
 - `template_preset`
 - optional brand mark reference
 
-The table is owner-only. Public routes do not read it in this lane.
+The table is owner-only. Public UI does not query it directly. The only public metadata path is the safe `public-creator-video-cards` Edge Function, which reads `creator_clip_edits` internally after filtering to public, moderation-safe videos and returns only sanitized card fields.
 
 ## Title Cards
 
@@ -78,7 +79,7 @@ Style presets:
 - Spotlight
 - Trailer
 
-The visibility decision for this lane is "Editor preview only" plus owner-only Content Library preview. Title cards are not presented as public video edits.
+Title cards are still not exported or burned into the video file. They are editor-preview metadata, owner-only Content Library preview metadata, and sanitized published-card display metadata when the video itself is public and moderation-safe.
 
 ## Templates
 
@@ -155,7 +156,7 @@ Owner Content Library cards may show:
 - owner-only title/subtitle overlay preview on the card image/placeholder
 - `Clip Studio: Title Card` or `Clip Studio: No Title Card` summary
 
-This is owner-only. Public users do not receive draft/private cards and public routes do not read Clip Studio edit rows.
+This is owner-only. Public users do not receive draft/private cards and public UI does not read Clip Studio edit rows directly. Published public cards receive only sanitized fields from the safe public resolver.
 
 ## Renderer Decision
 
@@ -164,17 +165,17 @@ This is owner-only. Public users do not receive draft/private cards and public r
 | `cover_storage_path` / poster | Owner Content Library plus safe public card cover/poster display for published, moderation-safe videos. Draft covers stay owner-only. |
 | `clip_format` | Editor-preview-only; saved to draft/edit state. Public renderer deferred. |
 | `fit_mode` | Editor-preview-only; saved to draft/edit state. Public renderer deferred. |
-| `title_overlay_text` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
-| `title_overlay_subtitle` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
-| `title_overlay_position` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
-| `title_overlay_style` | Editor-preview-only plus Content Library owner-only. Public renderer deferred. |
-| `template_preset` | Editor-preview-only plus Content Library owner-only badge/summary. Public renderer deferred. |
+| `title_overlay_text` | Editor preview, Content Library owner-only, and sanitized public card display for published moderation-safe videos. No burned-in video rendering. |
+| `title_overlay_subtitle` | Editor preview, Content Library owner-only, and sanitized public card display for published moderation-safe videos. No burned-in video rendering. |
+| `title_overlay_position` | Editor preview, Content Library owner-only, and sanitized public card placement for published moderation-safe videos. |
+| `title_overlay_style` | Editor preview, Content Library owner-only, and sanitized public card style for published moderation-safe videos. |
+| `template_preset` | Editor preview, Content Library owner-only badge/summary, and sanitized public card template badge for published moderation-safe videos. |
 | `brand_mark_enabled` | Editor-preview-only. Public watermark renderer deferred. |
 | `brand_asset_id` | Editor-preview-only. Public watermark renderer deferred. |
 | `trim_start_ms` | Deferred; no real trim/export is active. |
 | `trim_end_ms` | Deferred; no real trim/export is active. |
 
-Public title/template rendering is deferred because the current public Channel, Home, and Player surfaces do not have a dedicated published-video overlay renderer and should not read private edit rows by default. If a later lane enables public rendering, it must apply only to published public-safe videos and must prove drafts/private videos do not expose metadata.
+Public card title/template rendering is enabled only through the sanitized public resolver. Public Player video overlays, burned-in export, trim/export, and full rendered title cards remain deferred. Any later broader renderer must apply only to published public-safe videos and must prove drafts/private videos do not expose metadata.
 
 ## Cover Images
 
@@ -196,14 +197,16 @@ Public card surfaces now use a separate safe resolver:
 - The resolver uses service-role reads internally, but returns only sanitized public card fields.
 - It filters to `visibility='public'` and `moderation_status` `clean` or `reported`.
 - It signs `thumb_storage_path` only when the cover path is under the matching owner/video prefix.
-- It returns `thumbnailUrl` but does not return raw storage paths, object keys, playback URLs, or Clip Studio edit metadata.
+- It returns `thumbnailUrl` plus sanitized Clip Studio card metadata only when present.
+- Sanitized public metadata response shape: `clip_metadata_public`, `clip_title_text`, `clip_subtitle_text`, `clip_template_preset`, `clip_title_style`, and `clip_title_position`.
+- It does not return raw storage paths, object keys, playback URLs, full `creator_clip_edits` rows, owner edit ids, cover storage metadata, trim metadata, format/fit metadata, or brand asset references.
 - Public cards fall back to the existing thumbnail/default card state if no safe cover/poster is available.
 
-Current public cover/card surfaces:
+Current public cover/metadata card surfaces:
 
 - public Channel Featured card
 - public Channel Latest Uploads cards
-- Home creator-video rails
+- Home creator-video rails through the shared public creator-video card
 - public Profile creator-video cards
 
 Deleting a creator video best-effort removes its cover path according to the associated storage provider.
@@ -224,7 +227,7 @@ Deleting a creator video best-effort removes its cover path according to the ass
 - stickers
 - full export renderer
 - poster-frame extraction from video
-- public title-overlay rendering
+- public Player/video-surface title-overlay rendering
 - global video watermark rendering
 
 Do not claim any of these are active until a backed renderer/export path exists and Android release proof passes.
@@ -290,7 +293,24 @@ Backend public-cover proof is stored in the same `/tmp` proof directory:
 - public video rows for that draft remained `0`
 - unauthenticated `creator_clip_edits` read returned permission denial
 
-No public title/template display was enabled in the public cover/poster lane.
+Public metadata renderer proof on `R5CR120QCBF` is outside the repo under `/tmp/chillywood-proof-2026-05-25T16-49-37Z-clip-studio-public-metadata-renderer/`:
+
+- `02-public-channel-featured-metadata-visible.png` shows public Channel Featured and Latest Upload cards rendering the safe cover, Trailer badge, public title, and public subtitle.
+- `06-public-profile-creator-video-card-metadata.png` shows the public Profile Channel creator-video card using the shared public metadata treatment.
+- `08-owner-content-library-drafts-section.png` shows the owner Content Library draft card still rendering the owner-only Trailer badge and title/subtitle overlay preview.
+- `10-public-preview-owner-cards-no-draft-title.png` shows public-preview fallback cards for the original owner without the owner draft title/template metadata leaking.
+
+Backend public-metadata proof is stored at `/tmp/chillywood-proof-2026-05-25T16-49-37Z-clip-studio-public-metadata-renderer/backend-public-metadata-proof.json`:
+
+- the published proof video `4c0b42c4-fe11-44ce-8c31-d6a1fd41821b` returned `clip_metadata_public: true`
+- returned metadata was `Festival Trailer Night`, `Opening weekend highlights`, `trailer`, `trailer`, and `center`
+- returned public card keys did not include raw storage/path/object/playback fields or forbidden private edit fields
+- draft `3804dbca-e1f7-4251-b5fa-8603014c66bf` was not returned by the public resolver
+- public video rows for that draft remained `0`
+- unauthenticated `creator_clip_edits` read returned permission denial
+- the current `videos.visibility` policy is `draft`/`public`, so draft rows are the non-public/private proof path for creator videos
+
+No native export, burned-in video text, public Player overlay, LiveKit/watch-party surface, or Premium behavior was enabled in the public metadata lane.
 
 ## Brand Studio Integration
 
@@ -325,18 +345,19 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 ## Guardrails
 
 - Do not fake trim/export.
-- Do not fake public title-overlay rendering.
+- Do not fake burned-in or public Player title-overlay rendering.
+- Public card title/template metadata must come only from the sanitized public resolver.
 - Do not fake cover upload success.
 - Do not show Save Draft success until the video row, Clip Studio edit row, metadata read-back, and Content Library read-back are confirmed.
 - Do not expose draft/private videos publicly.
 - Do not expose draft/private cover images publicly.
-- Do not expose owner-only title/template metadata publicly.
+- Do not expose raw `creator_clip_edits` rows or owner-only title/template metadata publicly.
 - Do not change Premium gates, RevenueCat, LiveKit, Watch-Party Live, Live Watch-Party, payout, revenue, or creator monetization logic from Clip Studio work.
 - Do not use legacy diminutive Platform copy.
 
 ## Validation
 
-Latest Public Cover Poster Card Renderer validation used:
+Latest Public Metadata Renderer validation used:
 
 - `npm run typecheck`
 - `npm run validate:runtime`
@@ -352,13 +373,15 @@ Latest Public Cover Poster Card Renderer validation used:
 - `supabase migration list`
 - `supabase db lint --linked`
 - `supabase db push --dry-run`
-- targeted grep proof that no public title/template display claim was added
 - targeted grep proof that no fake export claim was added
-- targeted grep proof that no user-facing Mini Platform/debug copy was added
-- backend proof that public cards only receive safe published cover/poster URLs
+- targeted grep proof that no raw storage public response was added
+- targeted grep proof that no direct public `creator_clip_edits` exposure was added
+- targeted grep proof that no user-facing Mini Platform/debug copy was added in public Clip Studio surfaces
+- backend proof that public cards only receive sanitized metadata for published public-safe videos
 - backend proof that draft/private cover and title/template metadata do not render publicly
 - backend proof that unauthenticated `creator_clip_edits` direct read remains denied
-- Android public-cover proof on `R5CR120QCBF`
+- backend proof that public resolver response does not include raw storage/path/object/playback fields
+- Android public-metadata proof on `R5CR120QCBF`
 - Android owner Content Library proof that owner-only title/template preview remains owner-only
 - `git diff --check`
 - `git diff --cached --check`

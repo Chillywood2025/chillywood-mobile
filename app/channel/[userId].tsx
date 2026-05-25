@@ -25,6 +25,7 @@ import {
   readCreatorMiniPlatformCommerceSurface,
   type CreatorMiniPlatformCommerceSurface,
 } from "../../_lib/creatorMonetization";
+import { formatClipStudioTemplateLabel, type ClipStudioTemplatePreset } from "../../_lib/clipStudio";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
 import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
@@ -109,6 +110,15 @@ const formatEventStatus = (event: CreatorEventSummary) => {
 };
 
 const hasPlayableVideo = (video: CreatorVideo) => isCreatorVideoPubliclyShareable(video);
+const getPublicClipMetadata = (video: CreatorVideo) => (
+  video.publicClipMetadata?.isPublic ? video.publicClipMetadata : null
+);
+
+const formatPublicClipTemplateLabel = (
+  preset: NonNullable<CreatorVideo["publicClipMetadata"]>["templatePreset"],
+) => (
+  preset ? formatClipStudioTemplateLabel(preset as ClipStudioTemplatePreset) : ""
+);
 
 export default function PublicChannelScreen() {
   const router = useRouter();
@@ -507,6 +517,50 @@ export default function PublicChannelScreen() {
     </ScrollView>
   );
 
+  const getPublicClipCardTitle = (video: CreatorVideo) => (
+    getPublicClipMetadata(video)?.titleText || video.title
+  );
+
+  const getPublicClipCardSubtitle = (video: CreatorVideo) => (
+    getPublicClipMetadata(video)?.subtitleText || video.description
+  );
+
+  const renderPublicClipTemplateBadge = (video: CreatorVideo) => {
+    const metadata = getPublicClipMetadata(video);
+    const templateLabel = formatPublicClipTemplateLabel(metadata?.templatePreset ?? null);
+    if (!templateLabel) return null;
+    return (
+      <View style={styles.publicClipTemplateBadge}>
+        <Text style={styles.publicClipTemplateText}>{templateLabel}</Text>
+      </View>
+    );
+  };
+
+  const renderPublicClipMetadataOverlay = (video: CreatorVideo, variant: "featured" | "shelf") => {
+    const metadata = getPublicClipMetadata(video);
+    const title = metadata?.titleText.trim() ?? "";
+    const subtitle = metadata?.subtitleText.trim() ?? "";
+    if (!metadata || (!title && !subtitle)) return null;
+
+    return (
+      <View
+        pointerEvents="none"
+        style={[
+          styles.publicClipOverlay,
+          variant === "shelf" && styles.publicClipOverlayShelf,
+          metadata.titlePosition === "top" && styles.publicClipOverlayTop,
+          metadata.titlePosition === "center" && styles.publicClipOverlayCenter,
+          metadata.titleStyle === "bold" && styles.publicClipOverlayBold,
+          metadata.titleStyle === "spotlight" && styles.publicClipOverlaySpotlight,
+          metadata.titleStyle === "trailer" && styles.publicClipOverlayTrailer,
+        ]}
+      >
+        {title ? <Text style={styles.publicClipOverlayTitle} numberOfLines={2}>{title}</Text> : null}
+        {subtitle ? <Text style={styles.publicClipOverlaySubtitle} numberOfLines={2}>{subtitle}</Text> : null}
+      </View>
+    );
+  };
+
   const renderFeaturedVideoCard = (video: CreatorVideo) => (
     <View key={video.id} style={styles.featuredSpotlightCard}>
       <View style={styles.featuredSpotlightMedia}>
@@ -518,14 +572,17 @@ export default function PublicChannelScreen() {
           </View>
         )}
         <View style={styles.mediaScrim} />
-        <View style={styles.featuredMediaFooter}>
-          <Text style={styles.cardKicker}>Latest from this Platform</Text>
-          <Text style={styles.featuredCardTitle} numberOfLines={2}>{video.title}</Text>
-        </View>
+        {renderPublicClipTemplateBadge(video)}
+        {renderPublicClipMetadataOverlay(video, "featured") ?? (
+          <View style={styles.featuredMediaFooter}>
+            <Text style={styles.cardKicker}>Latest from this Platform</Text>
+            <Text style={styles.featuredCardTitle} numberOfLines={2}>{getPublicClipCardTitle(video)}</Text>
+          </View>
+        )}
       </View>
       <View style={styles.featuredSpotlightCopy}>
-        {video.description ? (
-          <Text style={styles.cardBody} numberOfLines={3}>{video.description}</Text>
+        {getPublicClipCardSubtitle(video) ? (
+          <Text style={styles.cardBody} numberOfLines={3}>{getPublicClipCardSubtitle(video)}</Text>
         ) : null}
         <View style={styles.metaRow}>
           {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
@@ -548,11 +605,13 @@ export default function PublicChannelScreen() {
             <Text style={styles.videoThumbInitial}>{video.title.slice(0, 1).toUpperCase()}</Text>
           </View>
         )}
+        {renderPublicClipTemplateBadge(video)}
+        {renderPublicClipMetadataOverlay(video, "shelf")}
       </View>
       <View style={styles.shelfCopy}>
-        <Text style={styles.shelfTitle} numberOfLines={2}>{video.title}</Text>
-        {video.description ? (
-          <Text style={styles.shelfBody} numberOfLines={2}>{video.description}</Text>
+        <Text style={styles.shelfTitle} numberOfLines={2}>{getPublicClipCardTitle(video)}</Text>
+        {getPublicClipCardSubtitle(video) ? (
+          <Text style={styles.shelfBody} numberOfLines={2}>{getPublicClipCardSubtitle(video)}</Text>
         ) : null}
         <View style={styles.metaRow}>
           {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
@@ -1124,6 +1183,77 @@ const styles = StyleSheet.create({
   mediaScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(4,6,11,0.34)",
+  },
+  publicClipTemplateBadge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    zIndex: 2,
+    borderRadius: 999,
+    backgroundColor: "rgba(5,8,14,0.76)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  publicClipTemplateText: {
+    color: "#F8FAFF",
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+  },
+  publicClipOverlay: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    bottom: 18,
+    zIndex: 2,
+    borderRadius: 12,
+    backgroundColor: "rgba(5,8,14,0.68)",
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    gap: 3,
+  },
+  publicClipOverlayShelf: {
+    left: 12,
+    right: 12,
+    bottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  publicClipOverlayTop: {
+    top: 42,
+    bottom: undefined,
+  },
+  publicClipOverlayCenter: {
+    top: "38%",
+    bottom: undefined,
+  },
+  publicClipOverlayBold: {
+    backgroundColor: "rgba(220,20,60,0.62)",
+  },
+  publicClipOverlaySpotlight: {
+    backgroundColor: "rgba(8,12,18,0.8)",
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.45)",
+  },
+  publicClipOverlayTrailer: {
+    backgroundColor: "rgba(3,4,8,0.84)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.32)",
+  },
+  publicClipOverlayTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  publicClipOverlaySubtitle: {
+    color: "#DDE5F5",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
   },
   featuredMediaFooter: {
     padding: 18,

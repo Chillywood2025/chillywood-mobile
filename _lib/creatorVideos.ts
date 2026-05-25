@@ -38,6 +38,24 @@ export type CreatorVideoModerationStatus =
   | "hidden"
   | "removed"
   | "banned";
+export type CreatorVideoPublicClipTitlePosition = "top" | "center" | "bottom";
+export type CreatorVideoPublicClipTitleStyle = "clean" | "bold" | "spotlight" | "trailer";
+export type CreatorVideoPublicClipTemplatePreset =
+  | "trailer"
+  | "highlight"
+  | "promo"
+  | "event"
+  | "reaction"
+  | "platform_intro";
+
+export type CreatorVideoPublicClipMetadata = {
+  isPublic: boolean;
+  titleText: string;
+  subtitleText: string;
+  titlePosition: CreatorVideoPublicClipTitlePosition;
+  titleStyle: CreatorVideoPublicClipTitleStyle;
+  templatePreset: CreatorVideoPublicClipTemplatePreset | null;
+};
 
 export type CreatorVideoFile = {
   uri: string;
@@ -69,6 +87,7 @@ export type CreatorVideo = {
   playbackQualityLabel: string | null;
   paidContentAccess: CreatorContentAccessResolution | null;
   renditionStatuses: VodRenditionStatusItem[];
+  publicClipMetadata: CreatorVideoPublicClipMetadata | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -92,6 +111,12 @@ type PublicCreatorVideoCardRow = {
   fileSizeBytes?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
+  clip_metadata_public?: unknown;
+  clip_title_text?: unknown;
+  clip_subtitle_text?: unknown;
+  clip_template_preset?: unknown;
+  clip_title_style?: unknown;
+  clip_title_position?: unknown;
 };
 
 const CREATOR_VIDEO_SELECT =
@@ -165,6 +190,33 @@ const normalizeModerationStatus = (value: unknown): CreatorVideoModerationStatus
     return normalized;
   }
   return "clean";
+};
+
+const normalizePublicClipTitlePosition = (value: unknown): CreatorVideoPublicClipTitlePosition => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "top" || normalized === "center") return normalized;
+  return "bottom";
+};
+
+const normalizePublicClipTitleStyle = (value: unknown): CreatorVideoPublicClipTitleStyle => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "bold" || normalized === "spotlight" || normalized === "trailer") return normalized;
+  return "clean";
+};
+
+const normalizePublicClipTemplatePreset = (value: unknown): CreatorVideoPublicClipTemplatePreset | null => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "trailer"
+    || normalized === "highlight"
+    || normalized === "promo"
+    || normalized === "event"
+    || normalized === "reaction"
+    || normalized === "platform_intro"
+  ) {
+    return normalized;
+  }
+  return null;
 };
 
 const createClientId = () =>
@@ -298,10 +350,28 @@ async function parseCreatorVideo(
     playbackQualityLabel: null,
     paidContentAccess: null,
     renditionStatuses: [],
+    publicClipMetadata: null,
     createdAt: toText(row.created_at) || new Date().toISOString(),
     updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
   };
 }
+
+const parsePublicClipMetadata = (row: PublicCreatorVideoCardRow): CreatorVideoPublicClipMetadata | null => {
+  if (row.clip_metadata_public !== true) return null;
+  const templatePreset = normalizePublicClipTemplatePreset(row.clip_template_preset);
+  const titleText = toText(row.clip_title_text);
+  const subtitleText = toText(row.clip_subtitle_text);
+  if (!titleText && !subtitleText && !templatePreset) return null;
+
+  return {
+    isPublic: true,
+    titleText,
+    subtitleText,
+    titlePosition: normalizePublicClipTitlePosition(row.clip_title_position),
+    titleStyle: normalizePublicClipTitleStyle(row.clip_title_style),
+    templatePreset,
+  };
+};
 
 const parsePublicCreatorVideoCard = (row: PublicCreatorVideoCardRow): CreatorVideo => ({
   id: toText(row.id),
@@ -326,6 +396,7 @@ const parsePublicCreatorVideoCard = (row: PublicCreatorVideoCardRow): CreatorVid
   playbackQualityLabel: null,
   paidContentAccess: null,
   renditionStatuses: [],
+  publicClipMetadata: parsePublicClipMetadata(row),
   createdAt: toText(row.createdAt) || new Date().toISOString(),
   updatedAt: toText(row.updatedAt) || toText(row.createdAt) || new Date().toISOString(),
 });

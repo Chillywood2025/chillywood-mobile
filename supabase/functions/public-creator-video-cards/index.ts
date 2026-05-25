@@ -29,6 +29,24 @@ type PublicCreatorVideoRow = {
   updated_at: string | null;
 };
 
+type PublicClipMetadataRow = {
+  video_id: string;
+  title_overlay_text: string | null;
+  title_overlay_subtitle: string | null;
+  title_overlay_position: string | null;
+  title_overlay_style: string | null;
+  template_preset: string | null;
+};
+
+type PublicClipMetadata = {
+  clip_metadata_public: boolean;
+  clip_title_text: string;
+  clip_subtitle_text: string;
+  clip_template_preset: string;
+  clip_title_style: string;
+  clip_title_position: string;
+};
+
 const JSON_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -38,6 +56,8 @@ const JSON_HEADERS = {
 
 const CREATOR_VIDEO_BUCKET = "creator-videos";
 const SIGNED_URL_SECONDS = 60 * 60;
+const CLIP_TITLE_MAX_LENGTH = 80;
+const CLIP_SUBTITLE_MAX_LENGTH = 140;
 const PUBLIC_MODERATION_STATUSES = ["clean", "reported"];
 const PUBLIC_CREATOR_VIDEO_SELECT = [
   "id",
@@ -58,6 +78,22 @@ const PUBLIC_CREATOR_VIDEO_SELECT = [
   "file_size_bytes",
   "updated_at",
 ].join(",");
+const PUBLIC_CLIP_EDIT_SELECT = [
+  "video_id",
+  "title_overlay_text",
+  "title_overlay_subtitle",
+  "title_overlay_position",
+  "title_overlay_style",
+  "template_preset",
+].join(",");
+const EMPTY_PUBLIC_CLIP_METADATA: PublicClipMetadata = {
+  clip_metadata_public: false,
+  clip_title_text: "",
+  clip_subtitle_text: "",
+  clip_template_preset: "",
+  clip_title_style: "",
+  clip_title_position: "",
+};
 
 const textEncoder = new TextEncoder();
 
@@ -92,6 +128,73 @@ const normalizeOwnerIds = (value: unknown) => {
 };
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
+
+const clipText = (value: unknown, maxLength: number) => toText(value).slice(0, maxLength);
+
+const normalizeClipTitlePosition = (value: unknown) => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "top" || normalized === "center") return normalized;
+  return "bottom";
+};
+
+const normalizeClipTitleStyle = (value: unknown) => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "bold" || normalized === "spotlight" || normalized === "trailer") return normalized;
+  return "clean";
+};
+
+const normalizeClipTemplatePreset = (value: unknown) => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "trailer"
+    || normalized === "highlight"
+    || normalized === "promo"
+    || normalized === "event"
+    || normalized === "reaction"
+    || normalized === "platform_intro"
+  ) {
+    return normalized;
+  }
+  return "";
+};
+
+const mapPublicClipMetadata = (row: PublicClipMetadataRow): PublicClipMetadata => {
+  const title = clipText(row.title_overlay_text, CLIP_TITLE_MAX_LENGTH);
+  const subtitle = clipText(row.title_overlay_subtitle, CLIP_SUBTITLE_MAX_LENGTH);
+  const template = normalizeClipTemplatePreset(row.template_preset);
+  const hasPublicMetadata = !!(title || subtitle || template);
+  if (!hasPublicMetadata) return EMPTY_PUBLIC_CLIP_METADATA;
+
+  return {
+    clip_metadata_public: true,
+    clip_title_text: title,
+    clip_subtitle_text: subtitle,
+    clip_template_preset: template,
+    clip_title_style: normalizeClipTitleStyle(row.title_overlay_style),
+    clip_title_position: normalizeClipTitlePosition(row.title_overlay_position),
+  };
+};
+
+const readPublicClipMetadata = async (
+  adminClient: any,
+  videoIds: string[],
+) => {
+  const normalizedVideoIds = Array.from(new Set(videoIds.map(toText).filter(Boolean))).slice(0, 100);
+  if (!normalizedVideoIds.length) return new Map<string, PublicClipMetadata>();
+
+  const { data, error } = await adminClient
+    .from("creator_clip_edits")
+    .select(PUBLIC_CLIP_EDIT_SELECT)
+    .in("video_id", normalizedVideoIds)
+    .returns<PublicClipMetadataRow[]>();
+
+  if (error || !data) {
+    if (error) console.error("public creator video clip metadata query failed", error.message);
+    return new Map<string, PublicClipMetadata>();
+  }
+
+  return new Map(data.map((row) => [toText(row.video_id), mapPublicClipMetadata(row)]));
+};
 
 const isSafeVideoThumbnailPath = (row: PublicCreatorVideoRow, thumbnailPath: string) => {
   const ownerId = toText(row.owner_id);
@@ -254,6 +357,7 @@ const createThumbnailUrl = async (
 const mapPublicVideo = async (
   adminClient: any,
   row: PublicCreatorVideoRow,
+  publicClipMetadata: PublicClipMetadata | undefined,
   s3Config: {
     bucket: string;
     endpoint: string;
@@ -278,6 +382,7 @@ const mapPublicVideo = async (
   fileSizeBytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null,
   createdAt: toText(row.created_at) || new Date().toISOString(),
   updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
+  ...(publicClipMetadata ?? EMPTY_PUBLIC_CLIP_METADATA),
 });
 
 Deno.serve(async (req): Promise<Response> => {
@@ -336,7 +441,14 @@ Deno.serve(async (req): Promise<Response> => {
       return json(500, { error: "query_failed", message: "Public videos are unavailable right now." });
     }
 
-    const videos = await Promise.all((data ?? []).map((row) => mapPublicVideo(adminClient, row, s3Config)));
+    const rows = data ?? [];
+    const metadataByVideoId = await readPublicClipMetadata(adminClient, rows.map((row) => row.id));
+    const videos = await Promise.all(rows.map((row) => mapPublicVideo(
+      adminClient,
+      row,
+      metadataByVideoId.get(toText(row.id)),
+      s3Config,
+    )));
     return json(200, { videos });
   } catch (error) {
     console.error("public creator video card failure", error);

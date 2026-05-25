@@ -13,6 +13,7 @@ const ownerCastMigration = read("supabase/migrations/202605240009_creator_clip_s
 const titleTemplateMigration = read("supabase/migrations/202605250001_creator_clip_studio_title_templates.sql");
 const publicChannel = read("app/channel/[userId].tsx");
 const publicHome = read("app/(tabs)/index.tsx");
+const publicProfile = read("app/profile/[userId].tsx");
 const player = read("app/player/[id].tsx");
 
 const requiredStudioCopy = [
@@ -141,6 +142,92 @@ for (const forbidden of ['"playback_url"', '"storage_path"', '"storage_object_ke
   }
 }
 
+const requiredPublicMetadataResolverTerms = [
+  "PUBLIC_CLIP_EDIT_SELECT",
+  "readPublicClipMetadata",
+  ".from(\"creator_clip_edits\")",
+  ".select(PUBLIC_CLIP_EDIT_SELECT)",
+  "clip_metadata_public",
+  "clip_title_text",
+  "clip_subtitle_text",
+  "clip_template_preset",
+  "clip_title_style",
+  "clip_title_position",
+  "rows.map((row) => row.id)",
+];
+
+for (const needle of requiredPublicMetadataResolverTerms) {
+  if (!publicCreatorVideoCardsFunction.includes(needle)) {
+    throw new Error(`Clip Studio guard failed: public metadata resolver is missing sanitized term "${needle}".`);
+  }
+}
+
+const publicClipEditSelect = publicCreatorVideoCardsFunction.match(/const PUBLIC_CLIP_EDIT_SELECT = \[([\s\S]*?)\]\.join/)?.[1] ?? "";
+const requiredPublicClipMetadataFields = [
+  '"video_id"',
+  '"title_overlay_text"',
+  '"title_overlay_subtitle"',
+  '"title_overlay_position"',
+  '"title_overlay_style"',
+  '"template_preset"',
+];
+
+for (const required of requiredPublicClipMetadataFields) {
+  if (!publicClipEditSelect.includes(required)) {
+    throw new Error(`Clip Studio guard failed: public metadata resolver must select sanitized field ${required}.`);
+  }
+}
+
+for (const forbidden of [
+  '"owner_user_id"',
+  '"cover_storage_path"',
+  '"cover_mime_type"',
+  '"cover_file_size_bytes"',
+  '"cover_source_uri"',
+  '"cover_public_url"',
+  '"brand_asset_id"',
+  '"brand_mark_enabled"',
+  '"clip_format"',
+  '"fit_mode"',
+  '"trim_start_ms"',
+  '"trim_end_ms"',
+  '"created_at"',
+  '"updated_at"',
+  '"playback_url"',
+  '"storage_path"',
+  '"storage_object_key"',
+]) {
+  if (publicClipEditSelect.includes(forbidden)) {
+    throw new Error(`Clip Studio guard failed: public metadata resolver must not select private edit field ${forbidden}.`);
+  }
+}
+
+const requiredPublicMetadataClientTerms = [
+  "publicClipMetadata",
+  "parsePublicClipMetadata",
+  "clip_metadata_public",
+  "clip_title_text",
+  "clip_subtitle_text",
+  "clip_template_preset",
+  "clip_title_style",
+  "clip_title_position",
+];
+
+for (const needle of requiredPublicMetadataClientTerms) {
+  if (!creatorVideos.includes(needle)) {
+    throw new Error(`Clip Studio guard failed: public client parser is missing sanitized metadata term "${needle}".`);
+  }
+}
+
+for (const [path, source] of [
+  ["components/creator-media/creator-video-card.tsx", creatorVideoCard],
+  ["app/channel/[userId].tsx", publicChannel],
+]) {
+  if (!source.includes("publicClipMetadata")) {
+    throw new Error(`Clip Studio guard failed: public surface ${path} must render only sanitized public Clip Studio metadata.`);
+  }
+}
+
 for (const requiredCoverMime of ['"image/jpeg"', '"image/png"', '"image/webp"', '"image/gif"']) {
   if (!mediaStorageFunction.includes(requiredCoverMime)) {
     throw new Error(`Clip Studio guard failed: media-storage creator-video uploads must allow Clip Studio cover MIME ${requiredCoverMime}.`);
@@ -150,6 +237,7 @@ for (const requiredCoverMime of ['"image/jpeg"', '"image/png"', '"image/webp"', 
 for (const [path, source] of [
   ["app/channel/[userId].tsx", publicChannel],
   ["app/(tabs)/index.tsx", publicHome],
+  ["app/profile/[userId].tsx", publicProfile],
   ["app/player/[id].tsx", player],
 ]) {
   if (source.includes("readClipStudioEdit") || source.includes("readClipStudioEditsForVideos")) {

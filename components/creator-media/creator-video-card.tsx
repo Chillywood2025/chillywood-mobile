@@ -12,6 +12,7 @@ import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
   formatClipStudioTemplateLabel,
   type ClipStudioEdit,
+  type ClipStudioTemplatePreset,
 } from "../../_lib/clipStudio";
 import { formatVodRenditionStatusSummary, getVodQualityPolicyCopy } from "../../_lib/vodQuality";
 
@@ -99,6 +100,12 @@ const formatCreatorVideoDisplayTitle = (value: string) => {
   };
 };
 
+const formatPublicClipTemplateLabel = (
+  preset: NonNullable<CreatorVideo["publicClipMetadata"]>["templatePreset"],
+) => (
+  preset ? formatClipStudioTemplateLabel(preset as ClipStudioTemplatePreset) : ""
+);
+
 export function CreatorVideoCard({
   video,
   mode,
@@ -118,6 +125,7 @@ export function CreatorVideoCard({
   const ownerMode = mode === "owner";
   const playable = ownerMode ? hasPlayableSource(video) : shareable;
   const ownerClipEdit = ownerMode ? clipEdit ?? null : null;
+  const publicClipMetadata = !ownerMode && video.publicClipMetadata?.isPublic ? video.publicClipMetadata : null;
   const { displayTitle, rawTitleDetected } = formatCreatorVideoDisplayTitle(video.title);
   const moderationBlocked = video.moderationStatus === "hidden"
     || video.moderationStatus === "removed"
@@ -133,6 +141,10 @@ export function CreatorVideoCard({
   const titleOverlaySubtitle = ownerClipEdit?.titleOverlaySubtitle.trim() ?? "";
   const hasOwnerTitleOverlay = !!(titleOverlayText || titleOverlaySubtitle);
   const ownerTemplateLabel = ownerClipEdit ? formatClipStudioTemplateLabel(ownerClipEdit.templatePreset) : "";
+  const publicTitleOverlayText = publicClipMetadata?.titleText.trim() ?? "";
+  const publicTitleOverlaySubtitle = publicClipMetadata?.subtitleText.trim() ?? "";
+  const hasPublicTitleOverlay = !!(publicTitleOverlayText || publicTitleOverlaySubtitle);
+  const publicTemplateLabel = formatPublicClipTemplateLabel(publicClipMetadata?.templatePreset ?? null);
 
   return (
     <View style={[styles.card, !playable && styles.cardUnavailable]}>
@@ -171,6 +183,11 @@ export function CreatorVideoCard({
               <Text style={styles.badgeText}>{ownerTemplateLabel}</Text>
             </View>
           ) : null}
+          {publicTemplateLabel ? (
+            <View style={[styles.badge, styles.badgeTemplate]}>
+              <Text style={styles.badgeText}>{publicTemplateLabel}</Text>
+            </View>
+          ) : null}
         </View>
         {hasOwnerTitleOverlay ? (
           <View
@@ -189,6 +206,26 @@ export function CreatorVideoCard({
             ) : null}
             {titleOverlaySubtitle ? (
               <Text style={styles.ownerTitleOverlaySubtitle} numberOfLines={2}>{titleOverlaySubtitle}</Text>
+            ) : null}
+          </View>
+        ) : null}
+        {hasPublicTitleOverlay ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.publicTitleOverlay,
+              publicClipMetadata?.titlePosition === "top" && styles.publicTitleOverlayTop,
+              publicClipMetadata?.titlePosition === "center" && styles.publicTitleOverlayCenter,
+              publicClipMetadata?.titleStyle === "bold" && styles.publicTitleOverlayBold,
+              publicClipMetadata?.titleStyle === "spotlight" && styles.publicTitleOverlaySpotlight,
+              publicClipMetadata?.titleStyle === "trailer" && styles.publicTitleOverlayTrailer,
+            ]}
+          >
+            {publicTitleOverlayText ? (
+              <Text style={styles.publicTitleOverlayText} numberOfLines={2}>{publicTitleOverlayText}</Text>
+            ) : null}
+            {publicTitleOverlaySubtitle ? (
+              <Text style={styles.publicTitleOverlaySubtitle} numberOfLines={2}>{publicTitleOverlaySubtitle}</Text>
             ) : null}
           </View>
         ) : null}
@@ -418,6 +455,50 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   ownerTitleOverlaySubtitle: {
+    color: "#DDE5F5",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
+  },
+  publicTitleOverlay: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 58,
+    borderRadius: 10,
+    backgroundColor: "rgba(5,7,12,0.64)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  publicTitleOverlayTop: {
+    top: 58,
+    bottom: undefined,
+  },
+  publicTitleOverlayCenter: {
+    top: "40%",
+    bottom: undefined,
+  },
+  publicTitleOverlayBold: {
+    backgroundColor: "rgba(220,20,60,0.62)",
+  },
+  publicTitleOverlaySpotlight: {
+    backgroundColor: "rgba(8,12,18,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.42)",
+  },
+  publicTitleOverlayTrailer: {
+    backgroundColor: "rgba(3,4,8,0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  publicTitleOverlayText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  publicTitleOverlaySubtitle: {
     color: "#DDE5F5",
     fontSize: 11,
     lineHeight: 15,
