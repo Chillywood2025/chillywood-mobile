@@ -1,8 +1,14 @@
-import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
 
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
-import { CREATOR_VIDEO_BUCKET, CREATOR_VIDEO_SIGNED_URL_SECONDS, formatCreatorVideoFileSize, type CreatorVideoFile } from "./creatorVideos";
+import { CREATOR_VIDEO_BUCKET, formatCreatorVideoFileSize, type CreatorVideoFile } from "./creatorVideos";
+import {
+  createSignedMediaDownload,
+  deleteStoredMediaObject,
+  getMediaStorageProviderBucket,
+  normalizeMediaStorageProvider,
+  uploadFileToMediaStorage,
+} from "./mediaStorage";
 import { supabase } from "./supabase";
 
 export const CLIP_STUDIO_COVER_MAX_BYTES = 20 * 1024 * 1024;
@@ -70,15 +76,16 @@ export type ClipStudioCoverUpload = {
 type ClipStudioEditRow = Tables<"creator_clip_edits">;
 type ClipStudioEditInsert = TablesInsert<"creator_clip_edits">;
 type ClipStudioEditUpdate = TablesUpdate<"creator_clip_edits">;
-type CreatorVideoOwnerRow = Pick<Tables<"videos">, "id" | "owner_id" | "thumb_storage_path">;
+type CreatorVideoOwnerRow = Pick<
+  Tables<"videos">,
+  "id" | "owner_id" | "thumb_storage_path" | "storage_provider" | "storage_bucket"
+>;
 
 const CLIP_STUDIO_EDIT_SELECT =
   "video_id,owner_user_id,clip_format,fit_mode,trim_start_ms,trim_end_ms,cover_storage_path,cover_mime_type,cover_file_size_bytes,title_overlay_text,title_overlay_subtitle,title_overlay_position,title_overlay_style,template_preset,brand_mark_enabled,brand_asset_id,created_at,updated_at";
 
 const COVER_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS = 30000;
-const CLIP_STUDIO_COVER_MAX_UPLOAD_TIMEOUT_MS = 2 * 60 * 1000;
-const CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_PER_MB_MS = 2000;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -101,21 +108,6 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: s
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
-};
-
-const getCoverUploadTimeoutMs = (sizeBytes?: number | null) => {
-  if (typeof sizeBytes !== "number" || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
-    return CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS;
-  }
-
-  const sizeMb = Math.ceil(sizeBytes / (1024 * 1024));
-  return Math.min(
-    CLIP_STUDIO_COVER_MAX_UPLOAD_TIMEOUT_MS,
-    Math.max(
-      CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS,
-      CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS + (sizeMb * CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_PER_MB_MS),
-    ),
-  );
 };
 
 async function prepareCoverUploadUri(file: CreatorVideoFile): Promise<{ uri: string; cleanup: () => Promise<void> }> {
@@ -345,7 +337,7 @@ export async function uploadClipStudioCoverImage(input: {
 
   const { data: videoRow, error: videoError } = await supabase
     .from("videos")
-    .select("id,owner_id,thumb_storage_path")
+    .select("id,owner_id,thumb_storage_path,storage_provider,storage_bucket")
     .eq("id", normalizedVideoId)
     .single()
     .returns<CreatorVideoOwnerRow>();
@@ -356,22 +348,44 @@ export async function uploadClipStudioCoverImage(input: {
   const mimeType = inferCoverMimeType(input.file);
   const storagePath = `${ownerUserId}/${normalizedVideoId}/cover-${createClientId()}.${getCoverExtension(input.file)}`;
   const preparedCover = await prepareCoverUploadUri(input.file);
-  const uploadTimeoutMs = getCoverUploadTimeoutMs(input.file.size);
-  const upload = await withTimeout(
-    supabase.storage
-      .from(CREATOR_VIDEO_BUCKET)
-      .upload(storagePath, new File(preparedCover.uri) as unknown as Blob, {
-        contentType: mimeType,
-        upsert: false,
-      }),
-    uploadTimeoutMs,
-    "Cover upload took too long. Try again.",
-  ).finally(() => preparedCover.cleanup());
-  if (upload.error) throw upload.error;
+  let signedUrl = "";
+  let uploadedObject: Awaited<ReturnType<typeof uploadFileToMediaStorage>> | null = null;
+
+  try {
+    uploadedObject = await uploadFileToMediaStorage({
+      surfaceType: "creator_video",
+      objectKey: storagePath,
+      uri: preparedCover.uri,
+      mimeType,
+      fileName: input.file.name,
+      sizeBytes: input.file.size,
+    });
+    signedUrl = await createSignedMediaDownload({
+      surfaceType: "creator_video",
+      provider: uploadedObject.provider,
+      bucket: uploadedObject.bucket,
+      objectKey: uploadedObject.objectKey,
+      recordId: normalizedVideoId,
+    });
+  } catch (error) {
+    if (uploadedObject) {
+      await deleteStoredMediaObject({
+        surfaceType: "creator_video",
+        provider: uploadedObject.provider,
+        bucket: uploadedObject.bucket,
+        objectKey: uploadedObject.objectKey,
+        recordId: normalizedVideoId,
+      }).catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    await preparedCover.cleanup();
+  }
+  if (!uploadedObject) throw new Error("Cover upload failed. Try again.");
 
   const previousCoverPath = toText(videoRow.thumb_storage_path);
   const update: TablesUpdate<"videos"> = {
-    thumb_storage_path: storagePath,
+    thumb_storage_path: uploadedObject.objectKey,
     thumb_url: null,
     updated_at: new Date().toISOString(),
   };
@@ -381,26 +395,40 @@ export async function uploadClipStudioCoverImage(input: {
     .eq("id", normalizedVideoId);
 
   if (updateError) {
-    await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([storagePath]).catch(() => undefined);
+    await deleteStoredMediaObject({
+      surfaceType: "creator_video",
+      provider: uploadedObject.provider,
+      bucket: uploadedObject.bucket,
+      objectKey: uploadedObject.objectKey,
+      recordId: normalizedVideoId,
+    }).catch(() => undefined);
     throw updateError;
   }
 
-  if (
-    previousCoverPath
-    && previousCoverPath !== storagePath
-    && previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)
-  ) {
-    await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([previousCoverPath]).catch(() => undefined);
+  if (previousCoverPath && previousCoverPath !== uploadedObject.objectKey) {
+    const previousProvider = normalizeMediaStorageProvider(videoRow.storage_provider);
+    const previousBucket = getMediaStorageProviderBucket({
+      provider: previousProvider,
+      bucket: videoRow.storage_bucket,
+      fallbackBucket: CREATOR_VIDEO_BUCKET,
+    });
+    if (previousProvider === "s3") {
+      await deleteStoredMediaObject({
+        surfaceType: "creator_video",
+        provider: previousProvider,
+        bucket: previousBucket,
+        objectKey: previousCoverPath,
+        recordId: normalizedVideoId,
+      }).catch(() => undefined);
+    } else if (previousCoverPath.startsWith(`${ownerUserId}/${normalizedVideoId}/cover-`)) {
+      await supabase.storage.from(CREATOR_VIDEO_BUCKET).remove([previousCoverPath]).catch(() => undefined);
+    }
   }
 
-  const { data: signedData } = await supabase.storage
-    .from(CREATOR_VIDEO_BUCKET)
-    .createSignedUrl(storagePath, CREATOR_VIDEO_SIGNED_URL_SECONDS);
-
   return {
-    storagePath,
+    storagePath: uploadedObject.objectKey,
     mimeType,
     fileSizeBytes: Math.max(0, Number(input.file.size ?? 0) || 0),
-    signedUrl: signedData?.signedUrl ?? "",
+    signedUrl,
   };
 }

@@ -31,6 +31,10 @@ for (const needle of requiredStudioCopy) {
 const requiredHelperTerms = [
   "getClipStudioCoverValidationMessage",
   "uploadClipStudioCoverImage",
+  "uploadFileToMediaStorage",
+  "createSignedMediaDownload",
+  "deleteStoredMediaObject",
+  "Cover upload failed. Try again.",
   "saveClipStudioEdit",
   "readClipStudioEdit",
   "CLIP_STUDIO_COVER_MAX_BYTES",

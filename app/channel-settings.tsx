@@ -2073,13 +2073,20 @@ export function ChannelStudioScreen() {
       typeof value === "number" && Number.isFinite(value) ? value : null
     );
 
+    const coverPathMatches = nullableText(edit.coverStoragePath) === nullableText(patch.coverStoragePath);
+    const coverMimeMatches = nullableText(edit.coverMimeType) === nullableText(patch.coverMimeType);
+    const persistedCoverSize = nullableNumber(edit.coverFileSizeBytes);
+    const intendedCoverSize = nullableNumber(patch.coverFileSizeBytes);
+    const coverSizeMatches = persistedCoverSize === intendedCoverSize
+      || (coverPathMatches && coverMimeMatches && persistedCoverSize !== null && intendedCoverSize === null);
+
     return edit.clipFormat === normalizeClipStudioFormat(patch.clipFormat)
       && edit.fitMode === normalizeClipStudioFitMode(patch.fitMode)
       && nullableNumber(edit.trimStartMs) === nullableNumber(patch.trimStartMs)
       && nullableNumber(edit.trimEndMs) === nullableNumber(patch.trimEndMs)
-      && nullableText(edit.coverStoragePath) === nullableText(patch.coverStoragePath)
-      && nullableText(edit.coverMimeType) === nullableText(patch.coverMimeType)
-      && nullableNumber(edit.coverFileSizeBytes) === nullableNumber(patch.coverFileSizeBytes)
+      && coverPathMatches
+      && coverMimeMatches
+      && coverSizeMatches
       && nullableText(edit.titleOverlayText) === nullableText(patch.titleOverlayText)
       && nullableText(edit.titleOverlaySubtitle) === nullableText(patch.titleOverlaySubtitle)
       && edit.titleOverlayPosition === normalizeClipStudioOverlayPosition(patch.titleOverlayPosition)

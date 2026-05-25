@@ -202,6 +202,30 @@ async function createCreatorVideoPlaybackUrl(input: {
   return createSupabaseSignedUrl(input.storagePath || input.playbackUrl);
 }
 
+async function createCreatorVideoThumbnailUrl(input: {
+  id: string;
+  storageProvider: MediaStorageProvider;
+  storageBucket: string;
+  thumbStoragePath: string;
+  thumbUrl: string;
+}) {
+  const thumbnailPath = toText(input.thumbStoragePath);
+  if (!thumbnailPath) return toText(input.thumbUrl);
+
+  if (input.storageProvider === "s3") {
+    const signedThumbnailUrl = await createSignedMediaDownload({
+      surfaceType: "creator_video",
+      provider: input.storageProvider,
+      bucket: input.storageBucket,
+      objectKey: thumbnailPath,
+      recordId: input.id,
+    }).catch(() => "");
+    if (signedThumbnailUrl) return signedThumbnailUrl;
+  }
+
+  return createSupabaseSignedUrl(thumbnailPath);
+}
+
 async function parseCreatorVideo(
   row: CreatorVideoRow,
   options?: { resolveLegacyPlaybackUrl?: boolean },
@@ -215,8 +239,6 @@ async function parseCreatorVideo(
     fallbackBucket: CREATOR_VIDEO_BUCKET,
   });
   const storageObjectKey = toText(row.storage_object_key) || storagePath || toText(row.playback_url);
-  const thumbnailPath = toText(row.thumb_storage_path);
-  const thumbnailFallback = toText(row.thumb_url);
   const playbackUrl = options?.resolveLegacyPlaybackUrl === true
     ? await createCreatorVideoPlaybackUrl({
       id,
@@ -227,6 +249,13 @@ async function parseCreatorVideo(
       playbackUrl: toText(row.playback_url),
     })
     : "";
+  const thumbnailUrl = await createCreatorVideoThumbnailUrl({
+    id,
+    storageProvider,
+    storageBucket,
+    thumbStoragePath: toText(row.thumb_storage_path),
+    thumbUrl: toText(row.thumb_url),
+  });
 
   return {
     id,
@@ -239,12 +268,12 @@ async function parseCreatorVideo(
     moderatedAt: toText(row.moderated_at) || null,
     moderatedBy: toText(row.moderated_by) || null,
     playbackUrl,
-    thumbnailUrl: thumbnailPath ? await createSupabaseSignedUrl(thumbnailPath) : thumbnailFallback,
+    thumbnailUrl,
     storageProvider,
     storageBucket,
     storageObjectKey,
     storagePath,
-    thumbStoragePath: thumbnailPath,
+    thumbStoragePath: toText(row.thumb_storage_path),
     mimeType: toText(row.mime_type),
     fileSizeBytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null,
     playbackResolution: null,
