@@ -28,6 +28,7 @@ const googlePlayWebhook = read("supabase/functions/google-play-webhook/index.ts"
 const channelSettings = read("app/channel-settings.tsx");
 const packageJson = read("package.json");
 const config = read("supabase/config.toml");
+const sandboxProofMigration = read("supabase/migrations/202605250004_provider_link_sandbox_proof_status.sql");
 
 assertIncludes(packageJson, "guard:provider-readiness-policy", "package guard script");
 
@@ -72,9 +73,20 @@ assertIncludes(edgeReadiness, "liveMoneyAction: false", "readiness no live money
 assertIncludes(revenueCatWebhook, "REVENUECAT_WEBHOOK_SECRET", "RevenueCat webhook secret env");
 assertIncludes(revenueCatWebhook, "premiumGranted: false", "RevenueCat no fake premium");
 assertIncludes(revenueCatWebhook, "verifySharedWebhookSecret", "RevenueCat signature requirement");
+assertIncludes(revenueCatWebhook, "revenuecat_webhook_setup_required", "RevenueCat missing-secret audit");
 assertIncludes(googlePlayWebhook, "GOOGLE_PLAY_WEBHOOK_SECRET", "Google Play webhook secret env");
 assertIncludes(googlePlayWebhook, "subscriptionGranted: false", "Google Play no fake subscription");
 assertIncludes(googlePlayWebhook, "verifySharedWebhookSecret", "Google Play signature requirement");
+assertIncludes(googlePlayWebhook, "google_play_webhook_setup_required", "Google Play missing-secret audit");
+
+assertIncludes(sandboxProofMigration, "'sandbox_ready'", "Stripe sandbox proof status");
+assertIncludes(sandboxProofMigration, "'stripe_webhook_sandbox_ready_proved'", "Stripe sandbox proof audit");
+assertIncludes(sandboxProofMigration, "'revenuecat_webhook_setup_required_proved'", "RevenueCat setup-required proof audit");
+assertIncludes(sandboxProofMigration, "'google_play_webhook_setup_required_proved'", "Google Play setup-required proof audit");
+assertIncludes(sandboxProofMigration, '"is_live_money_enabled" = false', "sandbox proof live money remains false");
+assertIncludes(sandboxProofMigration, "'CHILLYWOOD_LIVE_MONEY_ENABLED', 'missing'", "live money flag missing proof");
+assertNotIncludes(sandboxProofMigration, "'status' = 'active'", "sandbox proof must not force active");
+assertNotIncludes(sandboxProofMigration, '"is_live_money_enabled" = true', "sandbox proof must not enable live money");
 
 assertIncludes(config, "[functions.provider-readiness]", "provider readiness function config");
 assertIncludes(config, "[functions.revenuecat-webhook]", "RevenueCat webhook function config");

@@ -29,6 +29,24 @@ Deno.serve(async (req) => {
   const safeStatus = adapter.getSafeStatus();
 
   if (!webhookSecret) {
+    const adminConfig = createAdminClient();
+    if (adminConfig.configured) {
+      await writeProviderReadinessAudit(adminConfig.client, {
+        provider: "revenuecat",
+        capability: "premium_entitlement",
+        action: "revenuecat_webhook_setup_required",
+        statusAfter: "setup_needed",
+        reason: "RevenueCat webhook setup proof reached the fail-closed missing-secret path.",
+        proofSource: FUNCTION_NAME,
+        metadata: {
+          signature_verified: false,
+          webhook_processed: false,
+          premium_granted: false,
+          setup_required: true,
+        },
+      });
+    }
+
     return jsonResponse(200, {
       status: "setup_required",
       provider: "revenuecat",

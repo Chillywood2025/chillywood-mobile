@@ -34,15 +34,15 @@ Rules:
 - Normal creators and normal users cannot write readiness rows.
 - UI reads sanitized summaries only and never receives secrets, raw provider payloads, raw storage paths, customer payment identifiers, card data, bank data, or service-role values.
 
-## Seeded Providers And Capabilities
+## Readiness Providers And Capabilities
 
-| Provider | Capability | Seeded Status | Live Money |
+| Provider | Capability | Current Status | Live Money |
 | --- | --- | --- | --- |
 | RevenueCat | Premium entitlement | configured | false |
 | RevenueCat | Offering | configured | false |
 | RevenueCat | Entitlement | configured | false |
 | Google Play | Subscription product | configured | false |
-| Stripe | Webhook signature | setup_needed | false |
+| Stripe | Webhook signature | sandbox_ready | false |
 | Stripe Connect | Account setup | setup_needed | false |
 | Stripe Connect | Payout setup | setup_needed | false |
 | Stripe Connect | Payout release | disabled | false |
@@ -53,7 +53,44 @@ Rules:
 | Ads | Ad revenue | disabled | false |
 | Internal policy | Creator monetization policy | configured | false |
 
-`configured` means the repo has a named contract or policy row. It is not active. It does not grant access, create money, or enable a provider call.
+`configured` means the repo has a named contract or policy row. It is not active. It does not grant access, create money, or enable a provider call. `sandbox_ready` means a sandbox/test proof passed for that specific capability only; it is still not production active and does not enable live money.
+
+## Sandbox Provider Proof Closeout
+
+Migration `202605250004_provider_link_sandbox_proof_status.sql` records the May 25, 2026 sandbox proof overlay:
+
+- Supabase Edge secret inventory was names-only. `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are configured. RevenueCat server/webhook secrets, Google Play server/webhook secrets, Stripe Connect client/platform metadata, and internal live-money flags are missing.
+- Stripe webhook signature readiness is `sandbox_ready` only. Proof used a Stripe CLI test-mode `payment_intent.succeeded` event delivered to the enabled test webhook endpoint with `livemode=false` and `pending_webhooks=0`.
+- Unsigned direct POST to `stripe-connect-webhook` returned `invalid_signature` and `liveMoneyAction:false`.
+- RevenueCat and Google Play webhook shells cannot be marked sandbox-ready while their server/webhook secrets are missing. They return setup-required, write sanitized setup-required audit rows, and grant no Premium/subscription access.
+- No provider row is production `active`.
+- Every readiness row remains `is_live_money_enabled=false`.
+- No checkout, charge initiated by the app, tip, paid content, balance, transfer, payout, creator earning, revenue import, payout release, or fake Premium grant was created.
+- No secret value, webhook signing value, Google service-account JSON, raw provider payload, or customer/payment credential was committed or displayed.
+
+Current provider-link statuses after the sandbox proof:
+
+| Provider | Capability | Current Status | Production Active | Live Money |
+| --- | --- | --- | --- | --- |
+| Stripe | Webhook signature | sandbox_ready | false | false |
+| RevenueCat | Premium entitlement | configured | false | false |
+| RevenueCat | Offering | configured | false | false |
+| RevenueCat | Entitlement | configured | false | false |
+| Google Play | Subscription product | configured | false | false |
+| Stripe Connect | Account setup | setup_needed | false | false |
+| Stripe Connect | Payout setup | setup_needed | false | false |
+| Stripe Connect | Payout release | disabled | false | false |
+| Internal policy | Creator revenue imports | disabled | false | false |
+| Stripe | Tips | disabled | false | false |
+| Google Play | Paid content | setup_needed | false | false |
+| Stripe | Platform commerce | disabled | false | false |
+| Ads | Ad revenue | disabled | false | false |
+| Internal policy | Creator monetization policy | configured | false | false |
+
+Names-only Supabase secret inventory for this proof:
+
+- Configured: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+- Missing: `REVENUECAT_SECRET_API_KEY`, `REVENUECAT_WEBHOOK_SECRET`, `REVENUECAT_WEBHOOK_AUTH`, `REVENUECAT_ENTITLEMENT_ID`, `REVENUECAT_OFFERING_ID`, `REVENUECAT_PRODUCT_ID`, `GOOGLE_PLAY_PACKAGE_NAME`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`, `GOOGLE_PLAY_SERVICE_ACCOUNT_SECRET_REF`, `GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_ID`, `GOOGLE_PLAY_PUBSUB_TOPIC`, `GOOGLE_PLAY_WEBHOOK_SECRET`, `STRIPE_CONNECT_CLIENT_ID`, `STRIPE_PLATFORM_ACCOUNT_ID`, `STRIPE_ENVIRONMENT`, `CHILLYWOOD_PAYMENT_RAILS_ENABLED`, `CHILLYWOOD_LIVE_MONEY_ENABLED`, `CHILLYWOOD_CREATOR_MONETIZATION_ENABLED`, `CHILLYWOOD_PAYOUTS_ENABLED`
 
 ## Server-Only Env Contract
 
@@ -101,8 +138,8 @@ Only public-safe keys may use an `EXPO_PUBLIC_` prefix. Secret env vars must sta
 Added or confirmed fail-closed paths:
 
 - `provider-readiness`: authenticated sanitized readiness summary. Returns no secrets and no raw provider payloads.
-- `revenuecat-webhook`: requires `REVENUECAT_WEBHOOK_SECRET` before accepting events. Records verified events for readiness only and does not grant Premium.
-- `google-play-webhook`: requires `GOOGLE_PLAY_WEBHOOK_SECRET` before accepting events. Records verified events for readiness only and does not grant subscriptions.
+- `revenuecat-webhook`: requires `REVENUECAT_WEBHOOK_SECRET` before accepting events. Missing-secret requests fail closed, write sanitized setup-required audit rows when the service role is available, and do not grant Premium.
+- `google-play-webhook`: requires `GOOGLE_PLAY_WEBHOOK_SECRET` before accepting events. Missing-secret requests fail closed, write sanitized setup-required audit rows when the service role is available, and do not grant subscriptions.
 - Existing `stripe-connect-webhook`: requires Stripe webhook signature verification, rejects live-mode events in the current test-mode shell, records supported foundation events idempotently, and creates no checkout, orders, ledger earnings, transfers, payouts, or live money.
 
 The RevenueCat and Google Play webhook shells intentionally do not process entitlement changes. A later provider-link lane must implement provider-specific verification, idempotency, entitlement reconciliation, rollback proof, and audit proof before any active behavior can be claimed.
@@ -210,7 +247,8 @@ Do not touch these areas in provider-link work unless a future exact lane explic
 
 Android proof on device `R5CR120QCBF` is outside the repo at:
 
-`/tmp/chillywood-proof-2026-05-25T21-33-35Z-provider-link-readiness/`
+- Scaffold UI proof: `/tmp/chillywood-proof-2026-05-25T21-33-35Z-provider-link-readiness/`
+- Sandbox closeout proof: `/tmp/chillywood-proof-2026-05-25T-provider-link-sandbox-proof-android/`
 
 Captured proof includes:
 
@@ -226,7 +264,7 @@ Captured proof includes:
 - No secret values displayed.
 - No live-money, checkout, payout, balance, tip, paid-content, or revenue-import action.
 
-Validation run for the scaffold:
+Validation run for the scaffold and sandbox proof:
 
 - `npm run typecheck`
 - `npm run validate:runtime`
@@ -246,6 +284,12 @@ Validation run for the scaffold:
 - deployed function list proof for `provider-readiness`, `revenuecat-webhook`, and `google-play-webhook`
 - unauthenticated readiness curl proof returning auth required
 - RevenueCat and Google Play webhook curl proof returning setup required with no grants and no live-money action while webhook secrets are missing
+- Stripe CLI test-mode webhook proof with `livemode=false` and `pending_webhooks=0`
+- Stripe unsigned direct POST proof returning `invalid_signature` and no live-money action
+- signed-in sanitized readiness proof returning 14 rows, no active rows, no live-money rows, and no forbidden raw fields
+- direct `provider_readiness_status` RLS read proof returning 0 rows for the proof user
+- Android proof at `/tmp/chillywood-proof-2026-05-25T-provider-link-sandbox-proof-android/`
+- Android proof XML grep showing no Stripe/RevenueCat/Google secret-like values
 - scoped no-forbidden-copy/no-client-secret/no-fake-activation greps for the changed creator-facing surface
 - changed-file proof showing no native Android/Gradle, lockfile, Expo config, LiveKit, Watch-Party, Clip Studio, or Brand Studio behavior files changed
 - `git diff --check`
@@ -256,8 +300,8 @@ Validation run for the scaffold:
 - Provider readiness model: repo-added in migrations `202605250002_provider_link_readiness_scaffold.sql` and `202605250003_provider_readiness_creator_copy.sql`.
 - Provider adapters: typed fail-closed interfaces/shells in `supabase/functions/_shared/provider-readiness.ts`.
 - Platform Studio: Monetization tab reads sanitized readiness summaries and falls back closed if the summary is unavailable.
-- Edge Functions: `provider-readiness`, `revenuecat-webhook`, and `google-play-webhook` are deployed as ACTIVE version 1.
-- Webhook shells: RevenueCat and Google Play fail closed; Stripe Connect signed webhook foundation already exists.
+- Edge Functions: `provider-readiness` is deployed ACTIVE version 1; `revenuecat-webhook` and `google-play-webhook` are deployed ACTIVE version 2 after the setup-required audit logging update.
+- Webhook shells: RevenueCat and Google Play fail closed and audit setup-required when secrets are missing; Stripe Connect signed webhook foundation exists and has sandbox signature proof.
 - Live money: not active.
 - Purchases: unchanged.
 - Payouts: unavailable.
