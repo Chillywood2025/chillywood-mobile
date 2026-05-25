@@ -1,18 +1,27 @@
 # NEXT TASK
 
-## Recommended Lane: Clip Studio Cover/Poster Proof and Public Metadata Renderer Decision
+## Recommended Lane: Clip Studio Published Metadata Polish
 
-Clip Studio Save Draft is no longer the known blocker. The hardening lane is implemented at `a716ee1ed5a880922b8d6dc49896655392fc9b25`, remote migration `202605240009` is applied, and proof showed a real saved draft in Content Library with a real `creator_clip_edits` row and zero public rows for that draft.
+Clip Studio Save Draft and cover/poster proof are no longer known blockers.
 
-The next launch-strength Clip Studio work should be narrower:
+Closed truth:
 
-- Prove the optional cover/poster upload path on Android after the Save Draft trigger fix, including selected cover, cover upload, saved `thumb_storage_path`, edit row cover fields, Content Library cover preview, and no public cover leak while the video is draft.
-- Decide whether public metadata rendering is desired for Clip Studio fields. If yes, add only safely backed rendering for published videos, starting with cover/title/template display; do not fake burned-in overlays or export.
-- Keep trim/export, poster-frame extraction from video, multi-clip timeline, transitions, captions, AI cut, stickers, Brand mark watermark rendering, and full renderer unavailable until real processing/player support exists.
-- Preserve Save Draft read-back behavior: no `Saved` state unless the video row, Clip Studio edit row, and Content Library owner read-back are confirmed.
-- Preserve Premium gates, RevenueCat logic, creator gates, public Platform draft/private safety, Brand Studio public-safe asset rules, LiveKit behavior, Watch-Party behavior, creator-video delete/unpublish logic, payout/revenue logic, auth/session behavior, and admin role boundaries.
+- Save Draft hardening is implemented at `a716ee1ed5a880922b8d6dc49896655392fc9b25`.
+- Cover/poster hardening is implemented at `84a9109b2ccd939da85ed3595301d5a578bc6165`.
+- Remote migration `202605240009` is applied.
+- Backend proof confirmed a real draft row, a real `creator_clip_edits` row, matching cover path, readable non-empty cover object, Content Library owner visibility, and zero public rows for the draft.
+- Public Platform still uses `includeDrafts: false` and public-preview mode hides owner controls.
+- No fake trim/export, fake public overlay renderer, fake Premium access, LiveKit, Watch-Party, RevenueCat, payout/revenue, creator gate, auth/session, or Brand Studio public-safety behavior changed.
 
-Validation should include `npm run typecheck`, `npm run validate:runtime`, `npm run guard:refresh-policy`, `npm run guard:payment-rail-policy`, `npm run guard:creator-monetization-policy`, `npm run guard:stripe-connect-policy`, `npm run guard:vod-quality-policy`, `npm run guard:platform-brand-studio-policy`, `npm run guard:clip-studio-policy`, Supabase linked lint/dry-run/typegen proof if schema changes, targeted no-debug-copy/no-Mini-Platform/no-fake-export greps, Android screenshots on `R5CR120QCBF`, public draft non-leak proof, and `git diff --check`.
+The next launch-strength Clip Studio lane should be a polish lane, not another proof-blocker lane:
+
+- Decide how published video cards should present Clip Studio metadata without implying rendered video edits.
+- Keep cover/poster as the only currently backed visual metadata for public/published surfaces unless Product explicitly wants more.
+- If public published-card metadata is desired, add only safe display labels such as format/template on published video cards; do not burn overlays into video or claim export.
+- Improve the cover replacement UX if needed so retry/saved states are clearer after a partial cover save.
+- Keep title overlays, templates, format/fit, Brand mark, and trim/export as editor/preview metadata unless a backed renderer/player implementation is added and proved.
+
+Validation should include `npm run typecheck`, `npm run validate:runtime`, `npm run guard:refresh-policy`, `npm run guard:payment-rail-policy`, `npm run guard:creator-monetization-policy`, `npm run guard:stripe-connect-policy`, `npm run guard:vod-quality-policy`, `npm run guard:platform-brand-studio-policy`, `npm run guard:clip-studio-policy`, targeted no-debug-copy/no-Mini-Platform/no-fake-export greps, public draft non-leak proof, and `git diff --check`.
 
 ## Still-Open Non-UI Follow-Ups
 

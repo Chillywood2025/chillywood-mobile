@@ -13,7 +13,7 @@ Clip Studio is the creator-facing video preparation area inside Platform Studio.
 - Local selected-video preview using native controls with muted playback.
 - Format metadata: Vertical 9:16, Square 1:1, and Landscape 16:9.
 - Fit metadata: Fill, Fit, and Center.
-- Cover image picker for JPG, PNG, and WebP with a 20 MB limit.
+- Cover image picker/upload for JPG, PNG, and WebP with a 20 MB limit, hardened through the existing media-storage signed upload path and readable-byte verification.
 - Simple title card metadata: title, subtitle, placement, and style.
 - Template metadata: Trailer, Highlight, Promo, Event, Reaction, and Platform Intro.
 - Optional Platform brand mark preview only when a published approved Brand Studio avatar/logo/watermark asset exists.
@@ -66,7 +66,9 @@ If video upload succeeds but metadata or refresh confirmation fails, Clip Studio
 
 ## Cover Images
 
-Cover images upload only after a real `videos` row exists. The upload uses the existing private `creator-videos` bucket under the owner/video prefix, then updates `videos.thumb_storage_path`.
+Cover images upload only after a real `videos` row exists. The upload uses the same hardened media-storage path as creator video media, stores the private object under the owner/video prefix, verifies the uploaded object has readable bytes, then updates `videos.thumb_storage_path`.
+
+The Clip Studio edit row stores the same cover path in `creator_clip_edits.cover_storage_path`. Save Draft is not allowed to report cover success unless the video row and edit row can be read back and the cover path matches.
 
 Public cover access remains governed by existing creator-video visibility and moderation policies:
 
@@ -74,11 +76,28 @@ Public cover access remains governed by existing creator-video visibility and mo
 - public covers require the video to be public
 - moderation-hidden/removed/banned videos do not become public through Clip Studio
 
-Deleting a creator video now also attempts to remove its Supabase cover path when the video source itself uses S3 storage.
+Creator-video thumbnail resolution now signs the cover/poster through the video's real storage provider. S3-backed videos use media-storage signed downloads for their cover path; Supabase-backed legacy cover paths keep the existing Supabase signed URL path.
 
-## Metadata-Only Decisions
+Deleting a creator video best-effort removes its cover path according to the associated storage provider.
 
-The following are metadata/preview only in this MVP:
+## Renderer Decision
+
+| Field | Current public behavior |
+| --- | --- |
+| `cover_storage_path` / poster | Renders where existing creator-video thumbnail UI is used. Draft covers stay owner-only; published covers can render only through published video queries. |
+| `clip_format` | Stored and shown in Clip Studio/editor preview only. Public renderer deferred. |
+| `fit_mode` | Stored and shown in Clip Studio/editor preview only. Public renderer deferred. |
+| `title_overlay_text` | Stored as metadata only. Public overlay renderer deferred. |
+| `title_overlay_subtitle` | Stored as metadata only. Public overlay renderer deferred. |
+| `title_overlay_position` | Stored as metadata only. Public overlay renderer deferred. |
+| `title_overlay_style` | Stored as metadata only. Public overlay renderer deferred. |
+| `template_preset` | Stored and shown in Clip Studio/editor preview only. Public renderer deferred. |
+| `brand_mark_enabled` | Stored for preview intent only. Video watermark/public renderer deferred. |
+| `brand_asset_id` | Stored for preview intent only. Video watermark/public renderer deferred. |
+| `trim_start_ms` | Reserved/deferred; no real trim/export is active. |
+| `trim_end_ms` | Reserved/deferred; no real trim/export is active. |
+
+The following remain metadata/preview only in this MVP:
 
 - format/crop mode
 - fit mode
@@ -114,6 +133,8 @@ MVP implementation commit: `40c6fea9554fbb6ce084241daaa7c35b5792eecb`.
 
 Save Draft hardening implementation commit: `a716ee1ed5a880922b8d6dc49896655392fc9b25`.
 
+Cover/poster hardening implementation commit: `84a9109b2ccd939da85ed3595301d5a578bc6165`.
+
 Android release proof on `R5CR120QCBF` captured screenshots under `/tmp/chillywood-clip-studio-proof-20260524/` for:
 
 - Platform Studio `Create Clip`
@@ -137,6 +158,14 @@ Android/device and backend proof for the hardening lane is stored outside the re
 - `79-public-preview-no-draft.png`: public Platform preview shows only public-safe content and does not show the saved draft title.
 
 The same proof query returned `publicRowCount: 0` for the saved draft id, and source proof remains `readCreatorVideos(routeUserId, { includeDrafts: false })` plus `showOwnerControls = isOwner && !publicPreviewMode` on the public Platform route.
+
+Cover/poster closeout proof is stored outside the repo under `/tmp/chillywood-clip-cover-proof-20260524/`:
+
+- Android proof reopened the saved draft from Content Library, showed selected cover state, showed friendly retry/no-fake-success copy when confirmation was incomplete, and showed the owner Content Library draft card with cover art.
+- Backend proof file `/tmp/chillywood-clip-cover-proof-20260524/backend-cover-proof-final.json` confirmed draft video `3804dbca-e1f7-4251-b5fa-8603014c66bf` belongs to the signed-in proof creator, remains `draft`, has a matching `creator_clip_edits` row, and has matching `videos.thumb_storage_path` / `creator_clip_edits.cover_storage_path`.
+- The signed cover range probe returned `206` with readable bytes for the private cover object.
+- Public/published row count for that draft id was `0`, so neither the draft video nor its cover/poster renders through public published-video queries.
+- The earlier zero-byte cover object behavior was treated as a real bug and fixed by moving cover upload onto the existing media-storage upload/verification helper path.
 
 ## Brand Studio Integration
 
@@ -178,7 +207,7 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 
 ## Validation
 
-Latest Save Draft hardening validation used:
+Latest Clip Studio cover/poster closeout validation used:
 
 - `npm run typecheck`
 - `npm run validate:runtime`
@@ -190,12 +219,11 @@ Latest Save Draft hardening validation used:
 - `npm run guard:platform-brand-studio-policy`
 - `npm run guard:clip-studio-policy`
 - existing Watch-Party/LiveKit and old-room guards
-- `supabase db push`
 - `supabase migration list`
 - `supabase db lint --linked`
 - `supabase db push --dry-run`
 - targeted no-Mini-Platform/no-debug-copy/no-fake-export grep
-- backend proof that the saved draft has a real video row, real Clip Studio edit row, owner match, `draft` visibility, and zero public rows
+- backend proof that the saved draft has a real video row, real Clip Studio edit row, owner match, matching cover/poster path, readable non-empty cover object, `draft` visibility, and zero public rows
 - source proof that public Platform reads creator videos with `includeDrafts: false` and hides owner controls in public-preview mode
 - Android proof on `R5CR120QCBF`
 - `git diff --check`
