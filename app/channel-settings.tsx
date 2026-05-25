@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import { ResizeMode, Video } from "expo-av";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -98,6 +98,7 @@ import {
   getCreatorVideoStorageLimitMessage,
   getCreatorVideoTooLargeMessage,
   isCreatorVideoFileOverChannelMovieLimit,
+  readCreatorVideoForOwner,
   readCreatorVideos,
   updateCreatorVideoMetadata,
   uploadCreatorVideo,
@@ -119,6 +120,7 @@ import {
   uploadClipStudioCoverImage,
   type ClipStudioCoverUpload,
   type ClipStudioEdit,
+  type ClipStudioEditPatch,
   type ClipStudioFitMode,
   type ClipStudioFormat,
   type ClipStudioOverlayPosition,
@@ -190,6 +192,16 @@ type ContentStatusFilter = "all" | "published" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 type VideoLifecycleState = "idle" | "file_selected" | "uploading" | "succeeded" | "failed";
+type ClipStudioSaveState =
+  | "idle"
+  | "selecting_video"
+  | "video_selected"
+  | "selecting_cover"
+  | "ready_to_save"
+  | "saving"
+  | "saved"
+  | "save_failed"
+  | "retrying";
 type StudioHomeSectionId = "create" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
 type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scenePresets" | "review" | "preview" | "defaults";
 type ClipStudioSectionId = "format" | "cover" | "title" | "template" | "brand" | "advanced";
@@ -291,6 +303,11 @@ const logCreatorVideoUploadUi = (event: string, details?: Record<string, unknown
   console.log("[creator-video-upload-ui]", event, details ?? {});
 };
 
+const logClipStudioUi = (event: string, details?: Record<string, unknown>) => {
+  if (!__DEV__) return;
+  console.log("[clip-studio-ui]", event, details ?? {});
+};
+
 const SUPPORTED_CREATOR_VIDEO_MIME_TYPES = new Set([
   "video/mp4",
   "video/quicktime",
@@ -322,6 +339,9 @@ const formatCreatorVideoUiError = (error: unknown, fallback: string, fileSize?: 
   }
   if (message.includes("network") || message.includes("fetch")) {
     return "Network trouble interrupted creator videos. Check your connection and try again.";
+  }
+  if (message.includes("sign in") || message.includes("session") || message.includes("auth")) {
+    return "Sign in again before saving this clip.";
   }
   if (message.includes("permission") || message.includes("denied") || message.includes("policy") || message.includes("rls")) {
     return "This account cannot complete that creator video action right now.";
@@ -908,9 +928,12 @@ export function ChannelStudioScreen() {
   const [selectedVideoFile, setSelectedVideoFile] = useState<CreatorVideoFile | null>(null);
   const [clipNotice, setClipNotice] = useState<string | null>(null);
   const [clipSaving, setClipSaving] = useState(false);
+  const clipSaveInFlightRef = useRef(false);
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
   const [selectedClipVideoFile, setSelectedClipVideoFile] = useState<CreatorVideoFile | null>(null);
   const [selectedClipCoverFile, setSelectedClipCoverFile] = useState<CreatorVideoFile | null>(null);
+  const [clipSaveState, setClipSaveState] = useState<ClipStudioSaveState>("idle");
+  const [clipSavedVideoId, setClipSavedVideoId] = useState<string | null>(null);
   const [clipRightsAccepted, setClipRightsAccepted] = useState(false);
   const [contentRightsAccepted, setContentRightsAccepted] = useState(false);
   const [liveReplayAccepted, setLiveReplayAccepted] = useState(false);
@@ -1261,15 +1284,26 @@ export function ChannelStudioScreen() {
     setVideoNotice(null);
   };
 
+  const markClipStudioDirty = (nextState: ClipStudioSaveState = "ready_to_save") => {
+    setClipSaveState((current) => (
+      current === "saving" || current === "retrying" ? current : nextState
+    ));
+    setClipSavedVideoId(null);
+  };
+
   const updateClipEditor = (patch: Partial<ClipStudioEditorState>) => {
     setClipEditor((prev) => ({ ...prev, ...patch }));
+    markClipStudioDirty();
     setClipNotice(null);
   };
 
   const resetClipStudio = () => {
+    clipSaveInFlightRef.current = false;
     setClipEditor(createEmptyClipStudioEditorState());
     setSelectedClipVideoFile(null);
     setSelectedClipCoverFile(null);
+    setClipSaveState("idle");
+    setClipSavedVideoId(null);
     setClipRightsAccepted(false);
     setClipNotice(null);
   };
@@ -1284,6 +1318,8 @@ export function ChannelStudioScreen() {
     });
     setSelectedClipVideoFile(transferredFile);
     setSelectedClipCoverFile(null);
+    setClipSaveState(transferredFile ? "video_selected" : "idle");
+    setClipSavedVideoId(null);
     setClipRightsAccepted(contentRightsAccepted);
     setClipNotice(
       transferredFile
@@ -1305,6 +1341,8 @@ export function ChannelStudioScreen() {
     });
     setSelectedClipVideoFile(null);
     setSelectedClipCoverFile(null);
+    setClipSaveState("saved");
+    setClipSavedVideoId(video.id);
     setClipRightsAccepted(false);
     setClipNotice("Loading Clip Studio settings for this video...");
     openStudioTab("clip", { focus: "edit" });
@@ -1413,7 +1451,7 @@ export function ChannelStudioScreen() {
     if (!user?.id) {
       setCreatorVideos([]);
       setVideosLoadError(null);
-      return;
+      return [];
     }
 
     setVideosLoading(true);
@@ -1421,12 +1459,14 @@ export function ChannelStudioScreen() {
     try {
       const videos = await readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 });
       setCreatorVideos(videos);
+      return videos;
     } catch (error) {
       setCreatorVideos([]);
       setVideosLoadError(formatCreatorVideoUiError(
         error,
         "Unable to load creator videos right now. Check your connection and retry.",
       ));
+      return [];
     } finally {
       setVideosLoading(false);
     }
@@ -1580,7 +1620,9 @@ export function ChannelStudioScreen() {
 
   const onPickClipVideoFile = async () => {
     try {
+      setClipSaveState("selecting_video");
       setClipNotice(null);
+      logClipStudioUi("clip_video_select_started");
       const result = await DocumentPicker.getDocumentAsync({
         type: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"],
         copyToCacheDirectory: true,
@@ -1588,7 +1630,9 @@ export function ChannelStudioScreen() {
       });
 
       if (result.canceled) {
+        setClipSaveState((current) => (clipEditor.editingVideoId || selectedClipVideoFile ? "ready_to_save" : current === "selecting_video" ? "idle" : current));
         setClipNotice("No video selected. Choose Video when you're ready.");
+        logClipStudioUi("clip_video_select_canceled");
         return;
       }
 
@@ -1601,23 +1645,31 @@ export function ChannelStudioScreen() {
       };
 
       if (!pickedFile.uri) {
+        setClipSaveState("save_failed");
         setClipNotice("Choose a video before opening Clip Studio preview.");
+        logClipStudioUi("clip_video_select_failed", { reason: "missing_uri" });
         return;
       }
 
       if (!isSupportedCreatorVideoFile(pickedFile)) {
         setSelectedClipVideoFile(null);
+        setClipSaveState("save_failed");
         setClipNotice("Choose an MP4, MOV, WebM, or M4V video file.");
+        logClipStudioUi("clip_video_select_failed", { reason: "unsupported_type" });
         return;
       }
 
       if (isCreatorVideoFileOverChannelMovieLimit(pickedFile, maxUploadSizeMb)) {
         setSelectedClipVideoFile(null);
+        setClipSaveState("save_failed");
         setClipNotice(getCreatorVideoTooLargeMessage(pickedFile.size, maxUploadSizeMb));
+        logClipStudioUi("clip_video_select_failed", { reason: "too_large", size: pickedFile.size ?? null });
         return;
       }
 
       setSelectedClipVideoFile(pickedFile);
+      setClipSavedVideoId(null);
+      setClipSaveState("video_selected");
       setClipEditor((current) => ({
         ...current,
         editingVideoId: null,
@@ -1625,14 +1677,22 @@ export function ChannelStudioScreen() {
         visibility: "draft",
       }));
       setClipNotice("Video selected. Preview, cover, format, and metadata can be saved as a draft.");
+      logClipStudioUi("clip_video_selected", {
+        mimeType: pickedFile.mimeType ?? null,
+        size: pickedFile.size ?? null,
+      });
     } catch {
+      setClipSaveState("save_failed");
       setClipNotice("Unable to open the video picker right now.");
+      logClipStudioUi("clip_video_select_failed", { reason: "picker_unavailable" });
     }
   };
 
   const onPickClipCoverFile = async () => {
     try {
+      setClipSaveState("selecting_cover");
       setClipNotice(null);
+      logClipStudioUi("clip_cover_select_started");
       const result = await DocumentPicker.getDocumentAsync({
         type: ["image/jpeg", "image/png", "image/webp"],
         copyToCacheDirectory: true,
@@ -1640,7 +1700,9 @@ export function ChannelStudioScreen() {
       });
 
       if (result.canceled) {
+        setClipSaveState((current) => (current === "selecting_cover" ? "ready_to_save" : current));
         setClipNotice("No cover image selected.");
+        logClipStudioUi("clip_cover_select_canceled");
         return;
       }
 
@@ -1654,15 +1716,24 @@ export function ChannelStudioScreen() {
       const validationMessage = getClipStudioCoverValidationMessage(pickedFile);
       if (validationMessage) {
         setSelectedClipCoverFile(null);
+        setClipSaveState("save_failed");
         setClipNotice(validationMessage);
+        logClipStudioUi("clip_cover_select_failed", { reason: "validation_failed" });
         return;
       }
 
       setSelectedClipCoverFile(pickedFile);
+      setClipSavedVideoId(null);
       updateClipEditor({ coverPreviewUrl: pickedFile.uri });
       setClipNotice("Cover image selected. It stays private until you save it to a draft or publish.");
+      logClipStudioUi("clip_cover_selected", {
+        mimeType: pickedFile.mimeType ?? null,
+        size: pickedFile.size ?? null,
+      });
     } catch {
+      setClipSaveState("save_failed");
       setClipNotice("Unable to open the cover picker right now.");
+      logClipStudioUi("clip_cover_select_failed", { reason: "picker_unavailable" });
     }
   };
 
@@ -1993,51 +2064,101 @@ export function ChannelStudioScreen() {
     };
   };
 
+  const clipStudioEditMatchesPatch = (edit: ClipStudioEdit, patch: ClipStudioEditPatch) => {
+    const nullableText = (value: unknown) => {
+      const normalized = String(value ?? "").trim();
+      return normalized || null;
+    };
+    const nullableNumber = (value: unknown) => (
+      typeof value === "number" && Number.isFinite(value) ? value : null
+    );
+
+    return edit.clipFormat === normalizeClipStudioFormat(patch.clipFormat)
+      && edit.fitMode === normalizeClipStudioFitMode(patch.fitMode)
+      && nullableNumber(edit.trimStartMs) === nullableNumber(patch.trimStartMs)
+      && nullableNumber(edit.trimEndMs) === nullableNumber(patch.trimEndMs)
+      && nullableText(edit.coverStoragePath) === nullableText(patch.coverStoragePath)
+      && nullableText(edit.coverMimeType) === nullableText(patch.coverMimeType)
+      && nullableNumber(edit.coverFileSizeBytes) === nullableNumber(patch.coverFileSizeBytes)
+      && nullableText(edit.titleOverlayText) === nullableText(patch.titleOverlayText)
+      && nullableText(edit.titleOverlaySubtitle) === nullableText(patch.titleOverlaySubtitle)
+      && edit.titleOverlayPosition === normalizeClipStudioOverlayPosition(patch.titleOverlayPosition)
+      && edit.titleOverlayStyle === normalizeClipStudioOverlayStyle(patch.titleOverlayStyle)
+      && edit.templatePreset === normalizeClipStudioTemplatePreset(patch.templatePreset)
+      && edit.brandMarkEnabled === (patch.brandMarkEnabled === true)
+      && nullableText(edit.brandAssetId) === nullableText(patch.brandAssetId);
+  };
+
   const saveClipStudio = async (targetVisibility: CreatorVideoVisibility) => {
+    if (clipSaveInFlightRef.current) return;
+
     const title = clipEditor.title.trim();
     const isPublishing = targetVisibility === "public";
     if (!title) {
+      setClipSaveState("save_failed");
       setClipNotice("Enter a title before saving this clip.");
+      logClipStudioUi("clip_save_draft_failed", { reason: "missing_title", targetVisibility });
       return;
     }
 
     if (!clipEditor.editingVideoId && !selectedClipVideoFile) {
+      setClipSaveState("idle");
       setClipNotice("Choose a video before saving this Clip Studio draft.");
+      logClipStudioUi("clip_save_draft_failed", { reason: "missing_video", targetVisibility });
       return;
     }
 
     if (!clipEditor.editingVideoId && !uploadsEnabled) {
+      setClipSaveState("save_failed");
       setClipNotice("Creator video uploads are temporarily paused. Existing clips can still be managed.");
+      logClipStudioUi("clip_save_draft_failed", { reason: "uploads_paused", targetVisibility });
       return;
     }
 
     if ((!clipEditor.editingVideoId || isPublishing) && !clipRightsAccepted) {
+      setClipSaveState("save_failed");
       setClipNotice("Confirm the creator rights acknowledgement before saving or publishing this clip.");
+      logClipStudioUi("clip_save_draft_failed", { reason: "rights_acknowledgement_missing", targetVisibility });
       return;
     }
 
     if (selectedClipVideoFile && isCreatorVideoFileOverChannelMovieLimit(selectedClipVideoFile, maxUploadSizeMb)) {
+      setClipSaveState("save_failed");
       setClipNotice(getCreatorVideoTooLargeMessage(selectedClipVideoFile.size, maxUploadSizeMb));
+      logClipStudioUi("clip_save_draft_failed", { reason: "video_too_large", targetVisibility });
       return;
     }
 
     if (clipEditor.brandMarkEnabled && !approvedClipBrandAsset) {
+      setClipSaveState("save_failed");
       setClipNotice("Use Platform brand is available after a published approved avatar or logo exists in Brand Studio.");
+      logClipStudioUi("clip_save_draft_failed", { reason: "brand_mark_unavailable", targetVisibility });
       return;
     }
 
+    clipSaveInFlightRef.current = true;
+    let savedVideoId = clipEditor.editingVideoId;
+    let videoMutationComplete = false;
+    let intendedEditPatch: ClipStudioEditPatch | null = null;
+
     try {
       setClipSaving(true);
+      setClipSaveState((current) => (current === "save_failed" ? "retrying" : "saving"));
       setClipNotice(isPublishing ? "Publishing clip..." : "Saving Clip Studio draft...");
-      let savedVideoId = clipEditor.editingVideoId;
+      logClipStudioUi("clip_save_draft_attempted", {
+        mode: savedVideoId ? "update" : "new",
+        targetVisibility,
+        hasCover: !!selectedClipCoverFile,
+      });
       let coverUpload: ClipStudioCoverUpload | null = null;
 
       if (savedVideoId) {
-        await updateCreatorVideoMetadata(savedVideoId, {
+        const updatedVideo = await updateCreatorVideoMetadata(savedVideoId, {
           title,
           description: clipEditor.description,
           visibility: targetVisibility,
         });
+        savedVideoId = updatedVideo.id;
       } else {
         const uploadedVideo = await uploadCreatorVideo({
           file: selectedClipVideoFile!,
@@ -2048,7 +2169,15 @@ export function ChannelStudioScreen() {
           maxUploadSizeMb,
         });
         savedVideoId = uploadedVideo.id;
+        setClipEditor((current) => ({
+          ...current,
+          editingVideoId: uploadedVideo.id,
+          title: uploadedVideo.title,
+          description: uploadedVideo.description,
+          visibility: uploadedVideo.visibility,
+        }));
       }
+      videoMutationComplete = true;
 
       if (selectedClipCoverFile && savedVideoId) {
         coverUpload = await uploadClipStudioCoverImage({
@@ -2058,27 +2187,151 @@ export function ChannelStudioScreen() {
       }
 
       if (!savedVideoId) throw new Error("Clip Studio could not resolve a saved video.");
-      const savedEdit = await saveClipStudioEdit(savedVideoId, buildClipStudioEditPatch(coverUpload));
-      await loadCreatorVideos();
+      intendedEditPatch = buildClipStudioEditPatch(coverUpload);
+      await saveClipStudioEdit(savedVideoId, intendedEditPatch);
+      const confirmedVideo = await readCreatorVideoForOwner(savedVideoId);
+      if (!confirmedVideo) {
+        throw new Error("Clip Studio could not confirm the saved draft.");
+      }
+      if (confirmedVideo.visibility !== targetVisibility) {
+        throw new Error("Clip Studio saved state could not be confirmed.");
+      }
+      const confirmedEdit = await readClipStudioEdit(savedVideoId);
+      if (!confirmedEdit) {
+        throw new Error("Clip Studio settings could not be confirmed.");
+      }
+      if (coverUpload && confirmedVideo.thumbStoragePath !== coverUpload.storagePath) {
+        throw new Error("Clip Studio cover could not be confirmed.");
+      }
+      if (coverUpload && confirmedEdit.coverStoragePath !== coverUpload.storagePath) {
+        throw new Error("Clip Studio cover settings could not be confirmed.");
+      }
+      const refreshedVideos = await loadCreatorVideos();
+      const contentLibraryContainsDraft = refreshedVideos.some((video) => (
+        video.id === savedVideoId && video.visibility === targetVisibility
+      ));
+      if (!contentLibraryContainsDraft) {
+        setClipEditor((current) => ({
+          ...current,
+          editingVideoId: savedVideoId,
+          title: confirmedVideo.title,
+          description: confirmedVideo.description,
+          visibility: confirmedVideo.visibility,
+          coverStoragePath: confirmedEdit.coverStoragePath ?? confirmedVideo.thumbStoragePath ?? null,
+          coverMimeType: confirmedEdit.coverMimeType,
+          coverFileSizeBytes: confirmedEdit.coverFileSizeBytes,
+          coverPreviewUrl: coverUpload?.signedUrl || confirmedVideo.thumbnailUrl || current.coverPreviewUrl,
+          brandMarkEnabled: confirmedEdit.brandMarkEnabled,
+          brandAssetId: confirmedEdit.brandAssetId,
+        }));
+        setClipSavedVideoId(null);
+        setClipSaveState("save_failed");
+        setClipNotice("Draft saved, but Content Library could not refresh it. Check your connection, then retry.");
+        logClipStudioUi("clip_save_draft_failed", { reason: "library_refresh_missing_saved_video", targetVisibility });
+        return;
+      }
+
       setClipEditor((current) => ({
         ...current,
         editingVideoId: savedVideoId,
-        visibility: targetVisibility,
-        coverStoragePath: savedEdit.coverStoragePath,
-        coverMimeType: savedEdit.coverMimeType,
-        coverFileSizeBytes: savedEdit.coverFileSizeBytes,
-        coverPreviewUrl: coverUpload?.signedUrl || current.coverPreviewUrl,
-        brandMarkEnabled: savedEdit.brandMarkEnabled,
-        brandAssetId: savedEdit.brandAssetId,
+        title: confirmedVideo.title,
+        description: confirmedVideo.description,
+        visibility: confirmedVideo.visibility,
+        coverStoragePath: confirmedEdit.coverStoragePath ?? confirmedVideo.thumbStoragePath ?? null,
+        coverMimeType: confirmedEdit.coverMimeType,
+        coverFileSizeBytes: confirmedEdit.coverFileSizeBytes,
+        coverPreviewUrl: coverUpload?.signedUrl || confirmedVideo.thumbnailUrl || current.coverPreviewUrl,
+        brandMarkEnabled: confirmedEdit.brandMarkEnabled,
+        brandAssetId: confirmedEdit.brandAssetId,
       }));
       setSelectedClipVideoFile(null);
       setSelectedClipCoverFile(null);
       setClipRightsAccepted(false);
-      setClipNotice(isPublishing ? "Clip published. Public playback still uses the existing Player." : "Clip draft saved.");
+      setClipSavedVideoId(savedVideoId);
+      setClipSaveState("saved");
+      setClipNotice(
+        isPublishing
+          ? "Clip published and confirmed in Content Library. Public playback still uses the existing Player."
+          : "Draft saved and confirmed in Content Library.",
+      );
+      logClipStudioUi("clip_save_draft_succeeded", { targetVisibility });
     } catch (error) {
-      setClipNotice(formatCreatorVideoUiError(error, "Unable to save this clip right now.", selectedClipVideoFile?.size));
+      if (savedVideoId && videoMutationComplete) {
+        const confirmedPartialVideo = await readCreatorVideoForOwner(savedVideoId).catch(() => null);
+        if (confirmedPartialVideo) {
+          const confirmedPartialEdit = await readClipStudioEdit(savedVideoId).catch(() => null);
+          const refreshedVideos = await loadCreatorVideos().catch(() => []);
+          const partialDraftIsVisible = refreshedVideos.some((video) => video.id === confirmedPartialVideo.id);
+          const partialSaveConfirmed =
+            confirmedPartialVideo.visibility === targetVisibility
+            && !!confirmedPartialEdit
+            && !!intendedEditPatch
+            && partialDraftIsVisible
+            && clipStudioEditMatchesPatch(confirmedPartialEdit, intendedEditPatch);
+
+          if (partialSaveConfirmed && confirmedPartialEdit) {
+            setClipEditor((current) => ({
+              ...current,
+              editingVideoId: confirmedPartialVideo.id,
+              title: confirmedPartialVideo.title,
+              description: confirmedPartialVideo.description,
+              visibility: confirmedPartialVideo.visibility,
+              coverStoragePath: confirmedPartialEdit.coverStoragePath ?? confirmedPartialVideo.thumbStoragePath ?? null,
+              coverMimeType: confirmedPartialEdit.coverMimeType,
+              coverFileSizeBytes: confirmedPartialEdit.coverFileSizeBytes,
+              coverPreviewUrl: confirmedPartialVideo.thumbnailUrl || current.coverPreviewUrl,
+              brandMarkEnabled: confirmedPartialEdit.brandMarkEnabled,
+              brandAssetId: confirmedPartialEdit.brandAssetId,
+            }));
+            setSelectedClipVideoFile(null);
+            setSelectedClipCoverFile(null);
+            setClipRightsAccepted(false);
+            setClipSavedVideoId(confirmedPartialVideo.id);
+            setClipSaveState("saved");
+            setClipNotice(
+              targetVisibility === "public"
+                ? "Clip published and confirmed in Content Library. Public playback still uses the existing Player."
+                : "Draft saved and confirmed in Content Library.",
+            );
+            logClipStudioUi("clip_save_draft_succeeded", { targetVisibility, recoveredAfterReadback: true });
+            return;
+          }
+
+          setClipEditor((current) => ({
+            ...current,
+            editingVideoId: confirmedPartialVideo.id,
+            title: confirmedPartialVideo.title,
+            description: confirmedPartialVideo.description,
+            visibility: confirmedPartialVideo.visibility,
+            coverStoragePath: confirmedPartialEdit?.coverStoragePath ?? confirmedPartialVideo.thumbStoragePath ?? current.coverStoragePath,
+            coverMimeType: confirmedPartialEdit?.coverMimeType ?? current.coverMimeType,
+            coverFileSizeBytes: confirmedPartialEdit?.coverFileSizeBytes ?? current.coverFileSizeBytes,
+            coverPreviewUrl: confirmedPartialVideo.thumbnailUrl || current.coverPreviewUrl,
+            brandMarkEnabled: confirmedPartialEdit?.brandMarkEnabled ?? current.brandMarkEnabled,
+            brandAssetId: confirmedPartialEdit?.brandAssetId ?? current.brandAssetId,
+          }));
+          setClipSavedVideoId(null);
+          setClipSaveState("save_failed");
+          setClipNotice(
+            partialDraftIsVisible
+              ? "A draft is visible in Content Library, but Clip Studio could not finish cover or settings confirmation. Retry Save Draft to finish it without creating another draft."
+              : "A draft was created, but Clip Studio could not refresh Content Library or finish cover settings. Retry Save Draft to finish it without creating another draft.",
+          );
+          logClipStudioUi("clip_save_draft_failed", { reason: "partial_draft_needs_retry", targetVisibility });
+          return;
+        }
+      }
+
+      setClipSaveState("save_failed");
+      setClipSavedVideoId(null);
+      setClipNotice(formatCreatorVideoUiError(error, "Unable to save this clip right now. Try again.", selectedClipVideoFile?.size));
+      logClipStudioUi("clip_save_draft_failed", {
+        reason: error instanceof Error ? error.message : "unknown",
+        targetVisibility,
+      });
     } finally {
       setClipSaving(false);
+      clipSaveInFlightRef.current = false;
     }
   };
 
@@ -3365,15 +3618,74 @@ export function ChannelStudioScreen() {
     const coverPreviewUri = selectedClipCoverFile?.uri || clipEditor.coverPreviewUrl;
     const hasSavedVideo = !!clipEditor.editingVideoId;
     const hasWorkingVideo = !!previewVideoUri || hasSavedVideo;
+    const clipTitleReady = clipEditor.title.trim().length > 0;
+    const isClipVideoTooLarge = !!selectedClipVideoFile
+      && isCreatorVideoFileOverChannelMovieLimit(selectedClipVideoFile, maxUploadSizeMb);
+    const clipSaveDraftRequirement = !hasSavedVideo && !selectedClipVideoFile
+      ? "Choose a video to enable Save Draft."
+      : !clipTitleReady
+        ? "Enter a title to enable Save Draft."
+        : !hasSavedVideo && !uploadsEnabled
+          ? "Creator video uploads are temporarily paused."
+          : !hasSavedVideo && !clipRightsAccepted
+            ? "Confirm creator rights before saving this draft."
+            : isClipVideoTooLarge
+              ? getCreatorVideoTooLargeMessage(selectedClipVideoFile?.size, maxUploadSizeMb)
+              : clipEditor.brandMarkEnabled && !approvedClipBrandAsset
+                ? "Publish and approve a Platform avatar or logo before using the brand mark."
+                : "";
+    const clipPublishRequirement = !hasWorkingVideo
+      ? "Choose a video before publishing."
+      : !clipTitleReady
+        ? "Enter a title before publishing."
+        : !clipRightsAccepted
+          ? "Confirm creator rights before publishing."
+          : isClipVideoTooLarge
+            ? getCreatorVideoTooLargeMessage(selectedClipVideoFile?.size, maxUploadSizeMb)
+            : "";
     const previewAspectRatio = clipEditor.clipFormat === "square_1_1"
       ? 1
       : clipEditor.clipFormat === "landscape_16_9"
         ? 16 / 9
         : 9 / 16;
     const previewResizeMode = clipEditor.fitMode === "fill" ? ResizeMode.COVER : ResizeMode.CONTAIN;
-    const clipStatus = hasSavedVideo
-      ? clipEditor.visibility === "public" ? "Published" : "Draft"
-      : selectedClipVideoFile ? "Ready to save" : "Empty";
+    const clipStatus = clipSaveState === "saving"
+      ? "Saving"
+      : clipSaveState === "retrying"
+        ? "Retrying"
+        : clipSaveState === "save_failed"
+          ? "Save failed"
+          : clipSaveState === "saved" && hasSavedVideo
+            ? clipEditor.visibility === "public" ? "Published" : "Saved draft"
+            : clipSaveState === "selecting_video"
+              ? "Choosing video"
+              : clipSaveState === "selecting_cover"
+                ? "Choosing cover"
+                : hasSavedVideo
+                  ? clipEditor.visibility === "public" ? "Published" : "Draft"
+                  : selectedClipVideoFile
+                    ? "Ready to save"
+                    : "Unsaved";
+    const clipStatusTone = !hasWorkingVideo
+      ? "muted"
+      : clipSaveState === "save_failed"
+        ? "warning"
+        : "default";
+    const shouldShowViewDraftAction =
+      clipSaveState === "saved"
+      && !!clipSavedVideoId
+      && clipEditor.visibility === "draft";
+    const primaryClipActionLabel = shouldShowViewDraftAction
+      ? "View Draft"
+      : clipSaving
+        ? "Saving..."
+        : clipSaveState === "save_failed"
+          ? "Retry Save Draft"
+          : "Save Draft";
+    const isPrimaryClipActionDisabled = shouldShowViewDraftAction
+      ? false
+      : clipSaving || !!clipSaveDraftRequirement;
+    const isPublishClipDisabled = clipSaving || !!clipPublishRequirement;
     const brandMarkReady = !!approvedClipBrandAsset;
     const selectedTemplateLabel = formatClipStudioTemplateLabel(clipEditor.templatePreset);
 
@@ -3384,7 +3696,7 @@ export function ChannelStudioScreen() {
             <Text style={styles.panelTitle}>Clip Studio</Text>
             <Text style={styles.panelSubtitle}>Prepare your video before publishing.</Text>
           </View>
-          {renderStudioStatusPill(clipStatus, clipStatus === "Empty" ? "muted" : "default")}
+          {renderStudioStatusPill(clipStatus, clipStatusTone)}
         </View>
 
         <View style={styles.clipPreviewShell}>
@@ -3479,6 +3791,15 @@ export function ChannelStudioScreen() {
             <Text style={styles.summaryBody}>{selectedClipVideoFile?.name || (hasSavedVideo ? "Using existing creator video." : "Choose a video to begin.")}</Text>
           </View>
           <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Save State</Text>
+            <Text style={styles.summaryValue}>{clipStatus}</Text>
+            <Text style={styles.summaryBody}>
+              {clipSaveState === "saved"
+                ? "Confirmed in your Content Library."
+                : clipSaveDraftRequirement || "Ready for a confirmed draft save."}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Cover</Text>
             <Text style={styles.summaryValue}>{coverPreviewUri ? "Ready" : "Optional"}</Text>
             <Text style={styles.summaryBody}>{coverPreviewUri ? "Cover preview is staged." : "Upload a cover image when ready."}</Text>
@@ -3486,7 +3807,7 @@ export function ChannelStudioScreen() {
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Export</Text>
             <Text style={styles.summaryValue}>Deferred</Text>
-            <Text style={styles.summaryBody}>No fake trim or rendered crop is created.</Text>
+            <Text style={styles.summaryBody}>Advanced export tools stay locked until fully backed.</Text>
           </View>
         </View>
 
@@ -3733,26 +4054,33 @@ export function ChannelStudioScreen() {
           <Text style={styles.legalAcknowledgementText}>{CREATOR_UPLOAD_ACKNOWLEDGEMENT}</Text>
         </TouchableOpacity>
 
-        {clipNotice ? (
-          <View style={styles.noticeCard}>
-            <Text style={styles.noticeText}>{clipNotice}</Text>
-          </View>
-        ) : null}
-
         <View style={styles.eventActionRow}>
           <TouchableOpacity
-            style={[styles.eventPrimaryButton, clipSaving && styles.eventPrimaryButtonDisabled]}
+            style={[styles.eventPrimaryButton, isPrimaryClipActionDisabled && styles.eventPrimaryButtonDisabled]}
             activeOpacity={0.88}
-            onPress={onSaveClipDraft}
-            disabled={clipSaving}
+            onPress={() => {
+              if (shouldShowViewDraftAction) {
+                openStudioTab("content", { filter: "drafts", focus: "library" });
+                return;
+              }
+              onSaveClipDraft();
+            }}
+            disabled={isPrimaryClipActionDisabled}
           >
-            {clipSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.eventPrimaryButtonText}>Save Draft</Text>}
+            {clipSaving ? (
+              <View style={styles.eventPrimaryButtonBusyRow}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.eventPrimaryButtonText}>{primaryClipActionLabel}</Text>
+              </View>
+            ) : (
+              <Text style={styles.eventPrimaryButtonText}>{primaryClipActionLabel}</Text>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.eventSecondaryButton, clipSaving && styles.eventPrimaryButtonDisabled]}
+            style={[styles.eventSecondaryButton, isPublishClipDisabled && styles.eventPrimaryButtonDisabled]}
             activeOpacity={0.88}
             onPress={onPublishClip}
-            disabled={clipSaving}
+            disabled={isPublishClipDisabled}
           >
             <Text style={styles.eventSecondaryButtonText}>Publish Clip</Text>
           </TouchableOpacity>

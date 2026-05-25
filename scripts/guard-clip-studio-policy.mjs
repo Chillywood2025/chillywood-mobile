@@ -5,10 +5,17 @@ const read = (path) => readFileSync(path, "utf8");
 const studio = read("app/channel-settings.tsx");
 const clipHelper = read("_lib/clipStudio.ts");
 const migration = read("supabase/migrations/202605240008_creator_clip_studio_metadata.sql");
+const ownerCastMigration = read("supabase/migrations/202605240009_creator_clip_studio_owner_cast_fix.sql");
 
 const requiredStudioCopy = [
   "Clip Studio",
   "Prepare your video before publishing.",
+  "type ClipStudioSaveState",
+  "readCreatorVideoForOwner",
+  "clipSaveInFlightRef",
+  "Draft saved and confirmed in Content Library.",
+  "Retry Save Draft",
+  "View Draft",
   "Preview crop is used for display. Final export editing is coming later.",
   "Trim/export is coming later.",
   "Title overlay is preview metadata only until a backed public overlay renderer exists.",
@@ -48,6 +55,10 @@ for (const needle of requiredMigrationTerms) {
   if (!migration.includes(needle)) {
     throw new Error(`Clip Studio guard failed: migration is missing "${needle}".`);
   }
+}
+
+if (!ownerCastMigration.includes('video."owner_id"::text = new."owner_user_id"')) {
+  throw new Error("Clip Studio guard failed: owner cast fix must compare videos.owner_id as text.");
 }
 
 if (/grant\s+select\s+on\s+table\s+public\."creator_clip_edits"\s+to\s+anon/i.test(migration)) {

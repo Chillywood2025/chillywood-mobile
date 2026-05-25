@@ -324,6 +324,24 @@ export async function readCreatorVideosForOwners(
   return attachRenditionStatuses(await Promise.all(data.map((row) => parseCreatorVideo(row))));
 }
 
+export async function readCreatorVideoForOwner(videoId: string): Promise<CreatorVideo | null> {
+  const ownerId = await getRequiredUserId();
+  const normalizedVideoId = toText(videoId);
+  if (!normalizedVideoId) return null;
+
+  const { data, error } = await supabase
+    .from("videos")
+    .select(CREATOR_VIDEO_SELECT)
+    .eq("id", normalizedVideoId)
+    .eq("owner_id", ownerId)
+    .returns<CreatorVideoRow>()
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+  return parseCreatorVideo(data);
+}
+
 export async function readLatestPublicCreatorVideos(
   options?: { limit?: number },
 ): Promise<CreatorVideo[]> {

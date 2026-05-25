@@ -1,4 +1,5 @@
 import { File } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 import { CREATOR_VIDEO_BUCKET, CREATOR_VIDEO_SIGNED_URL_SECONDS, formatCreatorVideoFileSize, type CreatorVideoFile } from "./creatorVideos";
@@ -75,6 +76,9 @@ const CLIP_STUDIO_EDIT_SELECT =
   "video_id,owner_user_id,clip_format,fit_mode,trim_start_ms,trim_end_ms,cover_storage_path,cover_mime_type,cover_file_size_bytes,title_overlay_text,title_overlay_subtitle,title_overlay_position,title_overlay_style,template_preset,brand_mark_enabled,brand_asset_id,created_at,updated_at";
 
 const COVER_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS = 30000;
+const CLIP_STUDIO_COVER_MAX_UPLOAD_TIMEOUT_MS = 2 * 60 * 1000;
+const CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_PER_MB_MS = 2000;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -84,6 +88,56 @@ const createClientId = () =>
     const next = char === "x" ? rand : (rand & 0x3) | 0x8;
     return next.toString(16);
   });
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+const getCoverUploadTimeoutMs = (sizeBytes?: number | null) => {
+  if (typeof sizeBytes !== "number" || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS;
+  }
+
+  const sizeMb = Math.ceil(sizeBytes / (1024 * 1024));
+  return Math.min(
+    CLIP_STUDIO_COVER_MAX_UPLOAD_TIMEOUT_MS,
+    Math.max(
+      CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS,
+      CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS + (sizeMb * CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_PER_MB_MS),
+    ),
+  );
+};
+
+async function prepareCoverUploadUri(file: CreatorVideoFile): Promise<{ uri: string; cleanup: () => Promise<void> }> {
+  const normalizedUri = toText(file.uri);
+  if (!normalizedUri.startsWith("content://") || !FileSystem.cacheDirectory) {
+    return { uri: normalizedUri, cleanup: async () => undefined };
+  }
+
+  const cacheUri = `${FileSystem.cacheDirectory}clip-cover-${createClientId()}.${getCoverExtension(file)}`;
+  await withTimeout(
+    FileSystem.copyAsync({ from: normalizedUri, to: cacheUri }),
+    CLIP_STUDIO_COVER_UPLOAD_TIMEOUT_MS,
+    "Cover image preparation took too long. Try again.",
+  );
+
+  return {
+    uri: cacheUri,
+    cleanup: async () => {
+      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
+    },
+  };
+}
 
 const getExtensionFromName = (name?: string | null) => {
   const normalized = toText(name).toLowerCase();
@@ -301,13 +355,18 @@ export async function uploadClipStudioCoverImage(input: {
 
   const mimeType = inferCoverMimeType(input.file);
   const storagePath = `${ownerUserId}/${normalizedVideoId}/cover-${createClientId()}.${getCoverExtension(input.file)}`;
-  const localFile = new File(input.file.uri);
-  const upload = await supabase.storage
-    .from(CREATOR_VIDEO_BUCKET)
-    .upload(storagePath, localFile as unknown as Blob, {
-      contentType: mimeType,
-      upsert: false,
-    });
+  const preparedCover = await prepareCoverUploadUri(input.file);
+  const uploadTimeoutMs = getCoverUploadTimeoutMs(input.file.size);
+  const upload = await withTimeout(
+    supabase.storage
+      .from(CREATOR_VIDEO_BUCKET)
+      .upload(storagePath, new File(preparedCover.uri) as unknown as Blob, {
+        contentType: mimeType,
+        upsert: false,
+      }),
+    uploadTimeoutMs,
+    "Cover upload took too long. Try again.",
+  ).finally(() => preparedCover.cleanup());
   if (upload.error) throw upload.error;
 
   const previousCoverPath = toText(videoRow.thumb_storage_path);
