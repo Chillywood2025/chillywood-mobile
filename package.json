@@ -24,6 +24,7 @@
     "guard:creator-monetization-policy": "node ./scripts/guard-creator-monetization-policy.mjs",
     "guard:payment-rail-policy": "node ./scripts/guard-payment-rail-policy.mjs",
     "guard:stripe-connect-policy": "node ./scripts/guard-stripe-connect-policy.mjs",
+    "guard:provider-readiness-policy": "node ./scripts/guard-provider-readiness-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",
     "guard:owner-security-center": "node ./scripts/guard-owner-security-center.mjs",
     "guard:security-request-context": "node ./scripts/guard-security-request-context.mjs && npm run guard:security-context-proxy-proof",

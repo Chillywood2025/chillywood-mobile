@@ -47,6 +47,8 @@ Migration `202605140011_creator_monetization_systems_foundation.sql` adds:
 - monetization webhook event idempotency table;
 - monetization audit log.
 
+Provider-link readiness is now scaffolded by migrations `202605250002_provider_link_readiness_scaffold.sql` and `202605250003_provider_readiness_creator_copy.sql`. They add `provider_readiness_status`, `provider_readiness_audit_log`, and `get_provider_readiness_summary()` as the single sanitized readiness source for RevenueCat, Google Play, Stripe, Stripe Connect, payouts, revenue imports, tips, paid content, ads, and future commerce. The seeded rows are non-live: `is_live_money_enabled=false` everywhere, no row is seeded active, normal creators cannot write readiness, and the summary returns no secrets or raw provider payloads.
+
 The migration also adds RPC foundations:
 
 - `set_creator_content_price`
@@ -69,6 +71,10 @@ Client helpers in `_lib/creatorMonetization.ts` now expose the safe repo-side pa
 - calculating scheduled payout fee as `$0`;
 - calculating the 1.5% no-cap instant cash-out fee;
 - requesting payout/cash-out only through server-side RPCs that remain disabled while live-money flags are off.
+
+Client helper `_lib/providerReadiness.ts` reads only the sanitized readiness summary and falls back closed if the summary is unavailable. Platform Studio uses that summary inside the consolidated Monetization tab for Premium, Revenue, Payouts, Stripe Setup, Google Play / RevenueCat Status, Future Tools, and owner/dev Technical checks. The fallback cannot mark money active. Edge Functions `provider-readiness`, `revenuecat-webhook`, and `google-play-webhook` are deployed as fail-closed shells; they do not grant Premium, create subscriptions, create checkout, move money, or release payouts.
+
+Provider readiness runbook: `docs/PROVIDER_LINK_READINESS_RUNBOOK.md`.
 
 ## Stripe CLI / Connect Proof Status
 

@@ -53,6 +53,17 @@ import {
   readCreatorMonetizationFoundationSummary,
   type CreatorMonetizationFoundationSummary,
 } from "../_lib/creatorMonetization";
+import {
+  findProviderReadinessSummary,
+  getCreatorReadinessLabel,
+  getProviderReadinessFallbackSummary,
+  getProviderReadinessTone,
+  readProviderReadinessSummary,
+  summarizeProviderReadiness,
+  type ProviderReadinessCapability,
+  type ProviderReadinessProvider,
+  type ProviderReadinessSummaryRow,
+} from "../_lib/providerReadiness";
 import { getRevenueCatProductionReadiness } from "../_lib/revenuecat";
 import {
   approveChannelAudienceRequest,
@@ -934,6 +945,9 @@ export function ChannelStudioScreen() {
   );
   const [creatorMonetizationSummary, setCreatorMonetizationSummary] =
     useState<CreatorMonetizationFoundationSummary | null>(null);
+  const [providerReadinessSummary, setProviderReadinessSummary] = useState<ProviderReadinessSummaryRow[]>(
+    getProviderReadinessFallbackSummary,
+  );
   const [payoutSetupBusy, setPayoutSetupBusy] = useState<"setup" | "sync" | null>(null);
   const [payoutSetupNotice, setPayoutSetupNotice] = useState<string | null>(null);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
@@ -1073,6 +1087,7 @@ export function ChannelStudioScreen() {
     if (!canUseChannelSettings) {
       setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
       setCreatorMonetizationSummary(null);
+      setProviderReadinessSummary(getProviderReadinessFallbackSummary());
       setPayoutSetupNotice(null);
       setPlatformBranding(null);
       setBrandDraft(null);
@@ -1093,6 +1108,7 @@ export function ChannelStudioScreen() {
       readCreatorAnalyticsSummary(String(user?.id ?? "")).catch(() => null),
       readCreatorPayoutDashboardSummary({ creatorUserId: String(user?.id ?? ""), limit: 5 }),
       readCreatorMonetizationFoundationSummary(String(user?.id ?? "")).catch(() => null),
+      readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
       readMyPlatformRoleMemberships().catch(() => []),
     ])
@@ -1105,6 +1121,7 @@ export function ChannelStudioScreen() {
         resolvedCreatorAnalyticsSummary,
         resolvedCreatorPayoutSummary,
         resolvedCreatorMonetizationSummary,
+        resolvedProviderReadinessSummary,
         resolvedPlatformBranding,
         resolvedPlatformRoleMemberships,
       ]) => {
@@ -1121,6 +1138,7 @@ export function ChannelStudioScreen() {
         setCreatorAnalyticsSummary(resolvedCreatorAnalyticsSummary);
         setCreatorPayoutSummary(resolvedCreatorPayoutSummary);
         setCreatorMonetizationSummary(resolvedCreatorMonetizationSummary);
+        setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setPlatformBranding(resolvedPlatformBranding);
         setBrandDraft(resolvedPlatformBranding?.profile ?? null);
         setPlatformRoleMemberships(resolvedPlatformRoleMemberships);
@@ -1137,6 +1155,7 @@ export function ChannelStudioScreen() {
         setCreatorAnalyticsSummary(null);
         setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
         setCreatorMonetizationSummary(null);
+        setProviderReadinessSummary(getProviderReadinessFallbackSummary());
         setPlatformRoleMemberships([]);
         setBrandReviewQueueAssets([]);
         setLoading(false);
@@ -5623,24 +5642,43 @@ export function ChannelStudioScreen() {
   );
 
   const renderMonetizationTab = () => {
+    const readiness = (
+      provider: ProviderReadinessProvider,
+      capability: ProviderReadinessCapability,
+    ) => findProviderReadinessSummary(providerReadinessSummary, provider, capability);
+    const premiumEntitlementReadiness = readiness("revenuecat", "premium_entitlement");
+    const revenueCatOfferingReadiness = readiness("revenuecat", "revenuecat_offering");
+    const revenueCatEntitlementReadiness = readiness("revenuecat", "revenuecat_entitlement");
+    const googlePlayProductReadiness = readiness("google_play", "google_play_subscription_product");
+    const stripeConnectReadiness = readiness("stripe_connect", "stripe_connect_account");
+    const stripeWebhookReadiness = readiness("stripe", "stripe_webhook_signature");
+    const payoutSetupReadiness = readiness("stripe_connect", "payout_setup");
+    const payoutReleaseReadiness = readiness("stripe_connect", "payout_release");
+    const revenueImportReadiness = readiness("internal_policy", "creator_revenue_imports");
+    const tipsReadiness = readiness("stripe", "tips");
+    const paidContentReadiness = readiness("google_play", "paid_content");
+    const commerceReadiness = readiness("stripe", "platform_commerce");
+    const adRevenueReadiness = readiness("ads", "ad_revenue");
+    const policyReadiness = readiness("internal_policy", "creator_monetization_policy");
     const monetizationActive = creatorMonetizationSettings.liveMoneyEnabled === true;
     const topStatus = monetizationActive ? "Active" : "Not active";
-    const storeStatus = revenueCatReadiness.anyPublicKeyConfigured ? "Ready for review" : "Store setup needed";
-    const stripeStatus = creatorPayoutSummary.providerReady ? "Ready for review" : "Stripe setup needed";
-    const premiumStatus = revenueCatReadiness.anyPublicKeyConfigured ? "Setup needed" : "Store setup needed";
+    const storeStatus = getCreatorReadinessLabel(googlePlayProductReadiness, revenueCatReadiness.anyPublicKeyConfigured ? "Ready for review" : "Store setup needed");
+    const stripeStatus = getCreatorReadinessLabel(stripeConnectReadiness, creatorPayoutSummary.providerReady ? "Ready for review" : "Stripe setup needed");
+    const premiumStatus = getCreatorReadinessLabel(premiumEntitlementReadiness, revenueCatReadiness.anyPublicKeyConfigured ? "Setup needed" : "Store setup needed");
     const futureToolCards: readonly SummaryMetricCard[] = [
-      { label: "Tips", value: "Planned", body: "Creator support stays unavailable until payment and policy checks are ready.", tone: "unavailable" },
-      { label: "Paid content", value: "Planned", body: "Paid access stays unavailable until purchase, refund, tax, and access checks are ready.", tone: "unavailable" },
-      { label: "Platform commerce", value: "Planned", body: "Products need checkout, fulfillment, refund, tax, and payout checks first.", tone: "unavailable" },
+      { label: "Tips", value: "Planned", body: summarizeProviderReadiness(tipsReadiness, "Creator support stays unavailable until payment and policy checks are ready."), tone: "unavailable" },
+      { label: "Paid content", value: "Planned", body: summarizeProviderReadiness(paidContentReadiness, "Paid access stays unavailable until purchase, refund, tax, and access checks are ready."), tone: "unavailable" },
+      { label: "Platform commerce", value: "Planned", body: summarizeProviderReadiness(commerceReadiness, "Products need checkout, fulfillment, refund, tax, and payout checks first."), tone: "unavailable" },
       { label: "Sponsorships", value: "Planned", body: "Sponsorship tools need review, disclosure, brand safety, and payment checks.", tone: "unavailable" },
-      { label: "Ad revenue", value: "Planned", body: "Creator ad revenue waits for real ad reporting and payout checks.", tone: "unavailable" },
+      { label: "Ad revenue", value: "Planned", body: summarizeProviderReadiness(adRevenueReadiness, "Creator ad revenue waits for real ad reporting and payout checks."), tone: "unavailable" },
       { label: "Subscriptions", value: "Premium only", body: "Premium remains the existing Chi'llywood subscription, not creator payout revenue.", tone: "unavailable" },
     ];
     const premiumCards: readonly SummaryMetricCard[] = [
       {
         label: "Premium access",
-        value: "Unchanged",
-        body: "Premium gates still use the existing entitlement checks.",
+        value: premiumStatus,
+        body: summarizeProviderReadiness(premiumEntitlementReadiness, "Premium gates still use the existing entitlement checks."),
+        tone: getProviderReadinessTone(premiumEntitlementReadiness),
       },
       {
         label: "Subscription",
@@ -5650,17 +5688,17 @@ export function ChannelStudioScreen() {
       {
         label: "Store setup",
         value: storeStatus,
-        body: revenueCatReadiness.anyPublicKeyConfigured
+        body: summarizeProviderReadiness(googlePlayProductReadiness, revenueCatReadiness.anyPublicKeyConfigured
           ? "Store checks can be reviewed from the subscription screen."
-          : "Premium purchase setup still needs store configuration before purchase can open.",
-        tone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "unavailable",
+          : "Premium purchase setup still needs store configuration before purchase can open."),
+        tone: getProviderReadinessTone(googlePlayProductReadiness),
       },
     ];
     const payoutCards: readonly SummaryMetricCard[] = [
       {
         label: "Payout setup",
         value: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary),
-        body: getCreatorFacingPayoutSetupBody(creatorPayoutSummary),
+        body: summarizeProviderReadiness(payoutSetupReadiness, getCreatorFacingPayoutSetupBody(creatorPayoutSummary)),
         tone: creatorPayoutSummary.providerReady ? "default" : "unavailable",
       },
       {
@@ -5671,8 +5709,8 @@ export function ChannelStudioScreen() {
       },
       {
         label: "Withdrawals",
-        value: "Unavailable",
-        body: "No withdrawal, transfer, cash-out, or payout release action is available.",
+        value: getCreatorReadinessLabel(payoutReleaseReadiness, "Unavailable"),
+        body: summarizeProviderReadiness(payoutReleaseReadiness, "No withdrawal, transfer, cash-out, or payout release action is available."),
         tone: "unavailable",
       },
       {
@@ -5684,7 +5722,7 @@ export function ChannelStudioScreen() {
       {
         label: "Instant cash-out",
         value: creatorPayoutReadiness.canRequestInstantCashout ? "Ready for review" : "Setup required",
-        body: `Optional instant cash-out is ${creatorPayoutReadiness.instantCashoutFeeBps / 100}% with no default cap when a future payout lane is approved.`,
+        body: `Optional instant cash-out is ${creatorPayoutReadiness.instantCashoutFeeBps / 100}% with no default cap when a future payout rollout is approved.`,
         tone: creatorPayoutReadiness.canRequestInstantCashout ? "default" : "unavailable",
       },
     ];
@@ -5692,10 +5730,10 @@ export function ChannelStudioScreen() {
       {
         label: "Stripe setup",
         value: stripeStatus,
-        body: creatorPayoutSummary.providerReady
+        body: summarizeProviderReadiness(stripeConnectReadiness, creatorPayoutSummary.providerReady
           ? "Stripe setup can be reviewed, but payouts are still unavailable."
-          : "Stripe setup is needed before payout readiness can move forward.",
-        tone: creatorPayoutSummary.providerReady ? "default" : "unavailable",
+          : "Stripe setup is needed before payout readiness can move forward."),
+        tone: getProviderReadinessTone(stripeConnectReadiness),
       },
       {
         label: "Money movement",
@@ -5709,26 +5747,33 @@ export function ChannelStudioScreen() {
         body: "Platform review is required before any future payout action can be considered.",
         tone: "unavailable",
       },
+      {
+        label: "Webhook",
+        value: getCreatorReadinessLabel(stripeWebhookReadiness, "Setup needed"),
+        body: summarizeProviderReadiness(stripeWebhookReadiness, "Webhook checks stay server-side and do not expose secrets."),
+        tone: getProviderReadinessTone(stripeWebhookReadiness),
+      },
     ];
     const storeCards: readonly SummaryMetricCard[] = [
       {
         label: "Google Play",
-        value: revenueCatReadiness.applicationId === revenueCatReadiness.expectedAndroidPackage ? "Package matched" : "Setup needed",
-        body: "Premium purchase readiness still depends on the existing store and subscription screen.",
-        tone: revenueCatReadiness.applicationId === revenueCatReadiness.expectedAndroidPackage ? "default" : "unavailable",
+        value: storeStatus,
+        body: summarizeProviderReadiness(googlePlayProductReadiness, "Premium purchase readiness still depends on the existing store and subscription screen."),
+        tone: getProviderReadinessTone(googlePlayProductReadiness),
       },
       {
-        label: "RevenueCat",
-        value: storeStatus,
-        body: revenueCatReadiness.anyPublicKeyConfigured
+        label: "RevenueCat offering",
+        value: getCreatorReadinessLabel(revenueCatOfferingReadiness, storeStatus),
+        body: summarizeProviderReadiness(revenueCatOfferingReadiness, revenueCatReadiness.anyPublicKeyConfigured
           ? "Subscription setup can be reviewed from the existing Premium flow."
-          : "Store setup is needed before purchase setup can be reviewed.",
-        tone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "unavailable",
+          : "Store setup is needed before purchase setup can be reviewed."),
+        tone: getProviderReadinessTone(revenueCatOfferingReadiness),
       },
       {
         label: "Entitlement",
-        value: "Premium",
-        body: "The existing Premium entitlement remains the access source for Premium gates.",
+        value: getCreatorReadinessLabel(revenueCatEntitlementReadiness, "Premium"),
+        body: summarizeProviderReadiness(revenueCatEntitlementReadiness, "The existing Premium entitlement remains the access source for Premium gates."),
+        tone: getProviderReadinessTone(revenueCatEntitlementReadiness),
       },
     ];
     const technicalCards: readonly SummaryMetricCard[] = [
@@ -5750,14 +5795,20 @@ export function ChannelStudioScreen() {
       },
       {
         label: "Stripe Connect",
-        value: creatorPayoutSummary.providerReady ? "Ready for review" : "Not active",
+        value: getCreatorReadinessLabel(stripeConnectReadiness, creatorPayoutSummary.providerReady ? "Ready for review" : "Not active"),
         body: "No credentials, webhook signing values, transfers, or payout actions are exposed.",
-        tone: creatorPayoutSummary.providerReady ? "default" : "unavailable",
+        tone: getProviderReadinessTone(stripeConnectReadiness),
       },
       {
         label: "Payment rails",
-        value: "Guarded",
-        body: "Premium remains Google Play plus RevenueCat; creator payouts remain separate.",
+        value: getCreatorReadinessLabel(policyReadiness, "Guarded"),
+        body: summarizeProviderReadiness(policyReadiness, "Premium remains Google Play plus RevenueCat; creator payouts remain separate."),
+      },
+      {
+        label: "Revenue imports",
+        value: getCreatorReadinessLabel(revenueImportReadiness, "Not active yet"),
+        body: summarizeProviderReadiness(revenueImportReadiness, "Real source revenue imports remain unavailable."),
+        tone: "unavailable",
       },
     ];
 
@@ -5849,7 +5900,7 @@ export function ChannelStudioScreen() {
           {renderMonetizationAccordion({
             id: "revenue",
             title: "Revenue",
-            summary: "Read-only revenue status with no fake earnings.",
+            summary: "Read-only revenue status.",
             status: "No earnings yet",
             statusTone: "muted",
             children: (
@@ -5933,7 +5984,7 @@ export function ChannelStudioScreen() {
           {renderMonetizationAccordion({
             id: "stripe",
             title: "Stripe Setup",
-            summary: "Public-safe setup status only. No money movement.",
+            summary: "Setup status only. No money movement.",
             status: stripeStatus,
             statusTone: creatorPayoutSummary.providerReady ? "default" : "muted",
             children: renderSummaryMetricCards(stripeCards),

@@ -10,6 +10,15 @@ verify_jwt = false
 [functions.public-creator-video-cards]
 verify_jwt = false
 
+[functions.provider-readiness]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.google-play-webhook]
+verify_jwt = false
+
 [functions.provider-usage-import]
 verify_jwt = false
 

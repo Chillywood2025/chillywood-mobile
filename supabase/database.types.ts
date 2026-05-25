@@ -6258,6 +6258,102 @@ export type Database = {
           },
         ]
       }
+      provider_readiness_audit_log: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          capability: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          proof_source: string | null
+          provider: string | null
+          reason: string | null
+          security_context_id: string | null
+          status_after: string | null
+          status_before: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          capability?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          proof_source?: string | null
+          provider?: string | null
+          reason?: string | null
+          security_context_id?: string | null
+          status_after?: string | null
+          status_before?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          capability?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          proof_source?: string | null
+          provider?: string | null
+          reason?: string | null
+          security_context_id?: string | null
+          status_after?: string | null
+          status_before?: string | null
+        }
+        Relationships: []
+      }
+      provider_readiness_status: {
+        Row: {
+          capability: string
+          created_at: string
+          environment: string
+          id: string
+          is_client_visible: boolean
+          is_live_money_enabled: boolean
+          last_checked_at: string | null
+          last_error_code: string | null
+          last_error_message: string | null
+          proof_source: string | null
+          proof_summary: string | null
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          capability: string
+          created_at?: string
+          environment?: string
+          id?: string
+          is_client_visible?: boolean
+          is_live_money_enabled?: boolean
+          last_checked_at?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          proof_source?: string | null
+          proof_summary?: string | null
+          provider: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          capability?: string
+          created_at?: string
+          environment?: string
+          id?: string
+          is_client_visible?: boolean
+          is_live_money_enabled?: boolean
+          last_checked_at?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          proof_source?: string | null
+          proof_summary?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       provider_usage_daily: {
         Row: {
           created_at: string
@@ -8910,6 +9006,20 @@ export type Database = {
       get_admin_content_config: { Args: never; Returns: Json }
       get_admin_report_detail: { Args: { p_report_id: number }; Returns: Json }
       get_admin_reports_overview: { Args: never; Returns: Json }
+      get_provider_readiness_summary: {
+        Args: never
+        Returns: {
+          capability: string
+          display_label: string
+          display_summary: string
+          is_live_money_enabled: boolean
+          last_checked_at: string
+          next_step: string
+          provider: string
+          public_safe: boolean
+          status: string
+        }[]
+      }
       get_security_request_context_summary: {
         Args: { p_context_id: string }
         Returns: Json
