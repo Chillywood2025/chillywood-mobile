@@ -63,16 +63,9 @@ import {
   type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
 import {
-  formatCreatorVideoFileSize,
-  getCreatorVideoStorageLimitMessage,
-  getCreatorVideoTooLargeMessage,
-  isCreatorVideoFileOverChannelMovieLimit,
   readCreatorVideos,
   readCreatorVideosForOwners,
-  uploadCreatorVideo,
   type CreatorVideo,
-  type CreatorVideoFile,
-  type CreatorVideoVisibility,
 } from "../../_lib/creatorVideos";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
@@ -316,7 +309,7 @@ const getAccessPostureTitle = (resolution: ChannelAccessResolution | null, isOff
   if (resolution.classification === "subscriber_access") return "Subscriber Access";
   if (resolution.classification === "private") return "Private Entry";
   if (resolution.classification === "mixed_access") return "Mixed Entry";
-  return "Open Channel";
+  return "Open Platform";
 };
 
 const formatPublicActivityVisibilityValue = (value?: UserProfile["publicActivityVisibility"] | null) => {
@@ -335,13 +328,13 @@ const formatPublicActivityVisibilityValue = (value?: UserProfile["publicActivity
 const getPublicActivityVisibilityBody = (value?: UserProfile["publicActivityVisibility"] | null) => {
   switch (value) {
     case "followers_only":
-      return "Public activity stays follower-led here, so the channel can feel social without pretending the whole audience sees every signal.";
+      return "Public activity stays follower-led here, so the Platform can feel social without pretending the whole audience sees every signal.";
     case "subscribers_only":
-      return "Public activity stays channel-subscriber-led here and remains distinct from account-tier premium access.";
+      return "Public activity stays Platform-subscriber-led here and remains distinct from account-tier premium access.";
     case "private":
       return "Public activity stays quiet here until the creator opens it up.";
     default:
-      return "Public activity can show up openly on this channel.";
+      return "Public activity can show up openly on this Platform.";
   }
 };
 
@@ -351,11 +344,11 @@ const getAudienceSurfaceVisibilityBody = (surface: "followers" | "subscribers", 
   if (surface === "followers") {
     return enabled
       ? "Follower cues can show up here when that relationship is real."
-      : "This channel keeps follower-only cues out of public view right now.";
+      : "This Platform keeps follower-only cues out of public view right now.";
   }
   return enabled
-    ? "Subscriber cues can show up here when the channel relationship is real."
-    : "This channel keeps subscriber-only cues out of public view right now.";
+    ? "Subscriber cues can show up here when the Platform relationship is real."
+    : "This Platform keeps subscriber-only cues out of public view right now.";
 };
 
 const formatEventDate = (value?: string | null) => {
@@ -454,18 +447,18 @@ const getProfileAccessBody = (resolution: ChannelAccessResolution | null, isOffi
     return "Verified help and official follow-up stay public here.";
   }
   if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
-    return "Checking the channel's current entry posture.";
+    return "Checking the Platform's current entry posture.";
   }
   if (resolution.reason === "channel_defaults_subscriber") {
-    return "This channel stays public to browse while deeper conversation and watch-party entry can be subscriber-led.";
+    return "This Platform stays public to browse while deeper conversation and watch-party entry can be subscriber-led.";
   }
   if (resolution.reason === "channel_defaults_private") {
-    return "This channel stays public to browse while deeper room entry stays invite-led.";
+    return "This Platform stays public to browse while deeper room entry stays invite-led.";
   }
   if (resolution.reason === "channel_defaults_mixed") {
     return "Some entry stays open while member-only moments stay protected.";
   }
-  return "Conversation and watch-party entry stay open by default on this channel.";
+  return "Conversation and watch-party entry stay open by default on this Platform.";
 };
 
 const getWatchPartyAccessBody = (resolution: ChannelAccessResolution | null, ready: boolean) => {
@@ -477,10 +470,10 @@ const getWatchPartyAccessBody = (resolution: ChannelAccessResolution | null, rea
 };
 
 const getCommunicationAccessBody = (resolution: ChannelAccessResolution | null, ready: boolean) => {
-  if (!ready || !resolution) return "checking communication-room posture";
-  if (resolution.communicationAccessRule === "party_pass") return "linked communication rooms can stay Party Pass-led by default";
-  if (resolution.communicationAccessRule === "premium") return "linked communication rooms can stay Premium-led by default";
-  return "linked communication rooms stay open by default";
+  if (!ready || !resolution) return "checking Chi'lly Chat posture";
+  if (resolution.communicationAccessRule === "party_pass") return "Chi'lly Chat follow-up can stay Party Pass-led by default";
+  if (resolution.communicationAccessRule === "premium") return "Chi'lly Chat follow-up can stay Premium-led by default";
+  return "Chi'lly Chat follow-up stays open by default";
 };
 
 const getBrowseAccessValue = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
@@ -496,82 +489,18 @@ const getBrowseAccessBody = (resolution: ChannelAccessResolution | null, isOffic
     return "verified platform-owned public identity";
   }
   if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
-    return "checking public channel posture";
+    return "checking public Platform posture";
   }
   if (resolution.reason === "channel_defaults_subscriber") {
-    return "the channel stays visible while member access protects deeper entry";
+    return "the Platform stays visible while member access protects deeper entry";
   }
   if (resolution.reason === "channel_defaults_private") {
-    return "the channel stays visible even when room entry is invite-led";
+    return "the Platform stays visible even when room entry is invite-led";
   }
   if (resolution.reason === "channel_defaults_mixed") {
-    return "the channel stays visible while access changes by surface";
+    return "the Platform stays visible while access changes by surface";
   }
-  return "the full channel story stays open to browse";
-};
-
-const SUPPORTED_PROFILE_VIDEO_MIME_TYPES = new Set([
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
-  "video/x-m4v",
-]);
-
-const SUPPORTED_PROFILE_VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "m4v"]);
-
-const getReadableProfileFileName = (value?: string | null) => String(value ?? "").trim() || "video file";
-
-const getProfileVideoTitleFromName = (value?: string | null) => (
-  getReadableProfileFileName(value)
-    .replace(/\.[^.]+$/, "")
-    .replace(/[_-]+/g, " ")
-    .trim()
-);
-
-const formatProfileFileSize = formatCreatorVideoFileSize;
-
-const isSupportedProfileVideoFile = (file: CreatorVideoFile) => {
-  const mimeType = String(file.mimeType ?? "").trim().toLowerCase();
-  const extension = String(file.name ?? "").trim().toLowerCase().split(".").pop() ?? "";
-  const hasSupportedMimeType = SUPPORTED_PROFILE_VIDEO_MIME_TYPES.has(mimeType) || mimeType.startsWith("video/");
-  const hasSupportedExtension = SUPPORTED_PROFILE_VIDEO_EXTENSIONS.has(extension);
-
-  if (hasSupportedMimeType || hasSupportedExtension) return !!file.uri;
-  if (!mimeType && !extension) return !!file.uri;
-
-  return false;
-};
-
-const formatProfileComposerError = (error: unknown, fallback: string, fileSize?: number | null) => {
-  const rawMessage = error instanceof Error ? error.message : String(error ?? "");
-  const message = rawMessage.trim().toLowerCase();
-
-  if (!message) return fallback;
-  if (message.includes("too large") || message.includes("maximum") || message.includes("exceeded")) {
-    return getCreatorVideoStorageLimitMessage(fileSize);
-  }
-  if (message.includes("network") || message.includes("fetch")) {
-    return "Network trouble interrupted your profile upload. Check your connection and try again.";
-  }
-  if (message.includes("permission") || message.includes("denied") || message.includes("policy") || message.includes("rls")) {
-    return "This account cannot publish that profile upload right now.";
-  }
-  if (message.includes("empty") || message.includes("zero")) {
-    return "That video uploaded as an empty file. Choose a non-empty video and try again.";
-  }
-  if (message.includes("storage") || message.includes("bucket") || message.includes("upload")) {
-    return "The video could not be saved to creator storage right now. Try again in a moment.";
-  }
-  if (message.includes("file") || message.includes("mime") || message.includes("unsupported")) {
-    return "Choose an MP4, MOV, WebM, or M4V video file.";
-  }
-
-  return fallback;
-};
-
-const logProfileComposer = (event: string, details?: Record<string, unknown>) => {
-  if (!__DEV__) return;
-  console.log("[profile-composer]", event, details ?? {});
+  return "the full Platform story stays open to browse";
 };
 
 const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
@@ -614,13 +543,6 @@ export default function ProfileScreen() {
   } | null>(null);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
   const [creatorVideosReady, setCreatorVideosReady] = useState(false);
-  const [profileComposerOpen, setProfileComposerOpen] = useState(false);
-  const [profileComposerText, setProfileComposerText] = useState("");
-  const [profileComposerTitle, setProfileComposerTitle] = useState("");
-  const [profileComposerFile, setProfileComposerFile] = useState<CreatorVideoFile | null>(null);
-  const [profileComposerVisibility, setProfileComposerVisibility] = useState<CreatorVideoVisibility>("public");
-  const [profileComposerBusy, setProfileComposerBusy] = useState(false);
-  const [profileComposerNotice, setProfileComposerNotice] = useState<string | null>(null);
   const [channelAccessProfile, setChannelAccessProfile] = useState<UserProfile | null>(null);
   const [channelAccessPermissions, setChannelAccessPermissions] = useState<CreatorPermissionSet | null>(null);
   const [channelAccessReady, setChannelAccessReady] = useState(false);
@@ -669,7 +591,7 @@ export default function ProfileScreen() {
     tagline: hasBackedProfileIdentity ? undefined : taglineParam,
     role: hasBackedProfileIdentity ? undefined : roleParam,
     isLive: isLiveParam === "1" || isLiveParam === "true" || isLiveParam === "yes" || isLiveParam === "live",
-    fallbackDisplayName: "Channel",
+    fallbackDisplayName: "Profile",
   });
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
@@ -1117,7 +1039,7 @@ export default function ProfileScreen() {
 
   const shareCreatorVideo = async (video: CreatorVideo) => {
     if (!isCreatorVideoPubliclyShareable(video)) {
-      Alert.alert("Share unavailable", "Only public creator videos can be shared outside this channel.");
+      Alert.alert("Share unavailable", "Only public creator videos can be shared outside this Platform.");
       return;
     }
 
@@ -1336,8 +1258,15 @@ export default function ProfileScreen() {
       };
     }
 
-    if (!userId || isOfficialProfile || !currentUserId) {
+    if (!userId || isOfficialProfile) {
       setViewerFollowState("unavailable");
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!currentUserId) {
+      setViewerFollowState("signed_out");
       return () => {
         active = false;
       };
@@ -1378,7 +1307,7 @@ export default function ProfileScreen() {
         : profile.role === "host"
           ? "Host"
           : "Viewer";
-  const channelLabel = isOfficialProfile
+  const profileLabel = isOfficialProfile
     ? "Official Profile"
     : isSelfProfile
       ? "Your Profile"
@@ -1395,7 +1324,7 @@ export default function ProfileScreen() {
       .replace(/[^a-z0-9]+/g, ".")
       .replace(/^\.+|\.+$/g, "");
     if (normalizedHandle) return `@${normalizedHandle}`;
-    return isSelfProfile ? "@you" : "@channel";
+    return isSelfProfile ? "@you" : "@profile";
   }, [isSelfProfile, profile.displayName, profile.handle]);
   const liveActionLabel = profile.isLive ? "Join Live" : "View Live";
   const hasLiveRouteContext = !!partyIdParam;
@@ -1409,24 +1338,24 @@ export default function ProfileScreen() {
   const routeContextLabel = isOfficialProfile ? "PROTECTED" : hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
   const channelHomeBody = isOfficialProfile
     ? officialAccount?.trustSummary
-      ?? "Chi'llywood's official channel for trusted help, updates, and auditable follow-up."
+      ?? "Chi'llywood's official profile for trusted help, updates, and auditable follow-up."
     : isSelfProfile
-      ? "Share updates, connect with people, and guide fans to your Channel."
-      : "Read public updates, connect through Chi'lly Chat, and visit the Channel for creator videos.";
+      ? "Share updates, connect with people, and guide fans to your Platform."
+      : "Read public updates, connect through Chi'lly Chat, and visit the Platform for creator videos.";
   const liveStatusTitle = isOfficialProfile
     ? "Official concierge is ready"
     : profile.isLive
-      ? "Channel is live now"
-      : "Channel is off air";
+      ? "Platform is live now"
+      : "Platform is off air";
   const liveStatusBody = isOfficialProfile
-    ? "Open Chi'lly Chat for trusted help, then return here for the official channel view."
+    ? "Open Chi'lly Chat for trusted help, then return here for the official Platform view."
     : hasLiveRouteContext
       ? profile.isLive
         ? "Live and watch-party entry both hand back into the linked room."
         : "Room context is attached, so live and watch-party entry stay pointed at the linked room."
       : hasLiveTabEntry
         ? "Use the Live tab for the current schedule and backed events."
-        : "No room context is attached yet, but this channel's live posture still stays visible.";
+        : "No room context is attached yet, but this Platform's live posture still stays visible.";
   const openChannelSettings = (params?: { focus?: "content"; action?: "upload" }) => {
     if (!creatorSettingsEnabled) {
       Alert.alert("Platform Studio", "Creator platform controls are currently hidden by app configuration.");
@@ -1441,167 +1370,8 @@ export default function ProfileScreen() {
   const onPressManageChannel = () => {
     openChannelSettings();
   };
-  const onPressUploadVideo = () => {
-    if (!creatorSettingsEnabled) {
-      Alert.alert("Upload Video", "Creator uploads are currently hidden by app configuration.");
-      return;
-    }
-    setProfileComposerOpen(true);
-    setProfileComposerNotice(null);
-    setActiveTab("content");
-  };
-  const refreshProfileCreatorVideos = async () => {
-    if (isOfficialProfile || !userId) {
-      setCreatorVideos([]);
-      setCreatorVideosReady(true);
-      return [];
-    }
-
-    const videos = await readCreatorVideos(userId, { includeDrafts: isSelfProfile, limit: 24 });
-    setCreatorVideos(videos);
-    setCreatorVideosReady(true);
-    return videos;
-  };
-  const onPickProfileComposerFile = async () => {
-    try {
-      setProfileComposerNotice(null);
-      logProfileComposer("picker_open");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled) {
-        logProfileComposer("picker_canceled");
-        setProfileComposerNotice("No video selected.");
-        return;
-      }
-
-      const asset = result.assets[0];
-      if (!asset?.uri) {
-        logProfileComposer("picker_missing_asset");
-        setProfileComposerNotice("Choose a video file before uploading.");
-        return;
-      }
-
-      const pickedFile: CreatorVideoFile = {
-        uri: asset.uri,
-        name: asset.name,
-        mimeType: asset.mimeType,
-        size: asset.size,
-      };
-
-      if (!isSupportedProfileVideoFile(pickedFile)) {
-        logProfileComposer("picker_unsupported", {
-          name: pickedFile.name ?? "unnamed",
-          mimeType: pickedFile.mimeType ?? null,
-        });
-        setProfileComposerFile(null);
-        setProfileComposerNotice("Choose an MP4, MOV, WebM, or M4V video file.");
-        return;
-      }
-
-      if (isCreatorVideoFileOverChannelMovieLimit(pickedFile)) {
-        logProfileComposer("picker_too_large", {
-          name: pickedFile.name ?? "unnamed",
-          size: pickedFile.size ?? null,
-        });
-        setProfileComposerFile(null);
-        setProfileComposerNotice(getCreatorVideoTooLargeMessage(pickedFile.size));
-        return;
-      }
-
-      setProfileComposerFile(pickedFile);
-      if (!profileComposerTitle.trim()) {
-        setProfileComposerTitle(getProfileVideoTitleFromName(pickedFile.name));
-      }
-      logProfileComposer("picker_selected", {
-        name: pickedFile.name ?? "unnamed",
-        mimeType: pickedFile.mimeType ?? null,
-        size: pickedFile.size ?? null,
-      });
-      setProfileComposerNotice(`${getReadableProfileFileName(pickedFile.name)} attached.`);
-    } catch (error) {
-      logProfileComposer("picker_failed", {
-        message: error instanceof Error ? error.message : "unknown",
-      });
-      setProfileComposerNotice("Unable to open the video picker right now.");
-    }
-  };
-  const onSubmitProfileComposer = async () => {
-    if (!isSelfProfile) return;
-
-    if (!profileComposerFile) {
-      setProfileComposerNotice("Attach a video before uploading to your Channel.");
-      return;
-    }
-
-    if (typeof profileComposerFile.size === "number" && profileComposerFile.size <= 0) {
-      setProfileComposerNotice("Choose a non-empty video file before uploading.");
-      return;
-    }
-
-    if (isCreatorVideoFileOverChannelMovieLimit(profileComposerFile)) {
-      setProfileComposerNotice(getCreatorVideoTooLargeMessage(profileComposerFile.size));
-      return;
-    }
-
-    if (!profileComposerTitle.trim()) {
-      setProfileComposerNotice("Add a title before uploading this video.");
-      return;
-    }
-
-    try {
-      setProfileComposerBusy(true);
-      setProfileComposerNotice("Uploading to your Channel...");
-      logProfileComposer("submit_start", {
-        fileName: profileComposerFile.name ?? null,
-        fileSize: profileComposerFile.size ?? null,
-        visibility: profileComposerVisibility,
-      });
-
-      const uploadedVideo = await uploadCreatorVideo({
-        file: profileComposerFile,
-        title: profileComposerTitle,
-        description: profileComposerText,
-        visibility: profileComposerVisibility,
-      });
-
-      const refreshedVideos = await refreshProfileCreatorVideos().catch(() => []);
-      if (!refreshedVideos.some((video) => video.id === uploadedVideo.id)) {
-        setCreatorVideos((current) => [uploadedVideo, ...current.filter((video) => video.id !== uploadedVideo.id)]);
-        setCreatorVideosReady(true);
-      }
-
-      setActiveTab("content");
-      setProfileComposerFile(null);
-      setProfileComposerTitle("");
-      setProfileComposerText("");
-      setProfileComposerVisibility("public");
-      setProfileComposerNotice(
-        profileComposerVisibility === "public"
-          ? "Uploaded to your public Channel."
-          : "Saved as a draft in your Channel.",
-      );
-      logProfileComposer("submit_succeeded", {
-        id: uploadedVideo.id,
-        visibility: uploadedVideo.visibility,
-      });
-    } catch (error) {
-      logProfileComposer("submit_failed", {
-        message: error instanceof Error ? error.message : "unknown",
-      });
-      setProfileComposerNotice(
-        formatProfileComposerError(
-          error,
-          "Unable to upload this video right now. Try again in a moment.",
-          profileComposerFile.size,
-        ),
-      );
-    } finally {
-      setProfileComposerBusy(false);
-    }
+  const onPressCreatePlatformContent = () => {
+    openChannelSettings({ focus: "content", action: "upload" });
   };
   const onPressLive = () => {
     if (hasLiveRouteContext) {
@@ -1718,7 +1488,7 @@ export default function ProfileScreen() {
         profileIsSelf: "false",
         reason: "missing_target_user",
       });
-      Alert.alert("Chi'lly Chat", "This channel is missing the identity needed to open a direct thread.");
+      Alert.alert("Chi'lly Chat", "This Profile is missing the identity needed to open a direct thread.");
       return;
     }
 
@@ -1775,7 +1545,7 @@ export default function ProfileScreen() {
       Alert.alert(
         "Chi'lly Chat",
         isChatAuthFailure
-          ? "Sign in to open Chi'lly Chat from public channels."
+          ? "Sign in to open Chi'lly Chat from public Profiles."
           : (normalizedError.message || "Unable to open Chi'lly Chat right now."),
       );
     }
@@ -1802,6 +1572,13 @@ export default function ProfileScreen() {
       params: { userId },
     });
   };
+  const onPressPreviewPlatform = () => {
+    if (!userId) return;
+    router.push({
+      pathname: "/channel/[userId]",
+      params: { userId, preview: "public" },
+    });
+  };
   const onPressSettings = () => {
     router.push("/settings");
   };
@@ -1823,7 +1600,7 @@ export default function ProfileScreen() {
       return;
     }
     if (friendState?.availability === "blocked") {
-      Alert.alert("Chi'lly Circle", "Chi'lly Circle is unavailable while a channel audience block exists between these accounts.");
+      Alert.alert("Chi'lly Circle", "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
       return;
     }
 
@@ -1876,6 +1653,11 @@ export default function ProfileScreen() {
   const onToggleFollowChannel = async () => {
     if (!userId || isSelfProfile || isOfficialProfile || followActionBusy) return;
 
+    if (viewerFollowState === "signed_out") {
+      Alert.alert("Follow Platform", "Sign in to follow this creator Platform.");
+      return;
+    }
+
     try {
       setFollowActionBusy(true);
       const result = viewerFollowState === "following"
@@ -1888,13 +1670,13 @@ export default function ProfileScreen() {
       }
 
       if (result.reason === "signed_out") {
-        Alert.alert("Follow channel", "Sign in to follow this creator channel.");
+        Alert.alert("Follow Platform", "Sign in to follow this creator Platform.");
         return;
       }
 
-      Alert.alert("Follow channel", "Unable to update this follow relationship right now.");
+      Alert.alert("Follow Platform", "Unable to update this follow relationship right now.");
     } catch {
-      Alert.alert("Follow channel", "Unable to update this follow relationship right now.");
+      Alert.alert("Follow Platform", "Unable to update this follow relationship right now.");
     } finally {
       setFollowActionBusy(false);
     }
@@ -2277,7 +2059,12 @@ export default function ProfileScreen() {
   const hasCreatorVideoTruth = creatorVideos.length > 0;
   const canShowFollowAction = !isOfficialProfile
     && !isSelfProfile
-    && (viewerFollowState === "following" || viewerFollowState === "not_following" || viewerFollowState === "loading");
+    && (
+      viewerFollowState === "following"
+      || viewerFollowState === "not_following"
+      || viewerFollowState === "signed_out"
+      || viewerFollowState === "loading"
+    );
   const followActionLabel = followActionBusy || viewerFollowState === "loading"
     ? "Checking"
     : viewerFollowState === "following"
@@ -2411,7 +2198,7 @@ export default function ProfileScreen() {
       tone: isOfficialProfile ? "official" : "default",
     },
     {
-      label: isOfficialProfile ? "Chat" : "Channel",
+      label: isOfficialProfile ? "Chat" : "Platform",
       value: isOfficialProfile
         ? "Starter"
         : creatorVideosReady ? String(publicCreatorVideoCount) : "...",
@@ -2435,58 +2222,58 @@ export default function ProfileScreen() {
   ] as const;
   const channelHelper = isOfficialProfile
     ? {
-        kicker: "CHANNEL FLOW",
+        kicker: "PLATFORM FLOW",
         title: "Verified help starts here",
         body: "Use the official thread for trusted help, then return here for the verified account surface.",
       }
     : isSelfProfile
       ? {
-          kicker: "CHANNEL",
-          title: "Your uploads live in Channel",
+          kicker: "PLATFORM",
+          title: "Your creator content lives in Platform",
           body: creatorVideosReady
             ? hasCreatorVideoTruth
-              ? "Your uploads, live moments, and creator events live here."
-              : "Upload your first video when you are ready for this Channel to become watchable."
+              ? "Your creator videos, live moments, and creator events live here."
+              : "Create your first video in Platform Studio when you are ready for this Platform to become watchable."
             : "Loading your creator-video library."
         }
       : {
-          kicker: "CHANNEL",
-          title: "Creator uploads live here",
+          kicker: "PLATFORM",
+          title: "Creator videos live here",
           body: hasLiveRouteContext
             ? "This visit carries real room context, so live and watch-party handoff stays clean from here."
-            : "Uploads, live moments, and creator events live here while personal updates stay in Posts."
+            : "Creator videos, live moments, and events live here while personal updates stay in Posts."
         };
   const contentHomeBody = isSelfProfile
     ? creatorVideosReady
       ? hasCreatorVideoTruth
-        ? "Your uploads, live moments, and creator events live here."
-        : "Upload your first video when you are ready to make this channel watchable."
-      : "Loading your channel library."
+        ? "Your creator videos, live moments, and creator events live here."
+        : "Create your first video in Platform Studio when you are ready to make this Platform watchable."
+      : "Loading your Platform library."
     : isOfficialProfile
       ? "Official account updates and trusted help stay here; Chi'llywood Originals stay in Home, Explore, and title pages."
     : creatorVideosReady
       ? hasCreatorVideoTruth
-        ? `${publicCreatorVideoCount} creator video${publicCreatorVideoCount === 1 ? "" : "s"} already give this channel a real library.`
-        : "This channel is getting ready."
-      : "Loading this channel's creator videos.";
+        ? `${publicCreatorVideoCount} creator video${publicCreatorVideoCount === 1 ? "" : "s"} already give this Platform a real library.`
+        : "This Platform is getting ready."
+      : "Loading this Platform's creator videos.";
   const contentCreatorVideosBody = isSelfProfile
     ? creatorVideosReady
       ? hasCreatorVideoTruth
-        ? "Your uploads, live moments, and creator events live here. Public videos appear for visitors while drafts stay owner-only."
-        : "Upload your first creator video when you are ready to make the channel watchable."
+        ? "Your creator videos, live moments, and creator events live here. Public videos appear for visitors while drafts stay owner-only."
+        : "Create your first creator video in Platform Studio when you are ready to make the Platform watchable."
       : "Loading your creator-video library."
     : isOfficialProfile
-      ? "This official account does not host Chi'llywood Originals inside Profile/Channel."
+      ? "This official account does not host Chi'llywood Originals inside Profile/Platform."
       : creatorVideosReady && hasCreatorVideoTruth
-        ? `${publicCreatorVideoCount} creator-uploaded video${publicCreatorVideoCount === 1 ? "" : "s"} are ready to watch.`
-        : "This channel is getting ready.";
+        ? `${publicCreatorVideoCount} creator video${publicCreatorVideoCount === 1 ? "" : "s"} are ready to watch.`
+        : "This Platform is getting ready.";
   const contentCreatorEventsBody = isOfficialProfile
     ? "Official platform programming stays in Home, Explore, dedicated Originals surfaces, title pages, and admin-managed title routes."
     : publicEventsReady
       ? publicEventCount
         ? `${publicEventCount} public creator event${publicEventCount === 1 ? "" : "s"} can appear here when scheduled or live.`
         : "No public creator live or watch-party events are scheduled yet."
-      : "Loading this channel's creator events.";
+      : "Loading this Platform's creator events.";
   const quickActions = isOfficialProfile
     ? [
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
@@ -2498,7 +2285,7 @@ export default function ProfileScreen() {
       : [
           ...(canShowFollowAction ? [{ label: followActionLabel, onPress: onToggleFollowChannel }] : []),
           { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
-          { label: "View Channel", onPress: onPressViewChannel },
+          { label: "View Platform", onPress: onPressViewChannel },
           { label: "Share Profile", onPress: () => { void onShareProfile(); } },
           ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
         ];
@@ -2519,7 +2306,7 @@ export default function ProfileScreen() {
         ];
   const publicProfileTabs = [
     { key: "home", label: "Posts" },
-    { key: "content", label: "Channel" },
+    { key: "content", label: "Platform" },
     { key: "live", label: "Live" },
     { key: "community", label: "Community" },
     { key: "about", label: "About" },
@@ -2532,7 +2319,7 @@ export default function ProfileScreen() {
   const featuredSpotlightBody = isOfficialProfile
     ? "Verified updates and trusted follow-up start here; platform titles stay in platform surfaces."
     : isSelfProfile
-      ? "Share updates, connect with people, and guide fans to your Channel."
+      ? "Share updates, connect with people, and guide fans to your Platform."
       : "Start here for personal updates, public identity, and the next backed creator or chat move.";
   const channelLayoutPreset = resolveChannelLayoutPreset(channelAccessProfile?.channelLayoutPreset);
   const homeSectionMap = {
@@ -2549,7 +2336,7 @@ export default function ProfileScreen() {
       accent: profile.isLive ? "live" : "default",
     },
     content: {
-      title: isSelfProfile ? "Your Channel" : "Channel",
+      title: isSelfProfile ? "Your Platform" : "Platform",
       kicker: "CREATOR CONTENT",
       body: contentHomeBody,
     },
@@ -2575,7 +2362,7 @@ export default function ProfileScreen() {
   const contentTabSections: readonly ProfileSurfaceCard[] = isOfficialProfile
     ? [
         {
-          title: "Official Channel",
+          title: "Official Platform",
           kicker: profile.officialBadgeLabel ?? "OFFICIAL",
           body: contentCreatorVideosBody,
           accent: "official",
@@ -2589,7 +2376,7 @@ export default function ProfileScreen() {
     : [
         {
           title: isSelfProfile ? "Your Creator Videos" : "Creator Videos",
-          kicker: isSelfProfile ? "YOUR CHANNEL" : "PUBLIC CHANNEL",
+          kicker: isSelfProfile ? "YOUR PLATFORM" : "PUBLIC PLATFORM",
           body: contentCreatorVideosBody,
         },
         {
@@ -2629,7 +2416,7 @@ export default function ProfileScreen() {
       body: liveNowEvent
         ? `${liveNowEvent.eventTitle} is live here now as ${formatEventTypeLabel(liveNowEvent.eventType)}.`
         : profile.isLive
-          ? "This channel is showing live presence. Room re-entry appears only when real room context is attached."
+          ? "This Platform is showing live presence. Room re-entry appears only when real room context is attached."
           : "No live room is active right now. This tab keeps live status clear without pretending the profile is the room.",
       accent: profile.isLive ? "live" : "default",
     },
@@ -2701,12 +2488,12 @@ export default function ProfileScreen() {
     const followerSurfaceEnabled = channelAccessProfile?.followerSurfaceEnabled;
     const subscriberSurfaceEnabled = channelAccessProfile?.subscriberSurfaceEnabled;
     const postureLead = publicActivityVisibility === "followers_only"
-      ? "Community activity stays follower-led on this channel."
+      ? "Community activity stays follower-led on this Platform."
       : publicActivityVisibility === "subscribers_only"
-        ? "Community activity stays subscriber-led on this channel."
+        ? "Community activity stays subscriber-led on this Platform."
         : publicActivityVisibility === "private"
           ? "Community activity stays quiet on the public route for now."
-          : "Community activity can stay open on this channel.";
+          : "Community activity can stay open on this Platform.";
     const followerCue = followerSurfaceEnabled
       ? "Follower cues can appear when that relationship is real."
       : "Follower cues stay quiet on the public route.";
@@ -2733,7 +2520,7 @@ export default function ProfileScreen() {
         ? "Keep direct follow-up in Chi'lly Chat so this route can stay public-facing."
         : isOfficialProfile
           ? "Official follow-up stays in canonical Chi'lly Chat so trusted help never turns into a shadow support app."
-          : "Direct follow-up from this channel should move into Chi'lly Chat, not hide inside the profile.",
+          : "Direct follow-up from this Platform should move into Chi'lly Chat, not hide inside the profile.",
     },
     {
       title: isOfficialProfile ? "Trust And Safety" : "Public Trust",
@@ -2742,7 +2529,7 @@ export default function ProfileScreen() {
         ? "Official accounts need protected trust markers, bounded reporting, and auditable follow-up."
         : canReportProfile
           ? "Reporting is already available here, so audience posture and community trust can grow from a real safety floor."
-          : "Keep this channel identity-first, socially readable, and ready for real public activity when it exists.",
+          : "Keep this Profile identity-first, socially readable, and ready for real public activity when it exists.",
     },
     ...publicAudienceVisibilitySections,
   ];
@@ -2757,9 +2544,9 @@ export default function ProfileScreen() {
           accent: "official",
         },
         {
-          title: "Channel Read",
+          title: "Platform Read",
           kicker: "ABOUT",
-          body: "Verified access, trusted follow-up, and official channel posture stay clear on this canonical route.",
+          body: "Verified access, trusted follow-up, and official Platform posture stay clear on this canonical route.",
         },
         {
           title: "Starter Thread",
@@ -2769,16 +2556,16 @@ export default function ProfileScreen() {
       ]
     : [
         {
-          title: "Channel Identity",
+          title: "Platform Identity",
           kicker: "ABOUT",
           body: `${profile.displayName} keeps live presence, access posture, and direct follow-up inside one Chi'llywood identity.`,
         },
         {
-          title: "Channel Read",
-          kicker: "CHANNEL",
+          title: "Platform Read",
+          kicker: "PLATFORM",
           body: isSelfProfile
             ? "Keep this surface public-facing first. Platform Studio stays the deeper editing handoff while access and audience posture stay easy to read here."
-            : "This route stays a public channel destination where access posture, audience cues, and follow-up stay easy to read.",
+            : "This route stays a public Platform destination where access posture, audience cues, and follow-up stay easy to read.",
         },
       ];
   const activeTabSections = activeTab === "home"
@@ -2964,7 +2751,7 @@ export default function ProfileScreen() {
     {
       label: "Videos",
       value: creatorVideosReady ? String(creatorVideos.length) : "...",
-      body: "uploaded videos in your channel library",
+      body: "videos in your Platform library",
     },
     {
       label: "Public",
@@ -2985,51 +2772,50 @@ export default function ProfileScreen() {
       onPress: onPressManageChannel,
     },
     {
-      label: "Chi'lly Circle",
-      onPress: onPressChillyCircleManage,
+      label: "Preview Platform",
+      onPress: onPressPreviewPlatform,
     },
     {
-      label: "Upload Video",
-      onPress: onPressUploadVideo,
-      emphasis: "primary",
-    },
-    {
-      label: "Open Chi'lly Chat",
+      label: "Chi'lly Chat",
       onPress: () => {
         void onPressCommunication("message");
       },
     },
+    {
+      label: "Chi'lly Circle",
+      onPress: onPressChillyCircleManage,
+    },
+    {
+      label: "Settings",
+      onPress: onPressSettings,
+    },
   ] : [];
   const ownerNextSteps = [
-    !profile.tagline ? "add a sharper channel line" : null,
-    creatorVideosReady && creatorVideos.length === 0 ? "upload your first video" : null,
+    !profile.tagline ? "add a sharper Platform line" : null,
+    creatorVideosReady && creatorVideos.length === 0 ? "create platform content" : null,
   ].filter(Boolean);
   const ownerPromptCards: readonly OwnerPromptCard[] = isSelfProfile ? [
     ...(!creatorSettingsEnabled ? [{
       kicker: "OWNER VIEW",
-      title: "Channel editing is currently hidden",
-      body: "This route stays focused on the public-facing channel view until deeper creator controls return.",
+      title: "Platform editing is currently hidden",
+      body: "This route stays focused on the public-facing Profile until creator controls return.",
     }] : []),
     ...(creatorSettingsEnabled && ownerNextSteps.length ? [{
-      kicker: "NEXT IN CHANNEL STUDIO",
+      kicker: "NEXT IN PLATFORM STUDIO",
       title: ownerNextSteps.length > 1 ? "Shape the next public read" : (
-        ownerNextSteps[0] === "add a sharper channel line"
-          ? "Add a sharper channel line"
-          : ownerNextSteps[0] === "upload your first video"
-            ? "Upload your first video"
+        ownerNextSteps[0] === "add a sharper Platform line"
+          ? "Add a sharper Platform line"
+          : ownerNextSteps[0] === "create platform content"
+            ? "Create platform content"
             : "Build the first visible shelf"
       ),
       body: ownerNextSteps.length > 1
-        ? "Start by adding a sharper channel line and uploading the first playable channel video."
-        : ownerNextSteps[0] === "add a sharper channel line"
+        ? "Start by adding a sharper Platform line and creating the first playable Platform video in Platform Studio."
+        : ownerNextSteps[0] === "add a sharper Platform line"
           ? "Give visitors a clearer first read on your lane with a short tagline."
-          : "Upload a real video from this Profile so your Channel starts feeling like a platform.",
-      actionLabel: ownerNextSteps.length === 1 && ownerNextSteps[0] === "upload your first video"
-        ? "Upload Video"
-        : "Open Platform Studio",
-      onPress: ownerNextSteps.length === 1 && ownerNextSteps[0] === "upload your first video"
-        ? onPressUploadVideo
-        : onPressManageChannel,
+          : "Create platform content in Platform Studio so your public Platform starts feeling watchable.",
+      actionLabel: "Open Platform Studio",
+      onPress: onPressCreatePlatformContent,
     }] : []),
   ] : [];
   const openCreatorVideo = (video: CreatorVideo) => {
@@ -3162,135 +2948,6 @@ export default function ProfileScreen() {
       )}
     </View>
   );
-  const renderProfileComposerCard = () => {
-    if (!isSelfProfile) return null;
-
-    return (
-      <View style={styles.feedComposerCard}>
-        <View style={styles.feedComposerPromptRow}>
-          {renderComposerAvatar("small")}
-          <TouchableOpacity
-            style={styles.feedComposerPrompt}
-            activeOpacity={0.86}
-            onPress={onPressUploadVideo}
-          >
-            <Text style={styles.feedComposerPromptText}>Upload a creator video</Text>
-          </TouchableOpacity>
-          {profileComposerOpen ? (
-            <TouchableOpacity
-              style={styles.feedComposerClose}
-              activeOpacity={0.84}
-              disabled={profileComposerBusy}
-              onPress={() => setProfileComposerOpen(false)}
-            >
-              <MaterialIcons name="close" size={18} color="#DDE5F7" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {profileComposerOpen ? (
-          <View style={styles.feedComposerExpanded}>
-            <TextInput
-              style={[styles.profileComposerInput, styles.profileComposerTextArea, styles.feedComposerTextArea]}
-              placeholder="Add a description for this channel video."
-              placeholderTextColor="#8A93A8"
-              value={profileComposerText}
-              onChangeText={setProfileComposerText}
-              multiline
-            />
-            <TouchableOpacity
-              style={styles.feedComposerAttachButton}
-              activeOpacity={0.86}
-              onPress={() => {
-                void onPickProfileComposerFile();
-              }}
-              disabled={profileComposerBusy}
-            >
-              <MaterialIcons name="videocam" size={18} color="#EAF0FF" />
-              <Text style={styles.feedComposerAttachText}>
-                {profileComposerFile ? "Change Video" : "Add Video"}
-              </Text>
-            </TouchableOpacity>
-            {profileComposerFile ? (
-              <View style={styles.feedComposerFileCard}>
-                <View style={styles.feedComposerFileIcon}>
-                  <MaterialIcons name="movie" size={20} color="#fff" />
-                </View>
-                <View style={styles.feedComposerFileText}>
-                  <Text style={styles.profileComposerFileName} numberOfLines={2}>
-                    {getReadableProfileFileName(profileComposerFile.name)}
-                  </Text>
-                  {formatProfileFileSize(profileComposerFile.size) ? (
-                    <Text style={styles.profileComposerFileMeta}>{formatProfileFileSize(profileComposerFile.size)}</Text>
-                  ) : null}
-                </View>
-              </View>
-            ) : null}
-            <TextInput
-              style={styles.profileComposerInput}
-              placeholder="Title this video"
-              placeholderTextColor="#8A93A8"
-              value={profileComposerTitle}
-              onChangeText={setProfileComposerTitle}
-            />
-            <View style={styles.profileComposerVisibilityRow}>
-              {(["public", "draft"] as const).map((visibility) => (
-                <TouchableOpacity
-                  key={visibility}
-                  style={[
-                    styles.profileComposerVisibilityChip,
-                    profileComposerVisibility === visibility && styles.profileComposerVisibilityChipActive,
-                  ]}
-                  activeOpacity={0.84}
-                  disabled={profileComposerBusy}
-                  onPress={() => setProfileComposerVisibility(visibility)}
-                >
-                  <MaterialIcons
-                    name={visibility === "public" ? "public" : "lock"}
-                    size={15}
-                    color={profileComposerVisibility === visibility ? "#FFF6F8" : "#BAC3D6"}
-                  />
-                  <Text
-                    style={[
-                      styles.profileComposerVisibilityText,
-                      profileComposerVisibility === visibility && styles.profileComposerVisibilityTextActive,
-                    ]}
-                  >
-                    {visibility === "public" ? "Public" : "Draft"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {profileComposerNotice ? (
-              <View style={styles.profileComposerNotice}>
-                <Text style={styles.profileComposerNoticeText}>{profileComposerNotice}</Text>
-              </View>
-            ) : null}
-            <View style={styles.feedComposerActionRow}>
-              <TouchableOpacity
-                style={[
-                  styles.feedComposerPostButton,
-                  (!profileComposerFile || profileComposerBusy) && styles.ownerHeroToolsButtonDisabled,
-                ]}
-                activeOpacity={0.86}
-                disabled={!profileComposerFile || profileComposerBusy}
-                onPress={() => {
-                  void onSubmitProfileComposer();
-                }}
-              >
-                <View style={styles.profileComposerSubmitContent}>
-                  {profileComposerBusy ? <ActivityIndicator size="small" color="#fff" /> : null}
-                  <Text style={styles.feedComposerPostText}>
-                    {profileComposerBusy ? "Uploading..." : "Upload"}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : null}
-      </View>
-    );
-  };
   const renderProfilePostComposer = () => {
     if (!isSelfProfile) return null;
 
@@ -3308,7 +2965,7 @@ export default function ProfileScreen() {
           {renderComposerAvatar("small")}
           <View style={styles.profilePostComposerCopy}>
             <Text style={styles.profilePostComposerTitle}>Post</Text>
-            <Text style={styles.profilePostComposerMeta}>Attach a photo or file. Creator videos stay in Channel.</Text>
+            <Text style={styles.profilePostComposerMeta}>Share an update. Attach photos or files. Creator videos belong in Platform Studio.</Text>
           </View>
         </View>
         <TextInput
@@ -3484,12 +3141,12 @@ export default function ProfileScreen() {
             <Text style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</Text>
             <Text style={styles.feedPostMeta}>{formatProfilePostDate(post.createdAt)}</Text>
           </View>
-          {post.visibility === "draft" ? (
+          {isSelfProfile && post.visibility === "draft" ? (
             <View style={styles.feedDraftBadge}>
               <Text style={styles.feedDraftBadgeText}>DRAFT</Text>
             </View>
           ) : null}
-          {post.moderationStatus === "reported" ? (
+          {isSelfProfile && post.moderationStatus === "reported" ? (
             <View style={styles.feedDraftBadge}>
               <Text style={styles.feedDraftBadgeText}>REPORTED</Text>
             </View>
@@ -3704,20 +3361,20 @@ export default function ProfileScreen() {
   };
   const renderProfileSocialFeed = () => (
     <View style={styles.feedStack}>
-      {renderProfilePostComposer()}
       <View style={styles.profileSocialFeedHeader}>
         <Text style={styles.profileSocialFeedKicker}>
-          {profileSocialFeedMode === "own_profile_social_feed" ? "YOUR NEWS FEED" : "PUBLIC ACTIVITY"}
+          {profileSocialFeedMode === "own_profile_social_feed" ? "YOUR FEED" : "PROFILE FEED"}
         </Text>
         <Text style={styles.profileSocialFeedTitle}>
-          {profileSocialFeedMode === "own_profile_social_feed" ? "News Feed" : `${profile.displayName}'s Profile Feed`}
+          {profileSocialFeedMode === "own_profile_social_feed" ? "Posts" : `${profile.displayName}'s Posts`}
         </Text>
         <Text style={styles.profileSocialFeedBody}>
           {profileSocialFeedMode === "own_profile_social_feed"
-            ? "Your posts, creator uploads, Chi'lly Circle, followed creators, and private backed activity appear here when real rows exist."
-            : "This feed only shows this profile owner's public posts, uploads, and safe live or replay entries."}
+            ? "Share an update, keep attachments with social posts, and catch public activity from your Chi'lly Circle and followed creators."
+            : "This feed shows public posts, creator activity, and safe live or replay entries from this Profile."}
         </Text>
       </View>
+      {renderProfilePostComposer()}
       {profilePostsNotice || profileSocialFeedNotice ? (
         <View style={styles.profileComposerNotice}>
           <Text style={styles.profileComposerNoticeText}>{profilePostsNotice ?? profileSocialFeedNotice}</Text>
@@ -3725,14 +3382,14 @@ export default function ProfileScreen() {
       ) : null}
       {profileSocialFeedExtras.circleBackingUnavailable ? (
         <View style={styles.profileComposerNotice}>
-          <Text style={styles.profileComposerNoticeText}>{"Chi'lly Circle activity is not backed yet."}</Text>
+          <Text style={styles.profileComposerNoticeText}>{"Chi'lly Circle activity is unavailable right now."}</Text>
         </View>
       ) : null}
       {!profileSocialFeedReady ? (
         <View style={styles.feedEmptyCard}>
           <ActivityIndicator color="#DC143C" />
           <Text style={styles.feedEmptyTitle}>Loading profile feed</Text>
-          <Text style={styles.feedEmptyText}>Checking real backed posts, uploads, activity, and spectator-safe entries.</Text>
+          <Text style={styles.feedEmptyText}>Checking posts, public activity, and safe live entries.</Text>
         </View>
       ) : profileSocialFeedItems.length ? (
         profileSocialFeedItems.map(renderProfileSocialFeedItem)
@@ -3740,17 +3397,21 @@ export default function ProfileScreen() {
         <View style={styles.feedEmptyCard}>
           <Text style={styles.feedEmptyTitle}>
             {profileSocialFeedMode === "own_profile_social_feed"
-              ? "Follow creators and build your Chi'lly Circle to fill your News Feed."
+              ? "Your feed is ready when you are."
               : "No public activity yet."}
           </Text>
           <Text style={styles.feedEmptyText}>
             {profileSocialFeedMode === "own_profile_social_feed"
-              ? "Only real public posts, uploads, backed activity, and safe live or replay entries appear here."
-              : "This profile has not shared public posts, uploads, or safe live/replay entries yet."}
+              ? "Post an update or build your Chi'lly Circle to see more social activity here."
+              : "This profile has not shared public posts, creator activity, or safe live/replay entries yet."}
           </Text>
-          <TouchableOpacity style={styles.feedEmptyButton} activeOpacity={0.86} onPress={onPressViewChannel}>
+          <TouchableOpacity
+            style={styles.feedEmptyButton}
+            activeOpacity={0.86}
+            onPress={isSelfProfile ? onPressPreviewPlatform : onPressViewChannel}
+          >
             <MaterialIcons name="video-library" size={17} color="#fff" />
-            <Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "View Your Channel" : "View Channel"}</Text>
+            <Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "Preview Platform" : "View Platform"}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -3762,9 +3423,9 @@ export default function ProfileScreen() {
     return (
       <View style={styles.ownerModeCard}>
         <Text style={styles.ownerModeKicker}>OWNER HANDOFF</Text>
-        <Text style={styles.ownerModeTitle}>Keep the public channel in front.</Text>
+        <Text style={styles.ownerModeTitle}>Keep Profile social and Platform public.</Text>
         <Text style={styles.ownerModeBody}>
-          Use Platform Studio for deeper edits while this route keeps the public read, live posture, and access truth easy to scan.
+          Use Platform Studio for creator operations while this route keeps posts, identity, and social actions easy to scan.
         </Text>
         {ownerQuickActions.length ? (
           <View style={styles.ownerQuickActionRow}>
@@ -3843,7 +3504,7 @@ export default function ProfileScreen() {
     <View
       style={styles.outerFlex}
       testID="profile-screen"
-      accessibilityLabel="Chi'llywood profile channel screen"
+      accessibilityLabel="Chi'llywood profile screen"
     >
       <View style={styles.fullBackgroundFallback} pointerEvents="none" />
       <View style={styles.fullBackgroundOverlay} pointerEvents="none" />
@@ -3907,7 +3568,7 @@ export default function ProfileScreen() {
               </View>
             </TouchableOpacity>
             <View style={styles.profileIdentityCopy}>
-              <Text style={styles.channelLabel}>{channelLabel}</Text>
+              <Text style={styles.channelLabel}>{profileLabel}</Text>
               <Text
                 style={styles.username}
                 numberOfLines={1}
@@ -3944,27 +3605,34 @@ export default function ProfileScreen() {
             <>
               <Text style={styles.channelSupportText}>{channelHomeBody}</Text>
               <View style={styles.channelSignalGrid}>
-                {channelSignals.map((signal) => (
-                  <View
-                    key={signal.label}
-                    style={[
-                      styles.channelSignalCard,
-                      signal.tone === "live" && styles.channelSignalCardLive,
-                      signal.tone === "linked" && styles.channelSignalCardLinked,
-                      signal.tone === "official" && styles.channelSignalCardOfficial,
-                    ]}
-                  >
-                    <Text style={styles.channelSignalLabel}>{signal.label}</Text>
-                    <Text style={styles.channelSignalValue}>{signal.value}</Text>
-                  </View>
-                ))}
+                {channelSignals.map((signal) => {
+                  const signalIsPlatform = signal.label === "Platform";
+                  return (
+                    <TouchableOpacity
+                      key={signal.label}
+                      style={[
+                        styles.channelSignalCard,
+                        signal.tone === "live" && styles.channelSignalCardLive,
+                        signal.tone === "linked" && styles.channelSignalCardLinked,
+                        signal.tone === "official" && styles.channelSignalCardOfficial,
+                        signalIsPlatform && styles.channelSignalCardPressable,
+                      ]}
+                      activeOpacity={signalIsPlatform ? 0.86 : 1}
+                      disabled={!signalIsPlatform}
+                      onPress={isSelfProfile ? onPressPreviewPlatform : onPressViewChannel}
+                    >
+                      <Text style={styles.channelSignalLabel}>{signal.label}</Text>
+                      <Text style={styles.channelSignalValue}>{signal.value}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </>
           ) : null}
           {!shouldShowLockedShell && avatarQuickActionsOpen && quickActions.length > 0 ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>
-                {isOfficialProfile ? "Official Quick Actions" : isSelfProfile ? "Your Channel Quick Actions" : "Channel Quick Actions"}
+                {isOfficialProfile ? "Official Quick Actions" : isSelfProfile ? "Your Profile Quick Actions" : "Profile Quick Actions"}
               </Text>
               <View style={styles.quickActionsRow}>
                 {quickActions.map((action) => (
@@ -3988,6 +3656,7 @@ export default function ProfileScreen() {
               <>
                 <View style={styles.primaryActionRow}>
                   <TouchableOpacity
+                    testID="profile-platform-studio-button"
                     style={[styles.actionBtn, styles.actionBtnConnected]}
                     activeOpacity={0.86}
                     onPress={onPressManageChannel}
@@ -3995,14 +3664,26 @@ export default function ProfileScreen() {
                     <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Platform Studio</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
+                    testID="profile-preview-platform-button"
                     style={[styles.actionBtn, styles.actionBtnSecondary]}
                     activeOpacity={0.86}
-                    onPress={onPressUploadVideo}
+                    onPress={onPressPreviewPlatform}
                   >
-                    <Text style={styles.actionBtnText}>Upload</Text>
+                    <Text style={styles.actionBtnText}>Preview Platform</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.secondaryActionRow}>
+                  <TouchableOpacity
+                    testID="profile-chilly-chat-button"
+                    accessibilityLabel="Open Chi'lly Chat"
+                    style={[styles.actionChip, styles.actionChipConnected]}
+                    activeOpacity={0.86}
+                    onPress={() => {
+                      void onPressCommunication("message");
+                    }}
+                  >
+                    <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>{"Chi'lly Chat"}</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionChip, styles.actionChipConnected]}
                     activeOpacity={0.86}
@@ -4065,7 +3746,7 @@ export default function ProfileScreen() {
                       activeOpacity={0.82}
                       onPress={onPressViewChannel}
                     >
-                      <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>View Channel</Text>
+                      <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>View Platform</Text>
                     </TouchableOpacity>
                   ) : null}
                   <TouchableOpacity
@@ -4136,8 +3817,6 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <>
-            {renderProfileComposerCard()}
-
             <View style={styles.sectionStack}>
           <View style={styles.tabStripCard}>
             <ScrollView
@@ -4201,7 +3880,7 @@ export default function ProfileScreen() {
                 ) : null}
               </View>
               <View style={styles.accessCard}>
-                <Text style={styles.accessKicker}>CHANNEL ACCESS</Text>
+                <Text style={styles.accessKicker}>PLATFORM ACCESS</Text>
                 <Text style={styles.accessTitle}>{accessPosture.title}</Text>
                 <Text style={styles.accessBody}>{accessPosture.body}</Text>
                 <View style={styles.accessDetailRow}>
@@ -4219,7 +3898,7 @@ export default function ProfileScreen() {
           {activeTab === "content" ? (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle}>
-                {isSelfProfile ? "Your Uploaded Videos" : "Creator Videos"}
+                {isSelfProfile ? "Platform Videos" : "Creator Videos"}
               </Text>
               {!creatorVideosReady ? (
                 <Text style={styles.sectionBody}>Loading creator videos...</Text>
@@ -4239,21 +3918,21 @@ export default function ProfileScreen() {
                 </View>
               ) : isSelfProfile ? (
                 <View style={styles.creatorVideoEmptyCard}>
-                  <Text style={styles.creatorVideoTitle}>Upload your first video</Text>
+                  <Text style={styles.creatorVideoTitle}>Create platform content in Platform Studio</Text>
                   <Text style={styles.creatorVideoBody}>
-                    Add a playable video right from this Profile so your Channel becomes watchable immediately.
+                    Creator videos, Clip Studio, Brand Studio, and readiness tools stay in Platform Studio.
                   </Text>
                   <TouchableOpacity
                     style={styles.ownerPromptAction}
                     activeOpacity={0.84}
-                    onPress={onPressUploadVideo}
+                    onPress={onPressCreatePlatformContent}
                   >
-                    <Text style={styles.ownerPromptActionText}>Upload Video</Text>
+                    <Text style={styles.ownerPromptActionText}>Open Platform Studio</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
                 <Text style={styles.sectionBody}>
-                  This channel has not published creator videos yet.
+                  This Platform has not published creator videos yet.
                 </Text>
               )}
             </View>
@@ -4659,6 +4338,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(115,134,255,0.22)",
     backgroundColor: "rgba(23,31,52,0.78)",
   },
+  channelSignalCardPressable: {
+    borderColor: "rgba(115,134,255,0.34)",
+  },
   channelSignalCardOfficial: {
     borderColor: "rgba(242,194,91,0.28)",
     backgroundColor: "rgba(46,34,18,0.78)",
@@ -4908,7 +4590,14 @@ const styles = StyleSheet.create({
     minWidth: 96,
     paddingHorizontal: 16,
   },
-  feedStack: { gap: 12 },
+  feedStack: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.14)",
+    backgroundColor: "rgba(10,14,24,0.88)",
+    padding: 12,
+    gap: 12,
+  },
   feedPostCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -5265,10 +4954,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   tabStripKicker: { color: "#727C91", fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
-  tabStripRow: { flexDirection: "row", gap: 7, paddingRight: 14 },
+  tabStripRow: { flexDirection: "row", gap: 8, paddingHorizontal: 2, paddingRight: 16 },
   tabChip: {
     minHeight: 38,
-    minWidth: 68,
+    minWidth: 76,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -5577,26 +5266,24 @@ const styles = StyleSheet.create({
   },
   ownerPromptActionText: { color: "#E4E9FF", fontSize: 12, fontWeight: "800" },
   profileSocialFeedHeader: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.2)",
-    backgroundColor: "rgba(28,13,24,0.72)",
-    padding: 16,
+    paddingHorizontal: 4,
+    paddingTop: 2,
+    paddingBottom: 2,
     gap: 6,
   },
   profileSocialFeedKicker: {
-    color: "#F7AFC0",
+    color: "#91A2D8",
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1,
   },
   profileSocialFeedTitle: {
-    color: "#FFF5F8",
+    color: "#F4F7FF",
     fontSize: 17,
     fontWeight: "900",
   },
   profileSocialFeedBody: {
-    color: "#D7DFEF",
+    color: "#AAB4CA",
     fontSize: 13,
     lineHeight: 19,
     fontWeight: "600",

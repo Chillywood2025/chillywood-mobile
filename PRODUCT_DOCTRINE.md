@@ -22,7 +22,7 @@ Every new or materially changed screen must define its primary experience before
 - Live Stage / Live Room: people and video are primary.
 - Party Room / Watch-Party Live: shared content/player is primary.
 - Player: playback is primary.
-- Public Channel: creator/channel content is primary.
+- Public Platform: creator/channel content is primary.
 - Profile: person/social identity is primary.
 - Platform Studio: creator command center / management is primary.
 - Admin Command Center: platform operations are primary.
@@ -42,9 +42,9 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - RevenueCat/Google Play purchase proof remains pending until a release-like Android build proves product load, purchase sheet, purchase, restore, active entitlement, and expired/revoked blocking.
 - Premium purchases use Google Play plus RevenueCat only; Stripe must not sell or grant Premium.
 - Premium unlocks platform features, Premium-only live/watch-party access, creator tools, and future creator monetization tools where backed.
-- Creator Channel is the creator mini platform direction. Platform Studio is the owner command center for managing that mini platform. Public-facing docs/copy may call Channel a mini platform where appropriate, but technical route/table names do not need to be renamed and Platform Studio itself should not be renamed to mini platform.
-- The creator mini platform is free by default for viewers.
-- Premium creators can monetize their mini platform when the relevant tool is backed.
+- Creator Platform is the creator public-channel direction. Platform Studio is the owner command center for managing that public creator surface. Technical route/table names such as `/channel/[userId]` and channel-related tables do not need to be renamed when that would risk breakage.
+- The creator Platform is free by default for viewers.
+- Premium creators can monetize their Platform when the relevant tool is backed.
 - Premium creators can choose whether each content item is free or paid where pricing is backed.
 - Premium creators can set their own price per paid content item where price controls are backed; preset price tiers remain preferred over arbitrary pricing.
 - Viewers/buyers do not need Premium to buy and watch paid creator content. Free users can buy paid creator content without becoming Premium.
@@ -70,7 +70,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - tips may use Stripe only when they unlock no digital access, no paid content, no VIP treatment, no badges, no rankings, no emojis, and no other digital goods/perks.
 - if a user tips `$10`, the creator tip amount remains `$10`; any allowed Chi'llywood or provider fee must be separate and disclosed where allowed
 - Chi'llywood's main creator-commerce platform percentage should come from paid content and other marketplace/commerce sales, not hidden cuts from 100%-to-creator tip copy
-- merch, products, clothing, and other allowed creator sales belong on the future Channel mini platform and are managed from Platform Studio command-center surfaces
+- merch, products, clothing, and other allowed creator sales belong on the future public creator Platform and are managed from Platform Studio command-center surfaces
 - creator merch/product sales are separate from Premium subscription revenue, and viewers do not need Premium to buy creator merch/products
 - Physical merch/products/clothing may use Stripe or another commerce provider when provider, tax, shipping, refund, dispute, and legal readiness are proved.
 - merch/product sales need a future commerce/provider path, likely Stripe Connect or a commerce provider, plus product listings, prices, inventory/status where needed, fulfillment/shipping status for physical goods, refunds/disputes, payout ledger entries, and tax/provider/legal review
@@ -126,7 +126,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - Provider Transfer Records Sync Foundation is pushed and remote-applied/type-refreshed through migration `supabase/migrations/202605080010_provider_transfer_sync_foundation.sql`, with deployed backend-only `stripe-connect-transfer-sync` ACTIVE version 29. It imports/syncs provider transfer status only for existing local Stripe test-mode provider transfer records, requires admin/operator auth, rejects client-supplied provider transfer/payout ids, and keeps Admin Payouts read-only/foundation. It does not create transfers, payouts, checkout sessions, fake paid status, payable balances, Mark Paid/Retry/Send Money/Release/Process actions, Connect Stripe UI, or live money movement.
 - Payout Transfer Preflight Foundation is pushed and deployed as backend-only/admin-operator/test-mode `stripe-connect-transfer-create` ACTIVE version 28. It is a closed-gate preflight, not transfer execution: it rejects client-owned provider references and money instructions, reads no Stripe secrets, makes no Stripe calls, writes no provider transfer rows, returns `preconditions_required`, and may write immutable requested/blocked audit rows only. It creates no transfers, payouts, checkout sessions, paid state, payable balance, payout release, Connect Stripe UI, or live money movement.
 - Payout Release Preflight Foundation is pushed and deployed as backend-only/admin-operator `payout-release-preflight` ACTIVE version 28. It is a closed-gate preflight, not payout release: it rejects money/provider/release instructions, reads no provider secrets, makes no provider calls, writes no payout/provider rows, returns `preconditions_required`, and may write immutable requested/blocked audit rows only. It creates no payout release, payout approval, transfers, payouts, checkout sessions, paid state, payable balance, or live money movement.
-- Creator Monetization Systems Foundation is repo-backed and remote-applied through migration `202605140011_creator_monetization_systems_foundation.sql`, with client/readout helpers in `_lib/creatorMonetization.ts`. It adds default-off live-money flags, creator pricing/access-control records, product/order records, tip transaction records, append-only creator earnings ledger, payout request records, webhook idempotency, audit logs, and fail-closed RPCs for future Channel mini-platform monetization managed from Platform Studio. Platform Studio is the command center and now has disabled/foundation monetization states; Channel is the public Mini Platform surface with no-checkout commerce readout; Player checks the paid creator-content resolver before signing creator-video playback. Live proof shows the linked Chi'llywood project has the migration applied, live-money flags remain false, direct anon money-table writes are denied, and remote lint/dry-run are clean. It does not create provider checkout, payment intents, paid status, access grants from client success, fake earnings, fake balances, fake tips, fake product orders, payout execution, Stripe production transfers, RevenueCat purchase proof, or live money.
+- Creator Monetization Systems Foundation is repo-backed and remote-applied through migration `202605140011_creator_monetization_systems_foundation.sql`, with client/readout helpers in `_lib/creatorMonetization.ts`. It adds default-off live-money flags, creator pricing/access-control records, product/order records, tip transaction records, append-only creator earnings ledger, payout request records, webhook idempotency, audit logs, and fail-closed RPCs for future public creator Platform monetization managed from Platform Studio. Platform Studio is the command center and now has disabled/foundation monetization states; the public Platform surface has no-checkout commerce readout; Player checks the paid creator-content resolver before signing creator-video playback. Live proof shows the linked Chi'llywood project has the migration applied, live-money flags remain false, direct anon money-table writes are denied, and remote lint/dry-run are clean. It does not create provider checkout, payment intents, paid status, access grants from client success, fake earnings, fake balances, fake tips, fake product orders, payout execution, Stripe production transfers, RevenueCat purchase proof, or live money.
 
 ## Ads Direction
 - ads are a secondary revenue stream, not the core business model
@@ -187,7 +187,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 ## Discovery / Spectator Direction
 - Discovery Feed Foundation D2 and Discovery/Spectator D3-D10 foundation are pushed as privacy-safe read-model/UI/helper groundwork.
 - Home Feed V1 may show only real backed discovery rows, followed-channel uploads, Circle-safe public uploads, public events, and latest public uploads with honest empty states.
-- Public Channel discovery shelves may show public live/upcoming events and public uploads only; Channel remains the public mini streaming platform, not Platform Studio.
+- Public Platform discovery shelves may show public live/upcoming events and public uploads only; the public Platform remains the viewer-facing creator surface, not Platform Studio.
 - Profile live/activity remains person/social identity and must respect profile privacy, blocks, and Chi'lly Circle boundaries.
 - Spectator metadata exists at `/spectate/[itemId]` as metadata only: no mic, camera, playback URL, HLS/Egress, room mutation, host controls, or full LiveKit participant token.
 - D7B Live Spectator Broadcast Schema Foundation and the D7D test transition are pushed as `room_broadcast_sessions` foundation/proof only: broadcast public playback is not active, no HLS playback URL exists for users, spectators do not receive full LiveKit participant tokens, `is_publicly_watchable` and `is_spectator_playback_enabled` remain constrained false, and real Egress ids/private HLS playlist locations are allowed only for private `D7D_TEST_` proof rows.
@@ -200,27 +200,27 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - No fake feed items, fake trending, fake viewer counts, fake spectator counts, fake public rights, public protected-content playback, or full-room spectator tokens are allowed.
 - Public/free content may be ad-supported later when rights and visibility allow; Premium remains ad-free; CTV ads remain future-only for public/free TV-style inventory.
 
-## Profile / Channel Platform Direction
+## Profile / Platform Direction
 - profiles remain Chi'llywood's social identity hubs
-- Profile and Channel are connected but different product layers: Profile is personal/social identity, while Channel is the public mini streaming platform/network
+- Profile and Platform are connected but different product layers: Profile is personal/social identity, while Platform is the public creator/channel surface
 - Platform Studio is the owner-only creator operating system
-- `/channel/[userId]` is the public Channel route
+- `/channel/[userId]` is the internal route for the public Platform
 - `/channel-studio` is the preferred owner Platform Studio route
 - `/channel-settings` remains compatibility
-- Profile View Channel routes to `/channel/[userId]`
-- Platform Studio Preview Channel routes to `/channel/[ownUserId]`
-- every user can have the option to build their own mini streaming platform or channel inside Chi'llywood, but platform-building is optional
-- a user/creator Channel must show that creator's own channel content only: creator uploads, creator videos, creator events, creator live/watch-party content, and creator shelves/sections when those are backed
+- Profile View Platform routes to `/channel/[userId]`
+- Platform Studio Preview Platform routes to `/channel/[ownUserId]?preview=public`
+- every user can have the option to build their own public creator Platform inside Chi'llywood, but platform-building is optional
+- a user/creator Platform must show that creator's own content only: creator uploads, creator videos, creator events, creator live/watch-party content, and creator shelves/sections when those are backed
 - Chi'llywood Originals and platform/admin `titles` belong to platform surfaces such as Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces
-- Chi'llywood Originals must not be used as filler inside user/creator Channels
+- Chi'llywood Originals must not be used as filler inside user/creator Platforms
 - users who do not want to build a full channel or platform should still have meaningful profile customization
-- customizable branding, layout, featured rows, sections, and channel identity are approved direction inside the canonical profile/channel system
+- customizable branding, layout, featured rows, sections, and public Platform identity are approved direction inside the canonical profile/platform system
 - platform-inspired creator surfaces are approved; direct copies of third-party streaming services are not
-- creator-channel customization is preferred over relying on third-party streaming account connections
+- creator Platform customization is preferred over relying on third-party streaming account connections
 - users should be able to start with the base profile experience and expand later without losing that base experience
 - profiles remain social identity hubs even when creator-platform mode grows deeper
-- Public Channel must never show owner-only controls to non-owners
-- Public Channel must never show drafts, private videos, or unpublished content
+- Public Platform must never show owner-only controls to non-owners
+- Public Platform must never show drafts, private videos, or unpublished content
 - Profile route params may provide fallback presentation, but backed profile identity must win once loaded. Creator-video Player deep links must enforce public-or-owner visibility and must not expose drafts/private/unpublished videos to non-owners, even when another role can read broader moderation data elsewhere.
 - Creator payout readiness belongs in Platform Studio only. Test-mode provider setup UI may route through backend Edge Functions, but payout execution must stay inactive until KYC, tax forms, fraud review, admin approval, 7-30 day hold, minimum payout decision, immutable admin audit, and explicit payout-release requirements are separately scoped and proved.
 

@@ -1,6 +1,8 @@
-# Chi'llywood Profile / Channel Implementation Spec
+# Chi'llywood Profile / Platform Implementation Spec
 
 2026-05-06 current-route note: this older implementation spec is superseded where it says Profile and Channel share one public route or where it treats `/channel-settings` as the primary studio route. Current truth is Profile = `/profile/[userId]`, public Channel = `/channel/[userId]`, owner Platform Studio = `/channel-studio`, and `/channel-settings` compatibility must remain.
+
+2026-05-25 terminology note: user-facing Profile copy must say `Platform` for the public creator/channel surface and `Platform Studio` for owner tools. The internal `/channel/[userId]` route and channel-named database/helpers remain stable unless a separate migration/route lane proves a safe rename.
 
 ## 1. Purpose And Scope
 This document translates the full profile/channel product blueprint into the current Chi'llywood repo structure.
@@ -9,7 +11,7 @@ It is implementation doctrine, not UI code.
 
 It exists to:
 - preserve Profile as the canonical personal/social identity surface
-- preserve public Channel as the canonical viewer-facing mini streaming/network surface
+- preserve public Platform as the canonical viewer-facing creator/channel surface
 - preserve Platform Studio as the owner-only creator operating system
 - keep `/channel-settings` compatibility working for older links
 - map larger studio ideas into current sections and later-phase possibilities without silently making extra route families active
@@ -27,7 +29,7 @@ This spec does not:
 | Route | Current Owner File | Current Doctrine |
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Personal/social Profile surface for self, other-user, and official identity. |
-| `/channel/[userId]` | `app/channel/[userId].tsx` | Public viewer-facing Channel surface. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Public viewer-facing Platform surface. |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner-only Platform Studio. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/chat` | `app/chat/index.tsx` | Canonical Chi'lly Chat inbox. |
@@ -47,18 +49,18 @@ Do not mix `Watch-Party Live` and `Live Watch-Party`.
 
 ### 2.3 Current Cross-Surface Preservation Rules
 - `/profile/[userId]` is identity/social presentation, not a room and not an inbox.
-- `/channel/[userId]` is public Channel presentation, not an owner console.
+- `/channel/[userId]` is public Platform presentation, not an owner console.
 - `/channel-studio` is the owner Platform Studio; `/channel-settings` is compatibility.
 - `/chat` and `/chat/[threadId]` remain the only canonical standalone Chi'lly Chat routes.
 - `app/communication/index.tsx` and `app/communication/[roomId].tsx` remain compatibility-only, not new user-facing route truth.
 - Rachi remains on canonical `/profile/[userId]` and canonical Chi'lly Chat routes.
 
-## 3. Public Profile And Channel Surfaces
+## 3. Public Profile And Platform Surfaces
 ### 3.1 Route Ownership
 Current Profile route owner:
 - `app/profile/[userId].tsx`
 
-Current public Channel route owner:
+Current public Platform route owner:
 - `app/channel/[userId].tsx`
 
 Owner Platform Studio route:
@@ -68,17 +70,17 @@ Owner Platform Studio route:
 Future extraction is allowed only as supporting component files under those route owners. Route truth does not change.
 
 ### 3.2 Public Surface Purpose
-`/profile/[userId]` is Chi'llywood's personal/social identity surface. `/channel/[userId]` is the public mini streaming/network Channel surface.
+`/profile/[userId]` is Chi'llywood's personal/social identity surface. `/channel/[userId]` is the public creator Platform surface.
 
 Profile must answer:
 1. Who is this person, creator, or official presence?
 2. What social/Profile activity and identity signals are public-safe?
 3. What should the visitor do next from the Profile?
 
-Public Channel must answer:
-1. What media, live/upcoming, audience signals, and about details define this Channel?
+Public Platform must answer:
+1. What media, live/upcoming, audience signals, and about details define this Platform?
 2. What public creator videos are playable?
-3. What should the viewer do next from the Channel?
+3. What should the viewer do next from the Platform?
 
 It must not become:
 - a second inbox
@@ -103,7 +105,7 @@ The hero section on `/profile/[userId]` owns:
 - handle
 - tagline
 - official/live/linked-context badges
-- short channel identity framing
+- short Platform identity framing
 
 Hero rules:
 - self, other-user, and official states must remain unmistakable
@@ -143,9 +145,9 @@ Primary action rules:
 - no fake follow, subscribe, or monetization CTA should appear until backed by real doctrine and implementation
 
 ### 3.7 Tab Strip
-The canonical tab strip for the unified route is:
-- `Home`
-- `Content`
+The canonical Profile tab strip is:
+- `Posts`
+- `Platform`
 - `Live`
 - `Community`
 - `About`

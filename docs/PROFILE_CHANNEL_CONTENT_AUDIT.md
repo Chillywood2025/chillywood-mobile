@@ -11,6 +11,7 @@ Updated: 2026-04-29 for Public v1 social basics backing
 Updated: 2026-04-29 for remote social-basics schema/RLS proof
 Updated: 2026-04-29 for Profile post engagement backing
 Updated: 2026-05-06 for pushed Public Channel and Platform Studio route truth
+Updated: 2026-05-25 for Profile production UI, Platform terminology, Chi'lly Chat routing, and Platform Studio upload separation
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -26,7 +27,28 @@ Unrelated dirty files at audit start:
 - `docs/LIVE_STAGE_TWO_DEVICE_PROOF.md`
 - `scripts/proof-live-stage-video-check.sh`
 
-This audit began as documentation only. The follow-up creator media foundation now implements the first Public v1 creator-upload path. Later Android proof on `R5CR120QCBF` confirmed the owner Profile/Channel and Channel Settings presentation lanes, while public/non-owner proof and playable creator-video proof still remain pending because the current stored media object is zero bytes.
+This audit began as documentation only. The follow-up creator media foundation now implements the first Public v1 creator-upload path. Later Android proof on `R5CR120QCBF` confirmed the owner Profile/Platform and Platform Studio presentation lanes, while broad public/non-owner privacy proof should continue in a separate runtime smoke lane.
+
+## 2026-05-25 Profile Production UI Addendum
+
+Current governing truth:
+
+- Profile is the personal/social identity hub: personal posts, activity feed, Chi'lly Circle, comments/replies/social engagement, owner Settings, Chi'lly Chat, and a public Platform link where backed.
+- Platform is the user-facing public creator/channel surface. It currently uses the internal `/channel/[userId]` route and existing channel-named tables/helpers where changing names would risk breakage.
+- Platform Studio is the owner/authorized creator operation surface for creator-video uploads, content management, Clip Studio, Brand Studio, readiness, monetization setup, live tools, and creator operations.
+- Profile no longer shows a top `Upload` CTA and no longer contains a creator-video upload composer.
+- Profile post attachments remain backed social attachments for posts/comments; they are not creator-video upload.
+- Owner Profile actions are `Platform Studio`, `Preview Platform`, `Chi'lly Chat`, `Chi'lly Circle`, and `Settings`.
+- Viewer Profile actions are backed Follow/Following or sign-in handoff, `Chi'lly Chat`, `View Platform`, Share Profile, and Report/Block where supported.
+- Signed-out viewers can see public Profile/Platform surfaces where public and must be asked to sign in for follow/message/comment/post actions.
+- Blocked/private viewers must not bypass chat, private activity, owner controls, drafts, or private Platform content.
+- Profile tabs are `Posts`, `Platform`, `Live`, `Community`, and `About`; the tab row is horizontally scrollable and safe-area-contained.
+- The Posts composer, notices, public feed items, and empty state live in one connected feed surface.
+- `Preview Platform` and `View Platform` route to `/channel/[userId]`; owner preview passes `preview=public` so public Platform owner controls and draft/private content stay hidden.
+- Chi'lly Chat opens the existing inbox/direct-thread route only when backed by sign-in, runtime chat control, and thread availability. It does not create fake messages or fake threads.
+- DEV/proof/debug copy is not added to normal Profile UI; any proof-looking strings in content should be treated as backed test data, not UI labels.
+
+Validation for the production UI pass includes the Profile production guard, the standard type/runtime/payment/creator/Clip/Brand/Watch-Party guard stack, targeted terminology/upload/chat/attachment/owner-control/draft-leak greps, Android `R5CR120QCBF` proof outside the repo at `/tmp/chillywood-profile-production-ui-proof-20260525/`, and diff whitespace checks.
 
 ## 2026-04-29 Profile / Channel Contract Addendum
 
@@ -126,7 +148,7 @@ Backing truth after this pass:
 | Route | Owner | Current role |
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile surface for person identity, Profile posts, Chi'lly Circle/privacy-aware social context, Chi'lly Chat handoff, and owner/public Profile actions. |
-| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel surface with hero, backed Channel Pulse stats, Featured, Latest Uploads, Live & Upcoming, About, viewer-facing Play, and no owner controls for non-owners. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Platform surface with hero, backed Platform stats, Featured, Latest Uploads, Live & Upcoming, About, viewer-facing Play, and no owner controls for non-owners. |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred signed-in owner Platform Studio route for Home, Content, Live, Audience, Insights, Brand, creator content management, audience actions, analytics summaries, and safety/admin summaries. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/` home tab | `app/(tabs)/index.tsx` | Discovery/home surface. It opens the signed-in user's profile/channel avatar route and reads public `titles` programming. |
@@ -138,7 +160,7 @@ Backing truth after this pass:
 | `/chat` and `/chat/[threadId]` | `app/chat/index.tsx`, `app/chat/[threadId].tsx` | Canonical Chi'lly Chat inbox/direct-thread routes. |
 | `/admin` | `app/admin.tsx` | Internal/admin content programming and platform operations surface, including the only real title creation/edit route found. |
 
-The separate public Channel route is now `/channel/[userId]`. Doctrine and current code keep `/profile/[userId]` as the personal/social Profile route, `/channel/[userId]` as the viewer-facing Channel route, `/channel-studio` as the owner Platform Studio route, and `/channel-settings` as compatibility.
+The separate public Platform route is currently `/channel/[userId]`. Doctrine and current code keep `/profile/[userId]` as the personal/social Profile route, `/channel/[userId]` as the viewer-facing Platform route, `/channel-studio` as the owner Platform Studio route, and `/channel-settings` as compatibility.
 
 ## Owner File Map
 
@@ -157,23 +179,23 @@ The separate public Channel route is now `/channel/[userId]`. Doctrine and curre
 `/profile/[userId]` is the personal/social Profile surface. It renders:
 
 - public identity: display name, handle, avatar, tagline, role, official account badges, live/off-air state, and room context state
-- public Channel handoff through View Channel
-- primary public actions: backed Follow/Following where currently present, Chi'lly Chat, View Channel, Share Profile, Report, and live/watch-party handoffs when real context exists
-- primary owner actions: Edit Profile, Platform Studio, Upload Video where currently present, and Settings
-- channel access posture: browse, Watch Party, and Chi'lly Chat access cards backed by user profile defaults and creator permissions
-- tabs: Posts, Channel, Live, Community, About
+- public Platform handoff through View Platform
+- primary public actions: backed Follow/Following or sign-in follow handoff, Chi'lly Chat, View Platform, Share Profile, Report, and live/watch-party handoffs when real context exists
+- primary owner actions: Platform Studio, Preview Platform, Chi'lly Chat, Chi'lly Circle, and Settings
+- Platform access posture: browse, Watch Party, and Chi'lly Chat access cards backed by user profile defaults and creator permissions
+- tabs: Posts, Platform, Live, Community, About
 - Posts tab: backed text-only Profile posts/status updates, owner composer/delete, public clean reads, backed text comments, backed single likes/counts, and route-safe share
-- Channel handoff: Profile View Channel routes to `/channel/[userId]`; user/creator Channels do not show Chi'llywood Originals or platform `titles` as filler
+- Platform handoff: Profile View Platform routes to `/channel/[userId]`; user/creator Platforms do not show Chi'llywood Originals or platform `titles` as filler
 - public live/event summaries from backed `creator_events` and reminder summaries
 - owner mode on the same route when the signed-in user matches the route user id
-- owner-only handoff card and quick actions to Platform Studio, creator-video upload where currently present, Settings, and Chi'lly Chat
+- owner-only handoff card and quick actions to Platform Studio, Preview Platform, Settings, Chi'lly Circle, and Chi'lly Chat
 - report/safety path for non-self profiles
 
-The self vs public viewer experience is different at the control level: self-view gets owner prompts, edit/Platform Studio/upload/settings actions where backed, and drafts only on owner surfaces; visitors get backed Follow/Following where present, Chi'lly Chat, View Channel, Share Profile, Report, and public channel handoff. Public Channel viewing now uses `/channel/[userId]`.
+The self vs public viewer experience is different at the control level: self-view gets owner prompts, Platform Studio, Preview Platform, Settings, Chi'lly Circle, Chi'lly Chat, and drafts only on owner surfaces; visitors get backed Follow/Following where present, Chi'lly Chat, View Platform, Share Profile, Report, and public Platform handoff. Public Platform viewing currently uses `/channel/[userId]`.
 
-## Current Channel Truth
+## Current Platform Truth
 
-Channel exists as a separate public route at `/channel/[userId]`. Private creator controls live in `/channel-studio`, with `/channel-settings` preserved as compatibility.
+Platform exists as a separate public route at `/channel/[userId]`. Private creator controls live in `/channel-studio`, with `/channel-settings` preserved as compatibility.
 
 Platform Studio currently supports:
 
@@ -205,7 +227,7 @@ Channel settings does not yet support:
 - native game/video streaming source management
 - native thumbnail generation, duration extraction, creator-video likes, engagement counts, creator-video saves/My List, media comments, or nested replies
 
-## Profile <-> Channel Integration
+## Profile <-> Platform Integration
 
 Working connections:
 
@@ -214,7 +236,7 @@ Working connections:
 - Profile visitor view opens Chi'lly Chat direct threads through `/chat/[threadId]`.
 - Profile can hand back into live/watch-party routes when real room or scheduled title context exists.
 - Profile reads channel defaults and layout posture from `user_profiles`.
-- Platform Studio writes the same backed `user_profiles` fields that Profile/public Channel read.
+- Platform Studio writes the same backed `user_profiles` fields that Profile/public Platform read.
 - Platform Studio reads the same creator/event/audience/permission state surfaced publicly where appropriate.
 
 Updated working connections:

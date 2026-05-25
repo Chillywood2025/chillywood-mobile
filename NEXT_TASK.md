@@ -1,35 +1,36 @@
 # NEXT TASK
 
-## Recommended Lane: RevenueCat / Google Play Webhook Credential Link And Sandbox Event Proof
+## Recommended Lane: Profile Social Runtime Proof And Privacy Smoke
 
-Provider-Link sandbox proof is now closed for the Stripe webhook boundary, Android Monetization readiness UI, and fail-closed RevenueCat/Google Play webhook shells.
+The Profile Production UI/UX and Navigation Pass is now closed repo-side. Profile is the social identity hub, public creator/channel copy is user-facing `Platform`, and creator operations stay in Platform Studio.
 
 Closed truth:
 
-- `provider_readiness_status` and `provider_readiness_audit_log` remain the backend-owned readiness source.
-- Supabase Edge secrets are configured for `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` only.
-- RevenueCat server/webhook secrets and Google Play server/webhook secrets are missing in Supabase by names-only inventory.
-- RevenueCat and Google Play webhook shells return setup-required with no Premium/subscription grant and no live-money action.
-- Stripe has sandbox proof: an enabled test-mode webhook endpoint received a Stripe CLI `payment_intent.succeeded` test event with `livemode=false` and `pending_webhooks=0`; unsigned direct POST is rejected as `invalid_signature`.
-- Migration `202605250004_provider_link_sandbox_proof_status.sql` marks only `stripe / stripe_webhook_signature` as `sandbox_ready`; no provider is production active.
-- Signed-in readiness summary returns sanitized rows only, no forbidden raw fields, no active rows, and no live-money rows.
-- Android proof on `R5CR120QCBF` is outside the repo at `/tmp/chillywood-proof-2026-05-25T-provider-link-sandbox-proof-android/` and shows Monetization Overview, Premium, Revenue, Payouts, Stripe Setup, Google Play / RevenueCat Status, Future Tools, and owner/dev Technical checks with no active money claim and no secret-like values in captured XML.
-- No checkout, tips, paid content, revenue imports, balances, transfers, payouts, fake earnings, fake Premium access, or live money movement was added.
-- No Premium gate, RevenueCat entitlement, Google Play purchase, Stripe Connect account/onboarding, LiveKit, Watch-Party, Clip Studio, Brand Studio, creator upload/publish/delete, public renderer, package, native Android/Gradle, Expo config, or lockfile behavior changed.
+- Owner Profile actions are `Platform Studio`, `Preview Platform`, `Chi'lly Chat`, `Chi'lly Circle`, and `Settings`.
+- Viewer Profile actions are Follow/Following or sign-in follow handoff, `Chi'lly Chat`, `View Platform`, Share/Profile safety actions where backed, and no owner controls.
+- The Profile header `Upload` CTA and Profile creator-video upload composer are removed.
+- Profile post attachments remain available for social posts and comments.
+- Creator video upload, Clip Studio, Brand Studio, readiness, and monetization operations remain in Platform Studio.
+- Profile tabs are `Posts`, `Platform`, `Live`, `Community`, and `About`.
+- The Posts composer, feed notices, items, and empty states now live in one connected feed surface.
+- Public Platform preview uses `/channel/[userId]?preview=public`, hides owner controls, and reads public creator videos with drafts excluded.
+- Chi'lly Chat entry uses the existing inbox/direct-thread helpers and respects sign-in, chat runtime control, and thread availability without fake messages or fake threads.
+- No Premium gate, LiveKit, Watch-Party Live, Live Watch-Party, Clip Studio, Brand Studio, monetization/provider readiness, creator upload/publish/delete backend behavior, public Platform renderer, comments/replies/likes/share/delete controls, social attachment validation, auth/session behavior, native config, migrations, or Supabase remote state changed.
 
 Recommended next lane:
 
-- Add/link `REVENUECAT_WEBHOOK_SECRET` or approved RevenueCat webhook auth secret in Supabase and RevenueCat dashboard.
-- Add/link RevenueCat server metadata names only as needed: entitlement, offering, and product identifiers.
-- Add/link Google Play server/Pub/Sub/webhook secret references in Supabase and Play Console without committing service-account JSON.
-- Send valid and invalid RevenueCat/Google Play sandbox webhook events.
-- Move only the proved capability rows to `configured` or `sandbox_ready`; do not set `active`.
-- Capture updated Android Platform Studio Monetization screenshots only if RevenueCat/Google Play readiness statuses change.
-- Keep `CHILLYWOOD_LIVE_MONEY_ENABLED`, payout release, checkout, tips, paid content, balances, and revenue imports disabled.
+- Runtime-smoke owner, signed-in viewer, signed-out viewer, and blocked/private Profile states on Android with real backed accounts or safe fixtures.
+- Prove viewers do not see Platform Studio, Settings, owner draft markers, post delete controls for someone else's posts, or private/draft creator content.
+- Prove signed-out users can view public Profile/Platform surfaces and are asked to sign in for follow/message/comment/post actions.
+- Prove blocked/private viewers cannot bypass chat, private activity, or private Platform content.
+- Recheck post create, attachment, comment, reply, like, share, and owner delete flows after the UI pass.
+- Capture proof outside the repo and keep any screenshots/logs out of git unless project policy changes.
 
-Validation should include the full monetization/payment/Stripe/provider-readiness guard stack, Supabase migration/lint/dry-run checks if schema changes, valid/invalid webhook proof, signed-in sanitized readiness proof, no-secret-output proof, no-live-money proof, Android Monetization proof, and `git diff --check`.
+Validation should include `npm run guard:profile-production-policy`, the existing type/runtime/payment/creator/Clip/Brand/Watch-Party guard stack, targeted Profile terminology/upload/chat/attachment/owner-control/draft-leak greps, Android proof, and diff whitespace checks.
 
 ## Still-Open Non-UI Follow-Ups
+
+RevenueCat / Google Play webhook credential linking and sandbox event proof remains open from the provider-readiness lane. Keep live money disabled and do not mark provider rows active.
 
 Clip Studio Metadata-Only Trim Preview remains a valid later lane: add `trim_start_ms` / `trim_end_ms` metadata-only controls only if product wants preview range before launch, keep public Player unchanged unless a separate VOD renderer lane owns it, and do not claim export or permanent cuts.
 

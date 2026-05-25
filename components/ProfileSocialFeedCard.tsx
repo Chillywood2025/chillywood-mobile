@@ -55,7 +55,7 @@ const getVideoKicker = (item: Extract<ProfileSocialFeedItem, { type: "creator_vi
   if (item.type === "public_profile_creator_video") return "CREATOR VIDEO";
   switch (item.sourceContext) {
     case "own":
-      return "YOUR CHANNEL";
+      return "YOUR PLATFORM";
     case "chilly_circle":
       return "CHI'LLY CIRCLE";
     case "following":
@@ -125,7 +125,7 @@ export function ProfileSocialFeedCard({
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={() => onOpenActorChannel(item.actor)}>
             <MaterialIcons name="video-library" size={16} color="#E6ECFA" />
-            <Text style={styles.secondaryActionText}>Channel</Text>
+            <Text style={styles.secondaryActionText}>Platform</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -155,11 +155,11 @@ export function ProfileSocialFeedCard({
           ) : (
             <Text style={styles.kicker}>{getVideoKicker(item)}</Text>
           )}
-          <Text style={styles.title} numberOfLines={2}>{item.video.title || "Creator Upload"}</Text>
+          <Text style={styles.title} numberOfLines={2}>{item.video.title || "Creator Video"}</Text>
           {item.video.description ? (
             <Text style={styles.bodyText} numberOfLines={3}>{item.video.description}</Text>
           ) : (
-            <Text style={styles.bodyText} numberOfLines={2}>{"Open this public creator upload in the Chi'llywood Player."}</Text>
+            <Text style={styles.bodyText} numberOfLines={2}>{"Open this public creator video in the Chi'llywood Player."}</Text>
           )}
           <Text style={styles.meta}>{formatDate(item.video.updatedAt || item.video.createdAt)}</Text>
           <View style={styles.actionRow}>
@@ -169,7 +169,7 @@ export function ProfileSocialFeedCard({
             </TouchableOpacity>
             {item.actor ? (
               <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={() => onOpenActorChannel(item.actor!)}>
-                <Text style={styles.secondaryActionText}>Channel</Text>
+                <Text style={styles.secondaryActionText}>Platform</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -183,7 +183,7 @@ export function ProfileSocialFeedCard({
     const subtitle = String(item.discoveryItem.subtitle ?? "").trim();
     const schedule = formatDate(item.discoveryItem.starts_at ?? item.discoveryItem.published_at ?? item.discoveryItem.created_at);
     const actionLabel = item.discoveryItem.item_type === "creator_upload" ? "Open" : "Spectate";
-    const routeLabel = item.discoveryItem.item_type === "creator_upload" ? "Player route" : "Watch-only route";
+    const routeLabel = item.discoveryItem.item_type === "creator_upload" ? "Player" : "Watch-only";
 
     return (
       <View style={styles.card}>
@@ -217,7 +217,7 @@ export function ProfileSocialFeedCard({
             </TouchableOpacity>
             {item.actor ? (
               <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={() => onOpenActorChannel(item.actor!)}>
-                <Text style={styles.secondaryActionText}>Channel</Text>
+                <Text style={styles.secondaryActionText}>Platform</Text>
               </TouchableOpacity>
             ) : null}
           </View>

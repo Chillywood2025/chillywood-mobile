@@ -1,8 +1,9 @@
-# Profile Channel Product Contract
+# Profile / Platform Product Contract
 
 Date: 2026-05-06
+Updated: 2026-05-25 for Profile production UI, user-facing Platform terminology, Chi'lly Chat access, and Platform Studio upload separation.
 
-This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Channel work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.
+This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Platform work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.
 
 ## 1. Profile Purpose
 
@@ -12,36 +13,36 @@ It should make the user feel human: avatar, display name, handle, bio/tagline, b
 
 Profile must not become a generic creator feed, a management console, or a place where creator uploads pretend to be normal personal status posts.
 
-## 2. Channel Purpose
+## 2. Platform Purpose
 
-Channel is the creator's mini streaming platform inside Chi'llywood.
+Platform is the creator's public channel surface inside Chi'llywood.
 
-It should make creators feel like producers: creator uploaded videos, public creator library, creator events, live/watch-party context, backed channel identity/theme controls, and owner upload/manage handoffs.
+It should make creators feel like producers: creator uploaded videos, public creator library, creator events, live/watch-party context, backed Platform identity/theme controls, and owner upload/manage handoffs through Platform Studio.
 
-Public Channel now lives on `/channel/[userId]` as the viewer-facing mini streaming/network home. Profile remains the personal/social identity route at `/profile/[userId]`. Owner controls live in Platform Studio on `/channel-studio`, with `/channel-settings` preserved as compatibility.
+Public Platform currently lives on the internal `/channel/[userId]` route as the viewer-facing creator home. Profile remains the personal/social identity route at `/profile/[userId]`. Owner controls live in Platform Studio on `/channel-studio`, with `/channel-settings` preserved as compatibility.
 
 ## 3. Profile 1-6 Structure
 
 1. Identity header: avatar, cover/header treatment, display name, handle, tagline/bio, official/platform badges where backed, and no fake counts.
-2. Quick actions: public viewers get backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, and Report where supported; Profile View Channel routes to `/channel/[userId]`; owners keep Platform Studio, upload, and settings handoffs where backed.
+2. Quick actions: public viewers get backed Follow/Following, Chi'lly Chat, View Platform, Share Profile, and Report where supported; Profile View Platform routes to `/channel/[userId]`; owners keep Platform Studio, Preview Platform, Chi'lly Chat, Chi'lly Circle, and Settings where backed.
 3. Personal posts / updates: Public v1 now supports backed text-only Profile posts/status updates. They are Profile content, not Channel creator videos.
-4. Channel preview / entry: creator videos and events appear in the Channel area, not as personal posts.
+4. Platform preview / entry: creator videos and events appear in the Platform area, not as personal posts.
 5. Social proof / community: only backed follower/audience/subscriber or official/creator signals may appear; followers are not friends.
 6. Activity highlights: recent upload, live event, watch-party, or latest personal post may appear only when backed.
 
-## 4. Channel Definition
+## 4. Platform Definition
 
-Channel owns creator-uploaded videos, creator video library, backed creator shelves/sections, featured creator upload when backed, creator events, creator live/watch-party context, public creator content discovery, and backed audience/follower relationships.
+Platform owns creator-uploaded videos, creator video library, backed creator shelves/sections, featured creator upload when backed, creator events, creator live/watch-party context, public creator content discovery, and backed audience/follower relationships.
 
-Channel must not own platform/admin titles, Chi'llywood Originals, personal Profile posts/status updates, admin/moderation controls, a full Friends system, billing/payout controls, platform monetization controls, or normal Chi'lly Chat thread ownership.
+Platform must not own platform/admin titles, Chi'llywood Originals, personal Profile posts/status updates, admin/moderation controls, a full Friends system, billing/payout controls outside Platform Studio, platform monetization controls, or normal Chi'lly Chat thread ownership.
 
 Platform Studio owns owner-only channel operations: Home dashboard, Content, Live, Audience, Insights, Brand, creator upload/manage handoffs, backed audience actions, and backed channel defaults. Platform Studio must not be exposed to non-owners.
 
 ## 5. Owner Vs Public Behavior
 
-Owners may see edit/profile/channel controls, upload/manage video actions, draft badges, and owner prompts such as Upload your first video.
+Owners may see profile controls, Platform Studio, Preview Platform, Settings, Chi'lly Circle, Chi'lly Chat, Platform Studio upload/manage video actions, and backed draft badges.
 
-Public viewers may see identity, backed Follow/Following, Chi'lly Chat, public creator videos only, clean public event context, Share Profile, and Report.
+Public viewers may see identity, backed Follow/Following, Chi'lly Chat, View Platform, public creator videos only, clean public event context, Share Profile, and Report.
 
 Public viewers must not see owner controls, Platform Studio controls, upload, edit, publish, unpublish, delete, audience management, insights/analytics, drafts, private/hidden/removed videos, or admin controls.
 
@@ -51,8 +52,8 @@ Profile post owners may create and delete their own text-only posts. Public view
 
 Creator uploads appear in:
 
-- Public Channel route: `/channel/[userId]`
-- Profile Channel tab/section
+- Public Platform route: `/channel/[userId]`
+- Profile Platform tab/section
 - Platform Studio Content tab and `/channel-settings` compatibility
 - Creator-video Player route: `/player/[id]?source=creator-video`
 - Creator-video Watch-Party routes only when source eligibility is backed
@@ -63,11 +64,11 @@ Creator uploads must not be mixed into the personal Posts tab unless a future ba
 
 Chi'llywood Originals and platform/admin `titles` belong only on Home, Explore, dedicated Originals/platform surfaces, title pages, platform Player, platform Watch-Party, and admin-managed title surfaces.
 
-They must not appear as filler inside user/creator Channels, profile posts, creator video shelves, public channel stats, or creator-owned cards.
+They must not appear as filler inside user/creator Platforms, profile posts, creator video shelves, public Platform stats, or creator-owned cards.
 
 ## 8. What Is V1
 
-Public v1 includes a clear Profile/Channel/Platform Studio split, owner/public Profile behavior, public `/channel/[userId]`, owner `/channel-studio`, `/channel-settings` compatibility, backed text Profile posts/status updates, backed Profile post comments/replies/likes once the local social migrations are applied remotely, route-safe Profile post share, clickable safe external links in social text, bounded 250 MB social attachments for Profile posts/comments, creator-video comments, and Chi'lly Chat, backed following-based creator upload discovery, backed creator-video comments/replies, backed creator video upload/manage, public creator-video Channel display, explicit creator-video Player routing, backed report/share where implemented, honest event/live context, and premium mobile empty states.
+Public v1 includes a clear Profile/Platform/Platform Studio split, owner/public Profile behavior, public `/channel/[userId]`, owner `/channel-studio`, `/channel-settings` compatibility, backed text Profile posts/status updates, backed Profile post comments/replies/likes once the local social migrations are applied remotely, route-safe Profile post share, clickable safe external links in social text, bounded 250 MB social attachments for Profile posts/comments, creator-video comments, and Chi'lly Chat, backed following-based creator upload discovery, backed creator-video comments/replies, backed creator video upload/manage through Platform Studio, public creator-video Platform display, explicit creator-video Player routing, backed report/share where implemented, honest event/live context, and premium mobile empty states.
 
 Remote Supabase schema/RLS proof for the original text-only Profile posts, text-only creator-video comments, and `profile_post` / `creator_video_comment` report target types is complete as of 2026-04-29. The Profile post engagement migration for `profile_post_comments`, `profile_post_likes`, and `profile_post_comment` reports is local/pending remote application, and `202604290003_social_replies_links_attachments.sql` is also local/pending remote application for one-level replies, the private `social-attachments` bucket, attachment RLS, and `social_attachment` reports. Android runtime proof remains a separate Public v1 proof lane, including the Profile Post keyboard visibility fix.
 
