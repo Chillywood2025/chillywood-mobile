@@ -101,8 +101,9 @@ import {
     createSocialAttachmentForSurface,
     getSocialAttachmentValidationMessage,
     readSocialAttachmentsForSurfaces,
-    SOCIAL_ATTACHMENT_PICKER_TYPES,
+    getSocialAttachmentPickerTypes,
     type SocialAttachment,
+    type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../../_lib/socialAttachments";
 import {
@@ -120,6 +121,7 @@ import { getProtectedSessionCopy } from "../../../components/prototype/protected
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
 import { LiveEffectsPanel } from "../../../components/live/live-effects-sheet";
+import { SocialAttachmentActionSheet } from "../../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../../components/social/social-attachment-card";
 import {
   patchLiveKitSignalReadingLoop,
@@ -778,6 +780,7 @@ export default function WatchPartyLiveStageScreen({
   const [hybridCommentError, setHybridCommentError] = useState("");
   const [hybridCommentSending, setHybridCommentSending] = useState(false);
   const [hybridCommentAttachmentFile, setHybridCommentAttachmentFile] = useState<SocialAttachmentFile | null>(null);
+  const [hybridCommentAttachmentSheetVisible, setHybridCommentAttachmentSheetVisible] = useState(false);
   const [stageKeyboardHeight, setStageKeyboardHeight] = useState(0);
   const [selectedStageEffectId, setSelectedStageEffectId] = useState(LIVE_EFFECT_OFF_ID);
   const [stageOverlayVisible, setStageOverlayVisible] = useState(true);
@@ -3023,11 +3026,11 @@ export default function WatchPartyLiveStageScreen({
     onSelectReactionFromPicker(emoji);
   }, [onSelectReactionFromPicker, revealStageOverlay, stageReactionsEnabled]);
 
-  const onPickHybridCommentAttachment = useCallback(async () => {
+  const onPickHybridCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
       setHybridCommentError("");
       const result = await DocumentPicker.getDocumentAsync({
-        type: SOCIAL_ATTACHMENT_PICKER_TYPES as unknown as string[],
+        type: getSocialAttachmentPickerTypes(scope),
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -3048,6 +3051,11 @@ export default function WatchPartyLiveStageScreen({
       setHybridCommentError("Unable to choose this attachment right now.");
     }
   }, [revealStageOverlay]);
+
+  const onSelectHybridCommentAttachment = useCallback((scope: SocialAttachmentPickerScope) => {
+    setHybridCommentAttachmentSheetVisible(false);
+    void onPickHybridCommentAttachment(scope);
+  }, [onPickHybridCommentAttachment]);
 
   const onSendHybridComment = useCallback(async () => {
     const safeBody = hybridCommentDraft.trim();
@@ -3725,7 +3733,7 @@ export default function WatchPartyLiveStageScreen({
               hitSlop={STAGE_CONTROL_HIT_SLOP}
               disabled={hybridCommentSending}
               onPress={() => {
-                void onPickHybridCommentAttachment();
+                setHybridCommentAttachmentSheetVisible(true);
               }}
               testID="live-stage-comment-attach"
             >
@@ -4790,6 +4798,14 @@ export default function WatchPartyLiveStageScreen({
         onSystemShareFallback={() => {
           void onSystemShareLiveRoom();
         }}
+      />
+      <SocialAttachmentActionSheet
+        visible={hybridCommentAttachmentSheetVisible}
+        kicker="LIVE COMMENT ATTACHMENT"
+        title="Add to live comment"
+        body="Photos and files attach to this live-room comment and follow the existing room attachment rules."
+        onSelect={onSelectHybridCommentAttachment}
+        onClose={() => setHybridCommentAttachmentSheetVisible(false)}
       />
 
     </View>

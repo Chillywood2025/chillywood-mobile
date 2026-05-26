@@ -82,8 +82,9 @@ import {
 } from "../../_lib/creatorVideoComments";
 import {
     getSocialAttachmentValidationMessage,
-    SOCIAL_ATTACHMENT_PICKER_TYPES,
+    getSocialAttachmentPickerTypes,
     SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
+    type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
@@ -135,6 +136,7 @@ import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../compo
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
+import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
@@ -890,6 +892,7 @@ export default function PlayerScreen() {
   const [creatorVideoCommentsError, setCreatorVideoCommentsError] = useState<string | null>(null);
   const [creatorVideoCommentDraft, setCreatorVideoCommentDraft] = useState("");
   const [creatorVideoCommentAttachmentFile, setCreatorVideoCommentAttachmentFile] = useState<SocialAttachmentFile | null>(null);
+  const [creatorVideoCommentAttachmentSheetVisible, setCreatorVideoCommentAttachmentSheetVisible] = useState(false);
   const [creatorVideoCommentReplyTargetId, setCreatorVideoCommentReplyTargetId] = useState<string | null>(null);
   const [creatorVideoCommentBusy, setCreatorVideoCommentBusy] = useState(false);
   const [creatorVideoCommentDeletingId, setCreatorVideoCommentDeletingId] = useState<string | null>(null);
@@ -4119,11 +4122,11 @@ export default function PlayerScreen() {
     }
   }, [creatorVideo?.id, inWatchParty, isLiveModeFlag, playbackSourceKind, titleId]);
 
-  const onPickCreatorVideoCommentAttachment = useCallback(async () => {
+  const onPickCreatorVideoCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
       setCreatorVideoCommentsError(null);
       const result = await DocumentPicker.getDocumentAsync({
-        type: [...SOCIAL_ATTACHMENT_PICKER_TYPES],
+        type: getSocialAttachmentPickerTypes(scope),
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -4147,6 +4150,11 @@ export default function PlayerScreen() {
       setCreatorVideoCommentsError("Unable to attach that file right now.");
     }
   }, []);
+
+  const onSelectCreatorVideoCommentAttachment = useCallback((scope: SocialAttachmentPickerScope) => {
+    setCreatorVideoCommentAttachmentSheetVisible(false);
+    void onPickCreatorVideoCommentAttachment(scope);
+  }, [onPickCreatorVideoCommentAttachment]);
 
   const onSubmitCreatorVideoComment = useCallback(async () => {
     const creatorVideoId = String(creatorVideo?.id ?? titleId ?? "").trim();
@@ -6971,7 +6979,7 @@ export default function PlayerScreen() {
                 activeOpacity={0.84}
                 disabled={creatorVideoCommentBusy}
                 onPress={() => {
-                  void onPickCreatorVideoCommentAttachment();
+                  setCreatorVideoCommentAttachmentSheetVisible(true);
                 }}
                 accessibilityLabel="Attach to creator-video comment"
               >
@@ -7940,6 +7948,15 @@ export default function PlayerScreen() {
               onClose={() => {
                 if (!creatorVideoCommentReportBusy) setCreatorVideoCommentReportTarget(null);
               }}
+            />
+
+            <SocialAttachmentActionSheet
+              visible={creatorVideoCommentAttachmentSheetVisible}
+              kicker="COMMENT ATTACHMENT"
+              title="Add to comment"
+              body="Photos and files attach to this creator-video comment. Creator uploads stay in Platform Studio."
+              onSelect={onSelectCreatorVideoCommentAttachment}
+              onClose={() => setCreatorVideoCommentAttachmentSheetVisible(false)}
             />
 
             {seekFeedback ? (

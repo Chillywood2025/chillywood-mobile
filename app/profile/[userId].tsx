@@ -102,8 +102,9 @@ import {
 } from "../../_lib/profileSocialFeed";
 import {
   getSocialAttachmentValidationMessage,
-  SOCIAL_ATTACHMENT_PICKER_TYPES,
+  getSocialAttachmentPickerTypes,
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
+  type SocialAttachmentPickerScope,
   type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import {
@@ -129,6 +130,7 @@ import {
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { ProfileSocialFeedCard } from "../../components/ProfileSocialFeedCard";
 import { LinkedText } from "../../components/social/linked-text";
+import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -280,6 +282,10 @@ type ProfilePostUiState = {
   likeBusy?: boolean;
   deletingCommentId?: string | null;
 };
+
+type ProfileAttachmentSheetTarget =
+  | { surface: "post" }
+  | { surface: "comment"; post: ProfilePost };
 
 const PROFILE_DEEP_LINK_SCHEME = "chillywoodmobile";
 
@@ -537,6 +543,7 @@ export default function ProfileScreen() {
   const [profilePostBusy, setProfilePostBusy] = useState(false);
   const [profilePostDeletingId, setProfilePostDeletingId] = useState<string | null>(null);
   const [profilePostUiById, setProfilePostUiById] = useState<Record<string, ProfilePostUiState>>({});
+  const [profileAttachmentSheetTarget, setProfileAttachmentSheetTarget] = useState<ProfileAttachmentSheetTarget | null>(null);
   const [profilePostCommentReportTarget, setProfilePostCommentReportTarget] = useState<{
     post: ProfilePost;
     comment: ProfilePostComment;
@@ -937,9 +944,9 @@ export default function ProfileScreen() {
     }));
   };
 
-  const pickSocialAttachmentFile = async () => {
+  const pickSocialAttachmentFile = async (scope: SocialAttachmentPickerScope) => {
     const result = await DocumentPicker.getDocumentAsync({
-      type: [...SOCIAL_ATTACHMENT_PICKER_TYPES],
+      type: getSocialAttachmentPickerTypes(scope),
       copyToCacheDirectory: true,
       multiple: false,
     });
@@ -954,10 +961,10 @@ export default function ProfileScreen() {
     return file;
   };
 
-  const onPickProfilePostAttachment = async () => {
+  const attachProfilePostFile = async (scope: SocialAttachmentPickerScope) => {
     try {
       setProfilePostsNotice(null);
-      const file = await pickSocialAttachmentFile();
+      const file = await pickSocialAttachmentFile(scope);
       if (!file) return;
       setProfilePostAttachmentFile(file);
     } catch (error) {
@@ -966,13 +973,13 @@ export default function ProfileScreen() {
     }
   };
 
-  const onPickProfilePostCommentAttachment = async (post: ProfilePost) => {
+  const attachProfilePostCommentFile = async (post: ProfilePost, scope: SocialAttachmentPickerScope) => {
     try {
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
         commentNotice: null,
       }));
-      const file = await pickSocialAttachmentFile();
+      const file = await pickSocialAttachmentFile(scope);
       if (!file) return;
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
@@ -985,6 +992,27 @@ export default function ProfileScreen() {
         commentNotice: error instanceof Error ? error.message : "Unable to attach that file right now.",
       }));
     }
+  };
+
+  const onPickProfilePostAttachment = () => {
+    setProfileAttachmentSheetTarget({ surface: "post" });
+  };
+
+  const onPickProfilePostCommentAttachment = (post: ProfilePost) => {
+    setProfileAttachmentSheetTarget({ surface: "comment", post });
+  };
+
+  const onSelectProfileAttachment = (scope: SocialAttachmentPickerScope) => {
+    const target = profileAttachmentSheetTarget;
+    if (!target) return;
+
+    setProfileAttachmentSheetTarget(null);
+    if (target.surface === "post") {
+      void attachProfilePostFile(scope);
+      return;
+    }
+
+    void attachProfilePostCommentFile(target.post, scope);
   };
 
   const clearProfilePostCommentReply = (postId: string) => {
@@ -4095,6 +4123,19 @@ export default function ProfileScreen() {
         />
       </ScrollView>
       </KeyboardAvoidingView>
+      <SocialAttachmentActionSheet
+        visible={!!profileAttachmentSheetTarget}
+        kicker="PROFILE ATTACHMENT"
+        title={profileAttachmentSheetTarget?.surface === "comment" ? "Add to comment" : "Add to post"}
+        body="Photos and files attach to social posts. Creator videos stay in Platform Studio."
+        showPlatformStudio={isSelfProfile}
+        onSelect={onSelectProfileAttachment}
+        onOpenPlatformStudio={() => {
+          setProfileAttachmentSheetTarget(null);
+          onPressCreatePlatformContent();
+        }}
+        onClose={() => setProfileAttachmentSheetTarget(null)}
+      />
       {watchPartyPremiumGate?.reason === "premium_required" ? (
         <AccessSheet
           visible={watchPartyPremiumSheetVisible}

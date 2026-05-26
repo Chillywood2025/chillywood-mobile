@@ -59,7 +59,7 @@ const premiumWatchPartyAccess = readSource("_lib/premiumWatchPartyAccess.ts");
 const partyRoomWatchTogether = sliceBetween(
   partyRoom,
   "const onWatchTogether = useCallback(async () => {",
-  "const onPickPartyRoomCommentAttachment = useCallback(async () => {",
+  "const onPickPartyRoomCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {",
   "Party Room Watch Together handler boundary",
 );
 const premiumLiveProofHoldBranch = sliceBetween(

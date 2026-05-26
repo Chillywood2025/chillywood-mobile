@@ -21,6 +21,12 @@ const assertNotIncludes = (source, needle, label) => {
 
 const profile = read("app/profile/[userId].tsx");
 const profileFeedCard = read("components/ProfileSocialFeedCard.tsx");
+const socialAttachments = read("_lib/socialAttachments.ts");
+const socialAttachmentSheet = read("components/social/social-attachment-action-sheet.tsx");
+const chatThread = read("app/chat/[threadId].tsx");
+const player = read("app/player/[id].tsx");
+const watchParty = read("app/watch-party/[partyId].tsx");
+const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const publicPlatform = read("app/channel/[userId].tsx");
 const platformStudio = read("app/channel-settings.tsx");
 
@@ -34,6 +40,9 @@ assertIncludes(profile, `!appConfig.runtimeControls.chat_enabled`, "Chi'lly Chat
 assertIncludes(profile, `const isChatAuthFailure = error instanceof Error`, "signed-out Chi'lly Chat auth handoff");
 assertIncludes(profile, `viewerFollowState === "signed_out"`, "signed-out Profile follow handoff");
 assertIncludes(profile, `accessibilityLabel="Attach to profile post"`, "Profile post attachment control");
+assertIncludes(profile, `SocialAttachmentActionSheet`, "Profile shared attachment sheet");
+assertIncludes(profile, `kicker="PROFILE ATTACHMENT"`, "modern Profile attachment sheet");
+assertIncludes(profile, `onSelect={onSelectProfileAttachment}`, "Profile shared attachment sheet action");
 assertIncludes(profile, `Creator videos belong in Platform Studio.`, "Profile composer creator-video handoff copy");
 assertIncludes(profile, `resolveProfilePrivacyAccess`, "Profile privacy resolver");
 assertIncludes(profile, `if (!canViewFullProfile)`, "Profile private/blocked content gate");
@@ -47,6 +56,15 @@ assertIncludes(publicPlatform, `const showOwnerControls = isOwner && !publicPrev
 assertIncludes(publicPlatform, `if (nextAudienceState?.isViewerBlocked)`, "public Platform blocked-viewer guard");
 assertIncludes(publicPlatform, `readCreatorVideos(routeUserId, { includeDrafts: false, limit: 24 })`, "public Platform draft exclusion");
 assertIncludes(platformStudio, `router.push({ pathname: "/channel/[userId]", params: { userId: previewUserId, preview: "public" } })`, "Platform Studio public preview route");
+assertIncludes(socialAttachments, `export type SocialAttachmentPickerScope = "images" | "files"`, "shared attachment picker scope");
+assertIncludes(socialAttachments, `getSocialAttachmentPickerTypes`, "shared attachment picker type helper");
+assertIncludes(socialAttachmentSheet, `onSelect("images")`, "shared photo attachment sheet action");
+assertIncludes(socialAttachmentSheet, `onSelect("files")`, "shared file attachment sheet action");
+assertIncludes(socialAttachmentSheet, `Open Platform Studio for creator content`, "shared attachment Platform Studio handoff");
+assertIncludes(chatThread, `SocialAttachmentActionSheet`, "Chi'lly Chat shared attachment sheet");
+assertIncludes(player, `SocialAttachmentActionSheet`, "creator-video comments shared attachment sheet");
+assertIncludes(watchParty, `SocialAttachmentActionSheet`, "Watch-Party room comments shared attachment sheet");
+assertIncludes(liveStage, `SocialAttachmentActionSheet`, "Live Stage comments shared attachment sheet");
 
 [
   "Upload a creator video",

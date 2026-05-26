@@ -51,13 +51,15 @@ import {
 import { useSession } from "../../_lib/session";
 import {
   getSocialAttachmentValidationMessage,
-  SOCIAL_ATTACHMENT_PICKER_TYPES,
+  getSocialAttachmentPickerTypes,
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
+  type SocialAttachmentPickerScope,
   type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import { InRoomCommunicationPanel } from "../../components/communication/in-room-communication-panel";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
+import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { useCommunicationRoomSession } from "../../hooks/use-communication-room-session";
 
@@ -201,6 +203,7 @@ export default function ChillyChatThreadScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<SocialAttachmentFile | null>(null);
+  const [attachmentSheetVisible, setAttachmentSheetVisible] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -573,11 +576,11 @@ export default function ChillyChatThreadScreen() {
     };
   }, [officialAccount, otherMember?.userId]);
 
-  const handlePickAttachment = useCallback(async () => {
+  const handlePickAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
       setError(null);
       const result = await DocumentPicker.getDocumentAsync({
-        type: [...SOCIAL_ATTACHMENT_PICKER_TYPES],
+        type: getSocialAttachmentPickerTypes(scope),
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -601,6 +604,11 @@ export default function ChillyChatThreadScreen() {
       setError("Unable to attach that file right now.");
     }
   }, []);
+
+  const handleSelectAttachment = useCallback((scope: SocialAttachmentPickerScope) => {
+    setAttachmentSheetVisible(false);
+    void handlePickAttachment(scope);
+  }, [handlePickAttachment]);
 
   const handleSend = useCallback(async (bodyOverride?: string) => {
     const trimmedDraft = String(bodyOverride ?? draft).trim();
@@ -1384,7 +1392,7 @@ export default function ChillyChatThreadScreen() {
             activeOpacity={0.86}
             disabled={sending}
             onPress={() => {
-              void handlePickAttachment();
+              setAttachmentSheetVisible(true);
             }}
           >
             <MaterialIcons name="attach-file" size={18} color="#F4F8FF" />
@@ -1452,6 +1460,14 @@ export default function ChillyChatThreadScreen() {
         busy={reportBusy}
         onSubmit={handleSubmitReport}
         onClose={() => setReportVisible(false)}
+      />
+      <SocialAttachmentActionSheet
+        visible={attachmentSheetVisible}
+        kicker="CHI'LLY CHAT ATTACHMENT"
+        title="Add to message"
+        body="Photos and files stay private to this Chi'lly Chat thread."
+        onSelect={handleSelectAttachment}
+        onClose={() => setAttachmentSheetVisible(false)}
       />
     </KeyboardAvoidingView>
   );

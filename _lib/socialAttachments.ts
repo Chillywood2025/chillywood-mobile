@@ -38,6 +38,17 @@ export const SOCIAL_ATTACHMENT_PICKER_TYPES = [
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ] as const;
 
+export type SocialAttachmentPickerScope = "images" | "files";
+
+export const SOCIAL_ATTACHMENT_IMAGE_PICKER_TYPES = SOCIAL_ATTACHMENT_PICKER_TYPES.filter((type) =>
+  type.startsWith("image/")
+);
+
+export const getSocialAttachmentPickerTypes = (scope: SocialAttachmentPickerScope) =>
+  scope === "images"
+    ? [...SOCIAL_ATTACHMENT_IMAGE_PICKER_TYPES]
+    : [...SOCIAL_ATTACHMENT_PICKER_TYPES];
+
 export type SocialAttachmentSurfaceType =
   | "profile_post"
   | "profile_post_comment"

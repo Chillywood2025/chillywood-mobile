@@ -499,26 +499,28 @@ Storage:
 
 ## Comment Uploads Scope
 
-Main decision update: bounded social attachments are now a Public v1 local implementation for Profile posts/comments, standalone creator-video comments, and Chi'lly Chat, but Live Stage / Watch-Party media comments and movie-size comment/chat uploads remain post-v1. This remains separate from creator channel video upload and must not use the 5 GiB creator-video limit.
+Main decision update: bounded social attachments are now a Public v1 local implementation for Profile posts/comments, standalone creator-video comments, Chi'lly Chat, and backed room comments that already write through `watch_party_room_messages` plus `social_attachments`. Movie-size comment/chat uploads remain post-v1. This remains separate from creator Platform video upload and must not use the 5 GiB creator-video limit.
+
+2026-05-25 UX update: all backed social attachment entry points now use one shared Photos/Files action sheet. It is wired into Profile post Attach, Profile comment Attach, Chi'lly Chat Attach, creator-video comment Attach, Watch-Party room comment Attach, and Live Stage comment Attach. Profile owners may see a Platform Studio handoff inside the sheet for creator content; viewers and non-Profile social surfaces do not get owner tools. Legal/DMCA evidence attachment pickers and Platform Studio creator/brand media pickers intentionally remain separate.
 
 Current comment truth:
 
-- Watch-party room comments use `watch_party_room_messages` with `party_id`, `user_id`, `username`, `text`, and `created_at`.
-- Live Stage comments use the same `watch_party_room_messages` table through `_lib/watchParty.ts` and `app/watch-party/live-stage/[partyId].tsx`.
+- Watch-party room comments use `watch_party_room_messages` with `party_id`, `user_id`, `username`, `text`, and `created_at`; bounded room attachments use the `watch_party_room_message` social attachment surface where backed.
+- Live Stage comments use the same `watch_party_room_messages` table through `_lib/watchParty.ts` and `app/watch-party/live-stage/[partyId].tsx`; bounded room attachments use the same social attachment surface and existing room attachment runtime control.
 - Player room comments use `sendPartyMessage(...)` and `fetchPartyMessages(...)`; they are text-only room messages.
 - Standalone creator-video comments now use `creator_video_comments`; they support one-level replies and social attachments when the local migration is applied, and remain scoped to creator-video Player, not Live Stage or Watch-Party room comments.
 - Chi'lly Chat direct messages use `chat_messages` with a `message_type = 'text'` check plus `social_attachments` metadata for private thread attachments when the local migration is applied.
 - Reactions exist as emoji/floating room reactions and content relationship markers, not as comment attachments.
 - `profile_post_comments` is the scoped Profile post comment/reply table once `202604290002_profile_post_engagement.sql` and `202604290003_social_replies_links_attachments.sql` are applied. There is no platform Title comment table, Live/Watch-Party media comment table, deep nested thread model, or universal comment surface outside the scoped room/live/chat/profile-post/creator-video-comment contexts.
-- `social_attachments` plus the private `social-attachments` bucket are local/pending-remote for Profile posts/comments, creator-video comments, and chat messages. The cap is 250 MB per attachment, not the creator-video 5 GiB movie lane.
+- `social_attachments` plus the private `social-attachments` bucket are local/pending-remote for Profile posts/comments, creator-video comments, chat messages, and backed room-message attachment surfaces. The cap is 250 MB per attachment, not the creator-video 5 GiB movie lane.
 - `safety_reports` supports `profile_post`, `profile_post_comment`, `creator_video_comment`, and local/pending-remote `social_attachment` target types in addition to participant/room/title/creator_video.
 
 Public v1 recommendation:
 
-- Keep comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, Player room comments, Profile post comments/replies/likes, standalone creator-video comments/replies, Chi'lly Chat, bounded social/chat attachments, and existing reactions.
-- Prioritize creator video upload to Channel/Profile before comment media.
+- Keep comments/reactions only where already intended and backed: watch-party rooms, Live Stage room comments, Player room comments, Profile post comments/replies/likes, standalone creator-video comments/replies, Chi'lly Chat, bounded social/chat/room attachments, and existing reactions.
+- Prioritize creator video upload to Platform/Profile before expanded comment media.
 - Do not allow full movie-size uploads or media uploads in live comments for Public v1.
-- Do not add Live/Watch-Party attachment UI until schema, storage, rate limits, moderation, deletion, and report targets exist for those surfaces.
+- Do not expand Live/Watch-Party attachment types, size, storage behavior, or public visibility beyond the current backed room-message attachment path until schema, storage, rate limits, moderation, deletion, and report targets are proved for that expanded scope.
 
 Later comment media scope:
 

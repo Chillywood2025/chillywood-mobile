@@ -109,8 +109,9 @@ import {
     createSocialAttachmentForSurface,
     getSocialAttachmentValidationMessage,
     readSocialAttachmentsForSurfaces,
-    SOCIAL_ATTACHMENT_PICKER_TYPES,
+    getSocialAttachmentPickerTypes,
     type SocialAttachment,
+    type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import {
@@ -128,6 +129,7 @@ import { ParticipantDetailSheet } from "../../components/room/participant-detail
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
+import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import {
     buildOrderedParticipantsWithSelf,
@@ -329,6 +331,7 @@ export default function WatchPartyRoomScreen() {
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState("");
   const [chatAttachmentFile, setChatAttachmentFile] = useState<SocialAttachmentFile | null>(null);
+  const [chatAttachmentSheetVisible, setChatAttachmentSheetVisible] = useState(false);
   const isLive = true;
   const [, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [participantReactions, setParticipantReactions] = useState<Record<string, ParticipantReaction>>({});
@@ -1901,11 +1904,11 @@ export default function WatchPartyRoomScreen() {
     titleIdHint,
   ]);
 
-  const onPickPartyRoomCommentAttachment = useCallback(async () => {
+  const onPickPartyRoomCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
       setChatError("");
       const result = await DocumentPicker.getDocumentAsync({
-        type: SOCIAL_ATTACHMENT_PICKER_TYPES as unknown as string[],
+        type: getSocialAttachmentPickerTypes(scope),
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -1924,6 +1927,11 @@ export default function WatchPartyRoomScreen() {
       setChatError("Unable to choose this attachment right now.");
     }
   }, []);
+
+  const onSelectPartyRoomCommentAttachment = useCallback((scope: SocialAttachmentPickerScope) => {
+    setChatAttachmentSheetVisible(false);
+    void onPickPartyRoomCommentAttachment(scope);
+  }, [onPickPartyRoomCommentAttachment]);
 
   const onSendPartyRoomComment = useCallback(async () => {
     const safeBody = chatDraft.trim();
@@ -2819,7 +2827,7 @@ export default function WatchPartyRoomScreen() {
             activeOpacity={0.84}
             accessibilityLabel="Attach to room comment"
             onPress={() => {
-              void onPickPartyRoomCommentAttachment();
+              setChatAttachmentSheetVisible(true);
             }}
           >
             <MaterialIcons name="attach-file" size={19} color="#F3F7FF" />
@@ -3499,6 +3507,14 @@ export default function WatchPartyRoomScreen() {
           setReportVisible(false);
           setReportTarget(null);
         }}
+      />
+      <SocialAttachmentActionSheet
+        visible={chatAttachmentSheetVisible}
+        kicker="ROOM ATTACHMENT"
+        title="Add to room comment"
+        body="Photos and files attach to this room comment and stay inside the room context."
+        onSelect={onSelectPartyRoomCommentAttachment}
+        onClose={() => setChatAttachmentSheetVisible(false)}
       />
     </View>
   );

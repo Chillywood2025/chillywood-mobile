@@ -1,6 +1,8 @@
 # NEXT TASK
 
-## Recommended Lane: Profile Blocked/Private Fixture And Social Interaction Runtime Proof
+## Recommended Lane: Profile Blocked/Private Fixture And Remaining Social Runtime Proof
+
+The Profile attachment UX pivot is closed repo-side: social attachment entry points now share one modern Photos/Files sheet across Profile posts/comments, Chi'lly Chat, creator-video comments, Watch-Party room comments, and Live Stage room comments. Profile keeps the owner-only Platform Studio handoff for creator content; legal evidence pickers and Platform Studio creator/brand upload pickers were not changed. Android proof lives outside the repo at `/tmp/chillywood-profile-social-interaction-proof-20260525/`, including `45-shared-attachment-sheet-profile.png` and `48-chat-shared-attachment-sheet.png`. Validation passed the requested type/runtime/Profile/payment/creator/Clip/Brand/Watch-Party/provider guard stack plus targeted attachment/profile greps and diff whitespace checks.
 
 The Profile Viewer State Runtime Proof Closeout is now closed repo-side for the backed states available on `R5CR120QCBF`.
 
@@ -17,16 +19,17 @@ Closed truth:
 
 Remaining limitations:
 
+- The latest social interaction proof created a real owner Profile post with an image attachment, saw attachment preview plus Like/Comment/Share/Delete controls, proved like/unlike, posted a real owner comment, and cleaned the proof post/comment. Android reply submission was interrupted before a reply row was created, and Share sheet runtime proof still needs a clean current-build pass.
 - A true second-account credential was not available in the local proof setup, so signed-in non-owner proof used an existing authenticated account against the official Rachi Profile rather than logging into a separate viewer account.
 - Blocked/private runtime proof was not faked. Anonymous private-profile discovery was RLS-denied and `channel_audience_blocks` had zero client-visible rows. Static source proof covers the privacy/block path, but a safe fixture is still needed for full runtime proof.
-- Broader social interaction proof should still exercise post create, Attach picker, comment/reply, like, share, owner delete, and viewer no-delete in one current-build pass.
+- Player creator-video comment, Watch-Party room comment, and Live Stage comment attachment sheets are statically/type/guard validated but should get route-specific Android screenshots in the next proof lane if those rooms/media fixtures are already safe to open.
 
 Recommended next lane:
 
 - Create or identify safe test accounts for owner, second-account viewer, blocked viewer, and private-profile/private-Platform states.
 - Prove blocked/private runtime behavior on Android without bypassing RLS, block rules, privacy rules, or chat thread permissions.
-- Re-run signed-in second-account Profile, View Platform, Chi'lly Chat, Follow/Chi'lly Circle, comment/like/share, and viewer no-owner-control proof.
-- Recheck owner post create with Attach, comment/reply with Attach, Like/Share, owner Delete, and public/draft/private visibility boundaries.
+- Re-run signed-in second-account Profile, View Platform, Chi'lly Chat, Follow/Chi'lly Circle, comment/like/share, viewer no-owner-control proof, and viewer no-delete proof.
+- Recheck owner post create with Attach, comment/reply with Attach, Share sheet, owner Delete, and public/draft/private visibility boundaries.
 - Keep screenshots outside the repo, leave `artifacts/` and `supabase/.temp/` untouched, and keep creator-video upload/Clip Studio/Brand Studio/monetization/LiveKit behavior out of scope unless a regression is found.
 
 ## Still-Open Non-UI Follow-Ups
