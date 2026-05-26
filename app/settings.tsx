@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ActivityIndicator, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
@@ -38,9 +38,32 @@ import {
 import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
 import { useSession } from "../_lib/session";
-import { readMyProfileVisibility, updateMyProfileVisibility } from "../_lib/userData";
+import {
+  readMyProfileVisibility,
+  readUserProfile,
+  updateMyProfileVisibility,
+  type ProfileAppearanceFitMode,
+  type UserProfile,
+} from "../_lib/userData";
+import {
+  pickProfileMediaImage,
+  removeProfileMedia,
+  updateProfileMediaFitMode,
+  uploadProfileMedia,
+  type ProfileMediaKind,
+} from "../_lib/profileMedia";
+import {
+  ProfileAppearanceSheet,
+  ProfileImagePreviewSheet,
+} from "../components/profile/profile-media-sheets";
 
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
+
+const resolveProfileImageResizeMode = (fitMode?: ProfileAppearanceFitMode) => {
+  if (fitMode === "fit") return "contain" as const;
+  if (fitMode === "center") return "center" as const;
+  return "cover" as const;
+};
 
 type NotificationPreferenceKey = keyof Omit<NotificationPreferenceSettings, "updatedAt">;
 
@@ -96,7 +119,7 @@ const NOTIFICATION_GROUPS: {
       {
         key: "inAppEnabled",
         label: "In-app activity",
-        description: "Keep recent activity visible in your Profile News Feed.",
+        description: "Keep recent activity visible in your Profile Feed.",
       },
     ],
   },
@@ -317,6 +340,14 @@ export default function SettingsScreen() {
   const [profileVisibilityLoading, setProfileVisibilityLoading] = useState(false);
   const [profileVisibilitySaving, setProfileVisibilitySaving] = useState<ProfileVisibility | null>(null);
   const [profileVisibilityNotice, setProfileVisibilityNotice] = useState<string | null>(null);
+  const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
+  const [profileAppearanceSheetKind, setProfileAppearanceSheetKind] = useState<ProfileMediaKind | null>(null);
+  const [profileAppearanceBusy, setProfileAppearanceBusy] = useState<ProfileMediaKind | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<{
+    title: string;
+    imageUrl?: string;
+    fitMode?: ProfileAppearanceFitMode;
+  } | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
@@ -407,6 +438,29 @@ export default function SettingsScreen() {
       })
       .finally(() => {
         if (active) setProfileVisibilityLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isLoading, isSignedIn]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (isLoading || !isSignedIn) {
+      setMyProfile(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    void readUserProfile()
+      .then((profile) => {
+        if (active) setMyProfile(profile);
+      })
+      .catch(() => {
+        if (active) setMyProfile(null);
       });
 
     return () => {
@@ -554,6 +608,98 @@ export default function SettingsScreen() {
     if (!user?.id) return;
     router.push({ pathname: "/profile/[userId]", params: { userId: user.id, self: "1" } });
   }, [router, user?.id]);
+
+  const onViewProfileImage = useCallback((kind: ProfileMediaKind) => {
+    const imageUrl = kind === "avatar" ? myProfile?.avatarUrl : myProfile?.profileBackgroundUrl;
+    if (!imageUrl) {
+      Alert.alert(
+        kind === "avatar" ? "Profile Photo" : "Profile Background",
+        kind === "avatar" ? "No Profile photo is available yet." : "No Profile background is available yet.",
+      );
+      return;
+    }
+
+    setProfileImagePreview({
+      title: kind === "avatar" ? "Profile Photo" : "Profile Background",
+      imageUrl,
+      fitMode: kind === "avatar" ? myProfile?.profileAvatarFitMode : myProfile?.profileBackgroundFitMode,
+    });
+  }, [myProfile]);
+
+  const onChooseProfileMedia = useCallback(async (kind: ProfileMediaKind) => {
+    if (profileAppearanceBusy) return;
+
+    setProfileAppearanceBusy(kind);
+    try {
+      const file = await pickProfileMediaImage(kind);
+      if (!file) return;
+      const nextProfile = await uploadProfileMedia(kind, file);
+      setMyProfile(nextProfile);
+      Alert.alert("Profile Appearance", kind === "avatar" ? "Profile photo updated." : "Profile background updated.");
+    } catch (error) {
+      Alert.alert(
+        "Profile Appearance",
+        error instanceof Error ? error.message : "Unable to update Profile appearance right now.",
+      );
+    } finally {
+      setProfileAppearanceBusy(null);
+    }
+  }, [profileAppearanceBusy]);
+
+  const onRemoveProfileMedia = useCallback((kind: ProfileMediaKind) => {
+    const imageUrl = kind === "avatar" ? myProfile?.avatarUrl : myProfile?.profileBackgroundUrl;
+    if (!imageUrl || profileAppearanceBusy) return;
+
+    Alert.alert(
+      kind === "avatar" ? "Remove Profile photo?" : "Remove Profile background?",
+      kind === "avatar"
+        ? "Your Profile will return to the default avatar."
+        : "Your Profile will return to the default background.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: kind === "avatar" ? "Remove Photo" : "Remove Background",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setProfileAppearanceBusy(kind);
+              try {
+                const nextProfile = await removeProfileMedia(kind);
+                setMyProfile(nextProfile);
+                Alert.alert("Profile Appearance", kind === "avatar" ? "Profile photo removed." : "Profile background removed.");
+              } catch (error) {
+                Alert.alert(
+                  "Profile Appearance",
+                  error instanceof Error ? error.message : "Unable to remove this Profile image right now.",
+                );
+              } finally {
+                setProfileAppearanceBusy(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [myProfile?.avatarUrl, myProfile?.profileBackgroundUrl, profileAppearanceBusy]);
+
+  const onSelectProfileMediaFitMode = useCallback(async (kind: ProfileMediaKind, fitMode: ProfileAppearanceFitMode) => {
+    if (profileAppearanceBusy) return;
+    const currentFitMode = kind === "avatar" ? myProfile?.profileAvatarFitMode : myProfile?.profileBackgroundFitMode;
+    if (currentFitMode === fitMode) return;
+
+    setProfileAppearanceBusy(kind);
+    try {
+      const nextProfile = await updateProfileMediaFitMode(kind, fitMode);
+      setMyProfile(nextProfile);
+    } catch (error) {
+      Alert.alert(
+        "Profile Appearance",
+        error instanceof Error ? error.message : "Unable to update this image fit right now.",
+      );
+    } finally {
+      setProfileAppearanceBusy(null);
+    }
+  }, [myProfile?.profileAvatarFitMode, myProfile?.profileBackgroundFitMode, profileAppearanceBusy]);
 
   const onPressAdminDashboard = useCallback(() => {
     router.push("/admin" as Parameters<typeof router.push>[0]);
@@ -817,6 +963,13 @@ export default function SettingsScreen() {
     );
   }, [legalPolicyBySlug, onPressLegalPolicy]);
 
+  const appearanceInitial = String(
+    myProfile?.displayName
+    ?? myProfile?.username
+    ?? user?.email
+    ?? "P",
+  ).slice(0, 1).toUpperCase();
+
   if (isLoading) {
     return (
       <View style={styles.loadingWrap}>
@@ -879,6 +1032,64 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <SettingsAccordion
+        id="profile-appearance"
+        kicker="PROFILE"
+        title="Profile Appearance"
+        summary="Personal Profile photo and background"
+        value={myProfile ? "Ready" : "Loading"}
+        expandedSections={expandedSections}
+        onToggle={toggleSection}
+      >
+        <SettingsRow
+          title="Profile Photo"
+          subtitle="Change the photo shown on your Profile, posts, and comments."
+          value={myProfile?.avatarUrl ? "Change" : "Add"}
+          onPress={() => setProfileAppearanceSheetKind("avatar")}
+        >
+          <View style={styles.appearancePreviewRow}>
+            <View style={styles.appearanceAvatarPreview}>
+              {myProfile?.avatarUrl ? (
+                <Image
+                  source={{ uri: myProfile.avatarUrl }}
+                  style={styles.appearancePreviewImage}
+                  resizeMode={resolveProfileImageResizeMode(myProfile.profileAvatarFitMode)}
+                />
+              ) : (
+                <Text style={styles.appearanceAvatarInitial}>{appearanceInitial}</Text>
+              )}
+            </View>
+            <Text style={styles.appearancePreviewMeta}>
+              {myProfile?.avatarUrl ? "Photo is active." : "Default avatar is active."}
+            </Text>
+          </View>
+        </SettingsRow>
+        <SettingsRow
+          title="Profile Background"
+          subtitle="Change the personal Profile header background."
+          value={myProfile?.profileBackgroundUrl ? "Change" : "Add"}
+          onPress={() => setProfileAppearanceSheetKind("background")}
+        >
+          <View style={styles.appearancePreviewRow}>
+            <View style={styles.appearanceBackgroundPreview}>
+              {myProfile?.profileBackgroundUrl ? (
+                <Image
+                  source={{ uri: myProfile.profileBackgroundUrl }}
+                  style={styles.appearancePreviewImage}
+                  resizeMode={resolveProfileImageResizeMode(myProfile.profileBackgroundFitMode)}
+                />
+              ) : (
+                <Text style={styles.appearanceBackgroundFallback}>Profile</Text>
+              )}
+            </View>
+            <Text style={styles.appearancePreviewMeta}>
+              This background appears only on your Profile. Platform branding stays in Brand Studio.
+            </Text>
+          </View>
+        </SettingsRow>
+        <SettingsRow title="Preview Profile" subtitle="Review your personal Profile after changes." value="Open" onPress={onPressOpenProfile} />
+      </SettingsAccordion>
 
       <SettingsAccordion
         id="account"
@@ -1025,13 +1236,13 @@ export default function SettingsScreen() {
       <SettingsAccordion
         id="profile-channel"
         kicker="PROFILE"
-        title="Profile and Channel"
+        title="Profile and Platform"
         summary="Quick links for your public profile, creator tools, and circle"
         expandedSections={expandedSections}
         onToggle={toggleSection}
       >
         <SettingsRow title="Open Profile" subtitle="Review your public profile and profile feed." value="Open" onPress={onPressOpenProfile} />
-        <SettingsRow title="Platform Studio" subtitle="Manage channel presentation and creator tools." value="Open" onPress={onPressManageChannel} />
+        <SettingsRow title="Platform Studio" subtitle="Manage Platform presentation and creator tools." value="Open" onPress={onPressManageChannel} />
         <SettingsRow title="Chi'lly Circle" subtitle="Open your private circle and activity surface." value="Open" onPress={onPressChillyCircle} />
         {canOpenAdminDashboard ? (
           <SettingsRow title="Admin Dashboard" subtitle="Available only for authorized staff accounts." value="Open" onPress={onPressAdminDashboard} />
@@ -1213,6 +1424,49 @@ export default function SettingsScreen() {
         <SettingsRow title="Support" subtitle={`Contact ${legalConfig.supportEmail || LEGAL_SUPPORT_EMAIL} for help.`} value="Open" onPress={onPressSupportContact} />
       </SettingsAccordion>
       </ScrollView>
+      <ProfileAppearanceSheet
+        visible={profileAppearanceSheetKind === "avatar"}
+        kind="avatar"
+        imageUrl={myProfile?.avatarUrl}
+        fitMode={myProfile?.profileAvatarFitMode}
+        busy={profileAppearanceBusy === "avatar"}
+        onView={() => onViewProfileImage("avatar")}
+        onChoose={() => {
+          void onChooseProfileMedia("avatar");
+        }}
+        onRemove={() => onRemoveProfileMedia("avatar")}
+        onSelectFitMode={(fitMode) => {
+          void onSelectProfileMediaFitMode("avatar", fitMode);
+        }}
+        onClose={() => {
+          if (!profileAppearanceBusy) setProfileAppearanceSheetKind(null);
+        }}
+      />
+      <ProfileAppearanceSheet
+        visible={profileAppearanceSheetKind === "background"}
+        kind="background"
+        imageUrl={myProfile?.profileBackgroundUrl}
+        fitMode={myProfile?.profileBackgroundFitMode}
+        busy={profileAppearanceBusy === "background"}
+        onView={() => onViewProfileImage("background")}
+        onChoose={() => {
+          void onChooseProfileMedia("background");
+        }}
+        onRemove={() => onRemoveProfileMedia("background")}
+        onSelectFitMode={(fitMode) => {
+          void onSelectProfileMediaFitMode("background", fitMode);
+        }}
+        onClose={() => {
+          if (!profileAppearanceBusy) setProfileAppearanceSheetKind(null);
+        }}
+      />
+      <ProfileImagePreviewSheet
+        visible={!!profileImagePreview}
+        title={profileImagePreview?.title ?? "Profile Preview"}
+        imageUrl={profileImagePreview?.imageUrl}
+        fitMode={profileImagePreview?.fitMode}
+        onClose={() => setProfileImagePreview(null)}
+      />
     </ImageBackground>
   );
 }
@@ -1753,6 +2007,54 @@ const styles = StyleSheet.create({
   },
   settingsRowChildren: {
     gap: 10,
+  },
+  appearancePreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  appearanceAvatarPreview: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appearanceBackgroundPreview: {
+    width: 92,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(20,25,36,0.96)",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appearancePreviewImage: {
+    width: "100%",
+    height: "100%",
+  },
+  appearanceAvatarInitial: {
+    color: "#F4F7FC",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  appearanceBackgroundFallback: {
+    color: "#AAB5C8",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  appearancePreviewMeta: {
+    flex: 1,
+    color: "#9AA6BA",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
   },
   secondaryActionButton: {
     minHeight: 46,

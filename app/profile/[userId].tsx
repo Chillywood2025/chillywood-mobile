@@ -26,6 +26,7 @@ import {
   type FriendRelationshipState,
 } from "../../_lib/friendGraph";
 import {
+  blockChannelAudienceMember,
   followChannel,
   readFollowedChannelUserIds,
   readMyChannelFollowState,
@@ -106,6 +107,13 @@ import {
 } from "../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import {
+  pickProfileMediaImage,
+  removeProfileMedia,
+  updateProfileMediaFitMode,
+  uploadProfileMedia,
+  type ProfileMediaKind,
+} from "../../_lib/profileMedia";
+import {
     ActivityIndicator,
     Alert,
     Image,
@@ -123,6 +131,7 @@ import {
   buildUserChannelProfile,
   readUserProfile,
   readUserProfileByUserId,
+  type ProfileAppearanceFitMode,
   type UserProfile,
 } from "../../_lib/userData";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
@@ -130,6 +139,11 @@ import { ProfileSocialFeedCard } from "../../components/ProfileSocialFeedCard";
 import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
+import {
+  ProfileActionsSheet,
+  ProfileAppearanceSheet,
+  ProfileImagePreviewSheet,
+} from "../../components/profile/profile-media-sheets";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { AccessSheet } from "../../components/monetization/access-sheet";
@@ -507,6 +521,12 @@ const getBrowseAccessBody = (resolution: ChannelAccessResolution | null, isOffic
   return "the full Platform story stays open to browse";
 };
 
+const resolveProfileImageResizeMode = (fitMode?: ProfileAppearanceFitMode) => {
+  if (fitMode === "fit") return "contain" as const;
+  if (fitMode === "center") return "center" as const;
+  return "cover" as const;
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView | null>(null);
@@ -522,7 +542,16 @@ export default function ProfileScreen() {
   const [creatorSettingsEnabled, setCreatorSettingsEnabled] = useState(DEFAULT_APP_CONFIG.features.creatorSettingsEnabled);
   const [watchPartyPremiumGate, setWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [watchPartyPremiumSheetVisible, setWatchPartyPremiumSheetVisible] = useState(false);
-  const [avatarQuickActionsOpen, setAvatarQuickActionsOpen] = useState(false);
+  const [profilePhotoSheetVisible, setProfilePhotoSheetVisible] = useState(false);
+  const [profileBackgroundSheetVisible, setProfileBackgroundSheetVisible] = useState(false);
+  const [profileActionsSheetVisible, setProfileActionsSheetVisible] = useState(false);
+  const [profileImagePreview, setProfileImagePreview] = useState<{
+    title: string;
+    imageUrl?: string;
+    fitMode?: ProfileAppearanceFitMode;
+  } | null>(null);
+  const [profileAppearanceBusy, setProfileAppearanceBusy] = useState<ProfileMediaKind | null>(null);
+  const [profileBlockBusy, setProfileBlockBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [profilePostReportTarget, setProfilePostReportTarget] = useState<ProfilePost | null>(null);
@@ -685,6 +714,9 @@ export default function ProfileScreen() {
     && !isOfficialProfile
     && !isSelfProfile
     && !channelAccessProfile;
+  const visibleProfileAvatarUrl = shouldShowLockedShell ? undefined : profile.avatarUrl;
+  const visibleProfileBackgroundUrl = shouldShowLockedShell ? undefined : profile.profileBackgroundUrl;
+  const visibleProfileBackgroundOverlay = profile.profileBackgroundOverlayStrength;
 
   useEffect(() => {
     let active = true;
@@ -1509,6 +1541,21 @@ export default function ProfileScreen() {
       return;
     }
 
+    if (friendState?.availability === "blocked") {
+      trackEvent("communication_profile_entry_blocked", {
+        entryPath: "profile",
+        profileIsSelf: "false",
+        reason: "blocked_relationship",
+        targetUserId: userId,
+        entryMode,
+      });
+      Alert.alert(
+        "Chi'lly Chat",
+        "Messaging is unavailable while a block exists between these accounts.",
+      );
+      return;
+    }
+
     try {
       trackEvent("communication_profile_entry_requested", {
         targetRoute: "/chat/[threadId]",
@@ -1521,7 +1568,7 @@ export default function ProfileScreen() {
       const thread = await getOrCreateDirectThread({
         userId,
         displayName: profile.displayName,
-        avatarUrl: profile.avatarUrl,
+        avatarUrl: visibleProfileAvatarUrl,
         tagline: profile.tagline,
       });
 
@@ -1586,6 +1633,185 @@ export default function ProfileScreen() {
   };
   const onPressChillyCircleManage = () => {
     router.push("/chilly-circle" as Parameters<typeof router.push>[0]);
+  };
+  const onPressProfileAvatar = () => {
+    if (isSelfProfile) {
+      setProfilePhotoSheetVisible(true);
+      return;
+    }
+    setProfileActionsSheetVisible(true);
+  };
+  const onViewProfileImage = (kind: ProfileMediaKind) => {
+    const imageUrl = kind === "avatar" ? visibleProfileAvatarUrl : visibleProfileBackgroundUrl;
+    if (!imageUrl) {
+      Alert.alert(
+        kind === "avatar" ? "Profile Photo" : "Profile Background",
+        kind === "avatar" ? "No Profile photo is available yet." : "No Profile background is available yet.",
+      );
+      return;
+    }
+
+    setProfileImagePreview({
+      title: kind === "avatar" ? "Profile Photo" : "Profile Background",
+      imageUrl,
+      fitMode: kind === "avatar" ? profile.profileAvatarFitMode : profile.profileBackgroundFitMode,
+    });
+  };
+  const onChooseProfileMedia = async (kind: ProfileMediaKind) => {
+    if (!isSelfProfile) {
+      Alert.alert("Profile Appearance", "Only the Profile owner can change this image.");
+      return;
+    }
+    if (profileAppearanceBusy) return;
+
+    setProfileAppearanceBusy(kind);
+    try {
+      const file = await pickProfileMediaImage(kind);
+      if (!file) return;
+      const nextProfile = await uploadProfileMedia(kind, file);
+      setChannelAccessProfile(nextProfile);
+      Alert.alert("Profile Appearance", kind === "avatar" ? "Profile photo updated." : "Profile background updated.");
+    } catch (error) {
+      Alert.alert(
+        "Profile Appearance",
+        error instanceof Error ? error.message : "Unable to update Profile appearance right now.",
+      );
+    } finally {
+      setProfileAppearanceBusy(null);
+    }
+  };
+  const onRemoveProfileMedia = (kind: ProfileMediaKind) => {
+    if (!isSelfProfile) {
+      Alert.alert("Profile Appearance", "Only the Profile owner can remove this image.");
+      return;
+    }
+    const imageUrl = kind === "avatar" ? visibleProfileAvatarUrl : visibleProfileBackgroundUrl;
+    if (!imageUrl || profileAppearanceBusy) return;
+
+    Alert.alert(
+      kind === "avatar" ? "Remove Profile photo?" : "Remove Profile background?",
+      kind === "avatar"
+        ? "Your Profile will return to the default avatar."
+        : "Your Profile will return to the default background.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: kind === "avatar" ? "Remove Photo" : "Remove Background",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setProfileAppearanceBusy(kind);
+              try {
+                const nextProfile = await removeProfileMedia(kind);
+                setChannelAccessProfile(nextProfile);
+                Alert.alert("Profile Appearance", kind === "avatar" ? "Profile photo removed." : "Profile background removed.");
+              } catch (error) {
+                Alert.alert(
+                  "Profile Appearance",
+                  error instanceof Error ? error.message : "Unable to remove this Profile image right now.",
+                );
+              } finally {
+                setProfileAppearanceBusy(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+  const onSelectProfileMediaFitMode = async (kind: ProfileMediaKind, fitMode: ProfileAppearanceFitMode) => {
+    if (!isSelfProfile || profileAppearanceBusy) return;
+    const currentFitMode = kind === "avatar" ? profile.profileAvatarFitMode : profile.profileBackgroundFitMode;
+    if (currentFitMode === fitMode) return;
+
+    setProfileAppearanceBusy(kind);
+    try {
+      const nextProfile = await updateProfileMediaFitMode(kind, fitMode);
+      setChannelAccessProfile(nextProfile);
+    } catch (error) {
+      Alert.alert(
+        "Profile Appearance",
+        error instanceof Error ? error.message : "Unable to update this image fit right now.",
+      );
+    } finally {
+      setProfileAppearanceBusy(null);
+    }
+  };
+  const onPressProfileActionsChat = () => {
+    setProfileActionsSheetVisible(false);
+    void onPressCommunication("message");
+  };
+  const onPressProfileActionsReport = () => {
+    setProfileActionsSheetVisible(false);
+    if (!currentUserId) {
+      Alert.alert("Report User", "Sign in to send a safety report.");
+      return;
+    }
+    onPressReportProfile();
+  };
+  const onPressProfileActionsShare = () => {
+    setProfileActionsSheetVisible(false);
+    void onShareProfile();
+  };
+  const onPressProfileActionsPlatform = () => {
+    setProfileActionsSheetVisible(false);
+    if (!userId) {
+      Alert.alert("View Platform", "This Profile is missing the identity needed to open a Platform.");
+      return;
+    }
+    onPressViewChannel();
+  };
+  const onPressProfileActionsBlock = () => {
+    if (profileBlockBusy) return;
+    setProfileActionsSheetVisible(false);
+
+    if (!currentUserId) {
+      Alert.alert("Block User", "Sign in to block this user.");
+      return;
+    }
+    if (!userId || userId === currentUserId || isSelfProfile) {
+      Alert.alert("Block User", "You cannot block your own Profile.");
+      return;
+    }
+
+    Alert.alert(
+      "Block this user?",
+      "They won't be able to message you or interact with you where blocking is supported.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block User",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setProfileBlockBusy(true);
+              try {
+                const result = await blockChannelAudienceMember({
+                  channelUserId: currentUserId,
+                  blockedUserId: userId,
+                  reason: "profile_actions_sheet",
+                });
+                if (result.status !== "completed" && result.status !== "noop") {
+                  Alert.alert("Block User", result.message || "Unable to block this user right now.");
+                  return;
+                }
+
+                const nextFriendState = await readFriendRelationshipState(userId).catch(() => null);
+                if (nextFriendState) setFriendState(nextFriendState);
+                Alert.alert("Block User", "User blocked.");
+              } catch (error) {
+                Alert.alert(
+                  "Block User",
+                  error instanceof Error ? error.message : "Unable to block this user right now.",
+                );
+              } finally {
+                setProfileBlockBusy(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
   const normalizeChillyCircleActionError = (error: unknown) => {
     const message = error instanceof Error ? error.message : "Unable to update Chi'lly Circle right now.";
@@ -2276,21 +2502,6 @@ export default function ProfileScreen() {
         ? `${publicEventCount} public creator event${publicEventCount === 1 ? "" : "s"} can appear here when scheduled or live.`
         : "No public creator live or watch-party events are scheduled yet."
       : "Loading this Platform's creator events.";
-  const quickActions = isOfficialProfile
-    ? [
-        { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
-        { label: "Share Profile", onPress: () => { void onShareProfile(); } },
-        ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
-      ]
-    : isSelfProfile
-      ? []
-      : [
-          ...(canShowFollowAction ? [{ label: followActionLabel, onPress: onToggleFollowChannel }] : []),
-          { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
-          { label: "View Platform", onPress: onPressViewChannel },
-          { label: "Share Profile", onPress: () => { void onShareProfile(); } },
-          ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
-        ];
   const communityActions = isSelfProfile
     ? [
         { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
@@ -3533,6 +3744,22 @@ export default function ProfileScreen() {
 
         <View style={styles.profileCard}>
           <View style={styles.profileCover}>
+            {visibleProfileBackgroundUrl ? (
+              <Image
+                source={{ uri: visibleProfileBackgroundUrl }}
+                style={styles.profileCoverImage}
+                resizeMode={resolveProfileImageResizeMode(profile.profileBackgroundFitMode)}
+              />
+            ) : null}
+            {visibleProfileBackgroundUrl ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.profileCoverImageOverlay,
+                  { opacity: visibleProfileBackgroundOverlay },
+                ]}
+              />
+            ) : null}
             <View style={styles.profileCoverTopRow}>
               <Text style={styles.profileEyebrow}>{shouldShowLockedShell ? "PROFILE" : profileEyebrow}</Text>
               {!shouldShowLockedShell ? (
@@ -3553,15 +3780,22 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.profileIdentityRow}>
             <TouchableOpacity
+              testID={isSelfProfile ? "profile-avatar-edit-trigger" : "profile-avatar-actions-trigger"}
+              accessibilityRole="button"
+              accessibilityLabel={isSelfProfile ? "Edit Profile Photo" : "Open Profile Actions"}
               activeOpacity={0.88}
-              onPress={() => setAvatarQuickActionsOpen((current) => !current)}
-              onLongPress={() => setAvatarQuickActionsOpen((current) => !current)}
+              onPress={onPressProfileAvatar}
+              onLongPress={onPressProfileAvatar}
               delayLongPress={220}
             >
               <View style={styles.avatarWrap}>
                 <View style={styles.avatarCircle}>
-                  {profile.avatarUrl ? (
-                    <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+                  {visibleProfileAvatarUrl ? (
+                    <Image
+                      source={{ uri: visibleProfileAvatarUrl }}
+                      style={styles.avatarImage}
+                      resizeMode={resolveProfileImageResizeMode(profile.profileAvatarFitMode)}
+                    />
                   ) : (
                     <Text style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
                   )}
@@ -3630,28 +3864,6 @@ export default function ProfileScreen() {
                 })}
               </View>
             </>
-          ) : null}
-          {!shouldShowLockedShell && avatarQuickActionsOpen && quickActions.length > 0 ? (
-            <View style={styles.quickActionsCard}>
-              <Text style={styles.quickActionsTitle}>
-                {isOfficialProfile ? "Official Quick Actions" : isSelfProfile ? "Your Profile Quick Actions" : "Profile Quick Actions"}
-              </Text>
-              <View style={styles.quickActionsRow}>
-                {quickActions.map((action) => (
-                  <TouchableOpacity
-                    key={action.label}
-                    style={styles.quickActionChip}
-                    activeOpacity={0.84}
-                    onPress={() => {
-                      setAvatarQuickActionsOpen(false);
-                      action.onPress();
-                    }}
-                  >
-                    <Text style={styles.quickActionChipText}>{action.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
           ) : null}
           <View style={styles.actionCluster}>
             {shouldShowLockedShell ? null : isSelfProfile ? (
@@ -4105,6 +4317,65 @@ export default function ProfileScreen() {
         onSelect={onSelectProfileAttachment}
         onClose={() => setProfileAttachmentSheetTarget(null)}
       />
+      <ProfileAppearanceSheet
+        visible={profilePhotoSheetVisible && isSelfProfile}
+        kind="avatar"
+        imageUrl={visibleProfileAvatarUrl}
+        fitMode={profile.profileAvatarFitMode}
+        busy={profileAppearanceBusy === "avatar"}
+        onView={() => onViewProfileImage("avatar")}
+        onChoose={() => {
+          void onChooseProfileMedia("avatar");
+        }}
+        onRemove={() => onRemoveProfileMedia("avatar")}
+        onSelectFitMode={(fitMode) => {
+          void onSelectProfileMediaFitMode("avatar", fitMode);
+        }}
+        onClose={() => {
+          if (!profileAppearanceBusy) setProfilePhotoSheetVisible(false);
+        }}
+      />
+      <ProfileAppearanceSheet
+        visible={profileBackgroundSheetVisible && isSelfProfile}
+        kind="background"
+        imageUrl={visibleProfileBackgroundUrl}
+        fitMode={profile.profileBackgroundFitMode}
+        busy={profileAppearanceBusy === "background"}
+        onView={() => onViewProfileImage("background")}
+        onChoose={() => {
+          void onChooseProfileMedia("background");
+        }}
+        onRemove={() => onRemoveProfileMedia("background")}
+        onSelectFitMode={(fitMode) => {
+          void onSelectProfileMediaFitMode("background", fitMode);
+        }}
+        onClose={() => {
+          if (!profileAppearanceBusy) setProfileBackgroundSheetVisible(false);
+        }}
+      />
+      <ProfileActionsSheet
+        visible={profileActionsSheetVisible && !isSelfProfile}
+        displayName={profile.displayName}
+        hasPhoto={!!visibleProfileAvatarUrl}
+        blocked={friendState?.availability === "blocked"}
+        busy={profileBlockBusy}
+        onViewPhoto={() => onViewProfileImage("avatar")}
+        onChat={onPressProfileActionsChat}
+        onViewPlatform={onPressProfileActionsPlatform}
+        onBlock={onPressProfileActionsBlock}
+        onReport={onPressProfileActionsReport}
+        onShare={onPressProfileActionsShare}
+        onClose={() => {
+          if (!profileBlockBusy) setProfileActionsSheetVisible(false);
+        }}
+      />
+      <ProfileImagePreviewSheet
+        visible={!!profileImagePreview}
+        title={profileImagePreview?.title ?? "Profile Preview"}
+        imageUrl={profileImagePreview?.imageUrl}
+        fitMode={profileImagePreview?.fitMode}
+        onClose={() => setProfileImagePreview(null)}
+      />
       {watchPartyPremiumGate?.reason === "premium_required" ? (
         <AccessSheet
           visible={watchPartyPremiumSheetVisible}
@@ -4187,12 +4458,25 @@ const styles = StyleSheet.create({
     padding: 16,
     justifyContent: "flex-start",
     backgroundColor: "#171A22",
+    overflow: "hidden",
+    position: "relative",
+  },
+  profileCoverImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+  },
+  profileCoverImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#05070C",
   },
   profileCoverTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 10,
+    position: "relative",
+    zIndex: 1,
   },
   profileCoverBadgeRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 7, flexShrink: 1 },
   profileIdentityRow: {

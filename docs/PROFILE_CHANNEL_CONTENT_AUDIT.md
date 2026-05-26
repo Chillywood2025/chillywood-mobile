@@ -14,6 +14,7 @@ Updated: 2026-05-06 for pushed Public Channel and Platform Studio route truth
 Updated: 2026-05-25 for Profile production UI, Platform terminology, Chi'lly Chat routing, and Platform Studio upload separation
 Updated: 2026-05-25 for signed-out, signed-in non-owner, owner-regression, Platform routing, and Chi'lly Chat Android proof closeout
 Updated: 2026-05-25 for shared social attachment sheet correction and native phone-gallery Photos picking
+Updated: 2026-05-26 for Profile avatar/background management and viewer Profile Actions sheet
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -80,6 +81,30 @@ Current governing truth:
 - Existing `social_attachments` storage, runtime controls, privacy/RLS, moderation, raw-storage-path protections, comments/replies, likes, shares, and delete behavior are unchanged.
 - Legal evidence upload pickers, Platform Studio creator-video upload, and Brand Studio media upload remain separate purpose-built flows.
 - Android Profile and Chi'lly Chat sheet screenshots live outside the repo at `/tmp/chillywood-profile-social-interaction-proof-20260525/`; the operator checked Player/Watch-Party/Live Stage sheet behavior, so route-specific screenshots are no longer a remaining gap for this attachment correction.
+
+## 2026-05-26 Profile Avatar Background And Actions Sheet
+
+Current governing truth:
+
+- Profile photo/background is personal Profile appearance. Platform hero/background/logo remains Brand Studio and Platform Studio work.
+- Owner avatar tap and long-press open `Edit Profile Photo`; viewers tap or long-press another user's avatar to open `Profile Actions`.
+- Profile Settings now has `Profile Appearance` controls for `Profile Photo`, `Profile Background`, and `Preview Profile`.
+- Profile media upload uses the phone gallery through `expo-image-picker`, with square avatar edit, wide background edit, Fill/Fit/Center metadata, JPG/PNG/WebP validation, and size limits.
+- Migration `202605260001_profile_appearance_media.sql` adds the profile-only `profile-media` bucket, owner-prefix storage policies, Profile appearance fields on `user_profiles`, and public-profile RPC return fields behind the existing profile visibility gate.
+- `_lib/profileMedia.ts` writes only the signed-in user's Profile fields, attempts cleanup for replaced/removed owned objects, and does not render raw storage paths.
+- Viewer `Profile Actions` includes View Profile Photo, Chi'lly Chat, View Platform, Block User, Report User, and Share Profile where backed.
+- Block User requires sign-in plus confirmation, cannot block self, uses existing backed `channel_audience_blocks`, refreshes relationship state, and blocks Chi'lly Chat from creating a direct thread while blocked.
+- Report User uses the existing safety report sheet; Share Profile uses public-safe Profile links; View Platform opens public Platform, not Studio.
+- Locked/private/blocked shells do not render private Profile avatar/background images.
+- Migration `202605260001_profile_appearance_media.sql` is applied remotely and migration list is aligned; a prior post-apply dry-run reported the remote database up to date, while final dry-run/lint reruns hit the known intermittent `cli_login_postgres` SASL/circuit-breaker auth failure.
+- Android `R5CR120QCBF` startup proof after lazy image-picker loading is outside the repo at `/tmp/chillywood-profile-avatar-actions-proof-20260526/`.
+
+Current limitations and proof status:
+
+- There is no dedicated profile-media moderation/review queue yet. Do not claim automated moderation approval for Profile media; add moderation/review as a later safety lane.
+- Android visual proof is still pending for the new avatar edit sheet, Settings Profile Appearance section, background upload/remove, viewer Profile Actions sheet, block confirmation, signed-out handoffs, and no-edit viewer/signed-out state. The repo now lazy-loads `expo-image-picker` so older installed dev-clients do not crash on app startup, but choosing images requires a current native build if the installed client predates the module.
+- Full second-account and blocked/private runtime fixtures remain pending and must not be faked.
+- Validation passed the requested type/runtime/payment/creator/Stripe/VOD/Clip/Brand/Watch-Party/provider/Profile guard stack, Supabase migration list/typegen field proof, targeted Profile/media greps, Android startup smoke, and diff whitespace checks.
 
 ## 2026-04-29 Profile / Channel Contract Addendum
 

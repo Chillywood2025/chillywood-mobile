@@ -39,6 +39,14 @@ export type UserProfile = {
   avatarIndex: number; // 0-9 for different avatar colors/emojis
   displayName?: string;
   avatarUrl?: string;
+  profileAvatarFitMode?: ProfileAppearanceFitMode;
+  profileAvatarFocalX?: number;
+  profileAvatarFocalY?: number;
+  profileBackgroundUrl?: string;
+  profileBackgroundFitMode?: ProfileAppearanceFitMode;
+  profileBackgroundFocalX?: number;
+  profileBackgroundFocalY?: number;
+  profileBackgroundOverlayStrength?: number;
   tagline?: string;
   channelLayoutPreset?: "spotlight" | "live_first" | "library_first";
   channelRole?: "viewer" | "host" | "creator";
@@ -53,6 +61,8 @@ export type UserProfile = {
   defaultCommunicationContentAccessRule?: ContentAccessRule;
   defaultCommunicationCapturePolicy?: CapturePolicy;
 };
+
+export type ProfileAppearanceFitMode = "fill" | "fit" | "center";
 
 export type LastPartySession = {
   partyId: string;
@@ -74,6 +84,14 @@ export type UserChannelProfile = {
   id: string;
   displayName: string;
   avatarUrl?: string;
+  profileAvatarFitMode: ProfileAppearanceFitMode;
+  profileAvatarFocalX: number;
+  profileAvatarFocalY: number;
+  profileBackgroundUrl?: string;
+  profileBackgroundFitMode: ProfileAppearanceFitMode;
+  profileBackgroundFocalX: number;
+  profileBackgroundFocalY: number;
+  profileBackgroundOverlayStrength: number;
   tagline?: string;
   role: UserChannelRole;
   isLive: boolean;
@@ -99,6 +117,14 @@ type UserProfileRow = Pick<
   | "avatar_index"
   | "display_name"
   | "avatar_url"
+  | "profile_avatar_fit_mode"
+  | "profile_avatar_focal_x"
+  | "profile_avatar_focal_y"
+  | "profile_background_url"
+  | "profile_background_fit_mode"
+  | "profile_background_focal_x"
+  | "profile_background_focal_y"
+  | "profile_background_overlay_strength"
   | "tagline"
   | "channel_layout_preset"
   | "channel_role"
@@ -125,6 +151,18 @@ const UUID_LIKE_PROFILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89
 const normalizeTextValue = (value: unknown) => {
   const normalized = String(value ?? "").trim();
   return normalized || undefined;
+};
+
+export const normalizeProfileAppearanceFitMode = (value: unknown): ProfileAppearanceFitMode => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "fit" || normalized === "center") return normalized;
+  return "fill";
+};
+
+export const normalizeProfileAppearanceNumber = (value: unknown, fallback: number, min = 0, max = 1) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
 };
 
 const normalizePublicActivityVisibility = (value: unknown): UserProfile["publicActivityVisibility"] => {
@@ -164,6 +202,14 @@ export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): Use
     avatarIndex,
     displayName: normalizeTextValue(profile?.displayName),
     avatarUrl: normalizeTextValue(profile?.avatarUrl),
+    profileAvatarFitMode: normalizeProfileAppearanceFitMode(profile?.profileAvatarFitMode),
+    profileAvatarFocalX: normalizeProfileAppearanceNumber(profile?.profileAvatarFocalX, 0.5),
+    profileAvatarFocalY: normalizeProfileAppearanceNumber(profile?.profileAvatarFocalY, 0.5),
+    profileBackgroundUrl: normalizeTextValue(profile?.profileBackgroundUrl),
+    profileBackgroundFitMode: normalizeProfileAppearanceFitMode(profile?.profileBackgroundFitMode),
+    profileBackgroundFocalX: normalizeProfileAppearanceNumber(profile?.profileBackgroundFocalX, 0.5),
+    profileBackgroundFocalY: normalizeProfileAppearanceNumber(profile?.profileBackgroundFocalY, 0.5),
+    profileBackgroundOverlayStrength: normalizeProfileAppearanceNumber(profile?.profileBackgroundOverlayStrength, 0.58, 0, 0.9),
     tagline: normalizeTextValue(profile?.tagline),
     channelLayoutPreset: normalizeChannelLayoutPreset(profile?.channelLayoutPreset),
     channelRole: normalizeChannelRole(profile?.channelRole),
@@ -237,6 +283,14 @@ const toUserProfileUpsertRow = (userId: string, profile: UserProfile) => ({
   avatar_index: profile.avatarIndex,
   display_name: profile.displayName ?? null,
   avatar_url: profile.avatarUrl ?? null,
+  profile_avatar_fit_mode: normalizeProfileAppearanceFitMode(profile.profileAvatarFitMode),
+  profile_avatar_focal_x: normalizeProfileAppearanceNumber(profile.profileAvatarFocalX, 0.5),
+  profile_avatar_focal_y: normalizeProfileAppearanceNumber(profile.profileAvatarFocalY, 0.5),
+  profile_background_url: profile.profileBackgroundUrl ?? null,
+  profile_background_fit_mode: normalizeProfileAppearanceFitMode(profile.profileBackgroundFitMode),
+  profile_background_focal_x: normalizeProfileAppearanceNumber(profile.profileBackgroundFocalX, 0.5),
+  profile_background_focal_y: normalizeProfileAppearanceNumber(profile.profileBackgroundFocalY, 0.5),
+  profile_background_overlay_strength: normalizeProfileAppearanceNumber(profile.profileBackgroundOverlayStrength, 0.58, 0, 0.9),
   tagline: profile.tagline ?? null,
   channel_layout_preset: normalizeChannelLayoutPreset(profile.channelLayoutPreset),
   channel_role: profile.channelRole ?? null,
@@ -258,6 +312,14 @@ const parseRemoteUserProfile = (row: UserProfileRow | null | undefined): UserPro
     avatarIndex: Number.isFinite(Number(row.avatar_index)) ? Number(row.avatar_index) : undefined,
     displayName: normalizeTextValue(row.display_name),
     avatarUrl: normalizeTextValue(row.avatar_url),
+    profileAvatarFitMode: normalizeProfileAppearanceFitMode(row.profile_avatar_fit_mode),
+    profileAvatarFocalX: normalizeProfileAppearanceNumber(row.profile_avatar_focal_x, 0.5),
+    profileAvatarFocalY: normalizeProfileAppearanceNumber(row.profile_avatar_focal_y, 0.5),
+    profileBackgroundUrl: normalizeTextValue(row.profile_background_url),
+    profileBackgroundFitMode: normalizeProfileAppearanceFitMode(row.profile_background_fit_mode),
+    profileBackgroundFocalX: normalizeProfileAppearanceNumber(row.profile_background_focal_x, 0.5),
+    profileBackgroundFocalY: normalizeProfileAppearanceNumber(row.profile_background_focal_y, 0.5),
+    profileBackgroundOverlayStrength: normalizeProfileAppearanceNumber(row.profile_background_overlay_strength, 0.58, 0, 0.9),
     tagline: normalizeTextValue(row.tagline),
     channelLayoutPreset: normalizeChannelLayoutPreset(row.channel_layout_preset),
     channelRole: normalizeChannelRole(row.channel_role),
@@ -301,6 +363,16 @@ export const buildUserChannelProfile = (options: {
     id: officialAccount?.userId ?? id,
     displayName: officialAccount?.displayName ?? (resolvedDisplayName !== "User" ? resolvedDisplayName : fallbackDisplayName),
     avatarUrl: officialAccount ? normalizeTextValue(officialAccount.avatarUrl) : normalizeTextValue(options.avatarUrl) ?? normalizeTextValue(profile?.avatarUrl),
+    profileAvatarFitMode: officialAccount ? "fill" : normalizeProfileAppearanceFitMode(profile?.profileAvatarFitMode),
+    profileAvatarFocalX: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileAvatarFocalX, 0.5),
+    profileAvatarFocalY: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileAvatarFocalY, 0.5),
+    profileBackgroundUrl: officialAccount ? undefined : normalizeTextValue(profile?.profileBackgroundUrl),
+    profileBackgroundFitMode: officialAccount ? "fill" : normalizeProfileAppearanceFitMode(profile?.profileBackgroundFitMode),
+    profileBackgroundFocalX: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileBackgroundFocalX, 0.5),
+    profileBackgroundFocalY: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileBackgroundFocalY, 0.5),
+    profileBackgroundOverlayStrength: officialAccount
+      ? 0.58
+      : normalizeProfileAppearanceNumber(profile?.profileBackgroundOverlayStrength, 0.58, 0, 0.9),
     tagline: officialAccount?.tagline
       ?? normalizeTextValue(options.tagline)
       ?? normalizeTextValue(options.bio)
@@ -393,7 +465,7 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
     const { data, error } = await supabase
       .from(USER_PROFILES_TABLE)
       .select(
-        "user_id,username,avatar_index,display_name,avatar_url,tagline,channel_layout_preset,channel_role,profile_visibility,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
+        "user_id,username,avatar_index,display_name,avatar_url,profile_avatar_fit_mode,profile_avatar_focal_x,profile_avatar_focal_y,profile_background_url,profile_background_fit_mode,profile_background_focal_x,profile_background_focal_y,profile_background_overlay_strength,tagline,channel_layout_preset,channel_role,profile_visibility,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
       )
       .eq("user_id", normalizedUserId)
       .maybeSingle();

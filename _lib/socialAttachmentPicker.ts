@@ -1,5 +1,5 @@
 import * as DocumentPicker from "expo-document-picker";
-import * as ImagePicker from "expo-image-picker";
+import type { ImagePickerAsset } from "expo-image-picker";
 
 import {
   getSocialAttachmentPickerTypes,
@@ -13,7 +13,15 @@ const imageFileNameFromUri = (uri: string) => {
   return name || `photo-${Date.now()}.jpg`;
 };
 
-const buildSocialAttachmentFileFromImageAsset = (asset: ImagePicker.ImagePickerAsset): SocialAttachmentFile => ({
+const loadImagePicker = async () => {
+  try {
+    return await import("expo-image-picker");
+  } catch {
+    throw new Error("Photo gallery needs the current app build. Install a rebuilt app, then try Photos again.");
+  }
+};
+
+const buildSocialAttachmentFileFromImageAsset = (asset: ImagePickerAsset): SocialAttachmentFile => ({
   uri: asset.uri,
   name: asset.fileName || imageFileNameFromUri(asset.uri),
   mimeType: asset.mimeType || "image/jpeg",
@@ -29,6 +37,7 @@ const buildSocialAttachmentFileFromDocumentAsset = (asset: DocumentPicker.Docume
 
 export async function pickSocialAttachmentFile(scope: SocialAttachmentPickerScope) {
   if (scope === "images") {
+    const ImagePicker = await loadImagePicker();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: false,

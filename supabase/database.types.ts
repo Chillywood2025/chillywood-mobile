@@ -7897,6 +7897,15 @@ export type Database = {
           display_name: string | null
           follower_surface_enabled: boolean
           likes_visibility: string
+          profile_avatar_fit_mode: string
+          profile_avatar_focal_x: number
+          profile_avatar_focal_y: number
+          profile_background_fit_mode: string
+          profile_background_focal_x: number
+          profile_background_focal_y: number
+          profile_background_overlay_strength: number
+          profile_background_url: string | null
+          profile_media_updated_at: string | null
           profile_visibility: string
           public_activity_visibility: string
           shares_visibility: string
@@ -7920,6 +7929,15 @@ export type Database = {
           display_name?: string | null
           follower_surface_enabled?: boolean
           likes_visibility?: string
+          profile_avatar_fit_mode?: string
+          profile_avatar_focal_x?: number
+          profile_avatar_focal_y?: number
+          profile_background_fit_mode?: string
+          profile_background_focal_x?: number
+          profile_background_focal_y?: number
+          profile_background_overlay_strength?: number
+          profile_background_url?: string | null
+          profile_media_updated_at?: string | null
           profile_visibility?: string
           public_activity_visibility?: string
           shares_visibility?: string
@@ -7943,6 +7961,15 @@ export type Database = {
           display_name?: string | null
           follower_surface_enabled?: boolean
           likes_visibility?: string
+          profile_avatar_fit_mode?: string
+          profile_avatar_focal_x?: number
+          profile_avatar_focal_y?: number
+          profile_background_fit_mode?: string
+          profile_background_focal_x?: number
+          profile_background_focal_y?: number
+          profile_background_overlay_strength?: number
+          profile_background_url?: string | null
+          profile_media_updated_at?: string | null
           profile_visibility?: string
           public_activity_visibility?: string
           shares_visibility?: string
@@ -9286,6 +9313,14 @@ export type Database = {
           default_watch_party_reactions_policy: string
           display_name: string
           follower_surface_enabled: boolean
+          profile_avatar_fit_mode: string
+          profile_avatar_focal_x: number
+          profile_avatar_focal_y: number
+          profile_background_fit_mode: string
+          profile_background_focal_x: number
+          profile_background_focal_y: number
+          profile_background_overlay_strength: number
+          profile_background_url: string
           profile_visibility: string
           public_activity_visibility: string
           subscriber_surface_enabled: boolean
