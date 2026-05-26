@@ -34,6 +34,7 @@ import {
     type AppStateStatus,
     type GestureResponderEvent,
     type ImageSourcePropType,
+    type LayoutChangeEvent,
     type StyleProp,
     type ViewStyle
 } from "react-native";
@@ -197,6 +198,13 @@ const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+const WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT = 0.85;
+const WATCH_PARTY_LIVE_VOICE_VOLUME_DEFAULT = 1;
+const WATCH_PARTY_LIVE_DUCKED_VIDEO_VOLUME_DEFAULT = 0.3;
+const WATCH_PARTY_LIVE_DUCK_DOWN_MILLIS = 250;
+const WATCH_PARTY_LIVE_RESTORE_MILLIS = 700;
+const WATCH_PARTY_LIVE_VOICE_IDLE_MILLIS = 650;
+const WATCH_PARTY_LIVE_VOLUME_TICK_MILLIS = 50;
 const WATCH_PARTY_BRANDED_BACKGROUND = require("../../assets/images/chillywood-branded-background.png");
 const CREATOR_VIDEO_BRANDED_BACKGROUND = WATCH_PARTY_BRANDED_BACKGROUND;
 
@@ -346,6 +354,7 @@ type PlayerController = {
   pauseAsync: () => Promise<void>;
   replayAsync?: () => Promise<void>;
   setRateAsync: (rate: number, shouldCorrectPitch: boolean) => Promise<void>;
+  setVolumeAsync?: (volume: number) => Promise<void>;
 };
 
 type SharedAndroidVideoSurfaceProps = {
@@ -354,6 +363,7 @@ type SharedAndroidVideoSurfaceProps = {
   contentFit: "contain" | "cover";
   shouldPlay: boolean;
   playbackRate: number;
+  volume: number;
   onPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
   onLoad: (status: AVPlaybackStatus) => void;
 };
@@ -382,6 +392,11 @@ const isPromiseLike = (value: unknown): value is PromiseLike<unknown> => (
   && (typeof value === "object" || typeof value === "function")
   && typeof (value as { then?: unknown }).then === "function"
 );
+
+const applySharedVideoPlayerVolume = (player: unknown, volume: number) => {
+  const patchablePlayer = player as { volume?: number };
+  patchablePlayer.volume = clamp(volume, 0, 1);
+};
 
 const getPlaybackOperationErrorMeta = (error: unknown) => {
   if (error instanceof Error) {
@@ -417,7 +432,7 @@ const getPlaybackOperationErrorMeta = (error: unknown) => {
 
 const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVideoSurfaceProps>(
   function SharedAndroidVideoSurface(
-    { source, style, contentFit, shouldPlay, playbackRate, onPlaybackStatusUpdate, onLoad },
+    { source, style, contentFit, shouldPlay, playbackRate, volume, onPlaybackStatusUpdate, onLoad },
     ref,
   ) {
     const videoViewKey = useMemo(() => {
@@ -432,6 +447,7 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
       createdPlayer.loop = false;
       createdPlayer.preservesPitch = true;
       createdPlayer.playbackRate = playbackRate;
+      applySharedVideoPlayerVolume(createdPlayer, volume);
       createdPlayer.timeUpdateEventInterval = 0.25;
     });
     const durationMillisRef = useRef(0);
@@ -508,6 +524,11 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
             player.playbackRate = rate;
           });
         },
+        async setVolumeAsync(nextVolume: number) {
+          await runSharedVideoOperation("set-volume", () => {
+            applySharedVideoPlayerVolume(player, nextVolume);
+          });
+        },
       }),
       [emitStatus, player, runSharedVideoOperation],
     );
@@ -519,6 +540,12 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
         player.timeUpdateEventInterval = 0.25;
       });
     }, [player, playbackRate, runSharedVideoOperation]);
+
+    useEffect(() => {
+      void runSharedVideoOperation("apply-volume", () => {
+        applySharedVideoPlayerVolume(player, volume);
+      });
+    }, [player, runSharedVideoOperation, volume]);
 
     useEffect(() => {
       void runSharedVideoOperation(shouldPlay ? "effect-play" : "effect-pause", () => (
@@ -789,6 +816,49 @@ const ADVANCED_SELECT = `${BASE_SELECT},status,is_published,release_at,release_d
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
+type AudioMixSliderProps = {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  disabled?: boolean;
+};
+
+function AudioMixSlider({ label, value, onChange, disabled = false }: AudioMixSliderProps) {
+  const [trackWidth, setTrackWidth] = useState(1);
+  const safeValue = clamp(value, 0, 1);
+  const percent = Math.round(safeValue * 100);
+
+  const onTrackLayout = useCallback((event: LayoutChangeEvent) => {
+    setTrackWidth(Math.max(1, event.nativeEvent.layout.width));
+  }, []);
+
+  const updateValueFromEvent = useCallback((event: GestureResponderEvent) => {
+    if (disabled) return;
+    const nextValue = clamp(event.nativeEvent.locationX / trackWidth, 0, 1);
+    onChange(Number(nextValue.toFixed(2)));
+  }, [disabled, onChange, trackWidth]);
+
+  return (
+    <View style={styles.audioMixSliderWrap}>
+      <View style={styles.audioMixSliderHeader}>
+        <Text style={styles.audioMixSliderLabel}>{label}</Text>
+        <Text style={styles.audioMixSliderValue}>{percent}%</Text>
+      </View>
+      <View
+        style={[styles.audioMixSliderTrack, disabled && styles.audioMixSliderTrackDisabled]}
+        onLayout={onTrackLayout}
+        onStartShouldSetResponder={() => !disabled}
+        onMoveShouldSetResponder={() => !disabled}
+        onResponderGrant={updateValueFromEvent}
+        onResponderMove={updateValueFromEvent}
+      >
+        <View style={[styles.audioMixSliderFill, { width: `${percent}%` }]} />
+        <View style={[styles.audioMixSliderThumb, { left: `${percent}%` }]} />
+      </View>
+    </View>
+  );
+}
+
 const formatTime = (millis: number) => {
   const totalSeconds = Math.max(0, Math.floor((millis || 0) / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -892,6 +962,12 @@ export default function PlayerScreen() {
   const [positionMillis, setPositionMillis] = useState(0);
   const [resumeCueMillis, setResumeCueMillis] = useState(0);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [videoVolume, setVideoVolume] = useState(WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT);
+  const [voiceVolume] = useState(WATCH_PARTY_LIVE_VOICE_VOLUME_DEFAULT);
+  const [autoDuckEnabled, setAutoDuckEnabled] = useState(true);
+  const [duckedVideoVolume] = useState(WATCH_PARTY_LIVE_DUCKED_VIDEO_VOLUME_DEFAULT);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [effectiveVideoVolume, setEffectiveVideoVolume] = useState(WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [myListIds, setMyListIds] = useState<string[]>([]);
   const [myListBusy, setMyListBusy] = useState(false);
@@ -998,6 +1074,9 @@ export default function PlayerScreen() {
   const entryBoostTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastJoinToastAtRef = useRef(0);
   const roomEnergyRef = useRef(0);
+  const watchPartyLiveVoiceIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const watchPartyLiveVolumeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const effectiveVideoVolumeRef = useRef(WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT);
   const myCameraPreviewUrlRef = useRef("");
   const partyDisplayNameRef = useRef("You");
   const partyAvatarUrlRef = useRef("");
@@ -1023,6 +1102,14 @@ export default function PlayerScreen() {
       if (partySeatRequestPollRef.current) {
         clearInterval(partySeatRequestPollRef.current);
         partySeatRequestPollRef.current = null;
+      }
+      if (watchPartyLiveVoiceIdleTimeoutRef.current) {
+        clearTimeout(watchPartyLiveVoiceIdleTimeoutRef.current);
+        watchPartyLiveVoiceIdleTimeoutRef.current = null;
+      }
+      if (watchPartyLiveVolumeIntervalRef.current) {
+        clearInterval(watchPartyLiveVolumeIntervalRef.current);
+        watchPartyLiveVolumeIntervalRef.current = null;
       }
     };
   }, []);
@@ -4769,6 +4856,65 @@ export default function PlayerScreen() {
     setLiveFilterSheetOpen((value) => !value);
   }, []);
 
+  const onResetWatchPartyLiveAudioMix = useCallback(() => {
+    setVideoVolume(WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT);
+    setAutoDuckEnabled(true);
+  }, []);
+
+  const watchPartyLiveAudioMixStatus = useMemo(() => {
+    if (!autoDuckEnabled) return "Auto-duck off";
+    if (isVoiceActive) return "Video lowered while people talk";
+    return "Lower video when people talk";
+  }, [autoDuckEnabled, isVoiceActive]);
+
+  const renderWatchPartyLiveAudioMixControls = () => {
+    if (!isSharedPartyPlayback) return null;
+    const voicePercent = Math.round(clamp(voiceVolume, 0, 1) * 100);
+
+    return (
+      <View style={styles.watchPartyAudioMixPanel}>
+        <View style={styles.watchPartyAudioMixHeader}>
+          <View style={styles.watchPartyAudioMixHeaderCopy}>
+            <Text style={styles.watchPartyAudioMixKicker}>Audio Mix</Text>
+            <Text style={styles.watchPartyAudioMixStatus}>{watchPartyLiveAudioMixStatus}</Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.watchPartyAudioMixToggle,
+              autoDuckEnabled && styles.watchPartyAudioMixToggleActive,
+            ]}
+            onPress={() => setAutoDuckEnabled((value) => !value)}
+            activeOpacity={0.88}
+          >
+            <Text
+              style={[
+                styles.watchPartyAudioMixToggleText,
+                autoDuckEnabled && styles.watchPartyAudioMixToggleTextActive,
+              ]}
+            >
+              Auto-duck
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <AudioMixSlider label="Video" value={videoVolume} onChange={setVideoVolume} />
+
+        <View style={styles.watchPartyAudioMixVoiceRow}>
+          <Text style={styles.watchPartyAudioMixVoiceLabel}>Voices</Text>
+          <Text style={styles.watchPartyAudioMixVoiceValue}>{voicePercent}%</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.watchPartyAudioMixResetBtn}
+          onPress={onResetWatchPartyLiveAudioMix}
+          activeOpacity={0.88}
+        >
+          <Text style={styles.watchPartyAudioMixResetText}>Reset to default</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const progressPercent = useMemo(() => {
     if (!durationMillis || durationMillis <= 0) return 0;
     return clamp((positionMillis / durationMillis) * 100, 0, 100);
@@ -4786,6 +4932,82 @@ export default function PlayerScreen() {
     () => partyParticipants.filter((participant) => participant.isSpeaking && participant.canSpeak).map((participant) => participant.id),
     [partyParticipants],
   );
+  const watchPartyLiveVoiceDetected = useMemo(
+    () => isSharedPartyPlayback && partyParticipants.some((participant) => (
+      participant.isSpeaking
+      && participant.canSpeak
+      && !participant.muted
+    )),
+    [isSharedPartyPlayback, partyParticipants],
+  );
+
+  useEffect(() => {
+    if (!isSharedPartyPlayback) {
+      if (watchPartyLiveVoiceIdleTimeoutRef.current) {
+        clearTimeout(watchPartyLiveVoiceIdleTimeoutRef.current);
+        watchPartyLiveVoiceIdleTimeoutRef.current = null;
+      }
+      setIsVoiceActive(false);
+      return;
+    }
+
+    if (watchPartyLiveVoiceDetected) {
+      if (watchPartyLiveVoiceIdleTimeoutRef.current) {
+        clearTimeout(watchPartyLiveVoiceIdleTimeoutRef.current);
+        watchPartyLiveVoiceIdleTimeoutRef.current = null;
+      }
+      setIsVoiceActive(true);
+      return;
+    }
+
+    if (watchPartyLiveVoiceIdleTimeoutRef.current) {
+      clearTimeout(watchPartyLiveVoiceIdleTimeoutRef.current);
+    }
+    watchPartyLiveVoiceIdleTimeoutRef.current = setTimeout(() => {
+      setIsVoiceActive(false);
+      watchPartyLiveVoiceIdleTimeoutRef.current = null;
+    }, WATCH_PARTY_LIVE_VOICE_IDLE_MILLIS);
+  }, [isSharedPartyPlayback, watchPartyLiveVoiceDetected]);
+
+  useEffect(() => {
+    if (watchPartyLiveVolumeIntervalRef.current) {
+      clearInterval(watchPartyLiveVolumeIntervalRef.current);
+      watchPartyLiveVolumeIntervalRef.current = null;
+    }
+
+    if (!isSharedPartyPlayback) {
+      effectiveVideoVolumeRef.current = 1;
+      setEffectiveVideoVolume(1);
+      return;
+    }
+
+    const targetVolume = clamp(autoDuckEnabled && isVoiceActive ? duckedVideoVolume : videoVolume, 0, 1);
+    const startingVolume = effectiveVideoVolumeRef.current;
+    const durationMillis = targetVolume < startingVolume
+      ? WATCH_PARTY_LIVE_DUCK_DOWN_MILLIS
+      : WATCH_PARTY_LIVE_RESTORE_MILLIS;
+    const startedAt = Date.now();
+
+    if (Math.abs(targetVolume - startingVolume) < 0.005) {
+      effectiveVideoVolumeRef.current = targetVolume;
+      setEffectiveVideoVolume(targetVolume);
+      return;
+    }
+
+    watchPartyLiveVolumeIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const progress = clamp(elapsed / durationMillis, 0, 1);
+      const nextVolume = startingVolume + (targetVolume - startingVolume) * progress;
+      effectiveVideoVolumeRef.current = nextVolume;
+      setEffectiveVideoVolume(nextVolume);
+
+      if (progress >= 1 && watchPartyLiveVolumeIntervalRef.current) {
+        clearInterval(watchPartyLiveVolumeIntervalRef.current);
+        watchPartyLiveVolumeIntervalRef.current = null;
+      }
+    }, WATCH_PARTY_LIVE_VOLUME_TICK_MILLIS);
+  }, [autoDuckEnabled, duckedVideoVolume, isSharedPartyPlayback, isVoiceActive, videoVolume]);
+
   const primaryActiveParticipantIds = useMemo(() => {
     const merged = [...speakingParticipantIds, ...activeParticipantIds.filter((id) => !speakingParticipantIds.includes(id))];
     return merged.slice(0, LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS);
@@ -5668,6 +5890,7 @@ export default function PlayerScreen() {
   }, [displayItem, isCreatorVideoPlayback, localTitle]);
   const isLiveMode = isLiveModeFlag;
   const shouldUseSharedAndroidVideoSurface = Platform.OS === "android" && isSharedPartyPlayback;
+  const playerVideoVolume = isSharedPartyPlayback ? effectiveVideoVolume : 1;
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
@@ -6835,6 +7058,7 @@ export default function PlayerScreen() {
         {watchPartyMenuOpen ? (
           <View style={styles.watchPartyDockCard}>
             <Text style={styles.watchPartyDockCardTitle}>Player Controls</Text>
+            {renderWatchPartyLiveAudioMixControls()}
             <View style={styles.watchPartyDockMenuRow}>
               <TouchableOpacity
                 style={[styles.watchPartyDockMenuBtn, myListBusy && styles.secondaryBtnDisabled]}
@@ -7822,6 +8046,7 @@ export default function PlayerScreen() {
                     contentFit={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? "cover" : "contain"}
                     shouldPlay={isLiveMode ? true : isPlaying}
                     playbackRate={playbackRate}
+                    volume={playerVideoVolume}
                     onPlaybackStatusUpdate={onPlaybackStatusUpdate}
                     onLoad={onVideoLoad}
                   />
@@ -7836,6 +8061,7 @@ export default function PlayerScreen() {
                     shouldPlay={isLiveMode ? true : isPlaying}
                     isLooping={false}
                     useNativeControls={false}
+                    volume={playerVideoVolume}
                     onPlaybackStatusUpdate={onPlaybackStatusUpdate}
                     onLoad={onVideoLoad}
                     onError={onVideoError}
@@ -9899,6 +10125,132 @@ const styles = StyleSheet.create({
   },
   watchPartyDockRateChipTextActive: {
     color: "#FFFFFF",
+  },
+  watchPartyAudioMixPanel: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 10,
+  },
+  watchPartyAudioMixHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  watchPartyAudioMixHeaderCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  watchPartyAudioMixKicker: {
+    color: "#F5F7FC",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  watchPartyAudioMixStatus: {
+    color: "#BFC6D6",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  watchPartyAudioMixToggle: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  watchPartyAudioMixToggleActive: {
+    borderColor: "rgba(220,20,60,0.5)",
+    backgroundColor: "rgba(220,20,60,0.2)",
+  },
+  watchPartyAudioMixToggleText: {
+    color: "#D9E0EF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  watchPartyAudioMixToggleTextActive: {
+    color: "#FFFFFF",
+  },
+  audioMixSliderWrap: {
+    gap: 7,
+  },
+  audioMixSliderHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  audioMixSliderLabel: {
+    color: "#EEF2FA",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  audioMixSliderValue: {
+    color: "#D5DCEB",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  audioMixSliderTrack: {
+    height: 22,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(0,0,0,0.26)",
+    overflow: "hidden",
+    justifyContent: "center",
+  },
+  audioMixSliderTrackDisabled: {
+    opacity: 0.58,
+  },
+  audioMixSliderFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "rgba(220,20,60,0.72)",
+  },
+  audioMixSliderThumb: {
+    position: "absolute",
+    width: 18,
+    height: 18,
+    marginLeft: -9,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    backgroundColor: ACCENT,
+  },
+  watchPartyAudioMixVoiceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.18)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  watchPartyAudioMixVoiceLabel: {
+    color: "#EEF2FA",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  watchPartyAudioMixVoiceValue: {
+    color: "#D5DCEB",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  watchPartyAudioMixResetBtn: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  watchPartyAudioMixResetText: {
+    color: "#F2F5FC",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   participantBubbleScroll: {
     gap: 8,

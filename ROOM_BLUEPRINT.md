@@ -739,6 +739,7 @@ Relationship to other rooms: Watch-Party Live is the title/player-driven social 
 - Required quick actions: play/pause feedback, sync state, reactions/comments, and return-to-room awareness.
 - Host controls: authoritative playback control and limited room-synced media actions.
 - Viewer/user controls: social reactions, comments, passive sync-following, and local-only visibility or overlay preferences on their own screen, not silent desync of the shared timeline.
+- Local audio mix controls belong here: video volume is local player audio, voices stay LiveKit audio, Auto-duck can lower local video while participants speak, and these settings must remain per-device rather than room-wide authority.
 - Creator controls: not primary here except when a creator is the party host.
 - Owner/admin controls: indirect and minimal, typically through moderation/report paths rather than overt player takeover.
 - Advanced actions can later include richer overlays, co-host sync, or group-specific interactive moments.

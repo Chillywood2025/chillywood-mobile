@@ -1,8 +1,40 @@
 # NEXT TASK
 
-## Recommended Lane: Copyright Safety Surface Smoke Proof
+## Recommended Lane: Watch-Party Live Audio Mix Two-Device Speech Proof
 
-Visible Rights Disclosure UI is disabled for now. The remaining recommended follow-up is a light physical `R5CR120QCBF` smoke proof that copyright safety surfaces stay available without showing disclosure chips, cards, sheets, or overlays.
+Watch-Party Live now has a repo-side local audio mix pass plus single-device Android proof. The next useful lane is a bounded two-device proof to confirm video ducking under real LiveKit speech without moving the feature into Party Room or Live Watch-Party / Live Stage.
+
+Closed truth:
+
+- Route ownership is locked: Watch-Party Live shared player is `app/player/[id].tsx` when `partyId` is present without live mode.
+- Party Room is `app/watch-party/[partyId].tsx` and was not changed.
+- Live Watch-Party / Live Stage is `app/watch-party/live-stage/[partyId].tsx` and was not changed.
+- Shared video audio stays local to the player; voices stay in LiveKit room audio.
+- Defaults are Video `85%`, Voices `100%`, Auto-duck on, ducked video `30%`, duck down about `250ms`, restore about `700ms`.
+- `Audio Mix` appears only in Watch-Party Live shared player controls.
+- The current UI provides Video volume, Auto-duck, and Reset to default; voices remain at room/system volume because the shared LiveKit media surface does not safely expose per-viewer gain for existing subscribed voice tracks.
+- No LiveKit token issuer, publish grants, host/speaker/viewer roles, old-room handling, Premium gate, waiting room, Party Room, or Live Stage behavior changed.
+- `npm run guard:watch-party-live-audio-mix` pins the Watch-Party Live-only scope and rejects video-audio publishing markers.
+- Single-device Android proof on `R5CR120QCBF` lives outside the repo at `/tmp/chillywood-watch-party-live-audio-mix-proof-20260526/`; it captures Watch-Party Live waiting room no `Audio Mix`, Party Room no `Audio Mix`, shared Watch-Party Live player with `Audio Mix`, Video `85%`, Auto-duck, Voices `100%`, Video slider lowered to `32%`, and Live Watch-Party waiting room no `Audio Mix`.
+
+Remaining limitation:
+
+- Real speech-triggered ducking still needs two-device physical proof. It was not claimed from the single-device pass.
+
+Recommended next lane:
+
+- Use `R5CR120QCBF` plus a second device if available.
+- Open Watch-Party Live shared player and capture `Audio Mix`.
+- Verify the Video slider changes local video audio where the player supports volume.
+- Verify Auto-duck lowers video when another participant speaks and restores when speech stops.
+- Verify Party Room does not show `Audio Mix`.
+- Verify Live Watch-Party / Live Stage does not show `Audio Mix`.
+- Keep screenshots outside the repo, likely `/tmp/chillywood-watch-party-live-audio-mix-proof-20260526/`.
+- Re-run `npm run guard:watch-party-live-audio-mix`, `npm run guard:watch-party-livekit`, `npm run guard:old-room-handling`, and targeted LiveKit token/no-publisher greps.
+
+## Previous Recommended Lane: Copyright Safety Surface Smoke Proof
+
+Visible Rights Disclosure UI is disabled for now. A light physical `R5CR120QCBF` smoke proof remains useful to confirm copyright safety surfaces stay available without showing disclosure chips, cards, sheets, or overlays.
 
 Closed truth:
 
