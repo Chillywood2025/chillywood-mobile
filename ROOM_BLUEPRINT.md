@@ -77,7 +77,7 @@ Before a feature or AI behavior belongs in a room, it should be tested against t
 - Keep Rachi on the canonical profile and Chi'lly Chat paths as the official platform-owned concierge and moderation-ready presence.
 - All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Free users must be blocked before full room/session/token/connect and must not receive full LiveKit room/token/connect access.
 - No free live/watch-party preview mode exists. Any future preview must be separately designed, limited, low-cost, and separately gated.
-- Live Watch-Party and Watch-Party Live start flows may show a lightweight `Rights` chip for host disclosure of third-party content or music. This chip is an audit/safety signal only; it is not source eligibility, room authority, copyright clearance, or a LiveKit grant.
+- Visible Rights Disclosure UI is disabled for now. Watch-Party Live waiting room / create-room screen, Watch-Party Live Party Room (`app/watch-party/[partyId].tsx`), Live Watch-Party waiting room / create-room screen, Live Watch-Party Live Room / Live Stage (`app/watch-party/live-stage/[partyId].tsx`), setup/status panels, and room-code panels should stay free of Rights cards, chips, sheets, overlays, checkboxes, and note fields. Any dormant backend audit helper is not source eligibility, room authority, copyright clearance, or a LiveKit grant.
 
 ## Feature Maturity Model
 - `Core features now`: practical MVP and near-term product behaviors that fit the current direction and can be implemented without rewriting the platform.

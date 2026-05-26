@@ -1,30 +1,33 @@
 # NEXT TASK
 
-## Recommended Lane: Profile Rights Disclosure R5 Live-Stage Visual Proof
+## Recommended Lane: Copyright Safety Surface Smoke Proof
 
-The Profile navigation cleanup and lightweight Rights Disclosure lane is repo-side wired and partially runtime-proved on the current Android emulator. The remaining recommended follow-up is physical `R5CR120QCBF` visual proof for the direct live-stage host-entry surface once the device is visible to ADB again.
+Visible Rights Disclosure UI is disabled for now. The remaining recommended follow-up is a light physical `R5CR120QCBF` smoke proof that copyright safety surfaces stay available without showing disclosure chips, cards, sheets, or overlays.
 
 Closed truth:
 
 - Profile owner top action now says `Platform` and keeps the existing public Platform preview route.
 - The duplicate bottom Profile `Platform` tab/pill is removed; bottom tabs are Posts, Live, Community, About.
-- Clip Studio and creator-video upload use the reusable lightweight Rights Disclosure sheet instead of the long required acknowledgement block.
-- Rights Disclosure supports `Contains third-party content`, `Contains third-party music`, optional note, and clear disclosure.
-- Active disclosures show a persistent bottom chip/overlay on Platform Studio content/Clip surfaces.
-- Creator video upload/update/publish, Clip Studio save/publish, Watch-Party Live start, Live Watch-Party start, and host Live Stage entry log append-only disclosure rows where backed.
-- The disclosure is only an audit/safety signal. It does not grant permission, confirm licensing, protect from claims, bypass DMCA/report/takedown, bypass source eligibility, bypass Premium, or change LiveKit tokens/roles.
-- Migration `202605260007_content_rights_disclosures.sql` adds the append-only disclosure log and authenticated RPC.
-- `npm run guard:content-rights-policy` pins no unsafe rights copy, no duplicate Profile Platform tab, no Mini Platform copy, and no LiveKit token issuer changes.
-- Emulator screenshots live outside the repo at `/tmp/chillywood-profile-rights-disclosure-proof-20260526/`. They capture Settings Profile handoff, owner Profile top `Platform` action, bottom tabs Posts/Live/Community/About, Live Watch-Party start Rights chip/sheet, active disclosure overlay, Clip Studio without the old legal block, and the Clip Studio Rights sheet.
+- Clip Studio and creator-video upload/publish show no visible Rights UI; they focus on video, cover, title, template, Save Draft, and Publish.
+- Watch-Party Live waiting room, Watch-Party Live Party Room, Live Watch-Party waiting room, Live Watch-Party Live Room / Live Stage, setup/status panels, room-code panels, and Spectator pages show no visible Rights UI.
+- No Rights sheet, overlay, chip, checkbox group, or note field is user-facing.
+- Migration `202605260007_content_rights_disclosures.sql` and `_lib/contentRights.ts` remain dormant future audit support only.
+- Copyright safety relies on Terms, Community Guidelines, Report/Copyright flow, DMCA/takedown, repeat-infringer policy, and moderation/admin removal.
+- No disclosure helper grants permission, confirms licensing, bypasses DMCA/report/takedown, bypasses source eligibility, bypasses Premium, or changes LiveKit tokens/roles.
+- `npm run guard:content-rights-policy` pins no visible Rights UI in the listed app surfaces, no note field, no unsafe legal copy, no duplicate Profile Platform tab, no Mini Platform copy, and no LiveKit token issuer changes.
+- Previous Rights UI screenshots live outside the repo at `/tmp/chillywood-profile-rights-disclosure-proof-20260526/` and `/tmp/chillywood-rights-overlay-correction-proof-20260526/`; use only current absence-proof captures going forward.
 
 Remaining limitation:
 
-- Physical `R5CR120QCBF` was not visible to ADB during the implementation closeout, so direct live-stage host-entry visual proof is still not claimed on the target device. The route code is wired and static guards pass.
+- Physical Android proof on `R5CR120QCBF` is still useful after a fresh build/dev-client launch.
 
 Recommended next lane:
 
 - Reattach/run a current Android build/dev-client on `R5CR120QCBF`.
-- Capture direct `/watch-party/live-stage/[partyId]` host-entry Rights chip/sheet, active overlay, and stage-entry handoff.
+- Capture Clip Studio/content upload with no visible Rights card/chip/sheet.
+- Capture Watch-Party Live waiting room and Watch-Party Live Party Room with no visible Rights card/chip/sheet/overlay.
+- Capture Live Watch-Party waiting room and Live Watch-Party Live Room / Live Stage with no visible Rights card/chip/sheet/overlay.
+- Capture Spectator with no visible Rights card/chip/sheet/overlay, while Share/Report remain available where expected.
 - Re-run `npm run guard:content-rights-policy`, Profile/Clip/Watch-Party guards, and targeted no-unsafe-rights-copy greps.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
 

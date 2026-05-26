@@ -336,22 +336,17 @@ Clip Studio can preview a Platform brand mark only if Brand Studio already has a
 
 The brand mark remains preview metadata and does not change Player behavior.
 
-## Lightweight Rights Disclosure
+## Rights Disclosure Placement
 
-Clip Studio and creator-video upload now use a small optional Rights control instead of the old long required acknowledgement block in the main editor. Save Draft and Publish are not blocked for creators who own their own content and do not need to open the sheet.
+Visible Rights Disclosure UI is disabled for now.
 
-The Rights sheet supports:
+Clip Studio and creator-video upload/publish do not show visible Rights UI. There is no Rights card, chip, sheet, checkbox group, overlay, or note field in the Clip/content editor. Clip Studio should stay focused on video, cover, title, template, Save Draft, and Publish.
 
-- Contains third-party content
-- Contains third-party music
-- optional source/context note
-- Clear disclosure
+Watch-Party Live waiting room / create-room screen, Watch-Party Live Party Room, Live Watch-Party waiting room / create-room screen, Live Watch-Party Live Room / Live Stage, setup/status panels, room-code panels, and Spectator pages also stay free of visible Rights UI.
 
-When a disclosure is active, a persistent bottom chip stays visible on the relevant Platform Studio surface until the creator edits or clears it. Saving a creator video, publishing an existing video, or saving/publishing a Clip Studio item records an append-only `content_rights_disclosures` audit row through `record_content_rights_disclosure`.
+Copyright safety currently relies on Terms, Community Guidelines, Report/Copyright flow, DMCA/takedown, repeat-infringer policy, and moderation/admin removal.
 
-This disclosure is only a creator notice, audit record, and safety signal. It does not confirm permission, grant licensing, protect the creator from claims, or override reports, moderation, DMCA takedown, counter-notice, or repeat-infringer handling.
-
-May 26, 2026 validation: the content-rights migration `202605260007_content_rights_disclosures.sql` is applied and aligned with the remote database. Emulator screenshots at `/tmp/chillywood-profile-rights-disclosure-proof-20260526/` capture Clip Studio without the old long acknowledgement block, the compact Rights card, and the Rights sheet with third-party content/music flags plus the non-clearance note. Physical `R5CR120QCBF` proof remains a follow-up because the device was not visible to ADB during this pass.
+May 26, 2026 correction status: the content-rights migration `202605260007_content_rights_disclosures.sql` remains an append-only audit scaffold, and `_lib/contentRights.ts` remains helper-only. Backend disclosure helpers/tables are dormant future audit support and do not create visible controls, chips, sheets, overlays, legal clearance, source eligibility, room authority, or LiveKit grants.
 
 ## Failure States
 
@@ -390,7 +385,7 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 - Do not change Premium gates, RevenueCat, LiveKit, Watch-Party Live, Live Watch-Party, payout, revenue, or creator monetization logic from Clip Studio work.
 - Do not use legacy diminutive Platform copy.
 - Do not bring back the long creator rights acknowledgement block in the main editor.
-- Do not claim that checking third-party content/music creates legal permission or stops DMCA/report/takedown flows.
+- Do not claim that any rights disclosure creates legal permission or stops DMCA/report/takedown flows.
 
 ## Validation
 

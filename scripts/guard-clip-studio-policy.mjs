@@ -16,8 +16,8 @@ const publicHome = read("app/(tabs)/index.tsx");
 const publicProfile = read("app/profile/[userId].tsx");
 const player = read("app/player/[id].tsx");
 const rightsHelper = read("_lib/contentRights.ts");
-const rightsControl = read("components/content-rights/rights-disclosure-control.tsx");
 const rightsMigration = read("supabase/migrations/202605260007_content_rights_disclosures.sql");
+const clipDocs = read("docs/CLIP_STUDIO.md");
 
 const requiredStudioCopy = [
   "Clip Studio",
@@ -42,24 +42,35 @@ for (const needle of requiredStudioCopy) {
   }
 }
 
-const requiredRightsDisclosureTerms = [
+const requiredDormantRightsDisclosureTerms = [
+  "Visible Rights Disclosure UI is disabled for now",
+  "Clip Studio and creator-video upload/publish do not show visible Rights UI",
+  "content_rights_disclosures",
+  "record_content_rights_disclosure",
+  "Backend disclosure helpers/tables are dormant",
+  "does not grant copyright clearance",
+];
+
+for (const needle of requiredDormantRightsDisclosureTerms) {
+  const surface = `${rightsHelper}\n${rightsMigration}\n${clipDocs}`;
+  if (!surface.includes(needle)) {
+    throw new Error(`Clip Studio guard failed: dormant rights disclosure support is missing "${needle}".`);
+  }
+}
+
+for (const forbidden of [
   "RightsDisclosureControl",
   "contentRightsDisclosure",
   "clipRightsDisclosure",
   "recordCreatorVideoRightsDisclosure",
   "recordClipRightsDisclosure",
-  "Contains third-party content",
-  "Contains third-party music",
-  "This disclosure does not confirm permission or licensing. Reports and takedowns can still apply.",
-  "content_rights_disclosures",
-  "record_content_rights_disclosure",
-  "does not grant copyright clearance",
-];
-
-for (const needle of requiredRightsDisclosureTerms) {
-  const surface = `${studio}\n${rightsHelper}\n${rightsControl}\n${rightsMigration}`;
-  if (!surface.includes(needle)) {
-    throw new Error(`Clip Studio guard failed: lightweight rights disclosure is missing "${needle}".`);
+  "rightsInlineRow",
+  "I don’t own this content",
+  "I don’t own this music",
+  "Use this if your upload includes content or music",
+]) {
+  if (studio.includes(forbidden)) {
+    throw new Error(`Clip Studio guard failed: visible Clip/content Rights UI must be removed from Platform Studio: "${forbidden}".`);
   }
 }
 
@@ -76,12 +87,14 @@ for (const forbidden of [
 
 for (const forbidden of [
   "I don't own rights",
-  "I don't own content",
-  "I don't own music",
   "This protects you",
   "This makes it legal",
+  "Contains third-party content",
+  "Contains third-party music",
+  "Add a note",
+  "Clear disclosure",
 ]) {
-  const userFacingRightsSurface = `${studio}\n${rightsControl}`;
+  const userFacingRightsSurface = studio;
   if (userFacingRightsSurface.includes(forbidden)) {
     throw new Error(`Clip Studio guard failed: unsafe rights copy is present: "${forbidden}".`);
   }

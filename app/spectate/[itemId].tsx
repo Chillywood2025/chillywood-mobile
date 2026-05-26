@@ -329,7 +329,7 @@ export default function SpectatorMetadataScreen() {
             <Text style={styles.detailValue}>{decision.accessType.replaceAll("_", " ")}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Rights</Text>
+            <Text style={styles.detailLabel}>Safety</Text>
             <Text style={styles.detailValue}>{decision.rightsStatus.replaceAll("_", " ")}</Text>
           </View>
           <View style={styles.detailRow}>

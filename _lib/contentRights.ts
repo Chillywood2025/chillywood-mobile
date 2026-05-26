@@ -20,7 +20,6 @@ export type ContentRightsTargetType =
 export type ContentRightsDisclosureState = {
   containsThirdPartyContent: boolean;
   containsThirdPartyMusic: boolean;
-  note: string;
 };
 
 export const CONTENT_RIGHTS_POLICY_VERSION = "content-rights-v1";
@@ -28,7 +27,6 @@ export const CONTENT_RIGHTS_POLICY_VERSION = "content-rights-v1";
 export const createEmptyContentRightsDisclosure = (): ContentRightsDisclosureState => ({
   containsThirdPartyContent: false,
   containsThirdPartyMusic: false,
-  note: "",
 });
 
 const toText = (value: unknown) => String(value ?? "").trim();
@@ -38,7 +36,6 @@ export const normalizeContentRightsDisclosure = (
 ): ContentRightsDisclosureState => ({
   containsThirdPartyContent: value?.containsThirdPartyContent === true,
   containsThirdPartyMusic: value?.containsThirdPartyMusic === true,
-  note: toText(value?.note).slice(0, 500),
 });
 
 export const isContentRightsDisclosureActive = (
@@ -53,11 +50,11 @@ export const formatContentRightsDisclosureSummary = (
 ) => {
   const normalized = normalizeContentRightsDisclosure(value);
   if (normalized.containsThirdPartyContent && normalized.containsThirdPartyMusic) {
-    return "Third-party content + music disclosed";
+    return "content_and_music";
   }
-  if (normalized.containsThirdPartyMusic) return "Music disclosed";
-  if (normalized.containsThirdPartyContent) return "Third-party content disclosed";
-  return "No third-party disclosure active";
+  if (normalized.containsThirdPartyMusic) return "music";
+  if (normalized.containsThirdPartyContent) return "content";
+  return "none";
 };
 
 export async function recordContentRightsDisclosure(input: {
@@ -80,7 +77,7 @@ export async function recordContentRightsDisclosure(input: {
     p_target_id: targetId,
     p_contains_third_party_content: disclosure.containsThirdPartyContent,
     p_contains_third_party_music: disclosure.containsThirdPartyMusic,
-    p_disclosure_note: disclosure.note || null,
+    p_disclosure_note: null,
     p_policy_version: CONTENT_RIGHTS_POLICY_VERSION,
     p_source_context: input.sourceContext ?? {},
   });

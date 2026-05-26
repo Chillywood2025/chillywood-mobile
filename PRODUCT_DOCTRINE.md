@@ -35,11 +35,11 @@ Use native mobile layout systems intentionally: grid systems for people/content 
 Any generated route, room, or screen is incomplete unless it includes role-aware and permission-aware controls, empty/loading/error/locked states, safe-area and keyboard behavior where relevant, touch-friendly controls, no clipped/overlapping text or controls, and a proof plan. UI polish must not add fake data, fake counts, fake participants, fake money, fake messages, fake recommendations, route ownership changes, backend behavior changes, or Premium/role boundary changes.
 
 ## Lightweight Rights Disclosure
-- Creator rights disclosure is a lightweight notice and audit signal, not a licensing or copyright-clearance system.
-- Creators who own everything should not be forced through a large rights form. Creators who use third-party content or music should have an easy `Rights` control with `Contains third-party content` and `Contains third-party music`.
-- When active, the disclosure should remain visible as a small bottom chip/overlay or footer control until the creator edits or clears it.
-- Disclosures may be logged for Clip Studio, creator video upload/publish, Live Watch-Party, Watch-Party Live, Spectator child rooms when extra third-party media is added later, paid content later, and replay later.
-- A disclosure must never say it protects the creator, makes the use legal, confirms permission, grants a license, or blocks copyright claims.
+- Visible Rights Disclosure UI is disabled for now.
+- Clip Studio, creator-video upload/publish, Watch-Party Live waiting room, Watch-Party Live Party Room, Live Watch-Party waiting room, Live Watch-Party Live Room / Live Stage, setup/status panels, room-code panels, and Spectator pages must not show Rights cards, chips, sheets, overlays, checkboxes, or note fields.
+- Backend disclosure helpers/tables may remain only as dormant future audit support. They must not create creator-facing controls or imply permission, licensing, source eligibility, room authority, or LiveKit access.
+- Copyright safety relies on Terms, Community Guidelines, Report/Copyright flow, DMCA/takedown, repeat-infringer policy, and moderation/admin removal.
+- UI copy must never say a disclosure shields the creator, makes use legal, confirms permission, grants a license, or blocks copyright claims.
 - DMCA/report/takedown, moderation, repeat-infringer, private/source eligibility, Premium, LiveKit, and route-ownership rules remain separate and still apply.
 
 ## Monetization Core
