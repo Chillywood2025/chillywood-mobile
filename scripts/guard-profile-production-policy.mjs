@@ -38,7 +38,9 @@ const profileAppearanceMigration = read("supabase/migrations/202605260001_profil
 const profileMediaStatusMigration = read("supabase/migrations/202605260002_profile_media_status_policy.sql");
 
 assertIncludes(profile, `label: "Platform"`, "Profile tab labels");
-assertIncludes(profile, `Preview Platform`, "owner public Platform preview action");
+assertIncludes(profile, `profile-preview-platform-button`, "owner public Platform action");
+assertIncludes(profile, `<Text style={styles.actionBtnText}>Platform</Text>`, "owner public Platform action copy");
+assertNotIncludes(profile, `{ key: "content", label: "Platform" }`, "duplicate bottom Platform tab");
 assertIncludes(profile, `params: { userId, preview: "public" }`, "owner public Platform preview route");
 assertIncludes(profile, `Platform Studio`, "owner Platform Studio action");
 assertIncludes(profile, `Chi'lly Chat`, "Profile Chi'lly Chat action");

@@ -64,6 +64,12 @@ import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { PLAYER_WATCH_PARTY_SOURCE } from "../../_lib/watch-party/room-shared";
 import WatchPartyLiveStageScreen from "./live-stage/[partyId]";
+import {
+  createEmptyContentRightsDisclosure,
+  recordContentRightsDisclosure,
+  type ContentRightsDisclosureState,
+} from "../../_lib/contentRights";
+import { RightsDisclosureControl } from "../../components/content-rights/rights-disclosure-control";
 
 type RoomPreview = {
   room: WatchPartyState;
@@ -208,6 +214,9 @@ export default function WatchPartyIndexScreen() {
   const [watchPartyPremiumSheetCopy, setWatchPartyPremiumSheetCopy] = useState<PremiumLiveUpsellCopy>(WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const [embeddedLiveStageEntry, setEmbeddedLiveStageEntry] = useState<EmbeddedLiveStageEntry | null>(null);
+  const [roomRightsDisclosure, setRoomRightsDisclosure] = useState<ContentRightsDisclosureState>(
+    createEmptyContentRightsDisclosure,
+  );
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
   const lastEntryLaneKeyRef = useRef(entryLaneKey);
@@ -243,6 +252,36 @@ export default function WatchPartyIndexScreen() {
       active = false;
     };
   }, []);
+
+  const recordRoomRightsDisclosure = useCallback(async (
+    room: WatchPartyState,
+    action: "prepared" | "create" | "start",
+  ) => {
+    const targetId = String(room.partyId ?? room.roomCode ?? "").trim();
+    if (!targetId) return;
+
+    try {
+      await recordContentRightsDisclosure({
+        surface: room.roomType === "live" ? "live_watch_party" : "watch_party_live",
+        targetType: room.roomType === "live" ? "live_room" : "watch_party_room",
+        targetId,
+        disclosure: roomRightsDisclosure,
+        sourceContext: {
+          action,
+          roomType: room.roomType,
+          roomCode: room.roomCode,
+          sourceType: room.sourceType ?? null,
+          sourceId: room.sourceId ?? room.titleId ?? null,
+          source: "watch_party_start_flow",
+        },
+      });
+    } catch (error) {
+      reportRuntimeError("watch-party-rights-disclosure", error, {
+        partyId: targetId,
+        roomType: room.roomType,
+      });
+    }
+  }, [roomRightsDisclosure]);
 
   useEffect(() => {
     if (lastEntryLaneKeyRef.current === entryLaneKey) return;
@@ -396,6 +435,7 @@ export default function WatchPartyIndexScreen() {
       sourceId: sourceOptions?.sourceId,
     });
     if (!room || "error" in room) return null;
+    await recordRoomRightsDisclosure(room, "prepared");
 
     const nextPreparedRoom = await buildRoomPreview(room);
     setPreparedRoom(nextPreparedRoom);
@@ -408,7 +448,7 @@ export default function WatchPartyIndexScreen() {
     });
     setHostLabel("You are hosting");
     return nextPreparedRoom;
-  }, [buildRoomPreview, canUseBetaRooms, requirePremiumRoomEntry]);
+  }, [buildRoomPreview, canUseBetaRooms, recordRoomRightsDisclosure, requirePremiumRoomEntry]);
 
   useEffect(() => {
     if (!canUseBetaRooms) return;
@@ -889,6 +929,9 @@ export default function WatchPartyIndexScreen() {
         } else {
           const nextPartyId = preparedTargetPartyId;
           if (nextPartyId) {
+            if (preparedRoom?.room) {
+              await recordRoomRightsDisclosure(preparedRoom.room, "start");
+            }
             console.log("[watch-party-proof] navigating to prepared room", {
               roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
               partyId: nextPartyId,
@@ -936,6 +979,7 @@ export default function WatchPartyIndexScreen() {
         roomId: nextPartyId,
         roomType,
       });
+      await recordRoomRightsDisclosure(room, "create");
       navigateToRoom({
         partyId: nextPartyId,
         roomType: room.roomType,
@@ -1337,6 +1381,23 @@ export default function WatchPartyIndexScreen() {
                 onSubmitEditing={onCreateRoom}
               />
             )}
+            <View style={styles.rightsDisclosureRow}>
+              <Text style={styles.joinSupportText}>
+                {isLiveWaitingRoom
+                  ? "If your live includes third-party music or video, mark it here."
+                  : "Use Rights if you add third-party content or music to this watch party."}
+              </Text>
+              <RightsDisclosureControl
+                value={roomRightsDisclosure}
+                onChange={setRoomRightsDisclosure}
+                disabled={createActionBusy}
+                helperText={
+                  isLiveWaitingRoom
+                    ? "If your live includes third-party music or video, mark it here."
+                    : "Use this if your watch party includes third-party content or music beyond an eligible Chi'llwood source."
+                }
+              />
+            </View>
             {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
             <TouchableOpacity
               style={[styles.primaryButton, createActionBusy && styles.primaryButtonDisabled]}
@@ -1458,6 +1519,18 @@ export default function WatchPartyIndexScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+      <RightsDisclosureControl
+        mode="overlay"
+        showInactiveChip={false}
+        value={roomRightsDisclosure}
+        onChange={setRoomRightsDisclosure}
+        disabled={createActionBusy}
+        helperText={
+          isLiveWaitingRoom
+            ? "If your live includes third-party music or video, mark it here."
+            : "Use this if your watch party includes third-party content or music beyond an eligible Chi'llwood source."
+        }
+      />
       {accessSheetReason ? (
         <AccessSheet
           visible={accessSheetVisible}
@@ -1731,6 +1804,9 @@ const styles = StyleSheet.create({
   },
   joinLabel: { color: "#6C7488", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
   joinSupportText: { color: "#A7B0C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  rightsDisclosureRow: {
+    gap: 8,
+  },
   input: {
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,

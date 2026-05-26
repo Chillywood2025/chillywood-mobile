@@ -245,17 +245,17 @@ The separate public Platform route is currently `/channel/[userId]`. Doctrine an
 - public identity: display name, handle, avatar, tagline, role, official account badges, live/off-air state, and room context state
 - public Platform handoff through View Platform
 - primary public actions: backed Follow/Following or sign-in follow handoff, Chi'lly Chat, View Platform, Share Profile, Report, and live/watch-party handoffs when real context exists
-- primary owner actions: Platform Studio, Preview Platform, Chi'lly Chat, Chi'lly Circle, and Settings
+- primary owner actions: Platform Studio, Platform, Chi'lly Chat, Chi'lly Circle, and Settings
 - Platform access posture: browse, Watch Party, and Chi'lly Chat access cards backed by user profile defaults and creator permissions
-- tabs: Posts, Platform, Live, Community, About
+- tabs: Posts, Live, Community, About
 - Posts tab: backed text-only Profile posts/status updates, owner composer/delete, public clean reads, backed text comments, backed single likes/counts, and route-safe share
 - Platform handoff: Profile View Platform routes to `/channel/[userId]`; user/creator Platforms do not show Chi'llywood Originals or platform `titles` as filler
 - public live/event summaries from backed `creator_events` and reminder summaries
 - owner mode on the same route when the signed-in user matches the route user id
-- owner-only handoff card and quick actions to Platform Studio, Preview Platform, Settings, Chi'lly Circle, and Chi'lly Chat
+- owner-only handoff card and quick actions to Platform Studio, Platform, Settings, Chi'lly Circle, and Chi'lly Chat
 - report/safety path for non-self profiles
 
-The self vs public viewer experience is different at the control level: self-view gets owner prompts, Platform Studio, Preview Platform, Settings, Chi'lly Circle, Chi'lly Chat, and drafts only on owner surfaces; visitors get backed Follow/Following where present, Chi'lly Chat, View Platform, Share Profile, Report, and public Platform handoff. Public Platform viewing currently uses `/channel/[userId]`.
+The self vs public viewer experience is different at the control level: self-view gets owner prompts, Platform Studio, Platform, Settings, Chi'lly Circle, Chi'lly Chat, and drafts only on owner surfaces; visitors get backed Follow/Following where present, Chi'lly Chat, View Platform, Share Profile, Report, and public Platform handoff. Public Platform viewing currently uses `/channel/[userId]`.
 
 ## Current Platform Truth
 
@@ -548,7 +548,7 @@ Storage:
 
 Main decision update: bounded social attachments are now a Public v1 local implementation for Profile posts/comments, standalone creator-video comments, Chi'lly Chat, and backed room comments that already write through `watch_party_room_messages` plus `social_attachments`. Movie-size comment/chat uploads remain post-v1. This remains separate from creator Platform video upload and must not use the 5 GiB creator-video limit.
 
-2026-05-25 UX update: all backed social attachment entry points now use one shared Photos/Files action sheet. It is wired into Profile post Attach, Profile comment Attach, Chi'lly Chat Attach, creator-video comment Attach, Watch-Party room comment Attach, and Live Stage comment Attach. Profile owners may see a Platform Studio handoff inside the sheet for creator content; viewers and non-Profile social surfaces do not get owner tools. Legal/DMCA evidence attachment pickers and Platform Studio creator/brand media pickers intentionally remain separate.
+2026-05-25 UX update: all backed social attachment entry points now use one shared Photos/Files action sheet. It is wired into Profile post Attach, Profile comment Attach, Chi'lly Chat Attach, creator-video comment Attach, Watch-Party room comment Attach, and Live Stage comment Attach. The sheet must not include Platform Studio; creator content belongs in Platform Studio through owner actions, not through social Attach. Legal/DMCA evidence attachment pickers and Platform Studio creator/brand media pickers intentionally remain separate.
 
 Current comment truth:
 

@@ -1,28 +1,36 @@
 # NEXT TASK
 
-## Recommended Lane: True Live-Stage Spectator Fixture Proof
+## Recommended Lane: Profile Rights Disclosure R5 Live-Stage Visual Proof
 
-Replay proof is now closed with a proof-scoped safe archive fixture. The remaining Spectator proof gap is only successful Live Watch-Party / Reaction Room launch from a true live-stage-compatible public-safe source.
+The Profile navigation cleanup and lightweight Rights Disclosure lane is repo-side wired and partially runtime-proved on the current Android emulator. The remaining recommended follow-up is physical `R5CR120QCBF` visual proof for the direct live-stage host-entry surface once the device is visible to ADB again.
 
 Closed truth:
 
-- Watch-Party Live child creation from an eligible content/player Spectator source is already Android-proved.
-- Replay archive child creation is now Android-proved from source item `9c5f5655-1fbb-4ac8-9473-a5a8d73f3a19`; child room `NSHU7J` showed safe attribution and a visible child shared Player frame.
-- Migration `202605260006_spectator_replay_archive_fixture.sql` is remote-applied and creates only a replay archive fixture, with `source_is_live=false`, `live_state='replay_available_later'`, `allow_replay_watch_party=true`, and `allow_live_reaction_rooms=false`.
-- The replay resolver uses controlled HTTPS `spectator-playback` URLs and does not expose raw HLS paths or original LiveKit tokens.
-- Public-safe live-reaction candidate discovery returned zero true live-compatible rows, so Live Watch-Party / Reaction Room success remains unclaimed.
-- Existing LiveKit token issuance, old-room handling, Premium gates, Watch-Party Live route ownership, and Live Watch-Party route ownership remain unchanged.
-- Screenshots live outside the repo at `/tmp/chillywood-spectator-live-stage-replay-proof-20260526/`.
+- Profile owner top action now says `Platform` and keeps the existing public Platform preview route.
+- The duplicate bottom Profile `Platform` tab/pill is removed; bottom tabs are Posts, Live, Community, About.
+- Clip Studio and creator-video upload use the reusable lightweight Rights Disclosure sheet instead of the long required acknowledgement block.
+- Rights Disclosure supports `Contains third-party content`, `Contains third-party music`, optional note, and clear disclosure.
+- Active disclosures show a persistent bottom chip/overlay on Platform Studio content/Clip surfaces.
+- Creator video upload/update/publish, Clip Studio save/publish, Watch-Party Live start, Live Watch-Party start, and host Live Stage entry log append-only disclosure rows where backed.
+- The disclosure is only an audit/safety signal. It does not grant permission, confirm licensing, protect from claims, bypass DMCA/report/takedown, bypass source eligibility, bypass Premium, or change LiveKit tokens/roles.
+- Migration `202605260007_content_rights_disclosures.sql` adds the append-only disclosure log and authenticated RPC.
+- `npm run guard:content-rights-policy` pins no unsafe rights copy, no duplicate Profile Platform tab, no Mini Platform copy, and no LiveKit token issuer changes.
+- Emulator screenshots live outside the repo at `/tmp/chillywood-profile-rights-disclosure-proof-20260526/`. They capture Settings Profile handoff, owner Profile top `Platform` action, bottom tabs Posts/Live/Community/About, Live Watch-Party start Rights chip/sheet, active disclosure overlay, Clip Studio without the old legal block, and the Clip Studio Rights sheet.
 
 Remaining limitation:
 
-- A true public-safe live-stage-compatible source is still needed to prove `Start Live Watch-Party` / `Start Reaction Room` success. Do not reuse VOD/replay playback and call it live.
+- Physical `R5CR120QCBF` was not visible to ADB during the implementation closeout, so direct live-stage host-entry visual proof is still not claimed on the target device. The route code is wired and static guards pass.
 
 Recommended next lane:
 
-- Create or locate a real live-stage-compatible public-safe Spectator source with safe playback, source attribution, and `allow_live_reaction_rooms=true`.
-- On `R5CR120QCBF`, prove the eligible live-stage Spectator CTA, resulting child `/watch-party/live-stage/[partyId]` room, safe attribution, no original host controls/member list, no original LiveKit token exposure, and normal child-room speaker/publish rules.
+- Reattach/run a current Android build/dev-client on `R5CR120QCBF`.
+- Capture direct `/watch-party/live-stage/[partyId]` host-entry Rights chip/sheet, active overlay, and stage-entry handoff.
+- Re-run `npm run guard:content-rights-policy`, Profile/Clip/Watch-Party guards, and targeted no-unsafe-rights-copy greps.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
+
+## Previous Recommended Lane: True Live-Stage Spectator Fixture Proof
+
+Replay proof is closed with a proof-scoped safe archive fixture. The remaining Spectator proof gap is only successful Live Watch-Party / Reaction Room launch from a true live-stage-compatible public-safe source.
 
 ## Previous Recommended Lane: RevenueCat / Google Play Credential Linking And Money Center Provider Proof
 

@@ -336,6 +336,23 @@ Clip Studio can preview a Platform brand mark only if Brand Studio already has a
 
 The brand mark remains preview metadata and does not change Player behavior.
 
+## Lightweight Rights Disclosure
+
+Clip Studio and creator-video upload now use a small optional Rights control instead of the old long required acknowledgement block in the main editor. Save Draft and Publish are not blocked for creators who own their own content and do not need to open the sheet.
+
+The Rights sheet supports:
+
+- Contains third-party content
+- Contains third-party music
+- optional source/context note
+- Clear disclosure
+
+When a disclosure is active, a persistent bottom chip stays visible on the relevant Platform Studio surface until the creator edits or clears it. Saving a creator video, publishing an existing video, or saving/publishing a Clip Studio item records an append-only `content_rights_disclosures` audit row through `record_content_rights_disclosure`.
+
+This disclosure is only a creator notice, audit record, and safety signal. It does not confirm permission, grant licensing, protect the creator from claims, or override reports, moderation, DMCA takedown, counter-notice, or repeat-infringer handling.
+
+May 26, 2026 validation: the content-rights migration `202605260007_content_rights_disclosures.sql` is applied and aligned with the remote database. Emulator screenshots at `/tmp/chillywood-profile-rights-disclosure-proof-20260526/` capture Clip Studio without the old long acknowledgement block, the compact Rights card, and the Rights sheet with third-party content/music flags plus the non-clearance note. Physical `R5CR120QCBF` proof remains a follow-up because the device was not visible to ADB during this pass.
+
 ## Failure States
 
 Creator-facing failure copy covers:
@@ -372,6 +389,8 @@ Raw storage paths, signed URL internals, RLS messages, backend wording, and debu
 - Do not expose raw `creator_clip_edits` rows or owner-only title/template metadata publicly.
 - Do not change Premium gates, RevenueCat, LiveKit, Watch-Party Live, Live Watch-Party, payout, revenue, or creator monetization logic from Clip Studio work.
 - Do not use legacy diminutive Platform copy.
+- Do not bring back the long creator rights acknowledgement block in the main editor.
+- Do not claim that checking third-party content/music creates legal permission or stops DMCA/report/takedown flows.
 
 ## Validation
 

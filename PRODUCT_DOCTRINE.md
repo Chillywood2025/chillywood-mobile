@@ -34,6 +34,14 @@ Use native mobile layout systems intentionally: grid systems for people/content 
 
 Any generated route, room, or screen is incomplete unless it includes role-aware and permission-aware controls, empty/loading/error/locked states, safe-area and keyboard behavior where relevant, touch-friendly controls, no clipped/overlapping text or controls, and a proof plan. UI polish must not add fake data, fake counts, fake participants, fake money, fake messages, fake recommendations, route ownership changes, backend behavior changes, or Premium/role boundary changes.
 
+## Lightweight Rights Disclosure
+- Creator rights disclosure is a lightweight notice and audit signal, not a licensing or copyright-clearance system.
+- Creators who own everything should not be forced through a large rights form. Creators who use third-party content or music should have an easy `Rights` control with `Contains third-party content` and `Contains third-party music`.
+- When active, the disclosure should remain visible as a small bottom chip/overlay or footer control until the creator edits or clears it.
+- Disclosures may be logged for Clip Studio, creator video upload/publish, Live Watch-Party, Watch-Party Live, Spectator child rooms when extra third-party media is added later, paid content later, and replay later.
+- A disclosure must never say it protects the creator, makes the use legal, confirms permission, grants a license, or blocks copyright claims.
+- DMCA/report/takedown, moderation, repeat-infringer, private/source eligibility, Premium, LiveKit, and route-ownership rules remain separate and still apply.
+
 ## Monetization Core
 - Premium is the platform subscription. It uses Google Play plus RevenueCat, RevenueCat entitlement `premium`, and the current planned price is `$9.99/month` and `$99/year`.
 - Premium subscription revenue belongs to Chi'llywood/platform. It must not be split with creators, must not create a creator subscription revenue pool, and must not be treated as creator earnings.

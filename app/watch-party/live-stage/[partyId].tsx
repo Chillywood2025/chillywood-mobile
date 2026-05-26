@@ -114,6 +114,12 @@ import {
 import { useCommunicationRoomSession } from "../../../hooks/use-communication-room-session";
 import { InternalInviteSheet } from "../../../components/chat/internal-invite-sheet";
 import { AccessSheet, type AccessSheetReason } from "../../../components/monetization/access-sheet";
+import {
+  createEmptyContentRightsDisclosure,
+  recordContentRightsDisclosure,
+  type ContentRightsDisclosureState,
+} from "../../../_lib/contentRights";
+import { RightsDisclosureControl } from "../../../components/content-rights/rights-disclosure-control";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { RoomReactionPicker, pushRecentReaction } from "../../../components/room/reaction-picker";
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
@@ -800,6 +806,9 @@ export default function WatchPartyLiveStageScreen({
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const [liveKitJoinContract, setLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
   const [liveKitJoinUnavailable, setLiveKitJoinUnavailable] = useState<LiveKitTokenUnavailable | null>(null);
+  const [liveStageRightsDisclosure, setLiveStageRightsDisclosure] = useState<ContentRightsDisclosureState>(
+    createEmptyContentRightsDisclosure,
+  );
   const myCameraPreviewUrlRef = useRef<string>("");
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
@@ -2738,6 +2747,32 @@ export default function WatchPartyLiveStageScreen({
     trackedUserId,
   ]);
 
+  const recordLiveStageRightsDisclosure = useCallback(async (entryStageMode: SharedRoomMode) => {
+    const targetId = String(partyId ?? "").trim();
+    if (!isHost) return;
+    if (!targetId) return;
+
+    try {
+      await recordContentRightsDisclosure({
+        surface: "live_watch_party",
+        targetType: "live_room",
+        targetId,
+        disclosure: liveStageRightsDisclosure,
+        sourceContext: {
+          action: "enter_stage",
+          stageMode: entryStageMode,
+          roomCode: room?.roomCode ?? null,
+          source: source || null,
+        },
+      });
+    } catch (error) {
+      reportRuntimeError("live-stage-rights-disclosure", error, {
+        partyId: targetId,
+        stageMode: entryStageMode,
+      });
+    }
+  }, [isHost, liveStageRightsDisclosure, partyId, room?.roomCode, source]);
+
   const onEnterLiveStage = useCallback(async () => {
     const entryStageMode: SharedRoomMode = isHost ? stageMode : "hybrid";
     const entryParticipantRole: LiveKitTokenReady["participantRole"] = liveKitParticipantRole;
@@ -2834,6 +2869,7 @@ export default function WatchPartyLiveStageScreen({
     stageOverlayLastInteractionAtRef.current = Date.now();
     setStageOverlayVisible(true);
     stageOverlayMotion.setValue(1);
+    await recordLiveStageRightsDisclosure(entryStageMode);
     setLiveSurface("stage");
   }, [
     closeStageOverlayPanels,
@@ -2842,6 +2878,7 @@ export default function WatchPartyLiveStageScreen({
     liveKitParticipantRole,
     modeParamValue,
     partyId,
+    recordLiveStageRightsDisclosure,
     requireLiveStagePremium,
     resolveLiveKitStageEntryRole,
     resolvedCurrentUsername,
@@ -3433,6 +3470,18 @@ export default function WatchPartyLiveStageScreen({
       </ScrollView>
 
       <View style={[styles.liveRoomFooter, { paddingBottom: liveRoomFooterInset }]}>
+        {isHost ? (
+          <View style={styles.liveRoomRightsRow}>
+            <Text style={styles.stageSectionBody}>
+              If your live includes third-party music or video, mark it here.
+            </Text>
+            <RightsDisclosureControl
+              value={liveStageRightsDisclosure}
+              onChange={setLiveStageRightsDisclosure}
+              helperText="If your live includes third-party music or video, mark it here."
+            />
+          </View>
+        ) : null}
         <TouchableOpacity
           style={styles.liveRoomPrimaryButton}
           activeOpacity={0.88}
@@ -4683,6 +4732,16 @@ export default function WatchPartyLiveStageScreen({
         ) : null}
       </View>
 
+      {isHost ? (
+        <RightsDisclosureControl
+          mode="overlay"
+          showInactiveChip={false}
+          value={liveStageRightsDisclosure}
+          onChange={setLiveStageRightsDisclosure}
+          helperText="If your live includes third-party music or video, mark it here."
+        />
+      ) : null}
+
       <ParticipantDetailSheet
         visible={!!selectedParticipant}
         participant={selectedParticipant}
@@ -4933,6 +4992,12 @@ const styles = StyleSheet.create({
     position: "relative",
     zIndex: 14,
     elevation: 14,
+  },
+  liveRoomRightsRow: {
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 8,
+    gap: 8,
   },
 
   stageHudTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },

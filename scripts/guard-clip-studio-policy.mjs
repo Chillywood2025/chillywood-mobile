@@ -15,6 +15,9 @@ const publicChannel = read("app/channel/[userId].tsx");
 const publicHome = read("app/(tabs)/index.tsx");
 const publicProfile = read("app/profile/[userId].tsx");
 const player = read("app/player/[id].tsx");
+const rightsHelper = read("_lib/contentRights.ts");
+const rightsControl = read("components/content-rights/rights-disclosure-control.tsx");
+const rightsMigration = read("supabase/migrations/202605260007_content_rights_disclosures.sql");
 
 const requiredStudioCopy = [
   "Clip Studio",
@@ -36,6 +39,51 @@ const requiredStudioCopy = [
 for (const needle of requiredStudioCopy) {
   if (!studio.includes(needle)) {
     throw new Error(`Clip Studio guard failed: missing production copy "${needle}".`);
+  }
+}
+
+const requiredRightsDisclosureTerms = [
+  "RightsDisclosureControl",
+  "contentRightsDisclosure",
+  "clipRightsDisclosure",
+  "recordCreatorVideoRightsDisclosure",
+  "recordClipRightsDisclosure",
+  "Contains third-party content",
+  "Contains third-party music",
+  "This disclosure does not confirm permission or licensing. Reports and takedowns can still apply.",
+  "content_rights_disclosures",
+  "record_content_rights_disclosure",
+  "does not grant copyright clearance",
+];
+
+for (const needle of requiredRightsDisclosureTerms) {
+  const surface = `${studio}\n${rightsHelper}\n${rightsControl}\n${rightsMigration}`;
+  if (!surface.includes(needle)) {
+    throw new Error(`Clip Studio guard failed: lightweight rights disclosure is missing "${needle}".`);
+  }
+}
+
+for (const forbidden of [
+  "CREATOR_UPLOAD_ACKNOWLEDGEMENT",
+  "rights_acknowledgement_missing",
+  "Confirm creator rights before",
+  "Confirm the creator rights acknowledgement",
+]) {
+  if (studio.includes(forbidden)) {
+    throw new Error(`Clip Studio guard failed: main editor must not require the old heavy rights acknowledgement "${forbidden}".`);
+  }
+}
+
+for (const forbidden of [
+  "I don't own rights",
+  "I don't own content",
+  "I don't own music",
+  "This protects you",
+  "This makes it legal",
+]) {
+  const userFacingRightsSurface = `${studio}\n${rightsControl}`;
+  if (userFacingRightsSurface.includes(forbidden)) {
+    throw new Error(`Clip Studio guard failed: unsafe rights copy is present: "${forbidden}".`);
   }
 }
 

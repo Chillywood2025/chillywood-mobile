@@ -87,10 +87,12 @@ import {
   readMyPlatformRoleMemberships,
   type PlatformRoleMembership,
 } from "../_lib/moderation";
+import { LIVE_REPLAY_ACKNOWLEDGEMENT } from "../_lib/legalPolicies";
 import {
-  CREATOR_UPLOAD_ACKNOWLEDGEMENT,
-  LIVE_REPLAY_ACKNOWLEDGEMENT,
-} from "../_lib/legalPolicies";
+  createEmptyContentRightsDisclosure,
+  recordContentRightsDisclosure,
+  type ContentRightsDisclosureState,
+} from "../_lib/contentRights";
 import {
   createCreatorEvent,
   updateCreatorEvent,
@@ -169,6 +171,7 @@ import {
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
 import { normalizeUserProfile, readUserProfile, saveUserProfile } from "../_lib/userData";
 import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
+import { RightsDisclosureControl } from "../components/content-rights/rights-disclosure-control";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 
 const SKYLINE_SOURCE = require("../assets/images/chicago-skyline.jpg");
@@ -1052,8 +1055,12 @@ export function ChannelStudioScreen() {
   const [selectedClipCoverFile, setSelectedClipCoverFile] = useState<CreatorVideoFile | null>(null);
   const [clipSaveState, setClipSaveState] = useState<ClipStudioSaveState>("idle");
   const [clipSavedVideoId, setClipSavedVideoId] = useState<string | null>(null);
-  const [clipRightsAccepted, setClipRightsAccepted] = useState(false);
-  const [contentRightsAccepted, setContentRightsAccepted] = useState(false);
+  const [clipRightsDisclosure, setClipRightsDisclosure] = useState<ContentRightsDisclosureState>(
+    createEmptyContentRightsDisclosure,
+  );
+  const [contentRightsDisclosure, setContentRightsDisclosure] = useState<ContentRightsDisclosureState>(
+    createEmptyContentRightsDisclosure,
+  );
   const [liveReplayAccepted, setLiveReplayAccepted] = useState(false);
   const [videoLifecycleState, setVideoLifecycleState] = useState<VideoLifecycleState>("idle");
   const liveReplayAcknowledgementRequired =
@@ -1067,8 +1074,6 @@ export function ChannelStudioScreen() {
       : "Enter a title to update this video."
     : !selectedVideoFile
       ? "Choose a video file to enable upload."
-      : !contentRightsAccepted
-        ? "Confirm you own or have permission for everything in this upload."
       : videoTitleReady
         ? ""
         : "Enter a title to enable upload.";
@@ -1450,6 +1455,58 @@ export function ChannelStudioScreen() {
     setClipNotice(null);
   };
 
+  const recordCreatorVideoRightsDisclosure = async (
+    targetId: string,
+    disclosure: ContentRightsDisclosureState,
+    sourceContext: Record<string, unknown>,
+  ) => {
+    try {
+      await recordContentRightsDisclosure({
+        surface: "creator_video",
+        targetType: "creator_video",
+        targetId,
+        disclosure,
+        sourceContext,
+      });
+      logCreatorVideoUploadUi("rights_disclosure_logged", {
+        targetId,
+        containsThirdPartyContent: disclosure.containsThirdPartyContent,
+        containsThirdPartyMusic: disclosure.containsThirdPartyMusic,
+      });
+    } catch (error) {
+      logCreatorVideoUploadUi("rights_disclosure_log_failed", {
+        targetId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  };
+
+  const recordClipRightsDisclosure = async (
+    targetId: string,
+    disclosure: ContentRightsDisclosureState,
+    sourceContext: Record<string, unknown>,
+  ) => {
+    try {
+      await recordContentRightsDisclosure({
+        surface: "clip_studio",
+        targetType: "clip",
+        targetId,
+        disclosure,
+        sourceContext,
+      });
+      logClipStudioUi("rights_disclosure_logged", {
+        targetId,
+        containsThirdPartyContent: disclosure.containsThirdPartyContent,
+        containsThirdPartyMusic: disclosure.containsThirdPartyMusic,
+      });
+    } catch (error) {
+      logClipStudioUi("rights_disclosure_log_failed", {
+        targetId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  };
+
   const applyClipTemplatePreset = (preset: ClipStudioTemplatePreset) => {
     const templateConfig = getClipStudioTemplatePresetConfig(preset);
     updateClipEditor({
@@ -1470,7 +1527,7 @@ export function ChannelStudioScreen() {
     setSelectedClipCoverFile(null);
     setClipSaveState("idle");
     setClipSavedVideoId(null);
-    setClipRightsAccepted(false);
+    setClipRightsDisclosure(createEmptyContentRightsDisclosure());
     setClipNotice(null);
   };
 
@@ -1486,7 +1543,7 @@ export function ChannelStudioScreen() {
     setSelectedClipCoverFile(null);
     setClipSaveState(transferredFile ? "video_selected" : "idle");
     setClipSavedVideoId(null);
-    setClipRightsAccepted(contentRightsAccepted);
+    setClipRightsDisclosure(contentRightsDisclosure);
     setClipNotice(
       transferredFile
         ? "Video moved into Clip Studio. Choose format, cover, and title metadata before saving."
@@ -1510,7 +1567,7 @@ export function ChannelStudioScreen() {
     setSelectedClipCoverFile(null);
     setClipSaveState("saved");
     setClipSavedVideoId(video.id);
-    setClipRightsAccepted(false);
+    setClipRightsDisclosure(createEmptyContentRightsDisclosure());
     setClipNotice("Loading Clip Studio settings for this video...");
     openStudioTab("clip", { focus: "edit" });
     void Promise.all([
@@ -1721,7 +1778,7 @@ export function ChannelStudioScreen() {
   const resetVideoEditor = (nextLifecycleState: VideoLifecycleState = "idle") => {
     setVideoEditor(createEmptyVideoEditorState());
     setSelectedVideoFile(null);
-    setContentRightsAccepted(false);
+    setContentRightsDisclosure(createEmptyContentRightsDisclosure());
     setVideoLifecycleState(nextLifecycleState);
   };
 
@@ -2155,12 +2212,6 @@ export function ChannelStudioScreen() {
       return;
     }
 
-    if ((!videoEditor.editingVideoId || videoEditor.visibility === "public") && !contentRightsAccepted) {
-      logCreatorVideoUploadUi("submit_blocked", { reason: "rights_acknowledgement_missing" });
-      setVideoNotice("Confirm the creator rights acknowledgement before uploading or publishing.");
-      return;
-    }
-
     if (!videoEditor.editingVideoId && selectedVideoFile && isCreatorVideoFileOverChannelMovieLimit(selectedVideoFile, maxUploadSizeMb)) {
       logCreatorVideoUploadUi("submit_blocked", {
         reason: "file_too_large",
@@ -2191,11 +2242,16 @@ export function ChannelStudioScreen() {
       });
 
       if (videoEditor.editingVideoId) {
-        await updateCreatorVideoMetadata(videoEditor.editingVideoId, {
+        const updatedVideo = await updateCreatorVideoMetadata(videoEditor.editingVideoId, {
           title: videoEditor.title,
           description: videoEditor.description,
           thumbUrl: videoEditor.thumbUrl,
           visibility: videoEditor.visibility,
+        });
+        await recordCreatorVideoRightsDisclosure(updatedVideo.id, contentRightsDisclosure, {
+          action: "update",
+          visibility: updatedVideo.visibility,
+          source: "platform_studio_content",
         });
         setVideoNotice("Creator video updated.");
       } else {
@@ -2206,6 +2262,11 @@ export function ChannelStudioScreen() {
           thumbUrl: videoEditor.thumbUrl,
           visibility: videoEditor.visibility,
           maxUploadSizeMb,
+        });
+        await recordCreatorVideoRightsDisclosure(uploadedVideo.id, contentRightsDisclosure, {
+          action: "upload",
+          visibility: uploadedVideo.visibility,
+          source: "platform_studio_content",
         });
         setVideoNotice(`Creator video uploaded: ${uploadedVideo.title}.`);
       }
@@ -2319,13 +2380,6 @@ export function ChannelStudioScreen() {
       return;
     }
 
-    if ((!clipEditor.editingVideoId || isPublishing) && !clipRightsAccepted) {
-      setClipSaveState("save_failed");
-      setClipNotice("Confirm the creator rights acknowledgement before saving or publishing this clip.");
-      logClipStudioUi("clip_save_draft_failed", { reason: "rights_acknowledgement_missing", targetVisibility });
-      return;
-    }
-
     if (selectedClipVideoFile && isCreatorVideoFileOverChannelMovieLimit(selectedClipVideoFile, maxUploadSizeMb)) {
       setClipSaveState("save_failed");
       setClipNotice(getCreatorVideoTooLargeMessage(selectedClipVideoFile.size, maxUploadSizeMb));
@@ -2414,6 +2468,11 @@ export function ChannelStudioScreen() {
       if (coverUpload && confirmedEdit.coverStoragePath !== coverUpload.storagePath) {
         throw new Error("Clip Studio cover settings could not be confirmed.");
       }
+      await recordClipRightsDisclosure(savedVideoId, clipRightsDisclosure, {
+        action: isPublishing ? "publish" : "save_draft",
+        visibility: targetVisibility,
+        source: "clip_studio",
+      });
       const refreshedVideos = await loadCreatorVideos();
       const contentLibraryContainsDraft = refreshedVideos.some((video) => (
         video.id === savedVideoId && video.visibility === targetVisibility
@@ -2474,7 +2533,7 @@ export function ChannelStudioScreen() {
       }));
       setSelectedClipVideoFile(null);
       setSelectedClipCoverFile(null);
-      setClipRightsAccepted(false);
+      setClipRightsDisclosure(createEmptyContentRightsDisclosure());
       setClipSavedVideoId(savedVideoId);
       setClipSaveState("saved");
       setClipNotice(
@@ -2499,6 +2558,12 @@ export function ChannelStudioScreen() {
             && clipStudioEditMatchesPatch(confirmedPartialEdit, intendedEditPatch);
 
           if (partialSaveConfirmed && confirmedPartialEdit) {
+            await recordClipRightsDisclosure(confirmedPartialVideo.id, clipRightsDisclosure, {
+              action: targetVisibility === "public" ? "publish" : "save_draft",
+              visibility: targetVisibility,
+              source: "clip_studio",
+              recoveredAfterReadback: true,
+            });
             setClipEditor((current) => ({
               ...current,
               editingVideoId: confirmedPartialVideo.id,
@@ -2524,7 +2589,7 @@ export function ChannelStudioScreen() {
             }));
             setSelectedClipVideoFile(null);
             setSelectedClipCoverFile(null);
-            setClipRightsAccepted(false);
+            setClipRightsDisclosure(createEmptyContentRightsDisclosure());
             setClipSavedVideoId(confirmedPartialVideo.id);
             setClipSaveState("saved");
             setClipNotice(
@@ -2597,7 +2662,14 @@ export function ChannelStudioScreen() {
     try {
       setVideoSaving(true);
       setVideoNotice(nextVisibility === "public" ? "Publishing video..." : "Moving video to draft...");
-      await updateCreatorVideoMetadata(video.id, { visibility: nextVisibility });
+      const updatedVideo = await updateCreatorVideoMetadata(video.id, { visibility: nextVisibility });
+      if (nextVisibility === "public") {
+        await recordCreatorVideoRightsDisclosure(updatedVideo.id, contentRightsDisclosure, {
+          action: "publish_existing",
+          visibility: updatedVideo.visibility,
+          source: "platform_studio_content_library",
+        });
+      }
       await loadCreatorVideos();
       setVideoNotice(nextVisibility === "public" ? "Video published." : "Video moved to draft.");
     } catch (error) {
@@ -2623,11 +2695,6 @@ export function ChannelStudioScreen() {
           },
         ],
       );
-      return;
-    }
-
-    if (!contentRightsAccepted) {
-      setVideoNotice("Confirm the creator rights acknowledgement below before publishing a video.");
       return;
     }
 
@@ -3669,17 +3736,17 @@ export function ChannelStudioScreen() {
           </TouchableOpacity>
         ))}
       </View>
-      <TouchableOpacity
-        style={[styles.legalAcknowledgementRow, contentRightsAccepted && styles.legalAcknowledgementRowActive]}
-        activeOpacity={0.86}
-        onPress={() => setContentRightsAccepted((current) => !current)}
-        disabled={videoSaving}
-      >
-        <View style={[styles.legalCheckbox, contentRightsAccepted && styles.legalCheckboxActive]}>
-          <Text style={styles.legalCheckboxMark}>{contentRightsAccepted ? "✓" : ""}</Text>
-        </View>
-        <Text style={styles.legalAcknowledgementText}>{CREATOR_UPLOAD_ACKNOWLEDGEMENT}</Text>
-      </TouchableOpacity>
+      <View style={styles.eventEmptyCard}>
+        <Text style={styles.eventEmptyTitle}>Rights</Text>
+        <Text style={styles.eventEmptyBody}>
+          You're responsible for what you publish. Use Rights if this includes third-party content or music.
+        </Text>
+        <RightsDisclosureControl
+          value={contentRightsDisclosure}
+          onChange={setContentRightsDisclosure}
+          disabled={videoSaving}
+        />
+      </View>
       {videoSubmitRequirement ? (
         <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
       ) : null}
@@ -3734,26 +3801,22 @@ export function ChannelStudioScreen() {
         ? "Enter a title to enable Save Draft."
         : !hasSavedVideo && !uploadsEnabled
           ? "Creator video uploads are temporarily paused."
-          : !hasSavedVideo && !clipRightsAccepted
-            ? "Confirm creator rights before saving this draft."
-            : isClipVideoTooLarge
-              ? getCreatorVideoTooLargeMessage(selectedClipVideoFile?.size, maxUploadSizeMb)
-              : titleOverlayValidation
-                ? titleOverlayValidation
-                : clipEditor.brandMarkEnabled && !approvedClipBrandAsset
-                  ? "Publish and approve a Platform avatar or logo before using the brand mark."
-                  : "";
-    const clipPublishRequirement = !hasWorkingVideo
-      ? "Choose a video before publishing."
-      : !clipTitleReady
-        ? "Enter a title before publishing."
-        : !clipRightsAccepted
-          ? "Confirm creator rights before publishing."
           : isClipVideoTooLarge
             ? getCreatorVideoTooLargeMessage(selectedClipVideoFile?.size, maxUploadSizeMb)
             : titleOverlayValidation
               ? titleOverlayValidation
-              : "";
+              : clipEditor.brandMarkEnabled && !approvedClipBrandAsset
+                ? "Publish and approve a Platform avatar or logo before using the brand mark."
+                : "";
+    const clipPublishRequirement = !hasWorkingVideo
+      ? "Choose a video before publishing."
+      : !clipTitleReady
+        ? "Enter a title before publishing."
+        : isClipVideoTooLarge
+          ? getCreatorVideoTooLargeMessage(selectedClipVideoFile?.size, maxUploadSizeMb)
+          : titleOverlayValidation
+            ? titleOverlayValidation
+            : "";
     const previewAspectRatio = clipEditor.clipFormat === "square_1_1"
       ? 1
       : clipEditor.clipFormat === "landscape_16_9"
@@ -4150,17 +4213,17 @@ export function ChannelStudioScreen() {
                   onChangeText={(text) => updateClipEditor({ description: text })}
                   multiline
                 />
-                <TouchableOpacity
-                  style={[styles.legalAcknowledgementRow, clipRightsAccepted && styles.legalAcknowledgementRowActive]}
-                  activeOpacity={0.86}
-                  onPress={() => setClipRightsAccepted((current) => !current)}
-                  disabled={clipSaving}
-                >
-                  <View style={[styles.legalCheckbox, clipRightsAccepted && styles.legalCheckboxActive]}>
-                    <Text style={styles.legalCheckboxMark}>{clipRightsAccepted ? "✓" : ""}</Text>
-                  </View>
-                  <Text style={styles.legalAcknowledgementText}>{CREATOR_UPLOAD_ACKNOWLEDGEMENT}</Text>
-                </TouchableOpacity>
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Rights</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    You're responsible for what you publish. Use Rights if this includes third-party content or music.
+                  </Text>
+                  <RightsDisclosureControl
+                    value={clipRightsDisclosure}
+                    onChange={setClipRightsDisclosure}
+                    disabled={clipSaving}
+                  />
+                </View>
 
                 <View style={styles.eventActionRow}>
                   <TouchableOpacity
@@ -7157,6 +7220,24 @@ export function ChannelStudioScreen() {
           </>
         ) : null}
       </ScrollView>
+      {activeStudioTab === "content" ? (
+        <RightsDisclosureControl
+          mode="overlay"
+          showInactiveChip={false}
+          value={contentRightsDisclosure}
+          onChange={setContentRightsDisclosure}
+          disabled={videoSaving}
+        />
+      ) : null}
+      {activeStudioTab === "clip" ? (
+        <RightsDisclosureControl
+          mode="overlay"
+          showInactiveChip={false}
+          value={clipRightsDisclosure}
+          onChange={setClipRightsDisclosure}
+          disabled={clipSaving}
+        />
+      ) : null}
     </ImageBackground>
   );
 }

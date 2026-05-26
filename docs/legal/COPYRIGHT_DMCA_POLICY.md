@@ -45,6 +45,8 @@ Chi'llywood may remove or disable access to content where appropriate, notify th
 
 Chi'llywood may decline, request more information, or take limited action where a report is incomplete, abusive, unclear, not tied to copyright, or appears false.
 
+Creator Rights Disclosure is separate from DMCA handling. A creator may mark that a clip, upload, or live/watch-party start includes third-party content or third-party music, and Chi'llywood may store that as an audit/safety signal. That disclosure does not confirm permission, grant licensing, protect the creator from claims, or stop reports, takedowns, counter-notices, moderation, repeat-infringer review, or legal escalation. A disclosure also does not override DMCA case handling or restore eligibility.
+
 Operational status:
 
 - formal copyright notice intake is backed by a DMCA case record;

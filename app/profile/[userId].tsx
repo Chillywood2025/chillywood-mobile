@@ -2583,7 +2583,6 @@ export default function ProfileScreen() {
         ];
   const publicProfileTabs = [
     { key: "home", label: "Posts" },
-    { key: "content", label: "Platform" },
     { key: "live", label: "Live" },
     { key: "community", label: "Community" },
     { key: "about", label: "About" },
@@ -3049,7 +3048,7 @@ export default function ProfileScreen() {
       onPress: onPressManageChannel,
     },
     {
-      label: "Preview Platform",
+      label: "Platform",
       onPress: onPressPreviewPlatform,
     },
     {
@@ -3688,7 +3687,7 @@ export default function ProfileScreen() {
             onPress={isSelfProfile ? onPressPreviewPlatform : onPressViewChannel}
           >
             <MaterialIcons name="video-library" size={17} color="#fff" />
-            <Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "Preview Platform" : "View Platform"}</Text>
+            <Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "Platform" : "View Platform"}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -3943,11 +3942,12 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     testID="profile-preview-platform-button"
+                    accessibilityLabel="Open Platform"
                     style={[styles.actionBtn, styles.actionBtnSecondary]}
                     activeOpacity={0.86}
                     onPress={onPressPreviewPlatform}
                   >
-                    <Text style={styles.actionBtnText}>Preview Platform</Text>
+                    <Text style={styles.actionBtnText}>Platform</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.secondaryActionRow}>

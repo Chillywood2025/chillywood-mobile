@@ -9,6 +9,7 @@ Spectator is not participant entry into the original room. A spectator never rec
 - Spectator watches a public-safe controlled playback endpoint and can share/report/view the source Platform.
 - Participant joins a room through the room route and its existing membership, Premium, request-seat, request-speaker, and host-approval flows.
 - Starting a child room from Spectator does not upgrade the viewer in the original room. Joining or speaking in the original room still uses the existing request/approve path before any upgraded token is issued.
+- Spectator child-room start from an eligible Chi'llwood source does not force a new rights form. Source eligibility remains the gate. If the child-room host later adds extra third-party content or music, the shared lightweight Rights Disclosure system should be used as an audit signal without bypassing source, DMCA, Premium, or LiveKit rules.
 
 ## Child Room Linking
 `spectator-start-room` creates a new `watch_party_rooms` row with `source_type = 'spectator_playback'` and the discovery item id as `source_id`. The safe linkage is stored in `spectator_child_room_sources`:

@@ -7,6 +7,7 @@ Updated: 2026-05-25 for social attachment UX consistency and Profile social inte
 Updated: 2026-05-25 for the social attachment correction: no Platform Studio sheet option and native phone-gallery Photos picking.
 Updated: 2026-05-26 for Profile avatar/background management, Profile Actions, migration application, and Android startup proof.
 Updated: 2026-05-26 for owner-controlled Profile media status, public rendering masks, and profile-media reports.
+Updated: 2026-05-26 for Profile Platform navigation cleanup and lightweight Rights Disclosure.
 
 This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Platform work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.
 
@@ -29,7 +30,7 @@ Public Platform currently lives on the internal `/channel/[userId]` route as the
 ## 3. Profile 1-6 Structure
 
 1. Identity header: avatar, cover/header treatment, display name, handle, tagline/bio, official/platform badges where backed, and no fake counts.
-2. Quick actions: public viewers get backed Follow/Following, Chi'lly Chat, View Platform, Share Profile, and Report where supported; Profile View Platform routes to `/channel/[userId]`; owners keep Platform Studio, Preview Platform, Chi'lly Chat, Chi'lly Circle, and Settings where backed.
+2. Quick actions: public viewers get backed Follow/Following, Chi'lly Chat, View Platform, Share Profile, and Report where supported; Profile View Platform routes to `/channel/[userId]`; owners keep Platform Studio, Platform, Chi'lly Chat, Chi'lly Circle, and Settings where backed.
 3. Personal posts / updates: Public v1 now supports backed text-only Profile posts/status updates. They are Profile content, not Channel creator videos.
 4. Platform preview / entry: creator videos and events appear in the Platform area, not as personal posts.
 5. Social proof / community: only backed follower/audience/subscriber or official/creator signals may appear; followers are not friends.
@@ -45,7 +46,7 @@ Platform Studio owns owner-only channel operations: Home dashboard, Content, Liv
 
 ## 5. Owner Vs Public Behavior
 
-Owners may see profile controls, Platform Studio, Preview Platform, Settings, Chi'lly Circle, Chi'lly Chat, Platform Studio upload/manage video actions, and backed draft badges.
+Owners may see profile controls, Platform Studio, Platform, Settings, Chi'lly Circle, Chi'lly Chat, Platform Studio upload/manage video actions, and backed draft badges.
 
 Public viewers may see identity, backed Follow/Following, Chi'lly Chat, View Platform, public creator videos only, clean public event context, Share Profile, and Report.
 
@@ -53,7 +54,7 @@ Public viewers must not see owner controls, Platform Studio controls, upload, ed
 
 Profile post owners may create and delete their own text-only posts. Public viewers may read public clean Profile posts and report them where backed. Public viewers must not edit/delete posts or see draft/hidden/removed posts.
 
-Android `R5CR120QCBF` proof on 2026-05-25 confirmed the available runtime states: signed-out public Profile shows no owner controls/composer/Attach/delete/draft badges, signed-out Follow and Chi'lly Chat show sign-in-required handoffs, signed-out View Platform opens public Platform, signed-in non-owner official Profile proof shows no owner controls and routes Chi'lly Chat/View Platform safely, and owner regression keeps Platform Studio, Preview Platform public view, Chi'lly Chat inbox, Chi'lly Circle, Settings, composer, Attach, owner delete, and owner draft markers. True second-account and blocked/private runtime fixtures were not available and must remain explicit follow-up work rather than faked proof; static guards cover the current privacy/block path until that fixture lane runs. Validation passed with the requested type/runtime/Profile/payment/creator/Clip/Brand/Watch-Party/provider guard stack, targeted Profile grep/static proof, and diff whitespace checks.
+Android `R5CR120QCBF` proof on 2026-05-25 confirmed the available runtime states: signed-out public Profile shows no owner controls/composer/Attach/delete/draft badges, signed-out Follow and Chi'lly Chat show sign-in-required handoffs, signed-out View Platform opens public Platform, signed-in non-owner official Profile proof shows no owner controls and routes Chi'lly Chat/View Platform safely, and owner regression keeps Platform Studio, Preview Platform public view, Chi'lly Chat inbox, Chi'lly Circle, Settings, composer, Attach, owner delete, and owner draft markers. The May 26 navigation cleanup renames the owner top action to `Platform` and removes the duplicate bottom Profile `Platform` tab/pill; the bottom tab row is Posts, Live, Community, About, while Platform content remains available through Profile cards/sections and the top Platform action. True second-account and blocked/private runtime fixtures were not available and must remain explicit follow-up work rather than faked proof; static guards cover the current privacy/block path until that fixture lane runs.
 
 The follow-up Profile social interaction/attachment pivot on 2026-05-25 keeps the same owner/viewer contract and modernizes attachment entry consistently across backed social surfaces. Profile posts/comments, Chi'lly Chat, creator-video comments, Watch-Party room comments, and Live Stage comments now open a shared Photos/Files attachment sheet while keeping the existing storage, validation, runtime controls, RLS/privacy, and moderation status behavior. The social sheet must not offer Platform Studio; creator-video/public Platform work belongs in Platform Studio through the Profile owner actions and creator-content copy, not through Attach. Photos opens the phone's native gallery through `expo-image-picker`; Files keeps the existing document picker. Android proof captured the shared Profile and Chi'lly Chat sheets at `/tmp/chillywood-profile-social-interaction-proof-20260525/`, and the operator checked Player/Watch-Party/Live Stage sheet behavior after the shared-sheet pass. Legal evidence attachment pickers and Platform Studio creator/brand media pickers are intentionally separate and must not be collapsed into the social sheet.
 
@@ -64,7 +65,7 @@ The Profile avatar/background lane keeps personalization in Profile, separate fr
 Creator uploads appear in:
 
 - Public Platform route: `/channel/[userId]`
-- Profile Platform tab/section
+- Profile Platform section/card and top Platform handoff
 - Platform Studio Content tab and `/channel-settings` compatibility
 - Creator-video Player route: `/player/[id]?source=creator-video`
 - Creator-video Watch-Party routes only when source eligibility is backed
