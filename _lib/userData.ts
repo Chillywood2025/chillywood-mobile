@@ -399,12 +399,14 @@ export const buildUserChannelProfile = (options: {
   return {
     id: officialAccount?.userId ?? id,
     displayName: officialAccount?.displayName ?? (resolvedDisplayName !== "User" ? resolvedDisplayName : fallbackDisplayName),
-    avatarUrl: officialAccount ? normalizeTextValue(officialAccount.avatarUrl) : normalizeTextValue(options.avatarUrl) ?? profileAvatarUrl,
-    profileAvatarMediaStatus: officialAccount ? "active" : profileAvatarMediaStatus,
-    profileAvatarMediaFlaggedAt: officialAccount ? undefined : normalizeTextValue(profile?.profileAvatarMediaFlaggedAt),
-    profileAvatarFitMode: officialAccount ? "fill" : normalizeProfileAppearanceFitMode(profile?.profileAvatarFitMode),
-    profileAvatarFocalX: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileAvatarFocalX, 0.5),
-    profileAvatarFocalY: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileAvatarFocalY, 0.5),
+    avatarUrl: officialAccount
+      ? profileAvatarUrl ?? normalizeTextValue(officialAccount.avatarUrl)
+      : normalizeTextValue(options.avatarUrl) ?? profileAvatarUrl,
+    profileAvatarMediaStatus,
+    profileAvatarMediaFlaggedAt: normalizeTextValue(profile?.profileAvatarMediaFlaggedAt),
+    profileAvatarFitMode: normalizeProfileAppearanceFitMode(profile?.profileAvatarFitMode),
+    profileAvatarFocalX: normalizeProfileAppearanceNumber(profile?.profileAvatarFocalX, 0.5),
+    profileAvatarFocalY: normalizeProfileAppearanceNumber(profile?.profileAvatarFocalY, 0.5),
     profileBackgroundUrl: officialAccount ? undefined : profileBackgroundUrl,
     profileBackgroundMediaStatus: officialAccount ? "active" : profileBackgroundMediaStatus,
     profileBackgroundMediaFlaggedAt: officialAccount ? undefined : normalizeTextValue(profile?.profileBackgroundMediaFlaggedAt),

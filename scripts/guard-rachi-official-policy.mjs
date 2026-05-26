@@ -18,6 +18,7 @@ const assertNotIncludes = (haystack, needle, label) => {
 
 const officialAccounts = read("_lib/officialAccounts.ts");
 const officialRachi = read("_lib/officialRachi.ts");
+const userData = read("_lib/userData.ts");
 const chillyCircle = read("app/chilly-circle.tsx");
 const home = read("app/(tabs)/index.tsx");
 const admin = read("app/admin.tsx");
@@ -26,6 +27,8 @@ const channel = read("app/channel/[userId].tsx");
 const chatInbox = read("app/chat/index.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
 const migration = read("supabase/migrations/202605260008_rachi_official_posts.sql");
+const profileImageMigration = read("supabase/migrations/202605260009_rachi_official_profile_image.sql");
+const profileMediaStorageMigration = read("supabase/migrations/202605260010_rachi_official_profile_media_storage.sql");
 
 const userFacingSource = [
   officialAccounts,
@@ -41,6 +44,7 @@ const userFacingSource = [
 assertIncludes(officialAccounts, "Rachi shares Chi'llywood updates, tips, and Chi'llwood Originals.", "official Rachi positioning");
 assertIncludes(officialAccounts, "Rachi does not read your private chats.", "privacy trust copy");
 assertIncludes(officialAccounts, "Rachi Help is opt-in.", "opt-in Rachi Help copy");
+assertIncludes(userData, "profileAvatarUrl ?? normalizeTextValue(officialAccount.avatarUrl)", "official profile image reads backed avatar before fallback");
 
 assertIncludes(chillyCircle, "Official connection", "pinned official Chi'lly Circle section");
 assertIncludes(chillyCircle, "Your first Chi&apos;lly Circle connection", "first official Circle copy");
@@ -50,8 +54,19 @@ assertIncludes(migration, 'admin_create_official_rachi_post', "official post RPC
 assertIncludes(migration, 'public."admin_content_assert_operator"()', "owner/operator assertion");
 assertIncludes(migration, 'public."admin_content_write_audit"', "admin audit write");
 assertIncludes(migration, "'platform_rachi_official'", "official account target");
+assertIncludes(profileImageMigration, "admin_update_official_rachi_profile_image", "official profile image RPC");
+assertIncludes(profileImageMigration, 'public."admin_content_assert_operator"()', "profile image owner/operator assertion");
+assertIncludes(profileImageMigration, "official_rachi_profile_image_updated", "profile image audit action");
+assertIncludes(profileImageMigration, "lower(safe_avatar_url) not like 'https://%'", "public HTTPS image URL requirement");
+assertIncludes(profileMediaStorageMigration, "official/rachi/%", "official Rachi profile-media storage prefix");
+assertIncludes(profileMediaStorageMigration, "public.has_platform_role(array['owner'::text, 'operator'::text])", "official Rachi storage owner/operator policy");
 assertIncludes(officialRachi, "createOfficialRachiPost", "client official post helper");
+assertIncludes(officialRachi, "updateOfficialRachiProfileImage", "client official profile image helper");
+assertIncludes(officialRachi, "chooseOfficialRachiProfileImageFromGallery", "client gallery picker helper");
 assertIncludes(admin, "createOfficialRachiPost", "admin Rachi post action");
+assertIncludes(admin, "Choose from Gallery", "admin Rachi gallery profile image action");
+assertIncludes(admin, "Clear Picture", "admin Rachi profile image clear action");
+assertNotIncludes(admin, "Paste a public HTTPS image URL", "visible URL-based Rachi profile image UI");
 assertIncludes(admin, "Normal Users", "normal-user Rachi protection copy");
 assertIncludes(admin, "Cannot post as Rachi", "normal-user cannot post as Rachi proof copy");
 assertIncludes(admin, "Upload Original", "admin Rachi upload-original action");

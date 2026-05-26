@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Alert,
   ImageBackground,
   Linking,
@@ -69,7 +70,10 @@ import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
 import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
 import {
+  chooseOfficialRachiProfileImageFromGallery,
+  clearOfficialRachiProfileImage,
   createOfficialRachiPost,
+  readOfficialRachiProfileImage,
   readOfficialRachiOriginals,
   readOfficialRachiPosts,
 } from "../_lib/officialRachi";
@@ -2579,6 +2583,8 @@ export default function AdminStudioScreen() {
   const [rachiPostVisibility, setRachiPostVisibility] = useState<"public" | "draft">("public");
   const [rachiPostBusy, setRachiPostBusy] = useState(false);
   const [rachiNotice, setRachiNotice] = useState<string | null>(null);
+  const [rachiProfileImageSavedUrl, setRachiProfileImageSavedUrl] = useState("");
+  const [rachiProfileImageBusy, setRachiProfileImageBusy] = useState(false);
   const [rachiPosts, setRachiPosts] = useState<ProfilePost[]>([]);
   const [rachiPostsLoading, setRachiPostsLoading] = useState(false);
   const [rachiOriginals, setRachiOriginals] = useState<CreatorVideo[]>([]);
@@ -4637,6 +4643,7 @@ export default function AdminStudioScreen() {
     if (!canAccessContentProgramming) {
       setRachiPosts([]);
       setRachiOriginals([]);
+      setRachiProfileImageSavedUrl("");
       return;
     }
 
@@ -4644,12 +4651,14 @@ export default function AdminStudioScreen() {
     setRachiOriginalsLoading(true);
     setRachiNotice(null);
     try {
-      const [posts, originals] = await Promise.all([
+      const [posts, originals, profileImage] = await Promise.all([
         readOfficialRachiPosts({ includeDrafts: true, limit: 6 }),
         readOfficialRachiOriginals({ limit: 8 }),
+        readOfficialRachiProfileImage(),
       ]);
       setRachiPosts(posts);
       setRachiOriginals(originals);
+      setRachiProfileImageSavedUrl(profileImage.avatarUrl ?? "");
     } catch (error: any) {
       setRachiPosts([]);
       setRachiOriginals([]);
@@ -4659,6 +4668,38 @@ export default function AdminStudioScreen() {
       setRachiOriginalsLoading(false);
     }
   }, [canAccessContentProgramming]);
+
+  const submitRachiProfileImage = useCallback(async (mode: "choose" | "clear" = "choose") => {
+    if (!canAccessContentProgramming || rachiProfileImageBusy) {
+      setRachiNotice("Rachi profile photo changes require active Owner or Admin content permission.");
+      return;
+    }
+
+    try {
+      setRachiProfileImageBusy(true);
+      setRachiNotice(null);
+      const result = mode === "clear"
+        ? await clearOfficialRachiProfileImage({ previousAvatarUrl: rachiProfileImageSavedUrl })
+        : await chooseOfficialRachiProfileImageFromGallery({ previousAvatarUrl: rachiProfileImageSavedUrl });
+      if (!result) {
+        setRachiNotice("Rachi profile photo was not changed.");
+        return;
+      }
+      const savedUrl = result.avatarUrl ?? "";
+      setRachiProfileImageSavedUrl(savedUrl);
+      setRachiNotice(mode === "clear"
+        ? "Rachi profile photo cleared with admin audit."
+        : "Rachi profile photo selected from gallery and saved with admin audit.");
+    } catch (error: any) {
+      setRachiNotice(formatAdminOperationFailure(error, "Unable to update Rachi profile photo."));
+    } finally {
+      setRachiProfileImageBusy(false);
+    }
+  }, [
+    canAccessContentProgramming,
+    rachiProfileImageBusy,
+    rachiProfileImageSavedUrl,
+  ]);
 
   const submitRachiOfficialPost = useCallback(async () => {
     if (!canAccessContentProgramming || rachiPostBusy) {
@@ -9387,6 +9428,57 @@ export default function AdminStudioScreen() {
                 ]}
               />
               {rachiNotice ? <OwnerDisabledReason reason={rachiNotice} /> : null}
+            </View>
+
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Profile Picture</Text>
+                <OwnerStatusPill label={rachiProfileImageSavedUrl ? "Custom" : "Default"} tone={rachiProfileImageSavedUrl ? "success" : "locked"} />
+              </View>
+              <Text style={styles.contentSignalBody}>
+                Choose a picture from this device&apos;s photo gallery to update Rachi&apos;s official Profile and Platform picture. Saves and clears write admin audit.
+              </Text>
+              <View style={styles.rachiProfileImageRow}>
+                <View style={styles.rachiProfileImagePreview}>
+                  {rachiProfileImageSavedUrl ? (
+                    <Image source={{ uri: rachiProfileImageSavedUrl }} style={styles.rachiProfileImage} />
+                  ) : (
+                    <Text style={styles.rachiProfileImageInitial}>R</Text>
+                  )}
+                </View>
+                <View style={styles.rachiProfileImageCopy}>
+                  <Text style={styles.configListBody}>
+                    Gallery uploads use the official Rachi storage prefix. Do not use screenshots that contain private user data.
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    styles.actionBtnActive,
+                    (!canAccessContentProgramming || rachiProfileImageBusy) && styles.configSaveBtnDisabled,
+                  ]}
+                  activeOpacity={0.86}
+                  disabled={!canAccessContentProgramming || rachiProfileImageBusy}
+                  onPress={() => { void submitRachiProfileImage("choose"); }}
+                >
+                  {rachiProfileImageBusy ? <ActivityIndicator color="#fff" size="small" /> : (
+                    <Text style={styles.actionText}>Choose from Gallery</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    (!canAccessContentProgramming || rachiProfileImageBusy || !rachiProfileImageSavedUrl) && styles.configSaveBtnDisabled,
+                  ]}
+                  activeOpacity={0.86}
+                  disabled={!canAccessContentProgramming || rachiProfileImageBusy || !rachiProfileImageSavedUrl}
+                  onPress={() => { void submitRachiProfileImage("clear"); }}
+                >
+                  <Text style={styles.actionText}>Clear Picture</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.contentPanel}>
@@ -16637,6 +16729,37 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "700",
     lineHeight: 16,
+  },
+  rachiProfileImageRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  rachiProfileImagePreview: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 42,
+    borderWidth: 1,
+    height: 84,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 84,
+  },
+  rachiProfileImage: {
+    height: "100%",
+    width: "100%",
+  },
+  rachiProfileImageInitial: {
+    color: "#FFFFFF",
+    fontSize: 34,
+    fontWeight: "900",
+  },
+  rachiProfileImageCopy: {
+    flex: 1,
+    gap: 7,
+    minWidth: 210,
   },
   adminHomeHeroPills: {
     alignContent: "flex-start",

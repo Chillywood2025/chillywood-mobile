@@ -48,6 +48,23 @@ Rules:
 
 Normal users cannot post as Rachi or edit Rachi Platform/Studio.
 
+## Profile Picture
+
+Remote-applied migrations:
+
+- `202605260009_rachi_official_profile_image.sql`
+- `202605260010_rachi_official_profile_media_storage.sql`
+
+Rules:
+
+- Admin Rachi tab uses `Choose from Gallery` for Rachi's Profile/Platform picture.
+- The visible UI does not ask operators to paste an image URL.
+- The selected photo uploads to the official `profile-media/official/rachi/...` prefix.
+- Only owner/operator roles can upload or delete official Rachi profile-media objects.
+- The save/clear RPC writes admin audit through `admin_content_write_audit`.
+- Public Rachi Profile and Platform read the backed avatar when active, then fall back to the default `R`.
+- Do not use screenshots or gallery photos that expose private user data.
+
 ## Originals
 
 Chi'llwood Originals uses real Rachi-owned creator videos only:
@@ -111,8 +128,9 @@ Captured on `R5CR120QCBF`:
 
 Not claimed yet:
 
-- Admin Rachi tab Overview on device, because the attached session was a normal user with no active owner/operator role.
-- create Rachi post flow, because owner/operator proof credentials were unavailable.
+- Admin Rachi tab Overview on device, because the attached session still showed `This account does not have an active admin role` after the claimed proof-account upgrade.
+- Rachi Profile Picture gallery save/clear flow, because the attached session still lacks active owner/operator access.
+- create Rachi post flow, because the attached session still lacks active owner/operator access.
 - Rachi post visible in Profile/Home feed, because no real safe official Rachi post fixture was created.
 - Rachi uploaded/published content visible in Home Chi'llwood Originals, because no real public-safe Rachi-owned creator-video fixture exists.
 

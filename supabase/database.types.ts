@@ -8619,6 +8619,13 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_update_official_rachi_profile_image: {
+        Args: {
+          p_avatar_url?: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
       admin_dmca_add_strike: {
         Args: {
           p_case_id: string
