@@ -829,6 +829,8 @@ Deno.serve(async (req): Promise<Response> => {
             ? "Try again in a few minutes."
             : eligibility.reason === "blocked"
               ? "This source is not available to this account."
+              : eligibility.reason === "source_not_found"
+                ? "This source is not available."
               : eligibility.reason === "source_not_public"
                 ? "This source is not public-safe."
                 : "This live can’t be used for a watch party";

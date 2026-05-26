@@ -73,6 +73,9 @@ verify_jwt = false
 [functions.spectator-playback]
 verify_jwt = false
 
+[functions.spectator-start-room]
+verify_jwt = false
+
 [functions.notification-device-tokens]
 verify_jwt = false
 

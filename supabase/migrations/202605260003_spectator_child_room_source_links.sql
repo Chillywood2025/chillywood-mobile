@@ -246,18 +246,18 @@ create policy "spectator_child_room_sources_member_select"
   for select
   to "authenticated"
   using (
-    "created_by_user_id" = auth.uid()
+    ("created_by_user_id")::text = (auth.uid())::text
     or exists (
       select 1
       from public."watch_party_rooms" room
-      where room."party_id" = "spectator_child_room_sources"."child_room_id"
-        and room."host_user_id" = (auth.uid())::text
+      where (room."party_id")::text = "spectator_child_room_sources"."child_room_id"
+        and (room."host_user_id")::text = (auth.uid())::text
     )
     or exists (
       select 1
       from public."watch_party_room_memberships" membership
-      where membership."party_id" = "spectator_child_room_sources"."child_room_id"
-        and membership."user_id" = (auth.uid())::text
+      where (membership."party_id")::text = "spectator_child_room_sources"."child_room_id"
+        and (membership."user_id")::text = (auth.uid())::text
         and membership."membership_state" in ('active', 'reconnecting')
     )
   );

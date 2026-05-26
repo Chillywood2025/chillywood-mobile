@@ -85,11 +85,50 @@ The Edge Function writes:
 Audit metadata includes actor/source/child ids, denial reason, created time, and security request context when captured. It does not log tokens or raw media paths.
 
 ## Runtime Proof
-Android proof target is `R5CR120QCBF`. The device was attached during this lane, and a current-device screenshot plus note were written outside the repo at `/tmp/chillywood-spectator-child-room-proof-20260526/`.
+Android proof target is `R5CR120QCBF`. The follow-up closeout restored the device proof environment enough for a current dev-client run: the notification shade was collapsed, the stale Dev Launcher error state was exited, Metro was restarted on `localhost:8081`, the app bundled successfully, and Home plus `/spectate/[itemId]` rendered on-device. UiAutomator still returns `null root node` once the React Native app is foregrounded, so screenshot proof used `screencap`.
 
-The requested flow screenshots were not captured because the installed app was in a Dev Launcher error/notification-shade state, UiAutomator returned no root node, and no safe eligible public-safe source, private/blocked source, signed-out fixture, or ended-source fixture was available in this terminal context. This remains a required follow-up proof lane and should not be faked.
+Closeout screenshots are outside the repo at `/tmp/chillywood-spectator-child-room-proof-20260526/`:
+
+- `00-device-root-restored-launcher.png`: Android root restored and UiAutomator could see the launcher.
+- `02-app-after-attached-metro.png`: Dev Launcher saw the attached Metro server.
+- `03-app-home-after-bundle.png`: current app bundle reached Home; Home reported no public live rooms.
+- `04-spectator-missing-source-unavailable.png`: missing/unknown Spectator source rendered the production unavailable state.
+
+Backend/runtime hardening in this closeout:
+
+- Remote migration `202605260003_spectator_child_room_source_links.sql` was applied after normalizing mixed text/UUID RLS comparisons in `spectator_child_room_sources_member_select`.
+- `spectator-start-room` was deployed with `verify_jwt = false` because the function performs its own user-token authentication and must return the clean `sign_in_required` denial for signed-out callers.
+- `source_not_found` now returns the clean `This source is not available.` message.
+- Backend denial proof returned `sign_in_required` for signed-out calls and `source_not_found` for missing Watch-Party Live and Live Watch-Party source ids, with no `childRoomId`, original token, or full-room token fields.
+
+Validation run in the closeout:
+
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:spectator-child-room-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `npm run guard:refresh-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:provider-readiness-policy`
+- `npm run guard:clip-studio-policy`
+- `npm run guard:platform-brand-studio-policy`
+- `supabase migration list`
+- `supabase db lint --linked`
+- `supabase db push --dry-run`
+- `deno check supabase/functions/spectator-start-room/index.ts`
+- targeted token/private-source/Mini Platform/source-eligibility/route-ownership/Premium/old-room grep proofs
+- `git diff --check`
+- `git diff --cached --check`
+
+Fixture status:
+
+- The signed-in proof account could not read any spectator-enabled public discovery rows: authenticated public-client query for public, clean, public-free, spectator-playback-enabled rows with `allow_spectator_view = true` returned `0`.
+- No safe eligible public-safe source, live-stage-compatible source, private/blocked source, or ended/replay source was available in this terminal context.
+- Because the safe fixtures were unavailable, eligible Watch-Party Live child-room launch, eligible Live Watch-Party reaction-room launch, signed-out CTA handoff from an eligible source, private/blocked CTA state, source-ended CTA state, and replay launch remain unproved at runtime. They should not be claimed from the missing-source screenshot.
 
 ## Remaining Limitations
 - Replay child-room creation is schema-flagged but live replay archive behavior still depends on replay playback availability.
-- Android visual proof still needs an eligible public-safe source, resulting child rooms, original-control absence, an ineligible/private fixture, a signed-out launch handoff, and a source-ended fixture.
+- Android visual proof still needs an eligible public-safe source, resulting child rooms, source attribution, original-control absence, an eligible signed-out launch handoff, a private/blocked fixture, and a source-ended/replay fixture.
 - Cost policy is a simple server-side attempt/source rate limit in this lane; richer cost dashboards can build on `spectator_child_room_sources` and audit rows.
