@@ -1,6 +1,5 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import * as DocumentPicker from "expo-document-picker";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,12 +49,11 @@ import {
 } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
 import {
-  getSocialAttachmentValidationMessage,
-  getSocialAttachmentPickerTypes,
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
   type SocialAttachmentPickerScope,
   type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
+import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import { InRoomCommunicationPanel } from "../../components/communication/in-room-communication-panel";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
@@ -82,13 +80,6 @@ const formatStamp = (value: string) => {
   if (!Number.isFinite(date.getTime())) return "";
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 };
-
-const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
-  uri: asset.uri,
-  name: asset.name,
-  mimeType: asset.mimeType,
-  size: asset.size,
-});
 
 const getThreadStatusLabel = (thread: ChatThreadSummary | null, platformOwned = false) => {
   if (thread?.activeCommunicationRoomId && thread.activeCallType) {
@@ -579,29 +570,12 @@ export default function ChillyChatThreadScreen() {
   const handlePickAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
       setError(null);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: getSocialAttachmentPickerTypes(scope),
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset?.uri) {
-        setError("Choose an attachment before sending.");
-        return;
-      }
-
-      const file = buildSocialAttachmentFileFromAsset(asset);
-      const validationMessage = getSocialAttachmentValidationMessage(file);
-      if (validationMessage) {
-        setAttachmentFile(null);
-        setError(validationMessage);
-        return;
-      }
+      const file = await pickSocialAttachmentFile(scope);
+      if (!file) return;
       setAttachmentFile(file);
-    } catch {
-      setError("Unable to attach that file right now.");
+    } catch (error) {
+      setAttachmentFile(null);
+      setError(error instanceof Error ? error.message : "Unable to attach that file right now.");
     }
   }, []);
 

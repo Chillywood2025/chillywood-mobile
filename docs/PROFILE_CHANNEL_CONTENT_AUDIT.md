@@ -13,6 +13,7 @@ Updated: 2026-04-29 for Profile post engagement backing
 Updated: 2026-05-06 for pushed Public Channel and Platform Studio route truth
 Updated: 2026-05-25 for Profile production UI, Platform terminology, Chi'lly Chat routing, and Platform Studio upload separation
 Updated: 2026-05-25 for signed-out, signed-in non-owner, owner-regression, Platform routing, and Chi'lly Chat Android proof closeout
+Updated: 2026-05-25 for shared social attachment sheet correction and native phone-gallery Photos picking
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -66,6 +67,19 @@ Runtime proof results:
 - Validation passed with `npm run typecheck`, `npm run validate:runtime`, `npm run guard:refresh-policy`, `npm run guard:payment-rail-policy`, `npm run guard:creator-monetization-policy`, `npm run guard:stripe-connect-policy`, `npm run guard:vod-quality-policy`, `npm run guard:clip-studio-policy`, `npm run guard:platform-brand-studio-policy`, `npm run guard:watch-party-livekit`, `npm run guard:old-room-handling`, `npm run guard:provider-readiness-policy`, `npm run guard:profile-production-policy`, targeted Profile grep/static proof, `git diff --check`, and `git diff --cached --check`.
 
 Remaining limitation: a later safe-fixture lane should create or identify real second-account, blocked-viewer, and private-profile/private-Platform fixtures, then re-run Profile, Platform, Chi'lly Chat, Follow/Chi'lly Circle, and social interaction smoke without fake data or bypassed privacy.
+
+## 2026-05-25 Social Attachment Sheet Correction
+
+Current governing truth:
+
+- Profile/social Attach now opens one shared Photos/Files sheet across Profile posts/comments, Chi'lly Chat, creator-video comments, Watch-Party room comments, and Live Stage comments.
+- The social attachment sheet has no Platform Studio option. Creator-video/public Platform work stays in Platform Studio through owner actions and creator-content copy, not through Attach.
+- `Photos` opens the phone's native gallery through `expo-image-picker` with the photo tab selected.
+- `Files` keeps the existing `expo-document-picker` file path and social attachment validation.
+- Installed dev-client/AAB builds that predate this dependency need a rebuilt client before the native gallery picker is available on device.
+- Existing `social_attachments` storage, runtime controls, privacy/RLS, moderation, raw-storage-path protections, comments/replies, likes, shares, and delete behavior are unchanged.
+- Legal evidence upload pickers, Platform Studio creator-video upload, and Brand Studio media upload remain separate purpose-built flows.
+- Android Profile and Chi'lly Chat sheet screenshots live outside the repo at `/tmp/chillywood-profile-social-interaction-proof-20260525/`; the operator checked Player/Watch-Party/Live Stage sheet behavior, so route-specific screenshots are no longer a remaining gap for this attachment correction.
 
 ## 2026-04-29 Profile / Channel Contract Addendum
 

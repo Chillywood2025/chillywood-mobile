@@ -1,6 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import * as DocumentPicker from "expo-document-picker";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -99,13 +98,12 @@ import {
 } from "../../../_lib/watchParty";
 import {
     createSocialAttachmentForSurface,
-    getSocialAttachmentValidationMessage,
     readSocialAttachmentsForSurfaces,
-    getSocialAttachmentPickerTypes,
     type SocialAttachment,
     type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../../_lib/socialAttachments";
+import { pickSocialAttachmentFile } from "../../../_lib/socialAttachmentPicker";
 import {
     getCommunicationRTCModule,
     getLinkedCommunicationRoom,
@@ -183,13 +181,6 @@ type LiveStageCommentRow = {
   text?: string | null;
   created_at?: string | null;
 };
-
-const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
-  uri: asset.uri,
-  name: asset.name,
-  mimeType: asset.mimeType ?? null,
-  size: typeof asset.size === "number" ? asset.size : null,
-});
 
 const getLiveStageAccessTitle = (access: Pick<RoomAccessResolution, "reason"> | null | undefined) => {
   if (access?.reason === "room_locked") return "Live room locked";
@@ -3029,26 +3020,14 @@ export default function WatchPartyLiveStageScreen({
   const onPickHybridCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
       setHybridCommentError("");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: getSocialAttachmentPickerTypes(scope),
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (result.canceled || !result.assets?.length) return;
-
-      const file = buildSocialAttachmentFileFromAsset(result.assets[0]);
-      const validationMessage = getSocialAttachmentValidationMessage(file);
-      if (validationMessage) {
-        setHybridCommentAttachmentFile(null);
-        setHybridCommentError(validationMessage);
-        return;
-      }
-
+      const file = await pickSocialAttachmentFile(scope);
+      if (!file) return;
       setHybridCommentAttachmentFile(file);
       setCommentsOpen(true);
       revealStageOverlay();
-    } catch {
-      setHybridCommentError("Unable to choose this attachment right now.");
+    } catch (error) {
+      setHybridCommentAttachmentFile(null);
+      setHybridCommentError(error instanceof Error ? error.message : "Unable to choose this attachment right now.");
     }
   }, [revealStageOverlay]);
 

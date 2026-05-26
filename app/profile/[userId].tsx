@@ -1,6 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   resolveChannelAccess,
@@ -101,12 +100,11 @@ import {
   type ProfileSocialFeedPostActivity,
 } from "../../_lib/profileSocialFeed";
 import {
-  getSocialAttachmentValidationMessage,
-  getSocialAttachmentPickerTypes,
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
   type SocialAttachmentPickerScope,
   type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
+import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import {
     ActivityIndicator,
     Alert,
@@ -508,13 +506,6 @@ const getBrowseAccessBody = (resolution: ChannelAccessResolution | null, isOffic
   }
   return "the full Platform story stays open to browse";
 };
-
-const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
-  uri: asset.uri,
-  name: asset.name,
-  mimeType: asset.mimeType,
-  size: asset.size,
-});
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -942,23 +933,6 @@ export default function ProfileScreen() {
       ...current,
       [postId]: updater(current[postId] ?? {}),
     }));
-  };
-
-  const pickSocialAttachmentFile = async (scope: SocialAttachmentPickerScope) => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: getSocialAttachmentPickerTypes(scope),
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-
-    if (result.canceled) return null;
-    const asset = result.assets[0];
-    if (!asset?.uri) throw new Error("Choose an attachment before posting.");
-
-    const file = buildSocialAttachmentFileFromAsset(asset);
-    const validationMessage = getSocialAttachmentValidationMessage(file);
-    if (validationMessage) throw new Error(validationMessage);
-    return file;
   };
 
   const attachProfilePostFile = async (scope: SocialAttachmentPickerScope) => {
@@ -4127,13 +4101,8 @@ export default function ProfileScreen() {
         visible={!!profileAttachmentSheetTarget}
         kicker="PROFILE ATTACHMENT"
         title={profileAttachmentSheetTarget?.surface === "comment" ? "Add to comment" : "Add to post"}
-        body="Photos and files attach to social posts. Creator videos stay in Platform Studio."
-        showPlatformStudio={isSelfProfile}
+        body="Photos and files attach to social posts."
         onSelect={onSelectProfileAttachment}
-        onOpenPlatformStudio={() => {
-          setProfileAttachmentSheetTarget(null);
-          onPressCreatePlatformContent();
-        }}
         onClose={() => setProfileAttachmentSheetTarget(null)}
       />
       {watchPartyPremiumGate?.reason === "premium_required" ? (

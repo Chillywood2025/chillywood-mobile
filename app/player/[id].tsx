@@ -1,6 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import * as DocumentPicker from "expo-document-picker";
 import { useEventListener } from "expo";
 import { Asset } from "expo-asset";
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
@@ -81,12 +80,11 @@ import {
     type CreatorVideoComment,
 } from "../../_lib/creatorVideoComments";
 import {
-    getSocialAttachmentValidationMessage,
-    getSocialAttachmentPickerTypes,
     SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
     type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
+import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
     getCreatorVideoWatchPartyBlockCopy,
@@ -182,12 +180,6 @@ const formatCreatorCommentTime = (value?: string | null) => {
     minute: "2-digit",
   });
 };
-const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
-  uri: asset.uri,
-  name: asset.name,
-  mimeType: asset.mimeType,
-  size: asset.size,
-});
 const PARTY_HOST_SYNC_WRITE_INTERVAL_MILLIS = 600;
 const PARTY_GUEST_NOOP_DRIFT_MILLIS = 900;
 const PARTY_GUEST_SOFT_SEEK_THRESHOLD_MILLIS = 2400;
@@ -4125,29 +4117,12 @@ export default function PlayerScreen() {
   const onPickCreatorVideoCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
       setCreatorVideoCommentsError(null);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: getSocialAttachmentPickerTypes(scope),
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset?.uri) {
-        setCreatorVideoCommentsError("Choose an attachment before posting.");
-        return;
-      }
-
-      const file = buildSocialAttachmentFileFromAsset(asset);
-      const validationMessage = getSocialAttachmentValidationMessage(file);
-      if (validationMessage) {
-        setCreatorVideoCommentAttachmentFile(null);
-        setCreatorVideoCommentsError(validationMessage);
-        return;
-      }
+      const file = await pickSocialAttachmentFile(scope);
+      if (!file) return;
       setCreatorVideoCommentAttachmentFile(file);
-    } catch {
-      setCreatorVideoCommentsError("Unable to attach that file right now.");
+    } catch (error) {
+      setCreatorVideoCommentAttachmentFile(null);
+      setCreatorVideoCommentsError(error instanceof Error ? error.message : "Unable to attach that file right now.");
     }
   }, []);
 

@@ -16,22 +16,18 @@ type SocialAttachmentActionSheetProps = {
   title: string;
   body?: string;
   kicker?: string;
-  showPlatformStudio?: boolean;
   onSelect: (scope: SocialAttachmentPickerScope) => void;
-  onOpenPlatformStudio?: () => void;
   onClose: () => void;
 };
 
-const DEFAULT_BODY = "Photos and files attach here. Creator videos belong in Platform Studio.";
+const DEFAULT_BODY = "Photos and files attach here.";
 
 export function SocialAttachmentActionSheet({
   visible,
   title,
   body = DEFAULT_BODY,
   kicker = "ATTACHMENT",
-  showPlatformStudio = false,
   onSelect,
-  onOpenPlatformStudio,
   onClose,
 }: SocialAttachmentActionSheetProps) {
   return (
@@ -65,7 +61,7 @@ export function SocialAttachmentActionSheet({
               </View>
               <View style={styles.optionCopy}>
                 <Text style={styles.optionTitle}>Photos</Text>
-                <Text style={styles.optionBody}>Pick an image from this device.</Text>
+                <Text style={styles.optionBody}>Open your phone gallery.</Text>
               </View>
               <MaterialIcons name="chevron-right" size={22} color="#8E98AE" />
             </TouchableOpacity>
@@ -84,23 +80,6 @@ export function SocialAttachmentActionSheet({
               </View>
               <MaterialIcons name="chevron-right" size={22} color="#8E98AE" />
             </TouchableOpacity>
-            {showPlatformStudio && onOpenPlatformStudio ? (
-              <TouchableOpacity
-                style={[styles.option, styles.platformOption]}
-                activeOpacity={0.86}
-                onPress={onOpenPlatformStudio}
-                accessibilityLabel="Open Platform Studio for creator content"
-              >
-                <View style={[styles.optionIcon, styles.platformIcon]}>
-                  <MaterialIcons name="video-library" size={22} color="#FFFFFF" />
-                </View>
-                <View style={styles.optionCopy}>
-                  <Text style={styles.optionTitle}>Platform Studio</Text>
-                  <Text style={styles.optionBody}>Create creator videos and public Platform content there.</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={22} color="#E9EEFF" />
-              </TouchableOpacity>
-            ) : null}
           </View>
           <TouchableOpacity
             style={styles.cancelButton}
@@ -174,10 +153,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  platformOption: {
-    borderColor: "rgba(220,20,60,0.26)",
-    backgroundColor: "rgba(220,20,60,0.12)",
-  },
   optionIcon: {
     width: 42,
     height: 42,
@@ -185,9 +160,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(115,134,255,0.2)",
-  },
-  platformIcon: {
-    backgroundColor: "rgba(220,20,60,0.72)",
   },
   optionCopy: {
     flex: 1,

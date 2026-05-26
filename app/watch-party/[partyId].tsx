@@ -1,6 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import * as DocumentPicker from "expo-document-picker";
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -107,13 +106,12 @@ import {
 } from "../../_lib/watchPartyPinning";
 import {
     createSocialAttachmentForSurface,
-    getSocialAttachmentValidationMessage,
     readSocialAttachmentsForSurfaces,
-    getSocialAttachmentPickerTypes,
     type SocialAttachment,
     type SocialAttachmentPickerScope,
     type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
+import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
 import {
   resolveWatchPartyContentSource,
   resolveWatchPartySourceId,
@@ -220,13 +218,6 @@ const WATCH_PARTY_LIVE_FEED_COLUMNS = 5;
 const WATCH_PARTY_LIVE_FEED_VISIBLE_ROWS = 2;
 const WATCH_PARTY_LIVE_FEED_TILE_MIN_HEIGHT = 102;
 const WATCH_PARTY_LIVE_FEED_GAP = 8;
-
-const buildSocialAttachmentFileFromAsset = (asset: DocumentPicker.DocumentPickerAsset): SocialAttachmentFile => ({
-  uri: asset.uri,
-  name: asset.name,
-  mimeType: asset.mimeType ?? null,
-  size: typeof asset.size === "number" ? asset.size : null,
-});
 
 const isAccessSheetReason = (reason: string | null | undefined): reason is AccessSheetReason => (
   reason === "premium_required" || reason === "party_pass_required"
@@ -1907,24 +1898,12 @@ export default function WatchPartyRoomScreen() {
   const onPickPartyRoomCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {
     try {
       setChatError("");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: getSocialAttachmentPickerTypes(scope),
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (result.canceled || !result.assets?.length) return;
-
-      const file = buildSocialAttachmentFileFromAsset(result.assets[0]);
-      const validationMessage = getSocialAttachmentValidationMessage(file);
-      if (validationMessage) {
-        setChatAttachmentFile(null);
-        setChatError(validationMessage);
-        return;
-      }
-
+      const file = await pickSocialAttachmentFile(scope);
+      if (!file) return;
       setChatAttachmentFile(file);
-    } catch {
-      setChatError("Unable to choose this attachment right now.");
+    } catch (error) {
+      setChatAttachmentFile(null);
+      setChatError(error instanceof Error ? error.message : "Unable to choose this attachment right now.");
     }
   }, []);
 

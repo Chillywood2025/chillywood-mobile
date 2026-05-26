@@ -22,6 +22,7 @@ const assertNotIncludes = (source, needle, label) => {
 const profile = read("app/profile/[userId].tsx");
 const profileFeedCard = read("components/ProfileSocialFeedCard.tsx");
 const socialAttachments = read("_lib/socialAttachments.ts");
+const socialAttachmentPicker = read("_lib/socialAttachmentPicker.ts");
 const socialAttachmentSheet = read("components/social/social-attachment-action-sheet.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
 const player = read("app/player/[id].tsx");
@@ -29,6 +30,7 @@ const watchParty = read("app/watch-party/[partyId].tsx");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const publicPlatform = read("app/channel/[userId].tsx");
 const platformStudio = read("app/channel-settings.tsx");
+const packageJson = read("package.json");
 
 assertIncludes(profile, `label: "Platform"`, "Profile tab labels");
 assertIncludes(profile, `Preview Platform`, "owner public Platform preview action");
@@ -58,9 +60,16 @@ assertIncludes(publicPlatform, `readCreatorVideos(routeUserId, { includeDrafts: 
 assertIncludes(platformStudio, `router.push({ pathname: "/channel/[userId]", params: { userId: previewUserId, preview: "public" } })`, "Platform Studio public preview route");
 assertIncludes(socialAttachments, `export type SocialAttachmentPickerScope = "images" | "files"`, "shared attachment picker scope");
 assertIncludes(socialAttachments, `getSocialAttachmentPickerTypes`, "shared attachment picker type helper");
+assertIncludes(socialAttachmentPicker, `ImagePicker.launchImageLibraryAsync`, "shared photo gallery picker");
+assertIncludes(socialAttachmentPicker, `defaultTab: "photos"`, "shared photo picker gallery tab");
+assertIncludes(socialAttachmentPicker, `DocumentPicker.getDocumentAsync`, "shared file picker");
+assertIncludes(packageJson, `"expo-image-picker"`, "native photo gallery picker dependency");
 assertIncludes(socialAttachmentSheet, `onSelect("images")`, "shared photo attachment sheet action");
 assertIncludes(socialAttachmentSheet, `onSelect("files")`, "shared file attachment sheet action");
-assertIncludes(socialAttachmentSheet, `Open Platform Studio for creator content`, "shared attachment Platform Studio handoff");
+assertIncludes(socialAttachmentSheet, `Open your phone gallery.`, "shared photo attachment gallery copy");
+assertNotIncludes(socialAttachmentSheet, `Platform Studio`, "shared attachment sheet creator tools");
+assertNotIncludes(profile, `showPlatformStudio`, "Profile attachment sheet creator-tool option");
+assertNotIncludes(profile, `onOpenPlatformStudio`, "Profile attachment sheet creator-tool callback");
 assertIncludes(chatThread, `SocialAttachmentActionSheet`, "Chi'lly Chat shared attachment sheet");
 assertIncludes(player, `SocialAttachmentActionSheet`, "creator-video comments shared attachment sheet");
 assertIncludes(watchParty, `SocialAttachmentActionSheet`, "Watch-Party room comments shared attachment sheet");
