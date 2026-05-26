@@ -24,6 +24,7 @@ const assertMatch = (label, haystack, pattern) => {
 };
 
 const migration = read("supabase/migrations/202605260003_spectator_child_room_source_links.sql");
+const replayFixtureMigration = read("supabase/migrations/202605260006_spectator_replay_archive_fixture.sql");
 const startRoomFunction = read("supabase/functions/spectator-start-room/index.ts");
 const spectatorRoute = read("app/spectate/[itemId].tsx");
 const watchPartyRoute = read("app/watch-party/[partyId].tsx");
@@ -106,6 +107,12 @@ assertIncludes("Live Watch-Party source attribution", liveStageRoute, "sourceAtt
 assertIncludes("Player spectator source", playerRoute, "expectsSpectatorPlayback");
 assertIncludes("Player source mismatch guard", playerRoute, "different spectator source");
 assertIncludes("Player source ended copy", playerRoute, "Source live has ended");
+assertIncludes("replay archive fixture", replayFixtureMigration, "spectator_fixture_replay_archive_20260526");
+assertIncludes("replay source state", replayFixtureMigration, "replay_available_later");
+assertIncludes("replay child link source type", startRoomFunction, "return \"replay\"");
+assertIncludes("replay fixture not live", replayFixtureMigration, "'source_is_live', false");
+assertIncludes("replay fixture safe playback", replayFixtureMigration, "'raw_hls_url_visible_to_public', false");
+assertNotIncludes("replay fixture live-stage claim", replayFixtureMigration, "'source_kind', 'live_stage'");
 
 assertMatch("Watch-Party route ownership", watchPartyRoute, /pathname:\s*"\/player\/\[id\]"/);
 assertMatch("Live Watch-Party route ownership", liveStageRoute, /export default function WatchPartyLiveStageScreen/);

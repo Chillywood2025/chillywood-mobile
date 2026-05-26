@@ -102,6 +102,15 @@ Closeout screenshots are outside the repo at `/tmp/chillywood-spectator-child-ro
 - `16-reuse-disabled-spectator-cta.png`: reuse-disabled fixture showed the watch-party-disabled state and did not create a room. Client/server copy is now pinned to `This live can’t be used for a watch party`.
 - `17-private-source-unavailable.png`: private fixture rendered the production unavailable state.
 
+Replay fixture closeout screenshots are outside the repo at `/tmp/chillywood-spectator-live-stage-replay-proof-20260526/`:
+
+- `01-replay-spectator-page.png`: proof-scoped replay archive source opened on `/spectate/[itemId]` with `Replay Later` state, public-safe metadata, no fake live badge, and watch-only playback available.
+- `02-replay-cta-visible.png`: replay source showed a visible playback frame plus `Start Watch-Party Live`, `Watch with your Chi'lly Circle`, Share, and View Platform.
+- `03-replay-child-room-created.png` and `04-replay-child-room-after-camera-permission.png`: `Start Watch-Party Live` routed into the child Watch-Party Live room while Android requested child-room camera/audio permissions; these are child-room permissions, not original-room grants.
+- `05-replay-child-room-loaded.png`: replay child room loaded with safe source attribution, child room code `NSHU7J`, and no original host controls or original member list.
+- `06-replay-child-shared-player-visible-frame.png`: child shared Player loaded the replay source and duration but was paused at `0:00`.
+- `07-replay-child-shared-player-after-play-attempt.png`: after tapping play, the child shared Player showed a visible playback frame at `0:17` with the child room playing state.
+
 Backend/runtime hardening in this closeout:
 
 - Remote migration `202605260003_spectator_child_room_source_links.sql` was applied after normalizing mixed text/UUID RLS comparisons in `spectator_child_room_sources_member_select`.
@@ -111,7 +120,11 @@ Backend/runtime hardening in this closeout:
 - Migration `202605260004_spectator_child_room_safe_fixtures.sql` adds proof-scoped public-safe eligible, ended, reuse-disabled, private, and blocked Spectator fixtures without exposing private real user data.
 - Migration `202605260005_spectator_anon_public_safe_read.sql` allows signed-out Spectator reads only for explicitly public-free, clean, public-safe rows that allow spectator view; room creation still requires the authenticated `spectator-start-room` server checks.
 - `spectator-playback` now emits `https://` controlled playlist/segment URLs for deployed Edge Function requests even when the platform forwards an internal `http://` request origin. This keeps the mobile HTTPS-only playback resolver guard intact and does not expose raw HLS paths.
+- Migration `202605260006_spectator_replay_archive_fixture.sql` adds a proof-scoped replay archive fixture for Android validation. The source item is `9c5f5655-1fbb-4ac8-9473-a5a8d73f3a19`, the playback record is `40c25310-f0f9-46a3-bfdb-056a9405f6a0`, the live state is `replay_available_later`, `source_is_live` is false, `allow_replay_watch_party` is true, and `allow_live_reaction_rooms` is false.
+- Public-safe live-reaction fixture discovery returned zero true live-compatible candidate rows, so successful Live Watch-Party / Reaction Room proof remains unclaimed. A VOD or replay source was not relabeled as live.
+- Replay resolver proof returned `state = available`, `canRenderPlayback = true`, the controlled HTTPS `spectator-playback` path, and no raw Mux/HLS path. The only token-shaped field in the public resolver response was the negative safety flag `fullRoomTokenForSpectators:false`.
 - Eligible Watch-Party Live child-room proof created one child link in `spectator_child_room_sources`: `child_room_id = 5SR4TQ`, source item `fc63e1ba-d744-4350-9a96-a6ef5f35491e`, root source `spectator_fixture_content_20260526`, safe public playback id `abba8e59-3cd2-4306-93e4-6ac7f93a76f3`, and no parent original-room credential.
+- Replay child-room proof created child room `NSHU7J` from source item `9c5f5655-1fbb-4ac8-9473-a5a8d73f3a19`. The route showed `Watching Chi'llwood Replay Archive Fixture from Chi'llwood Safe Fixtures`, the shared Player used `source=spectator-playback`, and original host controls/member lists were not visible.
 - Backend denial proof returned `source_not_public` for the private fixture, `blocked` for the blocked fixture, `source_ended` for the ended fixture, and `source_reuse_disabled` for the reuse-disabled fixture, with no child room id or token fields.
 - Controlled resolver proof fetched the public-safe playlist and a controlled segment through `spectator-playback`; the client-facing response kept the raw playback path private.
 
@@ -143,11 +156,11 @@ Fixture status:
 - Signed-out login handoff is runtime-proved from the eligible fixture; no room was created and no token fields were returned.
 - Private, ended, and reuse-disabled UI states are runtime-proved where fixture routing allowed. Blocked/private/source-ended/reuse-disabled server denials are also proved.
 - Live Watch-Party / Reaction Room successful child launch is not runtime-proved. A true live-stage-compatible public-safe source was not created because using a VOD HLS fixture as a live-stage source would fake live status.
-- Replay child-room launch is not runtime-proved because no replay archive fixture was available.
+- Replay archive launch is runtime-proved on Android with the proof-scoped replay fixture. The replay source does not claim to be live, uses the safe spectator resolver, creates a child Watch-Party Live room, and shows a visible child shared Player frame after playback starts.
 
 ## Remaining Limitations
 - A true live-stage-compatible public-safe source is still needed to prove successful `Start Live Watch-Party` / `Start Reaction Room` child creation on Android.
-- Replay child-room creation is schema-flagged but live replay archive behavior still depends on replay playback availability and a safe archive fixture.
-- The Android shared Player loaded the spectator source/duration, but the captured child-player screenshots did not show visible video frames. The eligible Spectator page did show a real playback frame.
+- Replay proof is scoped to the safe archive fixture in `202605260006`; production replay launches still depend on real replay archive availability and the same public-safe resolver checks.
+- The prior child-player visible-frame gap is closed for the replay fixture. If another source renders black at `0:00`, tap/play timing should be checked before treating it as a player regression.
 - UiAutomator still cannot dump the React Native root node while the app is foregrounded, so visual proof remains screenshot-based.
 - Cost policy is a simple server-side attempt/source rate limit in this lane; richer cost dashboards can build on `spectator_child_room_sources` and audit rows.

@@ -1,6 +1,30 @@
 # NEXT TASK
 
-## Recommended Lane: RevenueCat / Google Play Credential Linking And Money Center Provider Proof
+## Recommended Lane: True Live-Stage Spectator Fixture Proof
+
+Replay proof is now closed with a proof-scoped safe archive fixture. The remaining Spectator proof gap is only successful Live Watch-Party / Reaction Room launch from a true live-stage-compatible public-safe source.
+
+Closed truth:
+
+- Watch-Party Live child creation from an eligible content/player Spectator source is already Android-proved.
+- Replay archive child creation is now Android-proved from source item `9c5f5655-1fbb-4ac8-9473-a5a8d73f3a19`; child room `NSHU7J` showed safe attribution and a visible child shared Player frame.
+- Migration `202605260006_spectator_replay_archive_fixture.sql` is remote-applied and creates only a replay archive fixture, with `source_is_live=false`, `live_state='replay_available_later'`, `allow_replay_watch_party=true`, and `allow_live_reaction_rooms=false`.
+- The replay resolver uses controlled HTTPS `spectator-playback` URLs and does not expose raw HLS paths or original LiveKit tokens.
+- Public-safe live-reaction candidate discovery returned zero true live-compatible rows, so Live Watch-Party / Reaction Room success remains unclaimed.
+- Existing LiveKit token issuance, old-room handling, Premium gates, Watch-Party Live route ownership, and Live Watch-Party route ownership remain unchanged.
+- Screenshots live outside the repo at `/tmp/chillywood-spectator-live-stage-replay-proof-20260526/`.
+
+Remaining limitation:
+
+- A true public-safe live-stage-compatible source is still needed to prove `Start Live Watch-Party` / `Start Reaction Room` success. Do not reuse VOD/replay playback and call it live.
+
+Recommended next lane:
+
+- Create or locate a real live-stage-compatible public-safe Spectator source with safe playback, source attribution, and `allow_live_reaction_rooms=true`.
+- On `R5CR120QCBF`, prove the eligible live-stage Spectator CTA, resulting child `/watch-party/live-stage/[partyId]` room, safe attribution, no original host controls/member list, no original LiveKit token exposure, and normal child-room speaker/publish rules.
+- Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
+
+## Previous Recommended Lane: RevenueCat / Google Play Credential Linking And Money Center Provider Proof
 
 Money Center is now the creator-facing monetization source of truth in Platform Studio. The next money lane should prove the provider boundary that Money Center is honestly waiting on, without activating live money.
 
@@ -32,9 +56,9 @@ Recommended next lane:
 - Capture Money Center Provider Status after provider proof and keep screenshots outside the repo.
 - Keep `artifacts/` and `supabase/.temp/` untouched.
 
-## Previous Recommended Lane: True Live-Stage And Replay Spectator Fixture Proof
+## Previous Completed Lane: Spectator Replay Fixture Proof Closeout
 
-The Spectator child-room relay is now runtime-proved on Android for the content/player Watch-Party Live launch path using proof-scoped fixtures. The remaining Spectator proof lane should focus only on true live-stage and replay fixture coverage without faking live status or replay availability.
+The Spectator child-room relay is now runtime-proved on Android for the content/player Watch-Party Live launch path and for replay archive Watch-Party Live launch using proof-scoped fixtures. The remaining Spectator proof lane should focus only on true live-stage coverage without faking live status.
 
 Closed truth:
 
@@ -53,25 +77,26 @@ Closed truth:
 - `spectator-start-room` is deployed with `verify_jwt = false`, performs its own user authentication, and returns clean `sign_in_required` and `source_not_found` denials without child ids or token fields.
 - Proof migration `202605260004_spectator_child_room_safe_fixtures.sql` creates proof-scoped eligible, ended, reuse-disabled, private, and blocked Spectator fixtures.
 - Proof migration `202605260005_spectator_anon_public_safe_read.sql` lets signed-out Spectator read only explicitly public-free, clean, public-safe spectator rows; room creation still requires authenticated server verification.
+- Proof migration `202605260006_spectator_replay_archive_fixture.sql` creates the safe replay archive fixture with `source_is_live=false`, `replay_available_later`, and replay watch-party reuse allowed.
 - `spectator-playback` now returns HTTPS controlled resolver URLs in deployed Edge Function contexts, preserving the mobile resolver guard without exposing raw playback paths.
 - Android `R5CR120QCBF` proves eligible Watch-Party Live child creation from Spectator: the eligible fixture renders playback, `Start Watch-Party Live` creates child room `5SR4TQ`, `/watch-party/[partyId]` shows safe source attribution, and original host controls/member lists are not visible.
+- Android `R5CR120QCBF` also proves replay archive child creation: replay source `9c5f5655-1fbb-4ac8-9473-a5a8d73f3a19` created child room `NSHU7J`, source attribution rendered, the shared Player loaded source/duration, and a visible playback frame was captured after tapping play.
 - Android signed-out proof from the eligible fixture shows login handoff with no room creation.
 - Android private/source-ended/reuse-disabled states and backend private/blocked/ended/reuse-disabled denials are proved without child ids or token fields.
 - Screenshots live outside the repo at `/tmp/chillywood-spectator-child-room-proof-20260526/`.
+- Replay closeout screenshots live outside the repo at `/tmp/chillywood-spectator-live-stage-replay-proof-20260526/`.
 
 Remaining limitations:
 
 - Successful Live Watch-Party / Reaction Room launch from Spectator still needs a true live-stage-compatible public-safe source. Do not reuse a VOD fixture and call it live.
-- Replay child-room creation has schema flags but still depends on replay/HLS archive availability and a safe replay archive fixture.
-- The child shared Player loaded source/duration during Android proof, but screenshots did not capture visible video frames inside the child Player. The eligible Spectator page did show real playback frames.
+- Production replay launches still depend on real replay archive availability and the same public-safe resolver checks; the closed proof is fixture-scoped.
 - Cost guard is a simple server-side actor/source rate limit; richer cost review can build on the audit/link tables later.
 - UiAutomator can see the launcher after shade cleanup, but still returns `null root node` while the React Native app is foregrounded; screenshot proof currently uses `screencap`.
 
 Recommended next lane:
 
 - Create or locate a real public-safe live-stage-compatible source for `Start Live Watch-Party` / `Start Reaction Room`.
-- Create or locate a safe replay archive source where replay playback is actually available.
-- On `R5CR120QCBF`, capture screenshots under `/tmp/chillywood-spectator-child-room-proof-20260526/` for the live-stage eligible Spectator CTA, resulting child Live Watch-Party room, source attribution, no original controls/member list, replay-safe Spectator CTA, resulting replay child room if allowed, and source-ended replay/no-replay branching.
+- On `R5CR120QCBF`, capture screenshots for the live-stage eligible Spectator CTA, resulting child Live Watch-Party room, source attribution, no original controls/member list, no original token exposure, and child-room speaker/publish rules.
 - Re-run the targeted token/private-source greps and the new `npm run guard:spectator-child-room-policy` after any proof-only fixes.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
 
