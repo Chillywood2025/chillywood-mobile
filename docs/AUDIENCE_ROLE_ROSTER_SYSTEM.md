@@ -69,7 +69,7 @@ Security-sensitive gaps:
 Profile / Channel System:
 
 - Profile is the personal/social identity surface on `/profile/[userId]`.
-- Public Channel is the mini streaming/network surface on `/channel/[userId]`.
+- Public Platform is the viewer-facing creator surface on `/channel/[userId]`.
 - Platform Studio is the owner control surface on `/channel-studio`; `/channel-settings` remains compatibility.
 - Audience Role Roster feeds channel audience posture, counts, relationship controls, and later role management.
 

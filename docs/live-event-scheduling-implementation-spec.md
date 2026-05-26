@@ -27,7 +27,7 @@ This spec does not:
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
-| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route and public-safe event presentation surface. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Platform route and public-safe event presentation surface. |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Platform Studio and future creator event-management owner. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/watch-party/index` | `app/watch-party/index.tsx` | Waiting-room entry owner for party and live flows. |
@@ -49,7 +49,7 @@ Do not mix `Watch-Party Live` and `Live Watch-Party`.
 
 ### 2.3 Current Product Rules To Preserve
 - `/profile/[userId]` remains the canonical personal/social Profile surface.
-- `/channel/[userId]` remains the canonical public Channel surface and public-safe Live & Upcoming owner.
+- `/channel/[userId]` remains the canonical public Platform surface and public-safe Live & Upcoming owner.
 - `/channel-studio` remains the preferred owner Platform Studio surface for creator live/event management.
 - `/channel-settings` remains compatibility for older owner Platform Studio links.
 - The access/entitlement resolver remains the canonical owner for channel/content/room access truth already landed.
@@ -65,7 +65,7 @@ Current repo doctrine already supports:
 - in-room distinction between `Live First` and `Live Watch-Party`
 - title publication scheduling in Content Studio through `status`, `is_published`, and `release_at`
 - title/player `Watch-Party Live` launch posture
-- Platform Studio Live tab framing and public Channel Live & Upcoming presentation
+- Platform Studio Live tab framing and public Platform Live & Upcoming presentation
 - access resolver groundwork for future event access, without implementing it yet
 
 ### 3.2 Current Doctrine Does Not Yet Support
@@ -95,7 +95,7 @@ These must remain separate in meaning:
 - Scheduled events do not create new user-facing route families.
 - A future scheduled `Live First` or `Live Watch-Party` event should still resolve into the canonical live route owner on `/watch-party/live-stage/[partyId]` once it is live.
 - A future scheduled `Watch-Party Live` event should still resolve into the canonical party flow and party-room owners instead of inventing a new event route.
-- `/channel/[userId]` should surface public-safe live-event truth when it becomes real, but it remains a public Channel surface, not the live room itself.
+- `/channel/[userId]` should surface public-safe live-event truth when it becomes real, but it remains a public Platform surface, not the live room itself.
 - `/channel-studio` should own creator scheduling and event management when event truth becomes real; `/channel-settings` remains compatibility.
 
 ### 4.3 Current Relationship To Content Publishing

@@ -1,6 +1,6 @@
 # Chi'llywood Profile / Platform Implementation Spec
 
-2026-05-06 current-route note: this older implementation spec is superseded where it says Profile and Channel share one public route or where it treats `/channel-settings` as the primary studio route. Current truth is Profile = `/profile/[userId]`, public Channel = `/channel/[userId]`, owner Platform Studio = `/channel-studio`, and `/channel-settings` compatibility must remain.
+2026-05-06 current-route note: this older implementation spec is superseded where it says Profile and Channel share one public route or where it treats `/channel-settings` as the primary studio route. Current truth is Profile = `/profile/[userId]`, public Platform = `/channel/[userId]`, owner Platform Studio = `/channel-studio`, and `/channel-settings` compatibility must remain.
 
 2026-05-25 terminology note: user-facing Profile copy must say `Platform` for the public creator/channel surface and `Platform Studio` for owner tools. The internal `/channel/[userId]` route and channel-named database/helpers remain stable unless a separate migration/route lane proves a safe rename.
 
@@ -78,7 +78,7 @@ Owner Platform Studio route:
 Future extraction is allowed only as supporting component files under those route owners. Route truth does not change.
 
 ### 3.2 Public Surface Purpose
-`/profile/[userId]` is Chi'llywood's personal/social identity surface. `/channel/[userId]` is the public creator Platform surface.
+`/profile/[userId]` is Chi'llywood's personal/social identity surface. `/channel/[userId]` is the Public Platform viewer surface.
 
 Profile must answer:
 1. Who is this person, creator, or official presence?
@@ -265,7 +265,7 @@ Owner mode still shares:
 Preserve this split:
 - owner-vs-public view switching
 - Profile owner/public actions stay on `/profile/[userId]`
-- public Channel preview/presentation stays on `/channel/[userId]`
+- public Platform preview/presentation stays on `/channel/[userId]`
 - owner stats and quick actions stay in `/channel-studio`
 
 `/channel-studio` should own deeper editing controls, not the entire owner identity surface. `/channel-settings` remains compatibility.
@@ -362,7 +362,7 @@ This section defines the intended boundaries for future implementation under the
 - `linkedMode`
 - `sourceRoute`
 
-### 7.2 Public Channel Hero Model
+### 7.2 Public Platform Hero Model
 `PublicChannelHeroModel`
 - `displayName`
 - `handle`
@@ -644,10 +644,10 @@ Remaining later-phase data gaps:
   - does not claim broader audience-role or moderation CRM depth yet
 
 ## 8. Exact Phased Implementation Order
-### Stage 1 - Profile And Public Channel Route Split
+### Stage 1 - Profile And Public Platform Route Split
 Goal:
 - preserve personal/social Profile on `/profile/[userId]`
-- preserve public Channel on `/channel/[userId]`
+- preserve public Platform on `/channel/[userId]`
 
 Exact route/file owner(s):
 - `app/profile/[userId].tsx`
@@ -682,14 +682,14 @@ Explicitly out of scope:
 
 Acceptance criteria:
 - `/profile/[userId]` reads as a personal/social Profile surface
-- `/channel/[userId]` reads as a public mini streaming/network Channel surface
+- `/channel/[userId]` reads as a Public Platform viewer surface
 - `Chi'lly Chat` handoff remains canonical
 - live/watch-party labels remain correct
 - no owner-control leakage to other-user view
 
 Proof requirements before moving on:
-- self Profile and own public Channel render without collapsing into settings
-- other-user Profile and public Channel render without owner leakage
+- self Profile and own public Platform render without collapsing into settings
+- other-user Profile and public Platform render without owner leakage
 - official route still reads as official/protected
 - room-linked entry preserves canonical live/watch-party handoff labels
 
@@ -884,8 +884,8 @@ Do not:
 ## 10. Current Doctrine vs Near-Term vs Later-Phase Ideas
 | Bucket | Items |
 | --- | --- |
-| Current doctrine / should build now | Personal/social Profile on `/profile/[userId]`; public Channel on `/channel/[userId]`; owner Platform Studio on `/channel-studio`; `/channel-settings` compatibility; Platform Studio tabs Home, Content, Live, Audience, Insights, Brand; public Channel sections Hero, Featured, Latest Uploads, Live & Upcoming, About; `Chi'lly Chat` as the communication entry; locked `Watch-Party Live` and `Live Watch-Party` semantics; official Rachi behavior on canonical profile/chat/channel surfaces. |
-| Near-term but not current route truth | Deeper backed Platform Studio controls, richer owner stats only when backed, stronger curated public Channel shelves only when backed, and audience summary refinement under existing routes. |
+| Current doctrine / should build now | Personal/social Profile on `/profile/[userId]`; public Platform on `/channel/[userId]`; owner Platform Studio on `/channel-studio`; `/channel-settings` compatibility; Platform Studio tabs Home, Content, Live, Audience, Insights, Brand; public Platform sections Hero, Featured, Latest Uploads, Live & Upcoming, About; `Chi'lly Chat` as the communication entry; locked `Watch-Party Live` and `Live Watch-Party` semantics; official Rachi behavior on canonical profile/chat/channel surfaces. |
+| Near-term but not current route truth | Deeper backed Platform Studio controls, richer owner stats only when backed, stronger curated public Platform shelves only when backed, and audience summary refinement under existing routes. |
 | Later-phase / planned only | Additional `/channel-studio/*` child routes, advanced creator tooling beyond current doctrine, deep audience tooling, full analytics suite, broader safety/admin surfaces, advanced creator monetization rollout, and platform-builder depth such as uploads/clips/lists/partnership modules when product doctrine intentionally promotes them. |
 
 ## 11. Execution Boundary
@@ -893,7 +893,7 @@ This document is the durable source of truth for future profile/channel implemen
 
 Current route truth remains unchanged after this spec:
 - `/profile/[userId]` is the Profile route
-- `/channel/[userId]` is the public Channel route
+- `/channel/[userId]` is the public Platform route
 - `/channel-studio` is the preferred owner Platform Studio route
 - `/channel-settings` remains compatibility
 - `/chat` and `/chat/[threadId]` remain canonical Chi'lly Chat routes

@@ -29,11 +29,11 @@ Current Public v1 truth:
 - Brand is `Chi'llywood`.
 - Every account has Profile + Channel.
 - Profile is the person/social identity.
-- Channel is the public mini streaming platform/network at `/channel/[userId]`.
+- Public Platform is the viewer-facing creator surface at `/channel/[userId]`.
 - Platform Studio is the owner-only creator operating system at `/channel-studio`.
 - `/channel-settings` remains compatibility for older owner links.
-- Profile View Channel routes to `/channel/[userId]`.
-- Platform Studio Preview Channel routes to `/channel/[ownUserId]`.
+- Profile View Platform routes to `/channel/[userId]`.
+- Platform Studio Preview Platform routes to `/channel/[ownUserId]`.
 - User/creator Channels show creator-owned uploads, videos, events, live/watch-party content, and backed creator shelves only.
 - Chi'llywood Originals/platform titles belong to Home, Explore, dedicated Originals surfaces, platform title/player routes, and admin-managed title surfaces, not inside user/creator Channels as filler.
 - `/profile/[userId]` is the public Profile/social identity surface.
@@ -772,7 +772,7 @@ Current route/surface owners:
 
 - `app/admin.tsx`: operator/admin visibility, platform title programming, bounded safety report queue, role-aware review access.
 - `app/profile/[userId].tsx`: Profile report entry.
-- `app/channel/[userId].tsx`: public Channel report entry.
+- `app/channel/[userId].tsx`: public Platform report entry.
 - `app/title/[id].tsx`: title report entry.
 - `app/player/[id].tsx`: playback unavailable states, creator-video not-ready states, and creator-video report entry.
 - Platform Studio (`app/channel-settings.tsx` implementation, `/channel-studio` preferred route): creator/channel safety summary, moderated creator-video status display, and owner management constraints, not global moderation queue.
@@ -1422,7 +1422,7 @@ Future backend tables:
 
 - pricing strategy
 - premium tiers
-- creator mini platform commerce direction
+- creator Platform commerce direction
 - creator paid media later
 - creator merch/product sales later
 - tips/coins later
@@ -1480,7 +1480,7 @@ Later layers:
 
 - Premium is `$9.99/month`, uses Google Play plus RevenueCat, and unlocks platform/creator tools and Premium-only features through RevenueCat entitlement `premium`.
 - Premium subscription revenue belongs to Chi'llywood/platform, is not split with creators, and must not create a creator subscription revenue pool.
-- Premium creators can monetize their creator mini platform when backed, choose free or paid content, and set prices where pricing is backed.
+- Premium creators can monetize their public Platform when backed, choose free or paid content, and set prices where pricing is backed.
 - Free viewers can buy and watch paid creator content without Premium, but they still cannot enter Premium-only Live, Watch-Party, creator hosting, or other Premium-only platform features.
 - Do not confuse `Premium subscriber` with `paid content buyer`.
 - Creator paid content later uses creator 80% net and Chi'llywood 20% net.
@@ -1488,7 +1488,7 @@ Later layers:
 - Chi'llywood should not take a direct percentage cut from the tip amount.
 - Any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed.
 - Tips do not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods.
-- Creator merch/product sales later belong on the Channel mini platform, are managed from Platform Studio command-center surfaces, and require product listings, prices, inventory/status where needed, fulfillment/shipping for physical goods, refunds/disputes, payout ledger entries, and tax/provider/legal review.
+- Creator merch/product sales later belong on the public Platform, are managed from Platform Studio Money Center surfaces, and require product listings, prices, inventory/status where needed, fulfillment/shipping for physical goods, refunds/disputes, payout ledger entries, and tax/provider/legal review.
 - Net receipts means after store/payment fees, taxes, refunds, chargebacks, provider fees, and adjustments.
 - Standard scheduled creator payouts remain free.
 - Instant Payout / Instant Cash Out may have a separate optional fee later; preferred direction is `1.5%` of the cash-out amount with no default cap, subject to provider/legal/accounting review.

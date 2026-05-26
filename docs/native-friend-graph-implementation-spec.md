@@ -18,7 +18,7 @@ It exists to:
 - define the exact phased implementation order for the native friend graph
 
 This spec does not:
-- change current route truth beyond recording that Profile is `/profile/[userId]`, public Channel is `/channel/[userId]`, and owner Platform Studio is `/channel-studio`
+- change current route truth beyond recording that Profile is `/profile/[userId]`, public Platform is `/channel/[userId]`, and owner Platform Studio is `/channel-studio`
 - implement UI behavior
 - add schema in this pass
 - rename followers, subscribers, requests, or blocked audience into friends
@@ -43,7 +43,7 @@ These mean:
 These are not person-to-person friendship truth.
 
 ### 2.2 Public Profile / Channel Truth Already Exists
-`/profile/[userId]` is the personal/social Profile route. `/channel/[userId]` is the public Channel route. `/channel-studio` is the owner-only Platform Studio route, with `/channel-settings` kept as compatibility.
+`/profile/[userId]` is the personal/social Profile route. `/channel/[userId]` is the public Platform route. `/channel-studio` is the owner-only Platform Studio route, with `/channel-settings` kept as compatibility.
 
 Current public-safe social truth on Profile and Channel routes is limited to:
 - identity and official/profile state

@@ -8,7 +8,7 @@ This is repo-side and live-schema foundation only. Remote migration `20260514001
 
 - Premium is `$9.99/month` through Google Play plus RevenueCat entitlement `premium`.
 - Premium subscription revenue belongs to Chi'llywood/platform and is not split with creators.
-- Channel is the public creator Platform. Platform Studio is the owner command center for managing it.
+- Public Platform is the viewer-facing creator surface. Platform Studio is the owner command center for managing it.
 - Premium creators may later mark eligible content free or paid and set prices where backed.
 - Viewers do not need Premium to buy creator paid content or products.
 - Premium subscription alone does not unlock creator paid content.
@@ -97,7 +97,7 @@ Preproduction test proof on May 16, 2026 moved this from copy-only readiness int
 - Platform Studio has one `Monetization` tab whose page title is `Money Center`; separate creator-facing `Monetize`, `Payouts`, and `Revenue` tabs/screens are consolidated. It uses collapsible Overview, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Payouts, Tax & Legal, Provider Status, Future Tools, and owner/dev-only Technical checks.
 - Digital Sales stays tied to the existing Google Play plus RevenueCat Premium flow and planned digital paid-access readiness; Creator Balance is ledger-first and shows no verified earnings yet; Payouts shows Stripe Connect setup/readiness only; Provider Status shows public-safe readiness; Merch is physical goods only and separate from digital app unlocks; Future Tools are labeled planned; Technical checks show only public-safe owner/dev details.
 - Legacy `tab=monetize`, `tab=payouts`, and `tab=revenue` route params map into the consolidated Monetization tab with the matching section expanded. Compatibility routes `/monetize`, `/revenue`, and `/payouts` redirect into Money Center Overview, Creator Balance, and Payouts. Normal navigation no longer has duplicate money tabs.
-- The public Channel route is product-copy framed as the creator Platform and can show a real active product shelf if backed product rows exist. It still says checkout is pending and does not create product orders.
+- The public Platform route (`/channel/[userId]`) can show a real active product shelf if backed product rows exist. It still says checkout is pending and does not create product orders.
 - The standalone Player checks the creator-paid-content resolver for creator videos. If a backed active paid-content price requires purchase, regular playback does not receive a playable URL and the Player shows a locked paid-creator-content state instead of guessing from the client.
 - Platform Studio remains the creator command center; Channel remains the public Platform. Technical route/table names are unchanged in this lane.
 - Money Center product policy: `docs/MONEY_CENTER_PRODUCT_POLICY.md`.

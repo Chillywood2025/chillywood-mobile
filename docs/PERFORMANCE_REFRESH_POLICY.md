@@ -45,7 +45,7 @@ The source of truth is `_lib/performancePolicy.ts`.
 - Watch-Party Live snapshot fallback refresh is 30 seconds.
 - Live Stage hybrid room comments still use Supabase realtime first; the fallback sync is 15 seconds.
 - Chat read receipts are route-throttled to avoid repeated write bursts while messages are loading or sending.
-- Home, Profile, Public Channel, and Platform Studio remain load-on-open/focus/manual surfaces; this lane does not add new feed polling.
+- Home, Profile, Public Platform, and Platform Studio remain load-on-open/focus/manual surfaces; this lane does not add new feed polling.
 - VOD quality ladder foundation lives in `docs/VOD_QUALITY_LADDER_AND_PLAYBACK_RESOLVER.md`. Player asks the resolver for allowed creator-video renditions and falls back to legacy single-file playback only when no real renditions exist.
 
 ## Guardrails

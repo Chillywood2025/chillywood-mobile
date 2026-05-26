@@ -1,6 +1,6 @@
 # Chi'llywood Creator Analytics / Conversion Implementation Spec
 
-2026-05-06 current-route note: creator analytics/insights belong in owner Platform Studio on `/channel-studio`. Public Channel on `/channel/[userId]` may show public-safe backed stats only. `/channel-settings` remains compatibility.
+2026-05-06 current-route note: creator analytics/insights belong in owner Platform Studio on `/channel-studio`. Public Platform on `/channel/[userId]` may show public-safe backed stats only. `/channel-settings` remains compatibility.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's creator analytics / conversion chapter.
@@ -30,7 +30,7 @@ This spec does not:
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator-side analytics/Insights owner today. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. Not a creator analytics console. |
-| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. Public-safe backed stats only, not creator analytics console. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Platform route. Public-safe backed stats only, not creator analytics console. |
 | `/chat` | `app/chat/index.tsx` | Canonical Chi'lly Chat inbox route. |
 | `/chat/[threadId]` | `app/chat/[threadId].tsx` | Canonical Chi'lly Chat direct-thread route. |
 | `/watch-party/[partyId]` | `app/watch-party/[partyId].tsx` | Canonical Party Room route. |
@@ -44,7 +44,7 @@ Do not create route proliferation in this chapter.
 - `/channel-studio` remains the preferred creator-side control center and current creator analytics/Insights summary owner.
 - `/channel-settings` remains compatibility for older owner Platform Studio links.
 - `/profile/[userId]` remains a personal/social identity surface, not a private creator analytics dashboard.
-- `/channel/[userId]` remains the public Channel route and may show public-safe backed stats only.
+- `/channel/[userId]` remains the public Platform route and may show public-safe backed stats only.
 - Chi'lly Chat unread/read truth stays messaging-owned truth, not creator analytics by default.
 - Access/entitlement truth remains access truth, not a conversion dashboard by default.
 - Live/event scheduling truth remains event truth, not attendance analytics by default.
@@ -61,7 +61,7 @@ Current creator analytics doctrine is intentionally narrow:
 ## 3. Exact Metric Buckets And Meanings
 
 ### 3.1 Profile / Channel
-Profile and Channel analytics means creator-facing aggregate truth about public Profile and public Channel surfaces.
+Profile and Channel analytics means creator-facing aggregate truth about public Profile and public Platform surfaces.
 
 Examples:
 - profile visits

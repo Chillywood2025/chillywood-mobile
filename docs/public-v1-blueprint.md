@@ -37,7 +37,7 @@ This blueprint exists to:
 | --- | --- | --- | --- | --- | --- | --- |
 | Auth / Login / Settings / Logout | `app/(auth)/login.tsx`, `app/settings.tsx`, `app/_layout.tsx`, `_lib/session.tsx` | Establish trusted access and safe session control for sensitive surfaces. | Logged-out entry lands on login, real sign-in succeeds, visible settings exists, real logout returns to `/login`, sensitive flows require auth. | Expanded onboarding funnels, creator onboarding, payout onboarding, account-billing management beyond existing premium handoff. | Session ownership, route gating, analytics for auth events, current sign-in foundations. | Signed-out first open proves `/login`; valid sign-in returns to the correct product path; logout clears session and cold reopen still lands on `/login`. |
 | Home / Discovery | `app/(tabs)/index.tsx` as the Home owner, plus canonical handoff into `app/title/[id].tsx` and live entry | Launch content, live, and profile flows cleanly without route drift. | Discovery rails render valid content, title routing works, live/watch-party entry is visible, continue-watching behavior stays stable where progress exists. | Advanced personalization, ad placements, partner rows, creator merchandising, large recommendation experiments. | Title data truth, home-config truth, route integrity, analytics for discovery engagement. | Visible Home rails open valid title detail, player, and live entry paths without `Not found` or dead-end regressions. |
-| Profile / Public Channel / Platform Studio | `app/profile/[userId].tsx`, `app/channel/[userId].tsx`, `app/channel-studio/index.tsx`, `app/channel-settings.tsx` compatibility, supported by `_lib/userData.ts`, `_lib/channelAudience.ts`, and official-account identity hooks | Provide a social identity hub, a public mini streaming/network Channel, and owner-only creator operations without blurring them. | Profile remains personal/social; public Channel renders hero, featured, latest uploads, live/upcoming, and about; Platform Studio remains owner-only; `/channel-settings` still resolves; Chi'lly Chat handoff works. | Owner controls on public Channel, drafts/private/unpublished public leakage, full creator monetization, merchandising, advanced channel programming, deep community modules, partnership surfaces. | Identity/profile data, official-account protection, creator-video visibility, channel audience truth, room/content relationship context, profile-to-thread continuity. | Self profile, other-user profile, public Channel, Platform Studio, and official Rachi profile each render correctly with no owner-control leakage and working content/chat handoff. |
+| Profile / Public Platform / Platform Studio | `app/profile/[userId].tsx`, `app/channel/[userId].tsx`, `app/channel-studio/index.tsx`, `app/channel-settings.tsx` compatibility, supported by `_lib/userData.ts`, `_lib/channelAudience.ts`, and official-account identity hooks | Provide a social identity hub, a creator Platform, and owner-only creator operations without blurring them. | Profile remains personal/social; public Platform renders hero, featured, latest uploads, live/upcoming, and about; Platform Studio remains owner-only; `/channel-settings` still resolves; Chi'lly Chat handoff works. | Owner controls on public Platform, drafts/private/unpublished public leakage, full creator monetization, merchandising, advanced channel programming, deep community modules, partnership surfaces. | Identity/profile data, official-account protection, creator-video visibility, channel audience truth, room/content relationship context, profile-to-thread continuity. | Self profile, other-user profile, public Platform, Platform Studio, and official Rachi profile each render correctly with no owner-control leakage and working content/chat handoff. |
 | Standalone Player | `app/player/[id].tsx` | Deliver solo-first playback with honest access handling and clean social escalation into Watch-Party Live. | Stable playback on valid titles, honest entitlement-aware access behavior, resume/progress clarity, `Watch-Party Live` handoff remains deliberate and route-correct. | Deep co-watch overlays, premium playback perks, advanced second-screen patterns, Game Live, broad creator tools. | Title/media truth, entitlement handling, resume/progress state, rights-aware content actions. | Valid titles load and play correctly, premium-locked titles render honest gate behavior, and `Watch-Party Live` hands off into the correct Party flow. |
 | Watch-Party Live Core Flow | `app/watch-party/index.tsx`, `app/watch-party/[partyId].tsx`, `app/player/[id].tsx`, `_lib/roomRules.ts` | Deliver the core shared social watch path from player into room and shared playback. | `Player -> Watch-Party Live -> Party Waiting Room -> Party Room -> shared party player` stays stable; host authority is clear; local-only viewer controls stay local; participant presence is bounded and readable. | Unlimited equal visible tiles, co-host systems, clip packages, trivia, gifts, creator paid-content publishing, ad intrusion in immersive party surfaces. | Room create/join, playback sync, entitlement checks, moderation/report hooks, participant presence. | Party create/join works, Party Room stays distinct from Live, shared playback stays synchronized, and room return paths remain stable. |
 | Live Watch-Party / Live Stage Core Flow | `app/watch-party/index.tsx`, `app/watch-party/live-stage/[partyId].tsx`, supporting live state owners | Deliver the core live social room with preserved Live Room and Live Stage boundaries. | `Live Waiting Room -> Live Room -> Live Stage` stays stable; `Live First` and `Live Watch-Party` remain distinct; Live Stage stays presentation-first; stage entry remains clear. | Game Live, Game Watch-Party, backstage roles, advanced stage templates, Platform Studio sprawl, immersive ads. | Live room state, participant presence, moderation/report, invite/rejoin continuity, analytics for live engagement. | Live create/join lands on the canonical live route, Live Room and Live Stage remain distinct, and the stage flow does not drift into Party behavior. |
@@ -105,7 +105,7 @@ This blueprint exists to:
 - basic owner-facing presentation/customization is possible without building a full creator platform
 - Chi'lly Chat handoff from profile works
 - Explicitly out of scope:
-- full creator mini-platform builder
+- full creator Platform builder
 - deep channel programming
 - creator commerce or merchandising
 - large community modules
@@ -355,7 +355,7 @@ Still not Public v1 even if technically easy:
 Later phase is reserved for traction-dependent, ops-heavy, compliance-heavy, or partnership-heavy work.
 
 Approved Later-phase direction:
-- full creator mini-platform builder
+- full creator Platform builder
 - advanced payout and tax automation
 - overseas creator payouts
 - Game Live after the core live product is stable and justified
@@ -422,7 +422,7 @@ Should remain gated:
 - ads in or around immersive rooms
 - Game Live
 - Game Watch-Party
-- full creator mini-platform depth
+- full creator Platform depth
 
 ## Exact Next 3 Execution Lanes
 ### Lane 1

@@ -29,7 +29,7 @@ This chapter does not:
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred creator control center, not the platform admin console. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route, including official-platform identities like Rachi. |
-| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route; must not expose platform admin controls. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Platform route; must not expose platform admin controls. |
 | `/chat`, `/chat/[threadId]` | `app/chat/index.tsx`, `app/chat/[threadId].tsx` | Canonical Chi'lly Chat routes, including official-platform thread continuity. |
 
 Do not create route proliferation in this chapter.

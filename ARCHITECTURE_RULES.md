@@ -27,10 +27,10 @@ If an older UI or layout assumption conflicts with `docs/APP_UI_UX_RULES.md`, `d
 - Party Waiting Room routes into Party Room
 - Live Waiting Room routes into Live Room
 - Profile social identity surface: `/profile/[userId]`
-- Public Channel surface: `/channel/[userId]`
+- Public Platform surface: `/channel/[userId]`
 - Spectator metadata surface: `/spectate/[itemId]`
-- Owner Channel Studio surface: `/channel-studio`
-- Channel Settings compatibility surface: `/channel-settings`
+- Owner Platform Studio surface: `/channel-studio`
+- Platform Studio compatibility surface: `/channel-settings`
 - Platform owner/operator Admin Command Center: `/admin`
 - Chi'lly Chat inbox lives on `/chat`
 - Chi'lly Chat direct threads live on `/chat/[threadId]`
@@ -40,11 +40,11 @@ These are the approved user-facing destinations.
 Grouped/tab entries must not create duplicate normalized ownership for these canonical routes. A future bottom-tab Chat entry requires a route design that delegates without colliding with `/chat`; the deferred `app/(tabs)/chat.tsx` candidate is not production truth.
 
 ## Discovery / Spectator Rule
-Home, Profile, and Public Channel discovery may show only real, privacy-safe, rights-safe activity from backed rows/helpers.
+Home, Profile, and Public Platform discovery may show only real, privacy-safe, rights-safe activity from backed rows/helpers.
 
 Discovery/Spectator D3-D10 foundation is pushed:
 - Home Feed V1 shows backed Live Now, Channels You Follow, From Your Chi'lly Circle, Upcoming Events, and Latest Public Uploads rails with honest empty states
-- Public Channel has public-safe Live Now and Upcoming Events shelves
+- Public Platform has public-safe Live Now and Upcoming Events shelves
 - `/spectate/[itemId]` is metadata-only
 - spectator eligibility and ranking helpers are read-only/foundation
 - notification/activity trigger foundation sends no pushes
@@ -137,8 +137,8 @@ These labels are locked and are not runtime-branding experiments.
 - `/chat` controls standalone Chi'lly Chat copy and behavior
 - Party Room and Live Room control room-native communication copy and behavior
 - Profile controls social identity and public/private social relationship visibility
-- Channel controls the public creator/network viewing experience on `/channel/[userId]`
-- Channel Studio controls owner-only creator operations on `/channel-studio`
+- Public Platform controls the public creator/network viewing experience on `/channel/[userId]`
+- Platform Studio controls owner-only creator operations on `/channel-studio`
 - Admin Command Center controls platform owner/operator operations on `/admin`; do not create duplicate admin routes such as `/admin-command-center`
 - Title and player control reusable rights-aware content actions
 
@@ -164,9 +164,9 @@ The registry/router/drain foundation enables future manual scaling and later sem
 `/admin` is the canonical platform owner/operator route.
 
 Admin is separate from:
-- Channel Studio
+- Platform Studio
 - Profile Settings
-- Public Channel
+- Public Platform
 - Chi'lly Circle
 - Room Control
 
@@ -182,13 +182,13 @@ Admin V1B1 runtime controls config foundation is pushed. Runtime controls are ty
 
 Admin V1B2A is pushed as the first real runtime control enforcement. Signup reads `runtimeControls.new_accounts_enabled` after email/password and 18+ confirmation pass and before `supabase.auth.signUp`; when false, account creation is paused before a Supabase auth account is created. Admin may label New Accounts as `Enforced on signup`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
 
-Admin V1B2B is pushed as the second real runtime control enforcement. Channel Studio's compatibility implementation in `app/channel-settings.tsx` reads `runtimeControls.uploads_enabled` from the existing normalized app-config load and blocks only new creator-video upload submit before `uploadCreatorVideo`, storage upload, or metadata insert when false. Existing video metadata edit, publish/unpublish/delete, Open Player, picker behavior, storage helpers, RLS, migrations, generated types, and the single `Video Upload` form remain unchanged. Admin may label Uploads as `Enforced on upload`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
+Admin V1B2B is pushed as the second real runtime control enforcement. Platform Studio's compatibility implementation in `app/channel-settings.tsx` reads `runtimeControls.uploads_enabled` from the existing normalized app-config load and blocks only new creator-video upload submit before `uploadCreatorVideo`, storage upload, or metadata insert when false. Existing video metadata edit, publish/unpublish/delete, Open Player, picker behavior, storage helpers, RLS, migrations, generated types, and the single `Video Upload` form remain unchanged. Admin may label Uploads as `Enforced on upload`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
 
 Admin V1B2C is pushed as the third real runtime control enforcement. Profile post comment/reply submit in `app/profile/[userId].tsx` and creator-video comment/reply submit in `app/player/[id].tsx` read `runtimeControls.comments_enabled` after existing validation and before backed comment create or comment attachment upload. Existing comment read/display, delete, report, attachment picker selection, Watch-Party comments, Live Stage comments, Chi'lly Chat messages, Chi'lly Circle, profile privacy, Player controls/layout, RLS, migrations, generated types, and Supabase remote state remain unchanged. Admin may label Comments as `Enforced on comments`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
 
-Admin V1B2D is pushed as the fourth real runtime control enforcement. Profile post creation submit in `app/profile/[userId].tsx` reads `runtimeControls.profile_posting_enabled` after owner/busy, empty-body, and length checks and before backed Profile post create or post attachment upload. Existing Profile post read/display, comments/replies, likes, deletes, reports, attachment picker selection, Chi'lly Circle, profile privacy, creator video upload, Channel Studio, Public Channel, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state remain unchanged. Admin may label Profile Posting as `Enforced on profile posts`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
+Admin V1B2D is pushed as the fourth real runtime control enforcement. Profile post creation submit in `app/profile/[userId].tsx` reads `runtimeControls.profile_posting_enabled` after owner/busy, empty-body, and length checks and before backed Profile post create or post attachment upload. Existing Profile post read/display, comments/replies, likes, deletes, reports, attachment picker selection, Chi'lly Circle, profile privacy, creator video upload, Platform Studio, Public Platform, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state remain unchanged. Admin may label Profile Posting as `Enforced on profile posts`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
 
-Admin V1B2E is pushed as the fifth real runtime control enforcement. New creator event creation in `app/channel-settings.tsx` reads `runtimeControls.creator_posting_enabled` before `createCreatorEvent`; when false, only new event creation is paused. Existing `updateCreatorEvent` edits, creator-video upload, video metadata edit, publish/unpublish/delete, Profile posts, comments/replies, attachments, Channel Studio layout, Public Channel, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state remain unchanged. Admin may label Creator Posting as `Enforced on creator events`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
+Admin V1B2E is pushed as the fifth real runtime control enforcement. New creator event creation in `app/channel-settings.tsx` reads `runtimeControls.creator_posting_enabled` before `createCreatorEvent`; when false, only new event creation is paused. Existing `updateCreatorEvent` edits, creator-video upload, video metadata edit, publish/unpublish/delete, Profile posts, comments/replies, attachments, Platform Studio layout, Public Platform, Player, Watch-Party, Live Stage, Chat, RLS, migrations, generated types, and Supabase remote state remain unchanged. Admin may label Creator Posting as `Enforced on creator events`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
 
 Admin V1B2F is pushed as the sixth real runtime control enforcement. Non-chat social attachment submits in `app/profile/[userId].tsx` and `app/player/[id].tsx` read `runtimeControls.attachments_enabled` before parent create and attachment upload; when false, only selected attachments are paused for Profile posts, Profile post comments/replies, and creator-video comments/replies. Text-only posts/comments remain controlled by their existing posting/comment controls. Chat attachments, room attachments, attachment reads, deletes, reports, Profile privacy, Chi'lly Circle, `_lib/socialAttachments.ts`, storage helpers, RLS, migrations, generated types, and Supabase remote state remain unchanged. Admin may label Attachments as `Enforced on social attachments`, but must still avoid working toggles unless a future prompt scopes backed write permissions, confirmation/proof, and affected-surface behavior.
 
@@ -230,9 +230,9 @@ Finance F2 payout-provider closeout is complete for foundation-only schema/reado
 
 Admin Payout Provider Dashboard is pushed. Current owners are `_lib/platformFinance.ts` and the `/admin` Payouts tab in `app/admin.tsx`. Admin Payouts may read and display counts for payout provider accounts, test-mode accounts, provider-ready-later accounts, action-required accounts, provider payouts-enabled accounts, onboarding sessions, link-created onboarding sessions, payout eligibility/readiness rows, provider-ready readiness rows, eligible-for-payouts readiness rows, and Stripe Connect webhook events by status. These counts are operator readouts only; they are not creator balances, payable status, or execution approval. Do not add Admin payout provider buttons, Connect Stripe creator UI, onboarding link creation, payout approval/release, transfer creation, checkout sessions, fake payable balances, fake earnings, or live money movement in this dashboard.
 
-Creator-facing payout setup UI is pushed. Current owners are `_lib/creatorPayouts.ts` and Channel Studio Payouts in `app/channel-settings.tsx`. The UI may create/reuse a Stripe Connect test-mode payout account, request/open a short-lived onboarding link, and refresh provider status only through the existing backend Edge Functions. It must stay separate from Premium/RevenueCat, must rely on Edge Function creator self-service validation, must use allowlisted return/refresh URLs, must hide raw provider ids and raw requirement JSON from creators, and must keep setup/status copy clear that payouts are not active. It must not add React Native Stripe secrets, client-side provider calls, Withdraw, Cash Out, available balance, payable balance, KYC/tax UI, payout approval/release, transfer creation, payout creation, checkout sessions, fake earnings, fake payable balances, live mode, or live money movement.
+Creator-facing payout setup UI is pushed. Current owners are `_lib/creatorPayouts.ts` and Platform Studio Payouts in `app/channel-settings.tsx`. The UI may create/reuse a Stripe Connect test-mode payout account, request/open a short-lived onboarding link, and refresh provider status only through the existing backend Edge Functions. It must stay separate from Premium/RevenueCat, must rely on Edge Function creator self-service validation, must use allowlisted return/refresh URLs, must hide raw provider ids and raw requirement JSON from creators, and must keep setup/status copy clear that payouts are not active. It must not add React Native Stripe secrets, client-side provider calls, Withdraw, Cash Out, available balance, payable balance, KYC/tax UI, payout approval/release, transfer creation, payout creation, checkout sessions, fake earnings, fake payable balances, live mode, or live money movement.
 
-Creator Payout Read-Only Dashboard Foundation is pushed and remote-applied. Current owners are `app/channel-settings.tsx`, `_lib/creatorPayouts.ts`, and policy-only migration `supabase/migrations/202605080007_creator_payout_dashboard_read_policy.sql`. Channel Studio owns the creator-facing Payouts tab after Insights and before Brand, plus the Home Payouts card that switches to that tab; `/channel-settings` remains compatibility and `/channel-studio` remains the owner Studio route. `_lib/creatorPayouts.ts` must stay read-only: no writes, no service-role usage, no Stripe/provider calls, no payout calculations implying payable balance. Regular creators may read only their own `creator_payout_ledger_entries` rows through `creator_user_id = auth.uid()::text` and must not insert/update/delete payout rows. No Withdraw, Cash Out, Connect Stripe, KYC live flow, tax form flow, payout approval/release, transfer creation, fake payable balance, fake earnings, or live money movement exists.
+Creator Payout Read-Only Dashboard Foundation is pushed and remote-applied. Current owners are `app/channel-settings.tsx`, `_lib/creatorPayouts.ts`, and policy-only migration `supabase/migrations/202605080007_creator_payout_dashboard_read_policy.sql`. Platform Studio owns the creator-facing Payouts tab after Insights and before Brand, plus the Home Payouts card that switches to that tab; `/channel-settings` remains compatibility and `/channel-studio` remains the owner Studio route. `_lib/creatorPayouts.ts` must stay read-only: no writes, no service-role usage, no Stripe/provider calls, no payout calculations implying payable balance. Regular creators may read only their own `creator_payout_ledger_entries` rows through `creator_user_id = auth.uid()::text` and must not insert/update/delete payout rows. No Withdraw, Cash Out, Connect Stripe, KYC live flow, tax form flow, payout approval/release, transfer creation, fake payable balance, fake earnings, or live money movement exists.
 
 Stripe Connect Schema Foundation (Payout S2) is pushed, remote-applied, and type-refreshed. Current owners are migration `supabase/migrations/202605080008_stripe_connect_schema_foundation.sql` plus generated table types in `supabase/database.types.ts`. It adds additive payout account provider/config/capability/readiness fields, onboarding session records without long-term onboarding URL storage, provider webhook event records with provider/environment/event id uniqueness, creator payout eligibility/readiness records, and immutable admin audit linkage fields only. Creators may read only their own eligibility/readiness rows and cannot insert/update/delete payout-provider rows; anon has no access; owner/operator access remains platform-role scoped. Do not add Stripe SDKs, provider secrets, provider calls, Stripe account creation, onboarding link creation, transfer creation, payout execution, Connect Stripe UI, withdrawal/cash-out buttons, KYC/tax live flow, fake payable balances, fake earnings, or live money movement without a separately scoped implementation and proof.
 
@@ -260,7 +260,7 @@ Creator Revenue Share Ledger Foundation and Fraud Hold Enforcement Foundation ar
 
 Real Source Revenue Import Foundation is pushed and deployed, but it imports no provider money. Current owners are migration `supabase/migrations/202605080015_revenue_source_import_foundation.sql`, generated table types in `supabase/database.types.ts`, backend-only `supabase/functions/revenue-source-import/index.ts`, `supabase/config.toml`, `_lib/platformFinance.ts`, and the `/admin` Revenue tab. The function returns `not_configured`, requires internal bearer auth plus owner/operator role, reads no provider secrets, performs no AppLovin/Stripe/tip/paid-content/network billing provider calls, and creates no creator earnings, payable balances, or payout ledger rows. Real revenue may enter creator revenue share only from idempotent provider-backed sources: AppLovin/ad reports later, Stripe sponsor payment events later, tips later, paid-content payments later, and network billing only if product later maps it to creator revenue. Every source import must capture provider event/import ids, source period, gross/net/fee fields, reconciliation status, duplicate protection, and immutable audit rows before any revenue-share ledger row can become meaningful. Do not create fake revenue, fake creator earnings, payable balances, payout ledger rows, or payout release from foundation source-import rows.
 
-Creator Revenue Dashboard Foundation is pushed in Channel Studio. Current owner is `app/channel-settings.tsx`. The Revenue tab is inactive/read-only and may show source status, planned share-rule labels, and guardrails only. It must not read creator revenue-share/source-import rows, show imported source-money history, show fake earnings, show payable balances, create payout ledger entries, show withdrawal controls, or release payouts. A future money-bearing Channel Studio revenue dashboard may read only creator-owned revenue-share rows after real source money imports exist and creator-read RLS is scoped. It must show source connection status, imported source-money history, ledger rows, fraud/hold/review state, payout readiness, and rules/help only when backed.
+Creator Revenue Dashboard Foundation is pushed in Platform Studio. Current owner is `app/channel-settings.tsx`. The Revenue tab is inactive/read-only and may show source status, planned share-rule labels, and guardrails only. It must not read creator revenue-share/source-import rows, show imported source-money history, show fake earnings, show payable balances, create payout ledger entries, show withdrawal controls, or release payouts. A future money-bearing Platform Studio revenue dashboard may read only creator-owned revenue-share rows after real source money imports exist and creator-read RLS is scoped. It must show source connection status, imported source-money history, ledger rows, fraud/hold/review state, payout readiness, and rules/help only when backed.
 
 Remaining Finance/Admin Lane Planning is recorded. Provider Billing Reconciliation Foundation, Provider Billing API Import Preflight Foundation, Sponsor Checkout Preflight Foundation, Sponsor Brand Payment Preflight Foundation, Sponsor Reporting / Fraud Integration Preflight Foundation, Fraud Review Queue Foundation, Real Source Revenue Import Foundation, Creator Revenue Dashboard Foundation, Payout Transfer Preflight Foundation, and Payout Release Preflight Foundation are now pushed as safe backend/readout/creator-facing inactive or closed-gate foundations, but actual provider billing imports, actual test-mode payout transfer creation, actual production payout release, actual sponsor checkout, actual brand payment through Stripe, real sponsor reporting imports/fraud integration, real provider source imports, and creator revenue dashboards with money all still require separate exact implementation prompts. Transfer creation remains blocked by provider readiness, KYC/tax readiness or safe test equivalent, fraud clear state, admin review, batch draft, immutable audit, idempotency, and explicit transfer-lane approval. Production payout release remains blocked by legal/accounting/provider approval, KYC/tax readiness, fraud review, admin review, hold-period clearance, support/dispute readiness, staged rollout, and explicit product approval. Provider billing APIs must be server-side/idempotent/reconciled and must not send invoices or charge customers. Sponsor checkout/payment/reporting/fraud lanes must stay test-mode/foundation until review/disclosure/safety/fraud/audit proof and explicit product approval.
 
@@ -318,7 +318,7 @@ Premium/ad-free users must always be ineligible for ads and must not increment a
 
 AppLovin MAX remains the primary future ad platform. Unity LevelPlay / Unity Ads may be added later through AppLovin MAX. Do not build an AdMob-only path.
 
-Ads must be blocked inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, immediately at app launch, in Admin, in Channel Studio, in Chat, and in Profile/composer contexts unless a future prompt explicitly redesigns and proves a safe surface.
+Ads must be blocked inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, immediately at app launch, in Admin, in Platform Studio, in Chat, and in Profile/composer contexts unless a future prompt explicitly redesigns and proves a safe surface.
 
 CTV ads are future-only for Chi'llywood Originals and network-style content. Do not add CTV inventory, fake CTV revenue, fake ad revenue, creator earnings, sponsor revenue, payout balances, invoices, or creator revenue ledgers without a separately backed implementation.
 
@@ -367,9 +367,9 @@ Primary experience ownership is locked:
 - Live Stage / Live Room: people/video primary
 - Party Room / Watch-Party Live: shared content/player primary
 - Player: playback primary
-- Public Channel: creator/channel content primary
+- Public Platform: creator content primary
 - Profile: person/social identity primary
-- Channel Studio: creator management primary
+- Platform Studio: creator management primary
 - Admin Command Center: platform operations primary
 - Chi'lly Chat: private messages primary
 - Spectator: public-safe metadata/access state primary
@@ -477,21 +477,21 @@ Locked MVP direction:
 - profile surfaces must be designed to show liked content, shared content, saved/public activity, and creator/community identity where policy allows
 - future uploads/clips, public lists, and fan/community activity must extend the same profile system instead of inventing a separate profile model
 
-## Profile / Channel Rule
+## Profile / Public Platform Rule
 Profiles are not simple account pages.
 
 Locked product direction:
 - profiles are Chi'llywood social identity hubs
-- public channels are creator-owned mini streaming platforms/networks on `/channel/[userId]`, not platform-title shelves
-- Channel Studio is the owner-only creator operating system on `/channel-studio`
+- public Platforms are creator-owned public surfaces on `/channel/[userId]`, not platform-title shelves
+- Platform Studio is the owner-only creator operating system on `/channel-studio`
 - `/channel-settings` remains compatibility only and must continue to resolve
-- Profile `View Channel` routes to `/channel/[userId]`
-- Studio `Preview Channel` routes to `/channel/[ownUserId]`
+- Profile `View Platform` routes to `/channel/[userId]`
+- Studio `Preview Platform` routes to `/channel/[ownUserId]`
 - cross-cutting profile/channel-platform doctrine lives in `PRODUCT_DOCTRINE.md`
 - the authenticated user's own profile opens their own channel/profile surface
 - viewing another user's profile should support opening or creating a direct Chi'lly Chat thread
 - photos/videos, likes, saved movies/videos, creator/channel identity, and community interaction must extend the same profile/channel system over time, but Chi'llywood Originals/platform `titles` must stay in platform surfaces and must not be used as creator-channel filler
-- public Channel must not expose owner-only Studio controls, upload, edit, publish, unpublish, delete, audience management, analytics, admin controls, drafts, private videos, or unpublished videos to non-owners
+- public Platform must not expose owner-only Studio controls, upload, edit, publish, unpublish, delete, audience management, analytics, admin controls, drafts, private videos, or unpublished videos to non-owners
 
 ## Relationship Separation Rule
 - Follow is channel audience.
@@ -512,7 +512,7 @@ Do not rename one relationship into another, reuse one backend truth as another,
 Rachi is Chi'llywood's official platform-owned seeded account.
 
 Architecture requirements:
-- Rachi must use the canonical `/profile/[userId]` Profile route, `/channel/[userId]` public Channel route where channel presentation is needed, and the canonical Chi'lly Chat thread path instead of disconnected special routes
+- Rachi must use the canonical `/profile/[userId]` Profile route, `/channel/[userId]` public Platform route where creator-surface presentation is needed, and the canonical Chi'lly Chat thread path instead of disconnected special routes
 - Rachi must not be treated as an ordinary self-editable or user-claimable profile
 - Rachi must carry explicit official/platform markers in both UI and logic
 - future moderation, admin, announcement, and audit-minded behavior must build on the same protected official-account foundation

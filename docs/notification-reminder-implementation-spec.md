@@ -25,7 +25,7 @@ This spec does not:
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
-| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Platform route. |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Platform Studio route and future creator-side reminder/notification-adjacent owner where truthful. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older Platform Studio links. |
 | `/chat` | `app/chat/index.tsx` | Canonical Chi'lly Chat inbox route. |
@@ -38,7 +38,7 @@ Do not create route proliferation in this chapter.
 
 ### 2.2 Current Product Rules To Preserve
 - `/profile/[userId]` remains the personal/social Profile route, not a notification inbox.
-- `/channel/[userId]` remains the public Channel route, not an owner notification inbox.
+- `/channel/[userId]` remains the public Platform route, not an owner notification inbox.
 - `/channel-studio` remains the owner creator operating system; `/channel-settings` remains compatibility.
 - `/chat` and `/chat/[threadId]` remain the canonical messaging routes for message-state truth.
 - `Watch-Party Live`, `Live Watch-Party`, and `Live First` remain distinct.

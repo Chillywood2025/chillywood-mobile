@@ -45,9 +45,9 @@ Primary experience map:
 - Live Stage / Live Room: people/video are primary.
 - Party Room / Watch-Party Live: shared content/player is primary.
 - Player: playback is primary.
-- Public Channel: creator/channel content is primary.
+- Public Platform: creator content is primary.
 - Profile: person/social identity is primary.
-- Channel Studio: creator management is primary.
+- Platform Studio: creator management is primary.
 - Admin Command Center: platform operations are primary.
 - Chi'lly Chat: private messages are primary.
 - Spectator page: public-safe metadata/access state is primary.

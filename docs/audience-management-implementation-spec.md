@@ -1,6 +1,6 @@
 # Chi'llywood Audience Management Implementation Spec
 
-2026-05-06 current-route note: current audience ownership is public Channel on `/channel/[userId]` for viewer-safe audience signals and owner Platform Studio on `/channel-studio` for owner audience controls. `/channel-settings` remains compatibility.
+2026-05-06 current-route note: current audience ownership is public Platform on `/channel/[userId]` for viewer-safe audience signals and owner Platform Studio on `/channel-studio` for owner audience controls. `/channel-settings` remains compatibility.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's audience-management chapter.
@@ -27,7 +27,7 @@ This spec does not:
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile route. |
-| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel route. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Platform route. |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Platform Studio and future audience-management owner. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/chat` and `/chat/[threadId]` | `app/chat/index.tsx`, `app/chat/[threadId].tsx` | Canonical Chi'lly Chat routes. |

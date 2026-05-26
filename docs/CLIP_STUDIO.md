@@ -222,8 +222,8 @@ Public card surfaces now use a separate safe resolver:
 
 Current public cover/metadata card surfaces:
 
-- public Channel Featured card
-- public Channel Latest Uploads cards
+- public Platform Featured card
+- public Platform Latest Uploads cards
 - Home creator-video rails through the shared public creator-video card
 - public Profile creator-video cards
 
@@ -296,7 +296,7 @@ Backend confirmation for the Android closeout used the same draft and returned `
 
 Android public cover/poster card proof on `R5CR120QCBF` is outside the repo under `/tmp/chillywood-proof-2026-05-25T15-17-45-3NZ-clip-studio-public-cover-cards/screenshots/`:
 
-- `10-public-featured-cover-card-rendered.png` shows a published public card rendering the saved cover image on the public Channel Featured card, with the same cover also visible in Latest Uploads.
+- `10-public-featured-cover-card-rendered.png` shows a published public card rendering the saved cover image on the public Platform Featured card, with the same cover also visible in Latest Uploads.
 - `12-owner-content-library-drafts-section.png` shows the owner-only Content Library draft card still rendering the Trailer badge and title/subtitle overlay preview only to the creator.
 - `02-public-platform-preview-no-owner-controls.png` and `09-public-cover-proof-channel-loaded.png` show public viewer state with no owner controls.
 
@@ -313,7 +313,7 @@ Backend public-cover proof is stored in the same `/tmp` proof directory:
 
 Public metadata renderer proof on `R5CR120QCBF` is outside the repo under `/tmp/chillywood-proof-2026-05-25T16-49-37Z-clip-studio-public-metadata-renderer/`:
 
-- `02-public-channel-featured-metadata-visible.png` shows public Channel Featured and Latest Upload cards rendering the safe cover, Trailer badge, public title, and public subtitle.
+- `02-public-channel-featured-metadata-visible.png` shows public Platform Featured and Latest Upload cards rendering the safe cover, Trailer badge, public title, and public subtitle.
 - `06-public-profile-creator-video-card-metadata.png` shows the public Profile Channel creator-video card using the shared public metadata treatment.
 - `08-owner-content-library-drafts-section.png` shows the owner Content Library draft card still rendering the owner-only Trailer badge and title/subtitle overlay preview.
 - `10-public-preview-owner-cards-no-draft-title.png` shows public-preview fallback cards for the original owner without the owner draft title/template metadata leaking.

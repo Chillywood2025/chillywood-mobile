@@ -39,7 +39,7 @@ Repo truth currently says:
 - creators keep 100% of the tip amount/net tip in current doctrine;
 - any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed;
 - tips do not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods;
-- creator merch/product/commerce sales are future Channel mini-platform monetization managed from Platform Studio and remain inactive until a backed commerce/provider path exists;
+- creator merch/product/commerce sales are future Public Platform monetization managed from Platform Studio Money Center and remain inactive until a backed commerce/provider path exists;
 - non-tip payout calculations use net receipts actually received after store/payment fees, taxes, refunds, chargebacks, provider fees, and adjustments, not gross sticker price.
 
 These are planning rules, not active payout promises.

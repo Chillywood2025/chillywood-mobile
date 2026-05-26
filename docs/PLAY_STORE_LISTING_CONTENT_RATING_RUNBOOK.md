@@ -92,7 +92,7 @@ Draft, pending owner/legal approval:
 ```text
 Chi'llywood is a premium social streaming space where every account has a Profile and a Channel.
 
-Build your public identity, upload creator videos to your Channel, watch in a standalone Player, and bring people into Watch-Party Live rooms when the content is ready to share. Chi'llywood keeps Profile and Channel connected: your Profile is who you are, and your Channel is your mini streaming platform.
+Build your public identity, upload creator videos to your Platform, watch in a standalone Player, and bring people into Watch-Party Live rooms when the content is ready to share. Chi'llywood keeps Profile and Platform connected: your Profile is who you are, and your Platform is where your creator videos live.
 
 Watch platform titles, creator uploads, and shared rooms with a modern Player experience. Start or join supported Watch-Party flows, use Chi'lly Chat for direct conversations, and enter Live rooms where camera and microphone features are available.
 

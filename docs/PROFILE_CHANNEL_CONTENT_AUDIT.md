@@ -10,7 +10,7 @@ Updated: 2026-04-29 for Profile/Channel Public v1 product-contract clarity
 Updated: 2026-04-29 for Public v1 social basics backing
 Updated: 2026-04-29 for remote social-basics schema/RLS proof
 Updated: 2026-04-29 for Profile post engagement backing
-Updated: 2026-05-06 for pushed Public Channel and Platform Studio route truth
+Updated: 2026-05-06 for pushed Public Platform and Platform Studio route truth
 Updated: 2026-05-25 for Profile production UI, Platform terminology, Chi'lly Chat routing, and Platform Studio upload separation
 Updated: 2026-05-25 for signed-out, signed-in non-owner, owner-regression, Platform routing, and Chi'lly Chat Android proof closeout
 Updated: 2026-05-25 for shared social attachment sheet correction and native phone-gallery Photos picking
@@ -119,22 +119,22 @@ Current limitations and proof status:
 Current governing truth:
 
 - Profile is personal/social identity.
-- Channel is the public mini streaming platform/network at `/channel/[userId]`.
+- Public Platform is the viewer-facing creator surface at `/channel/[userId]`.
 - Platform Studio is the owner-only creator operating system at `/channel-studio`.
 - `/channel-settings` remains compatibility.
-- Profile remains connected to Channel through View Channel, but `/profile/[userId]` must not collapse into one vague Profile/Channel feed.
+- Profile remains connected to Channel through View Platform, but `/profile/[userId]` must not collapse into one vague Profile/Channel feed.
 - Personal Profile posts/status updates are now backed for Public v1 as text-only `profile_posts`.
 - Creator uploaded videos belong to the Channel/creator content area, not the personal Posts lane.
 - Chi'llywood Originals/platform `titles` stay on Home, Explore, platform title/player routes, dedicated Originals/platform surfaces, and admin-managed title surfaces.
-- Public Channel must not show owner controls, drafts, private videos, or unpublished content to non-owners.
+- Public Platform must not show owner controls, drafts, private videos, or unpublished content to non-owners.
 
 Active code truth after this pass:
 
 - The Profile header shows identity, handle, avatar, tagline/bio when present, official/platform badges where backed, and backed live/role signals.
 - Owner top actions include Edit Profile, Platform Studio, Upload Video where currently present, and Settings.
-- Public top actions are backed Follow/Following, Chi'lly Chat, View Channel, Share Profile, and Report where supported.
+- Public top actions are backed Follow/Following, Chi'lly Chat, View Platform, Share Profile, and Report where supported.
 - The Posts tab now shows real Profile posts/status updates when backed rows exist, with owner composer/delete, public clean reads, "Post" composer/action copy, backed comments/replies, backed likes/counts, route-safe share, clickable links, optional 250 MB social attachments, and backed report actions.
-- Public Channel owns viewer-facing creator uploaded videos; owner surfaces use `CreatorVideoCard` where current code provides it and open `/player/[id]?source=creator-video`.
+- Public Platform owns viewer-facing creator uploaded videos; owner surfaces use `CreatorVideoCard` where current code provides it and open `/player/[id]?source=creator-video`.
 - The owner Profile composer remains available, but it is explicitly a creator-video upload into Channel.
 - Platform Studio labels current access controls as Access Defaults and no longer presents ad/sponsorship/Premium-playback cards as Channel owner controls.
 - Home has a backed "From People You Follow" section that reads `channel_followers` and shows public clean creator uploads from followed creators only.
@@ -314,7 +314,7 @@ Updated working connections:
 
 Confusing or missing connections:
 
-- Older audit language said Channel had no standalone public URL; current truth is `/channel/[userId]` exists and Profile View Channel routes there.
+- Older audit language said Channel had no standalone public URL; current truth is `/channel/[userId]` exists and Profile View Platform routes there.
 - The Channel tab now has a creator-video section, but shelf curation beyond the simple uploaded-video grid is still later.
 - Channel settings has a current upload/manage lane, but not a full shelf builder or advanced Platform Studio.
 - The app still has both `titles` and `videos`: `titles` remain platform/admin programming and `videos` now cover creator-owned uploads.
@@ -426,7 +426,7 @@ Creator-video comment proof still needed:
 
 Smallest safe Public v1 upload requirements:
 
-1. Owner entry point from Platform Studio (`/channel-studio`, with `/channel-settings` compatibility), with a clear `Upload Video` or `Add Video` action and an owner-only public Channel empty-state CTA where backed.
+1. Owner entry point from Platform Studio (`/channel-studio`, with `/channel-settings` compatibility), with a clear `Upload Video` or `Add Video` action and an owner-only public Platform empty-state CTA where backed.
 2. Upload form with video file picker, title, description, optional thumbnail or fallback, optional category/genre, draft/public visibility, creator `owner_id`, and Profile/Channel linkage through that owner id.
 3. Storage/backend lane with repo-owned bucket/policy migrations, video metadata rows, owner CRUD, public read for public videos only, and no token/secret exposure.
 4. Profile/Channel display where public uploaded videos appear for visitors, owner drafts are visible only to the owner, public empty state stays premium, and owner empty state points to upload.
@@ -474,7 +474,7 @@ Creators can currently:
 - create/edit creator event records
 - see and manage some audience relationships
 - see limited analytics and safety/admin summaries
-- open their public Profile or public Channel route
+- open their public Profile or public Platform route
 
 Creators still cannot currently:
 
@@ -589,7 +589,7 @@ Later implementation order:
 ### A. Already Working
 
 - Canonical `/profile/[userId]` personal/social Profile route.
-- Canonical `/channel/[userId]` public Channel route.
+- Canonical `/channel/[userId]` public Platform route.
 - Self vs visitor differences on Profile and Channel routes.
 - Platform Studio handoff to `/channel-studio`, with `/channel-settings` compatibility.
 - Platform Studio as a signed-in owner control center.
@@ -621,7 +621,7 @@ Later implementation order:
 ### D. Later Phase / Do Not Build Now
 
 - Native Chi'llywood game/video streaming.
-- Full creator mini-platform builder.
+- Full creator Platform builder.
 - Drag/drop channel shelves and full visual theming.
 - Advanced Platform Studio, automatic transcoding, moderation queue automation, paid media, subscriber-only media, and payouts.
 - Comment media upload, including images, short clips, and voice notes.

@@ -1,6 +1,6 @@
 # Chi'llywood Access / Entitlement Implementation Spec
 
-2026-05-06 current-route note: Profile is `/profile/[userId]`, public Channel is `/channel/[userId]`, owner Platform Studio is `/channel-studio`, and `/channel-settings` remains compatibility. All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Admin Command Center V1A is pushed on `/admin` and must preserve RevenueCat as Premium truth without manual Premium toggles.
+2026-05-06 current-route note: Profile is `/profile/[userId]`, public Platform is `/channel/[userId]`, owner Platform Studio is `/channel-studio`, and `/channel-settings` remains compatibility. All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Admin Command Center V1A is pushed on `/admin` and must preserve RevenueCat as Premium truth without manual Premium toggles.
 
 ## 1. Purpose And Scope
 This document defines Chi'llywood's current access and entitlement architecture.
@@ -27,7 +27,7 @@ This spec does not:
 | Route | Owner File | Doctrine |
 | --- | --- | --- |
 | `/profile/[userId]` | `app/profile/[userId].tsx` | Canonical personal/social Profile surface. |
-| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Channel surface. |
+| `/channel/[userId]` | `app/channel/[userId].tsx` | Canonical public Platform surface. |
 | `/channel-studio` | `app/channel-studio/index.tsx` | Preferred owner Platform Studio. |
 | `/channel-settings` | `app/channel-settings.tsx` | Compatibility route for older owner Platform Studio links. |
 | `/title/[id]` | `app/title/[id].tsx` | Canonical title detail and title-entry gate surface. |
