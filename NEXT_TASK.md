@@ -1,36 +1,43 @@
 # NEXT TASK
 
-## Recommended Lane: Watch-Party Live Audio Mix Two-Device Speech Proof
+## Recommended Lane: Rachi Official Admin Posting And Originals Fixture Proof
 
-Watch-Party Live now has a repo-side local audio mix pass plus single-device Android proof. The next useful lane is a bounded two-device proof to confirm video ducking under real LiveKit speech without moving the feature into Party Room or Live Watch-Party / Live Stage.
+Rachi is now implemented repo-side as the official Chi'llywood account, first pinned Chi'lly Circle connection, official update publisher, and Chi'llwood Originals source. Android proof on `R5CR120QCBF` covered the public/user-facing surfaces that had safe fixtures; the next useful lane is owner/operator proof with a safe official post/original fixture.
 
 Closed truth:
 
-- Route ownership is locked: Watch-Party Live shared player is `app/player/[id].tsx` when `partyId` is present without live mode.
-- Party Room is `app/watch-party/[partyId].tsx` and was not changed.
-- Live Watch-Party / Live Stage is `app/watch-party/live-stage/[partyId].tsx` and was not changed.
-- Shared video audio stays local to the player; voices stay in LiveKit room audio.
-- Defaults are Video `85%`, Voices `100%`, Auto-duck on, ducked video `30%`, duck down about `250ms`, restore about `700ms`.
-- `Audio Mix` appears only in Watch-Party Live shared player controls.
-- The current UI provides Video volume, Auto-duck, and Reset to default; voices remain at room/system volume because the shared LiveKit media surface does not safely expose per-viewer gain for existing subscribed voice tracks.
-- No LiveKit token issuer, publish grants, host/speaker/viewer roles, old-room handling, Premium gate, waiting room, Party Room, or Live Stage behavior changed.
-- `npm run guard:watch-party-live-audio-mix` pins the Watch-Party Live-only scope and rejects video-audio publishing markers.
-- Single-device Android proof on `R5CR120QCBF` lives outside the repo at `/tmp/chillywood-watch-party-live-audio-mix-proof-20260526/`; it captures Watch-Party Live waiting room no `Audio Mix`, Party Room no `Audio Mix`, shared Watch-Party Live player with `Audio Mix`, Video `85%`, Auto-duck, Voices `100%`, Video slider lowered to `32%`, and Live Watch-Party waiting room no `Audio Mix`.
+- Rachi copy now frames Rachi as `Official Chi'llywood`, not as a private chat monitor or normal user.
+- Rachi is pinned as the first official Chi'lly Circle connection without normal friendship/request rows.
+- Rachi Help is opt-in and says Rachi only sees messages sent in that help conversation.
+- Home reads real public Rachi posts for `Rachi Official Updates`.
+- Home reads real public-safe Rachi-owned creator videos for `Chi'llwood Originals`.
+- Empty Rachi update/original states stay honest and do not fake posts, videos, comments, likes, followers, or engagement.
+- Admin's Rachi tab has Overview, Official Posts, Chi'llwood Originals, Platform Tools, and Safety & Reports sections.
+- Remote-applied migration `202605260008_rachi_official_posts.sql` adds `admin_create_official_rachi_post`; it is owner/operator-only through `admin_content_assert_operator()`, writes admin audit, and posts as `platform_rachi_official`.
+- Normal users cannot post as Rachi or edit the Rachi Platform/Studio.
+- Profile and public Platform preserve public-safe/draft-hidden behavior.
+- No LiveKit, Watch-Party, Premium, provider readiness, creator upload/delete, or normal Chi'lly Chat behavior changed.
+- `npm run guard:rachi-official-policy` pins the official-account, privacy, Circle, Home, Admin, no-surveillance, no-fake-stats, and no-Mini-Platform boundaries.
+- Android proof screenshots live at `/tmp/chillywood-rachi-official-proof-20260526/`; they capture pinned Rachi in Chi'lly Circle, Rachi Profile, Rachi Help privacy copy, Rachi public Platform, Home `Chi'llwood Originals` honest empty state, and normal-user admin denial.
 
 Remaining limitation:
 
-- Real speech-triggered ducking still needs two-device physical proof. It was not claimed from the single-device pass.
+- Owner/operator Admin Rachi tab posting proof needs an active owner/operator device session.
+- Home/Profile Rachi post-success proof needs a real safe Rachi official post created through the RPC/Admin path.
+- Home `Chi'llwood Originals` success proof needs a real public-safe Rachi-owned creator video. Do not fake Rachi posts or Originals for screenshots.
 
 Recommended next lane:
 
-- Use `R5CR120QCBF` plus a second device if available.
-- Open Watch-Party Live shared player and capture `Audio Mix`.
-- Verify the Video slider changes local video audio where the player supports volume.
-- Verify Auto-duck lowers video when another participant speaks and restores when speech stops.
-- Verify Party Room does not show `Audio Mix`.
-- Verify Live Watch-Party / Live Stage does not show `Audio Mix`.
-- Keep screenshots outside the repo, likely `/tmp/chillywood-watch-party-live-audio-mix-proof-20260526/`.
-- Re-run `npm run guard:watch-party-live-audio-mix`, `npm run guard:watch-party-livekit`, `npm run guard:old-room-handling`, and targeted LiveKit token/no-publisher greps.
+- Verify migration `202605260008_rachi_official_posts.sql` remains applied in the target proof environment.
+- Use owner/admin access to create one safe official Rachi post through the Admin Rachi tab.
+- If a safe Rachi-owned public creator video exists, capture it in Home `Chi'llwood Originals`; otherwise document the missing official-original fixture.
+- Capture Chi'lly Circle with pinned Rachi, Rachi Profile, Rachi Platform, Admin Rachi tab, Home Rachi updates, Home Originals state, Rachi Help opt-in copy, and normal-user no-admin/no-studio access.
+- Keep screenshots outside the repo at `/tmp/chillywood-rachi-official-proof-20260526/`.
+- Re-run `npm run guard:rachi-official-policy`, `npm run guard:profile-production-policy`, `npm run validate:runtime`, and targeted privacy/no-fake-stats greps.
+
+## Previous Recommended Lane: Watch-Party Live Audio Mix Two-Device Speech Proof
+
+Watch-Party Live now has a repo-side local audio mix pass plus single-device Android proof. A bounded two-device proof remains useful to confirm video ducking under real LiveKit speech without moving the feature into Party Room or Live Watch-Party / Live Stage.
 
 ## Previous Recommended Lane: Copyright Safety Surface Smoke Proof
 

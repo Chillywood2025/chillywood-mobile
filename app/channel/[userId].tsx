@@ -218,6 +218,7 @@ export default function PublicChannelScreen() {
   const featuredVideo = videos[0] ?? null;
   const liveNowEvents = useMemo(() => events.filter((event) => event.isLiveNow), [events]);
   const upcomingEvents = useMemo(() => events.filter((event) => event.isUpcoming), [events]);
+  const isOfficialChannel = channel?.identityKind === "official_platform";
   const followerCount = audienceState?.followerCount ?? null;
   const viewerFollowState = audienceState?.viewerFollowState ?? "unavailable";
   const visibleStats = useMemo(() => {
@@ -449,6 +450,7 @@ export default function PublicChannelScreen() {
               )}
             </View>
             <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Platform"}</Text>
+            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>Official Chi&apos;llwood</Text> : null}
             {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
@@ -977,6 +979,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(126,215,255,0.18)",
     fontSize: 12,
     fontWeight: "900",
+  },
+  officialRolePill: {
+    color: "#FFEAF0",
+    backgroundColor: "rgba(220,20,60,0.24)",
   },
   statsRow: {
     flexDirection: "row",

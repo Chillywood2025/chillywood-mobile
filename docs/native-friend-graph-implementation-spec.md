@@ -77,13 +77,15 @@ Current direct-thread truth does not mean:
 ### 2.4 Rachi Truth Already Exists
 Rachi already exists as:
 - Chi'llywood's protected official platform account
-- an official starter/contact presence on canonical profile and Chi'lly Chat surfaces
+- the first pinned Chi'lly Circle official connection
+- an official guide/contact presence on canonical Profile, public Platform, Home, and opt-in Rachi Help surfaces
 - a distinct `official_platform` moderation actor with an audit owner key
 
 Rachi is not yet:
 - a native friend-graph primitive
 - an automatically accepted mutual friend for every user
 - owner authority
+- a private-chat reader or monitor
 
 ### 2.5 What Does Not Exist Yet
 The current repo now has Chi'lly Circle V1 mutual connection actions and privacy gates. It still does not have:
@@ -97,7 +99,7 @@ If friend truth were faked now, the product would become structurally confusing:
 - followers would be misrepresented as mutual friendship even though they are creator/channel audience relationships
 - subscribers would be misrepresented as social closeness even though they are creator/channel member/access relationships
 - direct threads would look like proof of friendship even though Chi'lly Chat is intentionally direct-message-first
-- Rachi's official starter presence would be misread as a real shipped mutual friend system
+- Rachi's pinned official Chi'lly Circle presence would be misread as a real shipped mutual friend system
 - `/profile/[userId]` would start implying private relationship truth that the repo cannot currently back
 
 ## 4. Exact Friend Definition
@@ -223,8 +225,8 @@ That means:
 Rachi remains outside the normal native friend graph in current truth.
 
 Current doctrine:
-- Rachi is the official first-contact presence
-- Rachi stays discoverable through canonical profile and Chi'lly Chat routes
+- Rachi is the first pinned Chi'lly Circle official connection
+- Rachi stays discoverable through canonical Profile, public Platform, Home, and opt-in Rachi Help routes
 - Rachi is not auto-accepted into every user's friend list
 - Rachi is not the proof that a native friend graph already ships
 
@@ -234,7 +236,7 @@ If later product language wants a more social-feeling Rachi experience, it must 
 - the distinction between official contact presence and ordinary friendship
 
 The safest later direction is:
-- treat Rachi as an official contact/pinned starter presence first
+- treat Rachi as an official contact and pinned Chi'lly Circle presence first
 - do not treat Rachi as a normal mutual friend by default
 
 ## 11. Hard Not-Yet Boundaries

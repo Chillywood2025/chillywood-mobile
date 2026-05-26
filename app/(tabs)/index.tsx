@@ -48,10 +48,13 @@ import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../../_lib/supabase";
 import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
 import {
+    readCreatorVideos,
     readCreatorVideosForOwners,
     readLatestPublicCreatorVideos,
     type CreatorVideo,
 } from "../../_lib/creatorVideos";
+import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
+import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import {
     getDiscoveryAccessLabel,
@@ -184,6 +187,8 @@ export default function HomeScreen() {
   const [homeUpcomingEvents, setHomeUpcomingEvents] = useState<CreatorEventSummary[]>([]);
   const [circleVideos, setCircleVideos] = useState<CreatorVideo[]>([]);
   const [latestPublicVideos, setLatestPublicVideos] = useState<CreatorVideo[]>([]);
+  const [rachiOfficialPosts, setRachiOfficialPosts] = useState<ProfilePost[]>([]);
+  const [rachiOriginals, setRachiOriginals] = useState<CreatorVideo[]>([]);
   const [homeDiscoveryItems, setHomeDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
   const [homeDiscoveryLoading, setHomeDiscoveryLoading] = useState(true);
   const [homeDiscoveryError, setHomeDiscoveryError] = useState<string | null>(null);
@@ -418,11 +423,13 @@ export default function HomeScreen() {
     setHomeDiscoveryError(null);
 
     try {
-      const [publicEvents, latestVideos, circleUserIds, discoveryRows] = await Promise.all([
+      const [publicEvents, latestVideos, circleUserIds, discoveryRows, officialPosts, officialOriginals] = await Promise.all([
         readLatestPublicEventSummaries({ limit: 24 }),
         readLatestPublicCreatorVideos({ limit: 12 }),
         readActiveFriendUserIds().catch(() => [] as string[]),
         readPublicDiscoveryFeedItems({ surface: "home", limit: 24 }).catch(() => [] as DiscoveryFeedItem[]),
+        readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 3 }).catch(() => [] as ProfilePost[]),
+        readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 12 }).catch(() => [] as CreatorVideo[]),
       ]);
       const uniqueCircleUserIds = Array.from(new Set(circleUserIds.map((id) => String(id ?? "").trim()).filter(Boolean)));
       const circleUploads = uniqueCircleUserIds.length
@@ -432,12 +439,16 @@ export default function HomeScreen() {
       setHomeLiveEvents(publicEvents.filter((event) => event.isLiveNow).slice(0, 8));
       setHomeUpcomingEvents(publicEvents.filter((event) => event.isUpcoming).slice(0, 8));
       setLatestPublicVideos(latestVideos);
+      setRachiOfficialPosts(officialPosts);
+      setRachiOriginals(officialOriginals);
       setCircleVideos(circleUploads);
       setHomeDiscoveryItems(rankDiscoveryFeedItems(discoveryRows, { chillyCircleUserIds: uniqueCircleUserIds }));
     } catch {
       setHomeLiveEvents([]);
       setHomeUpcomingEvents([]);
       setLatestPublicVideos([]);
+      setRachiOfficialPosts([]);
+      setRachiOriginals([]);
       setCircleVideos([]);
       setHomeDiscoveryItems([]);
       setHomeDiscoveryError("Discovery feed is unavailable right now.");
@@ -531,6 +542,13 @@ export default function HomeScreen() {
     router.push({
       pathname: "/channel/[userId]",
       params: { userId: safeUserId },
+    });
+  }
+
+  function openRachiProfile() {
+    router.push({
+      pathname: "/profile/[userId]",
+      params: { userId: RACHI_OFFICIAL_ACCOUNT.userId },
     });
   }
 
@@ -1002,7 +1020,7 @@ export default function HomeScreen() {
     <View style={styles.section}>
       <View style={styles.followingHeaderRow}>
         <View style={styles.followingHeaderCopy}>
-          <Text style={styles.sectionTitle}>Channels You Follow</Text>
+          <Text style={styles.sectionTitle}>Platforms You Follow</Text>
           <Text style={styles.followingSubtitle}>
             {followedChannelCount
               ? "Latest public creator uploads from channels you follow."
@@ -1049,7 +1067,7 @@ export default function HomeScreen() {
           </Text>
           <Text style={styles.followingEmptyText}>
             {followedChannelCount
-              ? "The channels you follow have no public clean creator videos ready for Home."
+              ? "The Platforms you follow have no public clean creator videos ready for Home."
               : "Following is a creator/audience relationship, not Chi'lly Circle."}
           </Text>
           <TouchableOpacity
@@ -1063,6 +1081,51 @@ export default function HomeScreen() {
       )}
     </View>
   );
+
+  function renderRachiOfficialUpdates() {
+    return (
+      <View style={styles.section}>
+        <View style={styles.followingHeaderRow}>
+          <View style={styles.followingHeaderCopy}>
+            <Text style={styles.sectionTitle}>Rachi Official Updates</Text>
+            <Text style={styles.followingSubtitle}>Rachi shares official Chi&apos;llwood tips, announcements, and Originals notes.</Text>
+          </View>
+        </View>
+
+        {homeDiscoveryLoading ? (
+          <View style={styles.followingEmptyCard}>
+            <Text style={styles.followingEmptyTitle}>Checking Rachi updates</Text>
+            <Text style={styles.followingEmptyText}>Only real public Rachi posts appear here.</Text>
+          </View>
+        ) : rachiOfficialPosts.length ? (
+          <View style={styles.rachiUpdateStack}>
+            {rachiOfficialPosts.map((post) => (
+              <TouchableOpacity
+                key={`rachi-post-${post.id}`}
+                style={styles.rachiUpdateCard}
+                activeOpacity={0.86}
+                onPress={openRachiProfile}
+              >
+                <View style={styles.rachiUpdateHeader}>
+                  <Text style={styles.rachiUpdateKicker}>Rachi · Official Chi&apos;llwood</Text>
+                  <View style={styles.rachiUpdatePill}>
+                    <Text style={styles.rachiUpdatePillText}>Official update</Text>
+                  </View>
+                </View>
+                <Text style={styles.rachiUpdateBody} numberOfLines={4}>{post.body}</Text>
+                <Text style={styles.rachiUpdateMeta}>{formatAddedDate(post.createdAt).replace("Added", "Posted")}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.followingEmptyCard}>
+            <Text style={styles.followingEmptyTitle}>No Rachi updates yet</Text>
+            <Text style={styles.followingEmptyText}>Official posts appear here only after an owner or admin publishes them.</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
 
   return (
     <ImageBackground
@@ -1202,9 +1265,11 @@ export default function HomeScreen() {
 
           {renderFollowingFeed()}
 
+          {renderRachiOfficialUpdates()}
+
           {renderCreatorVideoRail({
             title: "From Your Chi'lly Circle",
-            subtitle: "Public uploads from active Circle friends when privacy allows.",
+            subtitle: "Public uploads from active Circle connections when privacy allows.",
             videos: circleVideos,
             loading: homeDiscoveryLoading,
             emptyTitle: "No public Circle activity yet",
@@ -1320,15 +1385,15 @@ export default function HomeScreen() {
             return null;
           })}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Chi&apos;llywood Originals</Text>
-            <View style={styles.originalsPlaceholder}>
-              <Text style={styles.originalsPlaceholderTitle}>More Chi&apos;llywood drops land here next</Text>
-              <Text style={styles.originalsPlaceholderBody}>
-                This rail stays reserved for Chi&apos;llywood-owned originals, curated drops, and platform premieres when they are actually ready.
-              </Text>
-            </View>
-          </View>
+          {renderCreatorVideoRail({
+            title: "Chi'llwood Originals",
+            subtitle: "Published public-safe originals from Rachi's official Platform.",
+            videos: rachiOriginals,
+            loading: homeDiscoveryLoading,
+            emptyTitle: "No Chi'llwood Originals yet",
+            emptyText: "Rachi Originals appear here only after official content is published and public-safe.",
+            keyPrefix: "rachi-original",
+          })}
 
         </ScrollView>
       )}
@@ -1704,6 +1769,55 @@ const styles = StyleSheet.create({
     color: "#E5EAFF",
     fontSize: 12.5,
     fontWeight: "900",
+  },
+  rachiUpdateStack: {
+    gap: 10,
+  },
+  rachiUpdateCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.22)",
+    backgroundColor: "rgba(18,12,18,0.82)",
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    gap: 10,
+  },
+  rachiUpdateHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  rachiUpdateKicker: {
+    flex: 1,
+    color: "#FFEAF0",
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  rachiUpdatePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  rachiUpdatePillText: {
+    color: "#F9FBFF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  rachiUpdateBody: {
+    color: "#F6F8FF",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "700",
+  },
+  rachiUpdateMeta: {
+    color: "#9EA8BA",
+    fontSize: 11.5,
+    fontWeight: "800",
   },
   feedActivityRow: {
     paddingRight: 10,

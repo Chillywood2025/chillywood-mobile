@@ -22,17 +22,17 @@ export const RACHI_OFFICIAL_ACCOUNT: OfficialPlatformAccount = {
   userId: RACHI_OFFICIAL_USER_ID,
   displayName: "Rachi",
   handle: "@chillywood.rachi",
-  tagline: "Official Chi'llywood concierge, welcome guide, and moderation-ready helper.",
+  tagline: "Official Chi'llywood guide for updates, tips, and Chi'llwood Originals.",
   channelRole: "creator",
   officialBadgeLabel: "OFFICIAL",
   platformOwnershipLabel: "PLATFORM OWNED",
-  platformRoleLabel: "CONCIERGE",
+  platformRoleLabel: "OFFICIAL GUIDE",
   auditOwnerKey: "platform:rachi",
-  conciergeHeadline: "Official Chi'llywood concierge and trusted platform guide.",
+  conciergeHeadline: "Official Chi'llywood guide and Originals publisher.",
   trustSummary:
-    "Use Rachi for getting started, trusted account guidance, safety follow-up, and future official Chi'llywood updates on the canonical profile and Chi'lly Chat routes.",
+    "Rachi shares Chi'llywood updates, tips, and Chi'llwood Originals. Rachi does not read your private chats.",
   starterWelcomeBody:
-    "Rachi is Chi'llywood's official starter presence. Open this canonical thread for welcome guidance now, while future moderation, help, and announcement behavior grows on the same platform-owned identity.",
+    "Rachi Help is opt-in. Rachi only sees what you send in this help conversation.",
   starterPrompts: [
     "Hi Rachi, help me get started.",
     "Show me where to start in Chi'llywood.",

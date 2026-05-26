@@ -662,7 +662,7 @@ Admin/operator:
 
 - Admin/operator platform roles may access admin surfaces where backed.
 - Channel/content ownership is separate from platform owner/operator/moderator authority; owning a Profile, Channel, or upload does not grant Admin access.
-- Rachi is the official public platform concierge/presence on backed Profile/Chat/Support/onboarding surfaces, not Admin and not an operator role; backend-protected Admin may still manage or inspect Rachi official-account presence where backed.
+- Rachi is the official public platform guide/presence on backed Profile, public Platform, Chi'lly Circle, Home, opt-in Rachi Help, Support/onboarding, and Admin management surfaces. Rachi is not Admin, not an operator role, and not a private-chat monitor; backend-protected Admin may still manage or inspect Rachi official-account presence where backed.
 - Admin/operator role is not a universal Premium bypass for consumer feature proof unless explicitly documented and backend-enforced.
 - Operator test bypasses, if added later, must be visible in docs and impossible for ordinary users.
 

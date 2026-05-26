@@ -74,7 +74,7 @@ Before a feature or AI behavior belongs in a room, it should be tested against t
 - Treat Watch-Party Live / shared party player as a layer inside the Party flow, not a new top-level destination.
 - Treat Standalone Player as solo-first and playback-first.
 - Treat Profile / Channel and Chi'lly Chat as cross-room identity and communication layers, not replacement room systems.
-- Keep Rachi on the canonical profile and Chi'lly Chat paths as the official platform-owned concierge and moderation-ready presence.
+- Keep Rachi on canonical Profile, public Platform, Chi'lly Circle, Home, Admin, and opt-in Rachi Help paths as the official platform-owned guide and moderation-ready presence.
 - All full Live First, Live Watch-Party, and Watch-Party Live access is Premium. Free users must be blocked before full room/session/token/connect and must not receive full LiveKit room/token/connect access.
 - No free live/watch-party preview mode exists. Any future preview must be separately designed, limited, low-cost, and separately gated.
 - Visible Rights Disclosure UI is disabled for now. Watch-Party Live waiting room / create-room screen, Watch-Party Live Party Room (`app/watch-party/[partyId].tsx`), Live Watch-Party waiting room / create-room screen, Live Watch-Party Live Room / Live Stage (`app/watch-party/live-stage/[partyId].tsx`), setup/status panels, and room-code panels should stay free of Rights cards, chips, sheets, overlays, checkboxes, and note fields. Any dormant backend audit helper is not source eligibility, room authority, copyright clearance, or a LiveKit grant.
@@ -1021,7 +1021,7 @@ Relationship to other rooms: Chi'lly Chat is the native messaging and calling la
 - Emotionally, it should feel native, trusted, and continuous.
 
 ### B. Entry path
-- First-time users often reach it from self-profile, other-user profile, or Rachi's official starter presence.
+- First-time users often reach it from self-profile, other-user profile, or opt-in Rachi Help.
 - Repeat users reach it from `/chat`, `/chat/[threadId]`, room follow-up prompts, profile opens, and notification taps.
 - Route ownership is `/chat` for inbox and `/chat/[threadId]` for direct threads.
 - `/communication/index.tsx` and `/communication/[roomId].tsx` are compatibility-only, not Chi'lly Chat owners.
@@ -1065,7 +1065,7 @@ Relationship to other rooms: Chi'lly Chat is the native messaging and calling la
 - profile-to-thread handoff
 - thread-based voice/video entry
 - report flow
-- official Rachi starter presence
+- opt-in Rachi Help presence
 - optional smart replies under flags where product fit is proven
 
 ### H. Future expansion features
@@ -1111,30 +1111,30 @@ Relationship to other rooms: Chi'lly Chat is the native messaging and calling la
 - users need clear block/report/leave-call behavior
 - moderation and abuse summaries must stay private to authorized reviewers
 
-## 10. Rachi As Official Platform Concierge / Admin / Moderation Presence
-Relationship to other rooms: Rachi is a protected official platform-owned presence that works through canonical Profile / Channel and Chi'lly Chat surfaces and may later appear in room-adjacent official roles without becoming a separate product.
+## 10. Rachi As Official Platform Guide / Circle / Originals Presence
+Relationship to other rooms: Rachi is a protected official platform-owned presence that works through canonical Profile, public Platform, Chi'lly Circle, Home, Admin, and opt-in Rachi Help surfaces. Rachi may later appear in room-adjacent official roles without becoming a separate product or private-chat monitor.
 
 ### A. Room purpose
-- Rachi exists so Chi'llywood has a trusted official presence for onboarding, help, guidance, and moderation-ready follow-up.
+- Rachi exists so Chi'llywood has a trusted official presence for onboarding, tips, updates, Chi'llywood Originals, and moderation-ready follow-up.
 - Rachi is distinct from a normal user, from a generic chatbot, and from a hidden admin-only shell.
-- It solves the "Where does trusted platform help live?" problem.
+- It solves the "Where does trusted platform help and official Chi'llywood voice live?" problem.
 - Emotionally, it should feel credible, calm, and clearly official.
 
 ### B. Entry path
-- First-time users should often encounter Rachi through the official starter thread or protected official profile.
-- Repeat users may encounter Rachi through support follow-up, official announcements, safety escalation, or future room-adjacent official prompts.
-- Current route ownership stays canonical: `/profile/[userId]` and `/chat/[threadId]`.
+- First-time users should encounter Rachi as the first pinned Chi'lly Circle official connection and protected official profile.
+- Repeat users may encounter Rachi through Home official updates, Chi'llywood Originals, opt-in Rachi Help, support follow-up, safety escalation, or future room-adjacent official prompts.
+- Current route ownership stays canonical: `/profile/[userId]`, `/channel/[userId]`, `/chilly-circle`, `/chat/[threadId]`, Home, and `/admin`.
 - Preconditions are the protected official-account foundation and platform-role ownership behind the scenes.
 
 ### C. Exit path / transitions
-- Users can move from Rachi profile into official Chi'lly Chat, from thread into guided support, and back into the product context that created the need.
+- Users can move from Rachi Profile to Rachi Platform, Rachi Help, official updates, public-safe Originals, and back into the product context that created the need.
 - Future official follow-up can point into moderation or platform help without inventing a second persona system.
 - It must never fork into a fake special admin app or non-canonical support route.
 
 ### D. Core controls
-- Required quick actions: open official thread, view official profile, understand official status, and act on guided next steps.
+- Required quick actions: view official profile, view Rachi Platform, open opt-in Rachi Help, understand official status, and act on guided next steps.
 - Host controls are not the right model here; protected platform-role control is.
-- Viewer/user controls: contact Rachi, follow official guidance, read trusted announcements, and resolve onboarding/support needs.
+- Viewer/user controls: view Rachi as official Chi'lly Circle connection, read trusted announcements, watch public-safe Originals, and open Rachi Help when they choose.
 - Creator controls: not primary, though creators may later receive official guidance through Rachi.
 - Owner/admin controls: reserved for authorized platform roles operating the protected official identity, announcements, and moderation follow-up.
 - Advanced actions later can include structured case follow-up, official notice types, or guided escalation flows.
@@ -1145,9 +1145,10 @@ Relationship to other rooms: Rachi is a protected official platform-owned presen
 - Only authorized platform roles can control official behavior and messaging posture.
 - Official announcements, moderation follow-up, or admin-sensitive actions must remain auditable.
 - Room-adjacent visibility later must remain intentional and policy-backed rather than ambient and confusing.
+- Rachi does not read private Chi'lly Chat messages. Rachi Help only sees what a user sends in that help conversation.
 
 ### F. AI behavior
-- Visible AI now: concierge/onboarding guidance, support triage hints, and clear policy explanation when users open the official thread.
+- Visible AI now: onboarding guidance, support triage hints, official updates, and clear policy explanation when users open Rachi Help.
 - Background AI now: support triage preparation, moderation summary preparation, and official help routing.
 - Host-facing AI: not primary.
 - User-facing AI now: trusted help, onboarding, and "what should I do next" guidance.
@@ -1157,8 +1158,10 @@ Relationship to other rooms: Rachi is a protected official platform-owned presen
 
 ### G. Core features now
 - protected official markers
-- canonical profile and direct-thread entry
-- official starter presence in Chi'lly Chat
+- canonical Profile and public Platform entry
+- pinned official Chi'lly Circle connection
+- opt-in Rachi Help presence in Chi'lly Chat
+- Home official updates and Chi'llywood Originals rails backed by real public-safe Rachi content
 - onboarding/help messaging
 - protected non-claimable behavior
 - future-safe moderation-ready identity foundation
@@ -1172,13 +1175,16 @@ Relationship to other rooms: Rachi is a protected official platform-owned presen
 
 ### I. Anti-patterns / what does NOT belong here
 - a fake mascot persona disconnected from platform trust
+- a fake normal user pretending to have ordinary user activity
 - a separate support app or special route
+- private-chat surveillance, ambient chat monitoring, or copy implying Rachi reads private messages
+- fake Rachi posts, fake Originals, fake comments, fake likes, fake followers, or fake activity
 - silent AI enforcement without human or policy review
 - using Rachi as an excuse to avoid proper moderation tooling
 
 ### J. Success test
 - Users should immediately recognize where official help lives and trust that it is the real platform presence.
-- Moderation, onboarding, and announcement work should feel like extensions of this same canonical official identity, not a second system.
+- Moderation, onboarding, announcement work, Chi'lly Circle official presence, and Chi'llywood Originals should feel like extensions of this same canonical official identity, not a second system.
 
 ### K. Data / systems dependencies
 - protected official-account identity data

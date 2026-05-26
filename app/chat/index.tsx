@@ -47,7 +47,7 @@ function getIdentityLabel(thread: ChatThreadSummary) {
 }
 
 function getThreadKindLabel(thread: ChatThreadSummary) {
-  return getOfficialPlatformAccount(thread.otherMember?.userId) ? "Official thread" : "Direct thread";
+  return getOfficialPlatformAccount(thread.otherMember?.userId) ? "Rachi Help" : "Direct thread";
 }
 
 function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
@@ -324,7 +324,7 @@ export default function ChillyChatInboxScreen() {
             }}
             disabled={starterBusy}
           >
-            <Text style={styles.quickActionButtonText}>{starterBusy ? "Opening..." : "Open Thread"}</Text>
+            <Text style={styles.quickActionButtonText}>{starterBusy ? "Opening..." : "Ask Rachi"}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.quickActionButton, styles.quickActionAccentButton]}
@@ -339,7 +339,7 @@ export default function ChillyChatInboxScreen() {
         <View style={styles.headerErrorCard}>
           <View style={styles.headerErrorCopy}>
             <Text style={styles.headerErrorTitle}>
-              {error.source === "official-thread" ? "Official thread needs another try" : "Inbox needs another try"}
+              {error.source === "official-thread" ? "Rachi Help needs another try" : "Inbox needs another try"}
             </Text>
             <Text style={styles.headerErrorBody}>{error.message}</Text>
           </View>

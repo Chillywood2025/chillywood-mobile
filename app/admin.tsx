@@ -69,6 +69,13 @@ import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
 import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
 import {
+  createOfficialRachiPost,
+  readOfficialRachiOriginals,
+  readOfficialRachiPosts,
+} from "../_lib/officialRachi";
+import type { CreatorVideo } from "../_lib/creatorVideos";
+import type { ProfilePost } from "../_lib/profilePosts";
+import {
   getRuntimeConfig,
   getRuntimeConfigIssues,
   isLiveKitRuntimeConfigured,
@@ -2567,6 +2574,15 @@ export default function AdminStudioScreen() {
   const [pendingCreatorVideoModeration, setPendingCreatorVideoModeration] =
     useState<PendingReportTargetModerationAction | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
+  const [rachiPostBody, setRachiPostBody] = useState("");
+  const [rachiPostReason, setRachiPostReason] = useState("Official Chi'llwood update");
+  const [rachiPostVisibility, setRachiPostVisibility] = useState<"public" | "draft">("public");
+  const [rachiPostBusy, setRachiPostBusy] = useState(false);
+  const [rachiNotice, setRachiNotice] = useState<string | null>(null);
+  const [rachiPosts, setRachiPosts] = useState<ProfilePost[]>([]);
+  const [rachiPostsLoading, setRachiPostsLoading] = useState(false);
+  const [rachiOriginals, setRachiOriginals] = useState<CreatorVideo[]>([]);
+  const [rachiOriginalsLoading, setRachiOriginalsLoading] = useState(false);
   const [liveCostGuardSettingsReadModel, setLiveCostGuardSettingsReadModel] =
     useState<LiveCostGuardSettingsReadModel | null>(null);
   const [liveCostGuardSettingsForm, setLiveCostGuardSettingsForm] =
@@ -4412,14 +4428,14 @@ export default function AdminStudioScreen() {
       body: `Public profile uses /profile/${RACHI_OFFICIAL_ACCOUNT.userId} with protected official-account semantics.`,
     },
     {
-      label: "Chat Starter",
-      value: "Backed",
-      body: "Chi'lly Chat exposes Rachi as the official starter presence on canonical inbox and thread paths.",
+      label: "Chi'lly Circle",
+      value: "Pinned",
+      body: "Rachi appears as the first official Chi'lly Circle connection without becoming a normal mutual request row.",
     },
     {
-      label: "Support / Onboarding",
-      value: "Bounded",
-      body: "Rachi may appear as the official concierge where backed; editable support automation is not faked here.",
+      label: "Rachi Help",
+      value: "Opt-In",
+      body: "Rachi Help only sees messages sent directly in that help conversation.",
     },
   ], []);
 
@@ -4616,6 +4632,71 @@ export default function AdminStudioScreen() {
       setPlatformRolesChecked(true);
     }
   }, []);
+
+  const loadRachiOfficialSurfaces = useCallback(async () => {
+    if (!canAccessContentProgramming) {
+      setRachiPosts([]);
+      setRachiOriginals([]);
+      return;
+    }
+
+    setRachiPostsLoading(true);
+    setRachiOriginalsLoading(true);
+    setRachiNotice(null);
+    try {
+      const [posts, originals] = await Promise.all([
+        readOfficialRachiPosts({ includeDrafts: true, limit: 6 }),
+        readOfficialRachiOriginals({ limit: 8 }),
+      ]);
+      setRachiPosts(posts);
+      setRachiOriginals(originals);
+    } catch (error: any) {
+      setRachiPosts([]);
+      setRachiOriginals([]);
+      setRachiNotice(formatAdminOperationFailure(error, "Unable to load Rachi official surfaces."));
+    } finally {
+      setRachiPostsLoading(false);
+      setRachiOriginalsLoading(false);
+    }
+  }, [canAccessContentProgramming]);
+
+  const submitRachiOfficialPost = useCallback(async () => {
+    if (!canAccessContentProgramming || rachiPostBusy) {
+      setRachiNotice("Rachi posting requires active Owner or Admin content permission.");
+      return;
+    }
+
+    const body = rachiPostBody.trim();
+    if (!body) {
+      setRachiNotice("Write a Rachi update before publishing.");
+      return;
+    }
+
+    try {
+      setRachiPostBusy(true);
+      setRachiNotice(null);
+      const created = await createOfficialRachiPost({
+        body,
+        visibility: rachiPostVisibility,
+        reason: rachiPostReason.trim() || "Official Rachi update",
+      });
+      setRachiPosts((current) => [created, ...current.filter((post) => post.id !== created.id)]);
+      setRachiPostBody("");
+      setRachiNotice(`${rachiPostVisibility === "draft" ? "Draft" : "Published"} Rachi update recorded with admin audit.`);
+      await loadRachiOfficialSurfaces();
+    } catch (error: any) {
+      setRachiNotice(formatAdminOperationFailure(error, "Unable to create Rachi official update."));
+    } finally {
+      setRachiPostBusy(false);
+    }
+  }, [
+    canAccessContentProgramming,
+    loadRachiOfficialSurfaces,
+    rachiPostBody,
+    rachiPostBusy,
+    rachiPostReason,
+    rachiPostVisibility,
+  ]);
 
   const loadSafetyReports = useCallback(async () => {
     try {
@@ -5991,11 +6072,13 @@ export default function AdminStudioScreen() {
     if (operatorTab === "legal" && (canAccessLegalIntake || canAccessLegalEvidence)) void loadLegalIntake();
     if ((operatorTab === "owner-security" || operatorTab === "safety-dashboard") && canAccessOwnerSecurity) void loadOwnerSecurity();
     if (operatorTab === "canary" && canAccessCanaryChecks) void loadCanaries();
+    if (operatorTab === "rachi" && canAccessContentProgramming) void loadRachiOfficialSurfaces();
   }, [
     canAccessAdmin,
     canAccessAuditExplorer,
     canAccessBreakGlass,
     canAccessCanaryChecks,
+    canAccessContentProgramming,
     canAccessLegalEvidence,
     canAccessLegalIntake,
     canAccessOwnerSecurity,
@@ -6006,6 +6089,7 @@ export default function AdminStudioScreen() {
     loadLegalIntake,
     loadOwnerSecurity,
     loadPermissionTemplates,
+    loadRachiOfficialSurfaces,
     operatorTab,
   ]);
 
@@ -9256,9 +9340,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>RACHI / OFFICIAL ACCOUNT</Text>
-              <Text style={styles.configTitle}>Official platform presence</Text>
+              <Text style={styles.configTitle}>Official Chi&apos;llwood presence</Text>
               <Text style={styles.configBody}>
-                Manage backed Rachi visibility from the Operator Center without turning Rachi into Admin. Backend platform roles control this surface.
+                Manage Rachi as an official Platform voice for updates, tips, and Chi&apos;llwood Originals. Rachi does not read private chats.
               </Text>
             </View>
           </View>
@@ -9289,30 +9373,137 @@ export default function AdminStudioScreen() {
           </View>
 
           <View style={styles.configList}>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Operator boundary</Text>
-                <Text style={styles.configListBody}>
-                  {"Rachi is Chi'llywood's official concierge account. Rachi does not grant operator permissions, self-authorize moderation, or replace backend platform roles."}
-                </Text>
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Overview</Text>
+                <OwnerStatusPill label={canAccessContentProgramming ? "Operator Ready" : "Locked"} tone={canAccessContentProgramming ? "success" : "locked"} />
               </View>
+              <OwnerDetailGrid
+                rows={[
+                  { label: "Identity", value: "Rachi · Official Chi'llwood" },
+                  { label: "Circle", value: "Pinned first official Chi'lly Circle connection" },
+                  { label: "Privacy", value: "Does not read private Chi'lly Chat messages" },
+                  { label: "Audit Owner", value: RACHI_OFFICIAL_ACCOUNT.auditOwnerKey },
+                ]}
+              />
+              {rachiNotice ? <OwnerDisabledReason reason={rachiNotice} /> : null}
             </View>
 
-            <View style={styles.configListRow}>
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Official Posts</Text>
+                <OwnerStatusPill label={rachiPostsLoading ? "Loading" : `${rachiPosts.length} visible`} tone={rachiPosts.length ? "info" : "locked"} />
+              </View>
+              <Text style={styles.contentSignalBody}>
+                Owner/Admin posts publish as Rachi through the official-post RPC and write immutable admin audit. No fake engagement is created.
+              </Text>
+              <TextInput
+                style={[styles.input, styles.multiline]}
+                placeholder="Write a Rachi update"
+                placeholderTextColor="#788196"
+                multiline
+                maxLength={500}
+                value={rachiPostBody}
+                onChangeText={setRachiPostBody}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Audit reason"
+                placeholderTextColor="#788196"
+                value={rachiPostReason}
+                onChangeText={setRachiPostReason}
+              />
+              <View style={styles.actionsRow}>
+                {(["public", "draft"] as const).map((visibility) => (
+                  <TouchableOpacity
+                    key={`rachi-visibility-${visibility}`}
+                    style={[
+                      styles.actionBtn,
+                      rachiPostVisibility === visibility && styles.actionBtnActive,
+                    ]}
+                    activeOpacity={0.86}
+                    onPress={() => setRachiPostVisibility(visibility)}
+                  >
+                    <Text style={styles.actionText}>{visibility === "public" ? "Publish" : "Draft"}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.ownerPrimaryButton,
+                  (!canAccessContentProgramming || rachiPostBusy || !rachiPostBody.trim()) && styles.configSaveBtnDisabled,
+                ]}
+                activeOpacity={0.86}
+                disabled={!canAccessContentProgramming || rachiPostBusy || !rachiPostBody.trim()}
+                onPress={() => { void submitRachiOfficialPost(); }}
+              >
+                {rachiPostBusy ? <ActivityIndicator color="#fff" size="small" /> : (
+                  <Text style={styles.ownerPrimaryButtonText}>
+                    {rachiPostVisibility === "draft" ? "Save Rachi Draft" : "Publish Rachi Update"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              {rachiPosts.length ? (
+                <View style={styles.ownerControlList}>
+                  {rachiPosts.map((post) => (
+                    <OwnerControlRow
+                      key={`rachi-post-${post.id}`}
+                      title={post.visibility === "draft" ? "Draft Rachi Post" : "Published Rachi Post"}
+                      message={post.body}
+                      meta={post.createdAt ? formatModerationTimestamp(post.createdAt) : "Time unknown"}
+                      statusLabel={post.visibility === "draft" ? "Draft" : "Public"}
+                      tone={post.visibility === "draft" ? "locked" : "success"}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <OwnerEmptyState
+                  title={rachiPostsLoading ? "Loading Rachi Posts" : "No Rachi Posts Yet"}
+                  body="This list stays empty until backed official Rachi posts exist. No placeholder posts or fake engagement are shown."
+                />
+              )}
+            </View>
+
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Chi&apos;llwood Originals</Text>
+                <OwnerStatusPill label={rachiOriginalsLoading ? "Loading" : `${rachiOriginals.length} public`} tone={rachiOriginals.length ? "info" : "locked"} />
+              </View>
+              <Text style={styles.contentSignalBody}>
+                Home reads public-safe videos owned by Rachi for the Chi&apos;llwood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
+              </Text>
+              {rachiOriginals.length ? (
+                <View style={styles.ownerControlList}>
+                  {rachiOriginals.map((video) => (
+                    <OwnerControlRow
+                      key={`rachi-original-${video.id}`}
+                      title={video.title || "Untitled Original"}
+                      message={video.description || "Published Rachi Original."}
+                      meta={video.createdAt ? formatModerationTimestamp(video.createdAt) : "Time unknown"}
+                      statusLabel="Public-safe"
+                      tone="success"
+                    />
+                  ))}
+                </View>
+              ) : (
+                <OwnerEmptyState
+                  title="No Public Originals"
+                  body="Official video upload as Rachi is not faked here. When a public-safe Rachi-owned video exists, Home can show it under Chi'llwood Originals."
+                />
+              )}
+            </View>
+
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Platform Tools</Text>
+                <OwnerStatusPill label="Routed" tone="info" />
+              </View>
               <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Public-facing presence</Text>
                 <Text style={styles.configListBody}>{RACHI_OFFICIAL_ACCOUNT.conciergeHeadline}</Text>
                 <Text style={styles.configListBody}>{RACHI_OFFICIAL_ACCOUNT.trustSummary}</Text>
                 <Text style={styles.configListBody}>
                   {`Audit owner ${RACHI_OFFICIAL_ACCOUNT.auditOwnerKey} · User ${formatCompactIdentifier(RACHI_OFFICIAL_ACCOUNT.userId)}`}
                 </Text>
-              </View>
-            </View>
-
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Backed guidance topics</Text>
-                <Text style={styles.configListBody}>{RACHI_OFFICIAL_ACCOUNT.guidanceTopics.join(" · ")}</Text>
               </View>
               <View style={styles.actionsRow}>
                 <TouchableOpacity
@@ -9326,10 +9517,40 @@ export default function AdminStudioScreen() {
                 >
                   <Text style={styles.actionText}>Open Profile</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/channel/[userId]",
+                      params: { userId: RACHI_OFFICIAL_ACCOUNT.userId, preview: "public" },
+                    })
+                  }
+                >
+                  <Text style={styles.actionText}>Open Platform</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/chat")}>
-                  <Text style={styles.actionText}>Open Chat</Text>
+                  <Text style={styles.actionText}>Open Rachi Help</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.actionBtn, styles.configSaveBtnDisabled]} disabled>
+                  <Text style={styles.actionText}>Upload Original</Text>
                 </TouchableOpacity>
               </View>
+              <OwnerDisabledReason reason="Official upload-as-Rachi remains a separate backend-safe Studio path; existing public-safe Rachi uploads will still appear in Home." />
+            </View>
+
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Safety & Reports</Text>
+                <OwnerStatusPill label="Protected" tone="success" />
+              </View>
+              <OwnerDetailGrid
+                rows={[
+                  { label: "Normal Users", value: "Cannot post as Rachi or edit Rachi Platform" },
+                  { label: "Reports", value: "Report/Copyright and DMCA flows remain separate" },
+                  { label: "No Fake Stats", value: "No fake followers, likes, comments, posts, or Originals" },
+                  { label: "Private Chat", value: "Rachi does not read private Chi'lly Chat messages" },
+                ]}
+              />
             </View>
           </View>
         </View>
@@ -17510,6 +17731,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 9,
     paddingVertical: 6,
+  },
+  actionBtnActive: {
+    borderColor: "rgba(220,20,60,0.48)",
+    backgroundColor: "rgba(220,20,60,0.22)",
   },
   actionText: {
     color: "#efefef",

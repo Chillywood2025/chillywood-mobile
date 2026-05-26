@@ -234,7 +234,7 @@ function assertFriendTargetAllowed(otherUserId: string) {
     throw new Error("Chi'lly Circle target user id is required.");
   }
   if (isOfficialPlatformAccountUserId(normalizedOtherUserId)) {
-    throw new Error("Official platform accounts are not part of Chi'lly Circle.");
+    throw new Error("Official platform accounts appear as pinned Chi'lly Circle connections and are not managed as normal requests.");
   }
   return normalizedOtherUserId;
 }

@@ -8611,6 +8611,14 @@ export type Database = {
         }
         Returns: string
       }
+      admin_create_official_rachi_post: {
+        Args: {
+          p_body: string
+          p_reason?: string
+          p_visibility?: string
+        }
+        Returns: Json
+      }
       admin_dmca_add_strike: {
         Args: {
           p_case_id: string

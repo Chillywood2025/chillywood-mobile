@@ -729,7 +729,7 @@ export default function ProfileScreen() {
 
     setCreatorVideosReady(false);
 
-    if (isOfficialProfile || !userId || !profilePrivacyReady) {
+    if (!userId || !profilePrivacyReady) {
       setCreatorVideos([]);
       setCreatorVideosReady(!!profilePrivacyReady);
       return () => {
@@ -760,7 +760,7 @@ export default function ProfileScreen() {
     return () => {
       active = false;
     };
-  }, [canViewFullProfile, isOfficialProfile, isSelfProfile, profilePrivacyReady, userId]);
+  }, [canViewFullProfile, isSelfProfile, profilePrivacyReady, userId]);
 
   useEffect(() => {
     let active = true;
@@ -1374,21 +1374,21 @@ export default function ProfileScreen() {
   const canOpenWatchPartyEntry = hasLiveRouteContext || !!scheduledWatchPartyTitleId;
   const liveActionTitle = hasLiveRouteContext ? liveActionLabel : "Live Events";
   const officialGuidanceTopics = officialAccount?.guidanceTopics ?? [];
-  const liveStateLabel = isOfficialProfile ? "CONCIERGE READY" : profile.isLive ? "LIVE NOW" : "OFF AIR";
+  const liveStateLabel = isOfficialProfile ? "OFFICIAL READY" : profile.isLive ? "LIVE NOW" : "OFF AIR";
   const routeContextLabel = isOfficialProfile ? "PROTECTED" : hasLiveRouteContext ? "ROOM LINKED" : "CONTEXT NEEDED";
   const channelHomeBody = isOfficialProfile
     ? officialAccount?.trustSummary
-      ?? "Chi'llywood's official profile for trusted help, updates, and auditable follow-up."
+      ?? "Chi'llywood's official profile for updates, tips, Originals, and auditable follow-up."
     : isSelfProfile
       ? "Share updates, connect with people, and guide fans to your Platform."
       : "Read public updates, connect through Chi'lly Chat, and visit the Platform for creator videos.";
   const liveStatusTitle = isOfficialProfile
-    ? "Official concierge is ready"
+    ? "Rachi is ready"
     : profile.isLive
       ? "Platform is live now"
       : "Platform is off air";
   const liveStatusBody = isOfficialProfile
-    ? "Open Chi'lly Chat for trusted help, then return here for the official Platform view."
+    ? "Rachi shares official updates and tips here. Rachi does not read your private chats."
     : hasLiveRouteContext
       ? profile.isLive
         ? "Live and watch-party entry both hand back into the linked room."
@@ -2490,12 +2490,12 @@ export default function ProfileScreen() {
       tone: isOfficialProfile ? "official" : "default",
     },
     {
-      label: isOfficialProfile ? "Chat" : "Platform",
+      label: isOfficialProfile ? "Help" : "Platform",
       value: isOfficialProfile
-        ? "Starter"
+        ? "Opt-in"
         : creatorVideosReady ? String(publicCreatorVideoCount) : "...",
       body: isOfficialProfile
-        ? "trusted thread open"
+        ? "only opens when you choose"
         : "public creator videos",
       tone: "linked",
     },
@@ -2515,8 +2515,8 @@ export default function ProfileScreen() {
   const channelHelper = isOfficialProfile
     ? {
         kicker: "PLATFORM FLOW",
-        title: "Verified help starts here",
-        body: "Use the official thread for trusted help, then return here for the verified account surface.",
+        title: "Official updates start here",
+        body: "Use Rachi Profile for updates and Originals, or open Rachi Help when you choose to message directly.",
       }
     : isSelfProfile
       ? {
@@ -2542,7 +2542,7 @@ export default function ProfileScreen() {
         : "Create your first video in Platform Studio when you are ready to make this Platform watchable."
       : "Loading your Platform library."
     : isOfficialProfile
-      ? "Official account updates and trusted help stay here; Chi'llywood Originals stay in Home, Explore, and title pages."
+      ? "Official updates stay here, and published Chi'llywood Originals also appear in Home when public-safe."
     : creatorVideosReady
       ? hasCreatorVideoTruth
         ? `${publicCreatorVideoCount} creator video${publicCreatorVideoCount === 1 ? "" : "s"} already give this Platform a real library.`
@@ -2555,12 +2555,12 @@ export default function ProfileScreen() {
         : "Create your first creator video in Platform Studio when you are ready to make the Platform watchable."
       : "Loading your creator-video library."
     : isOfficialProfile
-      ? "This official account does not host Chi'llywood Originals inside Profile/Platform."
+      ? "Published public-safe Rachi uploads can appear here and in Home under Chi'llywood Originals."
       : creatorVideosReady && hasCreatorVideoTruth
         ? `${publicCreatorVideoCount} creator video${publicCreatorVideoCount === 1 ? "" : "s"} are ready to watch.`
         : "This Platform is getting ready.";
   const contentCreatorEventsBody = isOfficialProfile
-    ? "Official platform programming stays in Home, Explore, dedicated Originals surfaces, title pages, and admin-managed title routes."
+    ? "Official programming stays public-safe and backed by admin-managed Rachi content."
     : publicEventsReady
       ? publicEventCount
         ? `${publicEventCount} public creator event${publicEventCount === 1 ? "" : "s"} can appear here when scheduled or live.`
@@ -2572,7 +2572,7 @@ export default function ProfileScreen() {
       ]
     : isOfficialProfile
       ? [
-          { label: "Chi'lly Chat", onPress: () => { void onPressCommunication("message"); } },
+          { label: "Rachi Help", onPress: () => { void onPressCommunication("message"); } },
           ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
         ]
       : [
@@ -2795,7 +2795,7 @@ export default function ProfileScreen() {
       body: isSelfProfile
         ? "Keep direct follow-up in Chi'lly Chat so this route can stay public-facing."
         : isOfficialProfile
-          ? "Official follow-up stays in canonical Chi'lly Chat so trusted help never turns into a shadow support app."
+          ? "Rachi Help is opt-in and only sees what you send in that help conversation."
           : "Direct follow-up from this Platform should move into Chi'lly Chat, not hide inside the profile.",
     },
     {
@@ -2825,9 +2825,9 @@ export default function ProfileScreen() {
           body: "Verified access, trusted follow-up, and official Platform posture stay clear on this canonical route.",
         },
         {
-          title: "Starter Thread",
-          kicker: "CHI'LLY CHAT",
-          body: "Open the canonical direct thread for official help, onboarding questions, and future platform follow-up.",
+          title: "Rachi Help",
+          kicker: "OPTIONAL HELP",
+          body: "Open Rachi Help only when you want to send Rachi a message. Rachi does not read private Chi'lly Chat messages.",
         },
       ]
     : [
@@ -2996,9 +2996,9 @@ export default function ProfileScreen() {
       body: "official platform-owned identity",
     },
     {
-      label: "Chi'lly Chat",
-      value: "Official",
-      body: "trusted help starts in the official thread",
+      label: "Rachi Help",
+      value: "Opt-in",
+      body: "Rachi only sees what you send in that help conversation",
     },
   ] : [
     {
@@ -4005,7 +4005,7 @@ export default function ProfileScreen() {
                   ) : null}
                   <TouchableOpacity
                     testID="profile-chilly-chat-button"
-                    accessibilityLabel="Open Chi'lly Chat"
+                    accessibilityLabel={isOfficialProfile ? "Open Rachi Help" : "Open Chi'lly Chat"}
                     style={[styles.actionBtn, styles.actionBtnConnected]}
                     activeOpacity={0.86}
                     onPress={() => {
@@ -4013,12 +4013,12 @@ export default function ProfileScreen() {
                     }}
                   >
                     <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
-                      {"Chi'lly Chat"}
+                      {isOfficialProfile ? "Rachi Help" : "Chi'lly Chat"}
                     </Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.secondaryActionRow}>
-                  {!isOfficialProfile ? (
+                  {!isOfficialProfile || officialAccount ? (
                     <TouchableOpacity
                       style={[styles.actionChip, styles.actionChipConnected]}
                       activeOpacity={0.82}

@@ -6,7 +6,7 @@ This document locks the current owner/admin/Rachi/social-friend truth before bro
 It exists to:
 - separate current truth from desired later social truth
 - keep owner/admin/Rachi authority boundaries intact
-- define what `Rachi as your first friend` can and cannot mean today
+- define what `Rachi as your first Chi'lly Circle connection` can and cannot mean today
 - define what a native Chi'llywood friend list should mean when it becomes real
 
 This document does not:
@@ -23,7 +23,7 @@ This document does not:
 - `/channel-settings` remains compatibility for older creator-side Platform Studio links.
 - `/admin` remains the bounded internal/admin owner.
 - owner remains above Rachi.
-- Rachi is internal AI operations/system truth and official platform identity, not owner authority.
+- Rachi is official platform identity and future-safe AI operations truth, not owner authority.
 - creator/channel subscriber truth remains distinct from account-tier Premium truth.
 - no route proliferation, no schema drift, and no fake social metrics are allowed in this doctrine pass.
 
@@ -32,17 +32,19 @@ This document does not:
 ### 3.1 What Is Already Real
 Current repo truth already supports:
 - Rachi as the protected official platform account in `_lib/officialAccounts.ts`
-- Rachi on the canonical `/profile/[userId]` route and canonical Chi'lly Chat routes
-- Rachi as an official starter/contact presence through the inbox starter card and direct-thread handoff
+- Rachi on canonical Profile, public Platform, Chi'lly Circle, Home, Admin, and opt-in Rachi Help surfaces
+- Rachi as the first pinned Chi'lly Circle official connection without normal friendship/request rows
+- Rachi as an official update and Chi'llywood Originals source when backed public-safe content exists
 - Rachi as a distinct `official_platform` moderation actor with an audit owner key
-- bounded `/admin` visibility that keeps owner authority above Rachi and explicitly marks Rachi as observe-only today
+- bounded `/admin` visibility that keeps owner authority above Rachi and audits official Rachi posts
 
 ### 3.2 What Is Not Yet Real
 Current repo truth does not yet support:
 - Rachi as a native friend-graph primitive
 - Rachi as an automatically seeded mutual friend relationship for every account
 - Rachi as owner authority or a hidden admin override
-- Rachi automation queues, domain pause/resume controls, or approval-control state
+- Rachi reading private Chi'lly Chat messages
+- fake Rachi posts, fake Originals, fake followers, fake likes, fake comments, or fake engagement
 - a public claim that Rachi already behaves like a full social assistant or community CRM
 
 ## 4. Current Native Social Truth
@@ -81,7 +83,7 @@ Followers and subscribers are not a hidden friend system:
 Why:
 - the embedded official starter/contact presence is already real on canonical profile and Chi'lly Chat surfaces
 - the repo already protects Rachi as official platform identity and moderation actor truth
-- but `everyone's embedded first friend` is not fully real because there is no backed friend relationship, no universal seeded friend row, and no current doctrine that turns Rachi into a mutual social-graph node
+- but `first Chi'lly Circle connection` means pinned official-account presence, not a backed normal friend relationship, universal seeded friend row, or mutual social-graph node
 
 ### 5.2 `CHILLY_CIRCLE_V1_TRUTH = REAL_BUT_PRIVATE_FIRST`
 Why:
@@ -111,9 +113,11 @@ Recommended visibility doctrine:
 
 ### 7.1 Public Product Meaning Now
 Publicly, Rachi currently means:
-- official Chi'llywood concierge
-- trusted getting-started and account-help presence
-- canonical official profile and thread continuity
+- official Chi'llywood guide
+- first pinned Chi'lly Circle official connection
+- trusted getting-started, account-help, update, and Chi'llywood Originals presence
+- canonical official Profile, Platform, Home, and opt-in Rachi Help continuity
+- no private-chat surveillance
 
 Publicly, the current social graph currently means:
 - creator/channel audience posture

@@ -22,6 +22,7 @@ import {
   removeFromChillyCircle,
   type ChillyCircleListItem,
 } from "../_lib/friendGraph";
+import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
 import { useSession } from "../_lib/session";
 
 type CircleAction = "accept" | "decline" | "cancel" | "remove";
@@ -153,6 +154,41 @@ export default function ChillyCircleScreen() {
     );
   };
 
+  const renderRachiOfficialConnection = () => (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionTitle}>Official connection</Text>
+      <Text style={styles.sectionBody}>Rachi is your first Chi&apos;lly Circle connection for official Chi&apos;llwood updates, tips, and Originals.</Text>
+      <View style={styles.personCard}>
+        <TouchableOpacity
+          style={styles.personMain}
+          activeOpacity={0.86}
+          onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
+        >
+          <View style={[styles.avatar, styles.officialAvatar]}>
+            <Text style={styles.avatarInitial}>R</Text>
+          </View>
+          <View style={styles.personCopy}>
+            <Text style={styles.personName} numberOfLines={1}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
+            <Text style={styles.personMeta} numberOfLines={1}>Official Chi&apos;llwood · Your first Chi&apos;lly Circle connection</Text>
+          </View>
+          <View style={[styles.statusPill, styles.officialStatusPill]}>
+            <Text style={[styles.statusPillText, styles.officialStatusPillText]}>Official</Text>
+          </View>
+        </TouchableOpacity>
+        <Text style={styles.officialPrivacyText}>Rachi does not read your private chats.</Text>
+        <View style={styles.personActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.actionButtonAccent]}
+            activeOpacity={0.86}
+            onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
+          >
+            <Text style={[styles.actionButtonText, styles.actionButtonTextAccent]}>View Rachi</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+
   const renderPersonRow = (
     item: ChillyCircleListItem,
     actions: { label: string; action: CircleAction; accent?: boolean }[],
@@ -247,9 +283,13 @@ export default function ChillyCircleScreen() {
         <Text style={styles.heroKicker}>{"CHI'LLY CIRCLE REQUESTS"}</Text>
         <Text style={styles.heroTitle}>Manage mutual connections.</Text>
         <Text style={styles.heroBody}>
-          {"Follow stays separate. Chi'lly Circle is the mutual connection layer used by the existing mutual-connection system."}
+          {"Rachi is pinned as your official Chi'lly Circle connection. Mutual creator connections stay separate and only appear after acceptance."}
         </Text>
         <View style={styles.summaryRow}>
+          <View style={styles.summaryPill}>
+            <Text style={styles.summaryValue}>1</Text>
+            <Text style={styles.summaryLabel}>Official</Text>
+          </View>
           <View style={styles.summaryPill}>
             <Text style={styles.summaryValue}>{loading ? "..." : String(circle.length)}</Text>
             <Text style={styles.summaryLabel}>In Circle</Text>
@@ -269,6 +309,8 @@ export default function ChillyCircleScreen() {
           </View>
         ) : null}
       </View>
+
+      {renderRachiOfficialConnection()}
 
       {renderSection(
         "My Chi'lly Circle",
@@ -460,6 +502,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(220,20,60,0.28)",
     overflow: "hidden",
   },
+  officialAvatar: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(220,20,60,0.44)",
+  },
   avatarImage: {
     width: "100%",
     height: "100%",
@@ -496,6 +543,19 @@ const styles = StyleSheet.create({
     color: "#E8EEFB",
     fontSize: 10.5,
     fontWeight: "900",
+  },
+  officialStatusPill: {
+    borderColor: "rgba(220,20,60,0.4)",
+    backgroundColor: "rgba(220,20,60,0.18)",
+  },
+  officialStatusPillText: {
+    color: "#FFE8EF",
+  },
+  officialPrivacyText: {
+    color: "#B8C1D6",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
   },
   personActions: {
     flexDirection: "row",

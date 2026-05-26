@@ -88,11 +88,11 @@ const getThreadStatusLabel = (thread: ChatThreadSummary | null, platformOwned = 
   if ((thread?.currentMember?.unreadCount ?? 0) > 0) {
     return "Unread activity";
   }
-  return platformOwned ? "Official thread" : "Direct thread";
+  return platformOwned ? "Rachi Help" : "Direct thread";
 };
 
 const getThreadKindLabel = (platformOwned: boolean) => {
-  return platformOwned ? "Official thread" : "Direct thread";
+  return platformOwned ? "Rachi Help" : "Direct thread";
 };
 
 const getThreadGuideTitle = ({
@@ -103,7 +103,7 @@ const getThreadGuideTitle = ({
   activeCallType?: ChatCallType;
 }) => {
   if (platformOwned) {
-    return "Official thread";
+    return "Rachi Help";
   }
   if (activeCallType) {
     return "Call ready here";
@@ -120,8 +120,8 @@ const getThreadGuideBody = ({
 }) => {
   if (platformOwned) {
     return activeCallType
-      ? "Official follow-up and call rejoin stay in this thread."
-      : "Official follow-up stays in this thread.";
+      ? "Rachi Help and call rejoin stay in this opt-in conversation."
+      : "Rachi only sees what you send in this help conversation.";
   }
 
   return activeCallType
@@ -410,8 +410,8 @@ export default function ChillyChatThreadScreen() {
   const callTitle = thread?.activeCallType === "video" ? "Video call active" : "Voice call active";
   const callBody = officialAccount
     ? thread?.activeCallType === "video"
-      ? "Chi'lly Chat video for this official thread stays inside the same trusted conversation so platform guidance and call state never split apart."
-      : "Chi'lly Chat voice for this official thread stays inside the same trusted conversation so platform guidance and call state never split apart."
+      ? "Rachi Help video stays inside this opt-in conversation so call state never splits apart."
+      : "Rachi Help voice stays inside this opt-in conversation so call state never splits apart."
     : thread?.activeCallType === "video"
       ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
       : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
@@ -1033,7 +1033,7 @@ export default function ChillyChatThreadScreen() {
           </Text>
           <Text style={styles.headerQuickActionBody}>
             {officialAccount
-              ? "Open the profile or keep voice/video entry in this same thread."
+              ? "Open Rachi Profile or keep voice/video entry in this same opt-in help conversation."
               : "Open the profile, manage Chi'lly Circle, or keep voice/video entry in this same thread."}
           </Text>
           <View style={styles.headerQuickActionRow}>
@@ -1301,7 +1301,7 @@ export default function ChillyChatThreadScreen() {
           >
             <Text style={styles.emptyTitle}>{officialAccount ? `${officialAccount.displayName} is ready` : "Start the conversation"}</Text>
             <Text style={styles.emptyBody}>
-              {officialAccount
+            {officialAccount
                 ? officialAccount.starterWelcomeBody
                 : "Send the first message here, or start a voice or video handoff from the same thread."}
             </Text>

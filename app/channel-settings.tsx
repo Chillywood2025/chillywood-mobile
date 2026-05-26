@@ -2832,7 +2832,7 @@ export function ChannelStudioScreen() {
     },
     {
       title: "Audience",
-      body: "Channel-owned audience relationships and visibility controls.",
+      body: "Platform-owned audience relationships and visibility controls.",
       sections: [
         {
           title: "Audience",
@@ -2851,7 +2851,7 @@ export function ChannelStudioScreen() {
           body: "Backed room, event, and audience signals.",
         },
         {
-          title: "Channel IQ / Rachi Platform Studio Assistant",
+          title: "Platform IQ / Rachi Platform Studio Assistant",
           status: "later_phase",
           body: "Coming later; no assistant implementation is wired in this pass.",
         },
