@@ -2,9 +2,11 @@
 
 Last updated: May 25, 2026
 
-This runbook records the provider-link readiness scaffold for Premium, RevenueCat, Google Play Billing, Stripe, Stripe Connect, payouts, revenue imports, tips, paid content, ads, and future commerce.
+This runbook records the provider-link readiness scaffold for Premium, RevenueCat, Google Play Billing, Stripe, Stripe Connect, payouts, revenue imports, tips, paid content, Watch-Party seats, ads, and future commerce.
 
 No implementation in this lane activates purchases, payouts, balances, withdrawals, transfers, checkout, tips, paid content, revenue imports, or live money movement.
+
+Platform Studio Money Center is the normal creator-facing home for these statuses. The visible source of truth is the sanitized provider-readiness summary plus Money Center's ledger-first readiness copy; owner/dev-only Technical checks may show public-safe setup metadata, never secret values.
 
 ## Readiness Source Of Truth
 
@@ -180,6 +182,17 @@ Ads:
 2. Do not add ad SDK IDs or provider init until an ads provider lane owns it.
 3. Do not create ad revenue rows or creator earnings from placeholder ad surfaces.
 
+## Money Center UI Mapping
+
+- RevenueCat and Google Play appear under Money Center > Digital Sales and Provider Status.
+- Stripe Connect appears under Money Center > Payouts and Provider Status.
+- Tips, paid content, Watch-Party seats, and merch appear as separate readiness sections instead of one generic commerce bucket.
+- Creator Balance remains ledger-first and shows no verified earnings until backed ledger rows exist.
+- Old `Monetize`, `Revenue`, and `Payouts` entry points map into Money Center sections and no longer exist as duplicate creator-facing dashboards.
+- Admin Revenue/Payouts remain owner/admin operational readouts and are not normal creator-facing Money Center replacements.
+
+Product policy: `docs/MONEY_CENTER_PRODUCT_POLICY.md`.
+
 ## Sandbox Proof Checklist
 
 - Readiness rows exist and all seeded rows have `is_live_money_enabled=false`.
@@ -193,7 +206,7 @@ Ads:
 - Stripe webhook invalid signature remains rejected.
 - Premium entitlement behavior is unchanged.
 - Non-Premium users remain denied by existing Premium gates.
-- No creator earnings, payout balances, transfers, withdrawals, checkout sessions, tips, paid products, or paid access grants are created.
+- No creator earnings, payout balances, transfers, withdrawals, checkout sessions, tips, paid products, Watch-Party seat sales, merch orders, or paid access grants are created.
 
 ## Production Proof Checklist
 
@@ -249,15 +262,16 @@ Android proof on device `R5CR120QCBF` is outside the repo at:
 
 - Scaffold UI proof: `/tmp/chillywood-proof-2026-05-25T21-33-35Z-provider-link-readiness/`
 - Sandbox closeout proof: `/tmp/chillywood-proof-2026-05-25T-provider-link-sandbox-proof-android/`
+- Money Center consolidation proof: `/tmp/chillywood-money-center-proof-20260526-r5/`
 
 Captured proof includes:
 
-- Platform Studio Monetization Overview.
-- Premium and Subscriptions.
-- Revenue.
-- Payouts.
-- Stripe Setup.
-- Google Play / RevenueCat Status.
+- Platform Studio Monetization tab with `Money Center` title.
+- Overview and Digital Sales sections.
+- Tips, Watch-Party Seats, Paid Content, and Merch sections.
+- Creator Balance and Payouts sections.
+- Tax & Legal section.
+- Provider Status for Google Play, RevenueCat, Stripe Connect, Stripe webhook, live money, and creator monetization.
 - Future Tools.
 - Owner/dev Technical checks.
 - Locked/unavailable/planned states.

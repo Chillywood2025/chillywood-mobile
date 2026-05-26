@@ -26,6 +26,7 @@ const migration = read("supabase/migrations/202605140011_creator_monetization_sy
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
 const channelSettings = read("app/channel-settings.tsx");
+const revenueRoute = read("app/revenue.tsx");
 const publicChannel = read("app/channel/[userId].tsx");
 const player = read("app/player/[id].tsx");
 const admin = read("app/admin.tsx");
@@ -93,13 +94,16 @@ assertIncludes(monetization, "isPremiumPurchaseShellAvailable", "Premium purchas
 assertIncludes(premiumEntitlements, "entitlement_key", "backed entitlement helper");
 assertIncludes(premiumEntitlements, "revoked_at", "revoked entitlement blocking");
 
-assertIncludes(channelSettings, "Creator support stays unavailable until payment and policy checks are ready.", "tip unavailable copy");
+assertIncludes(channelSettings, "Tips will unlock after store products and payout rules are verified.", "tip unavailable copy");
 assertIncludes(channelSettings, "Monetization", "Platform Studio Monetization tab");
-assertIncludes(channelSettings, "Paid content", "Platform Studio paid content copy");
-assertIncludes(channelSettings, "Platform commerce", "Platform Studio commerce copy");
+assertIncludes(channelSettings, "Paid Content", "Platform Studio paid content copy");
+assertIncludes(channelSettings, "Physical merch", "Platform Studio merch copy");
+assertIncludes(channelSettings, "Stripe is not used to charge Android users for in-app digital access.", "Android digital Stripe block copy");
 assertIncludes(channelSettings, "tab=monetization&focus=payouts", "old payout deep link maps to Monetization");
+assertIncludes(revenueRoute, "focus=balance", "old revenue route maps to creator balance");
 assertNotIncludes(channelSettings, "{ id: \"payouts\", label: \"Payouts\" }", "separate Payouts tab");
 assertNotIncludes(channelSettings, "{ id: \"revenue\", label: \"Revenue\" }", "separate Revenue tab");
+assertNotIncludes(channelSettings, "{ id: \"monetize\", label: \"Monetize\" }", "separate Monetize tab");
 assertIncludes(channelSettings, "Run your platform from one place", "Platform Studio platform copy");
 assertIncludes(publicChannel, "Platform Store", "public platform store state");
 assertIncludes(publicChannel, "Checkout pending", "public platform checkout disabled copy");

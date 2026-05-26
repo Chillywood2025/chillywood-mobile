@@ -23,6 +23,7 @@
     "guard:refresh-policy": "node ./scripts/guard-refresh-policy.mjs",
     "guard:creator-monetization-policy": "node ./scripts/guard-creator-monetization-policy.mjs",
     "guard:payment-rail-policy": "node ./scripts/guard-payment-rail-policy.mjs",
+    "guard:money-center-policy": "node ./scripts/guard-money-center-policy.mjs",
     "guard:stripe-connect-policy": "node ./scripts/guard-stripe-connect-policy.mjs",
     "guard:provider-readiness-policy": "node ./scripts/guard-provider-readiness-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",

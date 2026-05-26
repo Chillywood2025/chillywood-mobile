@@ -105,11 +105,11 @@ assertIncludes(creatorPayouts, "No payable balance can be created by the mobile 
 assertIncludes(creatorPayouts, "Owner approval is required before any payout execution can move forward.", "owner approval blocker");
 assertIncludes(creatorPayouts, "canExecuteProductionPayout: false", "production payout execution disabled");
 
-assertIncludes(channelSettings, "Stripe setup can be reviewed, but payouts are still unavailable.", "Studio Stripe setup copy");
+assertIncludes(channelSettings, "Stripe Connect is for creator payouts only. It is not used to charge Android users for digital access.", "Studio Stripe setup copy");
 assertIncludes(channelSettings, "No withdrawal, transfer, cash-out, or payout release action is available.", "Studio payout action lock copy");
 assertIncludes(channelSettings, "Instant cash-out", "Studio instant cash-out readout");
 assertIncludes(channelSettings, "Optional instant cash-out is", "Studio cash-out fee copy");
-assertIncludes(channelSettings, "Platform review is required before any future payout action can be considered.", "Studio review copy");
+assertIncludes(channelSettings, "No payout is available until setup and verification are complete.", "Studio review copy");
 assertIncludes(admin, "Creator-facing Connect Stripe setup is test-mode only", "Admin Connect read-only copy");
 assertIncludes(admin, "tax/1099 readiness", "Admin tax readiness copy");
 assertIncludes(admin, "Owner approval is required", "Admin owner approval copy");

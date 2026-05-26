@@ -93,10 +93,13 @@ assertIncludes(config, "[functions.revenuecat-webhook]", "RevenueCat webhook fun
 assertIncludes(config, "[functions.google-play-webhook]", "Google Play webhook function config");
 
 assertIncludes(channelSettings, "readProviderReadinessSummary", "Studio readiness integration");
-assertIncludes(channelSettings, "Google Play / RevenueCat Status", "Studio store status section");
+assertIncludes(channelSettings, "Money Center", "Studio Money Center title");
+assertIncludes(channelSettings, "Provider Status", "Studio provider status section");
+assertIncludes(channelSettings, "Provider checks are the source of readiness truth.", "Studio provider source-of-truth copy");
 assertIncludes(channelSettings, "No withdrawal, transfer, cash-out, or payout release action is available.", "Studio payout lock copy");
 assertNotIncludes(channelSettings, "{ id: \"payouts\", label: \"Payouts\" }", "separate payout tab");
 assertNotIncludes(channelSettings, "{ id: \"revenue\", label: \"Revenue\" }", "separate revenue tab");
+assertNotIncludes(channelSettings, "{ id: \"monetize\", label: \"Monetize\" }", "separate monetize tab");
 assertNotIncludes(channelSettings, "STRIPE_SECRET_KEY", "Studio Stripe secret");
 assertNotIncludes(channelSettings, "REVENUECAT_SECRET_API_KEY", "Studio RevenueCat secret");
 assertNotIncludes(channelSettings, "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON", "Studio Google secret");

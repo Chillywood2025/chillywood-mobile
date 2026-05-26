@@ -45,6 +45,8 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - Creator Platform is the creator public-channel direction. Platform Studio is the owner command center for managing that public creator surface. Technical route/table names such as `/channel/[userId]` and channel-related tables do not need to be renamed when that would risk breakage.
 - The creator Platform is free by default for viewers.
 - Premium creators can monetize their Platform when the relevant tool is backed.
+- Platform Studio Money Center is the creator-facing source of truth for monetization readiness. Old Monetize, Revenue, and Payouts creator-facing surfaces should map into Money Center sections instead of becoming separate dashboards.
+- Money Center must stay ledger-first and provider-readiness-backed: no fake earnings, fake balances, fake tips, fake paid content sales, fake Watch-Party seat sales, fake merch orders, fake tax/KYC status, fake Stripe readiness, fake RevenueCat/Google Play purchase readiness, fake checkout, or fake payouts.
 - Premium creators can choose whether each content item is free or paid where pricing is backed.
 - Premium creators can set their own price per paid content item where price controls are backed; preset price tiers remain preferred over arbitrary pricing.
 - Viewers/buyers do not need Premium to buy and watch paid creator content. Free users can buy paid creator content without becoming Premium.

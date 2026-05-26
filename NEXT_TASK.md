@@ -1,6 +1,38 @@
 # NEXT TASK
 
-## Recommended Lane: True Live-Stage And Replay Spectator Fixture Proof
+## Recommended Lane: RevenueCat / Google Play Credential Linking And Money Center Provider Proof
+
+Money Center is now the creator-facing monetization source of truth in Platform Studio. The next money lane should prove the provider boundary that Money Center is honestly waiting on, without activating live money.
+
+Closed truth:
+
+- Platform Studio has one creator-facing `Monetization` tab with `Money Center` as the page title/source of truth.
+- Money Center sections are Overview, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Payouts, Tax & Legal, Provider Status, Future Tools, and owner/dev-only Technical checks.
+- Old `/monetize`, `/revenue`, and `/payouts` routes redirect into Money Center; old `tab=monetize|revenue|payouts` and `focus=premium|stripe|store|commerce` params map to Money Center sections.
+- Google Play/RevenueCat is the Android digital purchase readiness path.
+- Stripe Connect is creator payout setup/readiness only and is not used to charge Android users for in-app digital access.
+- Merch is physical goods and stays separate from digital app unlocks.
+- Creator Balance is ledger-first and shows no verified earnings until real ledger rows exist.
+- Payouts stay locked; no withdrawal, cash-out, transfer, payout release, checkout, or fake balance is available.
+- Provider Status reads sanitized `provider_readiness_status` summaries; owner/dev Technical checks show no secret values.
+- `npm run guard:money-center-policy` pins the Money Center sections, route mappings, no duplicate creator-facing money tabs, no fake money, no Android digital Stripe checkout, no secrets, and no user-facing `Mini Platform`.
+- Android `R5CR120QCBF` proof lives outside the repo at `/tmp/chillywood-money-center-proof-20260526-r5/`; it captures the consolidated tab row, Money Center first view, Overview, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Payouts, Tax & Legal, Provider Status, Future Tools, and owner/dev Technical checks.
+
+Remaining limitations:
+
+- RevenueCat and Google Play server/webhook secrets remain the real provider blockers. Do not mark them active without valid sandbox events and webhook proof.
+- Stripe Connect production payout readiness, KYC/tax completion, owner approval, payout execution, and live-money flags remain blocked.
+- Paid content, tips, Watch-Party seats, merch checkout, sponsorships, ads, and revenue imports remain planned/readiness-only.
+
+Recommended next lane:
+
+- Link RevenueCat and Google Play server/webhook credentials by secret name only, never values.
+- Prove valid and invalid webhook handling, idempotency, setup-required/blocked states, and sandbox events without granting fake Premium or live money.
+- Update provider readiness rows only to the exact proved status; `active` remains blocked until production proof exists.
+- Capture Money Center Provider Status after provider proof and keep screenshots outside the repo.
+- Keep `artifacts/` and `supabase/.temp/` untouched.
+
+## Previous Recommended Lane: True Live-Stage And Replay Spectator Fixture Proof
 
 The Spectator child-room relay is now runtime-proved on Android for the content/player Watch-Party Live launch path using proof-scoped fixtures. The remaining Spectator proof lane should focus only on true live-stage and replay fixture coverage without faking live status or replay availability.
 
