@@ -39,10 +39,14 @@ export type UserProfile = {
   avatarIndex: number; // 0-9 for different avatar colors/emojis
   displayName?: string;
   avatarUrl?: string;
+  profileAvatarMediaStatus?: ProfileMediaStatus;
+  profileAvatarMediaFlaggedAt?: string;
   profileAvatarFitMode?: ProfileAppearanceFitMode;
   profileAvatarFocalX?: number;
   profileAvatarFocalY?: number;
   profileBackgroundUrl?: string;
+  profileBackgroundMediaStatus?: ProfileMediaStatus;
+  profileBackgroundMediaFlaggedAt?: string;
   profileBackgroundFitMode?: ProfileAppearanceFitMode;
   profileBackgroundFocalX?: number;
   profileBackgroundFocalY?: number;
@@ -63,6 +67,7 @@ export type UserProfile = {
 };
 
 export type ProfileAppearanceFitMode = "fill" | "fit" | "center";
+export type ProfileMediaStatus = "active" | "user_removed" | "flagged" | "admin_removed";
 
 export type LastPartySession = {
   partyId: string;
@@ -84,10 +89,14 @@ export type UserChannelProfile = {
   id: string;
   displayName: string;
   avatarUrl?: string;
+  profileAvatarMediaStatus: ProfileMediaStatus;
+  profileAvatarMediaFlaggedAt?: string;
   profileAvatarFitMode: ProfileAppearanceFitMode;
   profileAvatarFocalX: number;
   profileAvatarFocalY: number;
   profileBackgroundUrl?: string;
+  profileBackgroundMediaStatus: ProfileMediaStatus;
+  profileBackgroundMediaFlaggedAt?: string;
   profileBackgroundFitMode: ProfileAppearanceFitMode;
   profileBackgroundFocalX: number;
   profileBackgroundFocalY: number;
@@ -117,10 +126,14 @@ type UserProfileRow = Pick<
   | "avatar_index"
   | "display_name"
   | "avatar_url"
+  | "profile_avatar_media_status"
+  | "profile_avatar_media_flagged_at"
   | "profile_avatar_fit_mode"
   | "profile_avatar_focal_x"
   | "profile_avatar_focal_y"
   | "profile_background_url"
+  | "profile_background_media_status"
+  | "profile_background_media_flagged_at"
   | "profile_background_fit_mode"
   | "profile_background_focal_x"
   | "profile_background_focal_y"
@@ -158,6 +171,16 @@ export const normalizeProfileAppearanceFitMode = (value: unknown): ProfileAppear
   if (normalized === "fit" || normalized === "center") return normalized;
   return "fill";
 };
+
+export const normalizeProfileMediaStatus = (value: unknown): ProfileMediaStatus => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "user_removed" || normalized === "flagged" || normalized === "admin_removed") return normalized;
+  return "active";
+};
+
+export const isProfileMediaActive = (status?: ProfileMediaStatus | null) => (
+  normalizeProfileMediaStatus(status) === "active"
+);
 
 export const normalizeProfileAppearanceNumber = (value: unknown, fallback: number, min = 0, max = 1) => {
   const parsed = Number(value);
@@ -202,10 +225,14 @@ export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): Use
     avatarIndex,
     displayName: normalizeTextValue(profile?.displayName),
     avatarUrl: normalizeTextValue(profile?.avatarUrl),
+    profileAvatarMediaStatus: normalizeProfileMediaStatus(profile?.profileAvatarMediaStatus),
+    profileAvatarMediaFlaggedAt: normalizeTextValue(profile?.profileAvatarMediaFlaggedAt),
     profileAvatarFitMode: normalizeProfileAppearanceFitMode(profile?.profileAvatarFitMode),
     profileAvatarFocalX: normalizeProfileAppearanceNumber(profile?.profileAvatarFocalX, 0.5),
     profileAvatarFocalY: normalizeProfileAppearanceNumber(profile?.profileAvatarFocalY, 0.5),
     profileBackgroundUrl: normalizeTextValue(profile?.profileBackgroundUrl),
+    profileBackgroundMediaStatus: normalizeProfileMediaStatus(profile?.profileBackgroundMediaStatus),
+    profileBackgroundMediaFlaggedAt: normalizeTextValue(profile?.profileBackgroundMediaFlaggedAt),
     profileBackgroundFitMode: normalizeProfileAppearanceFitMode(profile?.profileBackgroundFitMode),
     profileBackgroundFocalX: normalizeProfileAppearanceNumber(profile?.profileBackgroundFocalX, 0.5),
     profileBackgroundFocalY: normalizeProfileAppearanceNumber(profile?.profileBackgroundFocalY, 0.5),
@@ -312,10 +339,14 @@ const parseRemoteUserProfile = (row: UserProfileRow | null | undefined): UserPro
     avatarIndex: Number.isFinite(Number(row.avatar_index)) ? Number(row.avatar_index) : undefined,
     displayName: normalizeTextValue(row.display_name),
     avatarUrl: normalizeTextValue(row.avatar_url),
+    profileAvatarMediaStatus: normalizeProfileMediaStatus(row.profile_avatar_media_status),
+    profileAvatarMediaFlaggedAt: normalizeTextValue(row.profile_avatar_media_flagged_at),
     profileAvatarFitMode: normalizeProfileAppearanceFitMode(row.profile_avatar_fit_mode),
     profileAvatarFocalX: normalizeProfileAppearanceNumber(row.profile_avatar_focal_x, 0.5),
     profileAvatarFocalY: normalizeProfileAppearanceNumber(row.profile_avatar_focal_y, 0.5),
     profileBackgroundUrl: normalizeTextValue(row.profile_background_url),
+    profileBackgroundMediaStatus: normalizeProfileMediaStatus(row.profile_background_media_status),
+    profileBackgroundMediaFlaggedAt: normalizeTextValue(row.profile_background_media_flagged_at),
     profileBackgroundFitMode: normalizeProfileAppearanceFitMode(row.profile_background_fit_mode),
     profileBackgroundFocalX: normalizeProfileAppearanceNumber(row.profile_background_focal_x, 0.5),
     profileBackgroundFocalY: normalizeProfileAppearanceNumber(row.profile_background_focal_y, 0.5),
@@ -352,6 +383,12 @@ export const buildUserChannelProfile = (options: {
   const profile = options.profile;
   const officialAccount = getOfficialPlatformAccount(id);
   const fallbackDisplayName = normalizeTextValue(options.fallbackDisplayName) ?? "User";
+  const profileAvatarMediaStatus = normalizeProfileMediaStatus(profile?.profileAvatarMediaStatus);
+  const profileBackgroundMediaStatus = normalizeProfileMediaStatus(profile?.profileBackgroundMediaStatus);
+  const profileAvatarUrl = isProfileMediaActive(profileAvatarMediaStatus) ? normalizeTextValue(profile?.avatarUrl) : undefined;
+  const profileBackgroundUrl = isProfileMediaActive(profileBackgroundMediaStatus)
+    ? normalizeTextValue(profile?.profileBackgroundUrl)
+    : undefined;
   const resolvedDisplayName = resolveProfileDisplayName(
     options.displayName,
     options.username,
@@ -362,11 +399,15 @@ export const buildUserChannelProfile = (options: {
   return {
     id: officialAccount?.userId ?? id,
     displayName: officialAccount?.displayName ?? (resolvedDisplayName !== "User" ? resolvedDisplayName : fallbackDisplayName),
-    avatarUrl: officialAccount ? normalizeTextValue(officialAccount.avatarUrl) : normalizeTextValue(options.avatarUrl) ?? normalizeTextValue(profile?.avatarUrl),
+    avatarUrl: officialAccount ? normalizeTextValue(officialAccount.avatarUrl) : normalizeTextValue(options.avatarUrl) ?? profileAvatarUrl,
+    profileAvatarMediaStatus: officialAccount ? "active" : profileAvatarMediaStatus,
+    profileAvatarMediaFlaggedAt: officialAccount ? undefined : normalizeTextValue(profile?.profileAvatarMediaFlaggedAt),
     profileAvatarFitMode: officialAccount ? "fill" : normalizeProfileAppearanceFitMode(profile?.profileAvatarFitMode),
     profileAvatarFocalX: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileAvatarFocalX, 0.5),
     profileAvatarFocalY: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileAvatarFocalY, 0.5),
-    profileBackgroundUrl: officialAccount ? undefined : normalizeTextValue(profile?.profileBackgroundUrl),
+    profileBackgroundUrl: officialAccount ? undefined : profileBackgroundUrl,
+    profileBackgroundMediaStatus: officialAccount ? "active" : profileBackgroundMediaStatus,
+    profileBackgroundMediaFlaggedAt: officialAccount ? undefined : normalizeTextValue(profile?.profileBackgroundMediaFlaggedAt),
     profileBackgroundFitMode: officialAccount ? "fill" : normalizeProfileAppearanceFitMode(profile?.profileBackgroundFitMode),
     profileBackgroundFocalX: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileBackgroundFocalX, 0.5),
     profileBackgroundFocalY: officialAccount ? 0.5 : normalizeProfileAppearanceNumber(profile?.profileBackgroundFocalY, 0.5),
@@ -465,7 +506,7 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
     const { data, error } = await supabase
       .from(USER_PROFILES_TABLE)
       .select(
-        "user_id,username,avatar_index,display_name,avatar_url,profile_avatar_fit_mode,profile_avatar_focal_x,profile_avatar_focal_y,profile_background_url,profile_background_fit_mode,profile_background_focal_x,profile_background_focal_y,profile_background_overlay_strength,tagline,channel_layout_preset,channel_role,profile_visibility,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
+        "user_id,username,avatar_index,display_name,avatar_url,profile_avatar_media_status,profile_avatar_media_flagged_at,profile_avatar_fit_mode,profile_avatar_focal_x,profile_avatar_focal_y,profile_background_url,profile_background_media_status,profile_background_media_flagged_at,profile_background_fit_mode,profile_background_focal_x,profile_background_focal_y,profile_background_overlay_strength,tagline,channel_layout_preset,channel_role,profile_visibility,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
       )
       .eq("user_id", normalizedUserId)
       .maybeSingle();

@@ -15,6 +15,7 @@ Updated: 2026-05-25 for Profile production UI, Platform terminology, Chi'lly Cha
 Updated: 2026-05-25 for signed-out, signed-in non-owner, owner-regression, Platform routing, and Chi'lly Chat Android proof closeout
 Updated: 2026-05-25 for shared social attachment sheet correction and native phone-gallery Photos picking
 Updated: 2026-05-26 for Profile avatar/background management and viewer Profile Actions sheet
+Updated: 2026-05-26 for owner-controlled Profile media status, reportability, and public URL masking
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -91,6 +92,12 @@ Current governing truth:
 - Profile Settings now has `Profile Appearance` controls for `Profile Photo`, `Profile Background`, and `Preview Profile`.
 - Profile media upload uses the phone gallery through `expo-image-picker`, with square avatar edit, wide background edit, Fill/Fit/Center metadata, JPG/PNG/WebP validation, and size limits.
 - Migration `202605260001_profile_appearance_media.sql` adds the profile-only `profile-media` bucket, owner-prefix storage policies, Profile appearance fields on `user_profiles`, and public-profile RPC return fields behind the existing profile visibility gate.
+- Follow-up migration `202605260002_profile_media_status_policy.sql` adds lightweight owner-controlled media statuses for Profile photo/background: `active`, `user_removed`, `flagged`, and `admin_removed`.
+- Valid owner uploads publish immediately as `active`; Profile media does not require manual approval or default to `pending_review`.
+- Owner removal writes `user_removed`; admin/moderation hide/remove/restore actions for reported `profile_media` targets write `flagged`, `admin_removed`, or `active`.
+- Public Profile RPC rendering masks avatar/background URLs unless the matching media status is `active`, so flagged/admin-removed/user-removed Profile media does not continue rendering publicly.
+- Viewer Profile Actions can report the Profile Photo or Profile Background when visible. The report context includes `profileMediaKind`, media status, and public-state metadata, but no raw URL or storage object key.
+- Generic Profile saves do not write media status, which prevents stale local Profile cache from undoing moderation status.
 - `_lib/profileMedia.ts` writes only the signed-in user's Profile fields, attempts cleanup for replaced/removed owned objects, and does not render raw storage paths.
 - Viewer `Profile Actions` includes View Profile Photo, Chi'lly Chat, View Platform, Block User, Report User, and Share Profile where backed.
 - Block User requires sign-in plus confirmation, cannot block self, uses existing backed `channel_audience_blocks`, refreshes relationship state, and blocks Chi'lly Chat from creating a direct thread while blocked.
@@ -101,7 +108,8 @@ Current governing truth:
 
 Current limitations and proof status:
 
-- There is no dedicated profile-media moderation/review queue yet. Do not claim automated moderation approval for Profile media; add moderation/review as a later safety lane.
+- There is no advanced profile-media moderation review UI/queue yet beyond the backed `profile_media` report target plus admin hide/remove/restore target actions. Do not claim automated media approval or a manual review queue for every upload.
+- `202605260002_profile_media_status_policy.sql` is remote-applied and `supabase db lint --linked` passed; richer runtime visual proof still needs a current Android build plus safe fixtures.
 - Android visual proof is still pending for the new avatar edit sheet, Settings Profile Appearance section, background upload/remove, viewer Profile Actions sheet, block confirmation, signed-out handoffs, and no-edit viewer/signed-out state. The repo now lazy-loads `expo-image-picker` so older installed dev-clients do not crash on app startup, but choosing images requires a current native build if the installed client predates the module.
 - Full second-account and blocked/private runtime fixtures remain pending and must not be faked.
 - Validation passed the requested type/runtime/payment/creator/Stripe/VOD/Clip/Brand/Watch-Party/provider/Profile guard stack, Supabase migration list/typegen field proof, targeted Profile/media greps, Android startup smoke, and diff whitespace checks.

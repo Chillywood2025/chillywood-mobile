@@ -6,11 +6,13 @@ import type { TablesUpdate } from "../supabase/database.types";
 import {
   normalizeProfileAppearanceFitMode,
   normalizeProfileAppearanceNumber,
+  normalizeProfileMediaStatus,
   normalizeUserProfile,
   readUserProfile,
   saveUserProfile,
   USER_PROFILES_TABLE,
   type ProfileAppearanceFitMode,
+  type ProfileMediaStatus,
   type UserProfile,
 } from "./userData";
 import { supabase } from "./supabase";
@@ -147,6 +149,11 @@ const deleteOwnedProfileMediaObject = async (userId: string, url?: string | null
   await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
 };
 
+const shouldCleanupProfileMediaObject = (status?: ProfileMediaStatus | null) => {
+  const normalized = normalizeProfileMediaStatus(status);
+  return normalized === "active" || normalized === "user_removed";
+};
+
 async function updateProfileAppearance(
   userId: string,
   existingProfile: UserProfile,
@@ -219,9 +226,14 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
 
   const now = new Date().toISOString();
   const oldUrl = kind === "avatar" ? existingProfile.avatarUrl : existingProfile.profileBackgroundUrl;
+  const oldStatus = kind === "avatar"
+    ? existingProfile.profileAvatarMediaStatus
+    : existingProfile.profileBackgroundMediaStatus;
   const patch: UserProfileUpdate = kind === "avatar"
     ? {
         avatar_url: publicUrl,
+        profile_avatar_media_status: "active",
+        profile_avatar_media_flagged_at: null,
         profile_avatar_fit_mode: "fill",
         profile_avatar_focal_x: 0.5,
         profile_avatar_focal_y: 0.5,
@@ -230,6 +242,8 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
       }
     : {
         profile_background_url: publicUrl,
+        profile_background_media_status: "active",
+        profile_background_media_flagged_at: null,
         profile_background_fit_mode: "fill",
         profile_background_focal_x: 0.5,
         profile_background_focal_y: 0.5,
@@ -241,6 +255,8 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
     ? normalizeUserProfile({
         ...existingProfile,
         avatarUrl: publicUrl,
+        profileAvatarMediaStatus: "active",
+        profileAvatarMediaFlaggedAt: undefined,
         profileAvatarFitMode: "fill",
         profileAvatarFocalX: 0.5,
         profileAvatarFocalY: 0.5,
@@ -248,6 +264,8 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
     : normalizeUserProfile({
         ...existingProfile,
         profileBackgroundUrl: publicUrl,
+        profileBackgroundMediaStatus: "active",
+        profileBackgroundMediaFlaggedAt: undefined,
         profileBackgroundFitMode: "fill",
         profileBackgroundFocalX: 0.5,
         profileBackgroundFocalY: 0.5,
@@ -256,7 +274,9 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
 
   try {
     const saved = await updateProfileAppearance(userId, existingProfile, patch, nextProfile);
-    await deleteOwnedProfileMediaObject(userId, oldUrl);
+    if (shouldCleanupProfileMediaObject(oldStatus)) {
+      await deleteOwnedProfileMediaObject(userId, oldUrl);
+    }
     return saved;
   } catch (error) {
     await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
@@ -268,10 +288,15 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
   const userId = await getSignedInUserId();
   const existingProfile = await readUserProfile();
   const removedUrl = kind === "avatar" ? existingProfile.avatarUrl : existingProfile.profileBackgroundUrl;
+  const removedStatus = kind === "avatar"
+    ? existingProfile.profileAvatarMediaStatus
+    : existingProfile.profileBackgroundMediaStatus;
   const now = new Date().toISOString();
   const patch: UserProfileUpdate = kind === "avatar"
     ? {
         avatar_url: null,
+        profile_avatar_media_status: "user_removed",
+        profile_avatar_media_flagged_at: null,
         profile_avatar_fit_mode: "fill",
         profile_avatar_focal_x: 0.5,
         profile_avatar_focal_y: 0.5,
@@ -280,6 +305,8 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
       }
     : {
         profile_background_url: null,
+        profile_background_media_status: "user_removed",
+        profile_background_media_flagged_at: null,
         profile_background_fit_mode: "fill",
         profile_background_focal_x: 0.5,
         profile_background_focal_y: 0.5,
@@ -291,6 +318,8 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
     ? normalizeUserProfile({
         ...existingProfile,
         avatarUrl: undefined,
+        profileAvatarMediaStatus: "user_removed",
+        profileAvatarMediaFlaggedAt: undefined,
         profileAvatarFitMode: "fill",
         profileAvatarFocalX: 0.5,
         profileAvatarFocalY: 0.5,
@@ -298,6 +327,8 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
     : normalizeUserProfile({
         ...existingProfile,
         profileBackgroundUrl: undefined,
+        profileBackgroundMediaStatus: "user_removed",
+        profileBackgroundMediaFlaggedAt: undefined,
         profileBackgroundFitMode: "fill",
         profileBackgroundFocalX: 0.5,
         profileBackgroundFocalY: 0.5,
@@ -305,7 +336,9 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
       });
 
   const saved = await updateProfileAppearance(userId, existingProfile, patch, nextProfile);
-  await deleteOwnedProfileMediaObject(userId, removedUrl);
+  if (shouldCleanupProfileMediaObject(removedStatus)) {
+    await deleteOwnedProfileMediaObject(userId, removedUrl);
+  }
   return saved;
 }
 

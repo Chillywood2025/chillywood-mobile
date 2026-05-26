@@ -867,7 +867,7 @@ export default function HomeScreen() {
                   openChannel(ownerId);
                 }}
               >
-                <Text style={styles.feedActivityGhostText}>Channel</Text>
+                <Text style={styles.feedActivityGhostText}>Platform</Text>
               </TouchableOpacity>
             ) : null}
           </View>

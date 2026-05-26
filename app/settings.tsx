@@ -39,6 +39,7 @@ import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
 import { useSession } from "../_lib/session";
 import {
+  isProfileMediaActive,
   readMyProfileVisibility,
   readUserProfile,
   updateMyProfileVisibility,
@@ -364,6 +365,12 @@ export default function SettingsScreen() {
     email: user?.email ?? null,
     userId: user?.id ?? null,
   }), [user?.email, user?.id]);
+  const activeProfilePhotoUrl = isProfileMediaActive(myProfile?.profileAvatarMediaStatus)
+    ? myProfile?.avatarUrl
+    : undefined;
+  const activeProfileBackgroundUrl = isProfileMediaActive(myProfile?.profileBackgroundMediaStatus)
+    ? myProfile?.profileBackgroundUrl
+    : undefined;
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;
@@ -610,7 +617,7 @@ export default function SettingsScreen() {
   }, [router, user?.id]);
 
   const onViewProfileImage = useCallback((kind: ProfileMediaKind) => {
-    const imageUrl = kind === "avatar" ? myProfile?.avatarUrl : myProfile?.profileBackgroundUrl;
+    const imageUrl = kind === "avatar" ? activeProfilePhotoUrl : activeProfileBackgroundUrl;
     if (!imageUrl) {
       Alert.alert(
         kind === "avatar" ? "Profile Photo" : "Profile Background",
@@ -624,7 +631,7 @@ export default function SettingsScreen() {
       imageUrl,
       fitMode: kind === "avatar" ? myProfile?.profileAvatarFitMode : myProfile?.profileBackgroundFitMode,
     });
-  }, [myProfile]);
+  }, [activeProfileBackgroundUrl, activeProfilePhotoUrl, myProfile]);
 
   const onChooseProfileMedia = useCallback(async (kind: ProfileMediaKind) => {
     if (profileAppearanceBusy) return;
@@ -647,7 +654,7 @@ export default function SettingsScreen() {
   }, [profileAppearanceBusy]);
 
   const onRemoveProfileMedia = useCallback((kind: ProfileMediaKind) => {
-    const imageUrl = kind === "avatar" ? myProfile?.avatarUrl : myProfile?.profileBackgroundUrl;
+    const imageUrl = kind === "avatar" ? activeProfilePhotoUrl : activeProfileBackgroundUrl;
     if (!imageUrl || profileAppearanceBusy) return;
 
     Alert.alert(
@@ -680,7 +687,7 @@ export default function SettingsScreen() {
         },
       ],
     );
-  }, [myProfile?.avatarUrl, myProfile?.profileBackgroundUrl, profileAppearanceBusy]);
+  }, [activeProfileBackgroundUrl, activeProfilePhotoUrl, profileAppearanceBusy]);
 
   const onSelectProfileMediaFitMode = useCallback(async (kind: ProfileMediaKind, fitMode: ProfileAppearanceFitMode) => {
     if (profileAppearanceBusy) return;
@@ -1045,39 +1052,39 @@ export default function SettingsScreen() {
         <SettingsRow
           title="Profile Photo"
           subtitle="Change the photo shown on your Profile, posts, and comments."
-          value={myProfile?.avatarUrl ? "Change" : "Add"}
+          value={activeProfilePhotoUrl ? "Change" : "Add"}
           onPress={() => setProfileAppearanceSheetKind("avatar")}
         >
           <View style={styles.appearancePreviewRow}>
             <View style={styles.appearanceAvatarPreview}>
-              {myProfile?.avatarUrl ? (
+              {activeProfilePhotoUrl ? (
                 <Image
-                  source={{ uri: myProfile.avatarUrl }}
+                  source={{ uri: activeProfilePhotoUrl }}
                   style={styles.appearancePreviewImage}
-                  resizeMode={resolveProfileImageResizeMode(myProfile.profileAvatarFitMode)}
+                  resizeMode={resolveProfileImageResizeMode(myProfile?.profileAvatarFitMode)}
                 />
               ) : (
                 <Text style={styles.appearanceAvatarInitial}>{appearanceInitial}</Text>
               )}
             </View>
             <Text style={styles.appearancePreviewMeta}>
-              {myProfile?.avatarUrl ? "Photo is active." : "Default avatar is active."}
+              {activeProfilePhotoUrl ? "Photo is active." : "Default avatar is active."}
             </Text>
           </View>
         </SettingsRow>
         <SettingsRow
           title="Profile Background"
           subtitle="Change the personal Profile header background."
-          value={myProfile?.profileBackgroundUrl ? "Change" : "Add"}
+          value={activeProfileBackgroundUrl ? "Change" : "Add"}
           onPress={() => setProfileAppearanceSheetKind("background")}
         >
           <View style={styles.appearancePreviewRow}>
             <View style={styles.appearanceBackgroundPreview}>
-              {myProfile?.profileBackgroundUrl ? (
+              {activeProfileBackgroundUrl ? (
                 <Image
-                  source={{ uri: myProfile.profileBackgroundUrl }}
+                  source={{ uri: activeProfileBackgroundUrl }}
                   style={styles.appearancePreviewImage}
-                  resizeMode={resolveProfileImageResizeMode(myProfile.profileBackgroundFitMode)}
+                  resizeMode={resolveProfileImageResizeMode(myProfile?.profileBackgroundFitMode)}
                 />
               ) : (
                 <Text style={styles.appearanceBackgroundFallback}>Profile</Text>
@@ -1427,7 +1434,7 @@ export default function SettingsScreen() {
       <ProfileAppearanceSheet
         visible={profileAppearanceSheetKind === "avatar"}
         kind="avatar"
-        imageUrl={myProfile?.avatarUrl}
+        imageUrl={activeProfilePhotoUrl}
         fitMode={myProfile?.profileAvatarFitMode}
         busy={profileAppearanceBusy === "avatar"}
         onView={() => onViewProfileImage("avatar")}
@@ -1445,7 +1452,7 @@ export default function SettingsScreen() {
       <ProfileAppearanceSheet
         visible={profileAppearanceSheetKind === "background"}
         kind="background"
-        imageUrl={myProfile?.profileBackgroundUrl}
+        imageUrl={activeProfileBackgroundUrl}
         fitMode={myProfile?.profileBackgroundFitMode}
         busy={profileAppearanceBusy === "background"}
         onView={() => onViewProfileImage("background")}

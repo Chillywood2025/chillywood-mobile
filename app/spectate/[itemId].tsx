@@ -251,7 +251,7 @@ export default function SpectatorMetadataScreen() {
         <View style={styles.actionRow}>
           {canOpenChannel ? (
             <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={openChannel}>
-              <Text style={styles.primaryButtonText}>View Channel</Text>
+              <Text style={styles.primaryButtonText}>View Platform</Text>
             </TouchableOpacity>
           ) : null}
           {canOpenProfile ? (

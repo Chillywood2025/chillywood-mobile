@@ -41,6 +41,7 @@ type ProfileActionsSheetProps = {
   visible: boolean;
   displayName: string;
   hasPhoto?: boolean;
+  hasBackground?: boolean;
   blocked?: boolean;
   busy?: boolean;
   onViewPhoto: () => void;
@@ -48,6 +49,8 @@ type ProfileActionsSheetProps = {
   onViewPlatform: () => void;
   onBlock: () => void;
   onReport: () => void;
+  onReportPhoto?: () => void;
+  onReportBackground?: () => void;
   onShare: () => void;
   onClose: () => void;
 };
@@ -217,6 +220,7 @@ export function ProfileActionsSheet({
   visible,
   displayName,
   hasPhoto = false,
+  hasBackground = false,
   blocked = false,
   busy = false,
   onViewPhoto,
@@ -224,6 +228,8 @@ export function ProfileActionsSheet({
   onViewPlatform,
   onBlock,
   onReport,
+  onReportPhoto,
+  onReportBackground,
   onShare,
   onClose,
 }: ProfileActionsSheetProps) {
@@ -277,6 +283,24 @@ export function ProfileActionsSheet({
               body="Send a safety report."
               onPress={onReport}
             />
+            {hasPhoto && onReportPhoto ? (
+              <ProfileSheetOption
+                testID="profile-actions-report-photo"
+                icon="report"
+                title="Report Profile Photo"
+                body="Report this photo without hiding it automatically."
+                onPress={onReportPhoto}
+              />
+            ) : null}
+            {hasBackground && onReportBackground ? (
+              <ProfileSheetOption
+                testID="profile-actions-report-background"
+                icon="report"
+                title="Report Profile Background"
+                body="Report this background without hiding it automatically."
+                onPress={onReportBackground}
+              />
+            ) : null}
             <ProfileSheetOption
               testID="profile-actions-share"
               icon="ios-share"

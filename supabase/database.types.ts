@@ -7900,9 +7900,13 @@ export type Database = {
           profile_avatar_fit_mode: string
           profile_avatar_focal_x: number
           profile_avatar_focal_y: number
+          profile_avatar_media_flagged_at: string | null
+          profile_avatar_media_status: string
           profile_background_fit_mode: string
           profile_background_focal_x: number
           profile_background_focal_y: number
+          profile_background_media_flagged_at: string | null
+          profile_background_media_status: string
           profile_background_overlay_strength: number
           profile_background_url: string | null
           profile_media_updated_at: string | null
@@ -7932,9 +7936,13 @@ export type Database = {
           profile_avatar_fit_mode?: string
           profile_avatar_focal_x?: number
           profile_avatar_focal_y?: number
+          profile_avatar_media_flagged_at?: string | null
+          profile_avatar_media_status?: string
           profile_background_fit_mode?: string
           profile_background_focal_x?: number
           profile_background_focal_y?: number
+          profile_background_media_flagged_at?: string | null
+          profile_background_media_status?: string
           profile_background_overlay_strength?: number
           profile_background_url?: string | null
           profile_media_updated_at?: string | null
@@ -7964,9 +7972,13 @@ export type Database = {
           profile_avatar_fit_mode?: string
           profile_avatar_focal_x?: number
           profile_avatar_focal_y?: number
+          profile_avatar_media_flagged_at?: string | null
+          profile_avatar_media_status?: string
           profile_background_fit_mode?: string
           profile_background_focal_x?: number
           profile_background_focal_y?: number
+          profile_background_media_flagged_at?: string | null
+          profile_background_media_status?: string
           profile_background_overlay_strength?: number
           profile_background_url?: string | null
           profile_media_updated_at?: string | null
@@ -9316,9 +9328,13 @@ export type Database = {
           profile_avatar_fit_mode: string
           profile_avatar_focal_x: number
           profile_avatar_focal_y: number
+          profile_avatar_media_flagged_at: string
+          profile_avatar_media_status: string
           profile_background_fit_mode: string
           profile_background_focal_x: number
           profile_background_focal_y: number
+          profile_background_media_flagged_at: string
+          profile_background_media_status: string
           profile_background_overlay_strength: number
           profile_background_url: string
           profile_visibility: string

@@ -15,6 +15,7 @@ export type SafetyReportTargetType =
   | "creator_video"
   | "profile_post"
   | "profile_post_comment"
+  | "profile_media"
   | "creator_video_comment"
   | "social_attachment";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
@@ -404,7 +405,9 @@ const normalizeSafetyReportTargetType = (value: unknown): SafetyReportTargetType
     || normalized === "creator_video"
     || normalized === "profile_post"
     || normalized === "profile_post_comment"
+    || normalized === "profile_media"
     || normalized === "creator_video_comment"
+    || normalized === "social_attachment"
   ) {
     return normalized;
   }

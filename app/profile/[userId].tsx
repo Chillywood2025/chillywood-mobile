@@ -129,6 +129,7 @@ import {
 } from "react-native";
 import {
   buildUserChannelProfile,
+  isProfileMediaActive,
   readUserProfile,
   readUserProfileByUserId,
   type ProfileAppearanceFitMode,
@@ -555,6 +556,7 @@ export default function ProfileScreen() {
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [profilePostReportTarget, setProfilePostReportTarget] = useState<ProfilePost | null>(null);
+  const [profileMediaReportTarget, setProfileMediaReportTarget] = useState<ProfileMediaKind | null>(null);
   const [profilePosts, setProfilePosts] = useState<ProfilePost[]>([]);
   const [profilePostsReady, setProfilePostsReady] = useState(false);
   const [profilePostsNotice, setProfilePostsNotice] = useState<string | null>(null);
@@ -714,8 +716,12 @@ export default function ProfileScreen() {
     && !isOfficialProfile
     && !isSelfProfile
     && !channelAccessProfile;
-  const visibleProfileAvatarUrl = shouldShowLockedShell ? undefined : profile.avatarUrl;
-  const visibleProfileBackgroundUrl = shouldShowLockedShell ? undefined : profile.profileBackgroundUrl;
+  const visibleProfileAvatarUrl = shouldShowLockedShell || !isProfileMediaActive(profile.profileAvatarMediaStatus)
+    ? undefined
+    : profile.avatarUrl;
+  const visibleProfileBackgroundUrl = shouldShowLockedShell || !isProfileMediaActive(profile.profileBackgroundMediaStatus)
+    ? undefined
+    : profile.profileBackgroundUrl;
   const visibleProfileBackgroundOverlay = profile.profileBackgroundOverlayStrength;
 
   useEffect(() => {
@@ -1612,6 +1618,27 @@ export default function ProfileScreen() {
     });
     setProfilePostReportTarget(null);
     setProfilePostCommentReportTarget(null);
+    setProfileMediaReportTarget(null);
+    setReportVisible(true);
+  };
+  const onPressReportProfileMedia = (kind: ProfileMediaKind) => {
+    if (!canReportProfile) return;
+    if (!currentUserId) {
+      Alert.alert("Report Profile media", "Sign in to send a safety report.");
+      return;
+    }
+    trackModerationActionUsed({
+      surface: "profile",
+      action: "open_safety_report",
+      targetType: "profile_media",
+      targetId: userId,
+      sourceRoute: `/profile/${userId}`,
+      targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+      platformOwnedTarget: isOfficialProfile,
+    });
+    setProfilePostReportTarget(null);
+    setProfilePostCommentReportTarget(null);
+    setProfileMediaReportTarget(kind);
     setReportVisible(true);
   };
   const onPressViewChannel = () => {
@@ -1748,6 +1775,14 @@ export default function ProfileScreen() {
       return;
     }
     onPressReportProfile();
+  };
+  const onPressProfileActionsReportPhoto = () => {
+    setProfileActionsSheetVisible(false);
+    onPressReportProfileMedia("avatar");
+  };
+  const onPressProfileActionsReportBackground = () => {
+    setProfileActionsSheetVisible(false);
+    onPressReportProfileMedia("background");
   };
   const onPressProfileActionsShare = () => {
     setProfileActionsSheetVisible(false);
@@ -2194,6 +2229,7 @@ export default function ProfileScreen() {
     });
     setProfilePostReportTarget(post);
     setProfilePostCommentReportTarget(null);
+    setProfileMediaReportTarget(null);
     setReportVisible(true);
   };
   const onPressReportProfilePostComment = (post: ProfilePost, comment: ProfilePostComment) => {
@@ -2209,12 +2245,14 @@ export default function ProfileScreen() {
     });
     setProfilePostReportTarget(null);
     setProfilePostCommentReportTarget({ post, comment });
+    setProfileMediaReportTarget(null);
     setReportVisible(true);
   };
   const onSubmitProfileReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
     const commentTarget = profilePostCommentReportTarget;
     const postTarget = profilePostReportTarget;
-    if (!canReportProfile && !postTarget && !commentTarget) return;
+    const mediaTarget = profileMediaReportTarget;
+    if (!canReportProfile && !postTarget && !commentTarget && !mediaTarget) return;
     setReportBusy(true);
     try {
       if (commentTarget) {
@@ -2258,6 +2296,32 @@ export default function ProfileScreen() {
           }),
         });
         setProfilePostReportTarget(null);
+      } else if (mediaTarget) {
+        const mediaLabel = mediaTarget === "avatar" ? "Profile photo" : "Profile background";
+        const mediaStatus = mediaTarget === "avatar"
+          ? profile.profileAvatarMediaStatus
+          : profile.profileBackgroundMediaStatus;
+        await submitSafetyReport({
+          targetType: "profile_media",
+          targetId: userId,
+          category: input.category,
+          note: input.note,
+          context: buildSafetyReportContext({
+            sourceSurface: "profile",
+            sourceRoute: `/profile/${userId}`,
+            targetLabel: `${profile.displayName} ${mediaLabel.toLowerCase()}`,
+            targetRoleLabel: mediaLabel,
+            targetAuditOwnerKey: profile.auditOwnerKey ?? null,
+            platformOwnedTarget: isOfficialProfile,
+            context: {
+              profileUserId: userId,
+              profileMediaKind: mediaTarget,
+              profileMediaStatus: mediaStatus,
+              profileMediaPublicState: isProfileMediaActive(mediaStatus) ? "active" : "hidden",
+            },
+          }),
+        });
+        setProfileMediaReportTarget(null);
       } else {
         await submitSafetyReport({
           targetType: "participant",
@@ -4290,11 +4354,15 @@ export default function ProfileScreen() {
             ? "Report comment"
             : profilePostReportTarget
             ? "Report profile update"
+            : profileMediaReportTarget
+            ? `Report ${profileMediaReportTarget === "avatar" ? "Profile photo" : "Profile background"}`
             : isOfficialProfile ? "Report official account concern" : "Report profile or participant"}
           description={profilePostCommentReportTarget
             ? `Send a safety report for this comment under ${profile.displayName}'s post.`
             : profilePostReportTarget
             ? `Send a safety report for this public update from ${profile.displayName}.`
+            : profileMediaReportTarget
+            ? `Send a safety report for this ${profileMediaReportTarget === "avatar" ? "Profile photo" : "Profile background"}. Reports do not remove media automatically.`
             : isOfficialProfile
               ? `Send a safety report for ${profile.displayName} if an official platform interaction feels unsafe, misleading, or compromised.`
               : `Send a safety report for ${profile.displayName} if this identity feels abusive, unsafe, or misrepresented.`}
@@ -4304,6 +4372,7 @@ export default function ProfileScreen() {
             if (reportBusy) return;
             setProfilePostReportTarget(null);
             setProfilePostCommentReportTarget(null);
+            setProfileMediaReportTarget(null);
             setReportVisible(false);
           }}
         />
@@ -4357,6 +4426,7 @@ export default function ProfileScreen() {
         visible={profileActionsSheetVisible && !isSelfProfile}
         displayName={profile.displayName}
         hasPhoto={!!visibleProfileAvatarUrl}
+        hasBackground={!!visibleProfileBackgroundUrl}
         blocked={friendState?.availability === "blocked"}
         busy={profileBlockBusy}
         onViewPhoto={() => onViewProfileImage("avatar")}
@@ -4364,6 +4434,8 @@ export default function ProfileScreen() {
         onViewPlatform={onPressProfileActionsPlatform}
         onBlock={onPressProfileActionsBlock}
         onReport={onPressProfileActionsReport}
+        onReportPhoto={onPressProfileActionsReportPhoto}
+        onReportBackground={onPressProfileActionsReportBackground}
         onShare={onPressProfileActionsShare}
         onClose={() => {
           if (!profileBlockBusy) setProfileActionsSheetVisible(false);
