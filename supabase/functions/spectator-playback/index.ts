@@ -67,6 +67,12 @@ type PlaybackRecordRow = {
   visibility: string | null;
   watch_party_room_id: string | null;
 };
+type PublicSafePlaybackRecordRow = PlaybackRecordRow & {
+  playlist_path: string;
+};
+type PublicSafeBroadcastSessionRow = BroadcastSessionRow & {
+  hls_playback_url: string;
+};
 
 type PlaybackPayload = {
   broadcast_session_id?: unknown;
@@ -78,7 +84,7 @@ type PlaybackPayload = {
   sourceRoomId?: unknown;
 };
 
-type SupabaseClientLike = ReturnType<typeof createClient>;
+type SupabaseClientLike = any;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -164,10 +170,15 @@ const encodeS3Path = (objectKey: string) => objectKey
 const bytesToHex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
+const toArrayBuffer = (value: ArrayBuffer | Uint8Array): ArrayBuffer => {
+  if (value instanceof ArrayBuffer) return value;
+  return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+};
+
 const hmacSha256 = async (key: ArrayBuffer | Uint8Array, data: string) => {
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    key,
+    toArrayBuffer(key),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -418,7 +429,7 @@ const userHasPlatformRole = async (
   return !!(emailQuery.data as { id?: unknown } | null)?.id;
 };
 
-const parseJsonPayload = async (req: Request) => {
+const parseJsonPayload = async (req: Request): Promise<{ value: PlaybackPayload } | { error: Response }> => {
   const rawBody = await req.text();
   if (!rawBody.trim()) return { value: {} as PlaybackPayload };
 
@@ -474,10 +485,13 @@ const playlistPathFromUrl = (value: unknown) => {
 
 const functionBaseUrl = (req: Request) => {
   const url = new URL(req.url);
+  const isLocalhost = ["127.0.0.1", "localhost"].includes(url.hostname);
+  const protocol = isLocalhost ? url.protocol : "https:";
+  const origin = `${protocol}//${url.host}`;
   const marker = "/functions/v1/spectator-playback";
   const markerIndex = url.pathname.indexOf(marker);
-  if (markerIndex >= 0) return `${url.origin}${url.pathname.slice(0, markerIndex + marker.length)}`;
-  return `${url.origin}/functions/v1/spectator-playback`;
+  if (markerIndex >= 0) return `${origin}${url.pathname.slice(0, markerIndex + marker.length)}`;
+  return `${origin}/functions/v1/spectator-playback`;
 };
 
 const controlledPlaylistUrl = (req: Request, recordId: string) =>
@@ -541,7 +555,7 @@ const discoveryBlockState = (item: DiscoveryFeedItemRow | null) => {
       "This content is not available for public spectator playback.",
     );
   }
-  if (item.visibility === "private" || item.access_type === "private" || item.access_type === "invite_only") {
+  if (item.access_type === "private" || item.access_type === "invite_only") {
     return baseState(
       "blocked_private",
       "Spectator playback is private.",
@@ -660,7 +674,7 @@ const readPlaybackRecordForState = async (
   return ((data as PlaybackRecordRow[] | null)?.[0] ?? null) as PlaybackRecordRow | null;
 };
 
-const isPublicSafeRecord = (record: PlaybackRecordRow | null) => !!record
+const isPublicSafeRecord = (record: PlaybackRecordRow | null): record is PublicSafePlaybackRecordRow => !!record
   && record.visibility === "public"
   && record.playback_status === "live"
   && !!toText(record.playlist_path)
@@ -672,7 +686,7 @@ const isPublicSafeRecord = (record: PlaybackRecordRow | null) => !!record
   && record.requires_ticket === false
   && !isProofRoomId(record.source_room_id);
 
-const isPublicSafeSession = (session: BroadcastSessionRow | null) => !!session
+const isPublicSafeSession = (session: BroadcastSessionRow | null): session is PublicSafeBroadcastSessionRow => !!session
   && session.is_publicly_watchable === true
   && session.is_spectator_playback_enabled === true
   && isPublicSafeRights(session.rights_status)
@@ -768,14 +782,14 @@ const resolvePlaybackState = (
   itemBlock: JsonObject | null,
 ) => {
   const itemBlockState = toText(itemBlock?.state);
-  if (
+  if (itemBlock && (
     itemBlockState === "blocked_not_public_safe"
     || itemBlockState === "blocked_protected"
     || itemBlockState === "blocked_title_rights"
     || itemBlockState === "blocked_private"
     || itemBlockState === "blocked_ticketed"
     || itemBlockState === "blocked_premium_full_room"
-  ) {
+  )) {
     return itemBlock;
   }
 
@@ -1156,9 +1170,7 @@ const handlePlaylistFetch = async (req: Request, adminClient: SupabaseClientLike
   }
 
   const playlistFetch = await fetchApprovedHlsUrl(sourceUrl, {
-    headers: {
-      Accept: "application/vnd.apple.mpegurl, application/x-mpegURL, text/plain",
-    },
+    Accept: "application/vnd.apple.mpegurl, application/x-mpegURL, text/plain",
   });
   const response = playlistFetch.response;
   if (!response.ok) {
@@ -1234,7 +1246,7 @@ const handleSegmentFetch = async (
   });
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   if (req.method === "OPTIONS") return optionsResponse();
 
   try {

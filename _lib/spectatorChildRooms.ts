@@ -35,6 +35,7 @@ export type SpectatorStartRoomResponse = {
 
 const toText = (value: unknown) => String(value ?? "").trim();
 const toLowerText = (value: unknown) => toText(value).toLowerCase();
+const WATCH_PARTY_REUSE_DISABLED_COPY = "This live can’t be used for a watch party";
 
 export const classifySpectatorLaunchKind = (item: DiscoveryFeedItem | null | undefined): SpectatorLaunchKind => {
   if (!item) return "content";
@@ -100,13 +101,11 @@ export const resolveSpectatorLaunchEligibility = (
   if (sourceEnded) {
     disabledReason = "Source live has ended";
   } else if (!publicSafe || protectedSource || !spectatorAllowed || !canRenderPlayback) {
-    disabledReason = isLive
-      ? "This live can’t be used for a watch party"
-      : "This source can’t be used for a watch party";
+    disabledReason = WATCH_PARTY_REUSE_DISABLED_COPY;
   } else if (isLive && item?.allow_live_reaction_rooms !== true) {
-    disabledReason = "This live can’t be used for a watch party";
+    disabledReason = WATCH_PARTY_REUSE_DISABLED_COPY;
   } else if (!isLive && item?.allow_watch_party_from_spectator !== true) {
-    disabledReason = "This source can’t be used for a watch party";
+    disabledReason = WATCH_PARTY_REUSE_DISABLED_COPY;
   }
 
   return {
@@ -130,7 +129,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   source_ended: "Source live has ended",
   source_not_found: "This source is not available.",
   source_not_public: "This source is not public-safe.",
-  source_reuse_disabled: "This live can’t be used for a watch party",
+  source_reuse_disabled: WATCH_PARTY_REUSE_DISABLED_COPY,
 };
 
 export async function startSpectatorChildRoom(
