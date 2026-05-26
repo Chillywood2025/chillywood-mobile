@@ -3,8 +3,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -25,6 +27,15 @@ import {
   resolveSpectatorPlaybackState,
   type SpectatorPlaybackReadout,
 } from "../../_lib/spectatorPlayback";
+import {
+  buildSpectatorDeepLink,
+  resolveSpectatorLaunchEligibility,
+  startSpectatorChildRoom,
+  type SpectatorLaunchAction,
+} from "../../_lib/spectatorChildRooms";
+import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
+import { useSession } from "../../_lib/session";
+import { ReportSheet } from "../../components/safety/report-sheet";
 
 type LoadState = "loading" | "ready" | "unavailable";
 
@@ -45,6 +56,7 @@ const getPrimaryActorId = (item: DiscoveryFeedItem) =>
 export default function SpectatorMetadataScreen() {
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
+  const { isSignedIn } = useSession();
   const params = useLocalSearchParams<{ itemId?: string | string[] }>();
   const itemId = normalizeRouteParam(params.itemId);
 
@@ -52,6 +64,9 @@ export default function SpectatorMetadataScreen() {
   const [item, setItem] = useState<DiscoveryFeedItem | null>(null);
   const [decision, setDecision] = useState<SpectatorAccessDecision | null>(null);
   const [playback, setPlayback] = useState<SpectatorPlaybackReadout | null>(null);
+  const [startingAction, setStartingAction] = useState<SpectatorLaunchAction | null>(null);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -102,14 +117,100 @@ export default function SpectatorMetadataScreen() {
     });
   };
 
-  const openProfile = () => {
+  const handleStart = async (action: SpectatorLaunchAction) => {
     if (!item) return;
-    const actorId = String(item.owner_user_id ?? item.host_user_id ?? item.channel_user_id ?? "").trim();
-    if (!actorId) return;
-    router.push({
-      pathname: "/profile/[userId]",
-      params: { userId: actorId },
+    if (!isSignedIn) {
+      router.push({
+        pathname: "/(auth)/login",
+        params: { redirectTo: `/spectate/${item.id}` },
+      });
+      return;
+    }
+
+    setStartingAction(action);
+    try {
+      const created = await startSpectatorChildRoom(action, item.id);
+      if (created.roomType === "live") {
+        router.push({
+          pathname: "/watch-party/live-stage/[partyId]",
+          params: { partyId: created.childRoomId, source: "spectator" },
+        });
+      } else {
+        router.push({
+          pathname: "/watch-party/[partyId]",
+          params: { partyId: created.childRoomId, source: "spectator" },
+        });
+      }
+    } catch (error) {
+      Alert.alert(
+        "Watch party unavailable",
+        error instanceof Error && error.message ? error.message : "This live can’t be used for a watch party",
+      );
+    } finally {
+      setStartingAction(null);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!item) return;
+    const eligibility = resolveSpectatorLaunchEligibility(item, playback);
+    if (!eligibility.canShare) {
+      Alert.alert("Sharing unavailable", "This source can’t be shared from Spectator.");
+      return;
+    }
+    await Share.share({
+      message: `Watch ${String(item.title ?? "this public source").trim() || "this public source"} on Chi'llywood: ${buildSpectatorDeepLink(item.id)}`,
+      title: String(item.title ?? "Chi'llywood Spectator").trim() || "Chi'llywood Spectator",
     });
+  };
+
+  const openReport = () => {
+    if (!item) return;
+    trackModerationActionUsed({
+      surface: "spectator",
+      action: "open_safety_report",
+      targetType: "room",
+      targetId: String(item.room_id ?? item.source_id ?? item.id),
+      roomId: String(item.room_id ?? item.source_id ?? "") || null,
+      sourceRoute: `/spectate/${item.id}`,
+    });
+    setReportVisible(true);
+  };
+
+  const submitReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
+    if (!item) return;
+    setReportBusy(true);
+    try {
+      const safeTargetId = String(item.room_id ?? item.source_id ?? item.id).trim();
+      await submitSafetyReport({
+        targetType: "room",
+        targetId: safeTargetId,
+        category: input.category,
+        note: input.note,
+        roomId: String(item.room_id ?? item.source_id ?? "") || null,
+        context: buildSafetyReportContext({
+          sourceSurface: "spectator",
+          sourceRoute: `/spectate/${item.id}`,
+          targetLabel: title,
+          targetRoleLabel: "Spectator source",
+          context: {
+            sourceItemId: item.id,
+            sourceType: item.source_type,
+            liveState: item.live_state,
+            publicSafe: true,
+            rawPlaybackUrlVisible: false,
+          },
+        }),
+      });
+      setReportVisible(false);
+    } catch (error) {
+      Alert.alert(
+        "Report unavailable",
+        error instanceof Error && error.message ? error.message : "Sign in before sending a safety report.",
+      );
+    } finally {
+      setReportBusy(false);
+    }
   };
 
   const renderUnavailable = () => (
@@ -148,7 +249,12 @@ export default function SpectatorMetadataScreen() {
   const subtitle = String(item.subtitle ?? "").trim();
   const scheduledAt = item.starts_at ?? item.published_at ?? item.created_at;
   const canOpenChannel = !!getPrimaryActorId(item);
-  const canOpenProfile = !!String(item.owner_user_id ?? item.host_user_id ?? item.channel_user_id ?? "").trim();
+  const launchEligibility = resolveSpectatorLaunchEligibility(item, playback);
+  const primaryCanStart = launchEligibility.primaryAction === "start_live_reaction"
+    ? launchEligibility.canStartLiveWatchParty
+    : launchEligibility.canStartWatchPartyLive;
+  const primaryBusy = startingAction === launchEligibility.primaryAction;
+  const reactionBusy = startingAction === "start_live_reaction";
 
   return (
     <View style={styles.screen}>
@@ -249,18 +355,67 @@ export default function SpectatorMetadataScreen() {
         </View>
 
         <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.primaryButton, (!primaryCanStart || !!startingAction) && styles.buttonDisabled]}
+            activeOpacity={0.86}
+            disabled={!primaryCanStart || !!startingAction}
+            onPress={() => handleStart(launchEligibility.primaryAction)}
+          >
+            <Text style={styles.primaryButtonText}>
+              {primaryBusy ? "Starting..." : launchEligibility.primaryLabel}
+            </Text>
+          </TouchableOpacity>
+          {launchEligibility.kind === "live" ? (
+            <TouchableOpacity
+              style={[styles.secondaryButton, (!launchEligibility.canStartLiveWatchParty || !!startingAction) && styles.buttonDisabled]}
+              activeOpacity={0.86}
+              disabled={!launchEligibility.canStartLiveWatchParty || !!startingAction}
+              onPress={() => handleStart("start_live_reaction")}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {reactionBusy ? "Starting..." : launchEligibility.reactionLabel}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            style={[styles.secondaryButton, (!primaryCanStart || !!startingAction) && styles.buttonDisabled]}
+            activeOpacity={0.86}
+            disabled={!primaryCanStart || !!startingAction}
+            onPress={() => handleStart(launchEligibility.primaryAction)}
+          >
+            <Text style={styles.secondaryButtonText}>
+              {primaryBusy ? "Starting..." : launchEligibility.secondaryLabel}
+            </Text>
+          </TouchableOpacity>
+          {launchEligibility.disabledReason ? (
+            <Text style={styles.actionHint}>{launchEligibility.disabledReason}</Text>
+          ) : null}
+          <TouchableOpacity
+            style={[styles.secondaryButton, !launchEligibility.canShare && styles.buttonDisabled]}
+            activeOpacity={0.86}
+            disabled={!launchEligibility.canShare}
+            onPress={handleShare}
+          >
+            <Text style={styles.secondaryButtonText}>Share</Text>
+          </TouchableOpacity>
           {canOpenChannel ? (
-            <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={openChannel}>
+            <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={openChannel}>
               <Text style={styles.primaryButtonText}>View Platform</Text>
             </TouchableOpacity>
           ) : null}
-          {canOpenProfile ? (
-            <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={openProfile}>
-              <Text style={styles.secondaryButtonText}>View Profile</Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={openReport}>
+            <Text style={styles.secondaryButtonText}>Report</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+      <ReportSheet
+        visible={reportVisible}
+        title="Report spectator source"
+        description="Send a safety report for this public spectator source."
+        busy={reportBusy}
+        onClose={() => setReportVisible(false)}
+        onSubmit={submitReport}
+      />
     </View>
   );
 }
@@ -514,7 +669,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     minHeight: 46,
-    flexGrow: 1,
+    width: "100%",
     borderRadius: 12,
     backgroundColor: "#E50914",
     alignItems: "center",
@@ -529,6 +684,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     minHeight: 46,
     flexGrow: 1,
+    minWidth: "47%",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.13)",
@@ -541,5 +697,15 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 13,
     fontWeight: "900",
+  },
+  buttonDisabled: {
+    opacity: 0.48,
+  },
+  actionHint: {
+    width: "100%",
+    color: "#D7B6C0",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "800",
   },
 });

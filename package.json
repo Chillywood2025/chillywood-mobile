@@ -32,6 +32,7 @@
     "guard:profile-production-policy": "node ./scripts/guard-profile-production-policy.mjs",
     "guard:platform-brand-studio-policy": "node ./scripts/guard-platform-brand-studio-policy.mjs",
     "guard:clip-studio-policy": "node ./scripts/guard-clip-studio-policy.mjs",
+    "guard:spectator-child-room-policy": "node ./scripts/guard-spectator-child-room-policy.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs && npm run guard:live-stage-contract && npm run guard:live-stage-approved-seats",
     "guard:live-stage-contract": "node ./scripts/guard-live-stage-contract.mjs",

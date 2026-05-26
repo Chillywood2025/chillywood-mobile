@@ -182,7 +182,7 @@ export function ProfileSocialFeedCard({
     const title = String(item.discoveryItem.title ?? "").trim() || "Public live entry";
     const subtitle = String(item.discoveryItem.subtitle ?? "").trim();
     const schedule = formatDate(item.discoveryItem.starts_at ?? item.discoveryItem.published_at ?? item.discoveryItem.created_at);
-    const actionLabel = item.discoveryItem.item_type === "creator_upload" ? "Open" : "Spectate";
+    const actionLabel = item.discoveryItem.item_type === "creator_upload" ? "Open" : "Watch";
     const routeLabel = item.discoveryItem.item_type === "creator_upload" ? "Player" : "Watch-only";
 
     return (

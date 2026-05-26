@@ -46,8 +46,8 @@ type ServerSpectatorPlaybackReadout = {
 const BLOCKED_GUARDRAILS = [
   "No mic or camera controls",
   "No full LiveKit room token",
-  "No HLS or Egress playback URL",
-  "No real ad playback or CTV inventory",
+  "No private playback URL",
+  "No ad playback or CTV inventory",
   "No host controls or room mutation",
 ];
 
@@ -107,7 +107,7 @@ export function resolveSpectatorPlaybackState(
     return {
       state: "loading",
       title: "Checking spectator playback",
-      copy: "Spectator playback is waiting on backed metadata.",
+      copy: "Spectator playback is checking public metadata.",
       guardrails: BLOCKED_GUARDRAILS,
       canRenderPlayback: false,
       playbackUrl: null,
@@ -157,7 +157,7 @@ export function resolveSpectatorPlaybackState(
     return blockedReadout(
       "blocked_ticketed",
       "Spectator playback is ticketed.",
-      "Ticketed public playback needs a backed ticketing flow before it can be exposed.",
+      "Ticketed public playback needs purchase access before it can be shown here.",
       decision,
     );
   }
@@ -187,7 +187,7 @@ export function resolveSpectatorPlaybackState(
       state: "available",
       title: normalizeText(source.serverReadout.title) || "Spectator playback is available.",
       copy: normalizeText(source.serverReadout.copy)
-        || "This item has a proved public-safe HLS source and remains watch-only for spectators.",
+        || "This item has public-safe playback and remains watch-only for spectators.",
       guardrails: WATCH_ONLY_GUARDRAILS,
       canRenderPlayback: true,
       playbackUrl: controlledPlaybackUrl,
@@ -210,8 +210,8 @@ export function resolveSpectatorPlaybackState(
   if (!item.is_spectator_playback_enabled) {
     return blockedReadout(
       "waiting_for_egress",
-      "Spectator playback is waiting on Egress/HLS proof.",
-      "A public-safe playback record has not been approved for this item yet.",
+      "Spectator playback is still preparing.",
+      "This live is not ready for public watch-only playback yet.",
       decision,
     );
   }
@@ -219,7 +219,7 @@ export function resolveSpectatorPlaybackState(
   const serverCopy = normalizeText(source.serverReadout?.copy);
   return blockedReadout(
     serverState || "waiting_for_egress",
-    normalizeText(source.serverReadout?.title) || "Spectator playback is waiting on Egress/HLS proof.",
+    normalizeText(source.serverReadout?.title) || "Spectator playback is still preparing.",
     serverCopy || "Playback is marked as intended, but no approved controlled playback endpoint is available to render.",
     decision,
   );

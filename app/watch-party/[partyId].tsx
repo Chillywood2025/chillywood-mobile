@@ -309,6 +309,7 @@ export default function WatchPartyRoomScreen() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [titleName, setTitleName] = useState<string | null>(null);
+  const [sourceAttribution, setSourceAttribution] = useState<string | null>(null);
 
   // ── Connection ───────────────────────────────────────────────────────────────
   const [connState, setConnState] = useState<ConnState>("loading");
@@ -799,10 +800,13 @@ export default function WatchPartyRoomScreen() {
 
         if (snapshot.room.roomType === "live") {
           setTitleName("Live Room");
+          setSourceAttribution(null);
         } else {
           resolveWatchPartyContentSource(snapshot.room)
             .then((contentSource) => {
-              if (contentSource.displayName && !cancelled) setTitleName(contentSource.displayName);
+              if (cancelled) return;
+              if (contentSource.displayName) setTitleName(contentSource.displayName);
+              setSourceAttribution(contentSource.attributionLabel ?? null);
             })
             .catch(() => {});
         }
@@ -1877,6 +1881,7 @@ export default function WatchPartyRoomScreen() {
           partyId: nextPartyId,
           liveKitIdentity: participantIdentity,
           ...(targetSourceType === "creator_video" ? { source: "creator-video" } : {}),
+          ...(targetSourceType === "spectator_playback" ? { source: "spectator-playback" } : {}),
         },
       });
     } catch (error) {
@@ -2508,7 +2513,13 @@ export default function WatchPartyRoomScreen() {
   const partyRoomTitleContext = getSafeRoomTitleLabel(titleName, room, "Selected Title");
   const partyRoomSourceType = resolveWatchPartySourceType(room);
   const partyRoomSourceId = resolveWatchPartySourceId(room);
-  const partyRoomSourceLabel = partyRoomSourceType === "creator_video" ? "creator_video" : "platform_title";
+  const partyRoomSourceLabel = partyRoomSourceType === "creator_video"
+    ? "Creator video"
+    : partyRoomSourceType === "spectator_playback"
+      ? "Spectator source"
+      : "Platform title";
+  const partyRoomAttribution = sourceAttribution
+    ?? (partyRoomSourceType === "spectator_playback" ? `Watching ${partyRoomTitleContext} from this Platform` : null);
   const latestRoomMessages = messages.slice(-4);
   const roomLabels = buildSharedRoomLabels({
     isLiveRoom,
@@ -2658,6 +2669,9 @@ export default function WatchPartyRoomScreen() {
             <View style={styles.watchPartyScreenHeaderCopy}>
               <Text style={styles.watchPartyScreenKicker}>PARTY SCREEN</Text>
               <Text style={styles.watchPartyScreenTitle} numberOfLines={2}>{partyRoomTitleContext}</Text>
+              {partyRoomAttribution ? (
+                <Text style={styles.watchPartySourceAttributionText} numberOfLines={2}>{partyRoomAttribution}</Text>
+              ) : null}
             </View>
             <View style={styles.watchPartySourcePill}>
               <Text style={styles.watchPartySourceText}>{partyRoomSourceLabel}</Text>
@@ -4457,6 +4471,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 27,
     fontWeight: "900",
+  },
+  watchPartySourceAttributionText: {
+    color: "#AAB5CA",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
   },
   watchPartySourcePill: {
     borderRadius: 999,

@@ -2621,6 +2621,11 @@ export type Database = {
         Row: {
           access_type: string
           ad_policy: string
+          allow_live_reaction_rooms: boolean
+          allow_public_share: boolean
+          allow_replay_watch_party: boolean
+          allow_spectator_view: boolean
+          allow_watch_party_from_spectator: boolean
           category_key: string | null
           channel_user_id: string | null
           circle_signal_user_id: string | null
@@ -2660,6 +2665,11 @@ export type Database = {
         Insert: {
           access_type?: string
           ad_policy?: string
+          allow_live_reaction_rooms?: boolean
+          allow_public_share?: boolean
+          allow_replay_watch_party?: boolean
+          allow_spectator_view?: boolean
+          allow_watch_party_from_spectator?: boolean
           category_key?: string | null
           channel_user_id?: string | null
           circle_signal_user_id?: string | null
@@ -2699,6 +2709,11 @@ export type Database = {
         Update: {
           access_type?: string
           ad_policy?: string
+          allow_live_reaction_rooms?: boolean
+          allow_public_share?: boolean
+          allow_replay_watch_party?: boolean
+          allow_spectator_view?: boolean
+          allow_watch_party_from_spectator?: boolean
           category_key?: string | null
           channel_user_id?: string | null
           circle_signal_user_id?: string | null
@@ -6893,6 +6908,121 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      spectator_child_room_audit_log: {
+        Row: {
+          actor_user_id: string | null
+          child_room_id: string | null
+          created_at: string
+          denial_reason: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          security_context_id: string | null
+          source_item_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          child_room_id?: string | null
+          created_at?: string
+          denial_reason?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          security_context_id?: string | null
+          source_item_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          child_room_id?: string | null
+          created_at?: string
+          denial_reason?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          security_context_id?: string | null
+          source_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spectator_child_room_audit_log_child_room_id_fkey"
+            columns: ["child_room_id"]
+            isOneToOne: false
+            referencedRelation: "watch_party_rooms"
+            referencedColumns: ["party_id"]
+          },
+          {
+            foreignKeyName: "spectator_child_room_audit_log_source_item_id_fkey"
+            columns: ["source_item_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_feed_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spectator_child_room_sources: {
+        Row: {
+          child_room_id: string
+          created_at: string
+          created_by_user_id: string
+          metadata: Json
+          parent_room_id: string | null
+          root_source_id: string
+          source_item_id: string
+          source_owner_user_id: string | null
+          source_platform_id: string | null
+          source_public_playback_id: string | null
+          source_type: string
+        }
+        Insert: {
+          child_room_id: string
+          created_at?: string
+          created_by_user_id: string
+          metadata?: Json
+          parent_room_id?: string | null
+          root_source_id: string
+          source_item_id: string
+          source_owner_user_id?: string | null
+          source_platform_id?: string | null
+          source_public_playback_id?: string | null
+          source_type: string
+        }
+        Update: {
+          child_room_id?: string
+          created_at?: string
+          created_by_user_id?: string
+          metadata?: Json
+          parent_room_id?: string | null
+          root_source_id?: string
+          source_item_id?: string
+          source_owner_user_id?: string | null
+          source_platform_id?: string | null
+          source_public_playback_id?: string | null
+          source_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spectator_child_room_sources_child_room_id_fkey"
+            columns: ["child_room_id"]
+            isOneToOne: true
+            referencedRelation: "watch_party_rooms"
+            referencedColumns: ["party_id"]
+          },
+          {
+            foreignKeyName: "spectator_child_room_sources_source_item_id_fkey"
+            columns: ["source_item_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_feed_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spectator_child_room_sources_source_public_playback_id_fkey"
+            columns: ["source_public_playback_id"]
+            isOneToOne: false
+            referencedRelation: "spectator_hls_playback_records"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       spectator_hls_playback_records: {
         Row: {

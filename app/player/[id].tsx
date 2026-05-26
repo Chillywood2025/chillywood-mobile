@@ -89,6 +89,7 @@ import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../.
 import {
     getCreatorVideoWatchPartyBlockCopy,
     getCreatorVideoWatchPartyBlockReason,
+    resolveWatchPartyContentSourceByParts,
     resolveWatchPartySourceId,
     resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
@@ -264,6 +265,24 @@ const buildCreatorPlayerTitle = (video: CreatorVideo): TitleRow => ({
   poster_url: video.thumbnailUrl || null,
   thumbnail_url: video.thumbnailUrl || null,
   video_url: video.playbackUrl,
+  content_access_rule: "open",
+});
+
+const buildSpectatorPlayerTitle = (input: {
+  id: string;
+  title: string | null;
+  thumbnailUrl: string | null;
+  playbackUrl: string | null;
+}): TitleRow => ({
+  id: input.id,
+  title: input.title || "Spectator source",
+  category: "Spectator",
+  year: null,
+  runtime: null,
+  synopsis: null,
+  poster_url: input.thumbnailUrl,
+  thumbnail_url: input.thumbnailUrl,
+  video_url: input.playbackUrl,
   content_access_rule: "open",
 });
 
@@ -812,6 +831,7 @@ export default function PlayerScreen() {
     ? String(sourceParam[0] ?? "").trim().toLowerCase()
     : String(sourceParam ?? "").trim().toLowerCase();
   const expectsCreatorVideo = sourceRaw === "creator-video";
+  const expectsSpectatorPlayback = sourceRaw === "spectator-playback";
   const isLiveModeFlag = liveModeRaw === "1" || liveModeRaw === "true" || liveModeRaw === "yes" || liveModeRaw === "live";
   const isSharedPartyPlayback = inWatchParty && !isLiveModeFlag;
   let rawId = id;
@@ -838,7 +858,8 @@ export default function PlayerScreen() {
   const videoRef = useRef<PlayerController | null>(null);
   const [item, setItem] = useState<TitleRow | null>(null);
   const [creatorVideo, setCreatorVideo] = useState<CreatorVideo | null>(null);
-  const [playbackSourceKind, setPlaybackSourceKind] = useState<"title" | "creator-video">("title");
+  const [spectatorSourceEnded, setSpectatorSourceEnded] = useState(false);
+  const [playbackSourceKind, setPlaybackSourceKind] = useState<"title" | "creator-video" | "spectator-playback">("title");
   const [titleLoading, setTitleLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [standaloneAccess, setStandaloneAccess] = useState<ContentAccessResolution | null>(null);
@@ -1062,7 +1083,10 @@ export default function PlayerScreen() {
     () => String(item?.id ?? (localTitle as any)?.id ?? cleanId).trim(),
     [item?.id, localTitle, cleanId],
   );
-  const hasResolvedPlatformTitle = playbackSourceKind !== "creator-video" && !!(item || localTitle);
+  const hasResolvedPlatformTitle = playbackSourceKind !== "creator-video"
+    && playbackSourceKind !== "spectator-playback"
+    && !expectsSpectatorPlayback
+    && !!(item || localTitle);
   const inMyList = useMemo(() => (titleId ? myListIds.includes(titleId) : false), [myListIds, titleId]);
   const nextTitle = useMemo(() => {
     const index = titles.findIndex((entry) => String(entry.id) === titleId);
@@ -1103,6 +1127,7 @@ export default function PlayerScreen() {
       setTitleLoading(true);
       setItem(null);
       setCreatorVideo(null);
+      setSpectatorSourceEnded(false);
       setPlaybackSourceKind("title");
 
       if (!routeId) {
@@ -1125,6 +1150,26 @@ export default function PlayerScreen() {
             setItem(buildCreatorPlayerTitle(video));
             setTitleLoading(false);
           } else if (active) {
+            setTitleLoading(false);
+          }
+          return;
+        }
+
+        if (expectsSpectatorPlayback) {
+          const sourceInfo = await resolveWatchPartyContentSourceByParts({
+            sourceType: "spectator_playback",
+            sourceId: routeId,
+          });
+          if (active) {
+            debugLog("player", "match source resolved", { source: "spectator-playback:id" });
+            setPlaybackSourceKind("spectator-playback");
+            setSpectatorSourceEnded(sourceInfo.sourceEnded === true || sourceInfo.unavailableReason === "ended");
+            setItem(buildSpectatorPlayerTitle({
+              id: routeId,
+              title: sourceInfo.displayName,
+              thumbnailUrl: sourceInfo.thumbnailUrl,
+              playbackUrl: sourceInfo.playbackUrl,
+            }));
             setTitleLoading(false);
           }
           return;
@@ -1178,7 +1223,7 @@ export default function PlayerScreen() {
         }
       } catch {
         if (active) {
-          if (expectsCreatorVideo) {
+          if (expectsCreatorVideo || expectsSpectatorPlayback) {
             setItem(null);
           } else if (localTitle) {
             const chosen = localTitle as any;
@@ -1195,7 +1240,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [cleanId, expectsCreatorVideo, localMatchSource, localTitle]);
+  }, [cleanId, expectsCreatorVideo, expectsSpectatorPlayback, localMatchSource, localTitle]);
 
   useEffect(() => {
     let active = true;
@@ -1294,7 +1339,15 @@ export default function PlayerScreen() {
   useEffect(() => {
     let active = true;
 
-    if (inWatchParty || isLiveModeFlag || !titleId || expectsCreatorVideo || playbackSourceKind === "creator-video") {
+    if (
+      inWatchParty
+      || isLiveModeFlag
+      || !titleId
+      || expectsCreatorVideo
+      || expectsSpectatorPlayback
+      || playbackSourceKind === "creator-video"
+      || playbackSourceKind === "spectator-playback"
+    ) {
       setEngagementState(null);
       setEngagementLoading(false);
       return () => {
@@ -1317,7 +1370,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [expectsCreatorVideo, inWatchParty, isLiveModeFlag, playbackSourceKind, titleId]);
+  }, [expectsCreatorVideo, expectsSpectatorPlayback, inWatchParty, isLiveModeFlag, playbackSourceKind, titleId]);
 
   useEffect(() => {
     let active = true;
@@ -1558,7 +1611,16 @@ export default function PlayerScreen() {
         return;
       }
 
-      if (roomSourceType === "platform_title" && (expectsCreatorVideo || String(roomSourceId ?? snapshot.room.titleId ?? "") !== cleanId)) {
+      if (roomSourceType === "spectator_playback" && (!expectsSpectatorPlayback || String(roomSourceId ?? "") !== cleanId)) {
+        setWatchPartyEntryError("This watch party is linked to a different spectator source.");
+        setWatchPartyEntryLoading(false);
+        return;
+      }
+
+      if (
+        roomSourceType === "platform_title"
+        && (expectsCreatorVideo || expectsSpectatorPlayback || String(roomSourceId ?? snapshot.room.titleId ?? "") !== cleanId)
+      ) {
         setWatchPartyEntryError("This watch party is linked to a different title source.");
         setWatchPartyEntryLoading(false);
         return;
@@ -1641,7 +1703,7 @@ export default function PlayerScreen() {
     return () => {
       active = false;
     };
-  }, [cleanId, expectsCreatorVideo, inWatchParty, partyId, updatePartyMembershipMap, watchPartyEntryRetryToken]);
+  }, [cleanId, expectsCreatorVideo, expectsSpectatorPlayback, inWatchParty, partyId, updatePartyMembershipMap, watchPartyEntryRetryToken]);
 
   const refreshPartyMembershipSnapshot = useCallback(async () => {
     if (!partyId) return null;
@@ -3897,6 +3959,11 @@ export default function PlayerScreen() {
   }, [cleanId, titleId]);
 
   const onWatchParty = useCallback(async () => {
+    if (playbackSourceKind === "spectator-playback") {
+      Alert.alert("Watch-Party unavailable", "Start a watch party from the Spectator page for this source.");
+      return;
+    }
+
     if (playbackSourceKind === "creator-video") {
       if (!isSignedIn) {
         Alert.alert("Sign in required", "Sign in before starting Watch-Party Live from a creator video.");
@@ -5507,12 +5574,14 @@ export default function PlayerScreen() {
   const displayItem = useMemo<TitleRow | null>(() => {
     if (item) return item;
     if (expectsCreatorVideo) return null;
+    if (expectsSpectatorPlayback) return null;
     if (!localTitle) return null;
 
     return buildLocalPlayerTitle(localTitle as any);
-  }, [expectsCreatorVideo, item, localTitle]);
+  }, [expectsCreatorVideo, expectsSpectatorPlayback, item, localTitle]);
 
   const isCreatorVideoPlayback = playbackSourceKind === "creator-video" || expectsCreatorVideo;
+  const isSpectatorPlayback = playbackSourceKind === "spectator-playback" || expectsSpectatorPlayback;
   const creatorVideoPaidContentLocked = isCreatorVideoPlayback
     && creatorVideo?.paidContentAccess?.resolverStatus === "resolved"
     && creatorVideo.paidContentAccess.requiresPurchase
@@ -5532,7 +5601,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     setPlaybackLoadError(null);
     setIsVideoReady(false);
-  }, [cleanId, displayItem?.id, displayItem?.video_url, expectsCreatorVideo]);
+  }, [cleanId, displayItem?.id, displayItem?.video_url, expectsCreatorVideo, expectsSpectatorPlayback]);
   const sharedPartyResolvedSource = useMemo(() => {
     if (!inWatchParty) return source;
     if (displayItem?.video_url && displayItem.video_url.trim()) {
@@ -5585,8 +5654,9 @@ export default function PlayerScreen() {
   }, [sharedPartyResolvedSource]);
   const standalonePlaybackSourceFailed = !inWatchParty && !isLiveModeFlag && !titleLoading && !!playbackLoadError;
   const isCreatorVideoPlaybackUnavailable = isCreatorVideoPlayback && !titleLoading && (!source || standalonePlaybackSourceFailed);
-  const isPlatformVideoUnavailable = !isCreatorVideoPlayback && !titleLoading && !!displayItem && (!source || standalonePlaybackSourceFailed);
-  const isPlatformTitleUnavailable = !expectsCreatorVideo && !titleLoading && !displayItem;
+  const isSpectatorPlaybackUnavailable = isSpectatorPlayback && !titleLoading && (!source || spectatorSourceEnded || standalonePlaybackSourceFailed);
+  const isPlatformVideoUnavailable = !isCreatorVideoPlayback && !isSpectatorPlayback && !titleLoading && !!displayItem && (!source || standalonePlaybackSourceFailed);
+  const isPlatformTitleUnavailable = !expectsCreatorVideo && !expectsSpectatorPlayback && !titleLoading && !displayItem;
   const frameworkBackgroundSource = useMemo<ImageSourcePropType | null>(() => {
     const poster = String((displayItem as any)?.poster_url ?? "").trim();
     if (poster) return { uri: poster };
@@ -5607,7 +5677,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     let active = true;
 
-    if (!isStandalonePlayer || playbackSourceKind === "creator-video") {
+    if (!isStandalonePlayer || playbackSourceKind === "creator-video" || playbackSourceKind === "spectator-playback") {
       setStandaloneAccess(null);
       setStandaloneAccessLoading(false);
       setAccessError(null);
@@ -5904,9 +5974,9 @@ export default function PlayerScreen() {
     standalonePlaybackUnknown,
   ]);
   const showStandaloneAccessOverlay = isStandalonePlayer && standalonePlaybackGateActive && !!standaloneAccessPresentation;
-  const canSaveStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback;
-  const canLikeStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback;
-  const canMarkStandaloneShared = isStandalonePlayer && !isCreatorVideoPlayback && !standaloneAccessLoading && !!standaloneAccess?.isAllowed;
+  const canSaveStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback;
+  const canLikeStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback;
+  const canMarkStandaloneShared = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback && !standaloneAccessLoading && !!standaloneAccess?.isAllowed;
   const canShareStandaloneCreatorVideo = isStandalonePlayer && isCreatorVideoPubliclyShareable(creatorVideo);
   useEffect(() => {
     if (!isStandalonePlayer || !isCreatorVideoPlayback) {
@@ -7476,6 +7546,31 @@ export default function PlayerScreen() {
     );
   }
 
+  if (isSpectatorPlaybackUnavailable) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.container}>
+          <View style={styles.playerAccessCard}>
+            <Text style={styles.playerAccessKicker}>SPECTATOR SOURCE</Text>
+            <Text style={styles.playerAccessTitle}>
+              {spectatorSourceEnded ? "Source live has ended" : "Source playback unavailable"}
+            </Text>
+            <Text style={styles.playerAccessBody}>
+              {spectatorSourceEnded
+                ? "This child room can keep its people and comments, but the original source is no longer live."
+                : "This child room could not resolve public-safe watch-only playback for the source."}
+            </Text>
+            <View style={styles.playerAccessActions}>
+              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+                <Text style={styles.playerAccessSecondaryText}>Back</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
@@ -7748,12 +7843,16 @@ export default function PlayerScreen() {
                 )
               ) : (
                 <View style={styles.videoLoadingFallback}>
-                  {isCreatorVideoPlaybackUnavailable || isPlatformVideoUnavailable ? null : <ActivityIndicator color={ACCENT} />}
+                  {isCreatorVideoPlaybackUnavailable || isPlatformVideoUnavailable || isSpectatorPlaybackUnavailable ? null : <ActivityIndicator color={ACCENT} />}
                   <Text style={styles.videoLoadingText}>
                     {isCreatorVideoPlaybackUnavailable
                       ? creatorVideoPaidContentLocked
                         ? "Paid creator content"
                         : "Creator video unavailable"
+                      : isSpectatorPlaybackUnavailable
+                        ? spectatorSourceEnded
+                          ? "Source live has ended"
+                          : "Source playback unavailable"
                       : isPlatformVideoUnavailable
                         ? "Video unavailable"
                         : "Preparing video..."}
@@ -7765,6 +7864,13 @@ export default function PlayerScreen() {
                         : playbackLoadError
                         ? "This upload could not be loaded from storage. Re-upload or repair the video file."
                         : "This upload does not have a playable source yet."}
+                    </Text>
+                  ) : null}
+                  {isSpectatorPlaybackUnavailable ? (
+                    <Text style={styles.videoLoadingSubtext}>
+                      {spectatorSourceEnded
+                        ? "The source is no longer live. Stay in the room or go back to choose another source."
+                        : "Public-safe watch-only playback is not available for this source right now."}
                     </Text>
                   ) : null}
                   {isPlatformVideoUnavailable ? (

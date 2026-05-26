@@ -1,6 +1,37 @@
 # NEXT TASK
 
-## Recommended Lane: Profile Media Runtime Proof And Blocked/Private Fixtures
+## Recommended Lane: Spectator Child Room Android Proof And Replay Follow-Up
+
+The Spectator to Watch-Party Live Relay Flow is implemented repo-side. The next lane should runtime-prove it on Android with safe fixtures, then decide whether replay child-room creation needs a deeper archive/resolver pass.
+
+Closed repo-side truth:
+
+- Spectator is a public-safe watch-only surface, not participant entry into the original room.
+- Eligible content/player sources show `Start Watch-Party Live`; eligible live-stage sources show `Start Live Watch-Party` and `Start Reaction Room`.
+- `Watch with your Chi’lly Circle`, Share, View Platform, and Report are wired on the Spectator page.
+- Signed-out users are handed to login before room creation.
+- Ineligible sources show explicit copy such as `Source live has ended` or `This live can’t be used for a watch party`.
+- `spectator-start-room` is the server authority. It verifies public-safe source state, creator flags, block/private/Premium/ticket/subscription gates, runtime controls, public-safe playback record, backing broadcast-session approval, and rate limits before creating any child room.
+- Child rooms use `watch_party_rooms.source_type = 'spectator_playback'` and safe linkage in `spectator_child_room_sources` with `root_source_id` to avoid nested source chains.
+- Watch-Party Live child rooms route to `/watch-party/[partyId]` and open the shared Player with `source=spectator-playback`.
+- Live Watch-Party reaction rooms route to `/watch-party/live-stage/[partyId]` and show source attribution while preserving separate child room people/comments/live controls.
+- Original LiveKit tokens, publish permissions, host controls, speaker credentials, member lists, raw playback storage paths, and raw private HLS paths are not returned or stored in child room source metadata.
+- Existing LiveKit token issuance, old-room handling, Premium gate helpers, Watch-Party Live route ownership, and Live Watch-Party route ownership are intentionally unchanged.
+
+Remaining limitations:
+
+- Android visual proof for eligible Spectator source, child Watch-Party Live, child Live Watch-Party, attribution, no original controls, ineligible/private state, signed-out handoff, and source-ended state still needs a current runtime pass.
+- Safe fixtures are required for eligible public-safe live/playback, private/blocked/ineligible source, signed-out viewer, and ended source. Do not fake the state.
+- Replay child-room creation has schema flags but still depends on replay/HLS archive availability and should be a follow-up lane if product wants replay launch from ended sources.
+- Cost guard is a simple server-side actor/source rate limit; richer cost review can build on the audit/link tables later.
+
+Recommended next lane:
+
+- On `R5CR120QCBF`, capture screenshots under `/tmp/chillywood-spectator-child-room-proof-20260526/` for the eligible Spectator page, `Start Watch-Party Live`, resulting child Party Room, source attribution, no original controls, `Start Live Watch-Party` where a live-stage source exists, resulting child Live Watch-Party room, ineligible/private disabled state, signed-out handoff, and source-ended state if a safe fixture exists.
+- Re-run the targeted token/private-source greps and the new `npm run guard:spectator-child-room-policy` after any proof-only fixes.
+- Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
+
+## Previous Recommended Lane: Profile Media Runtime Proof And Blocked/Private Fixtures
 
 The Profile Avatar Background and User Actions Sheet lane is implemented repo-side, migration `202605260001_profile_appearance_media.sql` is applied remotely, and the owner-controlled media-status follow-up is implemented repo-side in `202605260002_profile_media_status_policy.sql`. The next lane should runtime-prove the new media/actions flows on a current Android dev-client or AAB that includes the native `expo-image-picker` module, plus safe second-account and blocked/private fixtures.
 

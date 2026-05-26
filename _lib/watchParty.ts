@@ -48,7 +48,7 @@ import { readUserProfile } from "./userData";
 export type WatchPartyRole = "host" | "viewer";
 export type WatchPartyPlaybackState = "playing" | "paused" | "buffering";
 export type WatchPartyRoomType = "live" | "title";
-export type WatchPartyContentSourceType = "platform_title" | "creator_video";
+export type WatchPartyContentSourceType = "platform_title" | "creator_video" | "spectator_playback";
 export type WatchPartyStageRole = "host" | "speaker" | "listener";
 
 export type WatchPartyState = {
@@ -353,6 +353,7 @@ const normalizeWatchPartyContentSourceType = (
   const normalized = String(value ?? "").trim().toLowerCase();
   if (normalized === "creator_video") return "creator_video";
   if (normalized === "platform_title") return "platform_title";
+  if (normalized === "spectator_playback") return "spectator_playback";
   return null;
 };
 
@@ -599,7 +600,7 @@ function rowToState(row: PartyRoomRow): WatchPartyState | null {
     ?? (titleIdRaw ? "platform_title" : null);
   const sourceId = sourceType === "platform_title"
     ? (sourceIdRaw || titleIdRaw || null)
-    : sourceType === "creator_video"
+    : sourceType === "creator_video" || sourceType === "spectator_playback"
       ? (sourceIdRaw || null)
       : null;
   const roomType: WatchPartyRoomType =
@@ -853,9 +854,11 @@ export async function createPartyRoom(
   const requestedSourceType = normalizeWatchPartyContentSourceType(options?.sourceType);
   const requestedSourceId = String(options?.sourceId ?? "").trim();
   const isCreatorVideoRoom = requestedSourceType === "creator_video";
-  const requestedRoomType: WatchPartyRoomType = options?.roomType ?? (isCreatorVideoRoom || requestedTitleId ? "title" : "live");
+  const isSpectatorPlaybackRoom = requestedSourceType === "spectator_playback";
+  const isSourceLinkedTitleRoom = isCreatorVideoRoom || isSpectatorPlaybackRoom;
+  const requestedRoomType: WatchPartyRoomType = options?.roomType ?? (isSourceLinkedTitleRoom || requestedTitleId ? "title" : "live");
   const platformTitleRequestId = requestedTitleId || (requestedSourceType === "platform_title" ? requestedSourceId : "");
-  const resolvedTitleId = requestedRoomType === "title" && !isCreatorVideoRoom
+  const resolvedTitleId = requestedRoomType === "title" && !isSourceLinkedTitleRoom
     ? await resolvePartyTitleId(platformTitleRequestId)
     : null;
   const requestedHostUserId = String(hostUserId ?? "").trim();
@@ -890,10 +893,11 @@ export async function createPartyRoom(
       ?? roomDefaults.capturePolicy,
   );
   const titleIdCandidates: (string | null)[] =
-    requestedRoomType === "live" || isCreatorVideoRoom
+    requestedRoomType === "live" || isSourceLinkedTitleRoom
       ? [null]
       : Array.from(new Set([resolvedTitleId, platformTitleRequestId].filter(isNonEmptyString)));
   const creatorVideoSourceId = isCreatorVideoRoom ? requestedSourceId : "";
+  const spectatorPlaybackSourceId = isSpectatorPlaybackRoom ? requestedSourceId : "";
   const hostUserIdCandidates = Array.from(new Set([resolvedHostUserId].filter(isNonEmptyString)));
 
   if (!hostUserIdCandidates.length) {
@@ -914,7 +918,16 @@ export async function createPartyRoom(
     return { error: explicitError };
   }
 
-  if (requestedRoomType === "title" && !isCreatorVideoRoom && !titleIdCandidates.length) {
+  if (requestedRoomType === "title" && isSpectatorPlaybackRoom && !spectatorPlaybackSourceId) {
+    const explicitError = toCreateError(
+      { message: "Unable to resolve valid spectator source for watch party room" },
+      { requestedSourceType, requestedSourceId },
+    );
+    debugLog("watch-party", "createPartyRoom spectator source resolution failed", explicitError);
+    return { error: explicitError };
+  }
+
+  if (requestedRoomType === "title" && !isSourceLinkedTitleRoom && !titleIdCandidates.length) {
     const explicitError = toCreateError(
       { message: "Unable to resolve valid titleId for watch party room" },
       { requestedTitleId, requestedSourceId, resolvedTitleId },
@@ -925,7 +938,7 @@ export async function createPartyRoom(
 
   const premiumAccessKey = requestedRoomType === "live"
     ? requestedHostUserId || resolvedHostUserId || "live-first"
-    : creatorVideoSourceId || resolvedTitleId || platformTitleRequestId || "watch-party-live";
+    : creatorVideoSourceId || spectatorPlaybackSourceId || resolvedTitleId || platformTitleRequestId || "watch-party-live";
   const premiumAccess = await requirePremiumAccessForRoomType(requestedRoomType, premiumAccessKey).catch(() => null);
   if (!premiumAccess?.allowed) {
     return {
@@ -963,12 +976,16 @@ export async function createPartyRoom(
         for (let attempt = 0; attempt < 5; attempt += 1) {
           const generatedPartyId = createPartyIdentifier();
           const now = new Date().toISOString();
-          const sourceType: WatchPartyContentSourceType | null = isCreatorVideoRoom
-            ? "creator_video"
+          const sourceType: WatchPartyContentSourceType | null = isSourceLinkedTitleRoom
+            ? requestedSourceType
             : requestedRoomType === "title"
               ? "platform_title"
               : null;
-          const sourceId = isCreatorVideoRoom ? creatorVideoSourceId : (safeTitleId ?? null);
+          const sourceId = isCreatorVideoRoom
+            ? creatorVideoSourceId
+            : isSpectatorPlaybackRoom
+              ? spectatorPlaybackSourceId
+              : (safeTitleId ?? null);
           const payload: PartyRoomInsert = {
             party_id: generatedPartyId,
             room_type: requestedRoomType,
@@ -1011,14 +1028,14 @@ export async function createPartyRoom(
               || isMissingColumnError(error, "source_type")
               || isMissingColumnError(error, "source_id")
             )
-            && isCreatorVideoRoom
+            && isSourceLinkedTitleRoom
           ) {
             lastError = toCreateError(error, {
               requestedSourceType,
               requestedSourceId,
-              source: "createPartyRoom.creatorVideoMissingSourceColumns",
+              source: "createPartyRoom.sourceLinkedMissingSourceColumns",
             });
-            debugLog("watch-party", "createPartyRoom creator video insert missing source columns", lastError);
+            debugLog("watch-party", "createPartyRoom source-linked insert missing source columns", lastError);
             break;
           }
 

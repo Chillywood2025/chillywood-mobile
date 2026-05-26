@@ -104,6 +104,7 @@ import {
     type SocialAttachmentFile,
 } from "../../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../../_lib/socialAttachmentPicker";
+import { resolveWatchPartyContentSource } from "../../../_lib/watchPartyContentSources";
 import {
     getCommunicationRTCModule,
     getLinkedCommunicationRoom,
@@ -755,6 +756,8 @@ export default function WatchPartyLiveStageScreen({
   const [livePremiumGateKind, setLivePremiumGateKind] = useState<"live_first" | "live_watch_party">("live_watch_party");
   const [roomMissing, setRoomMissing] = useState(false);
   const [roomEntryError, setRoomEntryError] = useState("");
+  const [sourceAttribution, setSourceAttribution] = useState<string | null>(null);
+  const [sourceEnded, setSourceEnded] = useState(false);
   const [participants, setParticipants] = useState<StageParticipant[]>([]);
   const [myUserId, setMyUserId] = useState<string>("");
   const [myUsername, setMyUsername] = useState<string>("You");
@@ -850,6 +853,36 @@ export default function WatchPartyLiveStageScreen({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (room?.sourceType !== "spectator_playback") {
+      setSourceAttribution(null);
+      setSourceEnded(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    resolveWatchPartyContentSource(room)
+      .then((sourceInfo) => {
+        if (!active) return;
+        setSourceAttribution(
+          sourceInfo.attributionLabel
+          ?? (sourceInfo.displayName ? `Watching ${sourceInfo.displayName} from this Platform` : "Watching from this Platform"),
+        );
+        setSourceEnded(sourceInfo.sourceEnded === true || sourceInfo.unavailableReason === "ended");
+      })
+      .catch(() => {
+        if (!active) return;
+        setSourceAttribution("Watching from this Platform");
+        setSourceEnded(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [room]);
 
   useEffect(() => {
     setCommunicationRoomId("");
@@ -4149,6 +4182,17 @@ export default function WatchPartyLiveStageScreen({
           renderToHardwareTextureAndroid
         >
         {renderStageTopChrome()}
+        {sourceAttribution ? (
+          <View style={styles.stageSourceCard} pointerEvents="none">
+            <Text style={styles.stageSourceKicker}>SOURCE</Text>
+            <Text style={styles.stageSourceTitle} numberOfLines={2}>{sourceAttribution}</Text>
+            <Text style={styles.stageSourceBody}>
+              {sourceEnded
+                ? "Source live has ended"
+                : "Source playback is watch-only. This room has its own people, comments, and live controls."}
+            </Text>
+          </View>
+        ) : null}
         {/* Layout lock: preserve the people-first Chi'lly Party Members grid structure in Live Watch-Party mode. */}
         {shouldShowStageCommunityDeck ? (
         <View style={[styles.stageHybridDeck, { top: hybridDeckTop }]} pointerEvents="box-none">
@@ -5455,6 +5499,39 @@ const styles = StyleSheet.create({
   stageHeroFilterOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
+  },
+  stageSourceCard: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    top: 88,
+    zIndex: 32,
+    elevation: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(126,215,255,0.24)",
+    backgroundColor: "rgba(5,10,20,0.72)",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    gap: 4,
+  },
+  stageSourceKicker: {
+    color: "#7ED7FF",
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  stageSourceTitle: {
+    color: "#F4F7FF",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  stageSourceBody: {
+    color: "#AAB5CA",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
   },
   stageHybridDeck: {
     position: "absolute",
