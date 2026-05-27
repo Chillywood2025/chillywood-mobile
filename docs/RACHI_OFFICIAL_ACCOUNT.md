@@ -124,14 +124,16 @@ Captured on `R5CR120QCBF`:
 - Rachi Platform
 - Rachi Help opt-in privacy copy
 - normal user cannot access Rachi admin/studio controls
+- owner/operator Admin Rachi tab Overview
+- Admin Rachi Profile Picture section with `Choose from Gallery` and `Clear Picture`
+- real official Rachi post created through the Admin Rachi tab
+- real official Rachi post visible on Rachi Profile
+- real official Rachi post visible on Home under `Rachi Official Updates`
 - Home `Chi'llwood Originals` honest empty state
 
 Not claimed yet:
 
-- Admin Rachi tab Overview on device, because the attached session still showed `This account does not have an active admin role` after the claimed proof-account upgrade.
-- Rachi Profile Picture gallery save/clear flow, because the attached session still lacks active owner/operator access.
-- create Rachi post flow, because the attached session still lacks active owner/operator access.
-- Rachi post visible in Profile/Home feed, because no real safe official Rachi post fixture was created.
+- Rachi Profile Picture actual save/clear mutation with a selected safe image. The Admin UI is gallery-based and audited, but the proof pass did not select a private device photo.
 - Rachi uploaded/published content visible in Home Chi'llwood Originals, because no real public-safe Rachi-owned creator-video fixture exists.
 
 Do not fake Rachi posts, Originals, comments, likes, followers, or engagement for screenshots.

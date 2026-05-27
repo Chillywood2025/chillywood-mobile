@@ -1,8 +1,8 @@
 # NEXT TASK
 
-## Recommended Lane: Rachi Owner/Operator Session Proof And Originals Fixture
+## Recommended Lane: Rachi Official Originals Fixture
 
-Rachi is now implemented repo-side as the official Chi'llywood account, first pinned Chi'lly Circle connection, official update publisher, and Chi'llwood Originals source. Android proof on `R5CR120QCBF` covered the public/user-facing surfaces that had safe fixtures; the next useful lane is owner/operator proof with a safe official post/original fixture.
+Rachi is now implemented repo-side as the official Chi'llywood account, first pinned Chi'lly Circle connection, official update publisher, and Chi'llwood Originals source. Android proof on `R5CR120QCBF` now covers public/user-facing surfaces plus the upgraded owner/operator Admin Rachi tab. The next useful Rachi lane is a real public-safe Rachi-owned creator-video fixture for Chi'llwood Originals.
 
 Closed truth:
 
@@ -16,26 +16,25 @@ Closed truth:
 - Remote-applied migration `202605260008_rachi_official_posts.sql` adds `admin_create_official_rachi_post`; it is owner/operator-only through `admin_content_assert_operator()`, writes admin audit, and posts as `platform_rachi_official`.
 - Remote-applied migrations `202605260009_rachi_official_profile_image.sql` and `202605260010_rachi_official_profile_media_storage.sql` add an owner/operator-only Rachi profile-photo save RPC plus official `profile-media/official/rachi/...` storage policies.
 - Admin Rachi Profile Picture uses the device photo gallery through `Choose from Gallery`; it does not ask normal operators to paste a URL.
+- The upgraded proof account opened Admin Rachi, showed the gallery-based Profile Picture section, and created a real public Rachi update through the Admin UI.
+- The real Rachi update appears on Rachi Profile and Home `Rachi Official Updates`.
 - Normal users cannot post as Rachi or edit the Rachi Platform/Studio.
 - Profile and public Platform preserve public-safe/draft-hidden behavior.
 - No LiveKit, Watch-Party, Premium, provider readiness, creator upload/delete, or normal Chi'lly Chat behavior changed.
 - `npm run guard:rachi-official-policy` pins the official-account, privacy, Circle, Home, Admin, no-surveillance, no-fake-stats, and no-Mini-Platform boundaries.
-- Android proof screenshots live at `/tmp/chillywood-rachi-official-proof-20260526/`; they capture pinned Rachi in Chi'lly Circle, Rachi Profile, Rachi Help privacy copy, Rachi public Platform, Home `Chi'llwood Originals` honest empty state, and admin denial for the attached session.
+- Android proof screenshots live at `/tmp/chillywood-rachi-official-proof-20260526/`; they capture pinned Rachi in Chi'lly Circle, Rachi Profile, Rachi Help privacy copy, Rachi public Platform, owner/operator Admin Rachi tab, gallery-based Profile Picture controls, a real Admin-created Rachi post, Home `Rachi Official Updates`, and Home `Chi'llwood Originals` honest empty state.
 
 Remaining limitation:
 
-- Owner/operator Admin Rachi tab, gallery profile-photo change, and posting proof need the attached Android device to be signed in as an account with an active owner/operator platform role. The latest `/admin` attempt still showed `This account does not have an active admin role`.
-- Home/Profile Rachi post-success proof needs a real safe Rachi official post created through the RPC/Admin path.
+- Rachi Profile Picture actual save/clear proof still needs selecting a safe non-private gallery image; do not use arbitrary device photos that might expose private user data.
 - Home `Chi'llwood Originals` success proof needs a real public-safe Rachi-owned creator video. Do not fake Rachi posts or Originals for screenshots.
 
 Recommended next lane:
 
 - Verify migrations `202605260008_rachi_official_posts.sql`, `202605260009_rachi_official_profile_image.sql`, and `202605260010_rachi_official_profile_media_storage.sql` remain applied in the target proof environment.
-- Re-authenticate the attached device with the upgraded owner/operator proof account, or upgrade the exact account currently signed in on `R5CR120QCBF`.
-- Capture Admin Rachi Profile Picture opening the device gallery, saving one safe image, and clearing it if needed.
-- Use owner/admin access to create one safe official Rachi post through the Admin Rachi tab.
+- If product has a safe Rachi avatar asset, capture Admin Rachi Profile Picture selecting it from the device gallery, saving it, and clearing/restoring it if needed.
 - If a safe Rachi-owned public creator video exists, capture it in Home `Chi'llwood Originals`; otherwise document the missing official-original fixture.
-- Capture Chi'lly Circle with pinned Rachi, Rachi Profile, Rachi Platform, Admin Rachi tab, Home Rachi updates, Home Originals state, Rachi Help opt-in copy, and normal-user no-admin/no-studio access.
+- Capture Chi'lly Circle with pinned Rachi, Rachi Profile, Rachi Platform, Admin Rachi tab, Home Rachi updates, Home Originals state, Rachi Help opt-in copy, and normal-user no-admin/no-studio access after any additional Rachi media fixture changes.
 - Keep screenshots outside the repo at `/tmp/chillywood-rachi-official-proof-20260526/`.
 - Re-run `npm run guard:rachi-official-policy`, `npm run guard:profile-production-policy`, `npm run validate:runtime`, and targeted privacy/no-fake-stats greps.
 
