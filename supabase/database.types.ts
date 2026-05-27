@@ -938,6 +938,65 @@ export type Database = {
           },
         ]
       }
+      content_rights_disclosures: {
+        Row: {
+          acknowledged_at: string
+          actor_user_id: string
+          cleared_at: string | null
+          contains_third_party_content: boolean
+          contains_third_party_music: boolean
+          created_at: string
+          disclosure_note: string | null
+          id: string
+          policy_version: string | null
+          security_context_id: string | null
+          source_context: Json
+          surface: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          actor_user_id: string
+          cleared_at?: string | null
+          contains_third_party_content?: boolean
+          contains_third_party_music?: boolean
+          created_at?: string
+          disclosure_note?: string | null
+          id?: string
+          policy_version?: string | null
+          security_context_id?: string | null
+          source_context?: Json
+          surface: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          acknowledged_at?: string
+          actor_user_id?: string
+          cleared_at?: string | null
+          contains_third_party_content?: boolean
+          contains_third_party_music?: boolean
+          created_at?: string
+          disclosure_note?: string | null
+          id?: string
+          policy_version?: string | null
+          security_context_id?: string | null
+          source_context?: Json
+          surface?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_rights_disclosures_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_clip_edits: {
         Row: {
           brand_asset_id: string | null
@@ -5103,6 +5162,47 @@ export type Database = {
         }
         Relationships: []
       }
+      official_rachi_original_videos: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          official_account_id: string
+          proof_scope: string | null
+          source_attribution: string | null
+          status: string
+          updated_at: string
+          video_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          official_account_id?: string
+          proof_scope?: string | null
+          source_attribution?: string | null
+          status?: string
+          updated_at?: string
+          video_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          official_account_id?: string
+          proof_scope?: string | null
+          source_attribution?: string | null
+          status?: string
+          updated_at?: string
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "official_rachi_original_videos_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: true
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       owner_trusted_devices: {
         Row: {
           app_version: string | null
@@ -6952,6 +7052,13 @@ export type Database = {
             referencedColumns: ["party_id"]
           },
           {
+            foreignKeyName: "spectator_child_room_audit_log_security_context_id_fkey"
+            columns: ["security_context_id"]
+            isOneToOne: false
+            referencedRelation: "security_request_context"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "spectator_child_room_audit_log_source_item_id_fkey"
             columns: ["source_item_id"]
             isOneToOne: false
@@ -8612,18 +8719,7 @@ export type Database = {
         Returns: string
       }
       admin_create_official_rachi_post: {
-        Args: {
-          p_body: string
-          p_reason?: string
-          p_visibility?: string
-        }
-        Returns: Json
-      }
-      admin_update_official_rachi_profile_image: {
-        Args: {
-          p_avatar_url?: string
-          p_reason?: string
-        }
+        Args: { p_body: string; p_reason?: string; p_visibility?: string }
         Returns: Json
       }
       admin_dmca_add_strike: {
@@ -9046,6 +9142,10 @@ export type Database = {
           p_reason?: string
           p_target_email: string
         }
+        Returns: Json
+      }
+      admin_update_official_rachi_profile_image: {
+        Args: { p_avatar_url?: string; p_reason?: string }
         Returns: Json
       }
       admin_update_platform_staff_permissions_by_email: {
@@ -9516,6 +9616,20 @@ export type Database = {
           updated_at: string
           watermark_asset_id: string
         }[]
+      }
+      record_content_rights_disclosure: {
+        Args: {
+          p_contains_third_party_content?: boolean
+          p_contains_third_party_music?: boolean
+          p_disclosure_note?: string
+          p_policy_version?: string
+          p_security_context_id?: string
+          p_source_context?: Json
+          p_surface: string
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: Json
       }
       record_creator_video_upload_usage: {
         Args: { target_video_id: string }

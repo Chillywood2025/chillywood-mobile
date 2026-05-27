@@ -1,6 +1,6 @@
 # Rachi Official Account
 
-Status: repo-side implemented; Android runtime proof lives at `/tmp/chillywood-rachi-official-proof-20260526/`.
+Status: repo-side implemented; Android runtime proof lives at `/tmp/chillywood-rachi-official-proof-20260526/` and Rachi Originals fixture proof lives at `/tmp/chillywood-rachi-originals-proof-20260526/`.
 
 ## Product Truth
 
@@ -72,6 +72,13 @@ Chi'llwood Originals uses real Rachi-owned creator videos only:
 - Home reads Rachi creator videos with `includeDrafts: false`
 - drafts, private uploads, hidden content, rejected content, and raw storage paths stay out of Home
 - empty states are honest when no official content exists
+- remote-applied migration `202605260011_rachi_originals_public_video_fixture.sql` adds `official_rachi_original_videos`, an owner/operator-managed link table for public-safe official Rachi Originals
+- remote-applied migration `202605260012_rachi_originals_fixture_playback_mp4.sql` keeps the proof fixture on direct `video/mp4` playback
+- remote-applied migration `202605260013_rachi_originals_public_link_select_hardening.sql` makes public link reads require a published official link and a linked public clean/reported video
+- proof fixture: `6e1c3405-7db8-4cb2-98f3-5a7642e82126`, `Chi'llwood Originals Proof Fixture`
+- fixture attribution: `Big Buck Bunny by Blender Foundation, CC BY 3.0.`
+- `public-creator-video-cards` reads official Rachi Originals through the link table and still requires published official links plus public, moderation-safe `videos` rows
+- public card responses use `ownerId=platform_rachi_official` and do not return raw playback URLs, raw storage paths, storage object keys, drafts, private rows, hidden rows, or admin controls
 - Admin shows `Upload Original` as an honest disabled action until a backend-safe upload-as-Rachi Studio path exists
 
 Do not create placeholder Originals or fake production claims.
@@ -129,11 +136,28 @@ Captured on `R5CR120QCBF`:
 - real official Rachi post created through the Admin Rachi tab
 - real official Rachi post visible on Rachi Profile
 - real official Rachi post visible on Home under `Rachi Official Updates`
-- Home `Chi'llwood Originals` honest empty state
+- Home `Chi'llwood Originals` honest empty state before the fixture pass
+
+Proof path: `/tmp/chillywood-rachi-originals-proof-20260526/`.
+
+Captured on `R5CR120QCBF`:
+
+- Home `Rachi Official Updates` still present
+- Home `Chi'llwood Originals` with the Rachi video fixture
+- Rachi video card with public/Media Ready state and no fake engagement
+- Rachi public Platform showing `1 Videos`, Featured, and Latest Uploads for the fixture
+- public Platform actions are Follow, Share, Report, and View Profile, with no app owner/admin controls in public preview
+- Player/public content route opens the fixture title
+
+Backend proof:
+
+- public card resolver returns the fixture for `platform_rachi_official`
+- public card response does not include raw playback URL, raw storage path, or storage object key
+- `resolve_video_playback` reports playable legacy source state for the fixture
 
 Not claimed yet:
 
+- visible moving Player frame for the Rachi fixture. The route opens and the resolver reports playable source state, but the Android screenshots captured a black player area after launch/wait.
 - Rachi Profile Picture actual save/clear mutation with a selected safe image. The Admin UI is gallery-based and audited, but the proof pass did not select a private device photo.
-- Rachi uploaded/published content visible in Home Chi'llwood Originals, because no real public-safe Rachi-owned creator-video fixture exists.
 
 Do not fake Rachi posts, Originals, comments, likes, followers, or engagement for screenshots.

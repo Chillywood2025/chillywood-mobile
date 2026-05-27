@@ -1,8 +1,8 @@
 # NEXT TASK
 
-## Recommended Lane: Rachi Official Originals Fixture
+## Recommended Lane: Rachi Originals Player Frame And Avatar Safe-Asset Proof
 
-Rachi is now implemented repo-side as the official Chi'llywood account, first pinned Chi'lly Circle connection, official update publisher, and Chi'llwood Originals source. Android proof on `R5CR120QCBF` now covers public/user-facing surfaces plus the upgraded owner/operator Admin Rachi tab. The next useful Rachi lane is a real public-safe Rachi-owned creator-video fixture for Chi'llwood Originals.
+Rachi is now implemented repo-side as the official Chi'llywood account, first pinned Chi'lly Circle connection, official update publisher, and Chi'llwood Originals source. Android proof on `R5CR120QCBF` covers public/user-facing surfaces, the upgraded owner/operator Admin Rachi tab, real Rachi Official Updates, and a real public-safe Rachi Originals video fixture in Home plus Rachi Platform. The next useful Rachi lane is only the remaining media-proof polish: capture a visible Player playback frame for the fixture and prove gallery avatar save with a safe app-owned image if one is available.
 
 Closed truth:
 
@@ -18,24 +18,30 @@ Closed truth:
 - Admin Rachi Profile Picture uses the device photo gallery through `Choose from Gallery`; it does not ask normal operators to paste a URL.
 - The upgraded proof account opened Admin Rachi, showed the gallery-based Profile Picture section, and created a real public Rachi update through the Admin UI.
 - The real Rachi update appears on Rachi Profile and Home `Rachi Official Updates`.
+- Remote-applied migrations `202605260011_rachi_originals_public_video_fixture.sql`, `202605260012_rachi_originals_fixture_playback_mp4.sql`, and `202605260013_rachi_originals_public_link_select_hardening.sql` add the owner/operator-managed `official_rachi_original_videos` link table and proof fixture `6e1c3405-7db8-4cb2-98f3-5a7642e82126`, `Chi'llwood Originals Proof Fixture`.
+- The fixture is public, clean, proof-scoped, attributed to `Big Buck Bunny by Blender Foundation, CC BY 3.0.`, and uses direct `video/mp4` playback.
+- The deployed `public-creator-video-cards` resolver reads Rachi Originals through the official link table, returns sanitized cards with `ownerId=platform_rachi_official`, and still requires published links plus public moderation-safe videos; link-table public reads also require the linked video to remain public and clean/reported.
+- Home `Chi'llwood Originals` shows the real Rachi video fixture.
+- Rachi public Platform shows `1 Videos` and renders the same fixture in Featured/Latest Uploads with public actions only.
 - Normal users cannot post as Rachi or edit the Rachi Platform/Studio.
 - Profile and public Platform preserve public-safe/draft-hidden behavior.
 - No LiveKit, Watch-Party, Premium, provider readiness, creator upload/delete, or normal Chi'lly Chat behavior changed.
-- `npm run guard:rachi-official-policy` pins the official-account, privacy, Circle, Home, Admin, no-surveillance, no-fake-stats, and no-Mini-Platform boundaries.
+- `npm run guard:rachi-official-policy` pins the official-account, privacy, Circle, Home, Admin, Rachi Originals, no-surveillance, no-fake-stats, no raw public video paths, and no-Mini-Platform boundaries.
 - Android proof screenshots live at `/tmp/chillywood-rachi-official-proof-20260526/`; they capture pinned Rachi in Chi'lly Circle, Rachi Profile, Rachi Help privacy copy, Rachi public Platform, owner/operator Admin Rachi tab, gallery-based Profile Picture controls, a real Admin-created Rachi post, Home `Rachi Official Updates`, and Home `Chi'llwood Originals` honest empty state.
+- Rachi Originals proof screenshots live at `/tmp/chillywood-rachi-originals-proof-20260526/`; they capture Home `Rachi Official Updates`, Home `Chi'llwood Originals` with the fixture, Rachi public Platform with the fixture, and Player route/title open.
 
 Remaining limitation:
 
 - Rachi Profile Picture actual save/clear proof still needs selecting a safe non-private gallery image; do not use arbitrary device photos that might expose private user data.
-- Home `Chi'llwood Originals` success proof needs a real public-safe Rachi-owned creator video. Do not fake Rachi posts or Originals for screenshots.
+- The Player/public content route opens the fixture title, and backend resolver proof reports playable legacy source state, but a visible moving playback frame was not captured yet.
 
 Recommended next lane:
 
 - Verify migrations `202605260008_rachi_official_posts.sql`, `202605260009_rachi_official_profile_image.sql`, and `202605260010_rachi_official_profile_media_storage.sql` remain applied in the target proof environment.
-- If product has a safe Rachi avatar asset, capture Admin Rachi Profile Picture selecting it from the device gallery, saving it, and clearing/restoring it if needed.
-- If a safe Rachi-owned public creator video exists, capture it in Home `Chi'llwood Originals`; otherwise document the missing official-original fixture.
-- Capture Chi'lly Circle with pinned Rachi, Rachi Profile, Rachi Platform, Admin Rachi tab, Home Rachi updates, Home Originals state, Rachi Help opt-in copy, and normal-user no-admin/no-studio access after any additional Rachi media fixture changes.
-- Keep screenshots outside the repo at `/tmp/chillywood-rachi-official-proof-20260526/`.
+- Verify migrations `202605260011_rachi_originals_public_video_fixture.sql`, `202605260012_rachi_originals_fixture_playback_mp4.sql`, and `202605260013_rachi_originals_public_link_select_hardening.sql` remain applied and `public-creator-video-cards` remains deployed in the target proof environment.
+- Capture a visible Player playback frame for `6e1c3405-7db8-4cb2-98f3-5a7642e82126` if the current Player/render path permits it; do not fake playback.
+- If product has a safe app-owned Rachi avatar asset in the device gallery, capture Admin Rachi Profile Picture selecting it from the gallery, saving it, and clearing/restoring it if needed.
+- Keep screenshots outside the repo at `/tmp/chillywood-rachi-originals-proof-20260526/` or a fresh dated `/tmp` folder.
 - Re-run `npm run guard:rachi-official-policy`, `npm run guard:profile-production-policy`, `npm run validate:runtime`, and targeted privacy/no-fake-stats greps.
 
 ## Previous Recommended Lane: Watch-Party Live Audio Mix Two-Device Speech Proof

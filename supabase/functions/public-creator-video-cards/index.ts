@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 type PublicCreatorVideoCardAction = "list_by_owner" | "list_for_owners" | "list_latest";
+type SupabaseAdminClient = any;
 
 type PublicCreatorVideoCardPayload = {
   action?: unknown;
@@ -29,6 +30,10 @@ type PublicCreatorVideoRow = {
   updated_at: string | null;
 };
 
+type OfficialRachiOriginalVideoLinkRow = {
+  video_id: string;
+};
+
 type PublicClipMetadataRow = {
   video_id: string;
   title_overlay_text: string | null;
@@ -55,6 +60,7 @@ const JSON_HEADERS = {
 };
 
 const CREATOR_VIDEO_BUCKET = "creator-videos";
+const RACHI_OFFICIAL_USER_ID = "platform_rachi_official";
 const SIGNED_URL_SECONDS = 60 * 60;
 const CLIP_TITLE_MAX_LENGTH = 80;
 const CLIP_SUBTITLE_MAX_LENGTH = 140;
@@ -176,7 +182,7 @@ const mapPublicClipMetadata = (row: PublicClipMetadataRow): PublicClipMetadata =
 };
 
 const readPublicClipMetadata = async (
-  adminClient: any,
+  adminClient: SupabaseAdminClient,
   videoIds: string[],
 ) => {
   const normalizedVideoIds = Array.from(new Set(videoIds.map(toText).filter(Boolean))).slice(0, 100);
@@ -185,15 +191,59 @@ const readPublicClipMetadata = async (
   const { data, error } = await adminClient
     .from("creator_clip_edits")
     .select(PUBLIC_CLIP_EDIT_SELECT)
-    .in("video_id", normalizedVideoIds)
-    .returns<PublicClipMetadataRow[]>();
+    .in("video_id", normalizedVideoIds);
 
   if (error || !data) {
     if (error) console.error("public creator video clip metadata query failed", error.message);
     return new Map<string, PublicClipMetadata>();
   }
 
-  return new Map(data.map((row) => [toText(row.video_id), mapPublicClipMetadata(row)]));
+  const rows = (data ?? []) as PublicClipMetadataRow[];
+  return new Map(rows.map((row) => [toText(row.video_id), mapPublicClipMetadata(row)]));
+};
+
+const readPublishedOfficialRachiOriginalVideoIds = async (
+  adminClient: SupabaseAdminClient,
+  limit: number,
+) => {
+  const { data, error } = await adminClient
+    .from("official_rachi_original_videos")
+    .select("video_id")
+    .eq("official_account_id", RACHI_OFFICIAL_USER_ID)
+    .eq("status", "published")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    if (error) console.error("official Rachi Originals link query failed", error.message);
+    return [];
+  }
+
+  const rows = (data ?? []) as OfficialRachiOriginalVideoLinkRow[];
+  return Array.from(new Set(rows.map((row) => toText(row.video_id)).filter(Boolean))).slice(0, limit);
+};
+
+const readOfficialRachiOwnerOverrides = async (
+  adminClient: SupabaseAdminClient,
+  videoIds: string[],
+) => {
+  const normalizedVideoIds = Array.from(new Set(videoIds.map(toText).filter(Boolean))).slice(0, 100);
+  if (!normalizedVideoIds.length) return new Map<string, string>();
+
+  const { data, error } = await adminClient
+    .from("official_rachi_original_videos")
+    .select("video_id")
+    .eq("official_account_id", RACHI_OFFICIAL_USER_ID)
+    .eq("status", "published")
+    .in("video_id", normalizedVideoIds);
+
+  if (error || !data) {
+    if (error) console.error("official Rachi Originals owner override query failed", error.message);
+    return new Map<string, string>();
+  }
+
+  const rows = (data ?? []) as OfficialRachiOriginalVideoLinkRow[];
+  return new Map(rows.map((row) => [toText(row.video_id), RACHI_OFFICIAL_USER_ID]));
 };
 
 const isSafeVideoThumbnailPath = (row: PublicCreatorVideoRow, thumbnailPath: string) => {
@@ -312,7 +362,7 @@ const isReadableImageUrl = async (url: string) => {
 };
 
 const createThumbnailUrl = async (
-  adminClient: any,
+  adminClient: SupabaseAdminClient,
   row: PublicCreatorVideoRow,
   s3Config: {
     bucket: string;
@@ -355,9 +405,10 @@ const createThumbnailUrl = async (
 };
 
 const mapPublicVideo = async (
-  adminClient: any,
+  adminClient: SupabaseAdminClient,
   row: PublicCreatorVideoRow,
   publicClipMetadata: PublicClipMetadata | undefined,
+  ownerIdOverride: string | undefined,
   s3Config: {
     bucket: string;
     endpoint: string;
@@ -367,7 +418,7 @@ const mapPublicVideo = async (
   },
 ) => ({
   id: toText(row.id),
-  ownerId: toText(row.owner_id),
+  ownerId: toText(ownerIdOverride) || toText(row.owner_id),
   title: toText(row.title) || "Untitled Video",
   description: toText(row.description),
   visibility: "public",
@@ -383,6 +434,12 @@ const mapPublicVideo = async (
   createdAt: toText(row.created_at) || new Date().toISOString(),
   updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
   ...(publicClipMetadata ?? EMPTY_PUBLIC_CLIP_METADATA),
+});
+
+const sortPublicRowsNewestFirst = (rows: PublicCreatorVideoRow[]) => rows.sort((left, right) => {
+  const leftTime = Date.parse(toText(left.created_at));
+  const rightTime = Date.parse(toText(right.created_at));
+  return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
 });
 
 Deno.serve(async (req): Promise<Response> => {
@@ -417,36 +474,107 @@ Deno.serve(async (req): Promise<Response> => {
       },
     });
     const limit = normalizeLimit(payload.limit);
-    let query = adminClient
-      .from("videos")
-      .select(PUBLIC_CREATOR_VIDEO_SELECT)
-      .eq("visibility", "public")
-      .in("moderation_status", PUBLIC_MODERATION_STATUSES)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+    let rows: PublicCreatorVideoRow[] = [];
 
     if (action === "list_by_owner") {
       const ownerId = toText(payload.ownerId);
       if (!ownerId) return json(400, { error: "missing_owner", message: "Missing owner id." });
-      query = query.eq("owner_id", ownerId);
+      const officialRachiVideoIds = ownerId === RACHI_OFFICIAL_USER_ID
+        ? await readPublishedOfficialRachiOriginalVideoIds(adminClient, limit)
+        : [];
+      if (ownerId === RACHI_OFFICIAL_USER_ID && !officialRachiVideoIds.length) {
+        return json(200, { videos: [] });
+      }
+
+      let query = adminClient
+        .from("videos")
+        .select(PUBLIC_CREATOR_VIDEO_SELECT)
+        .eq("visibility", "public")
+        .in("moderation_status", PUBLIC_MODERATION_STATUSES)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      query = ownerId === RACHI_OFFICIAL_USER_ID
+        ? query.in("id", officialRachiVideoIds)
+        : query.eq("owner_id", ownerId);
+
+      const { data, error } = await query.returns<PublicCreatorVideoRow[]>();
+      if (error) {
+        console.error("public creator video card query failed", error.message);
+        return json(500, { error: "query_failed", message: "Public videos are unavailable right now." });
+      }
+      rows = data ?? [];
     } else if (action === "list_for_owners") {
       const ownerIds = normalizeOwnerIds(payload.ownerIds);
       if (!ownerIds.length) return json(200, { videos: [] });
-      query = query.in("owner_id", ownerIds);
+      const includesOfficialRachi = ownerIds.includes(RACHI_OFFICIAL_USER_ID);
+      const regularOwnerIds = ownerIds.filter((ownerId) => ownerId !== RACHI_OFFICIAL_USER_ID);
+      const results: { data: PublicCreatorVideoRow[] | null; error: { message?: string } | null }[] = [];
+
+      if (regularOwnerIds.length) {
+        results.push(await adminClient
+          .from("videos")
+          .select(PUBLIC_CREATOR_VIDEO_SELECT)
+          .eq("visibility", "public")
+          .in("moderation_status", PUBLIC_MODERATION_STATUSES)
+          .in("owner_id", regularOwnerIds)
+          .order("created_at", { ascending: false })
+          .limit(limit)
+          .returns<PublicCreatorVideoRow[]>());
+      }
+
+      if (includesOfficialRachi) {
+        const officialRachiVideoIds = await readPublishedOfficialRachiOriginalVideoIds(adminClient, limit);
+        if (officialRachiVideoIds.length) {
+          results.push(await adminClient
+            .from("videos")
+            .select(PUBLIC_CREATOR_VIDEO_SELECT)
+            .eq("visibility", "public")
+            .in("moderation_status", PUBLIC_MODERATION_STATUSES)
+            .in("id", officialRachiVideoIds)
+            .order("created_at", { ascending: false })
+            .limit(limit)
+            .returns<PublicCreatorVideoRow[]>());
+        }
+      }
+
+      const failed = results.find((result) => result.error);
+      if (failed?.error) {
+        console.error("public creator video card query failed", failed.error.message);
+        return json(500, { error: "query_failed", message: "Public videos are unavailable right now." });
+      }
+
+      const deduped = new Map<string, PublicCreatorVideoRow>();
+      for (const result of results) {
+        for (const row of result.data ?? []) {
+          const id = toText(row.id);
+          if (id) deduped.set(id, row);
+        }
+      }
+      rows = sortPublicRowsNewestFirst(Array.from(deduped.values())).slice(0, limit);
+    } else {
+      const { data, error } = await adminClient
+        .from("videos")
+        .select(PUBLIC_CREATOR_VIDEO_SELECT)
+        .eq("visibility", "public")
+        .in("moderation_status", PUBLIC_MODERATION_STATUSES)
+        .order("created_at", { ascending: false })
+        .limit(limit)
+        .returns<PublicCreatorVideoRow[]>();
+      if (error) {
+        console.error("public creator video card query failed", error.message);
+        return json(500, { error: "query_failed", message: "Public videos are unavailable right now." });
+      }
+      rows = data ?? [];
     }
 
-    const { data, error } = await query.returns<PublicCreatorVideoRow[]>();
-    if (error) {
-      console.error("public creator video card query failed", error.message);
-      return json(500, { error: "query_failed", message: "Public videos are unavailable right now." });
-    }
-
-    const rows = data ?? [];
     const metadataByVideoId = await readPublicClipMetadata(adminClient, rows.map((row) => row.id));
+    const ownerOverridesByVideoId = await readOfficialRachiOwnerOverrides(adminClient, rows.map((row) => row.id));
     const videos = await Promise.all(rows.map((row) => mapPublicVideo(
       adminClient,
       row,
       metadataByVideoId.get(toText(row.id)),
+      ownerOverridesByVideoId.get(toText(row.id)),
       s3Config,
     )));
     return json(200, { videos });

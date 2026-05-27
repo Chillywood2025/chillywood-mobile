@@ -29,6 +29,10 @@ const chatThread = read("app/chat/[threadId].tsx");
 const migration = read("supabase/migrations/202605260008_rachi_official_posts.sql");
 const profileImageMigration = read("supabase/migrations/202605260009_rachi_official_profile_image.sql");
 const profileMediaStorageMigration = read("supabase/migrations/202605260010_rachi_official_profile_media_storage.sql");
+const originalsMigration = read("supabase/migrations/202605260011_rachi_originals_public_video_fixture.sql");
+const originalsPlaybackMigration = read("supabase/migrations/202605260012_rachi_originals_fixture_playback_mp4.sql");
+const originalsSelectHardeningMigration = read("supabase/migrations/202605260013_rachi_originals_public_link_select_hardening.sql");
+const publicCreatorVideoCardsFunction = read("supabase/functions/public-creator-video-cards/index.ts");
 
 const userFacingSource = [
   officialAccounts,
@@ -60,6 +64,19 @@ assertIncludes(profileImageMigration, "official_rachi_profile_image_updated", "p
 assertIncludes(profileImageMigration, "lower(safe_avatar_url) not like 'https://%'", "public HTTPS image URL requirement");
 assertIncludes(profileMediaStorageMigration, "official/rachi/%", "official Rachi profile-media storage prefix");
 assertIncludes(profileMediaStorageMigration, "public.has_platform_role(array['owner'::text, 'operator'::text])", "official Rachi storage owner/operator policy");
+assertIncludes(originalsMigration, "official_rachi_original_videos", "official Rachi Originals link table");
+assertIncludes(originalsMigration, "'platform_rachi_official'", "official Rachi Originals account guard");
+assertIncludes(originalsMigration, '"status" = \'published\'', "public Rachi Originals published-only select policy");
+assertIncludes(originalsMigration, '"visibility"', "Rachi Originals fixture has public visibility field");
+assertIncludes(originalsMigration, '"moderation_status"', "Rachi Originals fixture has moderation status field");
+assertIncludes(originalsMigration, 'video."visibility" = \'public\'', "Rachi Originals public select requires public linked video");
+assertIncludes(originalsMigration, "video.\"moderation_status\" in ('clean', 'reported')", "Rachi Originals public select requires moderation-safe linked video");
+assertIncludes(originalsMigration, "public.has_platform_role(array['owner'::text, 'operator'::text])", "official Rachi Originals owner/operator manage policy");
+assertIncludes(originalsMigration, "Big Buck Bunny by Blender Foundation, CC BY 3.0.", "public-safe Rachi Originals attribution");
+assertIncludes(originalsMigration, "rachi_originals_public_video_fixture_20260526", "proof-scoped Rachi Originals fixture");
+assertIncludes(originalsPlaybackMigration, "video/mp4", "Rachi Originals fixture direct MP4 playback");
+assertIncludes(originalsSelectHardeningMigration, 'video."visibility" = \'public\'', "Rachi Originals hardening keeps public linked-video select");
+assertIncludes(originalsSelectHardeningMigration, "video.\"moderation_status\" in ('clean', 'reported')", "Rachi Originals hardening keeps moderation-safe select");
 assertIncludes(officialRachi, "createOfficialRachiPost", "client official post helper");
 assertIncludes(officialRachi, "updateOfficialRachiProfileImage", "client official profile image helper");
 assertIncludes(officialRachi, "chooseOfficialRachiProfileImageFromGallery", "client gallery picker helper");
@@ -76,6 +93,16 @@ assertIncludes(home, "readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId", "Home Rac
 assertIncludes(home, "readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId", "Home Rachi Originals read");
 assertIncludes(home, "Chi'llwood Originals", "Home Originals rail");
 assertIncludes(home, "Only real public Rachi posts appear here.", "no fake Rachi posts copy");
+assertIncludes(publicCreatorVideoCardsFunction, 'RACHI_OFFICIAL_USER_ID = "platform_rachi_official"', "public card resolver official Rachi id");
+assertIncludes(publicCreatorVideoCardsFunction, "readPublishedOfficialRachiOriginalVideoIds", "public card resolver official Rachi link read");
+assertIncludes(publicCreatorVideoCardsFunction, '.eq("status", "published")', "public card resolver published-only Rachi links");
+assertIncludes(publicCreatorVideoCardsFunction, '.eq("visibility", "public")', "public card resolver public-only videos");
+assertIncludes(publicCreatorVideoCardsFunction, ".in(\"moderation_status\", PUBLIC_MODERATION_STATUSES)", "public card resolver clean/reported moderation filter");
+assertIncludes(publicCreatorVideoCardsFunction, "readOfficialRachiOwnerOverrides", "public card resolver safe Rachi owner override");
+assertIncludes(publicCreatorVideoCardsFunction, "ownerId: toText(ownerIdOverride) || toText(row.owner_id)", "public card resolver returns Rachi owner id for linked Originals");
+assertNotIncludes(publicCreatorVideoCardsFunction, "playback_url,", "public card resolver does not select raw playback URL");
+assertNotIncludes(publicCreatorVideoCardsFunction, "storage_path,", "public card resolver does not select raw storage path");
+assertNotIncludes(publicCreatorVideoCardsFunction, "storage_object_key,", "public card resolver does not select raw storage object key");
 
 assertIncludes(profile, "Rachi Help is opt-in", "Profile opt-in Rachi Help copy");
 assertIncludes(profile, "Published public-safe Rachi uploads", "Profile Rachi Originals copy");
