@@ -143,7 +143,30 @@ Screenshots must stay outside the repo.
 
 May 26, 2026 proof result: `R5CR120QCBF` captured the consolidated tab row, Money Center first view, Overview, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Payouts, Tax & Legal, Provider Status, Future Tools, and owner/dev Technical Checks at `/tmp/chillywood-money-center-proof-20260526-r5/`. The screenshots show locked/setup-needed/sandbox-ready states, no duplicate money tabs, no fake money actions, no Stripe checkout for Android digital access, and no provider secret values.
 
-May 27, 2026 proof status: repo-side switch integration is implemented and validated by typecheck/guards. Android screenshots for Owner/Admin Money Controls, high-risk confirmation, and kill-switch-off reflection in creator Money Center remain pending unless captured in a later `/tmp` proof folder.
+May 27, 2026 Android refresh proof result: `R5CR120QCBF` was refreshed against current JS by restarting Metro with `--clear`, using `adb reverse tcp:8081 tcp:8081`, clearing `com.chillywood.mobile` app state, and launching the dev-client URL directly. Screenshots live at `/tmp/chillywood-money-center-android-refresh-proof-20260527/` and capture Platform Studio Monetization / Money Center first view, Overview, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Payouts, Tax & Legal, Provider Status, and the Admin-role gate reached by the available proof account. The Payouts section shows the final tightened current-JS state: no setup-payout CTA, no payout release, no balance, no withdrawal, no transfer, and only a read-only status refresh.
+
+May 27, 2026 kill-switch proof result: the linked Supabase environment now has `202605270001` applied and aligned. A signed-in proof-account probe returned 17 creator-safe switch summary rows, no secret-like fields, `live_money_enabled=off`, `payouts_enabled=off`, digital sales/tips/Watch-Party seats/paid content/merch off, and Stripe Connect/RevenueCat-Google Play/provider webhooks sandbox-only. Direct table update was denied with `42501`; switch write RPC attempts were denied with `money_kill_switch_admin_required`; no toggle was performed and no live-money state changed. The same account could read the owner/operator switch list and audit summary RPCs, so the backend read path is present, but the clean Android Admin route did not admit the account to the Admin UI. Owner/Admin Money Controls UI rows, high-risk confirmation/reason sheet, and safe no-op audit-toggle runtime proof therefore remain pending for an account with an active owner/operator Admin UI role.
+
+May 27, 2026 validation commands passed:
+
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:refresh-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:stripe-connect-policy`
+- `npm run guard:provider-readiness-policy`
+- `npm run guard:money-center-policy`
+- `npm run guard:vod-quality-policy`
+- `npm run guard:clip-studio-policy`
+- `npm run guard:platform-brand-studio-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `supabase migration list`
+- `supabase db lint --linked --schema public --fail-on error`
+- `supabase db push --dry-run`
+
+Targeted source scans for fake earnings/tips/payouts/balances/checkout, Stripe checkout misuse for Android digital goods, provider-secret rendering in Money Center/Admin money files, live-money movement calls, duplicate creator-facing money tabs, user-facing `Mini Platform`, provider readiness source usage, Premium changes, and LiveKit/Watch-Party changes found only locked/negative policy copy, admin-only readouts, or no product-code changes.
 
 ## Remaining Limitations
 
@@ -152,3 +175,4 @@ May 27, 2026 proof status: repo-side switch integration is implemented and valid
 - Paid content, tips, Watch-Party seats, merch checkout, sponsorships, ads, and revenue imports remain planned/readiness-only.
 - No live money was activated by this consolidation.
 - Owner/Admin switches are a control scaffold, not payout or checkout activation.
+- Owner/Admin Money Controls backend read/write boundaries are scaffolded and read-only-probed, but the Android Admin UI and high-risk confirmation sheet still need proof with an active owner/operator Admin UI account.

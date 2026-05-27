@@ -1,14 +1,15 @@
 # NEXT TASK
 
-## Recommended Lane: Money Center Provider Proof And Android Kill-Switch Runtime Proof
+## Recommended Lane: Owner/Admin Money Controls Active-Role Runtime Proof
 
-Money Center now has backend-enforced Owner/Admin kill switches in addition to provider readiness. The next useful money lane is proof, not activation: apply the migration in the target environment, capture creator/Admin runtime screens on Android, and prove provider boundaries without turning on live money.
+Money Center is now refreshed and creator-runtime-proved on Android with the latest JS. The next useful money lane is still proof, not activation: use an account with an active owner/operator Admin UI role to capture Owner/Admin Money Controls, high-risk confirmation/reason flow, and an optional harmless audited switch toggle without turning on live money.
 
 Closed truth:
 
 - Platform Studio has one creator-facing `Monetization` tab and `Money Center` page title.
 - Old `/monetize`, `/revenue`, and `/payouts` routes plus old tab/focus params map into Money Center section anchors.
 - Migration `202605270001_platform_money_kill_switches.sql` adds `platform_money_kill_switches`, `platform_money_kill_switch_audit`, sanitized creator summary RPC, owner/admin list/audit/write RPCs, and backend `assert_money_feature_allowed()`.
+- Migration `202605270001_platform_money_kill_switches.sql` is applied and aligned in the linked Supabase environment; `supabase db push --dry-run` reports the remote database up to date.
 - Defaults keep live money off: digital sales, tips, Watch-Party seats, paid content, merch, payouts, revenue imports, tax/KYC, ad revenue, sponsorships, and `live_money_enabled` are `off`.
 - Store/Stripe/webhook readiness switches are `sandbox_only` by default, allowing proof without production money.
 - Admin Command Center > Kill Switches has Owner/Admin Money Controls with high-risk confirmation and reason capture.
@@ -16,17 +17,20 @@ Closed truth:
 - Google Play/RevenueCat handles Android digital purchases; Stripe Connect handles creator payout setup/readiness only; merch is physical goods and separate.
 - Creator Balance remains ledger-first and shows no verified earnings until real ledger rows exist.
 - No checkout, tip, paid content sale, Watch-Party seat sale, merch sale, payout, withdrawal, transfer, fake tax/KYC, fake Premium grant, provider secret, or live-money movement was added.
+- Android `R5CR120QCBF` proof at `/tmp/chillywood-money-center-android-refresh-proof-20260527/` captures the refreshed Money Center first view plus Overview, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Payouts, Tax & Legal, and Provider Status.
+- Backend proof through the available signed-in proof account returned sanitized creator switch rows, kept `live_money_enabled=off` and `payouts_enabled=off`, denied direct table updates with `42501`, denied switch writes with `money_kill_switch_admin_required`, and performed no toggle.
 
 Remaining limitations:
 
-- Android runtime screenshots for Owner/Admin Money Controls, high-risk confirmation, and switch-off reflection in creator Money Center still need a current build/dev-client pass unless captured in a follow-up proof folder.
-- The migration still needs target-environment application/lint/dry-run/typegen proof in the deployment path.
+- Android Admin route after the clean app refresh did not open for the available proof account; it showed the active Admin-role gate instead. Owner/Admin Money Controls UI, kill-switch rows, and high-risk confirmation sheet still need runtime proof with a real active owner/operator Admin UI account.
+- No safe switch toggle was performed because the available account could read switch/audit summaries but could not write switch state. A later active-role proof can toggle a harmless non-live switch off-to-off or sandbox-only-to-same-state only if product owners approve the no-op audit.
 - RevenueCat, Google Play, Stripe Connect, and webhook production readiness remain setup/sandbox-only; do not mark any capability `active` without provider proof and explicit owner approval.
 
 Recommended next lane:
 
-- Apply/prove `202605270001_platform_money_kill_switches.sql` in the target Supabase environment.
-- Capture Android `R5CR120QCBF` screenshots for Platform Studio tab row, Money Center first view, each Money Center section, Provider Status, Admin Money Controls, switch list, high-risk confirmation modal, and a switch-off state reflected in creator Money Center.
+- Sign in on Android `R5CR120QCBF` with an account that has an active owner/operator Admin UI role.
+- Capture Admin Command Center > Kill Switches > Owner/Admin Money Controls, switch list, Technical Checks, Audit Trail, and high-risk confirmation/reason sheet without committing any live-money state change.
+- If a harmless no-op switch proof is approved, use the backend RPC to perform it with a clear reason, prove an audit row, then confirm `live_money_enabled=off` and payouts/digital/tips/paid-content remain off.
 - Link/prove provider credentials by secret name only, never values; prove valid/invalid webhook handling and idempotency without granting Premium or live money.
 - Keep `live_money_enabled=off`; keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
 - Re-run the Money Center, provider readiness, payment rail, creator monetization, Stripe Connect, runtime, and LiveKit/old-room guard stack.
