@@ -1,6 +1,6 @@
 # Fraud And Forfeiture Policy
 
-Last updated: May 13, 2026
+Last updated: May 27, 2026
 
 > Repo launch note: Attorney review required before public launch. Enforcement, forfeiture, and payout-hold language must be approved before use.
 
@@ -44,4 +44,4 @@ Fraud decisions that affect money, payouts, sponsorships, account status, or cre
 
 ## No Live Enforcement Claim
 
-Current repo truth includes fraud foundation/readout/preflight systems, but no complete live fraud enforcement hook is active. Do not claim automated fraud enforcement or payout forfeiture is operational until backed hooks, review, appeal, legal approval, and affected-surface proof exist.
+Current repo truth includes fraud foundation/readout/preflight systems, but no complete live fraud enforcement hook is active. Owner/Admin Money Center now groups fraud holds, review queue counts, planned actions, payout-risk copy, and live-money/payout blocking status in one Fraud & Risk section. It does not create a fraud score, clear fraud, pause payouts, restrict accounts, disable monetization, or forfeit money. Do not claim automated fraud enforcement or payout forfeiture is operational until backed hooks, review, appeal, legal approval, and affected-surface proof exist.

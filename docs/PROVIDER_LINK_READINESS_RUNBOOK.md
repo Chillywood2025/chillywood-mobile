@@ -6,7 +6,7 @@ This runbook records the provider-link readiness scaffold for Premium, RevenueCa
 
 No implementation in this lane activates purchases, payouts, balances, withdrawals, transfers, checkout, tips, paid content, revenue imports, or live money movement.
 
-Platform Studio Money Center is the normal creator-facing home for these statuses. The visible source of truth is the sanitized provider-readiness summary plus Money Center's backend kill-switch summary and ledger-first readiness copy; owner/dev-only Technical checks may show public-safe setup metadata, never secret values.
+Platform Studio Money Center is the normal creator-facing home for these statuses. Owner/Admin Command Center has one consolidated Money Center tab for admin money readiness and switches. Both surfaces use the sanitized provider-readiness summary plus backend Money kill-switch state; owner/dev-only Technical checks may show public-safe setup metadata, never secret values.
 
 ## Readiness Source Of Truth
 
@@ -176,6 +176,23 @@ The RevenueCat and Google Play webhook shells intentionally do not process entit
 
 `provider_webhooks_enabled=off` keeps webhooks from activating money; they may only audit readiness if policy allows. `provider_webhooks_enabled=sandbox_only` allows sandbox proof only. `live_money_enabled=off` blocks live-money claims and actions even when a provider is configured or sandbox-ready.
 
+## Owner/Admin Money Center Mapping
+
+Owner/Admin Money Center reads `get_provider_readiness_summary()` through `_lib/providerReadiness.ts` and `get_platform_money_kill_switches()` / `list_platform_money_kill_switch_audit()` through `_lib/moneyFeatureFlags.ts`. It groups readiness under:
+
+- Premium / RevenueCat / Google Play
+- Digital Sales
+- Tips / Watch-Party Seats / Paid Content
+- Payouts / Stripe Connect
+- Provider Webhooks
+- Sponsors / Ads
+- Fraud & Risk
+- Creator Balance / Ledger
+- Tax & Legal
+- Technical Checks
+
+Old Admin params such as `tab=premium`, `tab=kill-switches`, `tab=ads`, `tab=sponsors`, `tab=fraud`, `tab=revenue`, and `tab=payouts` route into the consolidated Money Center section anchors. No provider row can be treated as active unless provider readiness says `active`, the relevant kill switch allows it, and live-money gates allow it.
+
 ## Provider Dashboard Setup Steps
 
 RevenueCat:
@@ -219,8 +236,8 @@ Ads:
 - Tips, paid content, Watch-Party seats, and merch appear as separate readiness sections instead of one generic commerce bucket.
 - Creator Balance remains ledger-first and shows no verified earnings until backed ledger rows exist.
 - Old `Monetize`, `Revenue`, and `Payouts` entry points map into Money Center sections and no longer exist as duplicate creator-facing dashboards.
-- Owner/Admin Money Controls live in Admin Command Center > Kill Switches and are separate from creator Money Center.
-- Admin Revenue/Payouts remain owner/admin operational readouts and are not normal creator-facing Money Center replacements.
+- Owner/Admin money controls now live in Admin Command Center > Money Center, where Premium, Sponsors/Ads, Fraud/Risk, Revenue/Ledger, Payouts, provider webhooks, kill switches, audit, and technical checks are consolidated.
+- Admin Revenue/Payouts remain owner/admin operational readouts inside the consolidated Admin Money Center and are not normal creator-facing Money Center replacements.
 
 Product policy: `docs/MONEY_CENTER_PRODUCT_POLICY.md`.
 

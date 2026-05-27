@@ -1,6 +1,6 @@
 # Sponsor And Paid Promotion Disclosure Policy
 
-Last updated: May 13, 2026
+Last updated: May 27, 2026
 
 > Repo launch note: Attorney review required before public launch. FTC, platform, app-store, and regulated-product requirements must be reviewed before paid promotion launches.
 
@@ -43,4 +43,4 @@ Chi'llywood may label, remove, restrict, demonetize, hold, or suspend undisclose
 
 ## Current Status
 
-Sponsor checkout, brand payment, sponsor activation, payout split execution, and live sponsor money are not active in current repo truth. Existing sponsor/fraud functions are preflight/foundation-only unless a later release proves otherwise.
+Sponsor checkout, brand payment, sponsor activation, payout split execution, and live sponsor money are not active in current repo truth. Existing sponsor/fraud functions are preflight/foundation-only unless a later release proves otherwise. Owner/Admin Money Center now groups sponsor review queue, sponsor disclosure/moderation, sponsor payment foundation, payout split planning, ads readiness, and sponsorship/ad kill switches in one Sponsors / Ads section; it does not approve sponsors, charge brands, create checkout, or create payable creator splits.

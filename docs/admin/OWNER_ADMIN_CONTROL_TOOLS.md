@@ -14,6 +14,7 @@
 - The single top-level Legal tab contains Intake, Evidence, Holds, Requests, Exports, and Timeline/History sections where backed. Legal Request Intake stores non-deletable intake records connected to Legal Evidence work.
 - DMCA Case Management handles copyright notice intake, case detail, content actions, strikes, counter-notices, and functional case history.
 - Owner Security Center is Owner-only and backed by `owner_trusted_devices`, `security_audit_events`, temporary grant read/revoke paths, security audit timeline readouts, Live Ops flag readouts, and checklist proof. It must show unavailable/manual when a source cannot be proved, not fake zeroes.
+- Owner/Admin Money Center is the single admin money control surface. It consolidates Premium, RevenueCat/Google Play readiness, sponsors/ads, fraud/risk, ledger/revenue, payouts/Stripe Connect, provider webhooks, kill switches, audit, and technical checks into collapsible sections. It uses backend Money switch RPCs plus sanitized provider readiness and cannot create checkout, payouts, transfers, balances, fake money, or live-money movement.
 - Canary Checks store pass/fail/manual-required results; manual required is not success.
 - Safety Dashboard shows only real counts and unknown/manual for missing aggregations.
 

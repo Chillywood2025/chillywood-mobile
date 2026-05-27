@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -77,6 +77,17 @@ import {
   type PlatformMoneyKillSwitchAuditRow,
   type PlatformMoneyKillSwitchRow,
 } from "../_lib/moneyFeatureFlags";
+import {
+  findProviderReadinessSummary,
+  getCreatorReadinessLabel,
+  getProviderReadinessFallbackSummary,
+  readProviderReadinessSummary,
+  summarizeProviderReadiness,
+  type ProviderReadinessCapability,
+  type ProviderReadinessProvider,
+  type ProviderReadinessStatus,
+  type ProviderReadinessSummaryRow,
+} from "../_lib/providerReadiness";
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
@@ -345,6 +356,7 @@ type OperatorTabKey =
   | "safety-dashboard"
   | "rachi"
   | "users"
+  | "money-center"
   | "premium"
   | "kill-switches"
   | "usage"
@@ -578,15 +590,9 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "safety-dashboard", label: "Safety" },
   { key: "rachi", label: "Rachi" },
   { key: "users", label: "Users" },
-  { key: "premium", label: "Premium" },
-  { key: "kill-switches", label: "Kill Switches" },
+  { key: "money-center", label: "Money Center" },
   { key: "usage", label: "Usage" },
-  { key: "ads", label: "Ads" },
-  { key: "revenue", label: "Revenue" },
-  { key: "payouts", label: "Payouts" },
   { key: "networks", label: "Networks" },
-  { key: "sponsors", label: "Sponsors" },
-  { key: "fraud", label: "Fraud" },
   { key: "live-cost-guard", label: "Live Cost Guard" },
   { key: "live-ops-fix-center", label: "Live Ops Fix Center" },
   { key: "legal", label: "Legal" },
@@ -938,17 +944,39 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
   },
 ];
 
-type MoneyControlSectionId =
+type AdminMoneyCenterSectionId =
+  | "overview"
+  | "kill_switches"
+  | "premium"
+  | "sponsors_ads"
+  | "fraud_risk"
+  | "digital_sales"
+  | "tips_seats_paid_content"
+  | "merch"
+  | "ledger"
+  | "payouts"
+  | "provider_webhooks"
+  | "tax_legal"
+  | "audit"
+  | "technical";
+
+type MoneySwitchGroupId =
   | "global"
   | "digital"
-  | "tips"
-  | "watch_party_seats"
-  | "paid_content"
-  | "merch"
+  | "physical"
   | "payouts"
-  | "webhooks"
-  | "technical"
-  | "audit";
+  | "sponsors_ads"
+  | "fraud_risk";
+
+type AdminMoneyCenterSectionConfig = {
+  id: AdminMoneyCenterSectionId;
+  title: string;
+  summary: string;
+  meta?: string;
+  statusLabel: string;
+  tone: OwnerControlTone;
+  children: React.ReactNode;
+};
 
 type MoneySwitchConfirmState = {
   key: MoneyFeatureFlagKey;
@@ -974,48 +1002,31 @@ const HIGH_RISK_MONEY_SWITCHES = new Set<MoneyFeatureFlagKey>([
   "watch_party_seats_enabled",
   "paid_content_enabled",
   "stripe_connect_enabled",
+  "revenuecat_google_play_enabled",
   "provider_webhooks_enabled",
 ]);
 
-const MONEY_CONTROL_SECTIONS: readonly {
-  id: MoneyControlSectionId;
+const MONEY_SWITCH_GROUPS: readonly {
+  id: MoneySwitchGroupId;
   title: string;
   summary: string;
   keys: readonly MoneyFeatureFlagKey[];
 }[] = [
   {
     id: "global",
-    title: "Global Money Switches",
-    summary: "Visibility, creator monetization, and the global live-money lock.",
-    keys: ["money_center_visible", "creator_monetization_enabled", "live_money_enabled"],
+    title: "Global Money",
+    summary: "Visibility, webhooks, creator monetization, and the global live-money lock.",
+    keys: ["money_center_visible", "creator_monetization_enabled", "provider_webhooks_enabled", "live_money_enabled"],
   },
   {
     id: "digital",
-    title: "Digital Sales",
+    title: "Digital Purchases",
     summary: "Android digital goods stay on Google Play and RevenueCat readiness.",
-    keys: ["digital_sales_enabled", "revenuecat_google_play_enabled"],
+    keys: ["digital_sales_enabled", "tips_enabled", "watch_party_seats_enabled", "paid_content_enabled", "revenuecat_google_play_enabled"],
   },
   {
-    id: "tips",
-    title: "Tips",
-    summary: "Creator support products stay locked until store and payout proof exist.",
-    keys: ["tips_enabled"],
-  },
-  {
-    id: "watch_party_seats",
-    title: "Watch-Party Seats",
-    summary: "Paid digital seats cannot change room authority or bypass approvals.",
-    keys: ["watch_party_seats_enabled"],
-  },
-  {
-    id: "paid_content",
-    title: "Paid Content",
-    summary: "Paid videos, posts, collections, and unlock claims.",
-    keys: ["paid_content_enabled"],
-  },
-  {
-    id: "merch",
-    title: "Merch",
+    id: "physical",
+    title: "Physical / Merch",
     summary: "Physical goods stay separate from Android digital purchases.",
     keys: ["merch_enabled"],
   },
@@ -1026,24 +1037,89 @@ const MONEY_CONTROL_SECTIONS: readonly {
     keys: ["creator_balance_visible", "stripe_connect_enabled", "payouts_enabled", "tax_kyc_collection_enabled"],
   },
   {
-    id: "webhooks",
-    title: "Provider Webhooks",
-    summary: "Provider webhooks can prove readiness without activating live money.",
-    keys: ["provider_webhooks_enabled"],
+    id: "sponsors_ads",
+    title: "Sponsors / Ads",
+    summary: "Sponsor and ad revenue controls remain foundation-only until provider proof exists.",
+    keys: ["sponsorships_enabled", "ads_revenue_enabled"],
   },
   {
-    id: "technical",
-    title: "Technical Checks",
-    summary: "Future imports, ad revenue, sponsorships, and owner-only readiness checks.",
-    keys: ["creator_revenue_imports_enabled", "ads_revenue_enabled", "sponsorships_enabled"],
-  },
-  {
-    id: "audit",
-    title: "Audit Trail",
-    summary: "Recent immutable Money switch changes.",
+    id: "fraud_risk",
+    title: "Fraud / Risk",
+    summary: "Fraud/risk money switches are not separate yet; live money and payout switches still block execution.",
     keys: [],
   },
 ];
+
+const ADMIN_MONEY_CENTER_COMPAT_TABS = new Set<OperatorTabKey>([
+  "money-center",
+  "premium",
+  "kill-switches",
+  "ads",
+  "revenue",
+  "payouts",
+  "sponsors",
+  "fraud",
+]);
+
+const ADMIN_MONEY_LEGACY_TAB_SECTIONS: Partial<Record<OperatorTabKey, AdminMoneyCenterSectionId>> = {
+  premium: "premium",
+  "kill-switches": "kill_switches",
+  ads: "sponsors_ads",
+  revenue: "ledger",
+  payouts: "payouts",
+  sponsors: "sponsors_ads",
+  fraud: "fraud_risk",
+};
+
+const ADMIN_MONEY_ROUTE_SECTION_ALIASES: Record<string, AdminMoneyCenterSectionId> = {
+  overview: "overview",
+  controls: "kill_switches",
+  "kill-switches": "kill_switches",
+  kill_switches: "kill_switches",
+  switches: "kill_switches",
+  premium: "premium",
+  revenuecat: "premium",
+  "google-play": "premium",
+  google_play: "premium",
+  sponsors: "sponsors_ads",
+  sponsor: "sponsors_ads",
+  ads: "sponsors_ads",
+  "sponsors-ads": "sponsors_ads",
+  sponsors_ads: "sponsors_ads",
+  fraud: "fraud_risk",
+  risk: "fraud_risk",
+  "fraud-risk": "fraud_risk",
+  fraud_risk: "fraud_risk",
+  "digital-sales": "digital_sales",
+  digital_sales: "digital_sales",
+  tips: "tips_seats_paid_content",
+  seats: "tips_seats_paid_content",
+  "watch-party-seats": "tips_seats_paid_content",
+  watch_party_seats: "tips_seats_paid_content",
+  "paid-content": "tips_seats_paid_content",
+  paid_content: "tips_seats_paid_content",
+  merch: "merch",
+  merchandise: "merch",
+  revenue: "ledger",
+  ledger: "ledger",
+  balance: "ledger",
+  payouts: "payouts",
+  "stripe-connect": "payouts",
+  stripe_connect: "payouts",
+  webhooks: "provider_webhooks",
+  "provider-webhooks": "provider_webhooks",
+  provider_webhooks: "provider_webhooks",
+  tax: "tax_legal",
+  legal: "tax_legal",
+  "tax-legal": "tax_legal",
+  tax_legal: "tax_legal",
+  audit: "audit",
+  "audit-trail": "audit",
+  technical: "technical",
+  checks: "technical",
+  "technical-checks": "technical",
+  technical_checks: "technical",
+};
 const dmcaStatusFilters: (DmcaCaseStatus | "all")[] = [
   "all",
   "received",
@@ -1621,6 +1697,41 @@ const moneySwitchWarningCopy = (pending: MoneySwitchConfirmState | null) => {
     return "This high-risk switch is audited. The backend records the change and creator surfaces fail closed if the write fails.";
   }
   return "This change is backend-enforced and audited. Switch state alone cannot create checkout, transfers, payouts, balances, or live money.";
+};
+
+const firstRouteParam = (value: string | string[] | undefined) => (
+  Array.isArray(value) ? value[0] : value
+);
+
+const normalizeAdminOperatorTabParam = (value: string | string[] | undefined): OperatorTabKey | null => {
+  const raw = firstRouteParam(value);
+  if (!raw) return null;
+  const normalized = raw.trim().toLowerCase().replace(/_/g, "-") as OperatorTabKey;
+  return operatorTabs.some((tab) => tab.key === normalized) || ADMIN_MONEY_CENTER_COMPAT_TABS.has(normalized)
+    ? normalized
+    : null;
+};
+
+const normalizeAdminMoneyCenterSectionParam = (
+  value: string | string[] | undefined,
+): AdminMoneyCenterSectionId | null => {
+  const raw = firstRouteParam(value);
+  if (!raw) return null;
+  return ADMIN_MONEY_ROUTE_SECTION_ALIASES[raw.trim().toLowerCase()] ?? null;
+};
+
+const providerReadinessStatusLabel = (status: ProviderReadinessStatus) => {
+  if (status === "sandbox_ready") return "Sandbox ready";
+  if (status === "ready_for_review") return "Ready for review";
+  if (status === "setup_needed") return "Setup needed";
+  return formatModerationToken(status);
+};
+
+const providerReadinessStatusTone = (status: ProviderReadinessStatus): OwnerControlTone => {
+  if (status === "active") return "success";
+  if (status === "sandbox_ready" || status === "configured" || status === "ready_for_review") return "manual";
+  if (status === "blocked" || status === "error") return "danger";
+  return "locked";
 };
 
 const ownerSecurityToneForStatus = (status: unknown): OwnerControlTone => {
@@ -2616,6 +2727,12 @@ const listAdminContentAuditEventsRpc = async (limit = 10) => {
 
 export default function AdminStudioScreen() {
   const router = useRouter();
+  const routeParams = useLocalSearchParams<{
+    focus?: string | string[];
+    section?: string | string[];
+    tab?: string | string[];
+  }>();
+  const consumedAdminRouteRef = useRef<string | null>(null);
   const { isLoading: authLoading, isSignedIn, user } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const [titles, setTitles] = useState<TitleRow[]>([]);
@@ -2831,18 +2948,28 @@ export default function AdminStudioScreen() {
   const [moneySwitchConfirm, setMoneySwitchConfirm] = useState<MoneySwitchConfirmState | null>(null);
   const [moneySwitchReason, setMoneySwitchReason] = useState("");
   const [moneySwitchOwnerReason, setMoneySwitchOwnerReason] = useState("");
-  const [expandedMoneyControlSections, setExpandedMoneyControlSections] = useState<Record<MoneyControlSectionId, boolean>>({
-    global: true,
-    digital: false,
-    tips: false,
-    watch_party_seats: false,
-    paid_content: false,
+  const [providerReadinessRows, setProviderReadinessRows] = useState<ProviderReadinessSummaryRow[]>(
+    getProviderReadinessFallbackSummary,
+  );
+  const [providerReadinessLoading, setProviderReadinessLoading] = useState(false);
+  const [providerReadinessNotice, setProviderReadinessNotice] = useState<string | null>(null);
+  const [expandedAdminMoneyCenterSections, setExpandedAdminMoneyCenterSections] = useState<Record<AdminMoneyCenterSectionId, boolean>>({
+    overview: true,
+    kill_switches: false,
+    premium: false,
+    sponsors_ads: false,
+    fraud_risk: false,
+    digital_sales: false,
+    tips_seats_paid_content: false,
     merch: false,
+    ledger: false,
     payouts: false,
-    webhooks: false,
-    technical: false,
+    provider_webhooks: false,
+    tax_legal: false,
     audit: false,
+    technical: false,
   });
+  const [expandedMoneySwitchRows, setExpandedMoneySwitchRows] = useState<Record<string, boolean>>({});
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
@@ -3132,6 +3259,37 @@ export default function AdminStudioScreen() {
   }, [operatorTab, visibleOperatorTabs]);
 
   useEffect(() => {
+    if (!canAccessAdmin || !visibleOperatorTabs.length) return;
+    const routeTab = normalizeAdminOperatorTabParam(routeParams.tab);
+    const routeSection = normalizeAdminMoneyCenterSectionParam(routeParams.section)
+      ?? normalizeAdminMoneyCenterSectionParam(routeParams.focus);
+    const legacySection = routeTab ? ADMIN_MONEY_LEGACY_TAB_SECTIONS[routeTab] ?? null : null;
+    const moneySection = routeSection ?? legacySection;
+    const targetTab: OperatorTabKey | null = moneySection
+      ? "money-center"
+      : routeTab && visibleOperatorTabs.some((tab) => tab.key === routeTab)
+        ? routeTab
+        : null;
+    if (!targetTab || !visibleOperatorTabs.some((tab) => tab.key === targetTab)) return;
+    const routeKey = `${firstRouteParam(routeParams.tab) ?? ""}:${firstRouteParam(routeParams.section) ?? ""}:${firstRouteParam(routeParams.focus) ?? ""}:${targetTab}:${moneySection ?? ""}`;
+    if (consumedAdminRouteRef.current === routeKey) return;
+    consumedAdminRouteRef.current = routeKey;
+    setOperatorTab(targetTab);
+    if (targetTab === "money-center" && moneySection) {
+      setExpandedAdminMoneyCenterSections((prev) => ({
+        ...prev,
+        [moneySection]: true,
+      }));
+    }
+  }, [
+    canAccessAdmin,
+    routeParams.focus,
+    routeParams.section,
+    routeParams.tab,
+    visibleOperatorTabs,
+  ]);
+
+  useEffect(() => {
     if (staffRoleOptions.length > 0 && !staffRoleOptions.some((option) => option.key === staffRoleTarget)) {
       setStaffRoleTarget(staffRoleOptions[0].key);
     }
@@ -3250,6 +3408,10 @@ export default function AdminStudioScreen() {
       setMoneySwitchConfirm(null);
       setMoneySwitchReason("");
       setMoneySwitchOwnerReason("");
+      setProviderReadinessRows(getProviderReadinessFallbackSummary());
+      setProviderReadinessLoading(false);
+      setProviderReadinessNotice(null);
+      setExpandedMoneySwitchRows({});
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -3346,6 +3508,10 @@ export default function AdminStudioScreen() {
       setMoneySwitchConfirm(null);
       setMoneySwitchReason("");
       setMoneySwitchOwnerReason("");
+      setProviderReadinessRows(getProviderReadinessFallbackSummary());
+      setProviderReadinessLoading(false);
+      setProviderReadinessNotice(null);
+      setExpandedMoneySwitchRows({});
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -4306,7 +4472,7 @@ export default function AdminStudioScreen() {
       body: "Count comes from active user_entitlements only, not subscription revenue.",
       qualifier: adminV1ReadModel.premiumActiveCount === null ? "Not Connected" : "Backed",
       tone: adminV1ReadModel.loading ? "info" : adminV1ReadModel.premiumActiveCount === null ? "locked" : "success",
-      destination: "premium",
+      destination: "money-center",
     },
     {
       label: "Active Live Rooms",
@@ -4338,7 +4504,7 @@ export default function AdminStudioScreen() {
       body: "Placeholder provider and caps exist. No real SDK, ad revenue, or rendering is live.",
       qualifier: "Foundation Only",
       tone: "locked",
-      destination: "ads",
+      destination: "money-center",
     },
   ], [
     adminImmutableAuditReadModel.connected,
@@ -4431,6 +4597,12 @@ export default function AdminStudioScreen() {
         destination: "live-ops-fix-center",
         label: "Open Live Ops",
         tone: "manual" as AdminHomeTone,
+      },
+      {
+        body: "Review money readiness, rails, kill switches, and provider status.",
+        destination: "money-center",
+        label: "Open Money Center",
+        tone: "info" as AdminHomeTone,
       },
       {
         body: "Check owner security state.",
@@ -5556,11 +5728,44 @@ export default function AdminStudioScreen() {
     }
   }, [canAccessAdmin]);
 
-  useEffect(() => {
-    if (canAccessAdmin && operatorTab === "kill-switches") {
-      void loadMoneyControls();
+  const loadProviderReadiness = useCallback(async () => {
+    if (!canAccessAdmin) {
+      setProviderReadinessRows(getProviderReadinessFallbackSummary());
+      setProviderReadinessLoading(false);
+      setProviderReadinessNotice(null);
+      return;
     }
-  }, [canAccessAdmin, loadMoneyControls, operatorTab]);
+
+    try {
+      setProviderReadinessLoading(true);
+      setProviderReadinessRows(await readProviderReadinessSummary());
+      setProviderReadinessNotice(null);
+    } catch (err: unknown) {
+      setProviderReadinessRows(getProviderReadinessFallbackSummary());
+      setProviderReadinessNotice(formatAdminOperationFailure(err, "Provider readiness is unavailable."));
+    } finally {
+      setProviderReadinessLoading(false);
+    }
+  }, [canAccessAdmin]);
+
+  useEffect(() => {
+    if (canAccessAdmin && ADMIN_MONEY_CENTER_COMPAT_TABS.has(operatorTab)) {
+      void loadMoneyControls();
+      void loadProviderReadiness();
+      if (!canAccessContentProgramming) {
+        void loadAdminV1ReadModel();
+        void loadAdminFinanceReadModel();
+      }
+    }
+  }, [
+    canAccessAdmin,
+    canAccessContentProgramming,
+    loadAdminFinanceReadModel,
+    loadAdminV1ReadModel,
+    loadMoneyControls,
+    loadProviderReadiness,
+    operatorTab,
+  ]);
 
   const loadAdminImmutableAuditReadModel = useCallback(async () => {
     setAdminImmutableAuditReadModel((current) => ({ ...current, loading: true }));
@@ -6272,8 +6477,12 @@ export default function AdminStudioScreen() {
     setExpandedOwnerControlRows((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  const toggleMoneyControlSection = useCallback((key: MoneyControlSectionId) => {
-    setExpandedMoneyControlSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleAdminMoneyCenterSection = useCallback((key: AdminMoneyCenterSectionId) => {
+    setExpandedAdminMoneyCenterSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const toggleMoneySwitchRow = useCallback((key: string) => {
+    setExpandedMoneySwitchRows((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
   const queueMoneySwitchChange = useCallback((row: PlatformMoneyKillSwitchRow, nextState: MoneyFeatureFlagState) => {
@@ -8195,15 +8404,17 @@ export default function AdminStudioScreen() {
 
   const renderMoneySwitchRow = (row: PlatformMoneyKillSwitchRow) => {
     const busy = moneySwitchBusyKey === row.key;
+    const expanded = expandedMoneySwitchRows[row.key] ?? false;
     return (
       <OwnerControlRow
         key={row.key}
-        expanded
+        expanded={expanded}
         title={row.displayLabel}
         message={row.description}
         meta={`Last updated ${row.updatedAt ? formatModerationTimestamp(row.updatedAt) : "not connected"}`}
         statusLabel={formatMoneySwitchState(row.state)}
         tone={moneySwitchTone(row.state)}
+        onPress={() => toggleMoneySwitchRow(row.key)}
       >
         <OwnerDetailGrid
           rows={[
@@ -8243,83 +8454,439 @@ export default function AdminStudioScreen() {
     );
   };
 
-  const renderMoneyControlsSection = (section: typeof MONEY_CONTROL_SECTIONS[number]) => {
-    const expanded = expandedMoneyControlSections[section.id];
-    const sectionRows = section.keys.map((key) => getPlatformMoneyKillSwitch(moneySwitches, key));
-    const liveMoneySwitch = getPlatformMoneyKillSwitch(moneySwitches, "live_money_enabled");
-    const statusLabel = section.id === "audit"
-      ? `${moneySwitchAuditRows.length} rows`
-      : sectionRows.some((row) => row.state === "locked")
+  const renderMoneySwitchGroup = (group: typeof MONEY_SWITCH_GROUPS[number]) => {
+    const rows = group.keys.map((key) => getPlatformMoneyKillSwitch(moneySwitches, key));
+    const statusLabel = !rows.length
+      ? "No switch"
+      : rows.some((row) => row.state === "locked")
         ? "Blocked"
-        : sectionRows.some((row) => row.state === "on")
+        : rows.some((row) => row.state === "on")
           ? "Has On"
-          : sectionRows.some((row) => row.state === "sandbox_only")
+          : rows.some((row) => row.state === "sandbox_only")
             ? "Sandbox only"
             : "Off";
-    const statusTone: OwnerControlTone = section.id === "audit"
-      ? (moneySwitchAuditRows.length ? "info" : "locked")
-      : sectionRows.some((row) => row.state === "locked")
+    const tone: OwnerControlTone = !rows.length
+      ? "locked"
+      : rows.some((row) => row.state === "locked")
         ? "danger"
-        : sectionRows.some((row) => row.state === "on" || row.state === "sandbox_only")
+        : rows.some((row) => row.state === "on" || row.state === "sandbox_only")
           ? "success"
           : "locked";
 
+    return (
+      <View key={group.id} style={styles.contentSubPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ownerSectionTitle}>{group.title}</Text>
+            <Text style={styles.configListBody}>{group.summary}</Text>
+          </View>
+          <OwnerStatusPill label={statusLabel} tone={tone} />
+        </View>
+        {rows.length ? (
+          <View style={styles.configList}>
+            {rows.map(renderMoneySwitchRow)}
+          </View>
+        ) : (
+          <OwnerDisabledReason reason="No dedicated fraud/risk money switch exists yet. Payout, provider, and live-money kill switches still fail closed." />
+        )}
+      </View>
+    );
+  };
+
+  const renderMoneyAuditTrail = () => (
+    moneySwitchAuditRows.length ? (
+      <View style={styles.reportTimeline}>
+        {moneySwitchAuditRows.map((row) => (
+          <View key={row.id} style={styles.reportTimelineRow}>
+            <View style={[styles.reportTimelineDot, row.newState === "on" ? styles.reportTimelineDotDanger : styles.reportTimelineDotInfo]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reportTimelineTitle}>{formatModerationToken(row.switchKey)}</Text>
+              <Text style={styles.reportTimelineMeta}>
+                {`${formatMoneySwitchState(row.oldState ?? "off")} -> ${formatMoneySwitchState(row.newState)} · ${row.createdAt ? formatModerationTimestamp(row.createdAt) : "Time unknown"} · ${formatMoneySwitchAuditActor(row.actorUserId)}`}
+              </Text>
+              <Text style={styles.reportBody}>{row.reason}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    ) : (
+      <OwnerEmptyState title="No Money switch audit rows returned" body="Recent switch changes appear here after the protected RPC returns rows." />
+    )
+  );
+
+  const renderProviderReadinessLine = (
+    provider: ProviderReadinessProvider,
+    capability: ProviderReadinessCapability,
+    title: string,
+  ) => {
+    const row = findProviderReadinessSummary(providerReadinessRows, provider, capability);
+    const status = row?.status ?? "setup_needed";
+    return (
+      <View key={`${provider}-${capability}`} style={styles.contentSubPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.configListTitle}>{title}</Text>
+            <Text style={styles.configListBody}>{summarizeProviderReadiness(row)}</Text>
+          </View>
+          <OwnerStatusPill label={getCreatorReadinessLabel(row, providerReadinessStatusLabel(status))} tone={providerReadinessStatusTone(status)} />
+        </View>
+        <OwnerDetailGrid
+          rows={[
+            { label: "Provider", value: formatModerationToken(provider) },
+            { label: "Capability", value: formatModerationToken(capability) },
+            { label: "Status", value: providerReadinessStatusLabel(status) },
+            { label: "Next step", value: row?.nextStep || "Add provider setup before review." },
+            { label: "Last checked", value: row?.lastCheckedAt ? formatModerationTimestamp(row.lastCheckedAt) : "not connected" },
+          ]}
+        />
+      </View>
+    );
+  };
+
+  const renderAdminMoneySection = (section: AdminMoneyCenterSectionConfig) => {
+    const expanded = expandedAdminMoneyCenterSections[section.id] ?? false;
     return (
       <OwnerControlRow
         key={section.id}
         expanded={expanded}
         title={section.title}
         message={section.summary}
-        meta={section.id === "audit" ? "Audit rows are immutable and backend-written." : `Live money is ${formatMoneySwitchState(liveMoneySwitch.state)}.`}
-        statusLabel={statusLabel}
-        tone={statusTone}
-        onPress={() => toggleMoneyControlSection(section.id)}
+        meta={section.meta}
+        statusLabel={section.statusLabel}
+        tone={section.tone}
+        onPress={() => toggleAdminMoneyCenterSection(section.id)}
       >
-        {section.id === "audit" ? (
-          moneySwitchAuditRows.length ? (
-            <View style={styles.reportTimeline}>
-              {moneySwitchAuditRows.map((row) => (
-                <View key={row.id} style={styles.reportTimelineRow}>
-                  <View style={[styles.reportTimelineDot, row.newState === "on" ? styles.reportTimelineDotDanger : styles.reportTimelineDotInfo]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.reportTimelineTitle}>{formatModerationToken(row.switchKey)}</Text>
-                    <Text style={styles.reportTimelineMeta}>
-                      {`${formatMoneySwitchState(row.oldState ?? "off")} -> ${formatMoneySwitchState(row.newState)} · ${row.createdAt ? formatModerationTimestamp(row.createdAt) : "Time unknown"} · ${formatMoneySwitchAuditActor(row.actorUserId)}`}
-                    </Text>
-                    <Text style={styles.reportBody}>{row.reason}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <OwnerEmptyState title="No Money switch audit rows returned" body="Recent switch changes appear here after the protected RPC returns rows." />
-          )
-        ) : (
-          <View style={styles.configList}>
-            {sectionRows.map(renderMoneySwitchRow)}
-          </View>
-        )}
+        {section.children}
       </OwnerControlRow>
     );
   };
 
-  const renderMoneyControlsPanel = () => {
+  const renderAdminMoneyCenterPanel = () => {
     const liveMoneySwitch = getPlatformMoneyKillSwitch(moneySwitches, "live_money_enabled");
     const payoutsSwitch = getPlatformMoneyKillSwitch(moneySwitches, "payouts_enabled");
     const digitalSalesSwitch = getPlatformMoneyKillSwitch(moneySwitches, "digital_sales_enabled");
     const moneyCenterSwitch = getPlatformMoneyKillSwitch(moneySwitches, "money_center_visible");
+    const revenueCatGoogleSwitch = getPlatformMoneyKillSwitch(moneySwitches, "revenuecat_google_play_enabled");
+    const webhooksSwitch = getPlatformMoneyKillSwitch(moneySwitches, "provider_webhooks_enabled");
+    const sponsorshipsSwitch = getPlatformMoneyKillSwitch(moneySwitches, "sponsorships_enabled");
+    const adsRevenueSwitch = getPlatformMoneyKillSwitch(moneySwitches, "ads_revenue_enabled");
+    const stripeConnectSwitch = getPlatformMoneyKillSwitch(moneySwitches, "stripe_connect_enabled");
+    const liveMoneyOff = liveMoneySwitch.state !== "on";
+    const readyProviderRows = providerReadinessRows.filter((row) => row.status === "active" || row.status === "sandbox_ready");
+    const highRiskOnCount = moneySwitches.filter((row) => HIGH_RISK_MONEY_SWITCHES.has(row.key) && row.state === "on").length;
+    const premiumReadiness = findProviderReadinessSummary(providerReadinessRows, "revenuecat", "premium_entitlement")
+      ?? findProviderReadinessSummary(providerReadinessRows, "revenuecat", "revenuecat_entitlement");
+    const stripeConnectReadiness = findProviderReadinessSummary(providerReadinessRows, "stripe_connect", "stripe_connect_account");
+    const payoutsReadiness = findProviderReadinessSummary(providerReadinessRows, "stripe_connect", "payout_release");
+    const sponsorQueueCount = adminFinanceReadModel.sponsorReviewQueueRecordCount;
+    const fraudQueueCount = adminFinanceReadModel.fraudReviewQueueRecordCount;
+
+    const sections: AdminMoneyCenterSectionConfig[] = [
+      {
+        id: "overview",
+        title: "Overview",
+        summary: "One admin control surface for money readiness, rails, kill switches, and proof status.",
+        meta: `Live money is ${formatMoneySwitchState(liveMoneySwitch.state)}.`,
+        statusLabel: liveMoneyOff ? "Fail closed" : "High risk",
+        tone: liveMoneyOff ? "success" : "danger",
+        children: (
+          <View style={{ gap: 10 }}>
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Money Center" value={formatMoneySwitchState(moneyCenterSwitch.state)} tone={moneySwitchTone(moneyCenterSwitch.state)} />
+              <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneyOff ? "success" : "danger"} />
+              <OwnerMetricTile label="Provider Rows" value={providerReadinessLoading ? "Loading" : providerReadinessRows.length} tone={providerReadinessRows.length ? "info" : "locked"} />
+              <OwnerMetricTile label="High Risk On" value={highRiskOnCount} tone={highRiskOnCount ? "danger" : "success"} />
+            </View>
+            <OwnerDisabledReason reason="Next required action: keep live money off, finish provider proof, and use audited backend switches only after provider readiness is real." />
+            <OwnerDetailGrid
+              rows={[
+                { label: "Digital rail", value: "Google Play / RevenueCat for Android digital purchases" },
+                { label: "Payout rail", value: "Stripe Connect for creator payouts only" },
+                { label: "Merch rail", value: "Physical goods stay separate from digital access" },
+                { label: "Ledger model", value: "Internal ledger remains source of truth for earnings and payout math" },
+              ]}
+            />
+          </View>
+        ),
+      },
+      {
+        id: "kill_switches",
+        title: "Kill Switches",
+        summary: "Backend-enforced, audited switches grouped by money risk area.",
+        meta: "Rows expand for reason, audit, and state change controls.",
+        statusLabel: liveMoneyOff ? "Live off" : "Live on",
+        tone: liveMoneyOff ? "success" : "danger",
+        children: (
+          <View style={{ gap: 10 }}>
+            <OwnerDisabledReason reason="High-risk switches require confirmation, a reason, backend permission, and an immutable audit row. UI state alone cannot create money movement." />
+            {MONEY_SWITCH_GROUPS.map(renderMoneySwitchGroup)}
+          </View>
+        ),
+      },
+      {
+        id: "premium",
+        title: "Premium / RevenueCat / Google Play",
+        summary: "Premium entitlements and Android store readiness in one place; Premium gates are unchanged.",
+        meta: `Store switch is ${formatMoneySwitchState(revenueCatGoogleSwitch.state)}.`,
+        statusLabel: getCreatorReadinessLabel(premiumReadiness, "Setup needed"),
+        tone: providerReadinessStatusTone(premiumReadiness?.status ?? "setup_needed"),
+        children: (
+          <View style={{ gap: 10 }}>
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Premium Entitlements" value={formatHomeCount(adminV1ReadModel.premiumActiveCount, adminV1ReadModel.loading)} tone={adminV1ReadModel.premiumActiveCount === null ? "locked" : "success"} />
+              <OwnerMetricTile label="Store Switch" value={formatMoneySwitchState(revenueCatGoogleSwitch.state)} tone={moneySwitchTone(revenueCatGoogleSwitch.state)} />
+              <OwnerMetricTile label="Webhooks" value={formatMoneySwitchState(webhooksSwitch.state)} tone={moneySwitchTone(webhooksSwitch.state)} />
+            </View>
+            {renderProviderReadinessLine("revenuecat", "revenuecat_offering", "RevenueCat offering")}
+            {renderProviderReadinessLine("revenuecat", "revenuecat_entitlement", "RevenueCat entitlement")}
+            {renderProviderReadinessLine("google_play", "google_play_subscription_product", "Google Play product")}
+            <OwnerDisabledReason reason="No fake Premium access or purchase activation is exposed here. Existing Premium gates remain the runtime authority." />
+          </View>
+        ),
+      },
+      {
+        id: "sponsors_ads",
+        title: "Sponsors / Ads",
+        summary: "Sponsor foundations, review queue, disclosure/moderation, and ad readiness are grouped together.",
+        meta: `Sponsorships ${formatMoneySwitchState(sponsorshipsSwitch.state)} · Ads ${formatMoneySwitchState(adsRevenueSwitch.state)}.`,
+        statusLabel: sponsorshipsSwitch.state === "on" || adsRevenueSwitch.state === "on" ? "Review needed" : "Not active",
+        tone: sponsorshipsSwitch.state === "on" || adsRevenueSwitch.state === "on" ? "manual" : "locked",
+        children: (
+          <View style={{ gap: 10 }}>
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Sponsor Queue" value={formatHomeCount(sponsorQueueCount, adminFinanceReadModel.loading)} tone={sponsorQueueCount && sponsorQueueCount > 0 ? "manual" : "locked"} />
+              <OwnerMetricTile label="Deals" value={formatHomeCount(adminFinanceReadModel.sponsorDealRecordCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Disclosures" value={formatHomeCount(adminFinanceReadModel.sponsorDisclosureRecordCount, adminFinanceReadModel.loading)} tone="manual" />
+              <OwnerMetricTile label="Ads Provider" value={adsProviderStatus.isConnected ? "Connected" : "Not connected"} tone={adsProviderStatus.isConnected ? "success" : "locked"} />
+            </View>
+            <OwnerDisabledReason reason="Sponsor tools are not active yet. No sponsor checkout, brand charge, paid status, or creator payout split can execute." />
+            <OwnerDetailGrid
+              rows={[
+                { label: "Sponsor payments", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorPaymentRecordCount, adminFinanceReadModel.loading, "foundation payment record", "foundation payment records") },
+                { label: "Safety reviews", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorSafetyReviewRecordCount, adminFinanceReadModel.loading, "foundation review", "foundation reviews") },
+                { label: "Review queue", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorReviewQueueRecordCount, adminFinanceReadModel.loading, "foundation queue row", "foundation queue rows") },
+                { label: "Ads status", value: adsProviderStatus.message },
+              ]}
+            />
+          </View>
+        ),
+      },
+      {
+        id: "fraud_risk",
+        title: "Fraud & Risk",
+        summary: "Fraud, risk holds, payment safety, and review foundations without fake clearance.",
+        meta: "Runtime enforcement hooks are not connected.",
+        statusLabel: fraudQueueCount && fraudQueueCount > 0 ? "Review rows" : "Foundation only",
+        tone: fraudQueueCount && fraudQueueCount > 0 ? "manual" : "locked",
+        children: (
+          <View style={{ gap: 10 }}>
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Fraud Queue" value={formatHomeCount(fraudQueueCount, adminFinanceReadModel.loading)} tone={fraudQueueCount && fraudQueueCount > 0 ? "manual" : "locked"} />
+              <OwnerMetricTile label="Holds" value={formatHomeCount(adminFinanceReadModel.platformFraudHoldCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Actions" value={formatHomeCount(adminFinanceReadModel.fraudActionRecordCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneyOff ? "success" : "danger"} />
+            </View>
+            <OwnerDisabledReason reason="No fraud clearance, risk score, payout pause, or monetization restriction is active from this foundation UI." />
+          </View>
+        ),
+      },
+      {
+        id: "digital_sales",
+        title: "Digital Sales",
+        summary: "Paid creator content, digital access passes, and creator events stay on Google Play / RevenueCat for Android.",
+        meta: `Digital sales are ${formatMoneySwitchState(digitalSalesSwitch.state)}.`,
+        statusLabel: digitalSalesSwitch.state === "on" && revenueCatGoogleSwitch.state === "on" ? "Provider proof required" : "Not active",
+        tone: digitalSalesSwitch.state === "on" ? "manual" : "locked",
+        children: (
+          <View style={{ gap: 10 }}>
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Prices" value={formatHomeCount(adminFinanceReadModel.creatorContentPriceCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Purchases" value={formatHomeCount(adminFinanceReadModel.paidContentPurchaseCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Access Grants" value={formatHomeCount(adminFinanceReadModel.contentAccessGrantCount, adminFinanceReadModel.loading)} tone="locked" />
+            </View>
+            {renderProviderReadinessLine("revenuecat", "paid_content", "Paid content provider readiness")}
+            <OwnerDisabledReason reason="No Stripe checkout for Android digital goods. No sale toggle appears until both provider readiness and backend switches allow it." />
+          </View>
+        ),
+      },
+      {
+        id: "tips_seats_paid_content",
+        title: "Tips / Watch-Party Seats / Paid Content",
+        summary: "Digital creator support and access products stay planned/setup until provider proof exists.",
+        meta: "Each capability has its own kill switch.",
+        statusLabel: "Not active",
+        tone: "locked",
+        children: (
+          <View style={{ gap: 10 }}>
+            <OwnerDetailGrid
+              rows={[
+                { label: "Tips", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "tips_enabled").state) },
+                { label: "Watch-Party seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_seats_enabled").state) },
+                { label: "Paid content", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "paid_content_enabled").state) },
+                { label: "Tip rows", value: formatAdminFinanceCount(adminFinanceReadModel.creatorTipTransactionCount, adminFinanceReadModel.loading, "foundation tip row", "foundation tip rows") },
+              ]}
+            />
+            {renderProviderReadinessLine("revenuecat", "tips", "Tips provider readiness")}
+            <OwnerDisabledReason reason="No fake tip totals, fake seat sales, fake paywalls, or fake unlocks are shown. Seat purchases cannot grant host controls or bypass approvals." />
+          </View>
+        ),
+      },
+      {
+        id: "merch",
+        title: "Merch",
+        summary: "Physical goods are separate from Android digital access and can use an approved merch provider later.",
+        meta: `Merch is ${formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "merch_enabled").state)}.`,
+        statusLabel: "Planned",
+        tone: "locked",
+        children: (
+          <View style={{ gap: 10 }}>
+            <OwnerDetailGrid
+              rows={[
+                { label: "Products", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductCount, adminFinanceReadModel.loading, "foundation product", "foundation products") },
+                { label: "Orders", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductOrderCount, adminFinanceReadModel.loading, "foundation order", "foundation orders") },
+                { label: "Payment rail", value: "Physical merch later uses Stripe, Shopify, or approved merch provider" },
+              ]}
+            />
+            <OwnerDisabledReason reason="No fake merch store, fake order, or bundled digital unlock is active." />
+          </View>
+        ),
+      },
+      {
+        id: "ledger",
+        title: "Creator Balance / Ledger",
+        summary: "Ledger-first earnings and revenue math with no fake dollar amounts.",
+        meta: `Balance visibility is ${formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "creator_balance_visible").state)}.`,
+        statusLabel: "Read only",
+        tone: "info",
+        children: (
+          <View style={{ gap: 10 }}>
+            <OwnerDetailGrid
+              rows={[
+                { label: "Finance events", value: formatAdminFinanceCount(adminFinanceReadModel.financeLedgerEventCount, adminFinanceReadModel.loading, "foundation event", "foundation events") },
+                { label: "Revenue imports", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueSourceImportRecordCount, adminFinanceReadModel.loading, "foundation import row", "foundation import rows") },
+                { label: "Earnings ledger", value: formatAdminFinanceCount(adminFinanceReadModel.creatorEarningsLedgerCount, adminFinanceReadModel.loading, "ledger row", "ledger rows") },
+                { label: "Share ledger", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueShareLedgerEntryCount, adminFinanceReadModel.loading, "foundation row", "foundation rows") },
+              ]}
+            />
+            <OwnerDisabledReason reason="Creator balance is not payable. No cash-out, withdrawal, transfer, fake balance, or payable obligation is created here." />
+          </View>
+        ),
+      },
+      {
+        id: "payouts",
+        title: "Payouts / Stripe Connect",
+        summary: "Stripe Connect readiness for creator payouts only; no Android digital checkout.",
+        meta: `Payouts are ${formatMoneySwitchState(payoutsSwitch.state)}.`,
+        statusLabel: getCreatorReadinessLabel(payoutsReadiness ?? stripeConnectReadiness, "Setup needed"),
+        tone: providerReadinessStatusTone((payoutsReadiness ?? stripeConnectReadiness)?.status ?? "setup_needed"),
+        children: (
+          <View style={{ gap: 10 }}>
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Payout Accounts" value={formatHomeCount(adminFinanceReadModel.creatorPayoutAccountCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Payout Requests" value={formatHomeCount(adminFinanceReadModel.creatorPayoutRequestCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Transfer Rows" value={formatHomeCount(adminFinanceReadModel.creatorPayoutProviderTransferCount, adminFinanceReadModel.loading)} tone="locked" />
+            </View>
+            {renderProviderReadinessLine("stripe_connect", "stripe_connect_account", "Stripe Connect account readiness")}
+            {renderProviderReadinessLine("stripe_connect", "payout_release", "Payout release readiness")}
+            <OwnerDisabledReason reason="No payout, transfer, withdrawal, cash-out, KYC completion, or tax collection is active while payouts and live money remain off." />
+          </View>
+        ),
+      },
+      {
+        id: "provider_webhooks",
+        title: "Provider Webhooks",
+        summary: "RevenueCat, Google Play, Stripe, and webhook status without secret values or raw payloads.",
+        meta: `Webhook switch is ${formatMoneySwitchState(webhooksSwitch.state)}.`,
+        statusLabel: formatMoneySwitchState(webhooksSwitch.state),
+        tone: moneySwitchTone(webhooksSwitch.state),
+        children: (
+          <View style={{ gap: 10 }}>
+            {renderProviderReadinessLine("stripe_webhook", "stripe_webhook_signature", "Stripe webhook signature")}
+            {renderProviderReadinessLine("revenuecat", "revenuecat_entitlement", "RevenueCat webhook/readiness")}
+            {renderProviderReadinessLine("google_play", "google_play_subscription_product", "Google Play product/readiness")}
+            <OwnerDetailGrid
+              rows={[
+                { label: "Monetization webhook events", value: formatAdminFinanceCount(adminFinanceReadModel.monetizationWebhookEventCount, adminFinanceReadModel.loading, "foundation event", "foundation events") },
+                { label: "Payout webhook events", value: formatAdminFinanceCount(adminFinanceReadModel.creatorPayoutProviderWebhookEventCount, adminFinanceReadModel.loading, "foundation event", "foundation events") },
+                { label: "Live money flag", value: formatMoneySwitchState(liveMoneySwitch.state) },
+              ]}
+            />
+            <OwnerDisabledReason reason="Provider webhooks can audit or prove readiness, but they cannot activate live money while live_money_enabled is off." />
+          </View>
+        ),
+      },
+      {
+        id: "tax_legal",
+        title: "Tax & Legal",
+        summary: "Compact legal, payout, refund/reversal, and payment rail status.",
+        meta: `Tax/KYC switch is ${formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "tax_kyc_collection_enabled").state)}.`,
+        statusLabel: "Setup needed",
+        tone: "locked",
+        children: (
+          <View style={{ gap: 10 }}>
+            <OwnerDetailGrid
+              rows={[
+                { label: "Tax/KYC", value: "Setup needed before payouts" },
+                { label: "Refunds/reversals", value: "Must reduce pending or available ledger states later" },
+                { label: "Platform fee/cut", value: "Policy/runbook only until real ledger proof exists" },
+                { label: "Creator policy", value: "Creator monetization policy must pass before activation" },
+              ]}
+            />
+            <OwnerDisabledReason reason="No tax/KYC, fraud clearance, payout terms acceptance, or payable balance is faked here." />
+          </View>
+        ),
+      },
+      {
+        id: "audit",
+        title: "Audit Trail",
+        summary: "Recent immutable money-control events from the backend audit path.",
+        meta: "Switch writes are backend-written and audited.",
+        statusLabel: moneySwitchAuditRows.length ? `${moneySwitchAuditRows.length} rows` : "No rows",
+        tone: moneySwitchAuditRows.length ? "info" : "locked",
+        children: renderMoneyAuditTrail(),
+      },
+      {
+        id: "technical",
+        title: "Technical Checks",
+        summary: "Owner/dev-only safe labels for config, provider proof, and missing setup names.",
+        meta: "No secret values are rendered.",
+        statusLabel: providerReadinessRows.length ? "Safe labels" : "Fallback",
+        tone: providerReadinessRows.length ? "info" : "locked",
+        children: (
+          <View style={{ gap: 10 }}>
+            <OwnerDetailGrid
+              rows={[
+                { label: "Runtime issues", value: runtimeConfigIssues.length ? runtimeConfigIssues.slice(0, 4).join(" · ") : "No runtime config issues reported" },
+                { label: "Provider readiness rows", value: String(providerReadinessRows.length) },
+                { label: "Live money", value: formatMoneySwitchState(liveMoneySwitch.state) },
+                { label: "Provider checks source", value: "get_provider_readiness_summary" },
+              ]}
+            />
+            <OwnerDisabledReason reason="Technical checks show configured/missing labels only. Secret values, service-role values, webhook secrets, and provider payloads are never shown." />
+          </View>
+        ),
+      },
+    ];
 
     return (
       <View style={styles.contentPanel}>
         <OwnerControlPanelHeader
-          kicker="MONEY CONTROLS"
-          title="Owner/Admin Money Controls"
-          subtitle="Backend-enforced kill switches for Money Center visibility, digital sales, tips, Watch-Party seats, paid content, merch, payouts, provider webhooks, and live money. Switches alone cannot create checkout, balances, transfers, payouts, or live money."
-          badgeLabel={moneySwitchLoading ? "Loading" : "Backend enforced"}
-          badgeTone={moneySwitchLoading ? "manual" : "success"}
+          kicker="MONEY CENTER"
+          title="Owner/Admin Money Center"
+          subtitle="One fail-closed control surface for Premium, sponsors, ads, fraud, digital sales, creator ledger, payouts, provider readiness, kill switches, and audit proof."
+          badgeLabel={moneySwitchLoading || providerReadinessLoading ? "Loading" : liveMoneyOff ? "Live money off" : "High risk"}
+          badgeTone={moneySwitchLoading || providerReadinessLoading ? "manual" : liveMoneyOff ? "success" : "danger"}
           actions={(
-            <TouchableOpacity style={styles.ownerSecondaryButton} onPress={() => void loadMoneyControls()} disabled={moneySwitchLoading}>
-              <Text style={styles.ownerSecondaryButtonText}>{moneySwitchLoading ? "Refreshing" : "Refresh Money Controls"}</Text>
+            <TouchableOpacity
+              style={styles.ownerSecondaryButton}
+              onPress={() => {
+                void loadMoneyControls();
+                void loadProviderReadiness();
+                void loadAdminFinanceReadModel();
+              }}
+              disabled={moneySwitchLoading || providerReadinessLoading}
+            >
+              <Text style={styles.ownerSecondaryButtonText}>{moneySwitchLoading || providerReadinessLoading ? "Refreshing" : "Refresh Money Center"}</Text>
             </TouchableOpacity>
           )}
         />
@@ -8327,18 +8894,20 @@ export default function AdminStudioScreen() {
           <OwnerMetricTile label="Money Center" value={formatMoneySwitchState(moneyCenterSwitch.state)} tone={moneySwitchTone(moneyCenterSwitch.state)} />
           <OwnerMetricTile label="Digital Sales" value={formatMoneySwitchState(digitalSalesSwitch.state)} tone={moneySwitchTone(digitalSalesSwitch.state)} />
           <OwnerMetricTile label="Payouts" value={formatMoneySwitchState(payoutsSwitch.state)} tone={moneySwitchTone(payoutsSwitch.state)} />
-          <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneySwitch.state === "on" ? "danger" : moneySwitchTone(liveMoneySwitch.state)} />
+          <OwnerMetricTile label="Providers" value={providerReadinessLoading ? "Loading" : `${readyProviderRows.length}/${providerReadinessRows.length}`} tone={readyProviderRows.length ? "manual" : "locked"} />
+          <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneyOff ? "success" : "danger"} />
         </View>
         <OwnerDisabledReason reason="Live money remains fail-closed unless live_money_enabled is on, the specific capability switch allows it, provider readiness proves it, and future backend action guards pass." />
         {moneySwitchNotice ? <Text style={styles.noticeText}>{moneySwitchNotice}</Text> : null}
-        {moneySwitchLoading ? (
+        {providerReadinessNotice ? <Text style={styles.noticeText}>{providerReadinessNotice}</Text> : null}
+        {moneySwitchLoading || providerReadinessLoading ? (
           <View style={styles.configLoadingRow}>
             <ActivityIndicator color="#fff" />
-            <Text style={styles.configLoadingText}>Loading Money controls...</Text>
+            <Text style={styles.configLoadingText}>Loading Money Center...</Text>
           </View>
         ) : (
           <View style={styles.configList}>
-            {MONEY_CONTROL_SECTIONS.map(renderMoneyControlsSection)}
+            {sections.map(renderAdminMoneySection)}
           </View>
         )}
       </View>
@@ -10100,6 +10669,8 @@ export default function AdminStudioScreen() {
         </View>
         ) : null}
 
+        {operatorTab === "money-center" ? renderAdminMoneyCenterPanel() : null}
+
         {operatorTab === "premium" ? (
         <View style={styles.configCard}>
           <View style={styles.configHeaderRow}>
@@ -10140,7 +10711,7 @@ export default function AdminStudioScreen() {
 
         {operatorTab === "kill-switches" ? (
         <>
-          {renderMoneyControlsPanel()}
+          {renderAdminMoneyCenterPanel()}
           <View style={styles.configCard}>
             <View style={styles.configHeaderRow}>
               <View style={{ flex: 1 }}>

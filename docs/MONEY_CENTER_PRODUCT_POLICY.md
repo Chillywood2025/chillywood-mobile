@@ -57,8 +57,40 @@ Rules:
 - `sandbox_only` allows provider test proof and readiness review but no production money.
 - `on` still requires provider readiness and, for live-money actions, `live_money_enabled=on`.
 - `live_money_enabled` stays off unless a later explicit launch lane documents provider proof, legal/accounting approval, rollback proof, and owner approval.
-- High-risk switches require confirmation and a reason: `live_money_enabled`, `payouts_enabled`, `digital_sales_enabled`, `tips_enabled`, `watch_party_seats_enabled`, `paid_content_enabled`, `stripe_connect_enabled`, and `provider_webhooks_enabled`.
+- High-risk switches require confirmation and a reason: `live_money_enabled`, `payouts_enabled`, `digital_sales_enabled`, `tips_enabled`, `watch_party_seats_enabled`, `paid_content_enabled`, `stripe_connect_enabled`, `revenuecat_google_play_enabled`, and `provider_webhooks_enabled`.
 - High-risk switch changes write both Money switch audit and immutable admin audit; future money actions must call backend guards and fail closed if the switch or audit path blocks.
+
+## Owner/Admin Money Center
+
+Owner/Admin Command Center has one visible `Money Center` tab for money controls. Separate top-level Admin money tabs for Premium, Kill Switches, Ads, Revenue, Payouts, Sponsors, and Fraud were consolidated into section anchors. Old params remain compatible:
+
+- `admin?tab=premium` -> Money Center > Premium / RevenueCat / Google Play
+- `admin?tab=kill-switches` -> Money Center > Kill Switches
+- `admin?tab=ads` and `admin?tab=sponsors` -> Money Center > Sponsors / Ads
+- `admin?tab=fraud` -> Money Center > Fraud & Risk
+- `admin?tab=revenue` -> Money Center > Creator Balance / Ledger
+- `admin?tab=payouts` -> Money Center > Payouts / Stripe Connect
+
+Owner/Admin Money Center sections:
+
+- Overview
+- Kill Switches
+- Premium / RevenueCat / Google Play
+- Sponsors / Ads
+- Fraud & Risk
+- Digital Sales
+- Tips / Watch-Party Seats / Paid Content
+- Merch
+- Creator Balance / Ledger
+- Payouts / Stripe Connect
+- Provider Webhooks
+- Tax & Legal
+- Audit Trail
+- Technical Checks
+
+Kill switches are grouped as Global Money, Digital Purchases, Physical / Merch, Payouts, Sponsors / Ads, and Fraud / Risk. Usage, Networks, Live Cost Guard, and Live Ops remain separate operational/admin surfaces because they do not activate creator money or payout capability.
+
+Detailed Admin surface audit: `docs/ADMIN_MONEY_CENTER_SURFACE_AUDIT.md`.
 
 ## Money Center Sections
 
@@ -87,7 +119,7 @@ Rules:
 | `app/subscribe.tsx` | Premium subscription UI | Existing RevenueCat/Google Play flow | Kept; Money Center links to it without changing Premium gates. |
 | `app/channel/[userId].tsx` | Public Platform store/product readout | Public-safe rows only | Kept outside Money Center; no checkout is activated. |
 | `app/player/[id].tsx` | Creator-paid content access lock/read path | Existing resolver/RPC foundation | Kept; Money Center documents paid-content readiness without changing Player behavior. |
-| `app/admin.tsx` | Owner/admin Revenue/Payouts/finance readiness readouts | Admin-only/foundation helpers | Kept owner/admin-only; not a creator-facing duplicate Money Center. |
+| `app/admin.tsx` | Owner/admin money controls, Premium/store readiness, sponsor/ads/fraud/revenue/payout foundation readouts | Admin-only/foundation helpers plus Money switch and provider readiness helpers | Consolidated into one visible Owner/Admin Money Center tab; old Admin money params map into section anchors instead of separate long top-level money tabs. |
 | `_lib/moneyFeatureFlags.ts` | Sanitized Money switch reader and owner/admin writer helpers | Money kill-switch RPCs | Added; normal creators read sanitized states only, owner/admin writes require backend RPC and audit. |
 | `_lib/providerReadiness.ts` | Sanitized readiness summary reader | `get_provider_readiness_summary()` | Kept as the visible readiness source for Money Center. |
 | `_lib/paymentRailPolicy.ts` | Client-side payment rail doctrine | Static policy helper | Kept; Money Center copy follows it. |
@@ -146,6 +178,8 @@ May 26, 2026 proof result: `R5CR120QCBF` captured the consolidated tab row, Mone
 May 27, 2026 Android refresh proof result: `R5CR120QCBF` was refreshed against current JS by restarting Metro with `--clear`, using `adb reverse tcp:8081 tcp:8081`, clearing `com.chillywood.mobile` app state, and launching the dev-client URL directly. After an active owner account was available, Metro/dev-client still did not attach to the installed Admin bundle, so `./gradlew assembleRelease` bundled current JS and `adb install -r -d android/app/build/outputs/apk/release/app-release.apk` installed over the existing app data. Screenshots live at `/tmp/chillywood-money-center-android-refresh-proof-20260527/` and capture Platform Studio Monetization / Money Center first view, Overview, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Payouts, Tax & Legal, Provider Status, Technical Checks, Owner/Admin Money Controls, kill-switch rows, `live_money_enabled=off`, and the high-risk Live money confirmation/reason sheet. The Payouts section shows the final tightened current-JS state: no setup-payout CTA, no payout release, no balance, no withdrawal, no transfer, and only a read-only status refresh.
 
 May 27, 2026 kill-switch proof result: the linked Supabase environment now has `202605270001` applied and aligned. A signed-in proof-account probe returned 17 creator-safe switch summary rows, no secret-like fields, `live_money_enabled=off`, `payouts_enabled=off`, digital sales/tips/Watch-Party seats/paid content/merch off, and Stripe Connect/RevenueCat-Google Play/provider webhooks sandbox-only. Direct table update was denied with `42501`; switch write RPC attempts were denied with `money_kill_switch_admin_required`; no toggle was performed and no live-money state changed. Owner/Admin Money Controls runtime proof used the logged-in owner account after release reinstall: Admin was opened with `chillywoodmobile://admin`, then Kill Switches was selected from the internal tab strip because `app/admin.tsx` does not consume `tab=kill-switches`. The high-risk Live money confirmation sheet required a 12+ character reason, warned that backend RPC and immutable audit must happen before creator-visible changes, and was cancelled without submitting.
+
+May 27, 2026 Owner/Admin Money Center consolidation result: `app/admin.tsx` now consumes `tab`, `section`, and `focus` query params, exposes one visible `Money Center` tab, and maps old Admin money tabs into collapsible Money Center sections. The consolidated UI reads `readPlatformMoneyKillSwitches()`, `listPlatformMoneyKillSwitchAudit()`, and `readProviderReadinessSummary()`; no provider secret values or raw payloads are rendered. Android `R5CR120QCBF` proof lives at `/tmp/chillywood-admin-money-center-proof-20260527/`. It used a current release APK installed over the existing owner session, opened `chillywoodmobile://admin?tab=money-center`, and captured the Admin tab row, Owner/Admin Money Center first view, Overview, grouped Kill Switches, Premium / RevenueCat / Google Play, Sponsors / Ads, Fraud & Risk, Digital Sales, Tips / Watch-Party Seats / Paid Content, Merch, Creator Balance / Ledger, Payouts / Stripe Connect, Provider Webhooks, Tax & Legal, Audit Trail, Technical Checks, and creator Money Center disabled/setup consistency. The high-risk Live money confirmation sheet was opened and cancelled; no switch was confirmed and `live_money_enabled` stayed off.
 
 May 27, 2026 validation commands passed:
 

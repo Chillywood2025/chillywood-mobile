@@ -29,6 +29,7 @@ const paymentRailPolicy = read("_lib/paymentRailPolicy.ts");
 const moneyFeatureFlags = read("_lib/moneyFeatureFlags.ts");
 const admin = read("app/admin.tsx");
 const moneyKillSwitchMigration = read("supabase/migrations/202605270001_platform_money_kill_switches.sql");
+const operatorTabsBlock = admin.match(/const operatorTabs:[\s\S]*?\n\];/)?.[0] ?? "";
 
 assertIncludes(packageJson, "guard:money-center-policy", "package guard script");
 
@@ -73,11 +74,30 @@ assertIncludes(channelSettings, "digital_sales_enabled", "Digital sales switch")
 assertIncludes(channelSettings, "payouts_enabled", "Payouts switch");
 assertIncludes(channelSettings, "live_money_enabled", "Live money switch");
 assertIncludes(channelSettings, "isMoneyFeatureSandboxOrOn", "sandbox-only setup gate");
-assertIncludes(admin, "Owner/Admin Money Controls", "Owner/Admin Money Controls UI");
+assertIncludes(admin, "Owner/Admin Money Center", "Owner/Admin Money Center UI");
+assertIncludes(operatorTabsBlock, "{ key: \"money-center\", label: \"Money Center\" }", "Admin Money Center tab");
+assertIncludes(admin, "ADMIN_MONEY_LEGACY_TAB_SECTIONS", "legacy Admin money tab mapping");
+assertIncludes(admin, "useLocalSearchParams", "Admin Money Center deep-link query mapping");
+assertIncludes(admin, "Premium / RevenueCat / Google Play", "Admin Premium provider consolidation");
+assertIncludes(admin, "Sponsors / Ads", "Admin sponsor and ads consolidation");
+assertIncludes(admin, "Fraud & Risk", "Admin fraud and risk consolidation");
+assertIncludes(admin, "Provider Webhooks", "Admin provider webhook consolidation");
+assertIncludes(admin, "revenuecat_google_play_enabled", "RevenueCat / Google Play high-risk switch");
 assertIncludes(admin, "HIGH_RISK_MONEY_SWITCHES", "high-risk Money switch confirmation list");
 assertIncludes(admin, "setPlatformMoneyKillSwitchState", "backend Money switch write");
 assertIncludes(admin, "Backend RPC writes the switch and immutable audit", "Money switch confirmation audit copy");
 assertIncludes(admin, "No provider secrets, checkout, transfer, withdrawal, payout, balance, or live-money movement is created.", "Money switch no-money-movement copy");
+[
+  "{ key: \"premium\", label: \"Premium\" }",
+  "{ key: \"kill-switches\", label: \"Kill Switches\" }",
+  "{ key: \"ads\", label: \"Ads\" }",
+  "{ key: \"revenue\", label: \"Revenue\" }",
+  "{ key: \"payouts\", label: \"Payouts\" }",
+  "{ key: \"sponsors\", label: \"Sponsors\" }",
+  "{ key: \"fraud\", label: \"Fraud\" }",
+].forEach((tab) => {
+  assertNotIncludes(operatorTabsBlock, tab, "duplicate Admin money tab");
+});
 assertIncludes(moneyKillSwitchMigration, "create table if not exists public.\"platform_money_kill_switches\"", "Money switch table");
 assertIncludes(moneyKillSwitchMigration, "create table if not exists public.\"platform_money_kill_switch_audit\"", "Money switch audit table");
 assertIncludes(moneyKillSwitchMigration, "get_money_feature_flags_summary", "creator-safe switch RPC");

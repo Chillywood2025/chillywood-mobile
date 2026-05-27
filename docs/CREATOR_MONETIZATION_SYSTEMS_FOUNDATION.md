@@ -76,7 +76,7 @@ Client helpers in `_lib/creatorMonetization.ts` now expose the safe repo-side pa
 
 Client helper `_lib/providerReadiness.ts` reads only the sanitized readiness summary and falls back closed if the summary is unavailable. Platform Studio now uses that summary inside Money Center for Provider Status, Digital Sales, Payouts, and owner/dev Technical checks. The fallback cannot mark money active. Edge Functions `provider-readiness`, `revenuecat-webhook`, and `google-play-webhook` are deployed as fail-closed shells; they do not grant Premium, create subscriptions, create checkout, move money, or release payouts.
 
-Client helper `_lib/moneyFeatureFlags.ts` reads sanitized switch state for creators and owner/admin switch rows/audit for Admin. Creator Money Center combines switch state with provider readiness: switch `on` alone cannot create `Active` money, `sandbox_only` remains readiness-only, and `live_money_enabled=off` blocks live-money claims. Admin Command Center > Kill Switches owns the Owner/Admin Money Controls UI.
+Client helper `_lib/moneyFeatureFlags.ts` reads sanitized switch state for creators and owner/admin switch rows/audit for Admin. Creator Money Center combines switch state with provider readiness: switch `on` alone cannot create `Active` money, `sandbox_only` remains readiness-only, and `live_money_enabled=off` blocks live-money claims. Admin Command Center now has one visible Owner/Admin Money Center tab for Premium/store readiness, sponsors/ads, fraud/risk, ledger/revenue, payouts, provider webhooks, kill switches, audit, and technical checks.
 
 Provider readiness runbook: `docs/PROVIDER_LINK_READINESS_RUNBOOK.md`.
 
@@ -99,7 +99,7 @@ Preproduction test proof on May 16, 2026 moved this from copy-only readiness int
 ## App Surfaces
 
 - Platform Studio has one `Monetization` tab whose page title is `Money Center`; separate creator-facing `Monetize`, `Payouts`, and `Revenue` tabs/screens are consolidated. It uses collapsible Overview, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Payouts, Tax & Legal, Provider Status, Future Tools, and owner/dev-only Technical checks.
-- Owner/Admin Money Controls live in Admin Command Center > Kill Switches with collapsible Global Money Switches, Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Payouts / Stripe Connect, Provider Webhooks, Technical Checks, and Audit Trail sections.
+- Owner/Admin Money Center lives in Admin Command Center > Money Center with collapsible Overview, Kill Switches, Premium / RevenueCat / Google Play, Sponsors / Ads, Fraud & Risk, Digital Sales, Tips / Watch-Party Seats / Paid Content, Merch, Creator Balance / Ledger, Payouts / Stripe Connect, Provider Webhooks, Tax & Legal, Audit Trail, and Technical Checks sections. Old Admin money params map into these section anchors.
 - Digital Sales stays tied to the existing Google Play plus RevenueCat Premium flow and planned digital paid-access readiness; Creator Balance is ledger-first and shows no verified earnings yet; Payouts shows Stripe Connect setup/readiness only; Provider Status shows public-safe readiness; Merch is physical goods only and separate from digital app unlocks; Future Tools are labeled planned; Technical checks show only public-safe owner/dev details.
 - Legacy `tab=monetize`, `tab=payouts`, and `tab=revenue` route params map into the consolidated Monetization tab with the matching section expanded. Compatibility routes `/monetize`, `/revenue`, and `/payouts` redirect into Money Center Overview, Creator Balance, and Payouts. Normal navigation no longer has duplicate money tabs.
 - The public Platform route (`/channel/[userId]`) can show a real active product shelf if backed product rows exist. It still says checkout is pending and does not create product orders.
@@ -112,7 +112,7 @@ Preproduction test proof on May 16, 2026 moved this from copy-only readiness int
 
 - Live schema: installed. `supabase migration list` shows `202605140011` local and remote, post-apply `supabase db push --dry-run` reports the remote database is up to date, and `supabase db lint --linked --schema public --fail-on error` passes.
 - Provider readiness: `202605250004_provider_link_sandbox_proof_status.sql` is remote-applied. Only Stripe webhook signature readiness is `sandbox_ready`; no row is production active and no row has live money enabled.
-- Money switches: `202605270001_platform_money_kill_switches.sql` is repo-side. Defaults are fail-closed with live money off and no money movement. Apply/prove this migration in the target environment before relying on Admin switch state there.
+- Money switches: `202605270001_platform_money_kill_switches.sql` is applied/aligned in the linked Supabase environment. Defaults are fail-closed with live money off and no money movement.
 - Live safety proof: `monetization_settings_json` returns every live-money flag as `false`; anon REST direct writes to `creator_earnings_ledger`, `paid_content_purchases`, `creator_tip_transactions`, and `creator_payout_requests` are denied; anon paid-content access resolver calls return safe unavailable/free/locked decisions without granting money access.
 - Paid creator checkout: foundation only, disabled.
 - Creator pricing: backed RPC foundation, disabled until server flag and Premium entitlement proof are ready.
