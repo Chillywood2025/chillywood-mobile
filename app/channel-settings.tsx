@@ -53,6 +53,16 @@ import {
   type CreatorMonetizationFoundationSummary,
 } from "../_lib/creatorMonetization";
 import {
+  getMoneyFeatureFlag,
+  getMoneyFeatureFlagFallbackSummary,
+  getMoneyFeatureStateLabel,
+  isMoneyFeatureSandboxOrOn,
+  readMoneyFeatureFlagSummary,
+  type MoneyFeatureFlagKey,
+  type MoneyFeatureFlagState,
+  type MoneyFeatureFlagSummaryRow,
+} from "../_lib/moneyFeatureFlags";
+import {
   findProviderReadinessSummary,
   getCreatorReadinessLabel,
   getProviderReadinessFallbackSummary,
@@ -1017,6 +1027,9 @@ export function ChannelStudioScreen() {
   const [providerReadinessSummary, setProviderReadinessSummary] = useState<ProviderReadinessSummaryRow[]>(
     getProviderReadinessFallbackSummary,
   );
+  const [moneyFeatureFlags, setMoneyFeatureFlags] = useState<MoneyFeatureFlagSummaryRow[]>(
+    getMoneyFeatureFlagFallbackSummary,
+  );
   const [payoutSetupBusy, setPayoutSetupBusy] = useState<"setup" | "sync" | null>(null);
   const [payoutSetupNotice, setPayoutSetupNotice] = useState<string | null>(null);
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
@@ -1153,6 +1166,7 @@ export function ChannelStudioScreen() {
       setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
       setCreatorMonetizationSummary(null);
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
+      setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
       setPayoutSetupNotice(null);
       setPlatformBranding(null);
       setBrandDraft(null);
@@ -1174,6 +1188,7 @@ export function ChannelStudioScreen() {
       readCreatorPayoutDashboardSummary({ creatorUserId: String(user?.id ?? ""), limit: 5 }),
       readCreatorMonetizationFoundationSummary(String(user?.id ?? "")).catch(() => null),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
+      readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
       readMyPlatformRoleMemberships().catch(() => []),
     ])
@@ -1187,6 +1202,7 @@ export function ChannelStudioScreen() {
         resolvedCreatorPayoutSummary,
         resolvedCreatorMonetizationSummary,
         resolvedProviderReadinessSummary,
+        resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
         resolvedPlatformRoleMemberships,
       ]) => {
@@ -1204,6 +1220,7 @@ export function ChannelStudioScreen() {
         setCreatorPayoutSummary(resolvedCreatorPayoutSummary);
         setCreatorMonetizationSummary(resolvedCreatorMonetizationSummary);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
+        setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
         setBrandDraft(resolvedPlatformBranding?.profile ?? null);
         setPlatformRoleMemberships(resolvedPlatformRoleMemberships);
@@ -1221,6 +1238,7 @@ export function ChannelStudioScreen() {
         setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
         setCreatorMonetizationSummary(null);
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
+        setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
         setPlatformRoleMemberships([]);
         setBrandReviewQueueAssets([]);
         setLoading(false);
@@ -3133,6 +3151,22 @@ export function ChannelStudioScreen() {
   ];
   const creatorMonetizationSettings =
     creatorMonetizationSummary?.settings ?? DEFAULT_CREATOR_MONETIZATION_RUNTIME_FLAGS;
+  const liveMoneyFeatureFlag = getMoneyFeatureFlag(moneyFeatureFlags, "live_money_enabled");
+  const moneyCenterFeatureFlag = getMoneyFeatureFlag(moneyFeatureFlags, "money_center_visible");
+  const providerHasLiveMoneyProof = providerReadinessSummary.some((row) => row.status === "active" && row.isLiveMoneyEnabled);
+  const moneyCenterLiveActive =
+    creatorMonetizationSettings.liveMoneyEnabled === true
+    && liveMoneyFeatureFlag.state === "on"
+    && providerHasLiveMoneyProof;
+  const moneyCenterHomeStatus =
+    moneyCenterFeatureFlag.state === "locked" ? "Blocked"
+      : moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "maintenance" ? "Disabled"
+        : moneyCenterLiveActive ? "Active"
+          : "Not active";
+  const moneyCenterHomeTone =
+    moneyCenterHomeStatus === "Active" ? "default"
+      : moneyCenterHomeStatus === "Blocked" ? "warning"
+        : "muted";
   const creatorPayoutReadiness = resolveCreatorPayoutReadiness(
     creatorPayoutSummary,
     creatorMonetizationSettings,
@@ -4888,14 +4922,17 @@ export function ChannelStudioScreen() {
           id: "monetization",
           title: "Monetization",
           summary: "Money Center for sales, balances, payouts, and provider checks.",
-          status: creatorMonetizationSettings.liveMoneyEnabled ? "Active" : "Not active",
-          statusTone: creatorMonetizationSettings.liveMoneyEnabled ? "default" : "muted",
+          status: moneyCenterHomeStatus,
+          statusTone: moneyCenterHomeTone,
           children: (
             <>
               {renderStudioActionRow({
                 title: "Money Center",
-                body: "Review what is active, what is locked, and what setup is needed.",
+                body: moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "locked"
+                  ? "Money Center is not active yet. Payments stay locked until provider checks pass."
+                  : "Review what is active, what is locked, and what setup is needed.",
                 value: "Open",
+                tone: moneyCenterFeatureFlag.state === "locked" ? "warning" : moneyCenterFeatureFlag.state === "off" ? "muted" : "default",
                 onPress: () => openStudioTab("monetization", { focus: "overview" }),
               })}
               {renderStudioActionRow({
@@ -5698,35 +5735,93 @@ export function ChannelStudioScreen() {
     const commerceReadiness = readiness("stripe", "platform_commerce");
     const adRevenueReadiness = readiness("ads", "ad_revenue");
     const policyReadiness = readiness("internal_policy", "creator_monetization_policy");
-    const monetizationActive = creatorMonetizationSettings.liveMoneyEnabled === true;
-    const topStatus = monetizationActive ? "Active" : "Not active";
-    const storeStatus = providerStatusLabel(googlePlayProductReadiness, revenueCatReadiness.anyPublicKeyConfigured ? "Ready for review" : "Store setup needed");
-    const stripeStatus = providerStatusLabel(stripeConnectReadiness, creatorPayoutSummary.providerReady ? "Ready for review" : "Stripe setup needed");
-    const premiumStatus = providerStatusLabel(premiumEntitlementReadiness, revenueCatReadiness.anyPublicKeyConfigured ? "Setup needed" : "Store setup needed");
-    const tipsStatus = providerStatusLabel(tipsReadiness, "Planned");
-    const paidContentStatus = providerStatusLabel(paidContentReadiness, "Store setup needed");
-    const merchStatus = providerStatusLabel(commerceReadiness, "Planned");
-    const providerOverallStatus = providerReadinessSummary.some((row) => row.status === "active" && row.isLiveMoneyEnabled)
+    const moneyFlag = (key: MoneyFeatureFlagKey) => getMoneyFeatureFlag(moneyFeatureFlags, key);
+    const switchTone = (state: MoneyFeatureFlagState): "default" | "muted" | "warning" => (
+      state === "on" || state === "sandbox_only" ? "default" : state === "locked" ? "warning" : "muted"
+    );
+    const switchSetupBody = (key: MoneyFeatureFlagKey, fallback: string) => {
+      const flag = moneyFlag(key);
+      if (flag.state === "off") return "Turned off by owner.";
+      if (flag.state === "locked") return "This money feature is unavailable.";
+      if (flag.state === "maintenance") return "Temporarily unavailable.";
+      if (flag.state === "sandbox_only") return "Sandbox checks can be reviewed, but live money is not active.";
+      return fallback;
+    };
+    const digitalSalesFlagBody = (fallback: string) => switchSetupBody("digital_sales_enabled", fallback);
+    const sectionStatus = (
+      key: MoneyFeatureFlagKey,
+      row: ProviderReadinessSummaryRow | null | undefined,
+      fallback = "Setup needed",
+    ) => {
+      const flag = moneyFlag(key);
+      if (flag.state === "locked") return "Blocked";
+      if (flag.state === "off" || flag.state === "maintenance") return "Disabled";
+      if (flag.state === "sandbox_only") {
+        if (row?.status === "blocked") return "Blocked";
+        if (row?.status === "missing" || row?.status === "setup_needed" || row?.status === "error") return "Setup needed";
+        return "Sandbox ready";
+      }
+      if (!row) return fallback;
+      if (row.status === "active") return liveMoneyFeatureFlag.state === "on" ? "Active" : "Ready for review";
+      if (row.status === "sandbox_ready") return "Sandbox ready";
+      if (row.status === "ready_for_review" || row.status === "configured") return "Ready for review";
+      if (row.status === "blocked") return "Blocked";
+      if (row.status === "disabled") return "Disabled";
+      return "Setup needed";
+    };
+    const sectionTone = (status: string): "default" | "muted" | "warning" => (
+      status === "Active" || status === "Sandbox ready" || status === "Ready for review"
+        ? "default"
+        : status === "Blocked" ? "warning" : "muted"
+    );
+    const monetizationActive = moneyCenterLiveActive;
+    const moneyCenterStatus = moneyCenterFeatureFlag.state === "locked" ? "Blocked"
+      : moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "maintenance" ? "Disabled"
+        : monetizationActive ? "Active"
+          : "Not active";
+    const topStatus = moneyCenterStatus;
+    const tipsFlag = moneyFlag("tips_enabled");
+    const watchPartySeatsFlag = moneyFlag("watch_party_seats_enabled");
+    const paidContentFlag = moneyFlag("paid_content_enabled");
+    const merchFlag = moneyFlag("merch_enabled");
+    const creatorBalanceFlag = moneyFlag("creator_balance_visible");
+    const payoutsFlag = moneyFlag("payouts_enabled");
+    const stripeConnectFlag = moneyFlag("stripe_connect_enabled");
+    const providerWebhooksFlag = moneyFlag("provider_webhooks_enabled");
+    const storeProviderRow = googlePlayProductReadiness ?? revenueCatOfferingReadiness ?? revenueCatEntitlementReadiness;
+    const storeStatus = sectionStatus("revenuecat_google_play_enabled", storeProviderRow, revenueCatReadiness.anyPublicKeyConfigured ? "Ready for review" : "Setup needed");
+    const digitalSalesStatus = sectionStatus("digital_sales_enabled", storeProviderRow, "Setup needed");
+    const stripeStatus = sectionStatus("stripe_connect_enabled", stripeConnectReadiness, creatorPayoutSummary.providerReady ? "Ready for review" : "Setup needed");
+    const premiumStatus = sectionStatus("revenuecat_google_play_enabled", premiumEntitlementReadiness, revenueCatReadiness.anyPublicKeyConfigured ? "Setup needed" : "Setup needed");
+    const tipsStatus = sectionStatus("tips_enabled", tipsReadiness, "Planned");
+    const paidContentStatus = sectionStatus("paid_content_enabled", paidContentReadiness, "Setup needed");
+    const watchPartySeatsStatus = sectionStatus("watch_party_seats_enabled", googlePlayProductReadiness, "Planned");
+    const merchStatus = sectionStatus("merch_enabled", commerceReadiness, "Planned");
+    const balanceStatus = creatorBalanceFlag.state === "locked" ? "Blocked" : creatorBalanceFlag.state === "off" || creatorBalanceFlag.state === "maintenance" ? "Disabled" : "Not active";
+    const payoutsStatus = sectionStatus("payouts_enabled", payoutSetupReadiness ?? payoutReleaseReadiness, "Setup needed");
+    const taxLegalStatus = creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady && payoutsFlag.state === "on" ? "Ready for review" : "Setup needed";
+    const providerOverallStatus = providerReadinessSummary.some((row) => row.status === "active" && row.isLiveMoneyEnabled && liveMoneyFeatureFlag.state === "on")
       ? "Active"
       : providerReadinessSummary.some((row) => row.status === "sandbox_ready")
         ? "Sandbox ready"
         : "Setup needed";
+    const canStartStripeSetup = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state) && payoutsFlag.state === "on";
     const digitalSalesCards: readonly SummaryMetricCard[] = [
       {
         label: "Premium access",
         value: premiumStatus,
         body: "Premium gates stay on the existing entitlement path.",
-        tone: getProviderReadinessTone(premiumEntitlementReadiness),
+        tone: sectionTone(premiumStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "Android digital access",
-        value: storeStatus,
-        body: "Digital sales inside the Android app use Google Play Billing and RevenueCat where required.",
-        tone: getProviderReadinessTone(googlePlayProductReadiness),
+        value: digitalSalesStatus,
+        body: digitalSalesFlagBody("Digital sales inside the Android app use Google Play Billing and RevenueCat where required."),
+        tone: sectionTone(digitalSalesStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "Creator split",
-        value: "Ledger first",
+        value: "Not active",
         body: "Creator share is calculated only after verified purchases, fees, refunds, and policy checks settle.",
         tone: "unavailable",
       },
@@ -5741,8 +5836,8 @@ export function ChannelStudioScreen() {
       {
         label: "Tips",
         value: tipsStatus,
-        body: "Tips will unlock after store products and payout rules are verified.",
-        tone: tipsReadiness?.status === "active" ? "default" : "unavailable",
+        body: `${tipsFlag.state === "off" ? "Tips are not active yet." : switchSetupBody("tips_enabled", "Tips are planned.")} Tips will unlock after store products and payout rules are verified.`,
+        tone: sectionTone(tipsStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "First products",
@@ -5752,7 +5847,7 @@ export function ChannelStudioScreen() {
       },
       {
         label: "Digital support",
-        value: "Store setup needed",
+        value: tipsFlag.state === "on" ? "Setup needed" : tipsFlag.state === "sandbox_only" ? "Sandbox ready" : "Not active",
         body: "Android in-app creator support is treated as digital support unless legal and provider review approve another path.",
         tone: "unavailable",
       },
@@ -5760,8 +5855,8 @@ export function ChannelStudioScreen() {
     const watchPartySeatCards: readonly SummaryMetricCard[] = [
       {
         label: "Seat sales",
-        value: "Planned",
-        body: "Viewer, VIP, speaker, event pass, and creator-room access products need verified store setup first.",
+        value: watchPartySeatsStatus,
+        body: `${watchPartySeatsFlag.state === "off" ? "Watch-Party seats are not active yet." : switchSetupBody("watch_party_seats_enabled", "Paid seats need verified store setup first.")} Viewer, VIP, speaker, event pass, and creator-room access products need verified store setup first.`,
         tone: "unavailable",
       },
       {
@@ -5781,8 +5876,8 @@ export function ChannelStudioScreen() {
       {
         label: "Paid content",
         value: paidContentStatus,
-        body: summarizeProviderReadiness(paidContentReadiness, "Paid videos, replays, posts, and collections need store products and entitlement checks."),
-        tone: paidContentReadiness?.status === "active" ? "default" : "unavailable",
+        body: `${paidContentFlag.state === "off" ? "Paid content is not active yet." : switchSetupBody("paid_content_enabled", "Paid videos, replays, posts, and collections need store products and entitlement checks.")} ${summarizeProviderReadiness(paidContentReadiness, "Paid videos, replays, posts, and collections need store products and entitlement checks.")}`,
+        tone: sectionTone(paidContentStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "Access unlock",
@@ -5801,8 +5896,8 @@ export function ChannelStudioScreen() {
       {
         label: "Physical merch",
         value: merchStatus,
-        body: "Physical merch can use a separate approved checkout when provider, tax, fulfillment, and refund checks are ready.",
-        tone: commerceReadiness?.status === "active" ? "default" : "unavailable",
+        body: `${merchFlag.state === "off" ? "Merch is not active yet." : switchSetupBody("merch_enabled", "Physical merch can use a separate approved checkout when provider, tax, fulfillment, and refund checks are ready.")} Physical merch can use a separate approved checkout when provider, tax, fulfillment, and refund checks are ready.`,
+        tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "Digital separation",
@@ -5829,39 +5924,39 @@ export function ChannelStudioScreen() {
     const payoutCards: readonly SummaryMetricCard[] = [
       {
         label: "Payout setup",
-        value: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary),
-        body: getCreatorFacingPayoutSetupBody(creatorPayoutSummary),
-        tone: creatorPayoutSummary.providerReady ? "default" : "unavailable",
+        value: payoutsStatus,
+        body: payoutsFlag.state === "off" ? "Payouts are unavailable." : getCreatorFacingPayoutSetupBody(creatorPayoutSummary),
+        tone: sectionTone(payoutsStatus) === "default" && creatorPayoutSummary.providerReady ? "default" : "unavailable",
       },
       {
         label: "Stripe setup",
         value: stripeStatus,
-        body: summarizeProviderReadiness(stripeConnectReadiness, "Payout setup is needed before payout readiness can move forward."),
-        tone: getProviderReadinessTone(stripeConnectReadiness),
+        body: `${switchSetupBody("stripe_connect_enabled", "Payout setup is needed before payout readiness can move forward.")} ${summarizeProviderReadiness(stripeConnectReadiness, "Payout setup is needed before payout readiness can move forward.")}`,
+        tone: sectionTone(stripeStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "Tax / KYC",
-        value: creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Ready for review" : "Setup needed",
+        value: taxLegalStatus,
         body: "Identity and tax checks must be ready before payouts can be reviewed.",
         tone: creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "default" : "unavailable",
       },
       {
         label: "Payout release",
-        value: getCreatorReadinessLabel(payoutReleaseReadiness, "Unavailable"),
-        body: summarizeProviderReadiness(payoutReleaseReadiness, "No withdrawal, transfer, cash-out, or payout release action is available."),
+        value: payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? getCreatorReadinessLabel(payoutReleaseReadiness, "Setup needed") : "Disabled",
+        body: `${payoutsFlag.state === "off" || liveMoneyFeatureFlag.state !== "on" ? "Payouts are unavailable." : summarizeProviderReadiness(payoutReleaseReadiness, "No withdrawal, transfer, cash-out, or payout release action is available.")} No withdrawal, transfer, cash-out, or payout release action is available.`,
         tone: "unavailable",
       },
       {
         label: "Scheduled payout",
-        value: creatorPayoutReadiness.canRequestScheduledPayout ? "Ready for review" : "Setup required",
+        value: creatorPayoutReadiness.canRequestScheduledPayout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "Ready for review" : "Setup needed",
         body: `Scheduled payout fee is ${formatMonetizationCurrency(creatorPayoutReadiness.scheduledPayoutFeeCents, "usd")}. Requests stay locked until all checks are ready.`,
-        tone: creatorPayoutReadiness.canRequestScheduledPayout ? "default" : "unavailable",
+        tone: creatorPayoutReadiness.canRequestScheduledPayout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "default" : "unavailable",
       },
       {
         label: "Instant cash-out",
-        value: creatorPayoutReadiness.canRequestInstantCashout ? "Ready for review" : "Setup required",
+        value: creatorPayoutReadiness.canRequestInstantCashout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "Ready for review" : "Setup needed",
         body: `Optional instant cash-out is ${creatorPayoutReadiness.instantCashoutFeeBps / 100}% with no default cap when a future payout rollout is approved.`,
-        tone: creatorPayoutReadiness.canRequestInstantCashout ? "default" : "unavailable",
+        tone: creatorPayoutReadiness.canRequestInstantCashout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "default" : "unavailable",
       },
     ];
     const taxLegalCards: readonly SummaryMetricCard[] = [
@@ -5894,8 +5989,8 @@ export function ChannelStudioScreen() {
       {
         label: "Google Play",
         value: storeStatus,
-        body: summarizeProviderReadiness(googlePlayProductReadiness, "Store setup needed before Android digital purchases can be active."),
-        tone: getProviderReadinessTone(googlePlayProductReadiness),
+        body: `${switchSetupBody("revenuecat_google_play_enabled", "Store setup needed before Android digital purchases can be active.")} ${summarizeProviderReadiness(googlePlayProductReadiness, "Store setup needed before Android digital purchases can be active.")}`,
+        tone: sectionTone(storeStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "RevenueCat",
@@ -5907,32 +6002,44 @@ export function ChannelStudioScreen() {
         label: "Stripe Connect",
         value: stripeStatus,
         body: "Stripe Connect is payout setup only. It does not charge Android users for digital goods.",
-        tone: getProviderReadinessTone(stripeConnectReadiness),
+        tone: sectionTone(stripeStatus) === "default" ? "default" : "unavailable",
       },
       {
         label: "Stripe webhook",
-        value: providerStatusLabel(stripeWebhookReadiness, "Setup needed"),
-        body: summarizeProviderReadiness(stripeWebhookReadiness, "Webhook checks are sanitized and do not expose secrets."),
-        tone: getProviderReadinessTone(stripeWebhookReadiness),
+        value: sectionStatus("provider_webhooks_enabled", stripeWebhookReadiness, "Setup needed"),
+        body: `${switchSetupBody("provider_webhooks_enabled", "Webhook checks are sanitized and do not expose secrets.")} ${summarizeProviderReadiness(stripeWebhookReadiness, "Webhook checks are sanitized and do not expose secrets.")}`,
+        tone: sectionTone(sectionStatus("provider_webhooks_enabled", stripeWebhookReadiness, "Setup needed")) === "default" ? "default" : "unavailable",
       },
       {
         label: "Live money",
-        value: monetizationActive ? "Active" : "Disabled",
+        value: liveMoneyFeatureFlag.state === "on" && monetizationActive ? "Active" : getMoneyFeatureStateLabel(liveMoneyFeatureFlag.state),
         body: "Live money stays disabled until provider checks, policy checks, and owner approval pass.",
         tone: monetizationActive ? "default" : "unavailable",
       },
       {
         label: "Creator monetization",
-        value: providerStatusLabel(policyReadiness, "Ready for review"),
+        value: sectionStatus("creator_monetization_enabled", policyReadiness, "Ready for review"),
         body: "Provider readiness is the visible source of truth for creator money tools.",
-        tone: getProviderReadinessTone(policyReadiness),
+        tone: sectionTone(sectionStatus("creator_monetization_enabled", policyReadiness, "Ready for review")) === "default" ? "default" : "unavailable",
+      },
+      {
+        label: "Payouts flag",
+        value: getMoneyFeatureStateLabel(payoutsFlag.state),
+        body: payoutsFlag.displaySummary,
+        tone: switchTone(payoutsFlag.state) === "default" ? "default" : "unavailable",
+      },
+      {
+        label: "Webhooks flag",
+        value: getMoneyFeatureStateLabel(providerWebhooksFlag.state),
+        body: providerWebhooksFlag.displaySummary,
+        tone: switchTone(providerWebhooksFlag.state) === "default" ? "default" : "unavailable",
       },
     ];
     const futureToolCards: readonly SummaryMetricCard[] = [
       { label: "Subscriptions", value: "Planned", body: "Creator subscriptions are separate from Chi'llywood Premium and need a later entitlement model.", tone: "unavailable" },
-      { label: "Sponsorships", value: "Planned", body: "Sponsorship tools need review, disclosure, brand safety, and payment checks.", tone: "unavailable" },
-      { label: "Ad revenue", value: "Planned", body: summarizeProviderReadiness(adRevenueReadiness, "Creator ad revenue waits for real ad reporting and payout checks."), tone: "unavailable" },
-      { label: "Revenue imports", value: providerStatusLabel(revenueImportReadiness, "Disabled"), body: summarizeProviderReadiness(revenueImportReadiness, "Real source revenue imports remain unavailable."), tone: "unavailable" },
+      { label: "Sponsorships", value: getMoneyFeatureStateLabel(moneyFlag("sponsorships_enabled").state) === "Disabled" ? "Planned" : getMoneyFeatureStateLabel(moneyFlag("sponsorships_enabled").state), body: "Sponsorship tools need review, disclosure, brand safety, and payment checks.", tone: "unavailable" },
+      { label: "Ad revenue", value: getMoneyFeatureStateLabel(moneyFlag("ads_revenue_enabled").state) === "Disabled" ? "Planned" : getMoneyFeatureStateLabel(moneyFlag("ads_revenue_enabled").state), body: summarizeProviderReadiness(adRevenueReadiness, "Creator ad revenue waits for real ad reporting and payout checks."), tone: "unavailable" },
+      { label: "Revenue imports", value: sectionStatus("creator_revenue_imports_enabled", revenueImportReadiness, "Disabled"), body: summarizeProviderReadiness(revenueImportReadiness, "Real source revenue imports remain unavailable."), tone: "unavailable" },
     ];
     const technicalCards: readonly SummaryMetricCard[] = [
       {
@@ -5958,6 +6065,12 @@ export function ChannelStudioScreen() {
         tone: getProviderReadinessTone(stripeConnectReadiness),
       },
       {
+        label: "Stripe switch",
+        value: getMoneyFeatureStateLabel(stripeConnectFlag.state),
+        body: stripeConnectFlag.displaySummary,
+        tone: switchTone(stripeConnectFlag.state) === "default" ? "default" : "unavailable",
+      },
+      {
         label: "Payment rails",
         value: providerStatusLabel(policyReadiness, "Guarded"),
         body: summarizeProviderReadiness(policyReadiness, "Premium remains Google Play plus RevenueCat; creator payouts remain separate."),
@@ -5970,11 +6083,34 @@ export function ChannelStudioScreen() {
       },
       {
         label: "Webhook checks",
-        value: providerStatusLabel(stripeWebhookReadiness, "Setup needed"),
+        value: getMoneyFeatureStateLabel(providerWebhooksFlag.state),
         body: "Technical status only. Secret values and provider payloads are never shown.",
-        tone: getProviderReadinessTone(stripeWebhookReadiness),
+        tone: switchTone(providerWebhooksFlag.state) === "default" ? "default" : "unavailable",
       },
     ];
+
+    if (moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "locked" || moneyCenterFeatureFlag.state === "maintenance") {
+      const unavailableStatus = moneyCenterFeatureFlag.state === "locked" ? "Blocked" : "Disabled";
+      return (
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <View style={styles.panelHeaderCopy}>
+              <Text style={styles.panelTitle}>Money Center</Text>
+              <Text style={styles.panelSubtitle}>Creator money tools are unavailable right now.</Text>
+            </View>
+            {renderStudioStatusPill(unavailableStatus, moneyCenterFeatureFlag.state === "locked" ? "warning" : "muted")}
+          </View>
+          <Text style={styles.permissionCopy}>
+            Money Center is not active yet. Payments stay locked until provider checks pass.
+          </Text>
+          {renderSummaryMetricCards([
+            { label: "Money Center", value: unavailableStatus, body: moneyCenterFeatureFlag.displaySummary, tone: "unavailable" },
+            { label: "Provider checks", value: providerOverallStatus, body: "Provider checks are the source of readiness truth.", tone: "unavailable" },
+            { label: "Live money", value: getMoneyFeatureStateLabel(liveMoneyFeatureFlag.state), body: "Live money stays off until owner approval and provider proof pass.", tone: "unavailable" },
+          ])}
+        </View>
+      );
+    }
 
     return (
       <>
@@ -5984,7 +6120,7 @@ export function ChannelStudioScreen() {
               <Text style={styles.panelTitle}>Money Center</Text>
               <Text style={styles.panelSubtitle}>One place for sales readiness, creator balance, payouts, and provider checks.</Text>
             </View>
-            {renderStudioStatusPill(topStatus, monetizationActive ? "default" : "muted")}
+            {renderStudioStatusPill(topStatus, sectionTone(topStatus))}
           </View>
           <Text style={styles.permissionCopy}>
             {monetizationActive
@@ -6035,13 +6171,13 @@ export function ChannelStudioScreen() {
             title: "Overview",
             summary: "A quick read on what is active and what is locked.",
             status: topStatus,
-            statusTone: monetizationActive ? "default" : "muted",
+            statusTone: sectionTone(topStatus),
             children: (
               <>
                 {renderSummaryMetricCards([
-                  { label: "Digital sales", value: "Not active", body: "Store setup needed before paid digital access can open.", tone: "unavailable" },
+                  { label: "Digital sales", value: digitalSalesStatus === "Disabled" ? "Not active" : digitalSalesStatus, body: "Store setup needed before paid digital access can open.", tone: sectionTone(digitalSalesStatus) === "default" ? "default" : "unavailable" },
                   { label: "Creator balance", value: "No verified earnings yet", body: "Your balance will appear after verified sales.", tone: "unavailable" },
-                  { label: "Payouts", value: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary), body: "Payouts need Stripe setup and policy checks.", tone: creatorPayoutSummary.providerReady ? "default" : "unavailable" },
+                  { label: "Payouts", value: payoutsStatus === "Disabled" ? "Not active" : payoutsStatus, body: "Payouts need Stripe setup and policy checks.", tone: sectionTone(payoutsStatus) === "default" && creatorPayoutSummary.providerReady ? "default" : "unavailable" },
                   { label: "Provider checks", value: providerOverallStatus, body: "Provider checks are the source of readiness truth.", tone: providerOverallStatus === "Sandbox ready" ? "default" : "unavailable" },
                 ])}
                 <View style={styles.eventEmptyCard}>
@@ -6058,8 +6194,8 @@ export function ChannelStudioScreen() {
             id: "digital_sales",
             title: "Digital Sales",
             summary: "Premium, digital passes, and paid access readiness.",
-            status: storeStatus,
-            statusTone: revenueCatReadiness.anyPublicKeyConfigured ? "default" : "muted",
+            status: digitalSalesStatus,
+            statusTone: sectionTone(digitalSalesStatus),
             children: (
               <>
                 {renderSummaryMetricCards(digitalSalesCards)}
@@ -6078,7 +6214,7 @@ export function ChannelStudioScreen() {
             title: "Tips",
             summary: "Creator support readiness.",
             status: tipsStatus,
-            statusTone: tipsReadiness?.status === "active" ? "default" : "muted",
+            statusTone: sectionTone(tipsStatus),
             children: (
               <>
                 {renderSummaryMetricCards(tipsCards)}
@@ -6094,8 +6230,8 @@ export function ChannelStudioScreen() {
             id: "watch_party_seats",
             title: "Watch-Party Seats",
             summary: "Paid seat readiness without changing room authority.",
-            status: "Planned",
-            statusTone: "muted",
+            status: watchPartySeatsStatus,
+            statusTone: sectionTone(watchPartySeatsStatus),
             children: renderSummaryMetricCards(watchPartySeatCards),
           })}
 
@@ -6104,7 +6240,7 @@ export function ChannelStudioScreen() {
             title: "Paid Content",
             summary: "Paid videos, replays, posts, and collections.",
             status: paidContentStatus,
-            statusTone: paidContentReadiness?.status === "active" ? "default" : "muted",
+            statusTone: sectionTone(paidContentStatus),
             children: renderSummaryMetricCards(paidContentCards),
           })}
 
@@ -6113,7 +6249,7 @@ export function ChannelStudioScreen() {
             title: "Merch",
             summary: "Physical goods are separate from digital app access.",
             status: merchStatus,
-            statusTone: commerceReadiness?.status === "active" ? "default" : "muted",
+            statusTone: sectionTone(merchStatus),
             children: renderSummaryMetricCards(merchCards),
           })}
 
@@ -6121,8 +6257,8 @@ export function ChannelStudioScreen() {
             id: "balance",
             title: "Creator Balance",
             summary: "Ledger-first balance status.",
-            status: "No verified earnings yet",
-            statusTone: "muted",
+            status: balanceStatus,
+            statusTone: sectionTone(balanceStatus),
             children: (
               <>
                 {renderSummaryMetricCards(balanceCards)}
@@ -6138,12 +6274,12 @@ export function ChannelStudioScreen() {
             id: "payouts",
             title: "Payouts",
             summary: "Setup status, KYC/tax readiness, and unavailable payout actions.",
-            status: getCreatorFacingPayoutSetupLabel(creatorPayoutSummary),
-            statusTone: creatorPayoutSummary.providerReady ? "default" : "muted",
+            status: payoutsStatus,
+            statusTone: sectionTone(payoutsStatus),
             children: (
               <>
                 {renderSummaryMetricCards(payoutCards)}
-                {creatorPayoutSummary.setupActionLabel || creatorPayoutSummary.canRefreshProviderStatus ? (
+                {canStartStripeSetup && (creatorPayoutSummary.setupActionLabel || creatorPayoutSummary.canRefreshProviderStatus) ? (
                   <View style={styles.eventActionRow}>
                     {creatorPayoutSummary.setupActionLabel ? (
                       <TouchableOpacity
@@ -6191,8 +6327,8 @@ export function ChannelStudioScreen() {
             id: "tax_legal",
             title: "Tax & Legal",
             summary: "Tax profile, payout terms, refunds, and policy checks.",
-            status: creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "Ready for review" : "Setup needed",
-            statusTone: creatorPayoutSummary.kycReady && creatorPayoutSummary.taxReady ? "default" : "muted",
+            status: taxLegalStatus,
+            statusTone: sectionTone(taxLegalStatus),
             children: (
               <>
                 {renderSummaryMetricCards(taxLegalCards)}

@@ -65,6 +65,18 @@ import {
   type OwnerTemporaryGrant,
 } from "../_lib/adminOwnerControls";
 import { FEATURE_FLAGS, type AppRuntimeControls } from "../_lib/featureFlags";
+import {
+  getMoneyFeatureStateLabel,
+  getPlatformMoneyKillSwitch,
+  getPlatformMoneyKillSwitchFallbackRows,
+  listPlatformMoneyKillSwitchAudit,
+  readPlatformMoneyKillSwitches,
+  setPlatformMoneyKillSwitchState,
+  type MoneyFeatureFlagKey,
+  type MoneyFeatureFlagState,
+  type PlatformMoneyKillSwitchAuditRow,
+  type PlatformMoneyKillSwitchRow,
+} from "../_lib/moneyFeatureFlags";
 import type { Database } from "../supabase/database.types";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
@@ -925,6 +937,113 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
     body: "Existing Premium watch-party gates remain enforced separately. Not enforced yet as a runtime switch.",
   },
 ];
+
+type MoneyControlSectionId =
+  | "global"
+  | "digital"
+  | "tips"
+  | "watch_party_seats"
+  | "paid_content"
+  | "merch"
+  | "payouts"
+  | "webhooks"
+  | "technical"
+  | "audit";
+
+type MoneySwitchConfirmState = {
+  key: MoneyFeatureFlagKey;
+  label: string;
+  currentState: MoneyFeatureFlagState;
+  nextState: MoneyFeatureFlagState;
+  highRisk: boolean;
+};
+
+const MONEY_SWITCH_STATE_OPTIONS: readonly MoneyFeatureFlagState[] = [
+  "off",
+  "sandbox_only",
+  "maintenance",
+  "locked",
+  "on",
+];
+
+const HIGH_RISK_MONEY_SWITCHES = new Set<MoneyFeatureFlagKey>([
+  "live_money_enabled",
+  "payouts_enabled",
+  "digital_sales_enabled",
+  "tips_enabled",
+  "watch_party_seats_enabled",
+  "paid_content_enabled",
+  "stripe_connect_enabled",
+  "provider_webhooks_enabled",
+]);
+
+const MONEY_CONTROL_SECTIONS: readonly {
+  id: MoneyControlSectionId;
+  title: string;
+  summary: string;
+  keys: readonly MoneyFeatureFlagKey[];
+}[] = [
+  {
+    id: "global",
+    title: "Global Money Switches",
+    summary: "Visibility, creator monetization, and the global live-money lock.",
+    keys: ["money_center_visible", "creator_monetization_enabled", "live_money_enabled"],
+  },
+  {
+    id: "digital",
+    title: "Digital Sales",
+    summary: "Android digital goods stay on Google Play and RevenueCat readiness.",
+    keys: ["digital_sales_enabled", "revenuecat_google_play_enabled"],
+  },
+  {
+    id: "tips",
+    title: "Tips",
+    summary: "Creator support products stay locked until store and payout proof exist.",
+    keys: ["tips_enabled"],
+  },
+  {
+    id: "watch_party_seats",
+    title: "Watch-Party Seats",
+    summary: "Paid digital seats cannot change room authority or bypass approvals.",
+    keys: ["watch_party_seats_enabled"],
+  },
+  {
+    id: "paid_content",
+    title: "Paid Content",
+    summary: "Paid videos, posts, collections, and unlock claims.",
+    keys: ["paid_content_enabled"],
+  },
+  {
+    id: "merch",
+    title: "Merch",
+    summary: "Physical goods stay separate from Android digital purchases.",
+    keys: ["merch_enabled"],
+  },
+  {
+    id: "payouts",
+    title: "Payouts / Stripe Connect",
+    summary: "Creator balance visibility, Stripe Connect setup, payouts, and tax/KYC.",
+    keys: ["creator_balance_visible", "stripe_connect_enabled", "payouts_enabled", "tax_kyc_collection_enabled"],
+  },
+  {
+    id: "webhooks",
+    title: "Provider Webhooks",
+    summary: "Provider webhooks can prove readiness without activating live money.",
+    keys: ["provider_webhooks_enabled"],
+  },
+  {
+    id: "technical",
+    title: "Technical Checks",
+    summary: "Future imports, ad revenue, sponsorships, and owner-only readiness checks.",
+    keys: ["creator_revenue_imports_enabled", "ads_revenue_enabled", "sponsorships_enabled"],
+  },
+  {
+    id: "audit",
+    title: "Audit Trail",
+    summary: "Recent immutable Money switch changes.",
+    keys: [],
+  },
+];
 const dmcaStatusFilters: (DmcaCaseStatus | "all")[] = [
   "all",
   "received",
@@ -1473,6 +1592,35 @@ const ownerStatusLabel = (status: unknown) => {
   if (normalized === "pass") return "Pass";
   if (normalized === "fail") return "Failed";
   return "Manual Required";
+};
+
+const moneySwitchTone = (state: MoneyFeatureFlagState): OwnerControlTone => {
+  if (state === "on" || state === "sandbox_only") return "success";
+  if (state === "locked") return "danger";
+  if (state === "maintenance") return "manual";
+  return "locked";
+};
+
+const formatMoneySwitchState = (state: MoneyFeatureFlagState) => (
+  state === "sandbox_only" ? "Sandbox only" : getMoneyFeatureStateLabel(state)
+);
+
+const formatMoneySwitchAuditActor = (actorUserId: string | null) => (
+  actorUserId ? formatCompactIdentifier(actorUserId) : "system"
+);
+
+const moneySwitchWarningCopy = (pending: MoneySwitchConfirmState | null) => {
+  if (!pending) return "Confirm this Money switch change.";
+  if (pending.key === "live_money_enabled" && pending.nextState === "on") {
+    return "This is the global production live-money lock. Turning it on still cannot activate money unless provider readiness and backend guards also allow the specific capability.";
+  }
+  if (pending.highRisk && pending.nextState === "on") {
+    return "This is a high-risk money capability. Turning the switch on still does not bypass provider readiness, ledger checks, or the global live-money lock.";
+  }
+  if (pending.highRisk) {
+    return "This high-risk switch is audited. The backend records the change and creator surfaces fail closed if the write fails.";
+  }
+  return "This change is backend-enforced and audited. Switch state alone cannot create checkout, transfers, payouts, balances, or live money.";
 };
 
 const ownerSecurityToneForStatus = (status: unknown): OwnerControlTone => {
@@ -2673,6 +2821,28 @@ export default function AdminStudioScreen() {
   const [canaryStatusFilter, setCanaryStatusFilter] = useState<CanaryStatusFilter>("all");
   const [expandedCanaryRows, setExpandedCanaryRows] = useState<Record<string, boolean>>({});
   const [expandedOwnerControlRows, setExpandedOwnerControlRows] = useState<Record<string, boolean>>({});
+  const [moneySwitches, setMoneySwitches] = useState<PlatformMoneyKillSwitchRow[]>(
+    getPlatformMoneyKillSwitchFallbackRows,
+  );
+  const [moneySwitchAuditRows, setMoneySwitchAuditRows] = useState<PlatformMoneyKillSwitchAuditRow[]>([]);
+  const [moneySwitchLoading, setMoneySwitchLoading] = useState(false);
+  const [moneySwitchNotice, setMoneySwitchNotice] = useState<string | null>(null);
+  const [moneySwitchBusyKey, setMoneySwitchBusyKey] = useState<MoneyFeatureFlagKey | null>(null);
+  const [moneySwitchConfirm, setMoneySwitchConfirm] = useState<MoneySwitchConfirmState | null>(null);
+  const [moneySwitchReason, setMoneySwitchReason] = useState("");
+  const [moneySwitchOwnerReason, setMoneySwitchOwnerReason] = useState("");
+  const [expandedMoneyControlSections, setExpandedMoneyControlSections] = useState<Record<MoneyControlSectionId, boolean>>({
+    global: true,
+    digital: false,
+    tips: false,
+    watch_party_seats: false,
+    paid_content: false,
+    merch: false,
+    payouts: false,
+    webhooks: false,
+    technical: false,
+    audit: false,
+  });
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
@@ -3072,6 +3242,14 @@ export default function AdminStudioScreen() {
       setCanaryStatusFilter("all");
       setExpandedCanaryRows({});
       setExpandedOwnerControlRows({});
+      setMoneySwitches(getPlatformMoneyKillSwitchFallbackRows());
+      setMoneySwitchAuditRows([]);
+      setMoneySwitchLoading(false);
+      setMoneySwitchNotice(null);
+      setMoneySwitchBusyKey(null);
+      setMoneySwitchConfirm(null);
+      setMoneySwitchReason("");
+      setMoneySwitchOwnerReason("");
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -3160,6 +3338,14 @@ export default function AdminStudioScreen() {
       setCanaryStatusFilter("all");
       setExpandedCanaryRows({});
       setExpandedOwnerControlRows({});
+      setMoneySwitches(getPlatformMoneyKillSwitchFallbackRows());
+      setMoneySwitchAuditRows([]);
+      setMoneySwitchLoading(false);
+      setMoneySwitchNotice(null);
+      setMoneySwitchBusyKey(null);
+      setMoneySwitchConfirm(null);
+      setMoneySwitchReason("");
+      setMoneySwitchOwnerReason("");
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -5344,6 +5530,38 @@ export default function AdminStudioScreen() {
     setAdminFinanceReadModel({ ...financeReadModel, loading: false });
   }, []);
 
+  const loadMoneyControls = useCallback(async () => {
+    if (!canAccessAdmin) {
+      setMoneySwitches(getPlatformMoneyKillSwitchFallbackRows());
+      setMoneySwitchAuditRows([]);
+      setMoneySwitchLoading(false);
+      return;
+    }
+
+    try {
+      setMoneySwitchLoading(true);
+      const [switchRows, auditRows] = await Promise.all([
+        readPlatformMoneyKillSwitches(),
+        listPlatformMoneyKillSwitchAudit(25),
+      ]);
+      setMoneySwitches(switchRows);
+      setMoneySwitchAuditRows(auditRows);
+      setMoneySwitchNotice(null);
+    } catch (err: unknown) {
+      setMoneySwitches(getPlatformMoneyKillSwitchFallbackRows());
+      setMoneySwitchAuditRows([]);
+      setMoneySwitchNotice(formatAdminOperationFailure(err, "Money Controls are unavailable."));
+    } finally {
+      setMoneySwitchLoading(false);
+    }
+  }, [canAccessAdmin]);
+
+  useEffect(() => {
+    if (canAccessAdmin && operatorTab === "kill-switches") {
+      void loadMoneyControls();
+    }
+  }, [canAccessAdmin, loadMoneyControls, operatorTab]);
+
   const loadAdminImmutableAuditReadModel = useCallback(async () => {
     setAdminImmutableAuditReadModel((current) => ({ ...current, loading: true }));
 
@@ -6053,6 +6271,63 @@ export default function AdminStudioScreen() {
   const toggleOwnerControlRow = useCallback((key: string) => {
     setExpandedOwnerControlRows((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
+
+  const toggleMoneyControlSection = useCallback((key: MoneyControlSectionId) => {
+    setExpandedMoneyControlSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const queueMoneySwitchChange = useCallback((row: PlatformMoneyKillSwitchRow, nextState: MoneyFeatureFlagState) => {
+    if (row.state === nextState || moneySwitchBusyKey) return;
+    setMoneySwitchConfirm({
+      key: row.key,
+      label: row.displayLabel,
+      currentState: row.state,
+      nextState,
+      highRisk: HIGH_RISK_MONEY_SWITCHES.has(row.key),
+    });
+    setMoneySwitchReason("");
+    setMoneySwitchOwnerReason("");
+  }, [moneySwitchBusyKey]);
+
+  const applyMoneySwitchConfirmation = useCallback(async () => {
+    const pending = moneySwitchConfirm;
+    const reason = moneySwitchReason.trim();
+    if (!pending || reason.length < 6 || moneySwitchBusyKey) return;
+
+    try {
+      setMoneySwitchBusyKey(pending.key);
+      setMoneySwitchNotice(null);
+      await setPlatformMoneyKillSwitchState({
+        key: pending.key,
+        state: pending.nextState,
+        reason,
+        ownerOnlyReason: moneySwitchOwnerReason.trim() || null,
+        metadata: {
+          surface: "admin_money_controls",
+          high_risk_confirmation: pending.highRisk,
+          live_money_action: false,
+          checkout_created: false,
+          payout_created: false,
+          transfer_created: false,
+        },
+      });
+      setMoneySwitchConfirm(null);
+      setMoneySwitchReason("");
+      setMoneySwitchOwnerReason("");
+      await loadMoneyControls();
+      setMoneySwitchNotice(`${pending.label} changed to ${formatMoneySwitchState(pending.nextState)}.`);
+    } catch (err: unknown) {
+      setMoneySwitchNotice(formatAdminOperationFailure(err, "Money switch change failed."));
+    } finally {
+      setMoneySwitchBusyKey(null);
+    }
+  }, [
+    loadMoneyControls,
+    moneySwitchBusyKey,
+    moneySwitchConfirm,
+    moneySwitchOwnerReason,
+    moneySwitchReason,
+  ]);
 
   const toggleCanaryRow = useCallback((key: string) => {
     setExpandedCanaryRows((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -7918,6 +8193,158 @@ export default function AdminStudioScreen() {
     </>
   );
 
+  const renderMoneySwitchRow = (row: PlatformMoneyKillSwitchRow) => {
+    const busy = moneySwitchBusyKey === row.key;
+    return (
+      <OwnerControlRow
+        key={row.key}
+        expanded
+        title={row.displayLabel}
+        message={row.description}
+        meta={`Last updated ${row.updatedAt ? formatModerationTimestamp(row.updatedAt) : "not connected"}`}
+        statusLabel={formatMoneySwitchState(row.state)}
+        tone={moneySwitchTone(row.state)}
+      >
+        <OwnerDetailGrid
+          rows={[
+            { label: "Public state", value: getMoneyFeatureStateLabel(row.state) },
+            { label: "Reason", value: row.reason || "not supplied" },
+            { label: "Owner note", value: row.ownerOnlyReason || "not supplied" },
+            { label: "Latest audit", value: row.latestAuditAt ? formatModerationTimestamp(row.latestAuditAt) : "not connected" },
+          ]}
+        />
+        {HIGH_RISK_MONEY_SWITCHES.has(row.key) ? (
+          <OwnerDisabledReason reason="High-risk switch: confirmation and an audit reason are required before the backend writes this change." />
+        ) : null}
+        <View style={styles.ownerFilterRow}>
+          {MONEY_SWITCH_STATE_OPTIONS.map((state) => {
+            const active = row.state === state;
+            const disabled = active || busy || moneySwitchBusyKey !== null;
+            return (
+              <TouchableOpacity
+                key={`${row.key}-${state}`}
+                accessibilityRole="button"
+                disabled={disabled}
+                style={[
+                  styles.ownerFilterChip,
+                  active && styles.ownerFilterChipActive,
+                  disabled && !active && styles.configSaveBtnDisabled,
+                ]}
+                onPress={() => queueMoneySwitchChange(row, state)}
+              >
+                <Text style={[styles.ownerFilterChipText, active && styles.ownerFilterChipTextActive]}>
+                  {formatMoneySwitchState(state)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </OwnerControlRow>
+    );
+  };
+
+  const renderMoneyControlsSection = (section: typeof MONEY_CONTROL_SECTIONS[number]) => {
+    const expanded = expandedMoneyControlSections[section.id];
+    const sectionRows = section.keys.map((key) => getPlatformMoneyKillSwitch(moneySwitches, key));
+    const liveMoneySwitch = getPlatformMoneyKillSwitch(moneySwitches, "live_money_enabled");
+    const statusLabel = section.id === "audit"
+      ? `${moneySwitchAuditRows.length} rows`
+      : sectionRows.some((row) => row.state === "locked")
+        ? "Blocked"
+        : sectionRows.some((row) => row.state === "on")
+          ? "Has On"
+          : sectionRows.some((row) => row.state === "sandbox_only")
+            ? "Sandbox only"
+            : "Off";
+    const statusTone: OwnerControlTone = section.id === "audit"
+      ? (moneySwitchAuditRows.length ? "info" : "locked")
+      : sectionRows.some((row) => row.state === "locked")
+        ? "danger"
+        : sectionRows.some((row) => row.state === "on" || row.state === "sandbox_only")
+          ? "success"
+          : "locked";
+
+    return (
+      <OwnerControlRow
+        key={section.id}
+        expanded={expanded}
+        title={section.title}
+        message={section.summary}
+        meta={section.id === "audit" ? "Audit rows are immutable and backend-written." : `Live money is ${formatMoneySwitchState(liveMoneySwitch.state)}.`}
+        statusLabel={statusLabel}
+        tone={statusTone}
+        onPress={() => toggleMoneyControlSection(section.id)}
+      >
+        {section.id === "audit" ? (
+          moneySwitchAuditRows.length ? (
+            <View style={styles.reportTimeline}>
+              {moneySwitchAuditRows.map((row) => (
+                <View key={row.id} style={styles.reportTimelineRow}>
+                  <View style={[styles.reportTimelineDot, row.newState === "on" ? styles.reportTimelineDotDanger : styles.reportTimelineDotInfo]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reportTimelineTitle}>{formatModerationToken(row.switchKey)}</Text>
+                    <Text style={styles.reportTimelineMeta}>
+                      {`${formatMoneySwitchState(row.oldState ?? "off")} -> ${formatMoneySwitchState(row.newState)} · ${row.createdAt ? formatModerationTimestamp(row.createdAt) : "Time unknown"} · ${formatMoneySwitchAuditActor(row.actorUserId)}`}
+                    </Text>
+                    <Text style={styles.reportBody}>{row.reason}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <OwnerEmptyState title="No Money switch audit rows returned" body="Recent switch changes appear here after the protected RPC returns rows." />
+          )
+        ) : (
+          <View style={styles.configList}>
+            {sectionRows.map(renderMoneySwitchRow)}
+          </View>
+        )}
+      </OwnerControlRow>
+    );
+  };
+
+  const renderMoneyControlsPanel = () => {
+    const liveMoneySwitch = getPlatformMoneyKillSwitch(moneySwitches, "live_money_enabled");
+    const payoutsSwitch = getPlatformMoneyKillSwitch(moneySwitches, "payouts_enabled");
+    const digitalSalesSwitch = getPlatformMoneyKillSwitch(moneySwitches, "digital_sales_enabled");
+    const moneyCenterSwitch = getPlatformMoneyKillSwitch(moneySwitches, "money_center_visible");
+
+    return (
+      <View style={styles.contentPanel}>
+        <OwnerControlPanelHeader
+          kicker="MONEY CONTROLS"
+          title="Owner/Admin Money Controls"
+          subtitle="Backend-enforced kill switches for Money Center visibility, digital sales, tips, Watch-Party seats, paid content, merch, payouts, provider webhooks, and live money. Switches alone cannot create checkout, balances, transfers, payouts, or live money."
+          badgeLabel={moneySwitchLoading ? "Loading" : "Backend enforced"}
+          badgeTone={moneySwitchLoading ? "manual" : "success"}
+          actions={(
+            <TouchableOpacity style={styles.ownerSecondaryButton} onPress={() => void loadMoneyControls()} disabled={moneySwitchLoading}>
+              <Text style={styles.ownerSecondaryButtonText}>{moneySwitchLoading ? "Refreshing" : "Refresh Money Controls"}</Text>
+            </TouchableOpacity>
+          )}
+        />
+        <View style={styles.ownerMetricGrid}>
+          <OwnerMetricTile label="Money Center" value={formatMoneySwitchState(moneyCenterSwitch.state)} tone={moneySwitchTone(moneyCenterSwitch.state)} />
+          <OwnerMetricTile label="Digital Sales" value={formatMoneySwitchState(digitalSalesSwitch.state)} tone={moneySwitchTone(digitalSalesSwitch.state)} />
+          <OwnerMetricTile label="Payouts" value={formatMoneySwitchState(payoutsSwitch.state)} tone={moneySwitchTone(payoutsSwitch.state)} />
+          <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneySwitch.state === "on" ? "danger" : moneySwitchTone(liveMoneySwitch.state)} />
+        </View>
+        <OwnerDisabledReason reason="Live money remains fail-closed unless live_money_enabled is on, the specific capability switch allows it, provider readiness proves it, and future backend action guards pass." />
+        {moneySwitchNotice ? <Text style={styles.noticeText}>{moneySwitchNotice}</Text> : null}
+        {moneySwitchLoading ? (
+          <View style={styles.configLoadingRow}>
+            <ActivityIndicator color="#fff" />
+            <Text style={styles.configLoadingText}>Loading Money controls...</Text>
+          </View>
+        ) : (
+          <View style={styles.configList}>
+            {MONEY_CONTROL_SECTIONS.map(renderMoneyControlsSection)}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderSkeleton = () => (
     <View style={{ gap: 12 }}>
       {Array.from({ length: 4 }).map((_, index) => (
@@ -9712,49 +10139,52 @@ export default function AdminStudioScreen() {
         ) : null}
 
         {operatorTab === "kill-switches" ? (
-        <View style={styles.configCard}>
-          <View style={styles.configHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.configKicker}>KILL SWITCHES</Text>
-              <Text style={styles.configTitle}>Kill Switches</Text>
-              <Text style={styles.configBody}>
-                Typed runtimeControls defaults now live under app_configurations.config. These rows are read-only foundation, not working toggles.
-              </Text>
+        <>
+          {renderMoneyControlsPanel()}
+          <View style={styles.configCard}>
+            <View style={styles.configHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configKicker}>KILL SWITCHES</Text>
+                <Text style={styles.configTitle}>Runtime Kill Switches</Text>
+                <Text style={styles.configBody}>
+                  Typed runtimeControls defaults now live under app_configurations.config. These rows remain read-only foundation while Money Controls above are backend-enforced.
+                </Text>
+              </View>
+              <View style={[styles.badge, styles.badgeScheduled]}>
+                <Text style={styles.badgeText}>Configured foundation</Text>
+              </View>
             </View>
-            <View style={[styles.badge, styles.badgeScheduled]}>
-              <Text style={styles.badgeText}>Configured foundation</Text>
-            </View>
-          </View>
-          <View style={styles.configList}>
-            {plannedKillSwitchRows.map((row) => {
-              const configuredValue = row.controlKey
-                ? experienceConfig.runtimeControls[row.controlKey]
-                : null;
-              const isConfiguredFoundation = configuredValue !== null;
+            <View style={styles.configList}>
+              {plannedKillSwitchRows.map((row) => {
+                const configuredValue = row.controlKey
+                  ? experienceConfig.runtimeControls[row.controlKey]
+                  : null;
+                const isConfiguredFoundation = configuredValue !== null;
 
-              return (
-                <View key={row.label} style={styles.configListRow}>
-                  <View style={styles.configListCopy}>
-                    <Text style={styles.configListTitle}>{row.label}</Text>
-                    <Text style={styles.configListBody}>
-                      {isConfiguredFoundation
-                        ? `${formatRuntimeControlValue(configuredValue)}. ${row.body}`
-                        : row.body}
-                    </Text>
+                return (
+                  <View key={row.label} style={styles.configListRow}>
+                    <View style={styles.configListCopy}>
+                      <Text style={styles.configListTitle}>{row.label}</Text>
+                      <Text style={styles.configListBody}>
+                        {isConfiguredFoundation
+                          ? `${formatRuntimeControlValue(configuredValue)}. ${row.body}`
+                          : row.body}
+                      </Text>
+                    </View>
+                    <View style={[
+                      styles.badge,
+                      isConfiguredFoundation ? styles.badgeScheduled : styles.badgeOff,
+                    ]}>
+                      <Text style={styles.badgeText}>
+                        {isConfiguredFoundation ? row.badgeLabel ?? "Configured foundation" : "Not connected yet"}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={[
-                    styles.badge,
-                    isConfiguredFoundation ? styles.badgeScheduled : styles.badgeOff,
-                  ]}>
-                    <Text style={styles.badgeText}>
-                      {isConfiguredFoundation ? row.badgeLabel ?? "Configured foundation" : "Not connected yet"}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
           </View>
-        </View>
+        </>
         ) : null}
 
         {operatorTab === "usage" ? (
@@ -14548,6 +14978,84 @@ export default function AdminStudioScreen() {
                 </View>
               </ScrollView>
             ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={moneySwitchConfirm !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          if (!moneySwitchBusyKey) {
+            setMoneySwitchConfirm(null);
+            setMoneySwitchReason("");
+            setMoneySwitchOwnerReason("");
+          }
+        }}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmSheet}>
+            <Text style={styles.confirmKicker}>Money Controls</Text>
+            <Text style={styles.confirmTitle}>{moneySwitchConfirm?.label ?? "Confirm Money Switch"}</Text>
+            <Text style={styles.confirmBody}>
+              {moneySwitchWarningCopy(moneySwitchConfirm)}
+            </Text>
+            <View style={styles.confirmMetaBox}>
+              <Text style={styles.confirmMetaText}>
+                {moneySwitchConfirm
+                  ? `${formatMoneySwitchState(moneySwitchConfirm.currentState)} -> ${formatMoneySwitchState(moneySwitchConfirm.nextState)}`
+                  : "State change not selected."}
+              </Text>
+              <Text style={styles.confirmMetaText}>Backend RPC writes the switch and immutable audit before creator-visible state changes.</Text>
+              <Text style={styles.confirmMetaText}>No provider secrets, checkout, transfer, withdrawal, payout, balance, or live-money movement is created.</Text>
+              {moneySwitchConfirm?.highRisk ? <Text style={styles.confirmMetaText}>High-risk switch: reason is required and server-side audit must succeed.</Text> : null}
+            </View>
+            <TextInput
+              style={[styles.input, styles.multiline]}
+              placeholder={moneySwitchConfirm?.highRisk && moneySwitchConfirm?.nextState === "on" ? "Reason required, 12+ characters" : "Reason required"}
+              placeholderTextColor="#8d8d8d"
+              multiline
+              value={moneySwitchReason}
+              onChangeText={setMoneySwitchReason}
+            />
+            <TextInput
+              style={[styles.input, styles.multiline]}
+              placeholder="Owner-only note optional"
+              placeholderTextColor="#8d8d8d"
+              multiline
+              value={moneySwitchOwnerReason}
+              onChangeText={setMoneySwitchOwnerReason}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setMoneySwitchConfirm(null);
+                  setMoneySwitchReason("");
+                  setMoneySwitchOwnerReason("");
+                }}
+                disabled={moneySwitchBusyKey !== null}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  moneySwitchConfirm?.highRisk ? styles.dangerConfirmBtn : styles.saveBtn,
+                  (
+                    moneySwitchBusyKey !== null
+                    || moneySwitchReason.trim().length < (moneySwitchConfirm?.highRisk && moneySwitchConfirm?.nextState === "on" ? 12 : 6)
+                  ) && styles.configSaveBtnDisabled,
+                ]}
+                onPress={() => void applyMoneySwitchConfirmation()}
+                disabled={
+                  moneySwitchBusyKey !== null
+                  || moneySwitchReason.trim().length < (moneySwitchConfirm?.highRisk && moneySwitchConfirm?.nextState === "on" ? 12 : 6)
+                }
+              >
+                {moneySwitchBusyKey ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Confirm Switch</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

@@ -26,6 +26,9 @@ const payoutsRoute = read("app/payouts.tsx");
 const packageJson = read("package.json");
 const providerReadiness = read("_lib/providerReadiness.ts");
 const paymentRailPolicy = read("_lib/paymentRailPolicy.ts");
+const moneyFeatureFlags = read("_lib/moneyFeatureFlags.ts");
+const admin = read("app/admin.tsx");
+const moneyKillSwitchMigration = read("supabase/migrations/202605270001_platform_money_kill_switches.sql");
 
 assertIncludes(packageJson, "guard:money-center-policy", "package guard script");
 
@@ -60,6 +63,45 @@ assertIncludes(channelSettings, "readProviderReadinessSummary", "provider readin
 assertIncludes(providerReadiness, "readProviderReadinessSummary", "provider readiness helper");
 assertIncludes(providerReadiness, "isLiveMoneyEnabled: false", "provider readiness fallback live money false");
 assertIncludes(paymentRailPolicy, "ANDROID_DIGITAL_CREATOR_CONTENT_STRIPE_ENABLED = false", "payment rail Stripe block");
+
+assertIncludes(moneyFeatureFlags, "readMoneyFeatureFlagSummary", "Money feature flag client creator summary");
+assertIncludes(moneyFeatureFlags, "setPlatformMoneyKillSwitchState", "Money kill switch admin writer");
+assertIncludes(moneyFeatureFlags, "live_money_enabled: \"off\"", "live money default remains off");
+assertIncludes(channelSettings, "readMoneyFeatureFlagSummary", "creator Money Center switch summary integration");
+assertIncludes(channelSettings, "money_center_visible", "Money Center visibility switch");
+assertIncludes(channelSettings, "digital_sales_enabled", "Digital sales switch");
+assertIncludes(channelSettings, "payouts_enabled", "Payouts switch");
+assertIncludes(channelSettings, "live_money_enabled", "Live money switch");
+assertIncludes(channelSettings, "isMoneyFeatureSandboxOrOn", "sandbox-only setup gate");
+assertIncludes(admin, "Owner/Admin Money Controls", "Owner/Admin Money Controls UI");
+assertIncludes(admin, "HIGH_RISK_MONEY_SWITCHES", "high-risk Money switch confirmation list");
+assertIncludes(admin, "setPlatformMoneyKillSwitchState", "backend Money switch write");
+assertIncludes(admin, "Backend RPC writes the switch and immutable audit", "Money switch confirmation audit copy");
+assertIncludes(admin, "No provider secrets, checkout, transfer, withdrawal, payout, balance, or live-money movement is created.", "Money switch no-money-movement copy");
+assertIncludes(moneyKillSwitchMigration, "create table if not exists public.\"platform_money_kill_switches\"", "Money switch table");
+assertIncludes(moneyKillSwitchMigration, "create table if not exists public.\"platform_money_kill_switch_audit\"", "Money switch audit table");
+assertIncludes(moneyKillSwitchMigration, "get_money_feature_flags_summary", "creator-safe switch RPC");
+assertIncludes(moneyKillSwitchMigration, "get_platform_money_kill_switches", "owner switch RPC");
+assertIncludes(moneyKillSwitchMigration, "set_platform_money_kill_switch_state", "owner switch write RPC");
+assertIncludes(moneyKillSwitchMigration, "assert_money_feature_allowed", "backend money feature assertion");
+assertIncludes(moneyKillSwitchMigration, "public.\"platform_admin_audit_logs\"", "Money switch admin audit integration");
+assertIncludes(moneyKillSwitchMigration, "('live_money_enabled', 'off'", "live money seeded off");
+[
+  "money_center_visible",
+  "digital_sales_enabled",
+  "tips_enabled",
+  "watch_party_seats_enabled",
+  "paid_content_enabled",
+  "merch_enabled",
+  "creator_balance_visible",
+  "payouts_enabled",
+  "stripe_connect_enabled",
+  "revenuecat_google_play_enabled",
+  "provider_webhooks_enabled",
+  "live_money_enabled",
+].forEach((key) => {
+  assertIncludes(moneyKillSwitchMigration, `'${key}'`, `Money kill switch key ${key}`);
+});
 
 assertIncludes(monetizeRoute, "focus=overview", "old monetize route maps to Money Center overview");
 assertIncludes(revenueRoute, "focus=balance", "old revenue route maps to Money Center balance");

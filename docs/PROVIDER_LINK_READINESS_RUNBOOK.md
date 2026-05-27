@@ -1,12 +1,12 @@
 # Provider-Link Readiness Runbook
 
-Last updated: May 25, 2026
+Last updated: May 27, 2026
 
 This runbook records the provider-link readiness scaffold for Premium, RevenueCat, Google Play Billing, Stripe, Stripe Connect, payouts, revenue imports, tips, paid content, Watch-Party seats, ads, and future commerce.
 
 No implementation in this lane activates purchases, payouts, balances, withdrawals, transfers, checkout, tips, paid content, revenue imports, or live money movement.
 
-Platform Studio Money Center is the normal creator-facing home for these statuses. The visible source of truth is the sanitized provider-readiness summary plus Money Center's ledger-first readiness copy; owner/dev-only Technical checks may show public-safe setup metadata, never secret values.
+Platform Studio Money Center is the normal creator-facing home for these statuses. The visible source of truth is the sanitized provider-readiness summary plus Money Center's backend kill-switch summary and ledger-first readiness copy; owner/dev-only Technical checks may show public-safe setup metadata, never secret values.
 
 ## Readiness Source Of Truth
 
@@ -35,6 +35,34 @@ Rules:
 - This lane seeds no active rows and no live-money rows.
 - Normal creators and normal users cannot write readiness rows.
 - UI reads sanitized summaries only and never receives secrets, raw provider payloads, raw storage paths, customer payment identifiers, card data, bank data, or service-role values.
+
+## Money Kill Switch Companion
+
+Migration `202605270001_platform_money_kill_switches.sql` adds the Owner/Admin control companion to provider readiness:
+
+- Creator UI reads `get_money_feature_flags_summary()` and receives only sanitized key/state/display copy.
+- Owner/Admin UI reads `get_platform_money_kill_switches()` and `list_platform_money_kill_switch_audit()`.
+- Owner/Admin changes use `set_platform_money_kill_switch_state()` with a reason and immutable audit.
+- Future backend money actions must use `assert_money_feature_allowed()` or equivalent server-side enforcement.
+
+Current default switch posture:
+
+| Switch | Current default |
+| --- | --- |
+| `money_center_visible` | on |
+| `digital_sales_enabled` | off |
+| `tips_enabled` | off |
+| `watch_party_seats_enabled` | off |
+| `paid_content_enabled` | off |
+| `merch_enabled` | off |
+| `creator_balance_visible` | on |
+| `payouts_enabled` | off |
+| `stripe_connect_enabled` | sandbox_only |
+| `revenuecat_google_play_enabled` | sandbox_only |
+| `provider_webhooks_enabled` | sandbox_only |
+| `live_money_enabled` | off |
+
+`sandbox_only` allows setup proof and readiness review only. It is not production active and cannot create checkout, balances, purchases, transfers, payouts, or provider grants. `on` still requires provider readiness. Live-money actions require both the target switch and `live_money_enabled=on`.
 
 ## Readiness Providers And Capabilities
 
@@ -146,6 +174,8 @@ Added or confirmed fail-closed paths:
 
 The RevenueCat and Google Play webhook shells intentionally do not process entitlement changes. A later provider-link lane must implement provider-specific verification, idempotency, entitlement reconciliation, rollback proof, and audit proof before any active behavior can be claimed.
 
+`provider_webhooks_enabled=off` keeps webhooks from activating money; they may only audit readiness if policy allows. `provider_webhooks_enabled=sandbox_only` allows sandbox proof only. `live_money_enabled=off` blocks live-money claims and actions even when a provider is configured or sandbox-ready.
+
 ## Provider Dashboard Setup Steps
 
 RevenueCat:
@@ -189,6 +219,7 @@ Ads:
 - Tips, paid content, Watch-Party seats, and merch appear as separate readiness sections instead of one generic commerce bucket.
 - Creator Balance remains ledger-first and shows no verified earnings until backed ledger rows exist.
 - Old `Monetize`, `Revenue`, and `Payouts` entry points map into Money Center sections and no longer exist as duplicate creator-facing dashboards.
+- Owner/Admin Money Controls live in Admin Command Center > Kill Switches and are separate from creator Money Center.
 - Admin Revenue/Payouts remain owner/admin operational readouts and are not normal creator-facing Money Center replacements.
 
 Product policy: `docs/MONEY_CENTER_PRODUCT_POLICY.md`.

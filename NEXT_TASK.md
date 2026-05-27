@@ -1,6 +1,37 @@
 # NEXT TASK
 
-## Recommended Lane: Rachi Originals Player Frame And Avatar Safe-Asset Proof
+## Recommended Lane: Money Center Provider Proof And Android Kill-Switch Runtime Proof
+
+Money Center now has backend-enforced Owner/Admin kill switches in addition to provider readiness. The next useful money lane is proof, not activation: apply the migration in the target environment, capture creator/Admin runtime screens on Android, and prove provider boundaries without turning on live money.
+
+Closed truth:
+
+- Platform Studio has one creator-facing `Monetization` tab and `Money Center` page title.
+- Old `/monetize`, `/revenue`, and `/payouts` routes plus old tab/focus params map into Money Center section anchors.
+- Migration `202605270001_platform_money_kill_switches.sql` adds `platform_money_kill_switches`, `platform_money_kill_switch_audit`, sanitized creator summary RPC, owner/admin list/audit/write RPCs, and backend `assert_money_feature_allowed()`.
+- Defaults keep live money off: digital sales, tips, Watch-Party seats, paid content, merch, payouts, revenue imports, tax/KYC, ad revenue, sponsorships, and `live_money_enabled` are `off`.
+- Store/Stripe/webhook readiness switches are `sandbox_only` by default, allowing proof without production money.
+- Admin Command Center > Kill Switches has Owner/Admin Money Controls with high-risk confirmation and reason capture.
+- Creator Money Center reads sanitized switch states plus provider readiness and does not show live-active claims unless both provider proof and switch state allow them.
+- Google Play/RevenueCat handles Android digital purchases; Stripe Connect handles creator payout setup/readiness only; merch is physical goods and separate.
+- Creator Balance remains ledger-first and shows no verified earnings until real ledger rows exist.
+- No checkout, tip, paid content sale, Watch-Party seat sale, merch sale, payout, withdrawal, transfer, fake tax/KYC, fake Premium grant, provider secret, or live-money movement was added.
+
+Remaining limitations:
+
+- Android runtime screenshots for Owner/Admin Money Controls, high-risk confirmation, and switch-off reflection in creator Money Center still need a current build/dev-client pass unless captured in a follow-up proof folder.
+- The migration still needs target-environment application/lint/dry-run/typegen proof in the deployment path.
+- RevenueCat, Google Play, Stripe Connect, and webhook production readiness remain setup/sandbox-only; do not mark any capability `active` without provider proof and explicit owner approval.
+
+Recommended next lane:
+
+- Apply/prove `202605270001_platform_money_kill_switches.sql` in the target Supabase environment.
+- Capture Android `R5CR120QCBF` screenshots for Platform Studio tab row, Money Center first view, each Money Center section, Provider Status, Admin Money Controls, switch list, high-risk confirmation modal, and a switch-off state reflected in creator Money Center.
+- Link/prove provider credentials by secret name only, never values; prove valid/invalid webhook handling and idempotency without granting Premium or live money.
+- Keep `live_money_enabled=off`; keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
+- Re-run the Money Center, provider readiness, payment rail, creator monetization, Stripe Connect, runtime, and LiveKit/old-room guard stack.
+
+## Previous Recommended Lane: Rachi Originals Player Frame And Avatar Safe-Asset Proof
 
 Rachi is now implemented repo-side as the official Chi'llywood account, first pinned Chi'lly Circle connection, official update publisher, and Chi'llwood Originals source. Android proof on `R5CR120QCBF` covers public/user-facing surfaces, the upgraded owner/operator Admin Rachi tab, real Rachi Official Updates, and a real public-safe Rachi Originals video fixture in Home plus Rachi Platform. The next useful Rachi lane is only the remaining media-proof polish: capture a visible Player playback frame for the fixture and prove gallery avatar save with a safe app-owned image if one is available.
 

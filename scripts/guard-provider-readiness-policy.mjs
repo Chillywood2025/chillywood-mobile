@@ -29,6 +29,7 @@ const channelSettings = read("app/channel-settings.tsx");
 const packageJson = read("package.json");
 const config = read("supabase/config.toml");
 const sandboxProofMigration = read("supabase/migrations/202605250004_provider_link_sandbox_proof_status.sql");
+const moneySwitchMigration = read("supabase/migrations/202605270001_platform_money_kill_switches.sql");
 
 assertIncludes(packageJson, "guard:provider-readiness-policy", "package guard script");
 
@@ -93,6 +94,7 @@ assertIncludes(config, "[functions.revenuecat-webhook]", "RevenueCat webhook fun
 assertIncludes(config, "[functions.google-play-webhook]", "Google Play webhook function config");
 
 assertIncludes(channelSettings, "readProviderReadinessSummary", "Studio readiness integration");
+assertIncludes(channelSettings, "readMoneyFeatureFlagSummary", "Studio money switch integration");
 assertIncludes(channelSettings, "Money Center", "Studio Money Center title");
 assertIncludes(channelSettings, "Provider Status", "Studio provider status section");
 assertIncludes(channelSettings, "Provider checks are the source of readiness truth.", "Studio provider source-of-truth copy");
@@ -103,6 +105,10 @@ assertNotIncludes(channelSettings, "{ id: \"monetize\", label: \"Monetize\" }", 
 assertNotIncludes(channelSettings, "STRIPE_SECRET_KEY", "Studio Stripe secret");
 assertNotIncludes(channelSettings, "REVENUECAT_SECRET_API_KEY", "Studio RevenueCat secret");
 assertNotIncludes(channelSettings, "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON", "Studio Google secret");
+
+assertIncludes(moneySwitchMigration, "get_money_feature_flags_summary", "Money switch sanitized readiness companion RPC");
+assertIncludes(moneySwitchMigration, "live_money_enabled", "Money switch live money lock");
+assertIncludes(moneySwitchMigration, "assert_money_feature_allowed", "backend money capability guard");
 
 if (process.exitCode) {
   process.exit();
