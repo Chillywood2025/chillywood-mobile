@@ -1,13 +1,16 @@
 # NEXT TASK
 
-## Recommended Lane: Explore / Library Backing Plan
+## Recommended Lane: Explore / Library Backing Plan And Host Preflight Design
 
-The Navigation Terminology and App Flow Clarity Pass is implemented and Android-proved. The next useful lane is only backed read-model planning for full Explore/Library expansion if product-approved.
+The Navigation Terminology and App Flow Clarity Pass and Live Hub Modern UI Density Pass are implemented and Android-proved. The next useful lane is backed read-model planning for full Explore/Library expansion plus a host preflight design, if product-approved.
 
 Closed truth:
 
 - Bottom navigation is Home / Explore / Live / Library / Profile.
-- Live bottom tab is an orientation/entry surface only. It does not own Party Room or Live Stage behavior.
+- Live bottom tab is a compact orientation/entry surface only. It does not own Party Room or Live Stage behavior.
+- Live screen now uses a Hero header, Choice chips, Compact action cards, Action rows, Status pills, Primary/secondary CTAs, Progressive disclosure / Collapsible details, and an honest Empty state.
+- Long technical Live card copy was removed.
+- Live Hub Android proof on `R5CR120QCBF` used `./gradlew assembleRelease`, `adb install -r -d`, and screenshots at `/tmp/chillywood-live-hub-density-proof-20260528/`.
 - Live Watch-Party entry uses the existing Premium/runtime preflight before routing.
 - Live Watch-Party routes through the existing `/watch-party?mode=live` waiting-room flow.
 - Watch-Party Live remains content/player-owned; the Live tab can join by code and points new content-first starts to Explore/title/Player.
@@ -30,6 +33,7 @@ Remaining limitations:
 Recommended next lane:
 
 - If product wants Explore/Library expansion, design backed read models first. Do not add fake creator/live/event/library rows.
+- If product wants host preflight, design it around the existing waiting-room owner without changing LiveKit, Premium, Party Room, Live Stage, or Watch-Party route ownership.
 
 ## Previous Recommended Lane: RevenueCat / Google Play Webhook Secret Linking And Signed Sandbox Proof
 

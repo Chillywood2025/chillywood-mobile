@@ -44,12 +44,25 @@ assertNotIncludes(tabs, "My List", "bottom navigation label");
 assertIncludes(iconSymbol, "'play.circle.fill': 'live-tv'", "Live bottom-nav icon");
 assertIncludes(iconSymbol, "'person.crop.circle.fill': 'person'", "Profile bottom-nav icon");
 
-assertIncludes(liveTab, "Live Watch-Party is people-first", "Live tab semantics");
-assertIncludes(liveTab, "Watch-Party Live is content-first", "Watch-Party Live semantics");
-assertIncludes(liveTab, "Party Room stays the room shell", "Party Room separation");
+assertIncludes(liveTab, "heroHeader", "Live screen Hero header pattern");
+assertIncludes(liveTab, "compactActionCard", "Live screen Compact action cards pattern");
+assertIncludes(liveTab, "actionRow", "Live screen Action rows pattern");
+assertIncludes(liveTab, "statusPill", "Live screen Status pills pattern");
+assertIncludes(liveTab, "choiceChip", "Live screen Choice chips pattern");
+assertIncludes(liveTab, "disclosureCard", "Live screen Progressive disclosure pattern");
+assertIncludes(liveTab, "emptyState", "Live screen Empty state pattern");
+assertIncludes(liveTab, "Start or join a people-first live room.", "Live Watch-Party user copy");
+assertIncludes(liveTab, "Enter a room code or start from content.", "Watch-Party Live user copy");
+assertIncludes(liveTab, "Pick something first, then watch together.", "Find Content user copy");
+assertIncludes(liveTab, "Party Room stays separate", "Party Room separation");
 assertIncludes(liveTab, "requireLiveFirstPremium", "Live tab Premium/runtime preflight");
 assertIncludes(liveTab, 'params: { mode: "live", source: "bottom-live-tab" }', "Live tab route mapping");
-assertIncludes(liveTab, "New Watch-Party Live rooms still start from a title", "Watch-Party Live ownership copy");
+[
+  "This opens the existing Live Waiting Room",
+  "keeps Live Stage ownership unchanged",
+  "New Watch-Party Live rooms still start from a title",
+  "Browse titles first, then start Watch-Party Live from the title or Player when access is allowed",
+].forEach((needle) => assertNotIncludes(liveTab, needle, "Live screen user copy"));
 
 assertIncludes(profileTab, "Profile is your social identity", "Profile/Platform separation");
 assertIncludes(profileTab, "Platform and Platform Studio stay separate", "Profile tab creator surface separation");

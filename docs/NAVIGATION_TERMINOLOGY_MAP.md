@@ -96,6 +96,26 @@ Recommended Library/My Stuff phase:
 - Watch-Party Live must not be routed into Live Stage.
 - Audio Mix belongs only to Watch-Party Live shared player controls.
 
+## Live Hub UI Density
+Implemented status:
+- The Live tab at `app/(tabs)/live.tsx` is a modern compact launcher.
+- It uses these named patterns: Hero header, Compact action cards, Action rows, Status pills, Choice chips, Progressive disclosure, Collapsible details, Empty state, Primary CTA, and Secondary CTA.
+- Main cards use one-sentence copy: `Live Watch-Party` is people-first, `Watch-Party Live` is for room codes/content watch-together, and `Find Content` starts from content discovery.
+- Long technical copy such as route ownership and waiting-room internals is removed from the main cards.
+
+Route map:
+- `Open Live` keeps the existing Premium/runtime preflight, then opens `/watch-party?mode=live`.
+- `Enter Code` opens `/watch-party` for the existing Watch-Party Live waiting-room/code path.
+- `Browse` opens Explore.
+- Party Room remains `/watch-party/[partyId]`.
+- Live Room / Live Stage remains `/watch-party/live-stage/[partyId]`.
+- Player remains `/player/[id]` and is deferred for a later scoped pass.
+- Spectator remains `/spectate/[itemId]`.
+
+Guardrails:
+- No LiveKit token issuer or permission behavior changed.
+- No Party Room, old-room handling, Premium gate, Spectator child-room, Player, fake live room, fake event, fake viewer count, or fake activity behavior changed.
+
 ## Profile / Platform / Studio Separation
 - Profile is personal/social identity.
 - Public Platform is viewer-facing creator surface at `/channel/[userId]`.
@@ -168,6 +188,7 @@ Deferred route work:
 ## Implemented In This Pass
 - Bottom nav changed from Home / Explore / My List to Home / Explore / Live / Library / Profile.
 - Added a Live tab that routes into existing Live Watch-Party and Watch-Party Live paths through existing Premium/runtime preflight and without changing room ownership.
+- Modernized the Live tab into a compact Live Hub launcher with the UI density patterns above.
 - Added a Profile tab that routes to the signed-in user's canonical Profile.
 - Renamed visible `My List` copy to `Library` while keeping saved-title behavior only.
 - Updated Explore copy to state current title-search scope and direct broader discovery to Home until backed.
@@ -180,7 +201,7 @@ Deferred route work:
 - Host preflight build.
 - Platform Studio structural rewrite.
 - Player route decomposition.
-- Android screenshot proof for this exact pass, if no device/session is available during the lane.
+- Full Explore and Library backing beyond current saved-title/title-search data.
 
 ## Validation
 Run:
@@ -207,7 +228,8 @@ Run:
 ## Android Proof
 Target device: `R5CR120QCBF`.
 
-Proof path: `/tmp/chillywood-navigation-terminology-proof-20260528/`.
+Navigation proof path: `/tmp/chillywood-navigation-terminology-proof-20260528/`.
+Live Hub density proof path: `/tmp/chillywood-live-hub-density-proof-20260528/`.
 
 Captured screenshots:
 - bottom navigation with Home / Explore / Live / Library / Profile
@@ -218,5 +240,8 @@ Captured screenshots:
 - Public Platform
 - Platform Studio
 - Live tab with both live paths
+- compact Live Hub first view
+- `How Live works` collapsed and expanded
+- Open Live, Enter Code, and Browse route handoffs
 - Money Center simple first view
 - Admin absent from normal bottom nav
