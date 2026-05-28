@@ -27,6 +27,7 @@ const packageJson = read("package.json");
 const providerReadiness = read("_lib/providerReadiness.ts");
 const paymentRailPolicy = read("_lib/paymentRailPolicy.ts");
 const moneyFeatureFlags = read("_lib/moneyFeatureFlags.ts");
+const moneyAuditEvents = read("_lib/moneyAuditEvents.ts");
 const admin = read("app/admin.tsx");
 const moneyKillSwitchMigration = read("supabase/migrations/202605270001_platform_money_kill_switches.sql");
 const operatorTabsBlock = admin.match(/const operatorTabs:[\s\S]*?\n\];/)?.[0] ?? "";
@@ -69,12 +70,21 @@ assertIncludes(moneyFeatureFlags, "readMoneyFeatureFlagSummary", "Money feature 
 assertIncludes(moneyFeatureFlags, "setPlatformMoneyKillSwitchState", "Money kill switch admin writer");
 assertIncludes(moneyFeatureFlags, "live_money_enabled: \"off\"", "live money default remains off");
 assertIncludes(channelSettings, "readMoneyFeatureFlagSummary", "creator Money Center switch summary integration");
+assertIncludes(channelSettings, "renderCreatorMoneyEventRows", "creator Money Center drilldown rows");
+assertIncludes(channelSettings, "Money Event Detail", "creator Money event detail sheet");
+assertIncludes(channelSettings, "Not payable", "creator non-payable labeling");
+assertIncludes(channelSettings, "Sandbox only", "creator sandbox labeling");
 assertIncludes(channelSettings, "money_center_visible", "Money Center visibility switch");
 assertIncludes(channelSettings, "digital_sales_enabled", "Digital sales switch");
 assertIncludes(channelSettings, "payouts_enabled", "Payouts switch");
 assertIncludes(channelSettings, "live_money_enabled", "Live money switch");
 assertIncludes(channelSettings, "isMoneyFeatureSandboxOrOn", "sandbox-only setup gate");
 assertIncludes(admin, "Owner/Admin Money Center", "Owner/Admin Money Center UI");
+assertIncludes(admin, "Money Audit Explorer", "Owner/Admin Money Audit Explorer");
+assertIncludes(admin, "renderAdminMoneyAuditExplorer", "Owner/Admin money audit explorer renderer");
+assertIncludes(admin, "selectedAdminMoneyAuditEvent", "Owner/Admin money event detail state");
+assertIncludes(admin, "Safe Technical Details", "Owner/Admin money detail safe technical section");
+assertIncludes(admin, "Inspect only", "Owner/Admin money detail action safety copy");
 assertIncludes(operatorTabsBlock, "{ key: \"money-center\", label: \"Money Center\" }", "Admin Money Center tab");
 assertIncludes(admin, "ADMIN_MONEY_LEGACY_TAB_SECTIONS", "legacy Admin money tab mapping");
 assertIncludes(admin, "useLocalSearchParams", "Admin Money Center deep-link query mapping");
@@ -87,6 +97,15 @@ assertIncludes(admin, "HIGH_RISK_MONEY_SWITCHES", "high-risk Money switch confir
 assertIncludes(admin, "setPlatformMoneyKillSwitchState", "backend Money switch write");
 assertIncludes(admin, "Backend RPC writes the switch and immutable audit", "Money switch confirmation audit copy");
 assertIncludes(admin, "No provider secrets, checkout, transfer, withdrawal, payout, balance, or live-money movement is created.", "Money switch no-money-movement copy");
+assertIncludes(moneyAuditEvents, "readAdminMoneyAuditSourceRows", "admin safe money source row reader");
+assertIncludes(moneyAuditEvents, "readCreatorMoneyAuditSourceRows", "creator scoped money source row reader");
+assertIncludes(moneyAuditEvents, "buildAdminMoneyAuditEvents", "admin normalized money event builder");
+assertIncludes(moneyAuditEvents, "buildCreatorMoneyAuditEvents", "creator normalized money event builder");
+assertIncludes(moneyAuditEvents, "\"Sandbox only\"", "sandbox-only money event labels");
+assertIncludes(moneyAuditEvents, "\"Not payable\"", "non-payable money event labels");
+assertIncludes(moneyAuditEvents, "provider_event_id", "safe provider event id support");
+assertIncludes(moneyAuditEvents, "idempotency", "idempotency proof support");
+assertIncludes(moneyAuditEvents, "SENSITIVE_FIELD_PARTS", "secret/raw payload redaction list");
 [
   "{ key: \"premium\", label: \"Premium\" }",
   "{ key: \"kill-switches\", label: \"Kill Switches\" }",
@@ -133,6 +152,9 @@ assertIncludes(channelSettings, "normalized === \"store\"", "old store focus map
 assertNotIncludes(channelSettings, "{ id: \"monetize\", label: \"Monetize\" }", "duplicate Monetize tab");
 assertNotIncludes(channelSettings, "{ id: \"revenue\", label: \"Revenue\" }", "duplicate Revenue tab");
 assertNotIncludes(channelSettings, "{ id: \"payouts\", label: \"Payouts\" }", "duplicate Payouts tab");
+assertNotIncludes(channelSettings, "foundation row found", "creator-facing confusing foundation row copy");
+assertNotIncludes(channelSettings, "foundation event found", "creator-facing confusing foundation event copy");
+assertNotIncludes(channelSettings, "foundation import row", "creator-facing confusing foundation import copy");
 assertNotIncludes(channelSettings, "fake purchase", "fake purchase copy in Studio");
 assertNotIncludes(channelSettings, "fake tip", "fake tip copy in Studio");
 assertNotIncludes(channelSettings, "fake earnings", "fake earnings copy in Studio");

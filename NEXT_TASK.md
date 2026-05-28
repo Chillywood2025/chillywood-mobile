@@ -1,12 +1,18 @@
 # NEXT TASK
 
-## Recommended Lane: Provider Boundary Sandbox Proof And Harmless Audit Toggle
+## Recommended Lane: Sandbox Provider Event Fire And Idempotency Proof
 
-Money Center and Owner/Admin Money Center consolidation are now repo-side and Android-proved. The next useful money lane is provider-boundary proof only: link/prove RevenueCat, Google Play, Stripe Connect, and webhook readiness by safe secret names/status only, keep production live money off, and optionally perform one harmless audited no-live switch change only with explicit product-owner approval.
+Money Center, Owner/Admin Money Center consolidation, and the Money Audit Explorer drilldowns are Android-proved. The next useful lane is only safe signed-provider sandbox event firing and idempotency proof if the required external tooling is available without exposing secrets.
 
 Closed truth:
 
 - Platform Studio has one creator-facing `Monetization` tab and `Money Center` page title.
+- Creator Money Center now has clickable money event rows and a sanitized `Money Event Detail` sheet for creator-owned/source-safe setup, sandbox, readiness, ledger, provider, and switch events.
+- Creator details show source label, status, environment, provider/capability label, timestamp where available, idempotency proof label, reason, next step, and explicit `Not payable`; they do not show raw provider payloads, service-role values, provider secrets, other-user ids, or admin-only notes.
+- Owner/Admin Money Center now has `Money Audit Explorer` with filters for All, Production, Sandbox, Setup, Blocked, Kill Switches, Provider Readiness, Ledger, Revenue Imports, Payouts, Sponsors / Ads, Fraud & Risk, Webhooks, Digital Sales, and Merch.
+- Admin event detail shows safe source table/event/actor/target/provider/capability/environment/idempotency/reason/timestamps/metadata and is inspect-only: no payout approval, revenue import, checkout activation, sandbox-to-production promotion, or balance creation.
+- Shared helper `_lib/moneyAuditEvents.ts` reads safe source rows where RLS allows and otherwise builds source-labeled rollup/detail events from existing Money Center read models.
+- Sandbox/test rows are labeled `Sandbox only` and `Not payable`, are not mixed into production payable balances, and do not expose withdraw/cash-out.
 - Old `/monetize`, `/revenue`, and `/payouts` routes plus old tab/focus params map into Money Center section anchors.
 - Admin Command Center now has one visible `Money Center` tab for money controls; separate Premium, Kill Switches, Ads, Revenue, Payouts, Sponsors, and Fraud top-level money tabs are consolidated.
 - Old Admin params map into the new Admin Money Center sections: Premium / RevenueCat / Google Play, Kill Switches, Sponsors / Ads, Fraud & Risk, Creator Balance / Ledger, and Payouts / Stripe Connect.
@@ -23,23 +29,28 @@ Closed truth:
 - No checkout, tip, paid content sale, Watch-Party seat sale, merch sale, payout, withdrawal, transfer, fake tax/KYC, fake Premium grant, provider secret, or live-money movement was added.
 - Previous Android `R5CR120QCBF` proof at `/tmp/chillywood-money-center-android-refresh-proof-20260527/` captures the refreshed creator Money Center plus the pre-consolidation Owner/Admin Money Controls.
 - Owner/Admin Money Center consolidation proof on `R5CR120QCBF` lives at `/tmp/chillywood-admin-money-center-proof-20260527/`. The proof used `./gradlew assembleRelease`, installed the release APK over the existing owner session with `adb install -r -d`, opened `chillywoodmobile://admin?tab=money-center`, captured the Admin tab row with one visible Money Center tab, first view, expanded Admin Money Center sections, grouped kill switches, the high-risk Live money reason sheet opened and cancelled, audit/technical checks, and creator Money Center disabled/setup states.
+- Money Audit Explorer Android proof on `R5CR120QCBF` lives at `/tmp/chillywood-money-audit-explorer-proof-20260527/`. The proof used a current release APK installed over the existing owner session, opened creator/admin deep links, and captured creator event rows/detail, creator balance detail with no verified earnings/not payable, Provider Status readiness, Owner/Admin Money Audit Explorer metrics and Sandbox/Setup filters, sandbox row detail, kill-switch event detail, sponsor/fraud drilldown surfaces, no secret exposure, no fake money, and no withdrawal/cash-out action.
 - Backend proof through the available signed-in proof account returned sanitized creator switch rows, kept `live_money_enabled=off` and `payouts_enabled=off`, denied direct table updates with `42501`, denied switch writes with `money_kill_switch_admin_required`, and performed no toggle.
+- Repo-side static proof passed for `npm run typecheck`, `npm run validate:runtime`, the Money Center/provider/payment/creator/Stripe Connect/refresh/VOD/Clip/Brand/Watch-Party/old-room guard stack, Supabase migration/lint/dry-run checks, targeted grep proof, and diff whitespace checks after adding event drilldowns.
 
 Remaining limitations:
 
+- A fresh signed sandbox provider event was not fired in this pass. Existing sandbox/readiness/switch rows are inspectable and labeled sandbox-only/not-payable, but duplicate webhook idempotency should still be proved with a signed provider event only when the provider tooling is available without printing secrets.
 - No safe switch toggle was performed. Previous Android confirmation proof was opened and cancelled, and backend denial proof was read-only; a later lane can perform a harmless no-live audited state change only with explicit product-owner approval.
 - RevenueCat, Google Play, Stripe Connect, and webhook production readiness remain setup/sandbox-only; do not mark any capability `active` without provider proof and explicit owner approval.
 
 Recommended next lane:
 
-- Link/prove RevenueCat and Google Play readiness through approved server/provider configuration by secret name only, never values.
-- Prove valid/invalid RevenueCat and Google Play webhook handling without granting Premium, paid content, tips, seat access, balances, or live money.
-- Reprove Stripe Connect sandbox/readiness without creating transfers, payouts, withdrawals, checkout, fake balances, or payable obligations.
-- If a harmless switch proof is explicitly approved, use the backend RPC with a clear reason, prove an immutable audit row, then restore/confirm `live_money_enabled=off` and payouts/digital/tips/paid-content remain off.
-- Keep creator/admin Money Centers as readiness/status surfaces until real provider proof exists.
+- Use available sandbox provider setup only through safe signed/provider tooling; never print secrets or raw payloads.
+- If a valid sandbox event can be fired, prove it appears in Owner/Admin Money Audit Explorer as `Sandbox only` and `Not payable`, prove duplicate/idempotency behavior if safely repeatable, and prove it creates no available balance or withdrawal action.
+- If event firing is not available, document the exact missing external action and keep the current configured/sandbox readiness proof as the boundary.
 - Keep `live_money_enabled=off`, no payouts/digital sales/tips/paid content/checkout, no fake balances, and no secrets.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
 - Re-run the Money Center, provider readiness, payment rail, creator monetization, Stripe Connect, runtime, and LiveKit/old-room guard stack.
+
+## Previous Recommended Lane: Money Audit Explorer Android Proof
+
+- Closed on May 27, 2026 with screenshots at `/tmp/chillywood-money-audit-explorer-proof-20260527/`.
 
 ## Previous Recommended Lane: Owner/Admin Money Center Android Runtime Proof
 

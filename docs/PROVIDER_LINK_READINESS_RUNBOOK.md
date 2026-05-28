@@ -8,6 +8,8 @@ No implementation in this lane activates purchases, payouts, balances, withdrawa
 
 Platform Studio Money Center is the normal creator-facing home for these statuses. Owner/Admin Command Center has one consolidated Money Center tab for admin money readiness and switches. Both surfaces use the sanitized provider-readiness summary plus backend Money kill-switch state; owner/dev-only Technical checks may show public-safe setup metadata, never secret values.
 
+Money Center also has inspection drilldowns. Creator Platform Studio rows open sanitized `Money Event Detail` sheets for creator-owned/source-safe setup, sandbox, readiness, ledger, provider, and switch events. Owner/Admin Money Center has `Money Audit Explorer` for source rows, provider readiness, kill switch state/audit, ledger/revenue/payout/webhook/sponsor/fraud setup rows, and blocked money actions. These drilldowns are inspect-only and cannot activate checkout, payouts, transfers, withdrawals, balances, paid access, Premium, or live money.
+
 ## Readiness Source Of Truth
 
 Migration `202605250002_provider_link_readiness_scaffold.sql` adds:
@@ -35,6 +37,24 @@ Rules:
 - This lane seeds no active rows and no live-money rows.
 - Normal creators and normal users cannot write readiness rows.
 - UI reads sanitized summaries only and never receives secrets, raw provider payloads, raw storage paths, customer payment identifiers, card data, bank data, or service-role values.
+
+## Sandbox Event Inspection
+
+Sandbox provider setup can be used for proof only when a signed/provider-safe event can be fired without printing or committing secrets.
+
+Sandbox row rules:
+
+- label sandbox/test provider rows `Sandbox only`;
+- label them `Not payable`;
+- keep them separate from production ledger/balance rows;
+- never show them as production revenue;
+- never enable withdraw, cash-out, payout release, transfer, checkout, paid content unlock, tips, seats, merch orders, or available balance;
+- preserve idempotency proof through provider event id or duplicate-safe source key where safely available;
+- do not show raw private payloads, signatures, tokens, provider secrets, service-role values, or secret env values.
+
+If sandbox event firing is not available during proof, record the exact missing external action and prove only configured/sandbox readiness rows.
+
+May 27, 2026 Money Audit Explorer proof did not fire a fresh signed provider event. It proves existing sandbox/readiness/switch rows only: Owner/Admin rows are inspectable, labeled `Sandbox only` or `Setup only`, labeled `Not payable`, and do not create creator balances, withdrawals, checkout, payout release, or production revenue. Fresh webhook idempotency remains a provider-tooling proof step when signed sandbox events can be sent without exposing secrets.
 
 ## Money Kill Switch Companion
 
@@ -311,6 +331,7 @@ Android proof on device `R5CR120QCBF` is outside the repo at:
 - Scaffold UI proof: `/tmp/chillywood-proof-2026-05-25T21-33-35Z-provider-link-readiness/`
 - Sandbox closeout proof: `/tmp/chillywood-proof-2026-05-25T-provider-link-sandbox-proof-android/`
 - Money Center consolidation proof: `/tmp/chillywood-money-center-proof-20260526-r5/`
+- Money Audit Explorer drilldown proof: `/tmp/chillywood-money-audit-explorer-proof-20260527/`
 
 Captured proof includes:
 
@@ -322,6 +343,8 @@ Captured proof includes:
 - Provider Status for Google Play, RevenueCat, Stripe Connect, Stripe webhook, live money, and creator monetization.
 - Future Tools.
 - Owner/dev Technical checks.
+- Creator Money Event Detail and Owner/Admin Money Audit Explorer detail sheets.
+- Sandbox and Setup filters, sandbox rows, kill-switch detail, and provider-readiness detail.
 - Locked/unavailable/planned states.
 - No secret values displayed.
 - No live-money, checkout, payout, balance, tip, paid-content, or revenue-import action.

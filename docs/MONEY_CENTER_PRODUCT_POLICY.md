@@ -107,6 +107,27 @@ Detailed Admin surface audit: `docs/ADMIN_MONEY_CENTER_SURFACE_AUDIT.md`.
 - Future Tools: planned subscriptions, sponsorships, ads, and revenue imports.
 - Technical Checks: owner/dev-only public-safe readiness details, never secret values.
 
+## Event Drilldowns And Audit Explorer
+
+Money Center has two inspection levels:
+
+- Creator Platform Studio Money Center shows creator-owned/source-safe money events only. Rows open `Money Event Detail` with event/source label, status, environment, provider/capability label, timestamp where available, idempotency proof label, reason, next step, and explicit payable state.
+- Owner/Admin Money Center includes `Money Audit Explorer` for source rows, provider readiness, kill switch current state, kill switch audit rows, revenue-import/ledger/payout/webhook/sponsor/fraud setup rows, and blocked money actions.
+
+Creator-safe detail never renders raw provider payloads, service-role values, provider secrets, webhook secrets, private provider internals, other-user ids, or admin-only notes. Owner/Admin detail may show safe ids and safe technical labels, but still never renders provider secrets, raw private provider payloads, service-role values, webhook secret values, Stripe secret keys, RevenueCat secret keys, Google service-account JSON, authorization headers, signatures, tokens, or private metadata blobs.
+
+Sandbox and setup rules:
+
+- Sandbox provider/test rows are labeled `Sandbox only`.
+- Sandbox and setup rows are labeled `Not payable`.
+- Sandbox rows do not become production revenue.
+- Sandbox rows do not create available creator balance.
+- Sandbox rows do not enable withdraw, cash-out, payout release, transfer, checkout, unlock, or payable obligations.
+- Setup/foundation rows are creator-facing as `Setup only`, `Readiness row`, `Planning record`, or `No verified ledger rows yet`, not confusing raw foundation wording.
+- If raw source rows are not safely readable, the UI may show a source-labeled count/detail event, but it must still say the row is not payable and why.
+
+`_lib/moneyAuditEvents.ts` is the shared normalization layer for these surfaces. It reads safe source rows where RLS allows and builds source-labeled events from existing read models otherwise. It filters secret-like fields and marks every sandbox/setup event as non-payable.
+
 ## Surface Audit And Consolidation
 
 | Path | Current purpose | Backing | Consolidation decision |
@@ -181,6 +202,8 @@ May 27, 2026 kill-switch proof result: the linked Supabase environment now has `
 
 May 27, 2026 Owner/Admin Money Center consolidation result: `app/admin.tsx` now consumes `tab`, `section`, and `focus` query params, exposes one visible `Money Center` tab, and maps old Admin money tabs into collapsible Money Center sections. The consolidated UI reads `readPlatformMoneyKillSwitches()`, `listPlatformMoneyKillSwitchAudit()`, and `readProviderReadinessSummary()`; no provider secret values or raw payloads are rendered. Android `R5CR120QCBF` proof lives at `/tmp/chillywood-admin-money-center-proof-20260527/`. It used a current release APK installed over the existing owner session, opened `chillywoodmobile://admin?tab=money-center`, and captured the Admin tab row, Owner/Admin Money Center first view, Overview, grouped Kill Switches, Premium / RevenueCat / Google Play, Sponsors / Ads, Fraud & Risk, Digital Sales, Tips / Watch-Party Seats / Paid Content, Merch, Creator Balance / Ledger, Payouts / Stripe Connect, Provider Webhooks, Tax & Legal, Audit Trail, Technical Checks, and creator Money Center disabled/setup consistency. The high-risk Live money confirmation sheet was opened and cancelled; no switch was confirmed and `live_money_enabled` stayed off.
 
+May 27, 2026 Ledger Audit Explorer proof result: creator Money Center event rows now open sanitized `Money Event Detail` sheets, and Owner/Admin Money Center now includes `Money Audit Explorer` with filters for production, sandbox, setup, blocked actions, kill switches, provider readiness, ledger, revenue imports, payouts, sponsors/ads, fraud/risk, webhooks, digital sales, and merch. Admin details show safe source table/event/actor/target/provider/capability/environment/idempotency/reason/timestamp metadata and inspect-only action-safety copy. Creator details hide other-user ids and private/admin fields. Sandbox and setup rows are labeled `Sandbox only` or `Setup only` plus `Not payable`. Android `R5CR120QCBF` proof lives at `/tmp/chillywood-money-audit-explorer-proof-20260527/`. It used `./gradlew assembleRelease`, installed the release APK over the existing owner session with `adb install -r -d`, opened creator/admin deep links, and captured creator event rows/detail, creator balance detail with no verified earnings/not payable, Provider Status readiness, Owner/Admin Money Audit Explorer metrics and Sandbox/Setup filters, sandbox row detail, kill-switch event detail, sponsor/fraud/money-control drilldown surfaces, no secret exposure, no fake money, and no withdrawal/cash-out action. No schema migration, live-money activation, fake balance, payout, checkout, transfer, withdrawal, Premium gate change, LiveKit change, or Watch-Party behavior change was added.
+
 May 27, 2026 validation commands passed:
 
 - `npm run typecheck`
@@ -210,3 +233,4 @@ Targeted source scans for fake earnings/tips/payouts/balances/checkout, Stripe c
 - No live money was activated by this consolidation.
 - Owner/Admin switches are a control scaffold, not payout or checkout activation.
 - A harmless audited switch mutation was not performed in this proof. Future no-live audit proof should be explicit, reasoned, and owner-approved before using the backend write RPC.
+- Fresh signed sandbox provider event firing/idempotency was not repeated in the Ledger Audit Explorer proof; existing sandbox/readiness/switch rows are inspectable and non-payable, and a later provider-tooling lane should fire a valid signed test event only without exposing secrets.

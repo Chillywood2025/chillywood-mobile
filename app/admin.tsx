@@ -201,6 +201,14 @@ import {
   type AdminFinanceReadModel,
 } from "../_lib/platformFinance";
 import {
+  buildAdminMoneyAuditEvents,
+  readAdminMoneyAuditSourceRows,
+  type MoneyAuditCategory,
+  type MoneyAuditEnvironment,
+  type MoneyAuditEvent,
+  type MoneyAuditSourceRow,
+} from "../_lib/moneyAuditEvents";
+import {
   formatAdminAuditFoundationCount,
   readAdminImmutableAuditReadModel,
   type AdminImmutableAuditReadModel,
@@ -957,6 +965,7 @@ type AdminMoneyCenterSectionId =
   | "payouts"
   | "provider_webhooks"
   | "tax_legal"
+  | "money_audit"
   | "audit"
   | "technical";
 
@@ -1115,11 +1124,42 @@ const ADMIN_MONEY_ROUTE_SECTION_ALIASES: Record<string, AdminMoneyCenterSectionI
   tax_legal: "tax_legal",
   audit: "audit",
   "audit-trail": "audit",
+  events: "money_audit",
+  "money-events": "money_audit",
+  "money-audit": "money_audit",
+  money_audit: "money_audit",
+  "audit-explorer": "money_audit",
+  explorer: "money_audit",
   technical: "technical",
   checks: "technical",
   "technical-checks": "technical",
   technical_checks: "technical",
 };
+
+type AdminMoneyAuditFilterId =
+  | "all"
+  | "production"
+  | "sandbox"
+  | "setup"
+  | MoneyAuditCategory;
+
+const ADMIN_MONEY_AUDIT_FILTERS: readonly { id: AdminMoneyAuditFilterId; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "production", label: "Production" },
+  { id: "sandbox", label: "Sandbox" },
+  { id: "setup", label: "Setup" },
+  { id: "blocked_actions", label: "Blocked" },
+  { id: "kill_switches", label: "Kill Switches" },
+  { id: "provider_readiness", label: "Provider Readiness" },
+  { id: "ledger", label: "Ledger" },
+  { id: "revenue_imports", label: "Revenue Imports" },
+  { id: "payouts", label: "Payouts" },
+  { id: "sponsors_ads", label: "Sponsors / Ads" },
+  { id: "fraud_risk", label: "Fraud & Risk" },
+  { id: "webhooks", label: "Webhooks" },
+  { id: "digital_sales", label: "Digital Sales" },
+  { id: "merch", label: "Merch" },
+];
 const dmcaStatusFilters: (DmcaCaseStatus | "all")[] = [
   "all",
   "received",
@@ -2387,6 +2427,30 @@ const formatAdminFinanceCount = (value: number | null, loading: boolean, singula
   return formatFinanceFoundationCount(value, singular, plural);
 };
 
+const formatMoneyAuditEnvironment = (environment: MoneyAuditEnvironment) => {
+  if (environment === "production") return "Production";
+  if (environment === "sandbox") return "Sandbox only";
+  return "Setup only";
+};
+
+const moneyAuditEventTone = (event: MoneyAuditEvent): OwnerControlTone => {
+  if (event.payable) return "success";
+  if (event.category === "blocked_actions" || event.statusLabel === "Blocked") return "danger";
+  if (event.environment === "sandbox") return "manual";
+  if (event.category === "provider_readiness" || event.category === "kill_switches") return "info";
+  return "locked";
+};
+
+const moneyAuditFilterMatches = (event: MoneyAuditEvent, filter: AdminMoneyAuditFilterId) => {
+  if (filter === "all") return true;
+  if (filter === "production" || filter === "sandbox" || filter === "setup") return event.environment === filter;
+  return event.category === filter;
+};
+
+const formatMoneyAuditCategory = (category: MoneyAuditCategory) => (
+  ADMIN_MONEY_AUDIT_FILTERS.find((option) => option.id === category)?.label ?? formatModerationToken(category)
+);
+
 const formatImmutableAuditCount = (value: number | null, loading: boolean) => {
   if (loading) return "Loading";
   return formatAdminAuditFoundationCount(value);
@@ -2966,9 +3030,13 @@ export default function AdminStudioScreen() {
     payouts: false,
     provider_webhooks: false,
     tax_legal: false,
+    money_audit: false,
     audit: false,
     technical: false,
   });
+  const [adminMoneyAuditFilter, setAdminMoneyAuditFilter] = useState<AdminMoneyAuditFilterId>("all");
+  const [adminMoneyAuditSourceRows, setAdminMoneyAuditSourceRows] = useState<MoneyAuditSourceRow[]>([]);
+  const [selectedAdminMoneyAuditEvent, setSelectedAdminMoneyAuditEvent] = useState<MoneyAuditEvent | null>(null);
   const [expandedMoneySwitchRows, setExpandedMoneySwitchRows] = useState<Record<string, boolean>>({});
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
@@ -3002,6 +3070,23 @@ export default function AdminStudioScreen() {
   const runtimeConfigIssues = useMemo(() => getRuntimeConfigIssues(runtimeConfig), [runtimeConfig]);
   const liveKitConfigured = useMemo(() => isLiveKitRuntimeConfigured(runtimeConfig), [runtimeConfig]);
   const adsProviderStatus = useMemo(() => placeholderAdProvider.getStatus(), []);
+  const adminMoneyAuditEvents = useMemo(() => buildAdminMoneyAuditEvents({
+    readModel: adminFinanceReadModel,
+    sourceRows: adminMoneyAuditSourceRows,
+    providerRows: providerReadinessRows,
+    moneySwitches,
+    moneySwitchAuditRows,
+  }), [
+    adminFinanceReadModel,
+    adminMoneyAuditSourceRows,
+    moneySwitchAuditRows,
+    moneySwitches,
+    providerReadinessRows,
+  ]);
+  const filteredAdminMoneyAuditEvents = useMemo(
+    () => adminMoneyAuditEvents.filter((event) => moneyAuditFilterMatches(event, adminMoneyAuditFilter)),
+    [adminMoneyAuditEvents, adminMoneyAuditFilter],
+  );
   const adsLaunchConfig = experienceConfig.adsLaunch;
   const moderationAccess = getModerationAccess({
     userId: user?.id ?? null,
@@ -3412,6 +3497,9 @@ export default function AdminStudioScreen() {
       setProviderReadinessLoading(false);
       setProviderReadinessNotice(null);
       setExpandedMoneySwitchRows({});
+      setAdminMoneyAuditFilter("all");
+      setAdminMoneyAuditSourceRows([]);
+      setSelectedAdminMoneyAuditEvent(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -3512,6 +3600,9 @@ export default function AdminStudioScreen() {
       setProviderReadinessLoading(false);
       setProviderReadinessNotice(null);
       setExpandedMoneySwitchRows({});
+      setAdminMoneyAuditFilter("all");
+      setAdminMoneyAuditSourceRows([]);
+      setSelectedAdminMoneyAuditEvent(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
@@ -3539,6 +3630,8 @@ export default function AdminStudioScreen() {
       setLiveOpsActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
+      setAdminMoneyAuditSourceRows([]);
+      setSelectedAdminMoneyAuditEvent(null);
       void loadAdminImmutableAuditReadModel();
       return;
     }
@@ -5698,8 +5791,12 @@ export default function AdminStudioScreen() {
   const loadAdminFinanceReadModel = useCallback(async () => {
     setAdminFinanceReadModel((current) => ({ ...current, loading: true }));
 
-    const financeReadModel = await readAdminFinanceReadModel();
+    const [financeReadModel, moneySourceRows] = await Promise.all([
+      readAdminFinanceReadModel(),
+      readAdminMoneyAuditSourceRows(false),
+    ]);
     setAdminFinanceReadModel({ ...financeReadModel, loading: false });
+    setAdminMoneyAuditSourceRows(moneySourceRows);
   }, []);
 
   const loadMoneyControls = useCallback(async () => {
@@ -8543,6 +8640,100 @@ export default function AdminStudioScreen() {
     );
   };
 
+  const renderAdminMoneyAuditEventRows = (
+    events: readonly MoneyAuditEvent[],
+    emptyTitle = "No money events returned",
+    emptyBody = "Money source rows, readiness rows, and switch audit rows will appear here when readable.",
+    limit = 6,
+  ) => {
+    const visibleEvents = events.slice(0, limit);
+    if (!visibleEvents.length) {
+      return <OwnerEmptyState title={emptyTitle} body={emptyBody} />;
+    }
+    return (
+      <View style={styles.configList}>
+        {visibleEvents.map((event) => (
+          <TouchableOpacity
+            key={event.id}
+            style={styles.configListRow}
+            activeOpacity={0.84}
+            onPress={() => setSelectedAdminMoneyAuditEvent(event)}
+          >
+            <View style={styles.ownerSectionHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configListTitle}>{event.title}</Text>
+                <Text style={styles.configListBody}>
+                  {`${event.createdAt ? formatModerationTimestamp(event.createdAt) : "Time unknown"} · ${formatMoneyAuditCategory(event.category)} · ${event.sourceLabel}`}
+                </Text>
+              </View>
+              <OwnerStatusPill label={event.statusLabel} tone={moneyAuditEventTone(event)} />
+            </View>
+            <Text style={styles.configListBody}>{event.summary}</Text>
+            <View style={styles.ownerFilterRow}>
+              {[formatMoneyAuditEnvironment(event.environment), event.payable ? "Payable" : "Not payable", ...event.badges.slice(0, 2)]
+                .filter((label, index, arr) => arr.indexOf(label) === index)
+                .map((badge) => (
+                  <View key={`${event.id}-${badge}`} style={styles.ownerFilterChip}>
+                    <Text style={styles.ownerFilterChipText}>{badge}</Text>
+                  </View>
+                ))}
+            </View>
+            <View style={styles.configListActions}>
+              <TouchableOpacity
+                style={styles.orderBtn}
+                onPress={() => setSelectedAdminMoneyAuditEvent(event)}
+              >
+                <Text style={styles.orderBtnText}>View details</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
+  const renderAdminMoneyAuditExplorer = () => {
+    const sandboxCount = adminMoneyAuditEvents.filter((event) => event.environment === "sandbox").length;
+    const setupCount = adminMoneyAuditEvents.filter((event) => event.environment === "setup").length;
+    const blockedCount = adminMoneyAuditEvents.filter((event) => event.category === "blocked_actions" || event.statusLabel === "Blocked").length;
+    return (
+      <View style={{ gap: 10 }}>
+        <View style={styles.ownerMetricGrid}>
+          <OwnerMetricTile label="Loaded Events" value={adminMoneyAuditEvents.length} tone={adminMoneyAuditEvents.length ? "info" : "locked"} />
+          <OwnerMetricTile label="Sandbox" value={sandboxCount} tone={sandboxCount ? "manual" : "locked"} />
+          <OwnerMetricTile label="Setup" value={setupCount} tone="locked" />
+          <OwnerMetricTile label="Blocked" value={blockedCount} tone={blockedCount ? "danger" : "success"} />
+        </View>
+        <OwnerDisabledReason reason="Money Audit Explorer is owner/admin-only. Sandbox and setup rows are inspectable, labeled not payable, and never become creator balances or withdrawals." />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.ownerFilterRow}>
+          {ADMIN_MONEY_AUDIT_FILTERS.map((filter) => {
+            const active = adminMoneyAuditFilter === filter.id;
+            const count = filter.id === "all"
+              ? adminMoneyAuditEvents.length
+              : adminMoneyAuditEvents.filter((event) => moneyAuditFilterMatches(event, filter.id)).length;
+            return (
+              <TouchableOpacity
+                key={filter.id}
+                style={[styles.ownerFilterChip, active && styles.ownerFilterChipActive]}
+                onPress={() => setAdminMoneyAuditFilter(filter.id)}
+              >
+                <Text style={[styles.ownerFilterChipText, active && styles.ownerFilterChipTextActive]}>
+                  {`${filter.label} ${count}`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        {renderAdminMoneyAuditEventRows(
+          filteredAdminMoneyAuditEvents,
+          "No matching money events",
+          "Try another filter. No fake audit rows are created for empty states.",
+          12,
+        )}
+      </View>
+    );
+  };
+
   const renderAdminMoneySection = (section: AdminMoneyCenterSectionConfig) => {
     const expanded = expandedAdminMoneyCenterSections[section.id] ?? false;
     return (
@@ -8580,6 +8771,12 @@ export default function AdminStudioScreen() {
     const payoutsReadiness = findProviderReadinessSummary(providerReadinessRows, "stripe_connect", "payout_release");
     const sponsorQueueCount = adminFinanceReadModel.sponsorReviewQueueRecordCount;
     const fraudQueueCount = adminFinanceReadModel.fraudReviewQueueRecordCount;
+    const sponsorAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "sponsors_ads");
+    const fraudAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "fraud_risk" || event.category === "blocked_actions");
+    const digitalAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "digital_sales" || event.category === "merch");
+    const ledgerAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "ledger" || event.category === "revenue_imports");
+    const payoutAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "payouts");
+    const webhookAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "webhooks" || event.category === "provider_readiness");
 
     const sections: AdminMoneyCenterSectionConfig[] = [
       {
@@ -8662,12 +8859,13 @@ export default function AdminStudioScreen() {
             <OwnerDisabledReason reason="Sponsor tools are not active yet. No sponsor checkout, brand charge, paid status, or creator payout split can execute." />
             <OwnerDetailGrid
               rows={[
-                { label: "Sponsor payments", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorPaymentRecordCount, adminFinanceReadModel.loading, "foundation payment record", "foundation payment records") },
-                { label: "Safety reviews", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorSafetyReviewRecordCount, adminFinanceReadModel.loading, "foundation review", "foundation reviews") },
-                { label: "Review queue", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorReviewQueueRecordCount, adminFinanceReadModel.loading, "foundation queue row", "foundation queue rows") },
+                { label: "Sponsor payments", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorPaymentRecordCount, adminFinanceReadModel.loading, "setup payment record", "setup payment records") },
+                { label: "Safety reviews", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorSafetyReviewRecordCount, adminFinanceReadModel.loading, "setup review", "setup reviews") },
+                { label: "Review queue", value: formatAdminFinanceCount(adminFinanceReadModel.sponsorReviewQueueRecordCount, adminFinanceReadModel.loading, "setup queue row", "setup queue rows") },
                 { label: "Ads status", value: adsProviderStatus.message },
               ]}
             />
+            {renderAdminMoneyAuditEventRows(sponsorAuditEvents, "No sponsor or ad rows returned", "Sponsor/ad setup rows appear here after backed read paths return safe records.", 4)}
           </View>
         ),
       },
@@ -8686,7 +8884,8 @@ export default function AdminStudioScreen() {
               <OwnerMetricTile label="Actions" value={formatHomeCount(adminFinanceReadModel.fraudActionRecordCount, adminFinanceReadModel.loading)} tone="locked" />
               <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneyOff ? "success" : "danger"} />
             </View>
-            <OwnerDisabledReason reason="No fraud clearance, risk score, payout pause, or monetization restriction is active from this foundation UI." />
+            <OwnerDisabledReason reason="No fraud clearance, risk score, payout pause, or monetization restriction is active from this setup-only UI." />
+            {renderAdminMoneyAuditEventRows(fraudAuditEvents, "No fraud or blocked-action rows returned", "Fraud/risk rows and blocked live-money events appear here when readable.", 4)}
           </View>
         ),
       },
@@ -8706,6 +8905,7 @@ export default function AdminStudioScreen() {
             </View>
             {renderProviderReadinessLine("revenuecat", "paid_content", "Paid content provider readiness")}
             <OwnerDisabledReason reason="No Stripe checkout for Android digital goods. No sale toggle appears until both provider readiness and backend switches allow it." />
+            {renderAdminMoneyAuditEventRows(digitalAuditEvents, "No digital sales rows returned", "Paid content, tips, access grants, and merch setup rows appear here only if backed rows are readable.", 4)}
           </View>
         ),
       },
@@ -8723,7 +8923,7 @@ export default function AdminStudioScreen() {
                 { label: "Tips", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "tips_enabled").state) },
                 { label: "Watch-Party seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_seats_enabled").state) },
                 { label: "Paid content", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "paid_content_enabled").state) },
-                { label: "Tip rows", value: formatAdminFinanceCount(adminFinanceReadModel.creatorTipTransactionCount, adminFinanceReadModel.loading, "foundation tip row", "foundation tip rows") },
+                { label: "Tip rows", value: formatAdminFinanceCount(adminFinanceReadModel.creatorTipTransactionCount, adminFinanceReadModel.loading, "setup tip row", "setup tip rows") },
               ]}
             />
             {renderProviderReadinessLine("revenuecat", "tips", "Tips provider readiness")}
@@ -8742,11 +8942,12 @@ export default function AdminStudioScreen() {
           <View style={{ gap: 10 }}>
             <OwnerDetailGrid
               rows={[
-                { label: "Products", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductCount, adminFinanceReadModel.loading, "foundation product", "foundation products") },
-                { label: "Orders", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductOrderCount, adminFinanceReadModel.loading, "foundation order", "foundation orders") },
+                { label: "Products", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductCount, adminFinanceReadModel.loading, "setup product", "setup products") },
+                { label: "Orders", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductOrderCount, adminFinanceReadModel.loading, "setup order", "setup orders") },
                 { label: "Payment rail", value: "Physical merch later uses Stripe, Shopify, or approved merch provider" },
               ]}
             />
+            {renderAdminMoneyAuditEventRows(digitalAuditEvents.filter((event) => event.category === "merch"), "No merch rows returned", "Physical merch setup rows appear here only if safe records are readable.", 4)}
             <OwnerDisabledReason reason="No fake merch store, fake order, or bundled digital unlock is active." />
           </View>
         ),
@@ -8762,13 +8963,14 @@ export default function AdminStudioScreen() {
           <View style={{ gap: 10 }}>
             <OwnerDetailGrid
               rows={[
-                { label: "Finance events", value: formatAdminFinanceCount(adminFinanceReadModel.financeLedgerEventCount, adminFinanceReadModel.loading, "foundation event", "foundation events") },
-                { label: "Revenue imports", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueSourceImportRecordCount, adminFinanceReadModel.loading, "foundation import row", "foundation import rows") },
+                { label: "Finance events", value: formatAdminFinanceCount(adminFinanceReadModel.financeLedgerEventCount, adminFinanceReadModel.loading, "setup event", "setup events") },
+                { label: "Revenue imports", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueSourceImportRecordCount, adminFinanceReadModel.loading, "readiness row", "readiness rows") },
                 { label: "Earnings ledger", value: formatAdminFinanceCount(adminFinanceReadModel.creatorEarningsLedgerCount, adminFinanceReadModel.loading, "ledger row", "ledger rows") },
-                { label: "Share ledger", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueShareLedgerEntryCount, adminFinanceReadModel.loading, "foundation row", "foundation rows") },
+                { label: "Share ledger", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueShareLedgerEntryCount, adminFinanceReadModel.loading, "setup row", "setup rows") },
               ]}
             />
             <OwnerDisabledReason reason="Creator balance is not payable. No cash-out, withdrawal, transfer, fake balance, or payable obligation is created here." />
+            {renderAdminMoneyAuditEventRows(ledgerAuditEvents, "No ledger or revenue rows returned", "Ledger, share, and revenue-import rows appear here when safe records are readable.", 5)}
           </View>
         ),
       },
@@ -8789,6 +8991,7 @@ export default function AdminStudioScreen() {
             {renderProviderReadinessLine("stripe_connect", "stripe_connect_account", "Stripe Connect account readiness")}
             {renderProviderReadinessLine("stripe_connect", "payout_release", "Payout release readiness")}
             <OwnerDisabledReason reason="No payout, transfer, withdrawal, cash-out, KYC completion, or tax collection is active while payouts and live money remain off." />
+            {renderAdminMoneyAuditEventRows(payoutAuditEvents, "No payout rows returned", "Payout accounts, requests, webhook, transfer, and audit rows appear here when safe records are readable.", 5)}
           </View>
         ),
       },
@@ -8806,12 +9009,13 @@ export default function AdminStudioScreen() {
             {renderProviderReadinessLine("google_play", "google_play_subscription_product", "Google Play product/readiness")}
             <OwnerDetailGrid
               rows={[
-                { label: "Monetization webhook events", value: formatAdminFinanceCount(adminFinanceReadModel.monetizationWebhookEventCount, adminFinanceReadModel.loading, "foundation event", "foundation events") },
-                { label: "Payout webhook events", value: formatAdminFinanceCount(adminFinanceReadModel.creatorPayoutProviderWebhookEventCount, adminFinanceReadModel.loading, "foundation event", "foundation events") },
+                { label: "Monetization webhook events", value: formatAdminFinanceCount(adminFinanceReadModel.monetizationWebhookEventCount, adminFinanceReadModel.loading, "sandbox/setup event", "sandbox/setup events") },
+                { label: "Payout webhook events", value: formatAdminFinanceCount(adminFinanceReadModel.creatorPayoutProviderWebhookEventCount, adminFinanceReadModel.loading, "sandbox/setup event", "sandbox/setup events") },
                 { label: "Live money flag", value: formatMoneySwitchState(liveMoneySwitch.state) },
               ]}
             />
             <OwnerDisabledReason reason="Provider webhooks can audit or prove readiness, but they cannot activate live money while live_money_enabled is off." />
+            {renderAdminMoneyAuditEventRows(webhookAuditEvents, "No webhook or provider rows returned", "Provider readiness and webhook rows appear here when safe records are readable.", 5)}
           </View>
         ),
       },
@@ -8835,6 +9039,15 @@ export default function AdminStudioScreen() {
             <OwnerDisabledReason reason="No tax/KYC, fraud clearance, payout terms acceptance, or payable balance is faked here." />
           </View>
         ),
+      },
+      {
+        id: "money_audit",
+        title: "Money Audit Explorer",
+        summary: "Inspect source rows, sandbox proof, provider readiness, kill switch audits, and blocked money actions.",
+        meta: `${adminMoneyAuditEvents.length} safe events loaded.`,
+        statusLabel: adminMoneyAuditEvents.length ? "Inspectable" : "No rows",
+        tone: adminMoneyAuditEvents.length ? "info" : "locked",
+        children: renderAdminMoneyAuditExplorer(),
       },
       {
         id: "audit",
@@ -15546,6 +15759,82 @@ export default function AdminStudioScreen() {
                   {!canAccessAuditExplorer ? (
                     <OwnerDisabledReason reason="Deeper investigation requires Audit Explorer permission and remains server-side scoped." />
                   ) : null}
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={selectedAdminMoneyAuditEvent !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedAdminMoneyAuditEvent(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Money Event Detail</Text>
+                <Text style={styles.ownerPanelMeta}>
+                  {selectedAdminMoneyAuditEvent
+                    ? `${selectedAdminMoneyAuditEvent.sourceLabel} · ${formatMoneyAuditEnvironment(selectedAdminMoneyAuditEvent.environment)}`
+                    : "Money event"}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedAdminMoneyAuditEvent(null)}>
+                <Text style={styles.closeText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            {selectedAdminMoneyAuditEvent ? (
+              <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={{ gap: 12, paddingBottom: 18 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ownerSectionTitle}>{selectedAdminMoneyAuditEvent.title}</Text>
+                      <Text style={styles.configListBody}>{selectedAdminMoneyAuditEvent.summary}</Text>
+                    </View>
+                    <OwnerStatusPill label={selectedAdminMoneyAuditEvent.statusLabel} tone={moneyAuditEventTone(selectedAdminMoneyAuditEvent)} />
+                  </View>
+                  <OwnerDetailGrid
+                    rows={[
+                      { label: "Event id", value: selectedAdminMoneyAuditEvent.id },
+                      { label: "Source table", value: selectedAdminMoneyAuditEvent.sourceTable },
+                      { label: "Category", value: formatMoneyAuditCategory(selectedAdminMoneyAuditEvent.category) },
+                      { label: "Environment", value: formatMoneyAuditEnvironment(selectedAdminMoneyAuditEvent.environment) },
+                      { label: "Payable", value: selectedAdminMoneyAuditEvent.payable ? "Yes" : "No" },
+                      { label: "Actor", value: selectedAdminMoneyAuditEvent.actorLabel },
+                      { label: "Actor user id", value: selectedAdminMoneyAuditEvent.actorUserId ? formatCompactIdentifier(selectedAdminMoneyAuditEvent.actorUserId) : "not returned" },
+                      { label: "Target user id", value: selectedAdminMoneyAuditEvent.targetUserId ? formatCompactIdentifier(selectedAdminMoneyAuditEvent.targetUserId) : "not returned" },
+                      { label: "Creator id", value: selectedAdminMoneyAuditEvent.creatorId ? formatCompactIdentifier(selectedAdminMoneyAuditEvent.creatorId) : "not returned" },
+                      { label: "Provider", value: selectedAdminMoneyAuditEvent.provider || "not provider-backed" },
+                      { label: "Capability", value: selectedAdminMoneyAuditEvent.capability || "not returned" },
+                      { label: "Provider event id", value: selectedAdminMoneyAuditEvent.providerEventId || "not returned" },
+                      { label: "Idempotency", value: selectedAdminMoneyAuditEvent.idempotencyLabel },
+                      { label: "Created", value: selectedAdminMoneyAuditEvent.createdAt ? formatModerationTimestamp(selectedAdminMoneyAuditEvent.createdAt) : "time unknown" },
+                      { label: "Updated", value: selectedAdminMoneyAuditEvent.updatedAt ? formatModerationTimestamp(selectedAdminMoneyAuditEvent.updatedAt) : "not returned" },
+                      { label: "Reason", value: selectedAdminMoneyAuditEvent.reason },
+                      { label: "Next step", value: selectedAdminMoneyAuditEvent.nextStep },
+                    ]}
+                  />
+                </View>
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Safe Technical Details</Text>
+                    <OwnerStatusPill label={`${selectedAdminMoneyAuditEvent.detailRows.length} fields`} tone="info" />
+                  </View>
+                  <OwnerDetailGrid rows={selectedAdminMoneyAuditEvent.detailRows} />
+                  <OwnerDisabledReason reason="Raw provider payloads, provider secrets, webhook secrets, service-role values, and private provider internals are intentionally not rendered." />
+                </View>
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Action Safety</Text>
+                    <OwnerStatusPill label="Inspect only" tone="locked" />
+                  </View>
+                  <Text style={styles.configListBody}>
+                    Allowed actions are inspection-only: view details, check provider status, review kill switches, and open the runbook. This view cannot approve payouts, import revenue, activate checkout, mark sandbox as production, or create balances.
+                  </Text>
                 </View>
               </ScrollView>
             ) : null}

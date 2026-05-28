@@ -8,6 +8,7 @@ import {
   Image,
   ImageBackground,
   Linking,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -73,6 +74,12 @@ import {
   type ProviderReadinessProvider,
   type ProviderReadinessSummaryRow,
 } from "../_lib/providerReadiness";
+import {
+  buildCreatorMoneyAuditEvents,
+  readCreatorMoneyAuditSourceRows,
+  type MoneyAuditEvent,
+  type MoneyAuditSourceRow,
+} from "../_lib/moneyAuditEvents";
 import { getRevenueCatProductionReadiness } from "../_lib/revenuecat";
 import {
   approveChannelAudienceRequest,
@@ -1024,6 +1031,8 @@ export function ChannelStudioScreen() {
   );
   const [creatorMonetizationSummary, setCreatorMonetizationSummary] =
     useState<CreatorMonetizationFoundationSummary | null>(null);
+  const [creatorMoneyAuditSourceRows, setCreatorMoneyAuditSourceRows] = useState<MoneyAuditSourceRow[]>([]);
+  const [selectedCreatorMoneyAuditEvent, setSelectedCreatorMoneyAuditEvent] = useState<MoneyAuditEvent | null>(null);
   const [providerReadinessSummary, setProviderReadinessSummary] = useState<ProviderReadinessSummaryRow[]>(
     getProviderReadinessFallbackSummary,
   );
@@ -1090,6 +1099,18 @@ export function ChannelStudioScreen() {
     [platformRoleMemberships],
   );
   const revenueCatReadiness = useMemo(() => getRevenueCatProductionReadiness(), []);
+  const creatorMoneyAuditEvents = useMemo(() => buildCreatorMoneyAuditEvents({
+    summary: creatorMonetizationSummary,
+    sourceRows: creatorMoneyAuditSourceRows,
+    providerRows: providerReadinessSummary,
+    moneyFlags: moneyFeatureFlags,
+    generatedAt: creatorMonetizationSummary?.generatedAt ?? new Date().toISOString(),
+  }), [
+    creatorMoneyAuditSourceRows,
+    creatorMonetizationSummary,
+    moneyFeatureFlags,
+    providerReadinessSummary,
+  ]);
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Platform Studio");
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
   const openStudioTab = (
@@ -1165,6 +1186,8 @@ export function ChannelStudioScreen() {
     if (!canUseChannelSettings) {
       setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
       setCreatorMonetizationSummary(null);
+      setCreatorMoneyAuditSourceRows([]);
+      setSelectedCreatorMoneyAuditEvent(null);
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
       setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
       setPayoutSetupNotice(null);
@@ -1187,6 +1210,7 @@ export function ChannelStudioScreen() {
       readCreatorAnalyticsSummary(String(user?.id ?? "")).catch(() => null),
       readCreatorPayoutDashboardSummary({ creatorUserId: String(user?.id ?? ""), limit: 5 }),
       readCreatorMonetizationFoundationSummary(String(user?.id ?? "")).catch(() => null),
+      readCreatorMoneyAuditSourceRows(String(user?.id ?? "")).catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
@@ -1201,6 +1225,7 @@ export function ChannelStudioScreen() {
         resolvedCreatorAnalyticsSummary,
         resolvedCreatorPayoutSummary,
         resolvedCreatorMonetizationSummary,
+        resolvedCreatorMoneyAuditSourceRows,
         resolvedProviderReadinessSummary,
         resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
@@ -1219,6 +1244,7 @@ export function ChannelStudioScreen() {
         setCreatorAnalyticsSummary(resolvedCreatorAnalyticsSummary);
         setCreatorPayoutSummary(resolvedCreatorPayoutSummary);
         setCreatorMonetizationSummary(resolvedCreatorMonetizationSummary);
+        setCreatorMoneyAuditSourceRows(resolvedCreatorMoneyAuditSourceRows);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
@@ -1237,6 +1263,8 @@ export function ChannelStudioScreen() {
         setCreatorAnalyticsSummary(null);
         setCreatorPayoutSummary(createEmptyCreatorPayoutDashboardReadModel());
         setCreatorMonetizationSummary(null);
+        setCreatorMoneyAuditSourceRows([]);
+        setSelectedCreatorMoneyAuditEvent(null);
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
         setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
         setPlatformRoleMemberships([]);
@@ -5703,6 +5731,65 @@ export function ChannelStudioScreen() {
     </View>
   );
 
+  const creatorMoneyEventTone = (event: MoneyAuditEvent): "default" | "muted" | "warning" => {
+    if (event.environment === "sandbox" || event.statusLabel === "Blocked") return "warning";
+    if (event.payable) return "default";
+    return "muted";
+  };
+
+  const renderCreatorMoneyEventRows = (
+    events: readonly MoneyAuditEvent[],
+    emptyTitle = "No money rows returned",
+    emptyBody = "Money setup, readiness, sandbox, and ledger rows will appear here when they are safely readable.",
+    limit = 4,
+  ) => {
+    const visibleEvents = events.slice(0, limit);
+    if (!visibleEvents.length) {
+      return (
+        <View style={styles.eventEmptyCard}>
+          <Text style={styles.eventEmptyTitle}>{emptyTitle}</Text>
+          <Text style={styles.eventEmptyBody}>{emptyBody}</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.eventList}>
+        {visibleEvents.map((event) => (
+          <TouchableOpacity
+            key={event.id}
+            style={styles.eventCard}
+            activeOpacity={0.86}
+            onPress={() => setSelectedCreatorMoneyAuditEvent(event)}
+            accessibilityRole="button"
+            accessibilityLabel={`View details for ${event.title}`}
+          >
+            <View style={styles.eventCardHeader}>
+              <View style={styles.eventCardCopy}>
+                <Text style={styles.eventCardTitle}>{event.title}</Text>
+                <Text style={styles.eventCardMeta}>
+                  {`${event.createdAt ? formatIsoDate(event.createdAt) : "Time unknown"} · ${event.sourceLabel}`}
+                </Text>
+              </View>
+              {renderStudioStatusPill(event.statusLabel, creatorMoneyEventTone(event))}
+            </View>
+            <Text style={styles.eventCardBody}>{event.summary}</Text>
+            <View style={styles.moneyAuditBadgeRow}>
+              {[event.environment === "sandbox" ? "Sandbox only" : event.environment === "production" ? "Production" : "Setup only", event.payable ? "Payable" : "Not payable"]
+                .map((badge) => (
+                  <View key={`${event.id}-${badge}`} style={styles.moneyAuditBadge}>
+                    <Text style={styles.moneyAuditBadgeText}>{badge}</Text>
+                  </View>
+                ))}
+            </View>
+            <View style={styles.eventActionButton}>
+              <Text style={styles.eventActionButtonText}>View details</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
   const renderMonetizationTab = () => {
     const readiness = (
       provider: ProviderReadinessProvider,
@@ -6088,6 +6175,17 @@ export function ChannelStudioScreen() {
         tone: switchTone(providerWebhooksFlag.state) === "default" ? "default" : "unavailable",
       },
     ];
+    const overviewEvents = creatorMoneyAuditEvents.filter((event) => (
+      event.category === "kill_switches"
+      || event.category === "provider_readiness"
+      || event.category === "blocked_actions"
+      || event.category === "ledger"
+    ));
+    const digitalEvents = creatorMoneyAuditEvents.filter((event) => event.category === "digital_sales");
+    const merchEvents = creatorMoneyAuditEvents.filter((event) => event.category === "merch");
+    const balanceEvents = creatorMoneyAuditEvents.filter((event) => event.category === "ledger" || event.category === "revenue_imports");
+    const payoutEvents = creatorMoneyAuditEvents.filter((event) => event.category === "payouts");
+    const providerEvents = creatorMoneyAuditEvents.filter((event) => event.category === "provider_readiness" || event.category === "webhooks");
 
     if (moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "locked" || moneyCenterFeatureFlag.state === "maintenance") {
       const unavailableStatus = moneyCenterFeatureFlag.state === "locked" ? "Blocked" : "Disabled";
@@ -6186,6 +6284,12 @@ export function ChannelStudioScreen() {
                     Digital sales inside Android use Google Play Billing where required. Creator payouts are handled separately through Stripe Connect when available. Physical merch can use an approved merch checkout. No payout is available until setup and verification are complete.
                   </Text>
                 </View>
+                {renderCreatorMoneyEventRows(
+                  overviewEvents,
+                  "No creator money events yet",
+                  "Setup, sandbox, readiness, and ledger details will appear here when there are safe rows for this creator.",
+                  5,
+                )}
               </>
             ),
           })}
@@ -6199,6 +6303,12 @@ export function ChannelStudioScreen() {
             children: (
               <>
                 {renderSummaryMetricCards(digitalSalesCards)}
+                {renderCreatorMoneyEventRows(
+                  digitalEvents,
+                  "No digital sales rows yet",
+                  "Digital sales setup rows, sandbox provider events, and readiness checks will appear here when safely readable.",
+                  4,
+                )}
                 {renderStudioActionRow({
                   title: "Manage Premium",
                   body: "Open the subscription screen for Premium status, purchase, restore, or account subscription management.",
@@ -6218,6 +6328,12 @@ export function ChannelStudioScreen() {
             children: (
               <>
                 {renderSummaryMetricCards(tipsCards)}
+                {renderCreatorMoneyEventRows(
+                  digitalEvents.filter((event) => event.title.toLowerCase().includes("tip") || event.sourceLabel.toLowerCase().includes("tip")),
+                  "No tips rows yet",
+                  "Tips are planned/setup only. Any future sandbox rows will be marked sandbox only and not payable.",
+                  3,
+                )}
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Tips are planned.</Text>
                   <Text style={styles.eventEmptyBody}>No tip totals, tip balance, or tip checkout is available here.</Text>
@@ -6232,7 +6348,17 @@ export function ChannelStudioScreen() {
             summary: "Paid seat readiness without changing room authority.",
             status: watchPartySeatsStatus,
             statusTone: sectionTone(watchPartySeatsStatus),
-            children: renderSummaryMetricCards(watchPartySeatCards),
+            children: (
+              <>
+                {renderSummaryMetricCards(watchPartySeatCards)}
+                {renderCreatorMoneyEventRows(
+                  providerEvents.filter((event) => event.capability === "google_play_subscription_product" || event.capability === "paid_content"),
+                  "No Watch-Party seat rows yet",
+                  "Paid seats stay setup/planned until Google Play or RevenueCat provider proof exists.",
+                  3,
+                )}
+              </>
+            ),
           })}
 
           {renderMonetizationAccordion({
@@ -6241,7 +6367,17 @@ export function ChannelStudioScreen() {
             summary: "Paid videos, replays, posts, and collections.",
             status: paidContentStatus,
             statusTone: sectionTone(paidContentStatus),
-            children: renderSummaryMetricCards(paidContentCards),
+            children: (
+              <>
+                {renderSummaryMetricCards(paidContentCards)}
+                {renderCreatorMoneyEventRows(
+                  digitalEvents.filter((event) => event.title.toLowerCase().includes("content") || event.capability === "paid_content"),
+                  "No paid content rows yet",
+                  "Paid content setup rows are not paywalls and do not unlock access until provider proof exists.",
+                  3,
+                )}
+              </>
+            ),
           })}
 
           {renderMonetizationAccordion({
@@ -6250,7 +6386,17 @@ export function ChannelStudioScreen() {
             summary: "Physical goods are separate from digital app access.",
             status: merchStatus,
             statusTone: sectionTone(merchStatus),
-            children: renderSummaryMetricCards(merchCards),
+            children: (
+              <>
+                {renderSummaryMetricCards(merchCards)}
+                {renderCreatorMoneyEventRows(
+                  merchEvents,
+                  "No merch rows yet",
+                  "Physical merch setup rows will appear here when safe creator-owned records exist.",
+                  3,
+                )}
+              </>
+            ),
           })}
 
           {renderMonetizationAccordion({
@@ -6266,6 +6412,12 @@ export function ChannelStudioScreen() {
                   <Text style={styles.eventEmptyTitle}>No verified earnings yet.</Text>
                   <Text style={styles.eventEmptyBody}>No dollar amount is shown until verified ledger rows exist. Pending, available, paid, refunded, reversed, and blocked balances stay separate.</Text>
                 </View>
+                {renderCreatorMoneyEventRows(
+                  balanceEvents,
+                  "No verified ledger rows yet",
+                  "Any setup/readiness row here is not payable and does not create a balance.",
+                  5,
+                )}
               </>
             ),
           })}
@@ -6319,6 +6471,12 @@ export function ChannelStudioScreen() {
                   <Text style={styles.eventEmptyTitle}>Payouts are locked.</Text>
                   <Text style={styles.eventEmptyBody}>Stripe Connect is for creator payouts only. It is not used to charge Android users for digital access.</Text>
                 </View>
+                {renderCreatorMoneyEventRows(
+                  payoutEvents,
+                  "No payout rows yet",
+                  "Payout setup and request rows are not withdrawable while payout and live-money switches are off.",
+                  4,
+                )}
               </>
             ),
           })}
@@ -6348,7 +6506,17 @@ export function ChannelStudioScreen() {
             summary: "Sanitized readiness for store, payout, and policy checks.",
             status: providerOverallStatus,
             statusTone: providerOverallStatus === "Sandbox ready" || providerOverallStatus === "Active" ? "default" : "muted",
-            children: renderSummaryMetricCards(providerCards),
+            children: (
+              <>
+                {renderSummaryMetricCards(providerCards)}
+                {renderCreatorMoneyEventRows(
+                  providerEvents,
+                  "No provider readiness details yet",
+                  "Provider readiness rows are sanitized and never expose secrets or raw payloads.",
+                  6,
+                )}
+              </>
+            ),
           })}
 
           {renderMonetizationAccordion({
@@ -6596,6 +6764,7 @@ export function ChannelStudioScreen() {
   }
 
   return (
+    <>
     <ImageBackground source={SKYLINE_SOURCE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay} />
 
@@ -7236,6 +7405,85 @@ export function ChannelStudioScreen() {
         ) : null}
       </ScrollView>
     </ImageBackground>
+    <Modal
+      visible={selectedCreatorMoneyAuditEvent !== null}
+      animationType="slide"
+      transparent
+      onRequestClose={() => setSelectedCreatorMoneyAuditEvent(null)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modalTitle}>Money Event Detail</Text>
+              <Text style={styles.modalSubtitle}>
+                {selectedCreatorMoneyAuditEvent
+                  ? `${selectedCreatorMoneyAuditEvent.sourceLabel} · ${selectedCreatorMoneyAuditEvent.statusLabel}`
+                  : "Money detail"}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedCreatorMoneyAuditEvent(null)}>
+              <Text style={styles.closeText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          {selectedCreatorMoneyAuditEvent ? (
+            <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={{ gap: 12, paddingBottom: 18 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.eventEmptyCard}>
+                <View style={styles.eventCardHeader}>
+                  <View style={styles.eventCardCopy}>
+                    <Text style={styles.eventCardTitle}>{selectedCreatorMoneyAuditEvent.title}</Text>
+                    <Text style={styles.eventCardMeta}>
+                      {selectedCreatorMoneyAuditEvent.createdAt ? formatIsoDate(selectedCreatorMoneyAuditEvent.createdAt) : "Time unknown"}
+                    </Text>
+                  </View>
+                  {renderStudioStatusPill(selectedCreatorMoneyAuditEvent.statusLabel, creatorMoneyEventTone(selectedCreatorMoneyAuditEvent))}
+                </View>
+                <Text style={styles.eventEmptyBody}>{selectedCreatorMoneyAuditEvent.summary}</Text>
+                <View style={styles.moneyAuditBadgeRow}>
+                  <View style={styles.moneyAuditBadge}>
+                    <Text style={styles.moneyAuditBadgeText}>
+                      {selectedCreatorMoneyAuditEvent.environment === "sandbox" ? "Sandbox only" : selectedCreatorMoneyAuditEvent.environment === "production" ? "Production" : "Setup only"}
+                    </Text>
+                  </View>
+                  <View style={styles.moneyAuditBadge}>
+                    <Text style={styles.moneyAuditBadgeText}>{selectedCreatorMoneyAuditEvent.payable ? "Payable" : "Not payable"}</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.eventEmptyCard}>
+                <Text style={styles.eventEmptyTitle}>What this means</Text>
+                <Text style={styles.eventEmptyBody}>{selectedCreatorMoneyAuditEvent.reason}</Text>
+                <Text style={styles.eventEmptyBody}>{selectedCreatorMoneyAuditEvent.nextStep}</Text>
+              </View>
+              <View style={styles.eventEmptyCard}>
+                <Text style={styles.eventEmptyTitle}>Safe Details</Text>
+                {[
+                  { label: "Source", value: selectedCreatorMoneyAuditEvent.sourceLabel },
+                  { label: "Status", value: selectedCreatorMoneyAuditEvent.statusLabel },
+                  { label: "Environment", value: selectedCreatorMoneyAuditEvent.environment },
+                  { label: "Payable", value: selectedCreatorMoneyAuditEvent.payable ? "Yes" : "No" },
+                  { label: "Provider", value: selectedCreatorMoneyAuditEvent.provider || "not provider-backed" },
+                  { label: "Capability", value: selectedCreatorMoneyAuditEvent.capability || "not returned" },
+                  { label: "Provider event", value: selectedCreatorMoneyAuditEvent.providerEventId ? "Recorded" : "not returned" },
+                  { label: "Idempotency", value: selectedCreatorMoneyAuditEvent.idempotencyLabel },
+                  ...selectedCreatorMoneyAuditEvent.detailRows.filter((row) => !row.label.toLowerCase().includes("user_id")).slice(0, 8),
+                ].map((row) => (
+                  <View key={`${row.label}-${row.value}`} style={styles.moneyAuditDetailRow}>
+                    <Text style={styles.moneyAuditDetailLabel}>{row.label}</Text>
+                    <Text style={styles.moneyAuditDetailValue}>{row.value}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.eventEmptyCard}>
+                <Text style={styles.eventEmptyTitle}>Inspect only</Text>
+                <Text style={styles.eventEmptyBody}>This detail view cannot create checkout, tips, balances, transfers, withdrawals, payouts, unlocks, or payable obligations.</Text>
+              </View>
+            </ScrollView>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -8649,6 +8897,45 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "800",
   },
+  moneyAuditBadgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  moneyAuditBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  moneyAuditBadgeText: {
+    color: "#DCE5F5",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  moneyAuditDetailRow: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 3,
+  },
+  moneyAuditDetailLabel: {
+    color: "#8590A6",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  moneyAuditDetailValue: {
+    color: "#F3F6FF",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
   eventEmptyCard: {
     borderRadius: 14,
     borderWidth: 1,
@@ -8712,6 +8999,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     textAlign: "center",
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  modalSheet: {
+    maxHeight: "90%",
+    backgroundColor: "#0B0E15",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    paddingTop: 14,
+    paddingHorizontal: 14,
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    gap: 10,
+  },
+  modalTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  modalSubtitle: {
+    color: "#9AA8C0",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  closeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  closeText: {
+    color: "#E6EAF3",
+    fontSize: 11,
+    fontWeight: "900",
   },
   uploadLifecycleInline: {
     borderRadius: 10,
