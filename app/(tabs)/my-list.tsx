@@ -123,7 +123,7 @@ export default function MyListScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
           <ActivityIndicator color="#E50914" />
-          <Text style={styles.loadingText}>Loading My List…</Text>
+          <Text style={styles.loadingText}>Loading Library…</Text>
         </View>
       </SafeAreaView>
     );
@@ -139,16 +139,23 @@ export default function MyListScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
-        ListHeaderComponent={<Text style={styles.header}>My List</Text>}
+        ListHeaderComponent={
+          <View style={styles.headerBlock}>
+            <Text style={styles.header}>Library</Text>
+            <Text style={styles.headerBody}>
+              Saved titles live here now. Followed Platforms, upcoming watch parties, replays, clips, and broader My Stuff sections stay planned until backed.
+            </Text>
+          </View>
+        }
         ListEmptyComponent={
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>
-              {errorMsg ? "My List couldn’t refresh" : "Your list is ready when you are"}
+              {errorMsg ? "Library couldn’t refresh" : "Your Library is ready when you are"}
             </Text>
             <Text style={styles.emptyText}>
               {errorMsg
                 ? errorMsg
-                : "Save a title from Home or Explore and it will appear here for quick access."}
+                : "Save a title from Home or Explore and it will appear here. Other Library sections will appear only when real saved items exist."}
             </Text>
             {errorMsg ? (
               <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={onRefresh}>
@@ -205,11 +212,20 @@ const styles = StyleSheet.create({
     paddingBottom: 96,
     paddingTop: 10,
   },
+  headerBlock: {
+    marginBottom: 14,
+    gap: 8,
+  },
   header: {
     color: "#fff",
     fontSize: 34,
     fontWeight: "900",
-    marginBottom: 14,
+  },
+  headerBody: {
+    color: "#bfc6d4",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
   },
   emptyCard: {
     borderRadius: 18,

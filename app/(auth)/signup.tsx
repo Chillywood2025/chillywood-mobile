@@ -156,7 +156,7 @@ export default function Signup() {
         <Text style={styles.subtitle}>
           {isClosedBetaEnvironment()
             ? "Sign up with the invited email for this small Chi'llywood beta. Accounts that are not on the invite list will stay blocked from invite-only flows."
-            : "Create an account so you can join rooms, manage your channel, and send in-app support feedback."}
+            : "Create an account so you can join rooms, manage your Platform, and send in-app support feedback."}
         </Text>
         <View style={styles.ageGateCard}>
           <Text style={styles.ageGateTitle}>Chi&apos;llywood is for users 18 and older.</Text>

@@ -741,7 +741,7 @@ export default function PublicChannelScreen() {
               {commerceSurface?.message ?? "Platform commerce is not active yet."}
             </Text>
             <Text style={styles.emptySubtext}>
-              Tips, paid content, products, orders, and cash-out stay disabled until provider and legal proof is complete.
+              Tips, paid content, products, orders, and cash-out stay disabled until provider and legal checks are complete.
             </Text>
           </View>
         )}

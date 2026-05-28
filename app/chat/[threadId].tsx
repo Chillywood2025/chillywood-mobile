@@ -468,7 +468,7 @@ export default function ChillyChatThreadScreen() {
       return {
         pill: "Unavailable",
         title: "Chi'lly Circle unavailable",
-        body: "A channel audience block currently prevents Chi'lly Circle actions between these accounts.",
+        body: "A Platform audience block currently prevents Chi'lly Circle actions between these accounts.",
       };
     }
 

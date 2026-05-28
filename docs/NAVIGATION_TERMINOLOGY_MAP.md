@@ -1,0 +1,222 @@
+# Navigation Terminology Map
+
+## Purpose
+This map records the current Chi'llywood app navigation and product language after the Navigation Terminology and App Flow Clarity Pass. It is a product map, not a route rewrite plan. Technical route names such as `/channel/[userId]` remain for compatibility when the user-facing concept is `Platform`.
+
+## Final Terminology
+- Profile = the user's social identity hub.
+- Platform = the public creator surface for uploads, videos, events, live context, and backed shelves.
+- Platform Studio = the signed-in owner creator control center.
+- Chi'lly Circle = mutual personal connection layer. Do not replace it with generic `friends` copy.
+- Chi'lly Chat = standalone inbox/direct-thread messaging plus room-linked chat surfaces.
+- Watch-Party Live = content/player-driven watch-together flow.
+- Live Watch-Party = people-first live room / Live Stage flow.
+- Party Room = canonical room shell after a Watch-Party Live room exists.
+- Live Room / Live Stage = canonical live room route and in-room presentation state.
+- Spectator = public-safe metadata/playback state surface; it does not grant original host/member controls.
+- Money Center = creator money readiness in Platform Studio and owner/admin money controls in Admin.
+- Rachi = official Chi'llywood presence, not a private-chat watcher or normal friend.
+
+## Main App Mode Map
+Viewer mode:
+- Home: discovery, live-now rails, Rachi official updates, public uploads, Originals, upcoming events, and continue watching.
+- Explore: current title search/filtering. Unified creator/live/event/upload search is planned and must not fake results.
+- Live: bottom-nav entry point for choosing `Live Watch-Party`, joining `Watch-Party Live` by code, or browsing content before starting a content-first party.
+- Library: current saved-title list. Broader My Stuff sections are planned only when backed.
+- Profile: social identity route for the signed-in user.
+
+Creator mode:
+- Platform Studio: `/channel-studio`, with `/channel-settings` as compatibility.
+- Content: uploads, drafts, published creator videos, and Clip Studio entry.
+- Live tools: event scheduling and existing Live Watch-Party / Watch-Party Live handoffs.
+- Brand Studio: Platform branding, separate from Profile photo/background.
+- Clip Studio: creator clip production; complete for now.
+- Money Center: creator money readiness, provider status, balances/payout readiness, and audit details where safe.
+- Moderation/Safety: creator-facing audience and safety controls only; admin enforcement stays in Admin.
+
+Owner/Admin mode:
+- Admin Command Center: `/admin`, backend-role protected.
+- Owner Security: owner-trusted device and emergency controls.
+- Money Controls: consolidated Owner/Admin Money Center.
+- Reports/Moderation: safety, DMCA, legal intake, and content review.
+- Legal: public policy/evidence/control surfaces.
+- System: canary checks, runtime controls, usage, networks, Live Ops, and ops guardrails.
+- Live Ops: reliability incidents and safe remediation proxy surfaces.
+
+## Bottom Navigation
+Implemented bottom navigation:
+- Home
+- Explore
+- Live
+- Library
+- Profile
+
+Rationale:
+- `Profile` is now one tap away from normal navigation.
+- `Live` is one tap away without changing canonical room routes.
+- `Library` replaces the narrow `My List` label while still showing only backed saved titles.
+- Creator tools stay out of normal viewer bottom navigation. Platform Studio remains a Profile/Platform owner action.
+- Platform Studio stays out of normal viewer bottom navigation.
+- Admin never appears in normal bottom navigation.
+
+## Explore Status
+Current implementation:
+- Searches and filters `titles` only.
+- Shows backed title metadata, featured/trending/top-row flags, and live-now title-room cues where available.
+- Does not invent creator, upload, event, live-room, or Rachi results.
+
+Recommended next Explore phase:
+- Add backed sections for Platforms, public uploads, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, Chi'llwood Originals, and Rachi official content.
+- Keep each section hidden or empty-state honest until backed rows exist.
+- Avoid fake trending, fake recommendations, fake viewer counts, and protected/private content leakage.
+
+## Library Status
+Implemented status:
+- `My List` is renamed to `Library` in the bottom nav and screen copy.
+- Current backed content remains saved titles only.
+- Empty state says other Library sections appear only when real saved items exist.
+
+Recommended Library/My Stuff phase:
+- Saved titles.
+- Followed Platforms.
+- Upcoming watch parties and reminders.
+- Saved replays.
+- Continue watching.
+- Liked/saved clips.
+- Offline/downloads only if rights and entitlement support it later.
+
+## Live Naming Map
+- Home and the Live bottom tab may open `Live Watch-Party` through `/watch-party?mode=live`.
+- Title, Player, and creator-video paths own `Watch-Party Live`.
+- `/watch-party` without `mode=live` remains the waiting-room/code path for Party Room / Watch-Party Live.
+- `/watch-party/[partyId]` remains Party Room.
+- `/watch-party/live-stage/[partyId]` remains Live Room / Live Stage.
+- Party Room must not be renamed to Live Stage.
+- Live Watch-Party must not be routed into Party Room except through the approved waiting-room behavior.
+- Watch-Party Live must not be routed into Live Stage.
+- Audio Mix belongs only to Watch-Party Live shared player controls.
+
+## Profile / Platform / Studio Separation
+- Profile is personal/social identity.
+- Public Platform is viewer-facing creator surface at `/channel/[userId]`.
+- Platform Studio is owner-only creator management at `/channel-studio`.
+- `/channel-settings` stays compatibility only.
+- Profile `View Platform` and Platform Studio `Preview Platform` map to `/channel/[userId]` with public-preview safeguards.
+- Brand Studio edits Platform branding, not Profile photo/background.
+- Settings and support copy should say Platform when the product means the public creator surface.
+
+## Host Preflight Recommendation
+Current backing exists across waiting-room/live-stage/player flows, but the product would benefit from one clearer preflight moment before the host enters:
+- Room type.
+- Audience and access.
+- Mic/camera readiness.
+- Paid/free status and Premium/access gates.
+- Who can speak.
+- Safety controls.
+- Source/content eligibility.
+- Start or schedule action.
+
+This pass did not build a full preflight because it would touch room behavior and LiveKit-adjacent flow. The correct future location is the existing waiting-room owner before handoff into Party Room or Live Room.
+
+## Platform Studio Density
+Current state:
+- Platform Studio has a useful Home, Today, Needs Attention, tabs, quick actions, and collapsible groups.
+- The remaining issue is density, not missing systems.
+
+Recommendation:
+- Keep the current tabs for route compatibility.
+- Put the creator's next step first.
+- Keep detailed proof, provider, audit, and technical language behind collapsed sections.
+- Keep Profile settings, Platform branding, and Admin controls clearly separate.
+
+## Money Center Top Layer
+Current state:
+- Money Center is consolidated and kill-switch/provider-readiness backed.
+- Creator details and event drilldowns are available without activating money.
+
+Recommendation:
+- First view should stay simple: active, locked, next step.
+- Detailed provider/audit rows should remain collapsed.
+- No fake earnings, balances, payouts, tips, paid content, merch, checkout, or live money.
+
+## Route And Deep Link Notes
+- `/profile/[userId]`: Profile social identity.
+- `/channel/[userId]`: Public Platform, route name retained for compatibility.
+- `/channel-studio`: preferred Platform Studio route.
+- `/channel-settings`: compatibility route into Platform Studio.
+- `/chat`: Chi'lly Chat inbox.
+- `/chat/[threadId]`: direct Chi'lly Chat thread.
+- `/chilly-circle`: Chi'lly Circle.
+- `/watch-party`: waiting room / code entry / live mode preparation.
+- `/watch-party/[partyId]`: Party Room.
+- `/watch-party/live-stage/[partyId]`: Live Room / Live Stage.
+- `/spectate/[itemId]`: Spectator metadata/playback eligibility.
+- `/admin`: Admin Command Center, backend-role protected.
+- `/monetize`, `/revenue`, `/payouts`: compatibility redirects into Money Center.
+
+Query params currently known:
+- `/watch-party?mode=live` opens Live Watch-Party waiting-room flow.
+- `/channel/[userId]?preview=public` opens public Platform preview without owner controls.
+- `/channel-studio?tab=monetization&focus=...` opens Money Center sections.
+- `/admin?tab=money-center` and old admin money params map into Admin Money Center sections.
+
+Deferred route work:
+- Make Explore global only after backed read models exist.
+- Add richer Library sections only after saved/followed/reminder/replay read models are backed.
+- Avoid a bottom-tab Chat route until it can delegate to `/chat` without duplicate route ownership.
+
+## Implemented In This Pass
+- Bottom nav changed from Home / Explore / My List to Home / Explore / Live / Library / Profile.
+- Added a Live tab that routes into existing Live Watch-Party and Watch-Party Live paths through existing Premium/runtime preflight and without changing room ownership.
+- Added a Profile tab that routes to the signed-in user's canonical Profile.
+- Renamed visible `My List` copy to `Library` while keeping saved-title behavior only.
+- Updated Explore copy to state current title-search scope and direct broader discovery to Home until backed.
+- Replaced several user-facing `Channel` labels with `Platform` where the product means public creator surface.
+- Added `guard:navigation-terminology-policy`.
+
+## Deferred
+- Full unified Explore.
+- Full Library/My Stuff.
+- Host preflight build.
+- Platform Studio structural rewrite.
+- Player route decomposition.
+- Android screenshot proof for this exact pass, if no device/session is available during the lane.
+
+## Validation
+Run:
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:navigation-terminology-policy`
+- `npm run guard:refresh-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:provider-readiness-policy`
+- `npm run guard:money-center-policy`
+- `npm run guard:clip-studio-policy`
+- `npm run guard:platform-brand-studio-policy`
+- `npm run guard:profile-production-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `npm run guard:spectator-child-room-policy`
+- `npm run guard:rachi-official-policy`
+- targeted grep proof for no user-facing Mini Platform
+- targeted grep proof for Live naming separation
+- `git diff --check`
+- `git diff --cached --check`
+
+## Android Proof
+Target device: `R5CR120QCBF`.
+
+Proof path: `/tmp/chillywood-navigation-terminology-proof-20260528/`.
+
+Captured screenshots:
+- bottom navigation with Home / Explore / Live / Library / Profile
+- Home
+- Explore title-search scope copy
+- Library saved-title-only scope copy
+- Profile tab route handoff
+- Public Platform
+- Platform Studio
+- Live tab with both live paths
+- Money Center simple first view
+- Admin absent from normal bottom nav

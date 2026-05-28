@@ -170,7 +170,7 @@ const LEGAL_POLICY_DESCRIPTIONS: Record<string, string> = {
   "community-guidelines": "Rules for safe participation across Chi'llywood.",
   copyright: "Copyright reports, counter notices, and DMCA process.",
   "creator-monetization": "Creator revenue disclaimers and monetization boundaries.",
-  "creator-rules": "Creator publishing and channel rules.",
+  "creator-rules": "Creator publishing and Platform rules.",
   "law-enforcement": "How legal requests are handled.",
   "live-chat-rules": "Rules for live rooms, watch parties, and chat.",
   "moderation-policy": "Moderation, enforcement, and appeal process.",

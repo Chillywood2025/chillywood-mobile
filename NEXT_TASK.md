@@ -1,6 +1,37 @@
 # NEXT TASK
 
-## Recommended Lane: RevenueCat / Google Play Webhook Secret Linking And Signed Sandbox Proof
+## Recommended Lane: Explore / Library Backing Plan
+
+The Navigation Terminology and App Flow Clarity Pass is implemented and Android-proved. The next useful lane is only backed read-model planning for full Explore/Library expansion if product-approved.
+
+Closed truth:
+
+- Bottom navigation is Home / Explore / Live / Library / Profile.
+- Live bottom tab is an orientation/entry surface only. It does not own Party Room or Live Stage behavior.
+- Live Watch-Party entry uses the existing Premium/runtime preflight before routing.
+- Live Watch-Party routes through the existing `/watch-party?mode=live` waiting-room flow.
+- Watch-Party Live remains content/player-owned; the Live tab can join by code and points new content-first starts to Explore/title/Player.
+- Profile bottom tab routes to canonical `/profile/[userId]`.
+- `My List` is renamed to `Library`, but current backed content remains saved titles only.
+- Explore remains title search/filtering only and says broader creator/live/event discovery is on Home until unified discovery is backed.
+- User-facing `Channel` wording was tightened to `Platform` where the product means public creator surface.
+- `docs/NAVIGATION_TERMINOLOGY_MAP.md` records the terminology map, mode map, route/deeplink notes, and deferred app-flow work.
+- `npm run guard:navigation-terminology-policy` pins bottom nav, live naming separation, Profile/Platform separation, Library scope, and no normal bottom-nav Admin exposure.
+- Android proof on `R5CR120QCBF` used `./gradlew assembleRelease`, `adb install -r -d`, and screenshots at `/tmp/chillywood-navigation-terminology-proof-20260528/`.
+- No LiveKit, Watch-Party route ownership, Party Room, old-room handling, Premium gate, money, Rachi, Clip Studio, Brand Studio, Admin permission, or backend schema behavior changed.
+
+Remaining limitations:
+
+- Explore is not yet unified global discovery.
+- Library is not yet a full My Stuff surface.
+- Host preflight remains a documented product recommendation, not a built flow.
+- Player remains multi-purpose and should be separated only in a future scoped lane.
+
+Recommended next lane:
+
+- If product wants Explore/Library expansion, design backed read models first. Do not add fake creator/live/event/library rows.
+
+## Previous Recommended Lane: RevenueCat / Google Play Webhook Secret Linking And Signed Sandbox Proof
 
 Money Center, Owner/Admin Money Center consolidation, the Money Audit Explorer drilldowns, and the Stripe CLI signed sandbox webhook proof are Android-proved. The next useful lane is only RevenueCat/Google Play server credential and webhook-secret linking, followed by safe signed-provider sandbox event proof if the provider tooling is available without exposing secrets.
 

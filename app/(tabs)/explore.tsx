@@ -356,7 +356,7 @@ export default function ExploreScreen() {
                   {hasSearchQuery ? `Showing ${visibleTitlesCount} of ${titlesCount}` : `Titles: ${titlesCount}`}
                 </Text>
                 <Text style={styles.headerBody}>
-                  Browse the current Chi&apos;llywood lineup, with featured, trending, top-row, and live-now cues surfaced first.
+                  Search titles here. Creator uploads, public live rooms, Rachi updates, and upcoming events are surfaced on Home while unified discovery rolls out.
                 </Text>
 
                 <View style={styles.searchShell}>

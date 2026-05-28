@@ -24,7 +24,7 @@ const PREMIUM_UNLOCKS = [
   "Creator video upload",
   "Watch-Party Live from Player",
   "Live Watch-Party hosting",
-  "Channel customization",
+  "Platform customization",
   "Premium creator tools",
 ];
 
@@ -371,7 +371,7 @@ export default function SubscribeScreen() {
           <PremiumAccordion
             id="premium-unlocks"
             title="What Premium unlocks"
-            summary="Creator, live, channel, and watch-party tools"
+            summary="Creator, live, Platform, and watch-party tools"
             expanded={expanded}
             onToggle={toggleAccordion}
           >

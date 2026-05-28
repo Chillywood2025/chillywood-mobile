@@ -1174,7 +1174,7 @@ export default function HomeScreen() {
                 disabled={!currentChannel?.id}
                 hitSlop={12}
                 accessibilityRole="button"
-                accessibilityLabel="Open your channel"
+                accessibilityLabel="Open your Profile"
               >
                 {currentChannel?.avatarUrl ? (
                   <Image source={{ uri: currentChannel.avatarUrl }} style={styles.profileAvatarImage} />

@@ -30,6 +30,8 @@ Every new or materially changed screen must define its primary experience before
 - Spectator page: public-safe metadata/access state is primary.
 - Home and Explore: discovery/search are primary.
 
+Normal bottom navigation should represent the viewer's most common app modes without exposing owner/admin complexity. Current bottom-nav product truth is Home / Explore / Live / Library / Profile. Platform Studio remains a Profile/Platform owner action, not a global viewer tab. Admin Command Center must never appear in normal bottom navigation. Library may replace the older My List label only when it remains honest about backed saved content; broader My Stuff sections must not appear with fake rows or fake counts.
+
 Use native mobile layout systems intentionally: grid systems for people/content collections, modular layouts for screens with distinct job areas, responsive panels for status/read-only/supporting details, adaptive containers for media and growing content, rails/shelves for discovery browsing, floating or docked action surfaces for frequent controls, and contextual More sheets/action sheets/popovers for secondary actions. Owner/admin surfaces may use modular dashboards; consumer rooms and media surfaces must remain media/social-first rather than admin-like.
 
 Any generated route, room, or screen is incomplete unless it includes role-aware and permission-aware controls, empty/loading/error/locked states, safe-area and keyboard behavior where relevant, touch-friendly controls, no clipped/overlapping text or controls, and a proof plan. UI polish must not add fake data, fake counts, fake participants, fake money, fake messages, fake recommendations, route ownership changes, backend behavior changes, or Premium/role boundary changes.
@@ -217,6 +219,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - `/channel/[userId]` is the internal route for the public Platform
 - `/channel-studio` is the preferred owner Platform Studio route
 - `/channel-settings` remains compatibility
+- normal user-facing copy should say Platform where the product means the public creator surface; internal `channel` route/table/helper names may remain when renaming would create compatibility risk
 - Profile View Platform routes to `/channel/[userId]`
 - Platform Studio Preview Platform routes to `/channel/[ownUserId]?preview=public`
 - every user can have the option to build their own creator Platform inside Chi'llywood, but platform-building is optional

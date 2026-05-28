@@ -168,7 +168,7 @@ export default function Login() {
             <Text style={styles.subtitle}>
               {isClosedBetaEnvironment()
                 ? "Use the invited Chi'llywood account for room access, feedback capture, and rollout verification."
-                : "Sign in to join rooms, manage your channel, unlock eligible access, and send support reports."}
+                : "Sign in to join rooms, manage your Platform, unlock eligible access, and send support reports."}
             </Text>
 
             <TextInput

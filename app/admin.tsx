@@ -609,7 +609,7 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
 ];
 const legalEvidenceTargetOptions: readonly { key: LegalEvidenceTargetType; label: string }[] = [
   { key: "user_id", label: "User / Account" },
-  { key: "profile_channel", label: "Profile / Channel" },
+  { key: "profile_channel", label: "Profile / Platform" },
   { key: "creator_video", label: "Creator Video" },
   { key: "profile_post", label: "Profile Post" },
   { key: "comment", label: "Comment / Reply" },
@@ -4625,14 +4625,14 @@ export default function AdminStudioScreen() {
   const homeBoundaryItems = useMemo<readonly AdminHomeBoundaryItem[]>(() => [
     {
       body: canManagePrivilegedWrites
-        ? "Channel owners manage channel-level systems; platform operators review platform-wide safety, legal, audit, and ops queues here."
-        : "Channel ownership alone never opens this private operator surface.",
+          ? "Platform owners manage Platform-level systems; platform operators review platform-wide safety, legal, audit, and ops queues here."
+        : "Platform ownership alone never opens this private operator surface.",
       label: "Owner / Operator Split",
       proofLabel: canManagePrivilegedWrites ? "Backed Role" : "Scope Limited",
       tone: canManagePrivilegedWrites ? "success" : "locked",
     },
     {
-      body: "This route does not grant authority from profile ownership, channel ownership, Rachi identity, or local helper status.",
+      body: "This route does not grant authority from Profile ownership, Platform ownership, Rachi identity, or local helper status.",
       label: "Authority Boundary",
       proofLabel: "Backend Role",
       tone: "info",
@@ -10864,7 +10864,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>USERS</Text>
               <Text style={styles.configTitle}>Users</Text>
               <Text style={styles.configBody}>
-                Future admin user tools will show account, profile, channel, Premium, and restriction status here.
+                Future admin user tools will show account, Profile, Platform, Premium, and restriction status here.
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
@@ -16195,7 +16195,7 @@ export default function AdminStudioScreen() {
                       <Text style={styles.configListBody}>{`Content id: ${formatCompactIdentifier(selectedDmcaDetail.case.contentId)}`}</Text>
                       <Text style={styles.configListBody}>{`Content URL/path: ${formatAuditDisplayText(selectedDmcaDetail.case.contentUrl)}`}</Text>
                       <Text style={styles.configListBody}>{`Uploader id: ${formatCompactIdentifier(selectedDmcaDetail.case.uploaderUserId)}`}</Text>
-                      <Text style={styles.configListBody}>{`Uploader channel: ${formatCompactIdentifier(selectedDmcaDetail.case.uploaderChannelId)}`}</Text>
+                      <Text style={styles.configListBody}>{`Uploader Platform: ${formatCompactIdentifier(selectedDmcaDetail.case.uploaderChannelId)}`}</Text>
                       {selectedDmcaDetail.case.contentUrl && /^https?:\/\//i.test(selectedDmcaDetail.case.contentUrl) ? (
                         <View style={styles.actionsRow}>
                           <TouchableOpacity

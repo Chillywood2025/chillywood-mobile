@@ -501,9 +501,9 @@ const getChannelAccessSummaryBody = (resolution: ChannelAccessResolution | null)
     return "Watch-party entry is locked by default, so private room behavior should stay explicit on public surfaces.";
   }
   if (resolution.reason === "channel_defaults_mixed") {
-    return "This channel mixes open and gated defaults, so access changes need to stay visible on public surfaces.";
+    return "This Platform mixes open and gated defaults, so access changes need to stay visible on public surfaces.";
   }
-  return "This channel currently defaults to open communication and open watch-party access.";
+  return "This Platform currently defaults to open communication and open watch-party access.";
 };
 
 const formatCount = (value: number | null) => value === null ? "Unavailable" : String(value);
@@ -615,9 +615,9 @@ const formatAudienceActionLabel = (value: ChannelAudienceActionResult["action"])
     case "remove_follower":
       return "Remove Follower";
     case "follow":
-      return "Follow Channel";
+      return "Follow Platform";
     case "unfollow":
-      return "Unfollow Channel";
+      return "Unfollow Platform";
     case "subscriber_relationship_mutation":
       return "Subscriber Relationship";
     default:
@@ -675,7 +675,7 @@ const analyticsUnavailableMetricDefinitions: readonly {
     key: "profileVisits",
     label: "Profile Visits",
     missingBody: "Profile analytics are in scope, but no honest aggregate read path exists yet.",
-    laterBody: "Profile/channel opens are not treated as creator analytics yet.",
+    laterBody: "Profile/Platform opens are not treated as creator analytics yet.",
   },
   {
     key: "liveAttendanceTotal",
@@ -2841,7 +2841,7 @@ export function ChannelStudioScreen() {
     },
     {
       title: "Brand & Design",
-      body: "Channel identity controls that stay separate from personal Profile privacy.",
+      body: "Platform identity controls that stay separate from personal Profile privacy.",
       sections: [
         {
           title: "Identity",
@@ -2976,17 +2976,17 @@ export function ChannelStudioScreen() {
     {
       label: "Followers",
       value: formatCount(audienceSummary?.followerCount ?? null),
-      body: "Real channel follower relationships from the landed audience schema.",
+      body: "Real Platform follower relationships from the landed audience schema.",
     },
     {
       label: "Subscribers",
       value: formatCount(audienceSummary?.subscriberCount ?? null),
-      body: "Creator/channel subscriber truth only, not account-tier premium.",
+      body: "Creator/Platform subscriber truth only, not account-tier premium.",
     },
     {
       label: "Requests",
       value: formatCount(audienceSummary?.pendingRequestCount ?? null),
-      body: "Pending audience requests waiting on channel review.",
+      body: "Pending audience requests waiting on Platform review.",
     },
     {
       label: "Blocked",
@@ -2998,17 +2998,17 @@ export function ChannelStudioScreen() {
     {
       label: "Public Activity",
       value: formatPublicActivityVisibility(audienceSummary?.publicActivityVisibility ?? null),
-      body: "Profile-backed audience visibility truth now lives on the channel profile record.",
+      body: "Profile-backed audience visibility truth now lives on the Platform profile record.",
     },
     {
       label: "Follower Surface",
       value: formatVisibilitySurface(audienceSummary?.followerSurfaceEnabled ?? null),
-      body: "Shows whether follower visibility can appear on the channel surface from current backed truth.",
+      body: "Shows whether follower visibility can appear on the Platform surface from current backed truth.",
     },
     {
       label: "Subscriber Surface",
       value: formatVisibilitySurface(audienceSummary?.subscriberSurfaceEnabled ?? null),
-      body: "Shows whether subscriber visibility can appear on the channel surface from current backed truth.",
+      body: "Shows whether subscriber visibility can appear on the Platform surface from current backed truth.",
     },
   ];
   const audienceUnavailableCards: readonly SummaryMetricCard[] = [
@@ -3076,7 +3076,7 @@ export function ChannelStudioScreen() {
     {
       label: "Subscriber Signal",
       value: formatCount(creatorAnalyticsSummary?.subscriberCount ?? null),
-      body: "Subscriber signal from creator/channel subscriber truth.",
+      body: "Subscriber signal from creator/Platform subscriber truth.",
     },
   ];
   const analyticsUnavailableCards: readonly SummaryMetricCard[] = analyticsUnavailableMetricDefinitions.reduce<SummaryMetricCard[]>((cards, definition) => {
@@ -3113,7 +3113,7 @@ export function ChannelStudioScreen() {
       value: safetyAdminSummary?.isOfficial ? "Official" : "Member",
       body: safetyAdminSummary?.auditOwnerKey
         ? `Audit owner key: ${safetyAdminSummary.auditOwnerKey}`
-        : "No official or operator audit key is attached to this channel context.",
+        : "No official or operator audit key is attached to this Platform context.",
     },
   ];
   const safetySummarySecondaryCards: readonly SummaryMetricCard[] = [
@@ -3424,17 +3424,17 @@ export function ChannelStudioScreen() {
     {
       label: "Published Videos",
       value: videosLoading ? "..." : String(publishedVideoCount),
-      body: "Public creator videos loaded for this channel.",
+      body: "Public creator videos loaded for this Platform.",
     },
     {
       label: "Drafts",
       value: videosLoading ? "..." : String(draftVideoCount),
-      body: "Owner-only creator uploads loaded for this channel.",
+      body: "Owner-only creator uploads loaded for this Platform.",
     },
     ...(audienceFollowerCount == null ? [] : [{
       label: "Followers",
       value: String(audienceFollowerCount),
-      body: "Backed channel follower relationships.",
+      body: "Backed Platform follower relationships.",
     }]),
     ...(pendingAudienceRequestCount == null ? [] : [{
       label: "Audience Requests",
@@ -3444,12 +3444,12 @@ export function ChannelStudioScreen() {
     ...(blockedAudienceCount == null ? [] : [{
       label: "Blocked Users",
       value: String(blockedAudienceCount),
-      body: "Blocked audience rows in current channel truth.",
+      body: "Blocked audience rows in current Platform truth.",
     }]),
     ...(audienceSubscriberCount == null ? [] : [{
       label: "Subscribers",
       value: String(audienceSubscriberCount),
-      body: "Creator/channel subscriber signal only.",
+      body: "Creator/Platform subscriber signal only.",
     }]),
     {
       label: "Upcoming Events",
@@ -5010,7 +5010,7 @@ export function ChannelStudioScreen() {
               })}
               {renderStudioActionRow({
                 title: "Blocked accounts",
-                body: blockedAudienceCount ? "Manage real channel-owned audience blocks." : "No blocked accounts.",
+                body: blockedAudienceCount ? "Manage real Platform-owned audience blocks." : "No blocked accounts.",
                 value: blockedAudienceCount ? String(blockedAudienceCount) : "Clear",
                 onPress: () => openStudioTab("moderation", { focus: "blocks" }),
               })}
@@ -6589,7 +6589,7 @@ export function ChannelStudioScreen() {
             <Text style={styles.summaryLabel}>Blocked accounts</Text>
             <Text style={styles.summaryValue}>{blockedAudienceCount == null ? "Protected" : String(blockedAudienceCount)}</Text>
             <Text style={styles.summaryBody}>
-              {blockedAudienceCount ? "Channel-owned audience blocks are backed here." : "No blocked accounts."}
+              {blockedAudienceCount ? "Platform-owned audience blocks are backed here." : "No blocked accounts."}
             </Text>
           </View>
           <View style={styles.summaryCard}>
@@ -6738,7 +6738,7 @@ export function ChannelStudioScreen() {
     return (
       <BetaAccessScreen
         title="Loading Platform Studio"
-        body="Checking your signed-in identity before opening the channel management surface."
+        body="Checking your signed-in identity before opening Platform Studio."
         loadingOverride
       />
     );
@@ -7265,7 +7265,7 @@ export function ChannelStudioScreen() {
 
               <Text style={styles.sectionLabel}>Blocked Audience</Text>
               <Text style={styles.permissionCopy}>
-                Block and unblock use the real channel-owned audience boundary already backed by schema truth. VIP, moderator, and co-host roles still stay out.
+                Block and unblock use the real Platform-owned audience boundary already backed by schema truth. VIP, moderator, and co-host roles still stay out.
               </Text>
               <TextInput
                 style={styles.input}
@@ -7367,7 +7367,7 @@ export function ChannelStudioScreen() {
               <Text style={styles.permissionCopy}>
                 Only backed creator analytics render here. Unsupported metrics stay unavailable instead of being zeroed or fabricated.
               </Text>
-              <Text style={styles.sectionLabel}>Channel Metrics</Text>
+              <Text style={styles.sectionLabel}>Platform Metrics</Text>
               <View style={styles.summaryGrid}>
                 {insightMetricCards.map((card) => (
                   <View key={card.label} style={styles.summaryCard}>
