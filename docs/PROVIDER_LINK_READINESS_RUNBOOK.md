@@ -54,7 +54,7 @@ Sandbox row rules:
 
 If sandbox event firing is not available during proof, record the exact missing external action and prove only configured/sandbox readiness rows.
 
-May 27, 2026 Money Audit Explorer proof did not fire a fresh signed provider event. It proves existing sandbox/readiness/switch rows only: Owner/Admin rows are inspectable, labeled `Sandbox only` or `Setup only`, labeled `Not payable`, and do not create creator balances, withdrawals, checkout, payout release, or production revenue. Fresh webhook idempotency remains a provider-tooling proof step when signed sandbox events can be sent without exposing secrets.
+May 27, 2026 Money Audit Explorer proof first proved existing sandbox/readiness/switch rows only. The follow-up provider CLI proof then fired a fresh Stripe CLI test-mode `payment_intent.succeeded` event and resent the same event to the enabled Chi'llwood Connect test webhook endpoint. Stripe reported `livemode=false` and `pending_webhooks=0` after delivery. Owner/Admin Money Audit Explorer shows the resulting `creator_payout_provider_webhook_events` source row as `Sandbox only`, `Not payable`, `ignored`, provider `stripe_connect`, provider environment `test`, `livemode=false`, event type `payment_intent.succeeded`, and duplicate-safe/idempotency labeled. Screenshots live at `/tmp/chillywood-provider-cli-proof-20260527/`. No payable creator balance, withdrawal, checkout, payout release, transfer, Premium grant, or production revenue was created.
 
 ## Money Kill Switch Companion
 
@@ -117,6 +117,14 @@ Migration `202605250004_provider_link_sandbox_proof_status.sql` records the May 
 - Every readiness row remains `is_live_money_enabled=false`.
 - No checkout, charge initiated by the app, tip, paid content, balance, transfer, payout, creator earning, revenue import, payout release, or fake Premium grant was created.
 - No secret value, webhook signing value, Google service-account JSON, raw provider payload, or customer/payment credential was committed or displayed.
+
+May 27, 2026 provider CLI refresh:
+
+- Stripe CLI is authenticated against the Chi'llwood test account and proved a signed test webhook delivery plus same-event resend without printing or committing API keys or webhook secrets.
+- Supabase names-only secret inventory still shows `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` configured, but no `REVENUECAT_WEBHOOK_SECRET` or `GOOGLE_PLAY_WEBHOOK_SECRET`.
+- No official RevenueCat CLI is installed locally; no RevenueCat signed webhook event was fired.
+- Google CLI confirms Android Publisher and Pub/Sub APIs are enabled on `chillywood-app`, but no Pub/Sub topics exist. Direct Android Publisher subscription read proof returned `403` for both the active user account and the local Google Play service account JSON, so Google signed webhook/product CLI proof remains blocked on provider permission/topic/secret setup.
+- RevenueCat and Google Play webhook shells remain fail-closed/readiness-only until their server webhook secrets and provider permissions are linked.
 
 Current provider-link statuses after the sandbox proof:
 
@@ -332,6 +340,7 @@ Android proof on device `R5CR120QCBF` is outside the repo at:
 - Sandbox closeout proof: `/tmp/chillywood-proof-2026-05-25T-provider-link-sandbox-proof-android/`
 - Money Center consolidation proof: `/tmp/chillywood-money-center-proof-20260526-r5/`
 - Money Audit Explorer drilldown proof: `/tmp/chillywood-money-audit-explorer-proof-20260527/`
+- Provider CLI Stripe sandbox event proof: `/tmp/chillywood-provider-cli-proof-20260527/`
 
 Captured proof includes:
 
@@ -369,7 +378,8 @@ Validation run for the scaffold and sandbox proof:
 - deployed function list proof for `provider-readiness`, `revenuecat-webhook`, and `google-play-webhook`
 - unauthenticated readiness curl proof returning auth required
 - RevenueCat and Google Play webhook curl proof returning setup required with no grants and no live-money action while webhook secrets are missing
-- Stripe CLI test-mode webhook proof with `livemode=false` and `pending_webhooks=0`
+- Stripe CLI test-mode webhook proof with `livemode=false`, `pending_webhooks=0`, same-event resend, and Money Audit Explorer detail showing `Sandbox only`, `Not payable`, `ignored`, provider `stripe_connect`, provider environment `test`, and duplicate-safe/idempotency labeling
+- Google CLI proof of Android Publisher/PubSub API availability, no Pub/Sub topics, and `403` subscription read blocker for both active user and local service account
 - Stripe unsigned direct POST proof returning `invalid_signature` and no live-money action
 - signed-in sanitized readiness proof returning 14 rows, no active rows, no live-money rows, and no forbidden raw fields
 - direct `provider_readiness_status` RLS read proof returning 0 rows for the proof user
