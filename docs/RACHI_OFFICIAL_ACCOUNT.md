@@ -1,6 +1,6 @@
 # Rachi Official Account
 
-Status: repo-side implemented; Android runtime proof lives at `/tmp/chillywood-rachi-official-proof-20260526/` and Rachi Originals fixture proof lives at `/tmp/chillywood-rachi-originals-proof-20260526/`.
+Status: repo-side implemented; Android runtime proof lives at `/tmp/chillywood-rachi-official-proof-20260526/`, Rachi Originals fixture proof lives at `/tmp/chillywood-rachi-originals-proof-20260526/`, and the Home identity cleanup proof lives at `/tmp/chillywood-home-profile-cleanup-proof-20260529/`.
 
 ## Product Truth
 
@@ -30,6 +30,8 @@ User-facing privacy copy should stay short:
 - Rachi public Platform shows official branding and public-safe published Rachi content only.
 - Home shows real public Rachi posts in `Rachi Official Updates`.
 - Home shows real public-safe Rachi-owned creator videos in `Chi'llwood Originals`.
+- Home Rachi Official Updates show Rachi identity: backed avatar when active, safe `R` fallback when missing, `Rachi`, `Official Chi'llwood`, and timestamp where backed.
+- Home/public Rachi Originals cards must not expose internal proof/fixture wording in normal user-facing title or description copy.
 - Chi'lly Chat keeps Rachi Help opt-in and does not imply Rachi reads other chats.
 - Admin Rachi tab is owner/admin-only and manages official Rachi posts plus official-content visibility.
 
@@ -79,6 +81,7 @@ Chi'llwood Originals uses real Rachi-owned creator videos only:
 - fixture attribution: `Big Buck Bunny by Blender Foundation, CC BY 3.0.`
 - `public-creator-video-cards` reads official Rachi Originals through the link table and still requires published official links plus public, moderation-safe `videos` rows
 - public card responses use `ownerId=platform_rachi_official` and do not return raw playback URLs, raw storage paths, storage object keys, drafts, private rows, hidden rows, or admin controls
+- normal public cards may mask internal proof/fixture title and description wording as `Chi'llwood Original` and `Official Chi'llwood Original from Rachi.` while preserving the real backed row and resolver result
 - Admin shows `Upload Original` as an honest disabled action until a backend-safe upload-as-Rachi Studio path exists
 
 Do not create placeholder Originals or fake production claims.
@@ -148,6 +151,14 @@ Captured on `R5CR120QCBF`:
 - Rachi public Platform showing `1 Videos`, Featured, and Latest Uploads for the fixture
 - public Platform actions are Follow, Share, Report, and View Profile, with no app owner/admin controls in public preview
 - Player/public content route opens the fixture title
+
+Proof path: `/tmp/chillywood-home-profile-cleanup-proof-20260529/`.
+
+Captured on `R5CR120QCBF`:
+
+- Home `Rachi Official Updates` with Rachi avatar/fallback, `Rachi`, `Official Chi'llwood`, and backed timestamp text
+- Home `Chi'llwood Originals` with the real Rachi-owned fixture row and public copy that no longer exposes `Proof Fixture` or `Proof-scoped` wording
+- Home no longer shows Top Picks, Browse, or Favorites sections
 
 Backend proof:
 

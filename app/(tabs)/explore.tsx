@@ -35,6 +35,7 @@ import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { supabase } from "../../_lib/supabase";
+import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
 import type { Tables } from "../../supabase/database.types";
 
 type TitleRow = Pick<
@@ -75,7 +76,7 @@ type ExploreBackedSections = {
 const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
 const EXPLORE_BACKED_NOW = [
   "Titles",
-  "Public discovery feed rows",
+  "Public discovery",
   "Creator video cards",
   "Rachi public-safe originals",
   "Creator event summaries",
@@ -578,12 +579,13 @@ export default function ExploreScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadExplore({ refresh: true })} tintColor="#E50914" />}
             ListHeaderComponent={
               <View style={styles.headerBlock}>
+                <MainTabTopBar surface="explore" label="EXPLORE" style={styles.mainTabTopBar} />
                 <Text style={styles.exploreTitle}>Explore</Text>
                 <Text style={styles.count}>
-                  {hasSearchQuery ? `Showing ${visibleTitlesCount} of ${titlesCount} backed titles` : `Backed titles: ${titlesCount}`}
+                  {hasSearchQuery ? `Showing ${visibleTitlesCount} of ${titlesCount} titles` : `Titles: ${titlesCount}`}
                 </Text>
                 <Text style={styles.headerBody}>
-                  Public discovery stays backed by existing title, Platform, creator video, Originals, event, and replay read models.
+                  Search titles, public Platforms, creator videos, Originals, events, and replays from current public sources.
                 </Text>
                 {errorMsg ? (
                   <View style={styles.inlineError}>
@@ -604,7 +606,7 @@ export default function ExploreScreen() {
                 </View>
 
                 <View style={styles.searchShell}>
-                  <Text style={styles.searchLabel}>Search backed titles</Text>
+                  <Text style={styles.searchLabel}>Search titles</Text>
                   <TextInput
                     testID="explore-title-search-input"
                     accessibilityLabel="Search Chi'llwood titles"
@@ -636,10 +638,10 @@ export default function ExploreScreen() {
 
                 {renderBackedSection(
                   "Live Now",
-                  `${liveDiscoveryItems.length + liveEvents.length} backed`,
+                  `${liveDiscoveryItems.length + liveEvents.length} ready`,
                   liveDiscoveryItems.length + liveEvents.length > 0,
-                  "No public live rows right now",
-                  "Live rows appear here only when the public discovery or event read models say they are live.",
+                  "No public live rooms right now",
+                  "Live rooms appear here when current public sources say they are live.",
                   <>
                     {liveDiscoveryItems.map((item) => renderDiscoveryCard(item, "Live"))}
                     {liveEvents.map((event) => renderEventCard(event))}
@@ -648,16 +650,16 @@ export default function ExploreScreen() {
 
                 {renderBackedSection(
                   "Platforms",
-                  `${platformDiscoveryItems.length} backed`,
+                  `${platformDiscoveryItems.length} ready`,
                   platformDiscoveryItems.length > 0,
-                  "No public Platform rows yet",
-                  "Platform cards appear after public discovery rows identify a public Platform update.",
+                  "No public Platforms yet",
+                  "Platform cards appear after public discovery identifies a public Platform update.",
                   platformDiscoveryItems.map((item) => renderDiscoveryCard(item, "Platform")),
                 )}
 
                 {renderBackedSection(
                   "Creator Videos",
-                  `${creatorDiscoveryVideos.length} backed`,
+                  `${creatorDiscoveryVideos.length} ready`,
                   creatorDiscoveryVideos.length > 0,
                   "No public creator videos yet",
                   "Creator video cards come only from the public creator-video resolver.",
@@ -666,16 +668,16 @@ export default function ExploreScreen() {
 
                 {renderBackedSection(
                   "Chi'llwood Originals",
-                  `${sections.rachiOriginals.length} backed`,
+                  `${sections.rachiOriginals.length} ready`,
                   sections.rachiOriginals.length > 0,
-                  "No public Originals rows yet",
+                  "No public Originals yet",
                   "Rachi Originals appear here only from the official public-safe creator video list.",
                   sections.rachiOriginals.map((video) => renderCreatorVideoCard(video, "Rachi")),
                 )}
 
                 {renderBackedSection(
                   "Events",
-                  `${scheduledEvents.length} backed`,
+                  `${scheduledEvents.length} ready`,
                   scheduledEvents.length > 0,
                   "No scheduled public events",
                   "Events appear here after creator event summaries are public and scheduled.",
@@ -684,9 +686,9 @@ export default function ExploreScreen() {
 
                 {renderBackedSection(
                   "Replays",
-                  `${replayDiscoveryItems.length + replayEvents.length} backed`,
+                  `${replayDiscoveryItems.length + replayEvents.length} ready`,
                   replayDiscoveryItems.length + replayEvents.length > 0,
-                  "No public replay rows yet",
+                  "No public replays yet",
                   "Replay cards appear only after a replay feed row or event replay is public and available.",
                   <>
                     {replayDiscoveryItems.map((item) => renderDiscoveryCard(item, "Replay"))}
@@ -706,7 +708,7 @@ export default function ExploreScreen() {
                 <Text style={styles.mutedSmall}>
                   {hasSearchQuery
                     ? "Try another title, category, year, runtime, or description."
-                    : "Chi'llwood titles will appear here once public-safe programming is backed."}
+                    : "Chi'llwood titles will appear here once public programming is available."}
                 </Text>
               </View>
             }
@@ -748,6 +750,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 16,
     gap: 12,
+  },
+  mainTabTopBar: {
+    marginBottom: 2,
   },
   exploreTitle: {
     color: "#fff",

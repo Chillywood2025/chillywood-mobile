@@ -10,6 +10,7 @@ import {
   LIVE_FIRST_PREMIUM_UPSELL_COPY,
   requireLiveFirstPremium,
 } from "../../_lib/premiumWatchPartyAccess";
+import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
 
 type LiveEntry = {
   title: string;
@@ -87,6 +88,7 @@ export default function LiveTabScreen() {
       <View style={styles.backgroundOverlay} pointerEvents="none" />
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <MainTabTopBar surface="live" label="LIVE" style={styles.mainTabTopBar} />
           <View style={styles.heroHeader}>
             <View style={styles.heroTopRow}>
               <Text style={styles.kicker}>LIVE HUB</Text>
@@ -159,7 +161,7 @@ export default function LiveTabScreen() {
 
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>Live discovery</Text>
-            <Text style={styles.emptyStateBody}>Backed public live rooms and events can appear here later. Nothing is filled with fake activity.</Text>
+            <Text style={styles.emptyStateBody}>Public live rooms and events will appear here when available.</Text>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -184,6 +186,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 112,
+  },
+  mainTabTopBar: {
+    marginBottom: 14,
   },
   heroHeader: {
     gap: 8,

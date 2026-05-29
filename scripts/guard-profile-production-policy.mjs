@@ -59,6 +59,13 @@ assertIncludes(profile, `shouldShowLockedShell ? null : isSelfProfile ? (`, "own
 assertIncludes(profile, `isSelfProfile && post.visibility === "draft"`, "owner-only draft marker");
 assertIncludes(profile, `isSelfProfile && post.moderationStatus === "reported"`, "owner-only reported marker");
 assertIncludes(profile, `const canDeletePost = isSelfProfile && post.userId === currentUserId`, "owner-only post delete control");
+assertIncludes(profile, `? "No posts yet"`, "owner Profile feed empty state");
+assertIncludes(profile, `: "No public posts yet"`, "viewer Profile feed empty state");
+assertIncludes(profile, `Share an update or attach a photo to start your Profile feed.`, "owner Profile feed empty copy");
+assertIncludes(profile, `Public updates will appear here when available.`, "viewer Profile feed empty copy");
+assertIncludes(profile, `onPress={focusProfilePostComposer}`, "Profile empty Create Post focuses composer");
+assertNotIncludes(profile, `Your feed is ready when you are.`, "old Profile feed empty state");
+assertNotIncludes(profile, `<Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "Platform" : "View Platform"}</Text>`, "random Profile feed Platform CTA");
 assertIncludes(profile, `friendState?.availability === "blocked"`, "blocked Chi'lly Circle action guard");
 assertIncludes(profile, `ProfileAppearanceSheet`, "owner Profile appearance sheet");
 assertIncludes(profile, `ProfileActionsSheet`, "viewer Profile actions sheet");

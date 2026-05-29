@@ -1,7 +1,7 @@
 # Navigation Terminology Map
 
 ## Purpose
-This map records the current Chi'llywood app navigation and product language after the Modern Navigation IA and Remaining UX Blocker Production Pass. It is a product map, not a route rewrite plan. Technical route names such as `/channel/[userId]` remain for compatibility when the user-facing concept is `Platform`.
+This map records the current Chi'llywood app navigation and product language after the Modern Navigation IA, Public V1 burn-down, and Home/Profile cleanup passes. It is a product map, not a route rewrite plan. Technical route names such as `/channel/[userId]` remain for compatibility when the user-facing concept is `Platform`.
 
 ## Final Terminology
 - Profile = the user's social identity hub.
@@ -19,11 +19,12 @@ This map records the current Chi'llywood app navigation and product language aft
 
 ## Main App Mode Map
 Viewer mode:
-- Home: discovery, live-now rails, Rachi official updates, public uploads, Originals, upcoming events, and continue watching.
-- Explore: current title search/filtering. Unified creator/live/event/upload search is planned and must not fake results.
+- Home: launch/feed surface for hero playback, Continue Watching when backed, Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle when backed, and Upcoming Events when backed. Home must not carry Top Picks, Browse, or Favorites jobs.
+- Explore: backed browse/discovery surface for title search, public discovery feed rows, public creator videos, Rachi public-safe Originals, events, replays, and honest empty states.
 - Live: bottom-nav entry point for choosing `Live Watch-Party`, joining `Watch-Party Live` by code, or browsing content before starting a content-first party.
 - Library: current saved-title list. Broader My Stuff sections are planned only when backed.
-- top Profile/avatar entry: opens the signed-in user's social identity route without duplicating Profile in the bottom nav.
+- top Profile/avatar entry: opens the signed-in user's social identity route from normal main tabs without duplicating Profile in the bottom nav.
+- top Settings entry: opens Settings from normal main tabs; detail, Profile, Platform, Studio, Admin, Player, and room surfaces keep route-local controls.
 - Chi'lly Chat: canonical message inbox/thread route.
 - Chi'lly Circle: canonical social-circle route.
 
@@ -62,7 +63,21 @@ Rationale:
 
 Source truth:
 - `app/(tabs)/_layout.tsx` registers `profile` with `href: null` so the compatibility tab route file remains but the bottom bar renders only Home / Explore / Live / Library.
-- Home owns the visible top Profile/avatar affordance with `accessibilityLabel="Open your Profile"` and routes to `/profile/[userId]`.
+- `components/navigation/main-tab-top-bar.tsx` provides shared top Profile/avatar and Settings controls for Explore, Live, and Library.
+- Home keeps its route-local top controls with `accessibilityLabel="Open your Profile"` and routes to `/profile/[userId]`.
+
+## Home Status
+Current implementation:
+- Home no longer renders Top Picks, Browse, Favorites, Platforms You Follow, or Latest Public Uploads sections.
+- The removal is product scope, not a duplicate-bug claim: Explore covers browse/discovery work, and Library covers saved/favorites work.
+- Home keeps launch/feed content only: hero playback, Continue Watching when backed, Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle, Upcoming Events, and the existing native ad slot.
+- Rachi Official Updates render identity with backed avatar or safe `R` fallback, `Rachi`, `Official Chi'llwood`, and backed timestamp text.
+- Rachi Originals public cards keep backed Rachi-owned content but mask internal proof/fixture wording from normal Home copy.
+- No fake Home rows, fake Rachi posts, fake Rachi Originals, fake saved rows, fake live rooms, fake events, fake creator activity, or fake counts were added.
+
+Android proof:
+- `/tmp/chillywood-home-profile-cleanup-proof-20260529/01-home-first-view.*` captures Home first view with top Profile/Settings, bottom nav, Rachi Official Updates, and no Top Picks/Browse/Favorites labels.
+- `/tmp/chillywood-home-profile-cleanup-proof-20260529/02-home-rachi-originals.*` captures Rachi identity plus Chi'llwood Originals with sanitized public copy.
 
 ## Explore Status
 Current implementation:
@@ -165,7 +180,24 @@ Guardrails:
 - Primary social-circle copy uses `Chi'lly Circle`; internal helper names may still use friend/friendship for compatibility.
 - Messaging copy uses `Chi'lly Chat`.
 - Rachi remains `Official Chi'llywood`, appears through canonical public-safe surfaces, and is not positioned as a private-chat watcher.
+- Rachi posts/content should show a visible identity row when the card design has author identity: avatar or official fallback, `Rachi`, official label, timestamp where backed, and public-safe body/content.
 - Rachi Official Updates and Chi'llwood Originals stay backed-only; no fake posts, fake Originals, fake followers, fake likes, or fake engagement are allowed.
+
+## Profile Header And Feed Empty State
+Implemented status:
+- Normal main tabs show top Profile/avatar and Settings access.
+- Own Profile, public Profile/Platform, Platform Studio, Admin, Player/detail, and room surfaces keep route-local controls instead of duplicate global Profile/Settings controls.
+- Profile bottom nav remains hidden.
+- Profile top owner action still provides Platform access.
+- The Profile feed empty state no longer says `Your feed is ready when you are`.
+- Owner empty state says `No posts yet`, explains that updates or photos start the Profile feed, and uses `Create Post` only to focus the existing composer.
+- Viewer empty state says `No public posts yet` and does not show owner composer controls.
+- The feed empty state no longer shows a random Platform CTA; Platform is already available through Profile top actions.
+
+Android proof:
+- `/tmp/chillywood-home-profile-cleanup-proof-20260529/03-explore-top-controls.*`, `04-library-top-controls.*`, and `05-live-top-controls.*` capture top controls on main tabs.
+- `/tmp/chillywood-home-profile-cleanup-proof-20260529/07-profile-feed-empty-state.*` captures the cleaned owner empty state.
+- `/tmp/chillywood-home-profile-cleanup-proof-20260529/08-settings-from-profile.*` and `09-platform-route-reachable.*` capture Settings and Platform reachability.
 
 ## Host Preflight Status
 Implemented status:
@@ -225,6 +257,7 @@ Deferred route work:
 - Normalize legacy route params in a scoped deeplink lane without changing LiveKit, Premium, Party Room, Live Stage, Player, Profile, or Admin ownership.
 
 ## Implemented In This Pass
+- Home/Profile cleanup removed Home Top Picks/Browse/Favorites because Explore/Library cover those jobs, added shared top Profile/Settings controls to Explore/Live/Library, improved Rachi identity display, cleaned Profile feed empty states, and updated guards for those boundaries.
 - Public V1 burn-down kept bottom nav at Home / Explore / Live / Library and verified Profile remains top-avatar/direct-route only.
 - Explore now renders backed title search, public discovery feed rows, creator videos, Rachi public-safe Originals, event summaries, replay rows where backed, and honest empty states.
 - Library now renders backed Saved, Continue Watching, and Platforms sections only.

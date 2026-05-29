@@ -6,7 +6,13 @@ Closed truth:
 
 - Bottom navigation is Home / Explore / Live / Library.
 - Profile is not duplicated in the bottom nav. The `(tabs)/profile` compatibility file remains hidden from the tab bar with `href: null`.
-- Profile remains accessible from the Home top avatar/profile entry, direct `/profile/[userId]` routes, Settings, and Profile actions.
+- Profile remains accessible from top avatar/profile entry points on Home, Explore, Live, and Library, direct `/profile/[userId]` routes, Settings, and Profile actions.
+- Home Top Picks, Browse, and Favorites sections are removed because Explore owns browse/discovery jobs and Library owns saved/favorites jobs. The cleanup also removed catalog-style followed-Platform/latest-public-upload Home sections so Home stays focused on launch/feed content rather than duplicating bottom-tab work.
+- Home still shows only backed or honest-empty feed sections: hero playback, Continue Watching, Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle, Upcoming Events, and the existing ad slot. No fake Home replacement rows were added.
+- Normal main tabs now show top Profile/avatar and Settings access. Detail, room, Profile, Platform, Platform Studio, Admin, and Player surfaces keep their route-local controls instead of duplicate global controls.
+- Rachi Official Updates show Rachi avatar or official fallback, `Rachi`, `Official Chi'llwood`, and backed timestamp text. Public Rachi Originals cards keep real backed rows but no longer expose internal proof/fixture wording in normal Home copy.
+- Profile feed empty state is cleaned up: owners see `No posts yet` with a `Create Post` action that focuses the composer; viewers see `No public posts yet`; the old `Your feed is ready when you are` card and random feed-level Platform CTA are gone.
+- Android proof for this cleanup lives at `/tmp/chillywood-home-profile-cleanup-proof-20260529/`.
 - Profile Photo first-sheet UX is corrected and Android-proved on `R5CR120QCBF`: owner avatar tap/long-press opens a compact `Profile Photo` bottom action sheet with `Change Photo`, conditional `Remove Photo` only when a real photo exists, and `Cancel`.
 - The Profile Photo first sheet no longer shows a preview card, disabled `View Photo`, disabled `Remove Photo`, Fit/Fill/Center controls, crop explanation copy, or a disabled save action before an image is selected.
 - Profile Photo crop/edit still uses the backed native phone gallery path through `expo-image-picker` with `allowsEditing`; `Change Photo` was proved to open Android DocumentsUI, but no picker screenshot was captured because private gallery thumbnails must not be recorded. Custom in-app drag/pinch repositioning remains a future enhancement unless it is actually built and proved.
@@ -29,6 +35,7 @@ Remaining limitations:
 - Watch-Party Live true two-device speech-triggered ducking is not closed. `adb devices -l` showed only `R5CR120QCBF`, with no second device/emulator/account available.
 - Player component extraction remains a future cleanup; this pass added safe mode labeling/resolution without a full rewrite.
 - Route/deeplink cleanup remains mostly documented rather than rewritten to avoid route-owner drift.
+- Profile media safe-asset save/read-back remains open even though the compact picker UI is fixed.
 
 Recommended next lane:
 

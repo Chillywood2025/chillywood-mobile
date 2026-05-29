@@ -450,11 +450,11 @@ const formatEventReminderEnrollmentLabel = (enrollment: EventReminderEnrollment)
 const getEventReminderEnrollmentBody = (enrollment: EventReminderEnrollment) => {
   switch (enrollment.state) {
     case "active":
-      return "You are enrolled for this backed event reminder. Delivery still depends on later notification infrastructure.";
+      return "You are enrolled for this event reminder. Delivery depends on notification availability.";
     case "canceled":
       return "Your reminder enrollment is currently off. You can turn it back on while this event stays reminder-ready.";
     case "signed_out":
-      return "Sign in to save a real reminder enrollment for this backed event.";
+      return "Sign in to save this event reminder.";
     case "not_ready":
       return "Reminder enrollment stays unavailable until the event is scheduled and marked reminder-ready.";
     default:
@@ -533,6 +533,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView | null>(null);
   const profilePostComposerYRef = useRef(0);
+  const profilePostInputRef = useRef<TextInput | null>(null);
   const [currentUserId, setCurrentUserId] = useState("");
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
   const [chillyCircleLoading, setChillyCircleLoading] = useState(false);
@@ -1045,6 +1046,13 @@ export default function ProfileScreen() {
     }, 120);
   };
 
+  const focusProfilePostComposer = () => {
+    scrollProfilePostComposerIntoView();
+    setTimeout(() => {
+      profilePostInputRef.current?.focus();
+    }, 180);
+  };
+
   const refreshProfilePostEngagement = async (postId: string) => {
     const engagement = await readProfilePostEngagementState(postId);
     updateProfilePostUiState(postId, (current) => ({
@@ -1395,7 +1403,7 @@ export default function ProfileScreen() {
         ? "Live and watch-party entry both hand back into the linked room."
         : "Room context is attached, so live and watch-party entry stay pointed at the linked room."
       : hasLiveTabEntry
-        ? "Use the Live tab for the current schedule and backed events."
+        ? "Use the Live tab for the current schedule and public events."
         : "No room context is attached yet, but this Platform's live posture still stays visible.";
   const openChannelSettings = (params?: { focus?: "content"; action?: "upload" }) => {
     if (!creatorSettingsEnabled) {
@@ -2486,7 +2494,7 @@ export default function ProfileScreen() {
         ? "Official"
         : profilePostsReady ? String(profilePosts.length) : "...",
       body: isOfficialProfile
-        ? "platform-backed identity"
+        ? "official platform identity"
         : "text updates on this Profile",
       tone: isOfficialProfile ? "official" : "default",
     },
@@ -2561,7 +2569,7 @@ export default function ProfileScreen() {
         ? `${publicCreatorVideoCount} creator video${publicCreatorVideoCount === 1 ? "" : "s"} are ready to watch.`
         : "This Platform is getting ready.";
   const contentCreatorEventsBody = isOfficialProfile
-    ? "Official programming stays public-safe and backed by admin-managed Rachi content."
+    ? "Official programming stays public-safe and managed by Chi'llywood."
     : publicEventsReady
       ? publicEventCount
         ? `${publicEventCount} public creator event${publicEventCount === 1 ? "" : "s"} can appear here when scheduled or live.`
@@ -2597,7 +2605,7 @@ export default function ProfileScreen() {
     ? "Verified updates and trusted follow-up start here; platform titles stay in platform surfaces."
     : isSelfProfile
       ? "Share updates, connect with people, and guide fans to your Platform."
-      : "Start here for personal updates, public identity, and the next backed creator or chat move.";
+      : "Start here for personal updates, public identity, and the next creator or chat move.";
   const channelLayoutPreset = resolveChannelLayoutPreset(channelAccessProfile?.channelLayoutPreset);
   const homeSectionMap = {
     featured: {
@@ -2701,7 +2709,7 @@ export default function ProfileScreen() {
       title: nextUpcomingEvent ? formatEventTypeLabel(nextUpcomingEvent.eventType) : "Live Watch-Party",
       kicker: "LIVE FLOW",
       body: nextUpcomingEvent
-        ? `${nextUpcomingEvent.eventTitle} is the next backed public event at ${formatEventDate(nextUpcomingEvent.startsAt)}.`
+        ? `${nextUpcomingEvent.eventTitle} is the next public event at ${formatEventDate(nextUpcomingEvent.startsAt)}.`
         : "This tab can point people toward Live Watch-Party without absorbing the live-room flow.",
     },
     {
@@ -2947,7 +2955,7 @@ export default function ProfileScreen() {
       label: "Reminders",
       value: String(reminderReadyEvents.length),
       body: reminderReadyEvents.length
-        ? "reminder-ready public schedule is backed"
+        ? "public schedule can accept reminders"
         : "no reminder-ready public event yet",
       tone: reminderReadyEvents.length ? "linked" : "default",
     },
@@ -3039,7 +3047,7 @@ export default function ProfileScreen() {
     {
       label: "Events",
       value: publicEventsReady ? String(publicEventCount) : "...",
-      body: "backed creator live/watch-party events",
+      body: "creator live/watch-party events",
       tone: publicEventCount ? "live" : "default",
     },
   ] : [];
@@ -3246,6 +3254,7 @@ export default function ProfileScreen() {
           </View>
         </View>
         <TextInput
+          ref={profilePostInputRef}
           style={[styles.profileComposerInput, styles.profileComposerTextArea]}
           placeholder="How are you feeling?"
           placeholderTextColor="#8A93A8"
@@ -3674,22 +3683,26 @@ export default function ProfileScreen() {
         <View style={styles.feedEmptyCard}>
           <Text style={styles.feedEmptyTitle}>
             {profileSocialFeedMode === "own_profile_social_feed"
-              ? "Your feed is ready when you are."
-              : "No public activity yet."}
+              ? "No posts yet"
+              : "No public posts yet"}
           </Text>
           <Text style={styles.feedEmptyText}>
             {profileSocialFeedMode === "own_profile_social_feed"
-              ? "Post an update or build your Chi'lly Circle to see more social activity here."
-              : "This profile has not shared public posts, creator activity, or safe live/replay entries yet."}
+              ? "Share an update or attach a photo to start your Profile feed."
+              : "Public updates will appear here when available."}
           </Text>
-          <TouchableOpacity
-            style={styles.feedEmptyButton}
-            activeOpacity={0.86}
-            onPress={isSelfProfile ? onPressPreviewPlatform : onPressViewChannel}
-          >
-            <MaterialIcons name="video-library" size={17} color="#fff" />
-            <Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "Platform" : "View Platform"}</Text>
-          </TouchableOpacity>
+          {profileSocialFeedMode === "own_profile_social_feed" ? (
+            <TouchableOpacity
+              style={styles.feedEmptyButton}
+              activeOpacity={0.86}
+              onPress={focusProfilePostComposer}
+              accessibilityRole="button"
+              accessibilityLabel="Create Profile post"
+            >
+              <MaterialIcons name="edit" size={17} color="#fff" />
+              <Text style={styles.feedEmptyButtonText}>Create Post</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
     </View>
@@ -4257,7 +4270,7 @@ export default function ProfileScreen() {
                   <Text style={styles.sectionKicker}>EVENT STATUS</Text>
                   <Text style={styles.sectionTitle}>Loading public event truth</Text>
                   <Text style={styles.sectionBody}>
-                    Checking backed creator events before showing live, replay, and reminder state.
+                    Checking public creator events before showing live, replay, and reminder state.
                   </Text>
                 </View>
               ) : null}

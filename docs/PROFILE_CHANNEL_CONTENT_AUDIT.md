@@ -16,6 +16,7 @@ Updated: 2026-05-25 for signed-out, signed-in non-owner, owner-regression, Platf
 Updated: 2026-05-25 for shared social attachment sheet correction and native phone-gallery Photos picking
 Updated: 2026-05-26 for Profile avatar/background management and viewer Profile Actions sheet
 Updated: 2026-05-26 for owner-controlled Profile media status, reportability, and public URL masking
+Updated: 2026-05-29 for Home/Profile cleanup: main tabs expose top Profile/Settings access, Profile bottom nav remains hidden, and Profile feed empty states are production-ready without the old ready-card or random Platform CTA.
 
 Repo root: `/Users/loverslane/chillywood-mobile`
 Branch audited: `main`
@@ -53,6 +54,20 @@ Current governing truth:
 - DEV/proof/debug copy is not added to normal Profile UI; any proof-looking strings in content should be treated as backed test data, not UI labels.
 
 Validation for the production UI pass includes the Profile production guard, the standard type/runtime/payment/creator/Clip/Brand/Watch-Party guard stack, targeted terminology/upload/chat/attachment/owner-control/draft-leak greps, Android `R5CR120QCBF` proof outside the repo at `/tmp/chillywood-profile-production-ui-proof-20260525/`, and diff whitespace checks.
+
+## 2026-05-29 Home/Profile Header Cleanup Addendum
+
+Current governing truth:
+
+- Visible bottom navigation remains Home / Explore / Live / Library; Profile stays hidden from the bottom bar.
+- Home, Explore, Live, and Library expose top Profile/avatar plus Settings access for normal main-tab use.
+- Own Profile, public Profile/Platform, Platform Studio, Admin, Player/detail, and room surfaces keep route-local controls instead of duplicate global Profile/Settings controls.
+- Profile owner top actions still include Platform access; feed empty state must not add a redundant Platform CTA.
+- Owner Profile feed empty state is `No posts yet` with short copy and an optional `Create Post` action that focuses the existing composer.
+- Viewer Profile feed empty state is `No public posts yet` with short public-copy only.
+- `Your feed is ready when you are` and Profile-feed Platform CTAs are no longer production copy.
+
+Android proof for this cleanup is outside the repo at `/tmp/chillywood-home-profile-cleanup-proof-20260529/` and includes main-tab top controls, owner Profile, cleaned owner empty state, Settings reachability, and Platform route reachability.
 
 ## 2026-05-25 Profile Viewer State Runtime Proof Closeout
 

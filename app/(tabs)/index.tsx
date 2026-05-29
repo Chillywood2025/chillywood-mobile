@@ -2,10 +2,9 @@ import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     buildUserChannelProfile,
-    readMyListIds,
     readMergedWatchProgress,
     readUserProfile,
-    toggleMyListTitle,
+    readUserProfileByUserId,
     type WatchProgressMap,
     type UserChannelProfile,
 } from "../../_lib/userData";
@@ -46,11 +45,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
 import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../../_lib/supabase";
-import { readFollowedChannelUserIds } from "../../_lib/channelAudience";
 import {
     readCreatorVideos,
     readCreatorVideosForOwners,
-    readLatestPublicCreatorVideos,
     type CreatorVideo,
 } from "../../_lib/creatorVideos";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
@@ -174,21 +171,14 @@ export default function HomeScreen() {
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [currentChannel, setCurrentChannel] = useState<UserChannelProfile | null>(null);
-  const [myListIds, setMyListIds] = useState<string[]>([]);
-  const [myListTitles, setMyListTitles] = useState<TitleRow[]>([]);
-  const [myListLoading, setMyListLoading] = useState(true);
   const [watchProgress, setWatchProgress] = useState<WatchProgressMap>({});
   const [titleLiveMetadataById, setTitleLiveMetadataById] = useState<Record<string, TitleLiveMetadata>>({});
-  const [followedChannelCount, setFollowedChannelCount] = useState(0);
-  const [followingVideos, setFollowingVideos] = useState<CreatorVideo[]>([]);
-  const [followingFeedLoading, setFollowingFeedLoading] = useState(true);
-  const [followingFeedError, setFollowingFeedError] = useState<string | null>(null);
   const [homeLiveEvents, setHomeLiveEvents] = useState<CreatorEventSummary[]>([]);
   const [homeUpcomingEvents, setHomeUpcomingEvents] = useState<CreatorEventSummary[]>([]);
   const [circleVideos, setCircleVideos] = useState<CreatorVideo[]>([]);
-  const [latestPublicVideos, setLatestPublicVideos] = useState<CreatorVideo[]>([]);
   const [rachiOfficialPosts, setRachiOfficialPosts] = useState<ProfilePost[]>([]);
   const [rachiOriginals, setRachiOriginals] = useState<CreatorVideo[]>([]);
+  const [rachiOfficialAvatarUrl, setRachiOfficialAvatarUrl] = useState("");
   const [homeDiscoveryItems, setHomeDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
   const [homeDiscoveryLoading, setHomeDiscoveryLoading] = useState(true);
   const [homeDiscoveryError, setHomeDiscoveryError] = useState<string | null>(null);
@@ -311,67 +301,6 @@ export default function HomeScreen() {
     setWatchProgress(nextProgress);
   }
 
-  async function fetchMyList() {
-    setMyListLoading(true);
-
-    const ids = await readMyListIds().catch(() => [] as string[]);
-    setMyListIds(ids);
-
-    if (!ids.length) {
-      setMyListTitles([]);
-      setMyListLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("titles")
-        .select(
-          "id, title, category, year, runtime, synopsis, poster_url, created_at, featured, is_hero, is_trending, pin_to_top_row, sort_order",
-        )
-        .in("id", ids)
-        .returns<TitleRow[]>();
-
-      if (!error && data) {
-        const byId = new Map(data.map((item) => [String(item.id), item]));
-        const ordered = ids.map((id) => byId.get(id)).filter((item): item is TitleRow => !!item);
-        setMyListTitles(ordered);
-        setMyListLoading(false);
-        return;
-      }
-    } catch {
-      // fall through to local fallback
-    }
-
-    const fallbackLocal = ids
-      .map((id): TitleRow | null => {
-        const localMatch = localTitles.find((item: any) => String(item.id) === id);
-        if (!localMatch) return null;
-        return {
-          id,
-          title: String((localMatch as any).title ?? "Untitled"),
-          category: (localMatch as any).genre ?? null,
-          year: (localMatch as any).year ?? null,
-          runtime: (localMatch as any).runtime ?? null,
-          synopsis: (localMatch as any).description ?? null,
-          poster_url: null,
-          created_at: null,
-          video_url: null,
-          featured: null,
-          is_hero: null,
-          is_trending: null,
-          pin_to_top_row: null,
-          sort_order: null,
-          slug: null,
-          video_thumbnail: null,
-        };
-      })
-      .filter((item): item is TitleRow => !!item);
-
-    setMyListTitles(fallbackLocal);
-    setMyListLoading(false);
-  }
-
   async function fetchCurrentChannelProfile() {
     const [profile, userId] = await Promise.all([
       readUserProfile().catch(() => null),
@@ -394,42 +323,18 @@ export default function HomeScreen() {
     setCurrentChannel(nextChannel);
   }
 
-  async function fetchFollowingFeed() {
-    setFollowingFeedLoading(true);
-    setFollowingFeedError(null);
-
-    try {
-      const followedChannelIds = await readFollowedChannelUserIds({ limit: 50 });
-      setFollowedChannelCount(followedChannelIds.length);
-
-      if (!followedChannelIds.length) {
-        setFollowingVideos([]);
-        return;
-      }
-
-      const videos = await readCreatorVideosForOwners(followedChannelIds, { limit: 12 });
-      setFollowingVideos(videos);
-    } catch {
-      setFollowedChannelCount(0);
-      setFollowingVideos([]);
-      setFollowingFeedError("Unable to load followed creator uploads right now.");
-    } finally {
-      setFollowingFeedLoading(false);
-    }
-  }
-
   async function fetchDiscoveryFeedV1() {
     setHomeDiscoveryLoading(true);
     setHomeDiscoveryError(null);
 
     try {
-      const [publicEvents, latestVideos, circleUserIds, discoveryRows, officialPosts, officialOriginals] = await Promise.all([
+      const [publicEvents, circleUserIds, discoveryRows, officialPosts, officialOriginals, officialProfile] = await Promise.all([
         readLatestPublicEventSummaries({ limit: 24 }),
-        readLatestPublicCreatorVideos({ limit: 12 }),
         readActiveFriendUserIds().catch(() => [] as string[]),
         readPublicDiscoveryFeedItems({ surface: "home", limit: 24 }).catch(() => [] as DiscoveryFeedItem[]),
         readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 3 }).catch(() => [] as ProfilePost[]),
         readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 12 }).catch(() => [] as CreatorVideo[]),
+        readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId).catch(() => null),
       ]);
       const uniqueCircleUserIds = Array.from(new Set(circleUserIds.map((id) => String(id ?? "").trim()).filter(Boolean)));
       const circleUploads = uniqueCircleUserIds.length
@@ -438,17 +343,17 @@ export default function HomeScreen() {
 
       setHomeLiveEvents(publicEvents.filter((event) => event.isLiveNow).slice(0, 8));
       setHomeUpcomingEvents(publicEvents.filter((event) => event.isUpcoming).slice(0, 8));
-      setLatestPublicVideos(latestVideos);
       setRachiOfficialPosts(officialPosts);
       setRachiOriginals(officialOriginals);
+      setRachiOfficialAvatarUrl(String(officialProfile?.avatarUrl ?? RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? "").trim());
       setCircleVideos(circleUploads);
       setHomeDiscoveryItems(rankDiscoveryFeedItems(discoveryRows, { chillyCircleUserIds: uniqueCircleUserIds }));
     } catch {
       setHomeLiveEvents([]);
       setHomeUpcomingEvents([]);
-      setLatestPublicVideos([]);
       setRachiOfficialPosts([]);
       setRachiOriginals([]);
+      setRachiOfficialAvatarUrl("");
       setCircleVideos([]);
       setHomeDiscoveryItems([]);
       setHomeDiscoveryError("Discovery feed is unavailable right now.");
@@ -463,10 +368,8 @@ export default function HomeScreen() {
       await Promise.all([
         fetchHomeConfig(),
         fetchTitles(),
-        fetchMyList(),
         fetchCurrentChannelProfile(),
         fetchWatchProgress(),
-        fetchFollowingFeed(),
         fetchDiscoveryFeedV1(),
       ]);
       setLoading(false);
@@ -477,10 +380,8 @@ export default function HomeScreen() {
     useCallback(() => {
       Promise.all([
         fetchHomeConfig(),
-        fetchMyList(),
         fetchCurrentChannelProfile(),
         fetchWatchProgress(),
-        fetchFollowingFeed(),
         fetchDiscoveryFeedV1(),
       ]).catch(() => {});
     }, []),
@@ -491,23 +392,11 @@ export default function HomeScreen() {
     await Promise.all([
       fetchHomeConfig(),
       fetchTitles(),
-      fetchMyList(),
       fetchCurrentChannelProfile(),
       fetchWatchProgress(),
-      fetchFollowingFeed(),
       fetchDiscoveryFeedV1(),
     ]);
     setRefreshing(false);
-  }
-
-  async function removeFromMyList(item: TitleRow) {
-    const nextIds = await toggleMyListTitle(String(item.id), {
-      title: item.title ?? undefined,
-      posterUrl: item.poster_url ?? undefined,
-    }).catch(() => myListIds);
-
-    setMyListIds(nextIds);
-    setMyListTitles((prev) => prev.filter((entry) => String(entry.id) !== String(item.id)));
   }
 
   function getImageUri(item?: TitleRow | null): ImageSourcePropType | null {
@@ -677,34 +566,6 @@ export default function HomeScreen() {
     return latestTitles[0] ?? null;
   }, [homeConfig.heroMode, homeConfig.manualHeroTitleId, latestTitles, programmedTitles]);
 
-  const topPicksRail = useMemo(() => {
-    const sourceTitles = (() => {
-      switch (homeConfig.topPicksSource) {
-        case "top_row":
-          return programmedTitles.filter((item) => item.pin_to_top_row === true);
-        case "featured":
-          return programmedTitles.filter((item) => item.featured === true);
-        case "trending":
-          return programmedTitles.filter((item) => item.is_trending === true);
-        default:
-          return latestTitles;
-      }
-    })();
-
-    const usingConfiguredSource = sourceTitles.length > 0;
-    const data = (usingConfiguredSource ? sourceTitles : latestTitles).slice(0, maxRailItems);
-    const sourceLabel = usingConfiguredSource ? homeConfig.topPicksSource : "recent";
-    const title = sourceLabel === "featured"
-      ? "Featured Picks"
-      : sourceLabel === "trending"
-        ? "Trending Now"
-        : sourceLabel === "top_row"
-          ? "Top Row"
-          : "Top Picks";
-
-    return { data, title };
-  }, [homeConfig.topPicksSource, latestTitles, maxRailItems, programmedTitles]);
-
   const continueWatchingTitles = useMemo(
     () => continueCandidates.slice(0, maxRailItems),
     [continueCandidates, maxRailItems],
@@ -718,29 +579,6 @@ export default function HomeScreen() {
     ? Math.max(8, Math.min(100, Math.round((spotlightProgress.positionMillis / spotlightProgress.durationMillis) * 100)))
     : 42;
   const homeAvatarInitial = String(currentChannel?.displayName ?? "You").slice(0, 1).toUpperCase() || "Y";
-
-  const browseTitles = useMemo(() => {
-    const browseQuery = String(homeConfig.browseCategoryQuery ?? "").trim().toLowerCase();
-    const matchingTitles = browseQuery
-      ? titles.filter((item) => String(item.category ?? "").trim().toLowerCase().includes(browseQuery))
-      : titles;
-    const sourceTitles = matchingTitles.length ? matchingTitles : titles;
-    return sourceTitles.slice(0, maxRailItems);
-  }, [homeConfig.browseCategoryQuery, maxRailItems, titles]);
-
-  const favoriteTitles = useMemo(() => myListTitles.slice(0, maxRailItems), [maxRailItems, myListTitles]);
-  const livePulse = useMemo(() => {
-    const liveEntries = Object.values(titleLiveMetadataById);
-    const liveRoomCount = liveEntries.reduce((total, entry) => total + entry.liveRoomCount, 0);
-    const liveCommentCount = liveEntries.reduce((total, entry) => total + entry.commentCount, 0);
-
-    return {
-      liveTitleCount: liveEntries.length,
-      liveRoomCount,
-      liveCommentCount,
-      reactionsLive: liveEntries.some((entry) => entry.reactionsEnabled),
-    };
-  }, [titleLiveMetadataById]);
   const liveDiscoveryItems = useMemo(
     () => homeDiscoveryItems.filter((item) => item.live_state === "live").slice(0, 8),
     [homeDiscoveryItems],
@@ -749,28 +587,6 @@ export default function HomeScreen() {
     () => homeDiscoveryItems.filter((item) => item.live_state === "scheduled").slice(0, 8),
     [homeDiscoveryItems],
   );
-  const homePulseTitle = livePulse.liveRoomCount
-    ? `${livePulse.liveRoomCount} live room${livePulse.liveRoomCount === 1 ? "" : "s"} moving now`
-    : continueWatchingTitles.length
-      ? `${continueWatchingTitles.length} title${continueWatchingTitles.length === 1 ? "" : "s"} ready to resume`
-      : `${titles.length} title${titles.length === 1 ? "" : "s"} ready on Home`;
-  const homePulseBody = livePulse.liveRoomCount
-    ? `${livePulse.liveTitleCount} title${livePulse.liveTitleCount === 1 ? "" : "s"} already have watch-party activity${livePulse.liveCommentCount ? ` and ${livePulse.liveCommentCount} live comment${livePulse.liveCommentCount === 1 ? "" : "s"}` : ""}.`
-    : favoriteTitles.length
-      ? `${favoriteTitles.length} saved title${favoriteTitles.length === 1 ? "" : "s"} stay close, and fresh picks are ready below.`
-      : "Fresh picks, featured drops, and live watch-party entry stay ready from Home.";
-  const homePulsePills = [
-    livePulse.liveRoomCount
-      ? `${livePulse.liveRoomCount} live room${livePulse.liveRoomCount === 1 ? "" : "s"}`
-      : "No live rooms",
-    favoriteTitles.length
-      ? `${favoriteTitles.length} saved`
-      : "Build your list",
-    canShowContinueWatching && continueWatchingTitles.length
-      ? `${continueWatchingTitles.length} resume`
-      : "Fresh picks ready",
-    ...(livePulse.reactionsLive ? ["Reactions live"] : []),
-  ];
 
   function renderDiscoveryRail(title: string, data: TitleRow[], keyPrefix: string) {
     if (!data.length) return null;
@@ -1016,72 +832,6 @@ export default function HomeScreen() {
     );
   }
 
-  const renderFollowingFeed = () => (
-    <View style={styles.section}>
-      <View style={styles.followingHeaderRow}>
-        <View style={styles.followingHeaderCopy}>
-          <Text style={styles.sectionTitle}>Platforms You Follow</Text>
-          <Text style={styles.followingSubtitle}>
-            {followedChannelCount
-              ? "Latest public creator uploads from channels you follow."
-              : "Follow creators to see their latest uploads here."}
-          </Text>
-        </View>
-        {followingFeedLoading ? <ActivityIndicator color="#E50914" /> : null}
-      </View>
-
-      {followingFeedError ? (
-        <View style={styles.followingEmptyCard}>
-          <Text style={styles.followingEmptyTitle}>Followed uploads unavailable</Text>
-          <Text style={styles.followingEmptyText}>{followingFeedError}</Text>
-        </View>
-      ) : followingFeedLoading ? (
-        <View style={styles.followingEmptyCard}>
-          <Text style={styles.followingEmptyTitle}>Checking followed creators</Text>
-          <Text style={styles.followingEmptyText}>Only real public creator uploads appear here.</Text>
-        </View>
-      ) : followingVideos.length ? (
-        <FlatList
-          horizontal
-          data={followingVideos}
-          keyExtractor={(item) => `following-video-${item.id}`}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.followingVideoRow}
-          renderItem={({ item }) => (
-            <View style={styles.followingVideoCardWrap}>
-              <CreatorVideoCard
-                video={item}
-                mode="public"
-                onOpen={() => openCreatorVideo(item)}
-                onShare={isCreatorVideoPubliclyShareable(item) ? () => {
-                  void shareCreatorVideo(item);
-                } : undefined}
-              />
-            </View>
-          )}
-        />
-      ) : (
-        <View style={styles.followingEmptyCard}>
-          <Text style={styles.followingEmptyTitle}>
-            {followedChannelCount ? "No new followed uploads yet" : "Follow creators to see their latest uploads here."}
-          </Text>
-          <Text style={styles.followingEmptyText}>
-            {followedChannelCount
-              ? "The Platforms you follow have no public clean creator videos ready for Home."
-              : "Following is a creator/audience relationship, not Chi'lly Circle."}
-          </Text>
-          <TouchableOpacity
-            style={styles.followingEmptyButton}
-            activeOpacity={0.86}
-            onPress={() => router.push("/(tabs)/explore")}
-          >
-            <Text style={styles.followingEmptyButtonText}>Explore</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-
   function renderRachiOfficialUpdates() {
     return (
       <View style={styles.section}>
@@ -1095,7 +845,7 @@ export default function HomeScreen() {
         {homeDiscoveryLoading ? (
           <View style={styles.followingEmptyCard}>
             <Text style={styles.followingEmptyTitle}>Checking Rachi updates</Text>
-            <Text style={styles.followingEmptyText}>Only real public Rachi posts appear here.</Text>
+            <Text style={styles.followingEmptyText}>Public Rachi posts appear here after they are published.</Text>
           </View>
         ) : rachiOfficialPosts.length ? (
           <View style={styles.rachiUpdateStack}>
@@ -1106,21 +856,32 @@ export default function HomeScreen() {
                 activeOpacity={0.86}
                 onPress={openRachiProfile}
               >
-                <View style={styles.rachiUpdateHeader}>
-                  <Text style={styles.rachiUpdateKicker}>Rachi · Official Chi&apos;llwood</Text>
-                  <View style={styles.rachiUpdatePill}>
-                    <Text style={styles.rachiUpdatePillText}>Official update</Text>
+                <View style={styles.rachiIdentityRow}>
+                  <View style={styles.rachiAvatar}>
+                    {rachiOfficialAvatarUrl ? (
+                      <Image source={{ uri: rachiOfficialAvatarUrl }} style={styles.rachiAvatarImage} />
+                    ) : (
+                      <Text style={styles.rachiAvatarInitial}>R</Text>
+                    )}
+                  </View>
+                  <View style={styles.rachiIdentityCopy}>
+                    <View style={styles.rachiNameRow}>
+                      <Text style={styles.rachiName}>Rachi</Text>
+                      <View style={styles.rachiOfficialBadge}>
+                        <Text style={styles.rachiOfficialBadgeText}>Official Chi&apos;llwood</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.rachiUpdateMeta}>{formatAddedDate(post.createdAt).replace("Added", "Posted")}</Text>
                   </View>
                 </View>
                 <Text style={styles.rachiUpdateBody} numberOfLines={4}>{post.body}</Text>
-                <Text style={styles.rachiUpdateMeta}>{formatAddedDate(post.createdAt).replace("Added", "Posted")}</Text>
               </TouchableOpacity>
             ))}
           </View>
         ) : (
           <View style={styles.followingEmptyCard}>
             <Text style={styles.followingEmptyTitle}>No Rachi updates yet</Text>
-            <Text style={styles.followingEmptyText}>Official posts appear here only after an owner or admin publishes them.</Text>
+            <Text style={styles.followingEmptyText}>Official posts will appear here when Rachi publishes them.</Text>
           </View>
         )}
       </View>
@@ -1158,6 +919,7 @@ export default function HomeScreen() {
             <Text style={styles.utilityKicker}>HOME</Text>
             <View style={styles.utilityActions}>
               <TouchableOpacity
+                testID="main-tab-home-settings-action"
                 style={styles.utilitySettingsButton}
                 onPress={openSettings}
                 activeOpacity={0.86}
@@ -1168,6 +930,7 @@ export default function HomeScreen() {
                 <Text style={styles.utilitySettingsText}>Settings</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="main-tab-home-profile-entry"
                 style={[styles.profileAvatarButton, !currentChannel?.id && styles.profileAvatarButtonDisabled]}
                 onPress={openOwnProfile}
                 activeOpacity={0.86}
@@ -1184,19 +947,6 @@ export default function HomeScreen() {
                   </View>
                 )}
               </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.homePulseCard}>
-            <Text style={styles.homePulseKicker}>DISCOVERY PULSE</Text>
-            <Text style={styles.homePulseTitle}>{homePulseTitle}</Text>
-            <Text style={styles.homePulseBody}>{homePulseBody}</Text>
-            <View style={styles.homePulseMetaRow}>
-              {homePulsePills.map((pill) => (
-                <View key={pill} style={styles.homePulsePill}>
-                  <Text style={styles.homePulsePillText}>{pill}</Text>
-                </View>
-              ))}
             </View>
           </View>
 
@@ -1254,18 +1004,30 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
+          {canShowContinueWatching && continueWatchingTitles.length
+            ? renderDiscoveryRail("Continue Watching", continueWatchingTitles, "continue-watching")
+            : null}
+
           {renderHomeEventRail({
             title: "Live Now",
-            subtitle: "Public, rights-safe live metadata from backed discovery rows and creator events.",
+            subtitle: "Public rooms and events that are live now.",
             feedItems: liveDiscoveryItems,
             events: homeLiveEvents,
             emptyTitle: "No public live rooms right now",
-            emptyText: "Live rooms appear here only when a real public, clean, rights-safe source exists.",
+            emptyText: "Live rooms appear here when public rooms or events are live.",
           })}
 
-          {renderFollowingFeed()}
-
           {renderRachiOfficialUpdates()}
+
+          {renderCreatorVideoRail({
+            title: "Chi'llwood Originals",
+            subtitle: "Published Originals from Rachi's official Platform.",
+            videos: rachiOriginals,
+            loading: homeDiscoveryLoading,
+            emptyTitle: "No Chi'llwood Originals yet",
+            emptyText: "Rachi Originals appear here after official content is published.",
+            keyPrefix: "rachi-original",
+          })}
 
           {renderCreatorVideoRail({
             title: "From Your Chi'lly Circle",
@@ -1279,21 +1041,11 @@ export default function HomeScreen() {
 
           {renderHomeEventRail({
             title: "Upcoming Events",
-            subtitle: "Public creator events from backed event and discovery read models.",
+            subtitle: "Public creator events scheduled for later.",
             feedItems: upcomingDiscoveryItems,
             events: homeUpcomingEvents,
             emptyTitle: "No upcoming public events yet",
-            emptyText: "Scheduled public creator events will appear here when they are backed.",
-          })}
-
-          {renderCreatorVideoRail({
-            title: "Latest Public Uploads",
-            subtitle: "Fresh public creator uploads only; no drafts, private videos, or protected playback.",
-            videos: latestPublicVideos,
-            loading: homeDiscoveryLoading,
-            emptyTitle: "No public uploads ready",
-            emptyText: "Creator uploads appear here only after they are public and moderation-safe.",
-            keyPrefix: "latest-public-video",
+            emptyText: "Scheduled public creator events will appear here when available.",
           })}
 
           <NativeAdSlot
@@ -1301,99 +1053,6 @@ export default function HomeScreen() {
             routePath="/"
             forbiddenContexts={HOME_NATIVE_AD_FORBIDDEN_CONTEXTS}
           />
-
-          {homeConfig.railOrder.map((railKey) => {
-            if (!homeConfig.enabledRails[railKey]) return null;
-
-            if (railKey === "top_picks") {
-              return renderDiscoveryRail(topPicksRail.title, topPicksRail.data, "top-picks");
-            }
-
-            if (railKey === "browse") {
-              return renderDiscoveryRail(
-                String(homeConfig.browseCategoryLabel ?? "").trim() || "Browse",
-                browseTitles,
-                "browse",
-              );
-            }
-
-            if (railKey === "continue_watching") {
-              if (!canShowContinueWatching || !continueWatchingTitles.length) return null;
-              return renderDiscoveryRail("Continue Watching", continueWatchingTitles, "continue-watching");
-            }
-
-            if (railKey === "favorites") {
-              if (!featureConfig.favoritesEnabled) return null;
-
-              return (
-                <View key="favorites" style={styles.section}>
-                  <Text style={styles.sectionTitle}>Favorites</Text>
-
-                  {myListLoading ? (
-                    <View style={styles.myListLoadingWrap}>
-                      <ActivityIndicator color="#E50914" />
-                    </View>
-                  ) : !favoriteTitles.length ? (
-                    <Text style={styles.myListEmpty}>Saved titles land here.</Text>
-                  ) : (
-                    <FlatList
-                      horizontal
-                      data={favoriteTitles}
-                      keyExtractor={(item, idx) => `${item.id}-${idx}`}
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.myListRow}
-                      renderItem={({ item }) => {
-                        const cardImage = getImageUri(item);
-                        const infoLine = buildDiscoveryInfoLine(item);
-                        const addedLabel = formatAddedDate(item.created_at);
-                        const liveMetadata = titleLiveMetadataById[String(item.id)];
-
-                        return (
-                          <View style={styles.myListCard}>
-                            <TouchableOpacity style={styles.myListPosterWrap} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
-                              {cardImage ? (
-                                <Image source={cardImage} style={styles.myListImage} />
-                              ) : (
-                                <View style={styles.myListFallback} />
-                              )}
-                            </TouchableOpacity>
-                            <Text style={styles.myListTitle} numberOfLines={1}>{item.title}</Text>
-                            <Text style={styles.myListMeta} numberOfLines={1}>{infoLine}</Text>
-                            <Text style={styles.myListDate} numberOfLines={1}>{addedLabel}</Text>
-                            {liveMetadata?.liveRoomCount ? (
-                              <View style={styles.myListLiveMetaRow}>
-                                <Text style={styles.myListLiveMetaText}>
-                                  {liveMetadata.commentCount} comment{liveMetadata.commentCount === 1 ? "" : "s"}
-                                </Text>
-                                {liveMetadata.reactionsEnabled ? (
-                                  <Text style={styles.myListLiveMetaText}>Reactions live</Text>
-                                ) : null}
-                              </View>
-                            ) : null}
-                            <TouchableOpacity style={styles.myListRemoveBtn} onPress={() => removeFromMyList(item)} activeOpacity={0.85}>
-                              <Text style={styles.myListRemoveText}>Remove</Text>
-                            </TouchableOpacity>
-                          </View>
-                        );
-                      }}
-                    />
-                  )}
-                </View>
-              );
-            }
-
-            return null;
-          })}
-
-          {renderCreatorVideoRail({
-            title: "Chi'llwood Originals",
-            subtitle: "Published public-safe originals from Rachi's official Platform.",
-            videos: rachiOriginals,
-            loading: homeDiscoveryLoading,
-            emptyTitle: "No Chi'llwood Originals yet",
-            emptyText: "Rachi Originals appear here only after official content is published and public-safe.",
-            keyPrefix: "rachi-original",
-          })}
 
         </ScrollView>
       )}
@@ -1444,57 +1103,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-  },
-  homePulseCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.16)",
-    backgroundColor: "rgba(9,12,20,0.82)",
-    paddingHorizontal: 17,
-    paddingVertical: 15,
-    gap: 9,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-  },
-  homePulseKicker: {
-    color: "#9AA8C4",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.1,
-  },
-  homePulseTitle: {
-    color: "#F5F8FF",
-    fontSize: 18,
-    lineHeight: 22,
-    fontWeight: "900",
-  },
-  homePulseBody: {
-    color: "#C4CFE2",
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontWeight: "600",
-  },
-  homePulseMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  homePulsePill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  homePulsePillText: {
-    color: "#E2E9F7",
-    fontSize: 11,
-    fontWeight: "800",
   },
   utilitySettingsButton: {
     minHeight: 36,
@@ -1782,20 +1390,47 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     gap: 10,
   },
-  rachiUpdateHeader: {
+  rachiIdentityRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
+    gap: 11,
   },
-  rachiUpdateKicker: {
-    flex: 1,
-    color: "#FFEAF0",
-    fontSize: 11,
+  rachiAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(220,20,60,0.28)",
+  },
+  rachiAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  rachiAvatarInitial: {
+    color: "#fff",
+    fontSize: 18,
     fontWeight: "900",
-    textTransform: "uppercase",
   },
-  rachiUpdatePill: {
+  rachiIdentityCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  rachiNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  rachiName: {
+    color: "#FFF6F8",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  rachiOfficialBadge: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
@@ -1803,7 +1438,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
-  rachiUpdatePillText: {
+  rachiOfficialBadgeText: {
     color: "#F9FBFF",
     fontSize: 10.5,
     fontWeight: "900",

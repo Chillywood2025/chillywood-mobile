@@ -25,6 +25,7 @@ import {
   type UserChannelProfile,
   type WatchProgressEntry,
 } from "../../_lib/userData";
+import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
 import type { Tables } from "../../supabase/database.types";
 
 type TitleRow = Pick<
@@ -168,7 +169,7 @@ export default function MyListScreen() {
 
       const expectedRows = savedIds.length + progressIds.length + followedIds.length;
       const resolvedRows = nextSavedTitles.length + nextContinueTitles.length + nextPlatformProfiles.filter(Boolean).length;
-      setErrorMsg(expectedRows > 0 && resolvedRows === 0 ? "Library rows exist, but the public read-back could not resolve them right now." : null);
+      setErrorMsg(expectedRows > 0 && resolvedRows === 0 ? "Some Library items could not be shown right now." : null);
     } catch {
       setSavedTitles([]);
       setContinueWatching([]);
@@ -308,10 +309,11 @@ export default function MyListScreen() {
             contentContainerStyle={styles.content}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
           >
+            <MainTabTopBar surface="library" label="LIBRARY" style={styles.mainTabTopBar} />
             <View style={styles.headerBlock}>
               <Text style={styles.header}>Library</Text>
               <Text style={styles.headerBody}>
-                Your backed saved titles, watch progress, and followed Platforms live here. Replays, events, and clips stay hidden until saved rows exist.
+                Your saved titles, watch progress, and followed Platforms live here. Replays, events, and clips appear when they are saved.
               </Text>
               <View style={styles.libraryScopeRow}>
                 <View style={styles.scopePill}>
@@ -341,7 +343,7 @@ export default function MyListScreen() {
 
             {renderLibrarySection(
               "Saved",
-              `${savedTitleCount} backed`,
+              `${savedTitleCount} saved`,
               savedTitleCount > 0,
               "No saved titles yet",
               "Save a title from Home or Explore and it will appear here.",
@@ -350,7 +352,7 @@ export default function MyListScreen() {
 
             {renderLibrarySection(
               "Continue Watching",
-              `${continueWatchingCount} backed`,
+              `${continueWatchingCount} ready`,
               continueWatchingCount > 0,
               "No watch progress yet",
               "Titles appear here only after playback writes progress for your account or this device.",
@@ -359,25 +361,25 @@ export default function MyListScreen() {
 
             {renderLibrarySection(
               "Platforms",
-              `${followedPlatformCount} backed`,
+              `${followedPlatformCount} followed`,
               followedPlatformCount > 0,
               "No followed Platforms yet",
-              "Follow a public Platform and its public profile read-back will appear here.",
+              "Follow a public Platform and it will appear here.",
               renderPlatformRail(),
             )}
 
             {!hasLibraryRows ? (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>Your Library is ready when you are</Text>
+                <Text style={styles.emptyTitle}>Nothing saved yet</Text>
                 <Text style={styles.emptyText}>
-                  Saved titles, progress, and followed Platforms will appear only after real rows exist.
+                  Saved titles, progress, and followed Platforms will appear here.
                 </Text>
                 <TouchableOpacity
                   style={styles.emptyButton}
                   activeOpacity={0.86}
                   onPress={() => router.push("/(tabs)/explore")}
                 >
-                  <Text style={styles.emptyButtonText}>Browse Explore</Text>
+                  <Text style={styles.emptyButtonText}>Explore</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -417,6 +419,9 @@ const styles = StyleSheet.create({
     paddingBottom: 96,
     paddingTop: 10,
     gap: 14,
+  },
+  mainTabTopBar: {
+    marginBottom: 2,
   },
   headerBlock: {
     gap: 9,

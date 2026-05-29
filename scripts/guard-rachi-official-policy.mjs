@@ -26,6 +26,7 @@ const profile = read("app/profile/[userId].tsx");
 const channel = read("app/channel/[userId].tsx");
 const chatInbox = read("app/chat/index.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
+const creatorVideoCard = read("components/creator-media/creator-video-card.tsx");
 const migration = read("supabase/migrations/202605260008_rachi_official_posts.sql");
 const profileImageMigration = read("supabase/migrations/202605260009_rachi_official_profile_image.sql");
 const profileMediaStorageMigration = read("supabase/migrations/202605260010_rachi_official_profile_media_storage.sql");
@@ -91,8 +92,16 @@ assertIncludes(admin, "Official upload-as-Rachi remains a separate backend-safe 
 
 assertIncludes(home, "readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId", "Home Rachi posts read");
 assertIncludes(home, "readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId", "Home Rachi Originals read");
+assertIncludes(home, "readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId", "Home Rachi backed avatar read");
 assertIncludes(home, "Chi'llwood Originals", "Home Originals rail");
-assertIncludes(home, "Only real public Rachi posts appear here.", "no fake Rachi posts copy");
+assertIncludes(home, "Rachi Official Updates", "Home Rachi updates rail");
+assertIncludes(home, "rachiIdentityRow", "Home Rachi identity row");
+assertIncludes(home, "rachiOfficialAvatarUrl", "Home Rachi avatar or official fallback");
+assertIncludes(home, "Official Chi&apos;llwood", "Home Rachi official identity label");
+assertIncludes(home, "Public Rachi posts appear here after they are published.", "no fake Rachi posts copy");
+assertIncludes(creatorVideoCard, "isOfficialRachiInternalProofFixture", "Rachi public fixture display cleanup");
+assertIncludes(creatorVideoCard, "Official Chi'llwood Original from Rachi.", "Rachi public fixture production copy");
+assertIncludes(creatorVideoCard, "video.ownerId === RACHI_OFFICIAL_USER_ID", "Rachi fixture cleanup scoped to official Rachi rows");
 assertIncludes(publicCreatorVideoCardsFunction, 'RACHI_OFFICIAL_USER_ID = "platform_rachi_official"', "public card resolver official Rachi id");
 assertIncludes(publicCreatorVideoCardsFunction, "readPublishedOfficialRachiOriginalVideoIds", "public card resolver official Rachi link read");
 assertIncludes(publicCreatorVideoCardsFunction, '.eq("status", "published")', "public card resolver published-only Rachi links");

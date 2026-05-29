@@ -9,6 +9,7 @@ import {
 
 import type { CreatorVideo } from "../../_lib/creatorVideos";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import { RACHI_OFFICIAL_USER_ID } from "../../_lib/officialAccounts";
 import {
   formatClipStudioTemplateLabel,
   type ClipStudioEdit,
@@ -73,6 +74,8 @@ const TIMESTAMP_TITLE_REGEXES = [
   /^\d{4}[\s_.-]?\d{2}[\s_.-]?\d{2}[\s_.-]?\d{2}[\s_.-]?\d{2}(?:[\s_.-]?\d{2})?$/i,
   /^(?:img|vid|video|mov|dsc|dscn|pxl|screenrecording|screen_recording|rp(?:replay)?_final)[\s_.-]*\d+/i,
 ];
+
+const INTERNAL_PROOF_TEXT_REGEX = /\b(?:proof|fixture)\b/i;
 
 const formatCreatorVideoDisplayTitle = (value: string) => {
   const originalTitle = String(value ?? "").trim();
@@ -145,6 +148,13 @@ export function CreatorVideoCard({
   const publicTitleOverlaySubtitle = publicClipMetadata?.subtitleText.trim() ?? "";
   const hasPublicTitleOverlay = !!(publicTitleOverlayText || publicTitleOverlaySubtitle);
   const publicTemplateLabel = formatPublicClipTemplateLabel(publicClipMetadata?.templatePreset ?? null);
+  const isOfficialRachiInternalProofFixture = !ownerMode
+    && video.ownerId === RACHI_OFFICIAL_USER_ID
+    && INTERNAL_PROOF_TEXT_REGEX.test(`${video.title} ${video.description}`);
+  const publicDisplayTitle = isOfficialRachiInternalProofFixture ? "Chi'llwood Original" : displayTitle;
+  const publicDescription = isOfficialRachiInternalProofFixture
+    ? "Official Chi'llwood Original from Rachi."
+    : (video.description || "Open this creator video in the Chi'llywood Player.");
 
   return (
     <View style={[styles.card, !playable && styles.cardUnavailable]}>
@@ -159,7 +169,7 @@ export function CreatorVideoCard({
         ) : (
           <View style={styles.fallbackPreview}>
             <Text style={styles.fallbackKicker}>{"CHI'LLYWOOD CREATOR"}</Text>
-            <Text style={styles.fallbackTitle} numberOfLines={2}>{displayTitle}</Text>
+            <Text style={styles.fallbackTitle} numberOfLines={2}>{publicDisplayTitle}</Text>
           </View>
         )}
         <View style={styles.previewShade} />
@@ -232,9 +242,9 @@ export function CreatorVideoCard({
       </TouchableOpacity>
 
       <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={2}>{displayTitle}</Text>
+        <Text style={styles.title} numberOfLines={2}>{publicDisplayTitle}</Text>
         <Text style={styles.description} numberOfLines={2}>
-          {video.description || "Open this creator video in the Chi'llywood Player."}
+          {publicDescription}
         </Text>
         {meta.length ? (
           <Text style={styles.meta} numberOfLines={1}>{meta.join(" · ")}</Text>
