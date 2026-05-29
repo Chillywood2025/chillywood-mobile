@@ -99,9 +99,16 @@ assertIncludes(home, 'testID="home-branded-hero"', "Home branded hero fallback")
 assertIncludes(home, 'testID="home-continue-watching-hero"', "Home Continue Watching hero");
 assertIncludes(home, 'testID="home-continue-watching-hero-action"', "Home Continue Watching hero action");
 assertIncludes(home, "const continueWatchingHeroItem = canShowContinueWatching ? continueCandidates[0] ?? null : null", "Home hero reads only eligible Continue Watching candidates");
+assertIncludes(home, "HOME_CONTINUE_MIN_POSITION_MILLIS = 10_000", "Home Continue Watching minimum watch threshold");
 assertIncludes(home, "HOME_CONTINUE_COMPLETION_THRESHOLD = 0.94", "Home Continue Watching completion threshold");
 assertIncludes(home, "isEligibleContinueWatchingProgress", "Home Continue Watching eligibility helper");
+assertIncludes(home, "position < HOME_CONTINUE_MIN_POSITION_MILLIS", "Home tiny progress excluded");
 assertIncludes(home, "position / duration < HOME_CONTINUE_COMPLETION_THRESHOLD", "Home completed titles excluded");
+assertIncludes(home, "isAvailableContinueWatchingTitle", "Home Continue Watching title availability helper");
+assertIncludes(home, "HOME_CONTINUE_BLOCKED_TITLE_STATUSES", "Home blocked title status set");
+assertIncludes(home, "HOME_CONTINUE_BLOCKED_ACCESS_RULES", "Home blocked access rule set");
+assertIncludes(home, "getContinueLastWatchedAt", "Home last watched sort helper");
+assertIncludes(home, "return bLastWatchedAt - aLastWatchedAt", "Home Continue Watching most recent sort");
 assertIncludes(home, "getContinueWatchingProgressPercent", "Home Continue Watching progress bar helper");
 assertIncludes(explore, 'surface="explore"', "Explore top Profile/Settings entry");
 assertIncludes(liveTab, 'surface="live"', "Live top Profile/Settings entry");

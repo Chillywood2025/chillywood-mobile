@@ -68,11 +68,14 @@ type TitleRow = Omit<
     | "synopsis"
     | "poster_url"
     | "video_url"
+    | "content_access_rule"
     | "featured"
     | "is_hero"
     | "is_trending"
+    | "is_published"
     | "pin_to_top_row"
     | "sort_order"
+    | "status"
   >,
   "created_at"
 > & {
@@ -87,7 +90,27 @@ type HomeActiveTitleRoomRow = Pick<
 >;
 
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
+const HOME_CONTINUE_MIN_POSITION_MILLIS = 10_000;
 const HOME_CONTINUE_COMPLETION_THRESHOLD = 0.94;
+const HOME_CONTINUE_BLOCKED_TITLE_STATUSES = new Set([
+  "archived",
+  "blocked",
+  "deleted",
+  "draft",
+  "private",
+  "removed",
+  "restricted",
+  "scheduled",
+  "unpublished",
+]);
+const HOME_CONTINUE_BLOCKED_ACCESS_RULES = new Set([
+  "blocked",
+  "deleted",
+  "private",
+  "removed",
+  "restricted",
+  "ticketed",
+]);
 const HOME_NATIVE_AD_FORBIDDEN_CONTEXTS = {
   activeVideoPlayback: false,
   activeLiveKitRoom: false,
@@ -116,12 +139,30 @@ const buildDiscoveryInfoLine = (item: TitleRow) => {
 
 const isEligibleContinueWatchingProgress = (entry?: WatchProgressMap[string]) => {
   const position = Number(entry?.positionMillis ?? 0);
-  if (!Number.isFinite(position) || position <= 0) return false;
+  if (!Number.isFinite(position) || position < HOME_CONTINUE_MIN_POSITION_MILLIS) return false;
 
   const duration = Number(entry?.durationMillis ?? 0);
   if (!Number.isFinite(duration) || duration <= 0) return true;
 
   return position / duration < HOME_CONTINUE_COMPLETION_THRESHOLD;
+};
+
+const isAvailableContinueWatchingTitle = (item: TitleRow) => {
+  if (!String(item.id ?? "").trim()) return false;
+  if (item.is_published === false) return false;
+
+  const status = String(item.status ?? "").trim().toLowerCase();
+  if (HOME_CONTINUE_BLOCKED_TITLE_STATUSES.has(status)) return false;
+
+  const accessRule = String(item.content_access_rule ?? "").trim().toLowerCase();
+  if (HOME_CONTINUE_BLOCKED_ACCESS_RULES.has(accessRule)) return false;
+
+  return true;
+};
+
+const getContinueLastWatchedAt = (entry?: WatchProgressMap[string]) => {
+  const timestamp = Number(entry?.updatedAt ?? 0);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 };
 
 const getContinueWatchingProgressPercent = (entry?: WatchProgressMap[string]) => {
@@ -187,7 +228,7 @@ export default function HomeScreen() {
     const { data, error } = await supabase
       .from("titles")
       .select(
-        "id, title, category, year, runtime, synopsis, poster_url, created_at, featured, is_hero, is_trending, pin_to_top_row, sort_order",
+        "id, title, category, year, runtime, synopsis, poster_url, content_access_rule, created_at, featured, is_hero, is_trending, is_published, pin_to_top_row, sort_order, status",
       )
       .order("created_at", { ascending: false })
       .returns<TitleRow[]>();
@@ -444,13 +485,14 @@ export default function HomeScreen() {
   const continueCandidates = useMemo(() => {
     return titles
       .filter((item) => {
+        if (!isAvailableContinueWatchingTitle(item)) return false;
         const progressEntry = watchProgress[String(item.id)];
         return isEligibleContinueWatchingProgress(progressEntry);
       })
       .sort((a, b) => {
-        const aUpdated = watchProgress[String(a.id)]?.updatedAt ?? 0;
-        const bUpdated = watchProgress[String(b.id)]?.updatedAt ?? 0;
-        return bUpdated - aUpdated;
+        const aLastWatchedAt = getContinueLastWatchedAt(watchProgress[String(a.id)]);
+        const bLastWatchedAt = getContinueLastWatchedAt(watchProgress[String(b.id)]);
+        return bLastWatchedAt - aLastWatchedAt;
       });
   }, [titles, watchProgress]);
 
