@@ -59,6 +59,7 @@ assertIncludes(liveTab, "Pick something first, then watch together.", "Find Cont
 assertIncludes(liveTab, "Party Room stays separate", "Party Room separation");
 assertIncludes(liveTab, "requireLiveFirstPremium", "Live tab Premium/runtime preflight");
 assertIncludes(liveTab, 'params: { mode: "live", source: "bottom-live-tab" }', "Live tab route mapping");
+assertIncludes(liveTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Live tab Chi'llwood background");
 [
   "This opens the existing Live Waiting Room",
   "keeps Live Stage ownership unchanged",
@@ -72,10 +73,12 @@ assertIncludes(libraryTab, "Library", "Library label");
 assertIncludes(libraryTab, "Other Library sections will appear only when real saved items exist.", "no fake Library sections");
 assertIncludes(libraryTab, "Saved titles live here now.", "Library backed scope copy");
 assertIncludes(libraryTab, "Following, replays, events, clips", "Library future scope copy");
+assertIncludes(libraryTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Library Chi'llwood background");
 assertIncludes(explore, "Search public-safe titles now.", "Explore current scope copy");
 assertIncludes(explore, "EXPLORE_BACKED_NOW", "Explore backed section list");
 assertIncludes(explore, "EXPLORE_FUTURE_SCOPE", "Explore future plan copy");
 assertIncludes(explore, "Backed titles", "Explore no fake global count copy");
+assertIncludes(explore, "CHILLYWOOD_BACKGROUND_SOURCE", "Explore Chi'llwood fallback background");
 assertIncludes(home, 'accessibilityLabel="Open your Profile"', "Home Profile affordance");
 assertIncludes(home, 'pathname: "/profile/[userId]"', "Home top Profile route");
 assertIncludes(player, 'surfaceLabel="Watch-Party Live"', "Player Watch-Party Live surface label");

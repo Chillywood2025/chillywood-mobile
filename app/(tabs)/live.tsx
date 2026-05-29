@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -21,6 +21,8 @@ type LiveEntry = {
   onPress: () => void;
   tone?: "primary" | "secondary";
 };
+
+const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
 
 export default function LiveTabScreen() {
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -81,91 +83,102 @@ export default function LiveTabScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroHeader}>
-          <View style={styles.heroTopRow}>
-            <Text style={styles.kicker}>LIVE HUB</Text>
-            <View style={styles.statusPill}>
-              <View style={styles.statusDot} />
-              <Text style={styles.statusPillText}>Ready</Text>
-            </View>
-          </View>
-          <Text style={styles.title}>Live</Text>
-          <Text style={styles.heroSubtitle}>Choose how you want to go live or watch together.</Text>
-          <View style={styles.choiceChipRow}>
-            <View style={styles.choiceChip}><Text style={styles.choiceChipText}>People-first</Text></View>
-            <View style={styles.choiceChip}><Text style={styles.choiceChipText}>Watch together</Text></View>
-            <View style={styles.choiceChip}><Text style={styles.choiceChipText}>Browse first</Text></View>
-          </View>
-        </View>
-
-        <View style={styles.actionList}>
-          {entries.map((entry) => (
-            <View key={entry.title} style={[styles.compactActionCard, entry.tone === "primary" && styles.primaryActionCard]}>
-              <View style={styles.actionRow}>
-                <View style={[styles.iconBadge, entry.tone === "primary" && styles.iconBadgePrimary]}>
-                  <MaterialIcons name={entry.icon} size={21} color="#FFFFFF" />
-                </View>
-                <View style={styles.actionCopy}>
-                  <View style={styles.actionTitleRow}>
-                    <Text style={styles.cardTitle}>{entry.title}</Text>
-                    <View style={styles.smallStatusPill}>
-                      <Text style={styles.smallStatusPillText}>{entry.status}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.cardSubtitle}>{entry.subtitle}</Text>
-                  <Text style={styles.cardBody}>{entry.body}</Text>
-                </View>
+    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.screenBackground} resizeMode="cover">
+      <View style={styles.backgroundOverlay} pointerEvents="none" />
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.heroHeader}>
+            <View style={styles.heroTopRow}>
+              <Text style={styles.kicker}>LIVE HUB</Text>
+              <View style={styles.statusPill}>
+                <View style={styles.statusDot} />
+                <Text style={styles.statusPillText}>Ready</Text>
               </View>
-              <Pressable
-                style={[styles.cardButton, entry.tone === "primary" ? styles.primaryButton : styles.secondaryButton]}
-                onPress={entry.onPress}
-                accessibilityRole="button"
-                accessibilityLabel={entry.action}
-              >
-                <Text style={[styles.cardButtonText, entry.tone !== "primary" && styles.secondaryButtonText]}>{entry.action}</Text>
-              </Pressable>
             </View>
-          ))}
-        </View>
+            <Text style={styles.title}>Live</Text>
+            <Text style={styles.heroSubtitle}>Choose how you want to go live or watch together.</Text>
+            <View style={styles.choiceChipRow}>
+              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>People-first</Text></View>
+              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>Watch together</Text></View>
+              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>Browse first</Text></View>
+            </View>
+          </View>
 
-        <View style={styles.disclosureCard}>
-          <Pressable
-            style={styles.disclosureHeader}
-            onPress={() => setDetailsOpen((current) => !current)}
-            accessibilityRole="button"
-            accessibilityLabel={detailsOpen ? "Hide how Live works" : "Show how Live works"}
-          >
-            <View>
-              <Text style={styles.disclosureTitle}>How Live works</Text>
-              <Text style={styles.disclosureSubtitle}>A quick guide to each live path.</Text>
-            </View>
-            <MaterialIcons name={detailsOpen ? "expand-less" : "expand-more"} size={26} color="#FFFFFF" />
-          </Pressable>
-          {detailsOpen ? (
-            <View style={styles.detailList}>
-              <Text style={styles.detailText}>Live Watch-Party is for people-first live rooms.</Text>
-              <Text style={styles.detailText}>Watch-Party Live is for watching content together.</Text>
-              <Text style={styles.detailText}>Find Content lets you start from a title or creator video.</Text>
-              <Text style={styles.detailText}>Party Room stays separate after a watch party is created.</Text>
-            </View>
-          ) : null}
-        </View>
+          <View style={styles.actionList}>
+            {entries.map((entry) => (
+              <View key={entry.title} style={[styles.compactActionCard, entry.tone === "primary" && styles.primaryActionCard]}>
+                <View style={styles.actionRow}>
+                  <View style={[styles.iconBadge, entry.tone === "primary" && styles.iconBadgePrimary]}>
+                    <MaterialIcons name={entry.icon} size={21} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.actionCopy}>
+                    <View style={styles.actionTitleRow}>
+                      <Text style={styles.cardTitle}>{entry.title}</Text>
+                      <View style={styles.smallStatusPill}>
+                        <Text style={styles.smallStatusPillText}>{entry.status}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.cardSubtitle}>{entry.subtitle}</Text>
+                    <Text style={styles.cardBody}>{entry.body}</Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={[styles.cardButton, entry.tone === "primary" ? styles.primaryButton : styles.secondaryButton]}
+                  onPress={entry.onPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={entry.action}
+                >
+                  <Text style={[styles.cardButtonText, entry.tone !== "primary" && styles.secondaryButtonText]}>{entry.action}</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
 
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateTitle}>Live discovery</Text>
-          <Text style={styles.emptyStateBody}>Backed public live rooms and events can appear here later. Nothing is filled with fake activity.</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.disclosureCard}>
+            <Pressable
+              style={styles.disclosureHeader}
+              onPress={() => setDetailsOpen((current) => !current)}
+              accessibilityRole="button"
+              accessibilityLabel={detailsOpen ? "Hide how Live works" : "Show how Live works"}
+            >
+              <View>
+                <Text style={styles.disclosureTitle}>How Live works</Text>
+                <Text style={styles.disclosureSubtitle}>A quick guide to each live path.</Text>
+              </View>
+              <MaterialIcons name={detailsOpen ? "expand-less" : "expand-more"} size={26} color="#FFFFFF" />
+            </Pressable>
+            {detailsOpen ? (
+              <View style={styles.detailList}>
+                <Text style={styles.detailText}>Live Watch-Party is for people-first live rooms.</Text>
+                <Text style={styles.detailText}>Watch-Party Live is for watching content together.</Text>
+                <Text style={styles.detailText}>Find Content lets you start from a title or creator video.</Text>
+                <Text style={styles.detailText}>Party Room stays separate after a watch party is created.</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>Live discovery</Text>
+            <Text style={styles.emptyStateBody}>Backed public live rooms and events can appear here later. Nothing is filled with fake activity.</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  screenBackground: {
     flex: 1,
     backgroundColor: "#050505",
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.66)",
+  },
+  safe: {
+    flex: 1,
+    backgroundColor: "transparent",
   },
   content: {
     paddingHorizontal: 16,

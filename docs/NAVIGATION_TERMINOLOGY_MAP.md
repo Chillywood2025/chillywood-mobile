@@ -69,6 +69,7 @@ Current implementation:
 - Searches and filters `titles` only.
 - Shows backed title metadata, featured/trending/top-row flags, and live-now title-room cues where available.
 - The header now separates `Available now` from `Next discovery phase` so users see the backed scope without fake global discovery.
+- Explore uses backed hero/title imagery when present and falls back to the Chi'llwood branded background when no backed hero image is available.
 - Does not invent creator, upload, event, live-room, or Rachi results.
 
 Recommended next Explore phase:
@@ -83,6 +84,7 @@ Implemented status:
 - Current backed content remains saved titles only.
 - Header scope pills show saved-title count and future My Stuff scope.
 - Empty state says other Library sections appear only when real saved items exist.
+- The Library route uses the Chi'llwood branded background behind the compact saved-title surface.
 
 Recommended Library/My Stuff phase:
 - Saved titles.
@@ -124,6 +126,7 @@ Audit result:
 Implemented status:
 - The Live tab at `app/(tabs)/live.tsx` is a modern compact launcher.
 - It uses these named patterns: Hero header, Compact action cards, Action rows, Status pills, Choice chips, Progressive disclosure, Collapsible details, Empty state, Primary CTA, and Secondary CTA.
+- It renders over the Chi'llwood branded background so the Live route does not fall back to a plain black shell.
 - Main cards use one-sentence copy: `Live Watch-Party` is people-first, `Watch-Party Live` is for room codes/content watch-together, and `Find Content` starts from content discovery.
 - Long technical copy such as route ownership and waiting-room internals is removed from the main cards.
 

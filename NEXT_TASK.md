@@ -17,6 +17,7 @@ Closed truth:
 - Live Watch-Party routes through the existing `/watch-party?mode=live` waiting-room flow.
 - Watch-Party Live remains content/player-owned; the Live tab can join by code and points new content-first starts to Explore/title/Player.
 - Hidden Profile tab compatibility route still hands off to canonical `/profile/[userId]` when opened directly, but it is not rendered in the bottom bar.
+- Follow-up background polish keeps the new normal viewer routes on-brand: Live and Library render over the Chi'llwood branded background, and Explore falls back to that branded background when no backed hero title image is available.
 - `My List` is renamed to `Library`, but current backed content remains saved titles only.
 - Explore remains title search/filtering only and now shows a compact `Available now` / `Next discovery phase` map. Titles, featured/top-row programming, and live title-room cues are backed now; Platforms, public uploads, public live rooms, events, Chi'llwood Originals, and Rachi updates stay planned until backed.
 - Library remains saved-title-only and now has saved-title scope pills plus future My Stuff copy for following, replays, events, and clips without creating fake rows.

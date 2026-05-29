@@ -4,6 +4,7 @@ import {
     ActivityIndicator,
     FlatList,
     Image,
+    ImageBackground,
     type ImageSourcePropType,
     RefreshControl,
     StyleSheet,
@@ -22,6 +23,8 @@ type TitleRow = Pick<
   Tables<"titles">,
   "id" | "title" | "category" | "year" | "runtime" | "synopsis" | "poster_url"
 >;
+
+const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
 
 export default function MyListScreen() {
   const [loading, setLoading] = useState(true);
@@ -119,97 +122,104 @@ export default function MyListScreen() {
     router.push(`/title/${safeId}`);
   }, []);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          <ActivityIndicator color="#E50914" />
-          <Text style={styles.loadingText}>Loading Library…</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.safe}>
-      <FlatList
-        data={items}
-        keyExtractor={(item, index) => `${item.id}-${index}`}
-        numColumns={2}
-        columnWrapperStyle={styles.gridRow}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
-        ListHeaderComponent={
-          <View style={styles.headerBlock}>
-            <Text style={styles.header}>Library</Text>
-            <Text style={styles.headerBody}>
-              Saved titles live here now. Following, replays, events, clips, and broader My Stuff sections appear only after real saved rows exist.
-            </Text>
-            <View style={styles.libraryScopeRow}>
-              <View style={styles.scopePill}>
-                <Text style={styles.scopePillValue}>{savedTitleCount}</Text>
-                <Text style={styles.scopePillLabel}>Saved titles</Text>
-              </View>
-              <View style={[styles.scopePill, styles.scopePillMuted]}>
-                <Text style={styles.scopePillValue}>Future</Text>
-                <Text style={styles.scopePillLabel}>Platforms, replays, events, clips</Text>
-              </View>
-            </View>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Saved</Text>
-              <Text style={styles.sectionMeta}>Backed now</Text>
-            </View>
+    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.screenBackground} resizeMode="cover">
+      <View style={styles.backgroundOverlay} pointerEvents="none" />
+      <SafeAreaView style={styles.safe}>
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color="#E50914" />
+            <Text style={styles.loadingText}>Loading Library…</Text>
           </View>
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>
-              {errorMsg ? "Library couldn’t refresh" : "Your Library is ready when you are"}
-            </Text>
-            <Text style={styles.emptyText}>
-              {errorMsg
-                ? errorMsg
-                : "Save a title from Home or Explore and it will appear here. Other Library sections will appear only when real saved items exist."}
-            </Text>
-            {errorMsg ? (
-              <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={onRefresh}>
-                <Text style={styles.emptyButtonText}>Retry</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.emptyButton}
-                activeOpacity={0.86}
-                onPress={() => router.push("/(tabs)/explore")}
-              >
-                <Text style={styles.emptyButtonText}>Browse Titles</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        }
-        renderItem={({ item }) => {
-          const source = getImageSource(item);
-          return (
-            <TouchableOpacity style={styles.card} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
-              {source ? (
-                <Image source={source} style={styles.poster} />
-              ) : (
-                <View style={styles.posterFallback} />
-              )}
-              <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
-              <Text style={styles.meta} numberOfLines={1}>{item.runtime || item.category || "Saved"}</Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
-    </SafeAreaView>
+        ) : (
+          <FlatList
+            data={items}
+            keyExtractor={(item, index) => `${item.id}-${index}`}
+            numColumns={2}
+            columnWrapperStyle={styles.gridRow}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
+            ListHeaderComponent={
+              <View style={styles.headerBlock}>
+                <Text style={styles.header}>Library</Text>
+                <Text style={styles.headerBody}>
+                  Saved titles live here now. Following, replays, events, clips, and broader My Stuff sections appear only after real saved rows exist.
+                </Text>
+                <View style={styles.libraryScopeRow}>
+                  <View style={styles.scopePill}>
+                    <Text style={styles.scopePillValue}>{savedTitleCount}</Text>
+                    <Text style={styles.scopePillLabel}>Saved titles</Text>
+                  </View>
+                  <View style={[styles.scopePill, styles.scopePillMuted]}>
+                    <Text style={styles.scopePillValue}>Future</Text>
+                    <Text style={styles.scopePillLabel}>Platforms, replays, events, clips</Text>
+                  </View>
+                </View>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>Saved</Text>
+                  <Text style={styles.sectionMeta}>Backed now</Text>
+                </View>
+              </View>
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>
+                  {errorMsg ? "Library couldn’t refresh" : "Your Library is ready when you are"}
+                </Text>
+                <Text style={styles.emptyText}>
+                  {errorMsg
+                    ? errorMsg
+                    : "Save a title from Home or Explore and it will appear here. Other Library sections will appear only when real saved items exist."}
+                </Text>
+                {errorMsg ? (
+                  <TouchableOpacity style={styles.emptyButton} activeOpacity={0.86} onPress={onRefresh}>
+                    <Text style={styles.emptyButtonText}>Retry</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.emptyButton}
+                    activeOpacity={0.86}
+                    onPress={() => router.push("/(tabs)/explore")}
+                  >
+                    <Text style={styles.emptyButtonText}>Browse Titles</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            }
+            renderItem={({ item }) => {
+              const source = getImageSource(item);
+              return (
+                <TouchableOpacity style={styles.card} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
+                  {source ? (
+                    <Image source={source} style={styles.poster} />
+                  ) : (
+                    <View style={styles.posterFallback} />
+                  )}
+                  <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
+                  <Text style={styles.meta} numberOfLines={1}>{item.runtime || item.category || "Saved"}</Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  screenBackground: {
     flex: 1,
     backgroundColor: "#050505",
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.66)",
+  },
+  safe: {
+    flex: 1,
+    backgroundColor: "transparent",
   },
   center: {
     flex: 1,

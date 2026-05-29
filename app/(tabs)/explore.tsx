@@ -112,6 +112,8 @@ const EXPLORE_BACKED_NOW = [
 const EXPLORE_FUTURE_SCOPE =
   "Platforms, creator videos, public live rooms, events, Chi'llywood Originals, and Rachi updates will join Explore only after backed discovery rows exist.";
 
+const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
+
 export default function ExploreScreen() {
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,7 +246,7 @@ export default function ExploreScreen() {
     return imageSource;
   }
 
-  const backgroundSource = getExploreImageSource(heroItem);
+  const backgroundSource = getExploreImageSource(heroItem) ?? CHILLYWOOD_BACKGROUND_SOURCE;
 
   const renderItem: ListRenderItem<TitleRow> = ({ item }) => {
     const imageSource = getExploreImageSource(item);
