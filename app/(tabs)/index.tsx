@@ -11,23 +11,13 @@ import {
 import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
-    resolveBrandingConfig,
     resolveFeatureConfig,
     resolveHomeConfig,
-    resolveMonetizationConfig,
 } from "../../_lib/appConfig";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
-import {
-    getRuntimeControlBlockedCopy,
-    isRuntimeControlBlockedAccess,
-    LIVE_FIRST_PREMIUM_UPSELL_COPY,
-    requireLiveFirstPremium,
-    type PremiumWatchPartyFeatureAccessDecision,
-} from "../../_lib/premiumWatchPartyAccess";
 
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     Image,
     ImageBackground,
@@ -63,7 +53,6 @@ import {
 import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
-import { AccessSheet } from "../../components/monetization/access-sheet";
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 
@@ -92,20 +81,13 @@ type TitleRow = Omit<
   video_thumbnail?: string | null;
 };
 
-type TitleLiveMetadata = {
-  liveRoomCount: number;
-  commentCount: number;
-  reactionsEnabled: boolean;
-};
-
-type WatchPartyRoomRow = Pick<
+type HomeActiveTitleRoomRow = Pick<
   Tables<"watch_party_rooms">,
-  "party_id" | "title_id" | "reactions_policy" | "is_active" | "last_activity_at" | "updated_at"
+  "party_id" | "title_id" | "is_active" | "last_activity_at" | "updated_at"
 >;
 
-type WatchPartyRoomMessageRow = Pick<Tables<"watch_party_room_messages">, "party_id">;
-
-const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
+const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
+const HOME_CONTINUE_COMPLETION_THRESHOLD = 0.94;
 const HOME_NATIVE_AD_FORBIDDEN_CONTEXTS = {
   activeVideoPlayback: false,
   activeLiveKitRoom: false,
@@ -123,23 +105,6 @@ const formatAddedDate = (value?: string | null) => {
   return `Added ${date.toLocaleDateString([], { month: "short", day: "numeric" })}`;
 };
 
-const toTimestamp = (value?: string | null) => {
-  const parsed = Date.parse(String(value ?? "").trim());
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const toProgramSortOrder = (value?: number | null) => (
-  typeof value === "number" && Number.isFinite(value) ? value : MAX_PROGRAM_SORT_ORDER
-);
-
-const sortTitlesByProgramTruth = (items: TitleRow[]) => {
-  return [...items].sort((a, b) => {
-    const sortDelta = toProgramSortOrder(a.sort_order) - toProgramSortOrder(b.sort_order);
-    if (sortDelta !== 0) return sortDelta;
-    return toTimestamp(b.created_at) - toTimestamp(a.created_at);
-  });
-};
-
 const buildDiscoveryInfoLine = (item: TitleRow) => {
   const segments = [
     String(item.category ?? "").trim() || "Title",
@@ -147,6 +112,31 @@ const buildDiscoveryInfoLine = (item: TitleRow) => {
   ].filter(Boolean);
 
   return segments.join(" • ");
+};
+
+const isEligibleContinueWatchingProgress = (entry?: WatchProgressMap[string]) => {
+  const position = Number(entry?.positionMillis ?? 0);
+  if (!Number.isFinite(position) || position <= 0) return false;
+
+  const duration = Number(entry?.durationMillis ?? 0);
+  if (!Number.isFinite(duration) || duration <= 0) return true;
+
+  return position / duration < HOME_CONTINUE_COMPLETION_THRESHOLD;
+};
+
+const getContinueWatchingProgressPercent = (entry?: WatchProgressMap[string]) => {
+  const position = Number(entry?.positionMillis ?? 0);
+  const duration = Number(entry?.durationMillis ?? 0);
+  if (!Number.isFinite(position) || position <= 0 || !Number.isFinite(duration) || duration <= 0) return 6;
+  return Math.max(2, Math.min(94, Math.round((position / duration) * 100)));
+};
+
+const formatContinueWatchingLabel = (entry?: WatchProgressMap[string]) => {
+  const duration = Number(entry?.durationMillis ?? 0);
+  if (Number.isFinite(duration) && duration > 0) {
+    return `${getContinueWatchingProgressPercent(entry)}% watched`;
+  }
+  return "In progress";
 };
 
 const formatFeedDate = (value?: string | null) => {
@@ -172,7 +162,7 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [currentChannel, setCurrentChannel] = useState<UserChannelProfile | null>(null);
   const [watchProgress, setWatchProgress] = useState<WatchProgressMap>({});
-  const [titleLiveMetadataById, setTitleLiveMetadataById] = useState<Record<string, TitleLiveMetadata>>({});
+  const [, setHomeActiveTitleRoomCount] = useState(0);
   const [homeLiveEvents, setHomeLiveEvents] = useState<CreatorEventSummary[]>([]);
   const [homeUpcomingEvents, setHomeUpcomingEvents] = useState<CreatorEventSummary[]>([]);
   const [circleVideos, setCircleVideos] = useState<CreatorVideo[]>([]);
@@ -182,95 +172,13 @@ export default function HomeScreen() {
   const [homeDiscoveryItems, setHomeDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
   const [homeDiscoveryLoading, setHomeDiscoveryLoading] = useState(true);
   const [homeDiscoveryError, setHomeDiscoveryError] = useState<string | null>(null);
-  const [liveFirstPremiumGate, setLiveFirstPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
-  const [liveFirstPremiumSheetVisible, setLiveFirstPremiumSheetVisible] = useState(false);
   const homeConfig = resolveHomeConfig(appConfig);
-  const brandingConfig = resolveBrandingConfig(appConfig);
   const featureConfig = resolveFeatureConfig(appConfig);
-  const monetizationConfig = resolveMonetizationConfig(appConfig);
-  const maxRailItems = Math.max(1, homeConfig.maxItemsPerRail || 8);
   const canShowContinueWatching = featureConfig.continueWatchingEnabled && homeConfig.enabledRails.continue_watching;
 
   async function fetchHomeConfig() {
     const nextConfig = await readAppConfig().catch(() => DEFAULT_APP_CONFIG);
     setAppConfig(nextConfig);
-  }
-
-  async function fetchTitleLiveMetadata(nextTitles: TitleRow[]) {
-    const titleIds = nextTitles.map((item) => String(item.id)).filter(Boolean);
-    if (!titleIds.length) {
-      setTitleLiveMetadataById({});
-      return;
-    }
-
-    try {
-      const { data: roomData, error: roomError } = await supabase
-        .from("watch_party_rooms")
-        .select("party_id,title_id,reactions_policy,is_active,last_activity_at,updated_at")
-        .eq("is_active", true)
-        .eq("room_type", "title")
-        .in("title_id", titleIds)
-        .returns<WatchPartyRoomRow[]>();
-
-      if (roomError || !roomData) {
-        setTitleLiveMetadataById({});
-        return;
-      }
-
-      const activeRooms = roomData.filter((row) => {
-        if (row.is_active !== true) return false;
-        const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
-        if (!activitySource) return false;
-        const activityAt = Date.parse(activitySource);
-        if (!Number.isFinite(activityAt)) return false;
-        return Date.now() - activityAt <= ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
-      });
-
-      if (!activeRooms.length) {
-        setTitleLiveMetadataById({});
-        return;
-      }
-
-      const activePartyIds = activeRooms.map((row) => String(row.party_id ?? "").trim()).filter(Boolean);
-      const messageCountByPartyId: Record<string, number> = {};
-
-      if (activePartyIds.length) {
-        const { data: messageData } = await supabase
-          .from("watch_party_room_messages")
-          .select("party_id")
-          .in("party_id", activePartyIds)
-          .returns<WatchPartyRoomMessageRow[]>();
-
-        messageData?.forEach((row) => {
-          const partyId = String(row.party_id ?? "").trim();
-          if (!partyId) return;
-          messageCountByPartyId[partyId] = (messageCountByPartyId[partyId] ?? 0) + 1;
-        });
-      }
-
-      const nextMetadata: Record<string, TitleLiveMetadata> = {};
-
-      activeRooms.forEach((row) => {
-        const titleId = String(row.title_id ?? "").trim();
-        const partyId = String(row.party_id ?? "").trim();
-        if (!titleId || !partyId) return;
-
-        const current = nextMetadata[titleId] ?? {
-          liveRoomCount: 0,
-          commentCount: 0,
-          reactionsEnabled: false,
-        };
-
-        current.liveRoomCount += 1;
-        current.commentCount += messageCountByPartyId[partyId] ?? 0;
-        current.reactionsEnabled = current.reactionsEnabled || String(row.reactions_policy ?? "").trim().toLowerCase() !== "muted";
-        nextMetadata[titleId] = current;
-      });
-
-      setTitleLiveMetadataById(nextMetadata);
-    } catch {
-      setTitleLiveMetadataById({});
-    }
   }
 
   async function fetchTitles() {
@@ -286,14 +194,42 @@ export default function HomeScreen() {
 
     if (error) {
       setTitles([]);
-      setTitleLiveMetadataById({});
       setError("Unable to refresh Home right now. Check your connection and try again.");
       return;
     }
 
     const nextTitles = data ?? [];
     setTitles(nextTitles);
-    await fetchTitleLiveMetadata(nextTitles);
+  }
+
+  async function fetchHomeActiveTitleRoomCount() {
+    try {
+      const { data, error } = await supabase
+        .from("watch_party_rooms")
+        .select("party_id,title_id,is_active,last_activity_at,updated_at")
+        .eq("is_active", true)
+        .eq("room_type", "title")
+        .returns<HomeActiveTitleRoomRow[]>();
+
+      if (error || !data) {
+        setHomeActiveTitleRoomCount(0);
+        return;
+      }
+
+      const activeTitleRooms = data.filter((row) => {
+        if (row.is_active !== true) return false;
+        if (!String(row.title_id ?? "").trim()) return false;
+        const activitySource = String(row.last_activity_at ?? row.updated_at ?? "").trim();
+        if (!activitySource) return false;
+        const activityAt = Date.parse(activitySource);
+        if (!Number.isFinite(activityAt)) return false;
+        return Date.now() - activityAt <= ROOM_ACTIVITY_ACTIVE_WINDOW_MS;
+      });
+
+      setHomeActiveTitleRoomCount(activeTitleRooms.length);
+    } catch {
+      setHomeActiveTitleRoomCount(0);
+    }
   }
 
   async function fetchWatchProgress() {
@@ -370,6 +306,7 @@ export default function HomeScreen() {
         fetchTitles(),
         fetchCurrentChannelProfile(),
         fetchWatchProgress(),
+        fetchHomeActiveTitleRoomCount(),
         fetchDiscoveryFeedV1(),
       ]);
       setLoading(false);
@@ -382,6 +319,7 @@ export default function HomeScreen() {
         fetchHomeConfig(),
         fetchCurrentChannelProfile(),
         fetchWatchProgress(),
+        fetchHomeActiveTitleRoomCount(),
         fetchDiscoveryFeedV1(),
       ]).catch(() => {});
     }, []),
@@ -394,6 +332,7 @@ export default function HomeScreen() {
       fetchTitles(),
       fetchCurrentChannelProfile(),
       fetchWatchProgress(),
+      fetchHomeActiveTitleRoomCount(),
       fetchDiscoveryFeedV1(),
     ]);
     setRefreshing(false);
@@ -481,33 +420,6 @@ export default function HomeScreen() {
     }
   }
 
-  function openTitleDetails(item: TitleRow) {
-    const safeId = String(item.id || item.slug || item.title);
-    router.push({
-      pathname: "/title/[id]",
-      params: { id: safeId },
-    });
-  }
-
-  async function openWatchParty() {
-    const access = await requireLiveFirstPremium({ accessKey: "home-live-entry" }).catch(() => null);
-    if (!access?.allowed) {
-      if (isRuntimeControlBlockedAccess(access)) {
-        const copy = getRuntimeControlBlockedCopy(access);
-        Alert.alert(copy.title, copy.message);
-        setLiveFirstPremiumGate(null);
-        setLiveFirstPremiumSheetVisible(false);
-        return;
-      }
-      if (access) setLiveFirstPremiumGate(access);
-      setLiveFirstPremiumSheetVisible(true);
-      return;
-    }
-
-    setLiveFirstPremiumGate(null);
-    router.push({ pathname: "/watch-party", params: { mode: "live" } });
-  }
-
   function openOwnProfile() {
     if (!currentChannel?.id) return;
 
@@ -533,7 +445,7 @@ export default function HomeScreen() {
     return titles
       .filter((item) => {
         const progressEntry = watchProgress[String(item.id)];
-        return !!progressEntry && progressEntry.positionMillis > 0;
+        return isEligibleContinueWatchingProgress(progressEntry);
       })
       .sort((a, b) => {
         const aUpdated = watchProgress[String(a.id)]?.updatedAt ?? 0;
@@ -542,42 +454,8 @@ export default function HomeScreen() {
       });
   }, [titles, watchProgress]);
 
-  const latestTitles = useMemo(() => {
-    return [...titles].sort((a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at));
-  }, [titles]);
+  const continueWatchingHeroItem = canShowContinueWatching ? continueCandidates[0] ?? null : null;
 
-  const programmedTitles = useMemo(() => sortTitlesByProgramTruth(titles), [titles]);
-
-  const programmedHeroItem = useMemo(() => {
-    const manualHeroTitleId = String(homeConfig.manualHeroTitleId ?? "").trim();
-    const manualHeroItem = manualHeroTitleId
-      ? programmedTitles.find((item) => String(item.id ?? "").trim() === manualHeroTitleId) ?? null
-      : null;
-    const heroFlagItem = programmedTitles.find((item) => item.is_hero === true) ?? null;
-
-    if (homeConfig.heroMode === "manual_title") {
-      return manualHeroItem ?? heroFlagItem ?? latestTitles[0] ?? null;
-    }
-
-    if (homeConfig.heroMode === "hero_flag") {
-      return heroFlagItem ?? latestTitles[0] ?? null;
-    }
-
-    return latestTitles[0] ?? null;
-  }, [homeConfig.heroMode, homeConfig.manualHeroTitleId, latestTitles, programmedTitles]);
-
-  const continueWatchingTitles = useMemo(
-    () => continueCandidates.slice(0, maxRailItems),
-    [continueCandidates, maxRailItems],
-  );
-
-  const spotlightItem = (canShowContinueWatching ? continueCandidates[0] : null) ?? programmedHeroItem ?? null;
-  const spotlightIsContinueWatching = canShowContinueWatching && !!continueCandidates.length && !!spotlightItem;
-  const spotlightImageSource = getImageUri(spotlightItem);
-  const spotlightProgress = spotlightItem ? watchProgress[String(spotlightItem.id)] : undefined;
-  const spotlightProgressPercent = spotlightProgress?.durationMillis
-    ? Math.max(8, Math.min(100, Math.round((spotlightProgress.positionMillis / spotlightProgress.durationMillis) * 100)))
-    : 42;
   const homeAvatarInitial = String(currentChannel?.displayName ?? "You").slice(0, 1).toUpperCase() || "Y";
   const liveDiscoveryItems = useMemo(
     () => homeDiscoveryItems.filter((item) => item.live_state === "live").slice(0, 8),
@@ -588,70 +466,65 @@ export default function HomeScreen() {
     [homeDiscoveryItems],
   );
 
-  function renderDiscoveryRail(title: string, data: TitleRow[], keyPrefix: string) {
-    if (!data.length) return null;
+  function renderHomeHero() {
+    const heroItem = continueWatchingHeroItem;
+    const progress = heroItem ? watchProgress[String(heroItem.id)] : undefined;
+    const progressPercent = heroItem ? getContinueWatchingProgressPercent(progress) : 0;
+    const heroImageSource = (heroItem ? getImageUri(heroItem) : null) ?? CHILLYWOOD_BACKGROUND_SOURCE;
 
-    return (
-      <View key={keyPrefix} style={styles.section}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-
-        <FlatList
-          horizontal
-          data={data}
-          keyExtractor={(item, idx) => `${keyPrefix}-${item.id}-${idx}`}
-          renderItem={renderDiscoveryCard}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.dramaRow}
-        />
-      </View>
-    );
-  }
-
-  const renderDiscoveryCard = ({ item }: { item: TitleRow }) => {
-    const cardImageSource = getImageUri(item);
-    const liveMetadata = titleLiveMetadataById[String(item.id)];
-    const infoLine = buildDiscoveryInfoLine(item);
-    const addedLabel = formatAddedDate(item.created_at);
-
-    return (
-      <TouchableOpacity style={styles.dramaCard} onPress={() => openTitleDetails(item)} activeOpacity={0.9}>
-        {cardImageSource ? (
-          <Image source={cardImageSource} style={styles.dramaImage} />
-        ) : (
-          <View style={styles.dramaFallback} />
-        )}
-        <View style={styles.dramaOverlay} />
-
-        {liveMetadata?.liveRoomCount ? (
-          <View style={styles.liveBadge}>
-            <Text style={styles.liveBadgeText}>LIVE</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.dramaMeta}>
-          <Text style={styles.dramaTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.dramaRuntime} numberOfLines={1}>
-            {infoLine}
-          </Text>
-          <Text style={styles.dramaDate} numberOfLines={1}>
-            {addedLabel}
-          </Text>
-          {liveMetadata?.liveRoomCount ? (
-            <View style={styles.dramaLiveMetaRow}>
-              <Text style={styles.dramaLiveMetaText}>
-                {liveMetadata.commentCount} comment{liveMetadata.commentCount === 1 ? "" : "s"}
-              </Text>
-              {liveMetadata.reactionsEnabled ? (
-                <Text style={styles.dramaLiveMetaText}>Reactions live</Text>
-              ) : null}
+    const heroContent = (
+      <ImageBackground
+        source={heroImageSource}
+        resizeMode="cover"
+        imageStyle={styles.homeHeroImage}
+        style={styles.homeHeroCard}
+      >
+        <View style={styles.homeHeroScrim}>
+          {heroItem ? (
+            <View testID="home-continue-watching-hero" style={styles.homeHeroContent}>
+              <Text style={styles.homeHeroKicker}>CONTINUE WATCHING</Text>
+              <Text style={styles.homeHeroTitle} numberOfLines={2}>{heroItem.title}</Text>
+              <Text style={styles.homeHeroMeta} numberOfLines={1}>{buildDiscoveryInfoLine(heroItem)}</Text>
+              <View style={styles.homeHeroProgressTrack}>
+                <View style={[styles.homeHeroProgressFill, { width: `${progressPercent}%` }]} />
+              </View>
+              <View style={styles.homeHeroFooter}>
+                <Text style={styles.homeHeroProgressText}>{formatContinueWatchingLabel(progress)}</Text>
+                <View style={styles.homeHeroButton}>
+                  <Text style={styles.homeHeroButtonText}>Resume</Text>
+                </View>
+              </View>
             </View>
-          ) : null}
+          ) : (
+            <View testID="home-branded-hero" style={styles.homeHeroContent}>
+              <Text style={styles.homeHeroKicker}>CHI&apos;LLWOOD</Text>
+              <Text style={styles.homeHeroTitle} numberOfLines={2}>Stream the city</Text>
+              <Text style={styles.homeHeroMeta} numberOfLines={2}>
+                Official updates, Originals, and live moments appear here when they are ready.
+              </Text>
+            </View>
+          )}
         </View>
+      </ImageBackground>
+    );
+
+    if (!heroItem) {
+      return <View style={styles.homeHeroWrap}>{heroContent}</View>;
+    }
+
+    return (
+      <TouchableOpacity
+        testID="home-continue-watching-hero-action"
+        style={styles.homeHeroWrap}
+        activeOpacity={0.9}
+        onPress={() => openPlayer(heroItem)}
+        accessibilityRole="button"
+        accessibilityLabel={`Resume ${heroItem.title}`}
+      >
+        {heroContent}
       </TouchableOpacity>
     );
-  };
+  }
 
   function renderFeedItemCard(item: DiscoveryFeedItem) {
     const title = String(item.title ?? "").trim() || "Public activity";
@@ -890,7 +763,7 @@ export default function HomeScreen() {
 
   return (
     <ImageBackground
-      source={spotlightImageSource || undefined}
+      source={CHILLYWOOD_BACKGROUND_SOURCE}
       style={styles.screenBackground}
       resizeMode="cover"
     >
@@ -898,7 +771,7 @@ export default function HomeScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color="#E50914" />
-          <Text style={styles.muted}>Loading tonight&apos;s picks…</Text>
+          <Text style={styles.muted}>Loading Home…</Text>
         </View>
       ) : error ? (
         <View style={styles.center}>
@@ -950,63 +823,7 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {spotlightItem ? (
-            <View style={styles.heroWrap}>
-              {spotlightImageSource ? (
-                <Image source={spotlightImageSource} style={styles.heroImage} />
-              ) : (
-                <View style={styles.heroFallback} />
-              )}
-
-              <View style={styles.heroOverlay} />
-
-              <View style={styles.heroContent}>
-                <Text style={styles.topBrand}>
-                  {spotlightIsContinueWatching ? "CONTINUE WATCHING" : brandingConfig.homeHeroKicker}
-                </Text>
-                <Text style={styles.heroTitle} numberOfLines={2}>
-                  {spotlightItem.title}
-                </Text>
-                <Text style={styles.heroSubtitle} numberOfLines={2}>
-                  {spotlightIsContinueWatching
-                    ? spotlightItem.synopsis || "Pick up where you left off without losing your place."
-                    : spotlightItem.synopsis || "A cinematic story from the city streets."}
-                </Text>
-
-                <View style={styles.heroMetaRow}>
-                  <Text style={styles.heroMetaText}>{buildDiscoveryInfoLine(spotlightItem)}</Text>
-                  <Text style={styles.heroMetaDot}>•</Text>
-                  <Text style={styles.heroMetaText}>{formatAddedDate(spotlightItem.created_at)}</Text>
-                </View>
-
-                {spotlightIsContinueWatching ? (
-                  <View style={styles.heroProgressWrap}>
-                    <View style={styles.heroProgressTrack}>
-                      <View style={[styles.heroProgressFill, { width: `${spotlightProgressPercent}%` }]} />
-                    </View>
-                    <Text style={styles.heroProgressText}>
-                      {spotlightProgress?.durationMillis
-                        ? `${Math.round(spotlightProgressPercent)}% complete`
-                        : "Resume where you left off"}
-                    </Text>
-                  </View>
-                ) : null}
-
-                <View style={styles.heroActionRow}>
-                  <TouchableOpacity style={styles.playBtn} onPress={() => openPlayer(spotlightItem)} activeOpacity={0.9}>
-                    <Text style={styles.playBtnText}>{spotlightIsContinueWatching ? "Resume" : "Play"}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.watchPartyBtn} onPress={openWatchParty} activeOpacity={0.9}>
-                    <Text style={styles.watchPartyBtnText}>Live Watch-Party</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ) : null}
-
-          {canShowContinueWatching && continueWatchingTitles.length
-            ? renderDiscoveryRail("Continue Watching", continueWatchingTitles, "continue-watching")
-            : null}
+          {renderHomeHero()}
 
           {renderHomeEventRail({
             title: "Live Now",
@@ -1053,21 +870,9 @@ export default function HomeScreen() {
             routePath="/"
             forbiddenContexts={HOME_NATIVE_AD_FORBIDDEN_CONTEXTS}
           />
-
         </ScrollView>
       )}
     </View>
-    <AccessSheet
-      visible={liveFirstPremiumSheetVisible}
-      reason="premium_required"
-      gate={liveFirstPremiumGate}
-      appDisplayName={brandingConfig.appDisplayName}
-      premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
-      premiumUpsellBody={monetizationConfig.premiumUpsellBody}
-      titleOverride={LIVE_FIRST_PREMIUM_UPSELL_COPY.title}
-      bodyOverride={LIVE_FIRST_PREMIUM_UPSELL_COPY.message}
-      onClose={() => setLiveFirstPremiumSheetVisible(false)}
-    />
     </ImageBackground>
   );
 }
@@ -1097,7 +902,7 @@ const styles = StyleSheet.create({
     color: "#8D98AE",
     fontSize: 10,
     fontWeight: "800",
-    letterSpacing: 1.4,
+    letterSpacing: 0,
   },
   utilityActions: {
     flexDirection: "row",
@@ -1187,126 +992,98 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  heroWrap: {
-    height: 460,
+  homeHeroWrap: {
     marginHorizontal: 16,
     marginTop: 12,
-    marginBottom: 20,
-    borderRadius: 22,
+    marginBottom: 22,
+    borderRadius: 24,
     overflow: "hidden",
-    justifyContent: "flex-end",
-    position: "relative",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(8,10,16,0.72)",
     shadowColor: "#000",
-    shadowOpacity: 0.28,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
   },
-  heroImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%",
+  homeHeroCard: {
+    minHeight: 410,
+    justifyContent: "flex-end",
   },
-  heroFallback: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#1A1A1A",
+  homeHeroImage: {
+    borderRadius: 24,
   },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.52)",
+  homeHeroScrim: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 22,
+    paddingVertical: 24,
+    backgroundColor: "rgba(3,5,10,0.44)",
   },
-  heroContent: {
-    paddingHorizontal: 17,
-    paddingBottom: 19,
+  homeHeroContent: {
+    gap: 9,
+    maxWidth: 680,
   },
-  topBrand: {
-    color: "#EAEAEA",
+  homeHeroKicker: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: "rgba(229,9,20,0.84)",
+    color: "#FFFFFF",
     fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 2,
-    marginBottom: 10,
-    textAlign: "left",
-  },
-  heroTitle: {
-    color: "#fff",
-    fontSize: 34,
     fontWeight: "900",
-    marginBottom: 8,
+    letterSpacing: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
-  heroSubtitle: {
-    color: "#D6D6D6",
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 14,
+  homeHeroTitle: {
+    color: "#FFFFFF",
+    fontSize: 37,
+    lineHeight: 43,
+    fontWeight: "900",
   },
-  heroMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 6,
-    marginBottom: 12,
-  },
-  heroMetaText: {
-    color: "#E8EDF8",
-    fontSize: 11,
+  homeHeroMeta: {
+    color: "#D8E0EF",
+    fontSize: 15,
+    lineHeight: 21,
     fontWeight: "800",
   },
-  heroMetaDot: {
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  heroProgressWrap: {
-    marginBottom: 14,
-  },
-  heroProgressTrack: {
+  homeHeroProgressTrack: {
     height: 7,
     borderRadius: 999,
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    marginTop: 8,
   },
-  heroProgressFill: {
+  homeHeroProgressFill: {
     height: "100%",
     borderRadius: 999,
     backgroundColor: "#E50914",
   },
-  heroProgressText: {
-    color: "#DDE5F7",
-    fontSize: 11,
-    fontWeight: "800",
-    marginTop: 8,
-  },
-  playBtn: {
-    alignSelf: "flex-start",
-    backgroundColor: "#E50914",
-    paddingHorizontal: 24,
-    paddingVertical: 11,
-    borderRadius: 999,
-  },
-  playBtnText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  heroActionRow: {
+  homeHeroFooter: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 5,
   },
-  watchPartyBtn: {
-    alignSelf: "flex-start",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.26)",
-    backgroundColor: "rgba(0,0,0,0.52)",
-    paddingHorizontal: 18,
-    paddingVertical: 11,
+  homeHeroProgressText: {
+    color: "#F3F7FF",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  homeHeroButton: {
+    minHeight: 42,
     borderRadius: 999,
+    backgroundColor: "#E50914",
+    paddingHorizontal: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  watchPartyBtnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "800",
+  homeHeroButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
   },
 
   section: {
@@ -1607,140 +1384,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     fontWeight: "700",
-  },
-
-  continueCard: {
-    height: 150,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#1f1f1f",
-    backgroundColor: "#111",
-  },
-  continueImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%",
-  },
-  continueFallback: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#1A1A1A",
-  },
-  continueOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  continueContent: {
-    flex: 1,
-    justifyContent: "flex-end",
-    paddingHorizontal: 12,
-    paddingBottom: 14,
-  },
-  continueTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  continueSub: {
-    color: "#cfcfcf",
-    fontSize: 12,
-  },
-  continueProgressTrack: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 6,
-    backgroundColor: "rgba(255,255,255,0.25)",
-  },
-  continueProgressFill: {
-    width: "42%",
-    height: "100%",
-    backgroundColor: "#E50914",
-  },
-
-  dramaRow: {
-    paddingRight: 8,
-  },
-  dramaCard: {
-    width: 150,
-    height: 210,
-    marginRight: 12,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#1f1f1f",
-    backgroundColor: "#111",
-    position: "relative",
-  },
-  dramaImage: {
-    width: "100%",
-    height: "100%",
-    position: "absolute",
-  },
-  dramaFallback: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#1A1A1A",
-  },
-  dramaOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 118,
-    backgroundColor: "rgba(0,0,0,0.7)",
-  },
-  liveBadge: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    borderRadius: 999,
-    backgroundColor: "#E50914",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  liveBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-  },
-  dramaMeta: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 10,
-    paddingBottom: 10,
-    paddingTop: 8,
-  },
-  dramaTitle: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  dramaRuntime: {
-    color: "#c3c3c3",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  dramaDate: {
-    color: "#98A3BA",
-    fontSize: 10.5,
-    marginTop: 4,
-    fontWeight: "700",
-  },
-  dramaLiveMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 6,
-  },
-  dramaLiveMetaText: {
-    color: "#E7EDF9",
-    fontSize: 10.5,
-    fontWeight: "800",
   },
 
   originalsPlaceholder: {

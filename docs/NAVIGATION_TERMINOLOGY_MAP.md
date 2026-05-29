@@ -1,7 +1,7 @@
 # Navigation Terminology Map
 
 ## Purpose
-This map records the current Chi'llywood app navigation and product language after the Modern Navigation IA, Public V1 burn-down, and Home/Profile cleanup passes. It is a product map, not a route rewrite plan. Technical route names such as `/channel/[userId]` remain for compatibility when the user-facing concept is `Platform`.
+This map records the current Chi'llywood app navigation and product language after the Modern Navigation IA, Public V1 burn-down, Home/Profile cleanup, and Home Continue Watching cleanup passes. It is a product map, not a route rewrite plan. Technical route names such as `/channel/[userId]` remain for compatibility when the user-facing concept is `Platform`.
 
 ## Final Terminology
 - Profile = the user's social identity hub.
@@ -19,7 +19,7 @@ This map records the current Chi'llywood app navigation and product language aft
 
 ## Main App Mode Map
 Viewer mode:
-- Home: launch/feed surface for hero playback, Continue Watching when backed, Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle when backed, and Upcoming Events when backed. Home must not carry Top Picks, Browse, or Favorites jobs.
+- Home: cinematic launch/feed surface with a branded hero by default and a `Continue Watching` hero only when real progress is backed, plus Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle when backed, and Upcoming Events when backed. Home must not carry Top Picks, Browse, Favorites, or random title-detail hero jobs.
 - Explore: backed browse/discovery surface for title search, public discovery feed rows, public creator videos, Rachi public-safe Originals, events, replays, and honest empty states.
 - Live: bottom-nav entry point for choosing `Live Watch-Party`, joining `Watch-Party Live` by code, or browsing content before starting a content-first party.
 - Library: current saved-title list. Broader My Stuff sections are planned only when backed.
@@ -70,12 +70,21 @@ Source truth:
 Current implementation:
 - Home no longer renders Top Picks, Browse, Favorites, Platforms You Follow, or Latest Public Uploads sections.
 - The removal is product scope, not a duplicate-bug claim: Explore covers browse/discovery work, and Library covers saved/favorites work.
-- Home keeps launch/feed content only: hero playback, Continue Watching when backed, Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle, Upcoming Events, and the existing native ad slot.
+- Home keeps launch/feed content only: cinematic branded/Continue Watching hero, Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle, Upcoming Events, and the existing native ad slot.
+- Home no longer promotes a latest/programmed title into a giant hero when Continue Watching is empty. The `Chicago Streets` issue came from the former `spotlightItem` fallback chain: missing Continue Watching fell through to `programmedHeroItem`, which could fall through to `latestTitles[0]`.
+- The Home hero keeps the premium cinematic look. With no eligible progress, it shows neutral Chi'llwood branding instead of a title. With eligible progress, it becomes a `Continue Watching` title hero.
+- Continue Watching hero eligibility requires real playback progress: position greater than zero, and when duration is known the ratio must be below `HOME_CONTINUE_COMPLETION_THRESHOLD` (`0.94`). Finished, not-started, saved/favorite, and broad discovery titles are not eligible Home hero content.
+- Saved/favorite/history ownership remains Library. Browse/discovery/top-pick ownership remains Explore. A future editorial Home hero would need a distinct backed source before it can be shown.
 - Rachi Official Updates render identity with backed avatar or safe `R` fallback, `Rachi`, `Official Chi'llwood`, and backed timestamp text.
 - Rachi Originals public cards keep backed Rachi-owned content but mask internal proof/fixture wording from normal Home copy.
-- No fake Home rows, fake Rachi posts, fake Rachi Originals, fake saved rows, fake live rooms, fake events, fake creator activity, or fake counts were added.
+- No fake Home rows, fake progress, fake Rachi posts, fake Rachi Originals, fake saved rows, fake live rooms, fake events, fake creator activity, or fake counts were added.
 
 Android proof:
+- `/tmp/chillywood-home-continue-watching-proof-20260529/01-home-first-view.*` captures Home first view with the cinematic branded hero, top Profile/Settings, bottom nav, no giant `Chicago Streets` hero, and no Top Picks/Browse/Favorites labels.
+- `/tmp/chillywood-home-continue-watching-proof-20260529/02-explore-discovery.*` captures Explore still reachable for discovery.
+- `/tmp/chillywood-home-continue-watching-proof-20260529/03-library-saved.*` captures Library showing `Chicago Streets` as a real Saved item with `0` Continue Watching.
+- `/tmp/chillywood-home-continue-watching-proof-20260529/04-player-opens-title.*` captures the title opening from Library/Player route instead of Home hero.
+- `/tmp/chillywood-home-continue-watching-proof-20260529/05-home-originals-section.*` captures Rachi Official Updates and Chi'llwood Originals still visible after the Home cleanup.
 - `/tmp/chillywood-home-profile-cleanup-proof-20260529/01-home-first-view.*` captures Home first view with top Profile/Settings, bottom nav, Rachi Official Updates, and no Top Picks/Browse/Favorites labels.
 - `/tmp/chillywood-home-profile-cleanup-proof-20260529/02-home-rachi-originals.*` captures Rachi identity plus Chi'llwood Originals with sanitized public copy.
 
