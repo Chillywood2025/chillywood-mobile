@@ -1,12 +1,16 @@
 # NEXT TASK
 
-## Recommended Lane: Remaining Runtime Proof Fixtures
+## Recommended Lane: Profile Media Runtime Save/Read-Back Proof
 
 Closed truth:
 
 - Bottom navigation is Home / Explore / Live / Library.
 - Profile is not duplicated in the bottom nav. The `(tabs)/profile` compatibility file remains hidden from the tab bar with `href: null`.
 - Profile remains accessible from the Home top avatar/profile entry, direct `/profile/[userId]` routes, Settings, and Profile actions.
+- Profile Photo first-sheet UX is corrected and Android-proved on `R5CR120QCBF`: owner avatar tap/long-press opens a compact `Profile Photo` bottom action sheet with `Change Photo`, conditional `Remove Photo` only when a real photo exists, and `Cancel`.
+- The Profile Photo first sheet no longer shows a preview card, disabled `View Photo`, disabled `Remove Photo`, Fit/Fill/Center controls, crop explanation copy, or a disabled save action before an image is selected.
+- Profile Photo crop/edit still uses the backed native phone gallery path through `expo-image-picker` with `allowsEditing`; `Change Photo` was proved to open Android DocumentsUI, but no picker screenshot was captured because private gallery thumbnails must not be recorded. Custom in-app drag/pinch repositioning remains a future enhancement unless it is actually built and proved.
+- Profile Background remains separate and Android-proved. Its first sheet is compact, and background Fit/Fill/Center positioning controls appear only after a real background image exists inside `Adjust Background`.
 - Live Hub is already modernized and was not redesigned in the burn-down lane.
 - Explore now uses backed title search, public discovery feed rows, public creator videos, Rachi public-safe Originals, and public event summaries. Visible sections are backed or honest empty states: Search, Live Now, Platforms, Creator Videos, Chi'llwood Originals, Events, Replays, and Titles.
 - Library now uses backed saved titles, watch progress, and followed Platform profile read-back. Replays, events, and clips remain hidden until saved rows exist.
@@ -14,12 +18,13 @@ Closed truth:
 - Watch-Party waiting room now has a UI-only host preflight for real title-linked Watch-Party Live entries; room creation, Premium gates, LiveKit token behavior, route ownership, Party Room, and old-room handling are unchanged.
 - Android proof on `R5CR120QCBF` lives at `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/`.
 - Valid proof files are `04-explore-current.*`, `05-library-backed-sections.*`, `06-player-normal-mode.*`, `09-host-preflight-details.*`, `10-home-bottom-nav-top-avatar.*`, and `11-top-avatar-profile-route.*`.
+- Profile Photo picker correction proof lives at `/tmp/chillywood-profile-photo-picker-proof-20260529/` with owner Profile, tap sheet, long-press sheet, DocumentsUI focus proof, Settings Profile Appearance, and Profile Background sheet captures.
 - `01`/`02` proof captures in that folder are stale-bundle/dev-menu misses and are not claimed.
 - No fake Explore rows, fake Library rows, fake live rooms, fake replays, fake events, fake creator activity, fake Rachi content, fake money, LiveKit issuer change, Watch-Party route ownership change, Premium gate change, Party Room change, or backend schema change was made.
 
 Remaining limitations:
 
-- Profile avatar/background proof is not closed. Owner Profile rendered and `profile-avatar-edit-trigger` was visible/enabled, but tap/long-press did not open the edit sheet in this dev-client session and no safe non-private gallery asset plus backend read-back fixture was available.
+- Profile avatar/background save/read-back proof is not closed. The first-sheet UX and native picker launch are corrected/proved, but choosing/saving/removing media still needs a safe non-private gallery asset plus backend active-media read-back.
 - Spectator remaining proof is not newly closed. No safe Live Watch-Party / Reaction fixture was available in this lane; previous Watch-Party Live and replay child-room proof remains current.
 - Watch-Party Live true two-device speech-triggered ducking is not closed. `adb devices -l` showed only `R5CR120QCBF`, with no second device/emulator/account available.
 - Player component extraction remains a future cleanup; this pass added safe mode labeling/resolution without a full rewrite.
@@ -27,7 +32,7 @@ Remaining limitations:
 
 Recommended next lane:
 
-- Profile Media Runtime Closeout with one safe app-owned/non-private gallery asset, a signed-in owner account, viewer/signed-out checks, backend active-media read-back, removal/fallback proof, and public masking proof.
+- Profile Media Runtime Closeout with one safe app-owned/non-private gallery asset, an attached Android device, a signed-in owner account, viewer/signed-out checks, compact sheet screenshots, gallery/native crop step proof without private photos, backend active-media read-back, removal/fallback proof, and public masking proof.
 - Spectator Live Watch-Party / Reaction Fixture Closeout with a real public-safe live-stage-compatible fixture and no original token/host/member leakage.
 - Watch-Party Live Two-Device Audio Ducking Closeout with two joined devices/accounts proving remote speech ducks/restores local video while Party Room and Live Watch-Party still have no Audio Mix.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.

@@ -119,6 +119,7 @@ import {
     Image,
     KeyboardAvoidingView,
     Platform,
+    Pressable,
     ScrollView,
     Share,
     StyleSheet,
@@ -3842,11 +3843,12 @@ export default function ProfileScreen() {
             </View>
           </View>
           <View style={styles.profileIdentityRow}>
-            <TouchableOpacity
+            <Pressable
               testID={isSelfProfile ? "profile-avatar-edit-trigger" : "profile-avatar-actions-trigger"}
               accessibilityRole="button"
               accessibilityLabel={isSelfProfile ? "Edit Profile Photo" : "Open Profile Actions"}
-              activeOpacity={0.88}
+              style={({ pressed }) => [styles.avatarPressable, pressed && styles.avatarPressablePressed]}
+              hitSlop={10}
               onPress={onPressProfileAvatar}
               onLongPress={onPressProfileAvatar}
               delayLongPress={220}
@@ -3865,7 +3867,7 @@ export default function ProfileScreen() {
                 </View>
                 {!shouldShowLockedShell && profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
               </View>
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.profileIdentityCopy}>
               <Text style={styles.channelLabel}>{profileLabel}</Text>
               <Text
@@ -4593,6 +4595,12 @@ const styles = StyleSheet.create({
   heroBadgeTextLive: { color: "#FFD5DD" },
   heroBadgeTextOfficial: { color: "#FFE6A6" },
   heroBadgeTextLinked: { color: "#D7DDFF" },
+  avatarPressable: {
+    borderRadius: 48,
+    zIndex: 3,
+    elevation: 3,
+  },
+  avatarPressablePressed: { opacity: 0.88 },
   avatarWrap: { position: "relative" },
   avatarCircle: {
     width: 86,

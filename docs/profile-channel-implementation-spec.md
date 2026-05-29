@@ -14,6 +14,8 @@
 
 2026-05-29 burn-down proof note: Android proof on `R5CR120QCBF` reached the owner Profile from the Home top avatar and showed the enabled `profile-avatar-edit-trigger`, but tap and long-press did not open the edit sheet in that dev-client session. No safe non-private gallery asset plus backend active-media read-back was available, so no avatar/background change, removal, fallback, or public-mask runtime closure is claimed by that lane.
 
+2026-05-29 Profile Photo picker correction note: the owner avatar trigger is hardened with a focused Pressable hit target, and Android `R5CR120QCBF` proof at `/tmp/chillywood-profile-photo-picker-proof-20260529/` now shows tap and long-press opening a compact `Profile Photo` action sheet. The first sheet shows `Change Photo` and `Cancel` when no photo exists, conditionally adds `Remove Photo` only when a real photo exists, and does not expose preview, `View Photo`, disabled remove, Fit/Fill/Center, crop explanation, or disabled save controls before selection. `Change Photo` opens Android DocumentsUI through the existing native picker path; no picker screenshot is captured because private gallery thumbnails must not be recorded. Profile Background remains a separate compact sheet and only exposes positioning controls after a real background image exists.
+
 2026-05-26 navigation cleanup note: owner Profile top action copy is `Platform` and still routes to the public Platform preview path. The duplicate bottom Profile `Platform` tab/pill is removed; the tab strip is Posts, Live, Community, About. Platform cards/sections can remain in Profile overview content, but there should not be duplicate top and bottom Platform controls without a distinct purpose.
 
 ## 1. Purpose And Scope

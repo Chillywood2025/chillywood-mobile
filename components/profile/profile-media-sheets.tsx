@@ -20,6 +20,8 @@ type ProfileSheetOptionProps = {
   tone?: "default" | "danger" | "muted";
   disabled?: boolean;
   busy?: boolean;
+  compact?: boolean;
+  showChevron?: boolean;
   onPress: () => void;
   testID?: string;
 };
@@ -82,6 +84,8 @@ function ProfileSheetOption({
   tone = "default",
   disabled = false,
   busy = false,
+  compact = false,
+  showChevron = true,
   onPress,
   testID,
 }: ProfileSheetOptionProps) {
@@ -90,6 +94,7 @@ function ProfileSheetOption({
       testID={testID}
       style={[
         styles.option,
+        compact && styles.optionCompact,
         tone === "danger" && styles.optionDanger,
         tone === "muted" && styles.optionMuted,
         disabled && styles.optionDisabled,
@@ -100,14 +105,34 @@ function ProfileSheetOption({
       accessibilityRole="button"
       accessibilityLabel={title}
     >
-      <View style={[styles.optionIcon, tone === "danger" && styles.optionIconDanger]}>
-        {busy ? <ActivityIndicator color="#F7FAFF" size="small" /> : <MaterialIcons name={icon} size={21} color="#F7FAFF" />}
+      <View
+        style={[
+          styles.optionIcon,
+          compact && styles.optionIconCompact,
+          tone === "danger" && styles.optionIconDanger,
+        ]}
+      >
+        {busy ? (
+          <ActivityIndicator color="#F7FAFF" size="small" />
+        ) : (
+          <MaterialIcons name={icon} size={21} color="#F7FAFF" />
+        )}
       </View>
       <View style={styles.optionCopy}>
-        <Text style={[styles.optionTitle, tone === "danger" && styles.optionTitleDanger]}>{title}</Text>
+        <Text
+          style={[
+            styles.optionTitle,
+            compact && styles.optionTitleCompact,
+            tone === "danger" && styles.optionTitleDanger,
+          ]}
+        >
+          {title}
+        </Text>
         {body ? <Text style={styles.optionBody}>{body}</Text> : null}
       </View>
-      <MaterialIcons name="chevron-right" size={22} color="#8E98AE" />
+      {showChevron ? (
+        <MaterialIcons name="chevron-right" size={22} color="#8E98AE" />
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -125,89 +150,181 @@ export function ProfileAppearanceSheet({
   onClose,
 }: ProfileAppearanceSheetProps) {
   const isAvatar = kind === "avatar";
-  const title = isAvatar ? "Edit Profile Photo" : "Profile Background";
-  const chooseLabel = imageUrl ? (isAvatar ? "Change Photo" : "Change Background") : (isAvatar ? "Choose Photo" : "Choose Background");
+  const hasImage = Boolean(imageUrl);
+  const title = isAvatar ? "Profile Photo" : "Profile Background";
+  const chooseLabel = isAvatar ? "Change Photo" : "Change Background";
+
+  if (isAvatar) {
+    return (
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={onClose}
+      >
+        <View style={styles.overlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={busy ? undefined : onClose}
+          />
+          <View
+            style={[styles.sheet, styles.actionSheet]}
+            testID="profile-photo-action-sheet"
+          >
+            <View style={styles.handle} />
+            <Text style={styles.actionTitle}>{title}</Text>
+
+            <View style={styles.optionStack}>
+              <ProfileSheetOption
+                testID="profile-avatar-choose-action"
+                icon="photo-library"
+                title={chooseLabel}
+                busy={busy}
+                compact
+                showChevron={false}
+                onPress={onChoose}
+              />
+              {hasImage ? (
+                <ProfileSheetOption
+                  testID="profile-avatar-remove-action"
+                  icon="delete-outline"
+                  title="Remove Photo"
+                  tone="danger"
+                  busy={busy}
+                  compact
+                  showChevron={false}
+                  onPress={onRemove}
+                />
+              ) : null}
+            </View>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              activeOpacity={0.84}
+              disabled={busy}
+              onPress={onClose}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
-        <View style={styles.sheet}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={busy ? undefined : onClose}
+        />
+        <View
+          style={[styles.sheet, styles.actionSheet]}
+          testID="profile-background-action-sheet"
+        >
           <View style={styles.handle} />
-          <Text style={styles.kicker}>PROFILE APPEARANCE</Text>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.body}>
-            {isAvatar
-              ? "This photo appears on your personal Profile and social posts."
-              : "This background appears only on your Profile. Platform branding stays in Brand Studio."}
+          <Text style={styles.actionTitle}>{title}</Text>
+          <Text style={styles.actionBody}>
+            Platform branding stays in Brand Studio.
           </Text>
-
-          <View style={styles.previewRow}>
-            <View style={[isAvatar ? styles.avatarPreview : styles.backgroundPreview, !imageUrl && styles.previewFallback]}>
-              {imageUrl ? (
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={styles.previewImage}
-                  resizeMode={resizeModeForFit(fitMode)}
-                />
-              ) : (
-                <MaterialIcons name={isAvatar ? "person" : "landscape"} size={isAvatar ? 34 : 28} color="#DCE5F5" />
-              )}
-            </View>
-            <View style={styles.previewCopy}>
-              <Text style={styles.previewTitle}>{imageUrl ? "Current image" : "No image yet"}</Text>
-              <Text style={styles.previewBody}>{isAvatar ? "Square crop is used for Profile photo." : "Wide crop keeps the header readable."}</Text>
-            </View>
-          </View>
-
-          <View style={styles.fitRow} testID={`profile-${kind}-fit-controls`}>
-            {(["fill", "fit", "center"] as const).map((mode) => {
-              const active = fitMode === mode;
-              return (
-                <TouchableOpacity
-                  key={mode}
-                  style={[styles.fitChip, active && styles.fitChipActive, (busy || !imageUrl) && styles.optionDisabled]}
-                  activeOpacity={0.84}
-                  disabled={busy || !imageUrl}
-                  onPress={() => onSelectFitMode(mode)}
-                >
-                  <Text style={[styles.fitChipText, active && styles.fitChipTextActive]}>{fitLabels[mode]}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
 
           <View style={styles.optionStack}>
             <ProfileSheetOption
-              testID={`profile-${kind}-view-action`}
-              icon="visibility"
-              title={isAvatar ? "View Photo" : "View Background"}
-              body={imageUrl ? "Open a larger preview." : "Add an image first."}
-              tone={imageUrl ? "default" : "muted"}
-              disabled={!imageUrl}
-              onPress={onView}
-            />
-            <ProfileSheetOption
-              testID={`profile-${kind}-choose-action`}
+              testID="profile-background-choose-action"
               icon="photo-library"
               title={chooseLabel}
-              body="Open your phone gallery."
               busy={busy}
+              compact
+              showChevron={false}
               onPress={onChoose}
             />
-            <ProfileSheetOption
-              testID={`profile-${kind}-remove-action`}
-              icon="delete-outline"
-              title={isAvatar ? "Remove Photo" : "Remove Background"}
-              body={imageUrl ? "Return to the default Profile look." : "Nothing to remove yet."}
-              tone="danger"
-              disabled={!imageUrl}
-              busy={busy}
-              onPress={onRemove}
-            />
+            {hasImage ? (
+              <>
+                <ProfileSheetOption
+                  testID="profile-background-view-action"
+                  icon="visibility"
+                  title="View Background"
+                  compact
+                  showChevron={false}
+                  onPress={onView}
+                />
+                <View
+                  style={styles.adjustBlock}
+                  testID="profile-background-adjust-section"
+                >
+                  <View style={styles.previewRowCompact}>
+                    <View style={styles.backgroundPreview}>
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={styles.previewImage}
+                        resizeMode={resizeModeForFit(fitMode)}
+                      />
+                    </View>
+                    <View style={styles.previewCopy}>
+                      <Text style={styles.previewTitle}>Adjust Background</Text>
+                      <Text style={styles.previewBody}>
+                        Keep the Profile header readable.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={styles.fitRow}
+                    testID="profile-background-adjust-fit-controls"
+                  >
+                    {(["fill", "fit", "center"] as const).map((mode) => {
+                      const active = fitMode === mode;
+                      return (
+                        <TouchableOpacity
+                          key={mode}
+                          style={[
+                            styles.fitChip,
+                            active && styles.fitChipActive,
+                            busy && styles.optionDisabled,
+                          ]}
+                          activeOpacity={0.84}
+                          disabled={busy}
+                          onPress={() => onSelectFitMode(mode)}
+                        >
+                          <Text
+                            style={[
+                              styles.fitChipText,
+                              active && styles.fitChipTextActive,
+                            ]}
+                          >
+                            {fitLabels[mode]}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+                <ProfileSheetOption
+                  testID="profile-background-remove-action"
+                  icon="delete-outline"
+                  title="Remove Background"
+                  tone="danger"
+                  busy={busy}
+                  compact
+                  showChevron={false}
+                  onPress={onRemove}
+                />
+              </>
+            ) : null}
           </View>
 
-          <TouchableOpacity style={styles.cancelButton} activeOpacity={0.84} disabled={busy} onPress={onClose}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            activeOpacity={0.84}
+            disabled={busy}
+            onPress={onClose}
+          >
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -234,20 +351,36 @@ export function ProfileActionsSheet({
   onClose,
 }: ProfileActionsSheetProps) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={busy ? undefined : onClose}
+        />
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <Text style={styles.kicker}>PROFILE ACTIONS</Text>
           <Text style={styles.title}>Profile Actions</Text>
-          <Text style={styles.body}>{displayName ? `Actions for ${displayName}.` : "Choose a safe Profile action."}</Text>
+          <Text style={styles.body}>
+            {displayName
+              ? `Actions for ${displayName}.`
+              : "Choose a safe Profile action."}
+          </Text>
           <View style={styles.optionStack}>
             <ProfileSheetOption
               testID="profile-actions-view-photo"
               icon="visibility"
               title="View Profile Photo"
-              body={hasPhoto ? "Open a larger preview." : "No profile photo to preview yet."}
+              body={
+                hasPhoto
+                  ? "Open a larger preview."
+                  : "No profile photo to preview yet."
+              }
               tone={hasPhoto ? "default" : "muted"}
               disabled={!hasPhoto}
               onPress={onViewPhoto}
@@ -270,7 +403,11 @@ export function ProfileActionsSheet({
               testID="profile-actions-block"
               icon="block"
               title={blocked ? "User Blocked" : "Block User"}
-              body={blocked ? "Messaging and social actions are already restricted." : "Requires confirmation before blocking."}
+              body={
+                blocked
+                  ? "Messaging and social actions are already restricted."
+                  : "Requires confirmation before blocking."
+              }
               tone="danger"
               disabled={blocked}
               busy={busy}
@@ -309,7 +446,12 @@ export function ProfileActionsSheet({
               onPress={onShare}
             />
           </View>
-          <TouchableOpacity style={styles.cancelButton} activeOpacity={0.84} disabled={busy} onPress={onClose}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            activeOpacity={0.84}
+            disabled={busy}
+            onPress={onClose}
+          >
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -326,7 +468,12 @@ export function ProfileImagePreviewSheet({
   onClose,
 }: ProfileImagePreviewSheetProps) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.previewOverlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.previewSheet}>
@@ -335,12 +482,20 @@ export function ProfileImagePreviewSheet({
           <Text style={styles.title}>{title}</Text>
           <View style={styles.largePreview}>
             {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={styles.previewImage} resizeMode={resizeModeForFit(fitMode)} />
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.previewImage}
+                resizeMode={resizeModeForFit(fitMode)}
+              />
             ) : (
               <MaterialIcons name="person" size={44} color="#DCE5F5" />
             )}
           </View>
-          <TouchableOpacity style={styles.cancelButton} activeOpacity={0.84} onPress={onClose}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            activeOpacity={0.84}
+            onPress={onClose}
+          >
             <Text style={styles.cancelText}>Close</Text>
           </TouchableOpacity>
         </View>
@@ -371,6 +526,10 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 24,
     gap: 12,
+  },
+  actionSheet: {
+    paddingBottom: 18,
+    gap: 10,
   },
   previewSheet: {
     borderTopLeftRadius: 24,
@@ -403,10 +562,21 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "900",
   },
+  actionTitle: {
+    color: "#F7FAFF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
   body: {
     color: "#A7B1C6",
     fontSize: 13,
     lineHeight: 18,
+    fontWeight: "700",
+  },
+  actionBody: {
+    color: "#A7B1C6",
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: "700",
   },
   previewRow: {
@@ -416,6 +586,12 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.045)",
     padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  previewRowCompact: {
+    minHeight: 76,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -467,6 +643,14 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
+  adjustBlock: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 10,
+    gap: 10,
+  },
   fitChip: {
     minHeight: 36,
     borderRadius: 999,
@@ -504,6 +688,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  optionCompact: {
+    minHeight: 56,
+    borderRadius: 14,
+    paddingVertical: 8,
+  },
   optionDanger: {
     borderColor: "rgba(220,20,60,0.26)",
     backgroundColor: "rgba(220,20,60,0.11)",
@@ -522,6 +711,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(115,134,255,0.2)",
   },
+  optionIconCompact: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+  },
   optionIconDanger: {
     backgroundColor: "rgba(220,20,60,0.32)",
   },
@@ -534,6 +728,9 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 14,
     fontWeight: "900",
+  },
+  optionTitleCompact: {
+    fontSize: 14,
   },
   optionTitleDanger: {
     color: "#FFE4EA",

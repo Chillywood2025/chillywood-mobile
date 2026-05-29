@@ -63,6 +63,7 @@ assertIncludes(profile, `friendState?.availability === "blocked"`, "blocked Chi'
 assertIncludes(profile, `ProfileAppearanceSheet`, "owner Profile appearance sheet");
 assertIncludes(profile, `ProfileActionsSheet`, "viewer Profile actions sheet");
 assertIncludes(profile, `onPressProfileAvatar`, "Profile avatar tap action");
+assertIncludes(profile, `styles.avatarPressable`, "Profile avatar edit hit target");
 assertIncludes(profile, `onLongPress={onPressProfileAvatar}`, "Profile avatar long-press action");
 assertIncludes(profile, `visible={profilePhotoSheetVisible && isSelfProfile}`, "Profile photo edit owner guard");
 assertIncludes(profile, `visible={profileActionsSheetVisible && !isSelfProfile}`, "viewer Profile actions guard");
@@ -93,6 +94,19 @@ assertIncludes(profileMedia, `profile_background_media_status: "active"`, "Profi
 assertIncludes(profileMedia, `profile_avatar_media_status: "user_removed"`, "Profile avatar owner removal status");
 assertIncludes(profileMedia, `profile_background_media_status: "user_removed"`, "Profile background owner removal status");
 assertNotIncludes(profileMedia, `pending_review`, "Profile media owner-controlled upload path");
+assertIncludes(profileMediaSheets, `testID="profile-photo-action-sheet"`, "compact Profile Photo action sheet");
+assertIncludes(profileMediaSheets, `"Change Photo"`, "Profile Photo primary change action");
+assertIncludes(profileMediaSheets, `testID="profile-avatar-choose-action"`, "Profile Photo choose action");
+assertIncludes(profileMediaSheets, `testID="profile-avatar-remove-action"`, "Profile Photo conditional remove action");
+assertIncludes(profileMediaSheets, `hasImage ? (`, "Profile Photo remove gating");
+assertIncludes(profileMediaSheets, `testID="profile-background-action-sheet"`, "compact Profile Background action sheet");
+assertIncludes(profileMediaSheets, `testID="profile-background-adjust-fit-controls"`, "Profile Background adjust controls");
+assertNotIncludes(profileMediaSheets, `Edit Profile Photo`, "Profile Photo sheet title");
+assertNotIncludes(profileMediaSheets, `No image yet`, "Profile Photo empty-state copy");
+assertNotIncludes(profileMediaSheets, `Add an image first.`, "Profile Photo disabled preview copy");
+assertNotIncludes(profileMediaSheets, `Nothing to remove yet.`, "Profile Photo disabled remove copy");
+assertNotIncludes(profileMediaSheets, `Square crop is used for Profile photo.`, "Profile Photo first sheet crop copy");
+assertNotIncludes(profileMediaSheets, `profile-avatar-fit-controls`, "Profile Photo first sheet fit controls");
 assertIncludes(profileMediaSheets, `View Profile Photo`, "viewer Profile photo preview action");
 assertIncludes(profileMediaSheets, `Chi'lly Chat`, "viewer Profile actions chat");
 assertIncludes(profileMediaSheets, `View Platform`, "viewer Profile actions public Platform route");
