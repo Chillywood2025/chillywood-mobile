@@ -23,6 +23,8 @@ const packageJson = read("package.json");
 const admin = read("app/admin.tsx");
 const explore = read("app/(tabs)/explore.tsx");
 const navDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
+const adminSearchAudit = read("_lib/adminSearchAudit.ts");
+const adminSearchAuditMigration = read("supabase/migrations/202605290004_admin_search_query_audit.sql");
 
 assertIncludes(packageJson, "guard:admin-search-policy", "package guard script");
 
@@ -53,6 +55,22 @@ assertIncludes(admin, "openLegalRequestDetail", "Admin legal detail open");
 assertIncludes(admin, "loadDmcaCaseDetail", "Admin DMCA detail open");
 assertIncludes(admin, "setSelectedAdminMoneyAuditEvent", "Admin money detail open");
 assertIncludes(admin, "Owner/Admin only", "Admin-only result badge");
+assertIncludes(admin, "writeAdminSearchAudit", "Admin search audit writer hook");
+assertIncludes(admin, 'testID="admin-search-audit-status"', "Admin search audit status UI");
+assertIncludes(admin, "admin_search_result_opened", "Admin search result-open audit");
+
+assertIncludes(adminSearchAudit, "write_admin_search_audit", "Admin search audit RPC client");
+assertIncludes(adminSearchAudit, "p_query", "Admin search audit query parameter");
+assertIncludes(adminSearchAudit, "client_written_full_query: false", "Admin search audit no full query client marker");
+
+assertIncludes(adminSearchAuditMigration, 'create or replace function public."write_admin_search_audit"', "Admin search audit RPC migration");
+assertIncludes(adminSearchAuditMigration, 'public."admin_search_mask_query"', "Admin search audit query masking");
+assertIncludes(adminSearchAuditMigration, "'admin_search_email_lookup'", "Admin email lookup audit event");
+assertIncludes(adminSearchAuditMigration, "'admin_search_denied'", "Admin search denied audit event");
+assertIncludes(adminSearchAuditMigration, "'admin_search_result_opened'", "Admin search result opened audit event");
+assertIncludes(adminSearchAuditMigration, "'email_plaintext_stored', false", "Admin email plaintext audit blocker");
+assertIncludes(adminSearchAuditMigration, "'raw_query_stored', false", "Admin raw query audit blocker");
+assertIncludes(adminSearchAuditMigration, "grant execute on function public.\"write_admin_search_audit\"", "Admin search audit authenticated grant");
 
 assertNotIncludes(explore, "Email lookup is admin-only.", "Explore admin email copy");
 assertNotIncludes(explore, "Search by email", "Explore email search copy");

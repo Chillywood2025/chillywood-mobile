@@ -34,6 +34,7 @@ User-facing privacy copy should stay short:
 - Home/public Rachi Originals cards must not expose internal proof/fixture wording in normal user-facing title or description copy.
 - Explore People search and typeahead can show Rachi only as the explicit public official result after internal/proof account filtering: `Rachi`, `Official Chi'llwood`, official avatar/fallback, View Profile, and View Platform.
 - Explore Originals typeahead can show Rachi-owned Chi'llwood Originals only when the underlying public-safe Rachi creator-video row is backed.
+- Admin Search can find Rachi posts/Originals only inside the owner/admin `/admin` gate. Those searches now write masked Admin Search audit events; Rachi must still never appear publicly as admin authority, a bot, a chat monitor, or fake private activity.
 - Chi'lly Chat keeps Rachi Help opt-in and does not imply Rachi reads other chats.
 - Admin Rachi tab is owner/admin-only and manages official Rachi posts plus official-content visibility.
 

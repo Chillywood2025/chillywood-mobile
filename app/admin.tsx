@@ -215,6 +215,10 @@ import {
   type PlatformAdminAuditLogRow,
 } from "../_lib/platformAudit";
 import {
+  writeAdminSearchAudit,
+  type AdminSearchAuditReceipt,
+} from "../_lib/adminSearchAudit";
+import {
   DMCA_CONTENT_ACTIONS,
   DMCA_CONTENT_TYPES,
   DMCA_NOTIFICATION_TEMPLATES,
@@ -2841,6 +2845,7 @@ export default function AdminStudioScreen() {
     tab?: string | string[];
   }>();
   const consumedAdminRouteRef = useRef<string | null>(null);
+  const lastAdminSearchAuditKeyRef = useRef<string | null>(null);
   const { isLoading: authLoading, isSignedIn, user } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const [titles, setTitles] = useState<TitleRow[]>([]);
@@ -2849,6 +2854,8 @@ export default function AdminStudioScreen() {
   const [adminSearchQuery, setAdminSearchQuery] = useState("");
   const [adminSearchDebouncedQuery, setAdminSearchDebouncedQuery] = useState("");
   const [adminSearchScope, setAdminSearchScope] = useState<AdminSearchScope>("all");
+  const [adminSearchAuditReceipt, setAdminSearchAuditReceipt] = useState<AdminSearchAuditReceipt | null>(null);
+  const [adminSearchAuditLoading, setAdminSearchAuditLoading] = useState(false);
   const [manualHeroQuery, setManualHeroQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [operatorTab, setOperatorTab] = useState<OperatorTabKey>("home");
@@ -7059,6 +7066,103 @@ export default function AdminStudioScreen() {
     safetyReports,
   ]);
 
+  useEffect(() => {
+    const queryText = adminSearchDebouncedQuery.trim();
+    if (!canAccessAdmin || queryText.length < ADMIN_SEARCH_MIN_LENGTH) {
+      lastAdminSearchAuditKeyRef.current = null;
+      setAdminSearchAuditLoading(false);
+      return;
+    }
+
+    if (adminSearchScope !== "all" && !adminSearchCanUseScope(adminSearchScope)) return;
+
+    const auditKey = `${adminSearchScope}:${queryText.toLowerCase()}`;
+    if (lastAdminSearchAuditKeyRef.current === auditKey) return;
+    lastAdminSearchAuditKeyRef.current = auditKey;
+
+    let cancelled = false;
+    setAdminSearchAuditLoading(true);
+
+    writeAdminSearchAudit({
+      searchScope: adminSearchScope,
+      query: queryText,
+      resultCount: adminSearchResults.length,
+      status: "searched",
+    })
+      .then((receipt) => {
+        if (cancelled) return;
+        setAdminSearchAuditReceipt(receipt);
+        if (receipt.ok) void loadAdminImmutableAuditReadModel();
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAdminSearchAuditReceipt({
+          ok: false,
+          auditLogId: null,
+          status: "failed",
+          eventName: "admin_search_query",
+          searchScope: adminSearchScope,
+          queryType: "text",
+          queryPreview: null,
+          resultCount: adminSearchResults.length,
+          createdAt: new Date().toISOString(),
+          error: "admin_search_audit_failed",
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setAdminSearchAuditLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    adminSearchCanUseScope,
+    adminSearchDebouncedQuery,
+    adminSearchResults.length,
+    adminSearchScope,
+    canAccessAdmin,
+    loadAdminImmutableAuditReadModel,
+  ]);
+
+  const openAdminSearchResult = useCallback((result: AdminSearchResult) => {
+    const queryText = adminSearchDebouncedQuery.trim();
+    if (queryText.length >= ADMIN_SEARCH_MIN_LENGTH) {
+      void writeAdminSearchAudit({
+        searchScope: result.scope,
+        query: queryText,
+        resultCount: adminSearchResults.length,
+        status: "searched",
+        eventName: "admin_search_result_opened",
+        resultRef: result.id,
+      })
+        .then((receipt) => {
+          setAdminSearchAuditReceipt(receipt);
+          if (receipt.ok) void loadAdminImmutableAuditReadModel();
+        })
+        .catch(() => {
+          setAdminSearchAuditReceipt({
+            ok: false,
+            auditLogId: null,
+            status: "failed",
+            eventName: "admin_search_result_opened",
+            searchScope: result.scope,
+            queryType: "text",
+            queryPreview: null,
+            resultCount: adminSearchResults.length,
+            createdAt: new Date().toISOString(),
+            error: "admin_search_result_audit_failed",
+          });
+        });
+    }
+
+    result.onPress();
+  }, [
+    adminSearchDebouncedQuery,
+    adminSearchResults.length,
+    loadAdminImmutableAuditReadModel,
+  ]);
+
   const queueMoneySwitchChange = useCallback((row: PlatformMoneyKillSwitchRow, nextState: MoneyFeatureFlagState) => {
     if (row.state === nextState || moneySwitchBusyKey) return;
     setMoneySwitchConfirm({
@@ -9608,6 +9712,22 @@ export default function AdminStudioScreen() {
     if (!canAccessAdmin) return null;
     const queryReady = adminSearchDebouncedQuery.trim().length >= ADMIN_SEARCH_MIN_LENGTH;
     const hasResults = adminSearchResults.length > 0;
+    const auditTitle = adminSearchAuditLoading
+      ? "Writing Search Audit"
+      : adminSearchAuditReceipt?.ok
+        ? "Search Audit Written"
+        : adminSearchAuditReceipt
+          ? "Search Audit Needs Attention"
+          : "Search Audit";
+    const auditBody = adminSearchAuditReceipt
+      ? [
+        `Scope ${formatModerationToken(adminSearchAuditReceipt.searchScope)}`,
+        `Type ${formatModerationToken(adminSearchAuditReceipt.queryType)}`,
+        adminSearchAuditReceipt.queryPreview ? `Query ${adminSearchAuditReceipt.queryPreview}` : null,
+        adminSearchAuditReceipt.resultCount !== null ? `${adminSearchAuditReceipt.resultCount} results` : null,
+        adminSearchAuditReceipt.createdAt ? formatModerationTimestamp(adminSearchAuditReceipt.createdAt) : null,
+      ].filter(Boolean).join(" · ")
+      : "Queries are written with masked search text and no raw email values.";
 
     return (
       <View testID="admin-search-panel" style={styles.adminSearchPanel}>
@@ -9658,7 +9778,7 @@ export default function AdminStudioScreen() {
                   testID={`admin-search-result-${result.scope}`}
                   activeOpacity={0.86}
                   style={styles.adminSearchResultRow}
-                  onPress={result.onPress}
+                  onPress={() => openAdminSearchResult(result)}
                 >
                   <View style={styles.adminSearchResultCopy}>
                     <View style={styles.ownerSectionHeaderRow}>
@@ -9684,6 +9804,19 @@ export default function AdminStudioScreen() {
             <Text style={styles.configListBody}>Results are permission-gated and stay inside Admin.</Text>
           </View>
         )}
+
+        {queryReady || adminSearchAuditReceipt ? (
+          <View testID="admin-search-audit-status" style={styles.configListRowSubtle}>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.configListTitle}>{auditTitle}</Text>
+              <OwnerStatusPill
+                label={adminSearchAuditLoading ? "Writing" : adminSearchAuditReceipt?.ok ? "Written" : "Masked"}
+                tone={adminSearchAuditReceipt?.ok ? "success" : adminSearchAuditLoading ? "info" : "manual"}
+              />
+            </View>
+            <Text style={styles.configListBody}>{auditBody}</Text>
+          </View>
+        ) : null}
       </View>
     );
   };

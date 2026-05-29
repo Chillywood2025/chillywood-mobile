@@ -114,7 +114,8 @@ Owner/Admin search:
 - Admin `Search Admin` typeahead searches already-loaded Admin sources only: staff/user role roster, safety reports, DMCA cases, Money Audit events, kill switches, provider readiness, Rachi posts/Originals, Live Cost Guard/Live Ops, legal requests, and immutable audit rows.
 - Email lookup stays Owner/Admin-only. Admin result rows mask email identity, and public Explore never accepts email lookup or displays email.
 - Admin search opens existing Admin tabs/details where backed; it does not add a new public RPC, bypass RLS, expose provider secrets/raw payloads, activate money, or change LiveKit/Watch-Party/Premium behavior.
-- Query-level Admin search audit writing is not added in this lane; opening/mutating sensitive surfaces continues through existing Admin audit paths where present.
+- Query-level Admin search audit writing is now implemented through `write_admin_search_audit`. Search queries, email-shaped lookups, denied attempts, and result opens write immutable Admin audit events with search scope, query type, masked query preview, result count, status, and no raw email/plain query storage in metadata.
+- Normal users cannot access the Admin Search UI or audit data. The latest proof used API/RLS denial for the non-staff proof account; Android runtime denial for the new panel remains unclaimed until a safe normal-user device session can be switched in without losing the owner/admin proof session.
 
 Recommended next Explore phase:
 - Add purpose-built Explore read models if product wants ranked search across Platforms, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, replays, Chi'llwood Originals, and Rachi official content.
@@ -123,6 +124,7 @@ Recommended next Explore phase:
 - Add ranking/read models before adding recommendation claims. Do not use placeholder creator/platform/live rows.
 
 Android proof:
+- `/tmp/chillywood-admin-search-audit-denial-spectator-profile-proof-20260529/` captures Admin Search audit writing, safe masked email lookup audit, public Explore email-blocked UI, compact Profile Photo sheet, and the safe Chi'llywood picker asset. It also records that normal-user Admin Search denial was proved through API/RLS rather than Android runtime for this lane.
 - `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/` captures the Explore typeahead/Admin search production pass.
 - `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/00-home-bottom-nav.*` captures the unchanged Home / Explore / Live / Library bottom nav and top controls.
 - `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/01-explore-initial.*` captures Explore with public typeahead scopes.

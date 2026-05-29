@@ -9144,6 +9144,8 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_search_mask_query: { Args: { p_query: string }; Returns: string }
+      admin_search_query_type: { Args: { p_query: string }; Returns: string }
       admin_update_official_rachi_profile_image: {
         Args: { p_avatar_url?: string; p_reason?: string }
         Returns: Json
@@ -9844,6 +9846,19 @@ export type Database = {
       user_has_active_entitlement: {
         Args: { required_entitlement_keys: string[]; target_user_id: string }
         Returns: boolean
+      }
+      write_admin_search_audit: {
+        Args: {
+          p_event_name?: string
+          p_metadata?: Json
+          p_query: string
+          p_reason?: string
+          p_result_count?: number
+          p_result_ref?: string
+          p_search_scope: string
+          p_status?: string
+        }
+        Returns: Json
       }
     }
     Enums: {

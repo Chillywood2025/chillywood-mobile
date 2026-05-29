@@ -10,6 +10,8 @@ Platform Studio Money Center is the normal creator-facing home for these statuse
 
 Money Center also has inspection drilldowns. Creator Platform Studio rows open sanitized `Money Event Detail` sheets for creator-owned/source-safe setup, sandbox, readiness, ledger, provider, and switch events. Owner/Admin Money Center has `Money Audit Explorer` for source rows, provider readiness, kill switch state/audit, ledger/revenue/payout/webhook/sponsor/fraud setup rows, and blocked money actions. These drilldowns are inspect-only and cannot activate checkout, payouts, transfers, withdrawals, balances, paid access, Premium, or live money.
 
+May 29, 2026 Admin Search audit closeout: Owner/Admin `Search Admin` can search provider readiness and money audit rows only inside `/admin`, and those searches now write masked immutable audit events through `write_admin_search_audit`. The audit metadata records scope, query type, masked preview, status, and result count, but never provider secrets, raw payloads, webhook secret values, service-role values, authorization headers, or plaintext email search text. This is an audit/readiness hardening only; it does not change provider readiness state or enable live money.
+
 ## Readiness Source Of Truth
 
 Migration `202605250002_provider_link_readiness_scaffold.sql` adds:

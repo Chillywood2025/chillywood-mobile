@@ -19,6 +19,8 @@ This spec does not:
 - add schema directly
 - create separate discovery-route sprawl beyond current doctrine
 
+2026-05-29 current search truth: Explore owns public discovery search with typeahead over backed public content, People, Platforms, Originals, Live, and Events. Public People search uses `search_public_people`, searches username/display name/public Platform name only, blocks email-shaped queries, hides owner/admin/security/system/proof/service accounts, respects privacy/block policy, and returns no email or private identifiers. Owner/Admin `Search Admin` lives only inside `/admin`; it may search operational sources, including masked email lookup, and now writes masked immutable audit events through `write_admin_search_audit`. Profile is not global user search.
+
 ## 2. Current Doctrine That Must Be Preserved
 
 ### 2.1 Locked Route Truth
@@ -49,6 +51,8 @@ Current doctrine is intentionally narrow:
 - hero/rail ordering is real
 - public creator/channel discovery is real
 - public live/event discovery is real where backed
+- public Explore typeahead is real only for backed public sources
+- Admin Search is real only inside the owner/admin permission gate and is audited
 - recommendation systems are not yet real
 
 That means:
@@ -158,11 +162,26 @@ Title/player surfaces may support discovery by:
 They must not become broad discovery owners.
 
 ### 4.4 Explore
-Explore may remain a lightweight browse surface while discovery deepens.
+Explore is the public browse/search surface while discovery deepens.
 
 If Explore grows:
 - it should stay curated/MVP-first
 - it must not overclaim search sophistication
+- it must not expose email lookup, Admin scopes, private audit/money/provider/report data, or owner/admin/security/system accounts
+
+Current backed Explore typeahead scopes:
+- Content
+- People
+- Platforms
+- Chi'llwood Originals
+- Live, where backed
+- Events, where backed
+
+Owner/Admin search stays separate:
+- Route: `/admin`
+- Copy: `Search Admin`
+- Search sources: already-loaded admin user/staff, reports, DMCA, money events, kill switches, provider readiness, Rachi, Live Ops, legal, and immutable audit rows where the signed-in role can see them
+- Audit: `write_admin_search_audit` writes masked query/result-open events and denied attempts
 
 ## 5. Current Source-Of-Truth Already In Repo
 

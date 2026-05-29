@@ -14,9 +14,12 @@ Closed truth:
 - Rachi may appear in Explore People only as the explicit public official result with `Rachi` and `Official Chi'llwood`, plus View Profile/View Platform. Rachi is not shown as admin, bot, or private-chat monitor.
 - Owner/Admin email lookup remains in Admin/staff tooling only. No public Explore email search or normal-user email lookup was added.
 - Admin Command Center now has a permission-gated `Search Admin` typeahead over already-loaded Admin sources: staff/user roles, reports, DMCA, Money Audit events, kill switches, provider readiness, Rachi posts/Originals, Live Cost Guard/Live Ops, legal requests, and immutable audit rows. Admin email lookup is Admin-only and result rows mask email identity.
+- Admin Search query-level audit writing is now implemented through remote-applied migration `202605290004_admin_search_query_audit.sql`, `_lib/adminSearchAudit.ts`, and the Admin Search audit receipt UI. It writes `admin_search_query`, `admin_search_email_lookup`, `admin_search_denied`, and `admin_search_result_opened` events into immutable Admin audit logs with masked query preview, query type, scope, result count, status, and no raw email/plain query storage in metadata.
+- Normal-user Admin Search API/RLS denial proof passed with the configured non-staff proof account: no active platform role rows, denied Admin Search audit RPC response with masked email-shaped query, zero visible Admin audit rows, and no public email result fields. Android runtime denial for the new panel remains unclaimed because the attached app session was owner/admin and there was no safe account-switch/restore path in this lane.
 - New guard coverage includes `npm run guard:public-user-search-policy` for public typeahead and `npm run guard:admin-search-policy` for owner/admin search boundaries.
 - Android proof for the Explore People search safety pass lives at `/tmp/chillywood-explore-people-search-proof-20260529/`.
 - Android proof for the Explore Typeahead/Admin Search pass lives at `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/`.
+- Admin Search audit/denial/profile/spectator closeout proof lives at `/tmp/chillywood-admin-search-audit-denial-spectator-profile-proof-20260529/`.
 - Home Top Picks, Browse, and Favorites sections are removed because Explore owns browse/discovery jobs and Library owns saved/favorites jobs. The cleanup also removed catalog-style followed-Platform/latest-public-upload Home sections so Home stays focused on launch/feed content rather than duplicating bottom-tab work.
 - Home no longer promotes a programmed/latest title into a giant Home hero. The `Chicago Streets` issue came from a fallback chain that used a latest/programmed title when no Continue Watching row existed.
 - Home keeps a cinematic hero. When real playback progress exists, that hero becomes `Continue Watching`; when no eligible progress exists, Home shows a neutral branded Chi'llwood hero rather than a random title.
@@ -39,19 +42,20 @@ Closed truth:
 - Android proof on `R5CR120QCBF` lives at `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/`.
 - Valid proof files are `04-explore-current.*`, `05-library-backed-sections.*`, `06-player-normal-mode.*`, `09-host-preflight-details.*`, `10-home-bottom-nav-top-avatar.*`, and `11-top-avatar-profile-route.*`.
 - Profile Photo picker correction proof lives at `/tmp/chillywood-profile-photo-picker-proof-20260529/` with owner Profile, tap sheet, long-press sheet, DocumentsUI focus proof, Settings Profile Appearance, and Profile Background sheet captures.
+- Current Profile proof in `/tmp/chillywood-admin-search-audit-denial-spectator-profile-proof-20260529/` also captures the compact owner photo sheet and a safe Chi'llywood image visible in Android DocumentsUI. The native picker did not hand the selected safe image back to the app during automation, so save/read-back/remove/fallback is not claimed.
 - `01`/`02` proof captures in that folder are stale-bundle/dev-menu misses and are not claimed.
 - No fake Explore rows, fake Library rows, fake live rooms, fake replays, fake events, fake creator activity, fake Rachi content, fake money, LiveKit issuer change, Watch-Party route ownership change, Premium gate change, Party Room change, or backend schema change was made.
 
 Remaining limitations:
 
-- Profile avatar/background save/read-back proof is not closed. The first-sheet UX and native picker launch are corrected/proved, but choosing/saving/removing media still needs a safe non-private gallery asset plus backend active-media read-back.
-- Spectator remaining proof is not newly closed. No safe Live Watch-Party / Reaction fixture was available in this lane; previous Watch-Party Live and replay child-room proof remains current.
+- Profile avatar/background save/read-back proof is not closed. The first-sheet UX, native picker launch, and a safe Chi'llywood picker asset are proved, but Android DocumentsUI did not return the selected image to the app during automation; save/remove/fallback also still needs backend active-media read-back from the owner session.
+- Spectator remaining proof is not newly closed. No safe Live Watch-Party / Reaction fixture was available in the latest closeout lane; previous Watch-Party Live and replay child-room proof remains current.
 - Watch-Party Live true two-device speech-triggered ducking is not closed. `adb devices -l` showed only `R5CR120QCBF`, with no second device/emulator/account available.
 - Player component extraction remains a future cleanup; this pass added safe mode labeling/resolution without a full rewrite.
 - Route/deeplink cleanup remains mostly documented rather than rewritten to avoid route-owner drift.
 - Profile media safe-asset save/read-back remains open even though the compact picker UI is fixed.
 - Explore People search runtime proof uses the explicit public Rachi official account. Capture a separate normal public user/creator result only when a safe public fixture exists; do not fake one.
-- Admin Search uses existing Admin-loaded data and does not add a separate search audit-write for the query itself. Opening or mutating sensitive surfaces continues to rely on the existing Admin audit paths where they exist; add a dedicated Admin search audit writer only in a future owner-security/audit lane.
+- Admin Search audit writing is closed for query/result-open events. Future Admin proof can add richer reason-required audit policy per sensitive scope only if product/security policy requires it.
 
 Recommended next lane:
 
