@@ -9709,6 +9709,20 @@ export type Database = {
         Args: { p_grants: Json; p_reason: string; p_target_user_id: string }
         Returns: Json
       }
+      search_public_people: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          has_public_platform: boolean
+          is_official: boolean
+          official_label: string
+          public_platform_id: string
+          short_bio: string
+          user_id: string
+          username: string
+        }[]
+      }
       security_context_id_from_metadata: {
         Args: { p_metadata: Json }
         Returns: string

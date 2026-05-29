@@ -32,6 +32,7 @@ User-facing privacy copy should stay short:
 - Home shows real public-safe Rachi-owned creator videos in `Chi'llwood Originals`.
 - Home Rachi Official Updates show Rachi identity: backed avatar when active, safe `R` fallback when missing, `Rachi`, `Official Chi'llwood`, and timestamp where backed.
 - Home/public Rachi Originals cards must not expose internal proof/fixture wording in normal user-facing title or description copy.
+- Explore People search can show Rachi only as the explicit public official result: `Rachi`, `Official Chi'llwood`, official avatar/fallback, View Profile, and View Platform.
 - Chi'lly Chat keeps Rachi Help opt-in and does not imply Rachi reads other chats.
 - Admin Rachi tab is owner/admin-only and manages official Rachi posts plus official-content visibility.
 
@@ -106,6 +107,18 @@ Rachi does not change:
 - creator upload/publish/delete rules
 - normal Chi'lly Chat privacy
 - normal Chi'lly Circle request/accept/remove behavior
+
+## Explore People Search
+
+Rachi is allowed in public Explore People search because Rachi is an explicit public official Chi'llywood account, not because of any owner/admin role.
+
+Rules:
+
+- Search result label is `Official Chi'llwood`.
+- Result actions are View Profile and View Platform where backed.
+- Do not show admin/operator/system role labels.
+- Do not show email, private support metadata, fake engagement, fake followers, fake uploads, or private-chat surveillance copy.
+- Rachi Help remains opt-in and only sees what a user sends in that help conversation.
 
 ## Validation
 

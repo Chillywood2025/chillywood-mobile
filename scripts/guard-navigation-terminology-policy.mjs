@@ -77,13 +77,16 @@ assertIncludes(libraryTab, "Replays, events, and clips appear when they are save
 assertIncludes(libraryTab, "readMergedWatchProgress", "Library backed continue watching");
 assertIncludes(libraryTab, "readFollowedChannelUserIds", "Library backed followed Platforms");
 assertIncludes(libraryTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Library Chi'llwood background");
-assertIncludes(explore, "Search titles, public Platforms, creator videos, Originals, events, and replays from current public sources.", "Explore backed scope copy");
-assertIncludes(explore, "EXPLORE_BACKED_NOW", "Explore backed section list");
+assertIncludes(explore, "Search titles, public people, Platforms, creator videos, Originals, events, and replays.", "Explore backed scope copy");
+assertIncludes(explore, "EXPLORE_SEARCH_SCOPES", "Explore search scope list");
+assertIncludes(explore, 'label: "People"', "Explore People search scope");
+assertIncludes(explore, "searchPublicPeople", "Explore public people search source");
+assertIncludes(explore, 'testID="explore-people-search-section"', "Explore People results section");
 assertIncludes(explore, "readPublicDiscoveryFeedItems({ surface: \"home\"", "Explore public discovery feed source");
 assertIncludes(explore, "readLatestPublicCreatorVideos", "Explore public creator video source");
-assertIncludes(explore, "Rachi public-safe originals", "Explore Rachi Originals source");
+assertIncludes(explore, "readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId", "Explore Rachi Originals source");
 assertIncludes(explore, "No public replays yet", "Explore honest replay empty state");
-assertIncludes(explore, "Search titles", "Explore no fake global count copy");
+assertIncludes(explore, "Search Explore", "Explore unified search copy");
 assertIncludes(explore, "CHILLYWOOD_BACKGROUND_SOURCE", "Explore Chi'llwood fallback background");
 ["fake", "mock row", "sample row", "dummy row"].forEach((needle) => {
   assertNotIncludes(explore, needle, "Explore backed data surface");

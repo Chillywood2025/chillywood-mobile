@@ -34,6 +34,10 @@ import {
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
+import {
+  searchPublicPeople,
+  type PublicPeopleSearchResult,
+} from "../../_lib/publicPeopleSearch";
 import { supabase } from "../../_lib/supabase";
 import { MainTabTopBar } from "../../components/navigation/main-tab-top-bar";
 import type { Tables } from "../../supabase/database.types";
@@ -73,14 +77,18 @@ type ExploreBackedSections = {
   publicEvents: CreatorEventSummary[];
 };
 
+type ExploreSearchScope = "all" | "content" | "people" | "platforms" | "live" | "events";
+
+const EXPLORE_SEARCH_SCOPES: Array<{ key: ExploreSearchScope; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "content", label: "Content" },
+  { key: "people", label: "People" },
+  { key: "platforms", label: "Platforms" },
+  { key: "live", label: "Live" },
+  { key: "events", label: "Events" },
+];
+
 const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
-const EXPLORE_BACKED_NOW = [
-  "Titles",
-  "Public discovery",
-  "Creator video cards",
-  "Rachi public-safe originals",
-  "Creator event summaries",
-] as const;
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
 
 const emptyBackedSections: ExploreBackedSections = {
@@ -146,6 +154,12 @@ const matchesExploreSearch = (item: TitleRow, rawQuery: string) => {
   ].some((value) => String(value ?? "").toLowerCase().includes(query));
 };
 
+const matchesTextSearch = (rawQuery: string, values: Array<unknown>) => {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) return true;
+  return values.some((value) => String(value ?? "").toLowerCase().includes(query));
+};
+
 const formatEventMode = (event: CreatorEventSummary) => {
   if (event.eventType === "live_watch_party") return "Live Watch-Party";
   if (event.eventType === "watch_party_live") return "Watch-Party Live";
@@ -192,16 +206,32 @@ export default function ExploreScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeScope, setActiveScope] = useState<ExploreSearchScope>("all");
+  const [peopleResults, setPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [peopleError, setPeopleError] = useState<string | null>(null);
   const [titleLiveMetadataById, setTitleLiveMetadataById] = useState<Record<string, TitleLiveMetadata>>({});
 
   const programmedTitles = useMemo(() => sortTitlesByProgramTruth(titles), [titles]);
+  const showContentScope = activeScope === "all" || activeScope === "content";
+  const showPeopleScope = activeScope === "all" || activeScope === "people";
+  const showPlatformScope = activeScope === "all" || activeScope === "platforms";
+  const showLiveScope = activeScope === "all" || activeScope === "live";
+  const showEventScope = activeScope === "all" || activeScope === "events";
   const filteredTitles = useMemo(
-    () => programmedTitles.filter((item) => matchesExploreSearch(item, searchQuery)),
-    [programmedTitles, searchQuery],
+    () => showContentScope ? programmedTitles.filter((item) => matchesExploreSearch(item, searchQuery)) : [],
+    [programmedTitles, searchQuery, showContentScope],
   );
   const titlesCount = programmedTitles.length;
   const visibleTitlesCount = filteredTitles.length;
   const hasSearchQuery = searchQuery.trim().length > 0;
+  const exploreCountLabel = activeScope === "people"
+    ? hasSearchQuery
+      ? `${peopleResults.length} public ${peopleResults.length === 1 ? "person" : "people"}`
+      : "Search public people"
+    : hasSearchQuery
+      ? `Showing ${visibleTitlesCount} of ${titlesCount} titles`
+      : `Titles: ${titlesCount}`;
   const heroItem = useMemo(() => {
     const heroFlagItem = programmedTitles.find((item) => item.is_hero === true) ?? null;
     const featuredItem = programmedTitles.find((item) => item.featured === true) ?? null;
@@ -217,36 +247,59 @@ export default function ExploreScreen() {
     [sections.discoveryItems],
   );
   const liveDiscoveryItems = useMemo(
-    () => rankedDiscoveryItems.filter((item) => item.live_state === "live").slice(0, 8),
-    [rankedDiscoveryItems],
+    () => rankedDiscoveryItems
+      .filter((item) => item.live_state === "live")
+      .filter((item) => matchesTextSearch(searchQuery, [item.title, item.subtitle, item.category_key]))
+      .slice(0, 8),
+    [rankedDiscoveryItems, searchQuery],
   );
   const platformDiscoveryItems = useMemo(
-    () => rankedDiscoveryItems.filter((item) => item.item_type === "channel_update").slice(0, 8),
-    [rankedDiscoveryItems],
+    () => rankedDiscoveryItems
+      .filter((item) => item.item_type === "channel_update")
+      .filter((item) => matchesTextSearch(searchQuery, [item.title, item.subtitle, item.category_key]))
+      .slice(0, 8),
+    [rankedDiscoveryItems, searchQuery],
   );
   const replayDiscoveryItems = useMemo(
     () => rankedDiscoveryItems
       .filter((item) => item.live_state === "replay_available_later" || item.item_type === "replay_later")
+      .filter((item) => matchesTextSearch(searchQuery, [item.title, item.subtitle, item.category_key]))
       .slice(0, 8),
-    [rankedDiscoveryItems],
+    [rankedDiscoveryItems, searchQuery],
   );
   const creatorDiscoveryVideos = useMemo(
     () => sections.creatorVideos
       .filter((video) => video.ownerId !== RACHI_OFFICIAL_ACCOUNT.userId)
+      .filter((video) => matchesTextSearch(searchQuery, [video.title, video.description, video.publicClipMetadata?.titleText]))
       .slice(0, 8),
-    [sections.creatorVideos],
+    [sections.creatorVideos, searchQuery],
   );
   const liveEvents = useMemo(
-    () => sections.publicEvents.filter((event) => event.isLiveNow).slice(0, 6),
-    [sections.publicEvents],
+    () => sections.publicEvents
+      .filter((event) => event.isLiveNow)
+      .filter((event) => matchesTextSearch(searchQuery, [event.eventTitle, event.eventType, event.status]))
+      .slice(0, 6),
+    [sections.publicEvents, searchQuery],
   );
   const scheduledEvents = useMemo(
-    () => sections.publicEvents.filter((event) => event.isUpcoming).slice(0, 8),
-    [sections.publicEvents],
+    () => sections.publicEvents
+      .filter((event) => event.isUpcoming)
+      .filter((event) => matchesTextSearch(searchQuery, [event.eventTitle, event.eventType, event.status]))
+      .slice(0, 8),
+    [sections.publicEvents, searchQuery],
   );
   const replayEvents = useMemo(
-    () => sections.publicEvents.filter((event) => event.replay.isReplayAvailableNow).slice(0, 8),
-    [sections.publicEvents],
+    () => sections.publicEvents
+      .filter((event) => event.replay.isReplayAvailableNow)
+      .filter((event) => matchesTextSearch(searchQuery, [event.eventTitle, event.eventType, event.status]))
+      .slice(0, 8),
+    [sections.publicEvents, searchQuery],
+  );
+  const rachiOriginals = useMemo(
+    () => sections.rachiOriginals
+      .filter((video) => matchesTextSearch(searchQuery, [video.title, video.description, video.publicClipMetadata?.titleText]))
+      .slice(0, 8),
+    [sections.rachiOriginals, searchQuery],
   );
 
   async function fetchTitleLiveMetadata(nextTitles: TitleRow[]) {
@@ -333,6 +386,43 @@ export default function ExploreScreen() {
     void loadExplore();
   }, []);
 
+  useEffect(() => {
+    const query = searchQuery.trim();
+    const queryWithoutHandlePrefix = query.replace(/^@+/, "");
+
+    if (!showPeopleScope || queryWithoutHandlePrefix.length < 2 || queryWithoutHandlePrefix.includes("@")) {
+      setPeopleResults([]);
+      setPeopleLoading(false);
+      setPeopleError(null);
+      return;
+    }
+
+    let active = true;
+    setPeopleLoading(true);
+    setPeopleError(null);
+
+    const timeout = setTimeout(() => {
+      searchPublicPeople(query, { limit: 12 })
+        .then((results) => {
+          if (!active) return;
+          setPeopleResults(results);
+        })
+        .catch(() => {
+          if (!active) return;
+          setPeopleResults([]);
+          setPeopleError("People search is unavailable right now.");
+        })
+        .finally(() => {
+          if (active) setPeopleLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [searchQuery, showPeopleScope]);
+
   function getExploreImageSource(item?: TitleRow | null): ImageSourcePropType | null {
     if (!item) return null;
 
@@ -363,6 +453,15 @@ export default function ExploreScreen() {
     if (!safeUserId) return;
     router.push({
       pathname: "/channel/[userId]",
+      params: { userId: safeUserId },
+    });
+  }
+
+  function openProfile(userId?: string | null) {
+    const safeUserId = String(userId ?? "").trim();
+    if (!safeUserId) return;
+    router.push({
+      pathname: "/profile/[userId]",
       params: { userId: safeUserId },
     });
   }
@@ -503,6 +602,108 @@ export default function ExploreScreen() {
     </TouchableOpacity>
   );
 
+  const renderPeopleResult = (person: PublicPeopleSearchResult) => {
+    const handle = person.username ? `@${person.username.replace(/^@+/, "")}` : "Public Profile";
+    const avatarSource = remoteImageSource(person.avatarUrl);
+    const platformId = String(person.publicPlatformId ?? person.userId).trim();
+
+    return (
+      <View
+        key={`person-${person.userId}`}
+        testID={`explore-people-result-${person.userId}`}
+        style={styles.peopleResultCard}
+      >
+        <TouchableOpacity
+          activeOpacity={0.86}
+          style={styles.peopleIdentityRow}
+          onPress={() => openProfile(person.userId)}
+        >
+          <View style={styles.peopleAvatar}>
+            {avatarSource ? (
+              <Image source={avatarSource} style={styles.peopleAvatarImage} />
+            ) : (
+              <Text style={styles.peopleAvatarInitial}>{person.displayName.slice(0, 1).toUpperCase()}</Text>
+            )}
+          </View>
+          <View style={styles.peopleCopy}>
+            <View style={styles.peopleNameRow}>
+              <Text style={styles.peopleName} numberOfLines={1}>{person.displayName}</Text>
+              {person.officialLabel ? (
+                <Text style={styles.officialBadge}>{person.officialLabel}</Text>
+              ) : person.hasPublicPlatform ? (
+                <Text style={styles.platformBadge}>Platform</Text>
+              ) : null}
+            </View>
+            <Text style={styles.peopleHandle} numberOfLines={1}>{handle}</Text>
+            {person.shortBio ? (
+              <Text style={styles.peopleBio} numberOfLines={2}>{person.shortBio}</Text>
+            ) : null}
+          </View>
+        </TouchableOpacity>
+        <View style={styles.peopleActionRow}>
+          <TouchableOpacity
+            activeOpacity={0.86}
+            style={styles.peopleAction}
+            onPress={() => openProfile(person.userId)}
+          >
+            <Text style={styles.peopleActionText}>View Profile</Text>
+          </TouchableOpacity>
+          {person.hasPublicPlatform && platformId ? (
+            <TouchableOpacity
+              activeOpacity={0.86}
+              style={[styles.peopleAction, styles.peopleActionPrimary]}
+              onPress={() => openChannel(platformId)}
+            >
+              <Text style={[styles.peopleActionText, styles.peopleActionPrimaryText]}>View Platform</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
+  const renderPeopleSearchSection = () => {
+    if (!showPeopleScope) return null;
+    const query = searchQuery.trim().replace(/^@+/, "");
+    const hasPeopleQuery = query.length >= 2 && !query.includes("@");
+    const showPeoplePrompt = activeScope === "people" && !hasPeopleQuery;
+
+    if (!hasPeopleQuery && !showPeoplePrompt) return null;
+
+    return (
+      <View testID="explore-people-search-section" style={styles.discoverySection}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>People</Text>
+          <Text style={styles.sectionMeta}>Public</Text>
+        </View>
+        {showPeoplePrompt ? (
+          <View testID="explore-people-empty" style={styles.inlineEmpty}>
+            <Text style={styles.inlineEmptyTitle}>Search public people</Text>
+            <Text style={styles.inlineEmptyText}>Try a username or creator name.</Text>
+          </View>
+        ) : peopleLoading ? (
+          <View style={styles.inlineEmpty}>
+            <Text style={styles.inlineEmptyTitle}>Searching people...</Text>
+          </View>
+        ) : peopleError ? (
+          <View style={styles.inlineEmpty}>
+            <Text style={styles.inlineEmptyTitle}>People search unavailable</Text>
+            <Text style={styles.inlineEmptyText}>{peopleError}</Text>
+          </View>
+        ) : peopleResults.length ? (
+          <View testID="explore-people-results" style={styles.peopleResultsList}>
+            {peopleResults.map(renderPeopleResult)}
+          </View>
+        ) : (
+          <View testID="explore-people-empty" style={styles.inlineEmpty}>
+            <Text style={styles.inlineEmptyTitle}>No people found</Text>
+            <Text style={styles.inlineEmptyText}>Try a username or creator name.</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderTitleItem: ListRenderItem<TitleRow> = ({ item }) => {
     const imageSource = getExploreImageSource(item);
     const liveMetadata = titleLiveMetadataById[String(item.id)] ?? null;
@@ -581,11 +782,9 @@ export default function ExploreScreen() {
               <View style={styles.headerBlock}>
                 <MainTabTopBar surface="explore" label="EXPLORE" style={styles.mainTabTopBar} />
                 <Text style={styles.exploreTitle}>Explore</Text>
-                <Text style={styles.count}>
-                  {hasSearchQuery ? `Showing ${visibleTitlesCount} of ${titlesCount} titles` : `Titles: ${titlesCount}`}
-                </Text>
+                <Text style={styles.count}>{exploreCountLabel}</Text>
                 <Text style={styles.headerBody}>
-                  Search titles, public Platforms, creator videos, Originals, events, and replays from current public sources.
+                  Search titles, public people, Platforms, creator videos, Originals, events, and replays.
                 </Text>
                 {errorMsg ? (
                   <View style={styles.inlineError}>
@@ -598,21 +797,38 @@ export default function ExploreScreen() {
                 ) : null}
 
                 <View style={styles.scopeChipRow}>
-                  {EXPLORE_BACKED_NOW.map((label) => (
-                    <View key={label} style={styles.scopeChip}>
-                      <Text style={styles.scopeChipText}>{label}</Text>
-                    </View>
+                  {EXPLORE_SEARCH_SCOPES.map((scope) => (
+                    <TouchableOpacity
+                      key={scope.key}
+                      testID={`explore-scope-chip-${scope.key}`}
+                      accessibilityLabel={`Search ${scope.label}`}
+                      activeOpacity={0.86}
+                      onPress={() => setActiveScope(scope.key)}
+                      style={[
+                        styles.scopeChip,
+                        activeScope === scope.key && styles.scopeChipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.scopeChipText,
+                          activeScope === scope.key && styles.scopeChipTextActive,
+                        ]}
+                      >
+                        {scope.label}
+                      </Text>
+                    </TouchableOpacity>
                   ))}
                 </View>
 
                 <View style={styles.searchShell}>
-                  <Text style={styles.searchLabel}>Search titles</Text>
+                  <Text style={styles.searchLabel}>Search Explore</Text>
                   <TextInput
-                    testID="explore-title-search-input"
-                    accessibilityLabel="Search Chi'llwood titles"
+                    testID="explore-search-input"
+                    accessibilityLabel="Search Chi'llwood Explore"
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    placeholder="Search title, category, or description"
+                    placeholder="Search title, person, Platform, or event"
                     placeholderTextColor="#858C9D"
                     style={styles.searchInput}
                     autoCapitalize="none"
@@ -621,6 +837,7 @@ export default function ExploreScreen() {
                   />
                 </View>
 
+                {activeScope !== "people" ? (
                 <View style={styles.statRow}>
                   <View style={styles.statPill}>
                     <Text style={styles.statValue}>{featuredCount}</Text>
@@ -635,8 +852,11 @@ export default function ExploreScreen() {
                     <Text style={styles.statLabel}>Title Rooms</Text>
                   </View>
                 </View>
+                ) : null}
 
-                {renderBackedSection(
+                {renderPeopleSearchSection()}
+
+                {showLiveScope ? renderBackedSection(
                   "Live Now",
                   `${liveDiscoveryItems.length + liveEvents.length} ready`,
                   liveDiscoveryItems.length + liveEvents.length > 0,
@@ -646,63 +866,63 @@ export default function ExploreScreen() {
                     {liveDiscoveryItems.map((item) => renderDiscoveryCard(item, "Live"))}
                     {liveEvents.map((event) => renderEventCard(event))}
                   </>,
-                )}
+                ) : null}
 
-                {renderBackedSection(
+                {showPlatformScope ? renderBackedSection(
                   "Platforms",
                   `${platformDiscoveryItems.length} ready`,
                   platformDiscoveryItems.length > 0,
                   "No public Platforms yet",
                   "Platform cards appear after public discovery identifies a public Platform update.",
                   platformDiscoveryItems.map((item) => renderDiscoveryCard(item, "Platform")),
-                )}
+                ) : null}
 
-                {renderBackedSection(
+                {showContentScope ? renderBackedSection(
                   "Creator Videos",
                   `${creatorDiscoveryVideos.length} ready`,
                   creatorDiscoveryVideos.length > 0,
                   "No public creator videos yet",
                   "Creator video cards come only from the public creator-video resolver.",
                   creatorDiscoveryVideos.map((video) => renderCreatorVideoCard(video)),
-                )}
+                ) : null}
 
-                {renderBackedSection(
+                {showContentScope ? renderBackedSection(
                   "Chi'llwood Originals",
-                  `${sections.rachiOriginals.length} ready`,
-                  sections.rachiOriginals.length > 0,
+                  `${rachiOriginals.length} ready`,
+                  rachiOriginals.length > 0,
                   "No public Originals yet",
                   "Rachi Originals appear here only from the official public-safe creator video list.",
-                  sections.rachiOriginals.map((video) => renderCreatorVideoCard(video, "Rachi")),
-                )}
+                  rachiOriginals.map((video) => renderCreatorVideoCard(video, "Rachi")),
+                ) : null}
 
-                {renderBackedSection(
+                {showEventScope ? renderBackedSection(
                   "Events",
                   `${scheduledEvents.length} ready`,
                   scheduledEvents.length > 0,
                   "No scheduled public events",
                   "Events appear here after creator event summaries are public and scheduled.",
                   scheduledEvents.map((event) => renderEventCard(event)),
-                )}
+                ) : null}
 
-                {renderBackedSection(
+                {showContentScope ? renderBackedSection(
                   "Replays",
                   `${replayDiscoveryItems.length + replayEvents.length} ready`,
                   replayDiscoveryItems.length + replayEvents.length > 0,
                   "No public replays yet",
-                  "Replay cards appear only after a replay feed row or event replay is public and available.",
+                  "Replays appear here after public replay content or event replays are available.",
                   <>
                     {replayDiscoveryItems.map((item) => renderDiscoveryCard(item, "Replay"))}
                     {replayEvents.map((event) => renderEventCard(event, true))}
                   </>,
-                )}
+                ) : null}
 
-                <View style={styles.sectionHeaderRow}>
+                {showContentScope ? <View style={styles.sectionHeaderRow}>
                   <Text style={styles.sectionTitle}>Titles</Text>
-                  <Text style={styles.sectionMeta}>Backed</Text>
-                </View>
+                  <Text style={styles.sectionMeta}>Public</Text>
+                </View> : null}
               </View>
             }
-            ListEmptyComponent={
+            ListEmptyComponent={showContentScope ? (
               <View style={styles.centerCard}>
                 <Text style={styles.muted}>{hasSearchQuery ? "No matching titles." : "No published titles yet."}</Text>
                 <Text style={styles.mutedSmall}>
@@ -711,7 +931,7 @@ export default function ExploreScreen() {
                     : "Chi'llwood titles will appear here once public programming is available."}
                 </Text>
               </View>
-            }
+            ) : null}
           />
         )}
       </SafeAreaView>
@@ -783,10 +1003,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
+  scopeChipActive: {
+    borderColor: "rgba(255,255,255,0.58)",
+    backgroundColor: "#FFFFFF",
+  },
   scopeChipText: {
     color: "#FFE8EA",
     fontSize: 11,
     fontWeight: "900",
+  },
+  scopeChipTextActive: {
+    color: "#111318",
   },
   searchShell: {
     gap: 8,
@@ -946,6 +1173,120 @@ const styles = StyleSheet.create({
   smallBadgeLive: {
     borderColor: "rgba(229,9,20,0.55)",
     backgroundColor: "rgba(229,9,20,0.2)",
+  },
+  peopleResultsList: {
+    gap: 10,
+  },
+  peopleResultCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(10,12,18,0.88)",
+    padding: 12,
+    gap: 10,
+  },
+  peopleIdentityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  peopleAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  peopleAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  peopleAvatarInitial: {
+    color: "#fff",
+    fontSize: 19,
+    fontWeight: "900",
+  },
+  peopleCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  peopleNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  peopleName: {
+    flexShrink: 1,
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  peopleHandle: {
+    color: "#AEB7CA",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  peopleBio: {
+    color: "#C8D0E0",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  officialBadge: {
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "rgba(229,9,20,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(229,9,20,0.48)",
+    color: "#FFE8EA",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  platformBadge: {
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    color: "#EAF0FF",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  peopleActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  peopleAction: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  peopleActionPrimary: {
+    borderColor: "rgba(229,9,20,0.5)",
+    backgroundColor: "rgba(229,9,20,0.2)",
+  },
+  peopleActionText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  peopleActionPrimaryText: {
+    color: "#FFE8EA",
   },
   inlineEmpty: {
     borderRadius: 8,

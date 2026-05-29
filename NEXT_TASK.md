@@ -7,6 +7,12 @@ Closed truth:
 - Bottom navigation is Home / Explore / Live / Library.
 - Profile is not duplicated in the bottom nav. The `(tabs)/profile` compatibility file remains hidden from the tab bar with `href: null`.
 - Profile remains accessible from top avatar/profile entry points on Home, Explore, Live, and Library, direct `/profile/[userId]` routes, Settings, and Profile actions.
+- Explore owns public people discovery; Profile remains the current user's identity/feed surface, not a global user-search surface.
+- Explore search now has All / Content / People / Platforms / Live / Events scopes. People search is backed by `search_public_people`, which searches username/display name/public Platform name only, blocks email-shaped queries, respects profile privacy and block policy, masks non-active avatar media, excludes owner/operator/moderator/security/support/system/proof/service accounts, and returns only public-safe fields.
+- Public People results may show `View Profile` and `View Platform` when a public Platform is backed. They do not show email, phone, private identifiers, staff role, admin/owner/security metadata, fake stats, fake followers, fake uploads, or fake activity.
+- Rachi may appear in Explore People only as the explicit public official result with `Rachi` and `Official Chi'llwood`, plus View Profile/View Platform. Rachi is not shown as admin, bot, or private-chat monitor.
+- Owner/Admin email lookup remains in Admin/staff tooling only. No public Explore email search or normal-user email lookup was added.
+- Android proof for the Explore People search safety pass lives at `/tmp/chillywood-explore-people-search-proof-20260529/`.
 - Home Top Picks, Browse, and Favorites sections are removed because Explore owns browse/discovery jobs and Library owns saved/favorites jobs. The cleanup also removed catalog-style followed-Platform/latest-public-upload Home sections so Home stays focused on launch/feed content rather than duplicating bottom-tab work.
 - Home no longer promotes a programmed/latest title into a giant Home hero. The `Chicago Streets` issue came from a fallback chain that used a latest/programmed title when no Continue Watching row existed.
 - Home keeps a cinematic hero. When real playback progress exists, that hero becomes `Continue Watching`; when no eligible progress exists, Home shows a neutral branded Chi'llwood hero rather than a random title.
@@ -40,6 +46,7 @@ Remaining limitations:
 - Player component extraction remains a future cleanup; this pass added safe mode labeling/resolution without a full rewrite.
 - Route/deeplink cleanup remains mostly documented rather than rewritten to avoid route-owner drift.
 - Profile media safe-asset save/read-back remains open even though the compact picker UI is fixed.
+- Explore People search runtime proof uses the explicit public Rachi official account. Capture a separate normal public user/creator result only when a safe public fixture exists; do not fake one.
 
 Recommended next lane:
 

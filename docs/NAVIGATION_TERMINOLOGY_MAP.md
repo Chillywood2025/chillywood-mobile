@@ -20,7 +20,7 @@ This map records the current Chi'llywood app navigation and product language aft
 ## Main App Mode Map
 Viewer mode:
 - Home: cinematic launch/feed surface with a branded hero by default and a `Continue Watching` hero only when real progress is backed, plus Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle when backed, and Upcoming Events when backed. Home must not carry Top Picks, Browse, Favorites, or random title-detail hero jobs.
-- Explore: backed browse/discovery surface for title search, public discovery feed rows, public creator videos, Rachi public-safe Originals, events, replays, and honest empty states.
+- Explore: backed browse/discovery surface for title search, public people/Profile discovery, public Platform discovery, public discovery feed rows, public creator videos, Rachi public-safe Originals, events, replays, and honest empty states.
 - Live: bottom-nav entry point for choosing `Live Watch-Party`, joining `Watch-Party Live` by code, or browsing content before starting a content-first party.
 - Library: current saved-title list. Broader My Stuff sections are planned only when backed.
 - top Profile/avatar entry: opens the signed-in user's social identity route from normal main tabs without duplicating Profile in the bottom nav.
@@ -90,20 +90,60 @@ Android proof:
 
 ## Explore Status
 Current implementation:
+- Explore owns public people discovery. Profile remains the current user's identity and social feed surface, not global user search.
+- Search scopes are All, Content, People, Platforms, Live, and Events.
 - Searches and filters `titles`.
+- Reads `search_public_people` for public People/Profile results.
 - Reads `readPublicDiscoveryFeedItems({ surface: "home" })` for public Platform/live/replay/discovery rows where the existing feed already exposes them.
 - Reads `readLatestPublicCreatorVideos` for public creator videos.
 - Reads Rachi public-safe Originals through the official Rachi account without draft/private inclusion.
 - Reads `readLatestPublicEventSummaries` for public event/replay summaries.
-- Renders compact backed or honest-empty sections: Search, Live Now, Platforms, Creator Videos, Chi'llwood Originals, Events, Replays, and Titles.
+- Renders compact backed or honest-empty sections: Search, People, Live Now, Platforms, Creator Videos, Chi'llwood Originals, Events, Replays, and Titles.
 - Uses backed hero/title imagery when present and falls back to the Chi'llwood branded background when no backed hero image is available.
 - Does not invent trending rows, creator rows, Platform rows, live state, replays, events, Rachi content, counts, or protected/private content.
+- Public People search supports username, display name, and the current public Platform name source. It does not support email, phone, private account identifiers, private roles, or staff/security/system metadata.
+- The public `search_public_people` RPC returns only public-safe fields: user id, display name, username, active avatar URL, official flag/label, public Platform flag/id, and short public bio.
+- Public People search reuses `can_view_profile_content`, so private Profiles and blocked relationships stay hidden according to the existing profile policy.
+- Owner/operator/moderator/security/support/system/proof/service accounts are excluded from public People search unless they are an explicitly public official account. Rachi is the allowed explicit official result and appears as `Official Chi'llwood`.
+- Owner/Admin email lookup remains an Admin/staff-only boundary. Public Explore does not add exact or partial email lookup.
 
 Recommended next Explore phase:
 - Add purpose-built Explore read models if product wants ranked search across Platforms, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, replays, Chi'llwood Originals, and Rachi official content.
 - Keep each section hidden or empty-state honest until backed rows exist.
 - Avoid fake trending, fake recommendations, fake viewer counts, and protected/private content leakage.
 - Add ranking/read models before adding recommendation claims. Do not use placeholder creator/platform/live rows.
+
+Android proof:
+- `/tmp/chillywood-explore-people-search-proof-20260529/01-explore-search-scopes.*` captures Explore with public search scopes and bottom nav Home / Explore / Live / Library.
+- `/tmp/chillywood-explore-people-search-proof-20260529/02-explore-people-rachi-result.*` captures the Rachi public official People result with no email visible.
+- `/tmp/chillywood-explore-people-search-proof-20260529/03-people-result-profile-route.*` captures View Profile from the People result.
+- `/tmp/chillywood-explore-people-search-proof-20260529/04-people-result-platform-route.*` captures View Platform from the People result.
+- `/tmp/chillywood-explore-people-search-proof-20260529/05-email-query-empty.*` captures public email-query no-result behavior.
+- `/tmp/chillywood-explore-people-search-proof-20260529/06-content-search-still-works.*` captures title/content search still working.
+- Runtime People-result proof uses the explicit public Rachi official account; a separate normal public user/creator result should be captured only when a safe public fixture exists.
+
+Validation:
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:navigation-terminology-policy`
+- `npm run guard:profile-production-policy`
+- `npm run guard:rachi-official-policy`
+- `npm run guard:public-user-search-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `npm run guard:refresh-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:provider-readiness-policy`
+- `npm run guard:money-center-policy`
+- `npm run guard:clip-studio-policy`
+- `npm run guard:platform-brand-studio-policy`
+- `npm run guard:spectator-child-room-policy`
+- `npm run guard:content-rights-policy`
+- `npm run guard:vod-quality-policy`
+- `supabase db push --dry-run`
+- `supabase db lint --linked --schema public --fail-on error`
+- targeted source proofs for no public email search/display, staff/system exclusion, Rachi official public behavior, content search continuity, no user-facing Mini Platform/friends wording in Explore, no LiveKit/Watch-Party/Premium/Money diffs, and whitespace checks
 
 ## Library Status
 Implemented status:
