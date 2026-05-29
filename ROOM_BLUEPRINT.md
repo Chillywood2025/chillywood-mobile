@@ -69,6 +69,7 @@ Before a feature or AI behavior belongs in a room, it should be tested against t
 
 ## Cross-Room Principles
 - Keep locked naming and route doctrine intact. `Live Watch-Party`, `Watch-Party Live`, `Live First`, `Party Room`, `Live Room`, and `Chi'lly Chat` are not interchangeable.
+- Normal viewer bottom navigation is Home / Explore / Live / Library. Profile is reached from top avatar/profile affordances and direct routes, not duplicated as a bottom tab.
 - The normal `Live` bottom-tab entry is an orientation surface, not a new room owner. It may route to existing Live Watch-Party waiting-room flow, Watch-Party Live code entry, or title/player discovery, but it must not change Party Room, Live Stage, LiveKit, Premium, or old-room handling.
 - The `Live` bottom-tab UI should stay compact: Hero header, Compact action cards, Status pills, Primary/secondary CTAs, and collapsed `How Live works` detail are product presentation only, not route or permission authority.
 - Player is the content-first playback surface. It may expose Watch-Party Live entry and Watch-Party Live-only Audio Mix when the shared player is active, but it must not become Live Watch-Party / Live Stage or Party Room ownership.

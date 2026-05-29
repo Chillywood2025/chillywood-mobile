@@ -1,12 +1,14 @@
 # NEXT TASK
 
-## Recommended Lane: Explore / Library Backed Read Models And Player Surface Plan
+## Recommended Lane: Backed Explore / Library Read Models And Player Surface Plan
 
-The Navigation Terminology and App Flow Clarity Pass, Live Hub Modern UI Density Pass, and Navigation Terminology Information Architecture Completion Pass are implemented and Android-proved. The next useful lane is backed read-model planning for full Explore/Library expansion plus a scoped Player surface plan, if product-approved.
+The Navigation Terminology and App Flow Clarity Pass, Live Hub Modern UI Density Pass, Navigation Terminology Information Architecture Completion Pass, and Modern Navigation IA production pass are implemented and Android-proved. The next useful lane is backed read-model planning for full Explore/Library expansion plus a scoped Player surface plan, if product-approved.
 
 Closed truth:
 
-- Bottom navigation is Home / Explore / Live / Library / Profile.
+- Bottom navigation is Home / Explore / Live / Library.
+- Profile is not duplicated in the bottom nav. The `(tabs)/profile` compatibility file remains hidden from the tab bar with `href: null`.
+- Profile remains accessible from the Home top avatar/profile entry, direct `/profile/[userId]` routes, Settings `Open Profile`, and existing Profile actions.
 - Live bottom tab is a compact orientation/entry surface only. It does not own Party Room or Live Stage behavior.
 - Live screen now uses a Hero header, Choice chips, Compact action cards, Action rows, Status pills, Primary/secondary CTAs, Progressive disclosure / Collapsible details, and an honest Empty state.
 - Long technical Live card copy was removed.
@@ -14,7 +16,7 @@ Closed truth:
 - Live Watch-Party entry uses the existing Premium/runtime preflight before routing.
 - Live Watch-Party routes through the existing `/watch-party?mode=live` waiting-room flow.
 - Watch-Party Live remains content/player-owned; the Live tab can join by code and points new content-first starts to Explore/title/Player.
-- Profile bottom tab routes to canonical `/profile/[userId]`.
+- Hidden Profile tab compatibility route still hands off to canonical `/profile/[userId]` when opened directly, but it is not rendered in the bottom bar.
 - `My List` is renamed to `Library`, but current backed content remains saved titles only.
 - Explore remains title search/filtering only and now shows a compact `Available now` / `Next discovery phase` map. Titles, featured/top-row programming, and live title-room cues are backed now; Platforms, public uploads, public live rooms, events, Chi'llwood Originals, and Rachi updates stay planned until backed.
 - Library remains saved-title-only and now has saved-title scope pills plus future My Stuff copy for following, replays, events, and clips without creating fake rows.
@@ -24,6 +26,7 @@ Closed truth:
 - `npm run guard:navigation-terminology-policy` pins bottom nav, live naming separation, Profile/Platform separation, Explore/Library scope, Player Watch-Party Live / Audio Mix / Party Room terminology, and no normal bottom-nav Admin exposure.
 - Android proof on `R5CR120QCBF` used `./gradlew assembleRelease`, `adb install -r -d`, and screenshots at `/tmp/chillywood-navigation-terminology-proof-20260528/`.
 - Completion-pass Android proof lives at `/tmp/chillywood-nav-ia-completion-proof-20260528/`.
+- Modern Navigation IA Android proof lives at `/tmp/chillywood-modern-nav-ia-proof-20260528/`.
 - No LiveKit, Watch-Party route ownership, Party Room, old-room handling, Premium gate, money, Rachi, Clip Studio, Brand Studio, Admin permission, or backend schema behavior changed.
 
 Remaining limitations:
@@ -33,6 +36,8 @@ Remaining limitations:
 - Host preflight remains a documented product recommendation, not a built flow.
 - Player remains multi-purpose and should be separated only in a future scoped lane.
 - Route/deeplink query handling remains mostly documented rather than rewritten; avoid risky router changes until backed read models are ready.
+- Profile avatar/background runtime proof remains skipped for now.
+- Spectator remaining runtime proof and Watch-Party Live two-device audio ducking proof remain separate device/account lanes.
 
 Recommended next lane:
 

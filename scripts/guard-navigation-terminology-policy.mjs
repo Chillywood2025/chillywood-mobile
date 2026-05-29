@@ -37,13 +37,14 @@ const navDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
   "title: 'Explore'",
   "title: 'Live'",
   "title: 'Library'",
-  "title: 'Profile'",
 ].forEach((label) => assertIncludes(tabs, label, "bottom navigation"));
 
+assertIncludes(tabs, 'name="profile"', "hidden Profile tab route registration");
+assertIncludes(tabs, "href: null", "Profile hidden from bottom navigation");
 assertNotIncludes(tabs, "Admin", "normal bottom navigation");
 assertNotIncludes(tabs, "My List", "bottom navigation label");
+assertNotIncludes(tabs, "title: 'Profile'", "normal bottom navigation label");
 assertIncludes(iconSymbol, "'play.circle.fill': 'live-tv'", "Live bottom-nav icon");
-assertIncludes(iconSymbol, "'person.crop.circle.fill': 'person'", "Profile bottom-nav icon");
 
 assertIncludes(liveTab, "heroHeader", "Live screen Hero header pattern");
 assertIncludes(liveTab, "compactActionCard", "Live screen Compact action cards pattern");
@@ -76,6 +77,7 @@ assertIncludes(explore, "EXPLORE_BACKED_NOW", "Explore backed section list");
 assertIncludes(explore, "EXPLORE_FUTURE_SCOPE", "Explore future plan copy");
 assertIncludes(explore, "Backed titles", "Explore no fake global count copy");
 assertIncludes(home, 'accessibilityLabel="Open your Profile"', "Home Profile affordance");
+assertIncludes(home, 'pathname: "/profile/[userId]"', "Home top Profile route");
 assertIncludes(player, 'surfaceLabel="Watch-Party Live"', "Player Watch-Party Live surface label");
 assertIncludes(player, "Audio Mix", "Player Watch-Party Live audio mix label");
 assertIncludes(player, "This room belongs to Live Watch-Party, not Watch-Party Live.", "Player live naming split");
@@ -91,7 +93,8 @@ assertIncludes(roomBlueprint, "Party Room must not hand off to Live Stage", "Par
   "Viewer mode",
   "Creator mode",
   "Owner/Admin mode",
-  "Home / Explore / Live / Library / Profile",
+  "Home / Explore / Live / Library",
+  "top Profile/avatar entry",
   "Watch-Party Live = content/player-driven watch-together flow",
   "Live Watch-Party = people-first live room",
   "Party Room = canonical room shell",
