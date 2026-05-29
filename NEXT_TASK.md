@@ -1,6 +1,30 @@
 # NEXT TASK
 
-## Recommended Lane: Profile Media Runtime Save/Read-Back Proof
+## Recommended Lane: Android Release Candidate Build And Route Smoke Proof
+
+Public V1 readiness audit is complete in `docs/PUBLIC_V1_READINESS_BLOCKER_MAP.md`.
+
+Current launch truth:
+
+- Chi'llywood is safe for continued controlled Android testing with live money off and honest scope.
+- Chi'llywood is not ready for broad public launch.
+- No new P0 app-code/security failure was found by the audit.
+- P0 blockers are current release-candidate Android proof and external store/legal/account-deletion acceptance.
+- The audit records 12 P1 blockers and 10 P2 deferrals.
+- Required validation passed: typecheck, runtime validation, all requested guards, Supabase migration list, linked schema lint, dry-run, and git diff checks.
+- Command proof lives at `/tmp/chillywood-public-v1-readiness-20260529/commands.log`.
+- Referenced Android proof remains in the existing `/tmp/chillywood-*` proof folders; this docs lane did not create new screenshots.
+
+Next lane scope:
+
+- Build/install a current release-like Android artifact from current `main`.
+- Capture app launch, splash/icon where feasible, Home, Explore, Library, Live, Profile, Platform, Platform Studio, Player, Watch-Party Live, Live Watch-Party where available, Spectator, Money Center, Admin, Rachi, Search, Settings, legal/support/account deletion, signed-out and signed-in handoffs.
+- Run release logging/redaction checks for tokens, signed URLs, provider payloads, service-role values, private identifiers, and noisy production logs.
+- Confirm release route smoke without adding features, changing LiveKit/Watch-Party/Premium behavior, or activating live money.
+
+After that lane, close Profile media save/read-back and blocked/private fixtures, then store/legal acceptance.
+
+## Previous Recommended Lane: Profile Media Runtime Save/Read-Back Proof
 
 Closed truth:
 
