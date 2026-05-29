@@ -1,50 +1,36 @@
 # NEXT TASK
 
-## Recommended Lane: Backed Explore / Library Read Models And Player Surface Plan
-
-The Navigation Terminology and App Flow Clarity Pass, Live Hub Modern UI Density Pass, Navigation Terminology Information Architecture Completion Pass, and Modern Navigation IA production pass are implemented and Android-proved. The next useful lane is backed read-model planning for full Explore/Library expansion plus a scoped Player surface plan, if product-approved.
+## Recommended Lane: Remaining Runtime Proof Fixtures
 
 Closed truth:
 
 - Bottom navigation is Home / Explore / Live / Library.
 - Profile is not duplicated in the bottom nav. The `(tabs)/profile` compatibility file remains hidden from the tab bar with `href: null`.
-- Profile remains accessible from the Home top avatar/profile entry, direct `/profile/[userId]` routes, Settings `Open Profile`, and existing Profile actions.
-- Live bottom tab is a compact orientation/entry surface only. It does not own Party Room or Live Stage behavior.
-- Live screen now uses a Hero header, Choice chips, Compact action cards, Action rows, Status pills, Primary/secondary CTAs, Progressive disclosure / Collapsible details, and an honest Empty state.
-- Long technical Live card copy was removed.
-- Live Hub Android proof on `R5CR120QCBF` used `./gradlew assembleRelease`, `adb install -r -d`, and screenshots at `/tmp/chillywood-live-hub-density-proof-20260528/`.
-- Live Watch-Party entry uses the existing Premium/runtime preflight before routing.
-- Live Watch-Party routes through the existing `/watch-party?mode=live` waiting-room flow.
-- Watch-Party Live remains content/player-owned; the Live tab can join by code and points new content-first starts to Explore/title/Player.
-- Hidden Profile tab compatibility route still hands off to canonical `/profile/[userId]` when opened directly, but it is not rendered in the bottom bar.
-- Follow-up background polish keeps the new normal viewer routes on-brand: Live and Library render over the Chi'llwood branded background, and Explore falls back to that branded background when no backed hero title image is available.
-- `My List` is renamed to `Library`, but current backed content remains saved titles only.
-- Explore remains title search/filtering only and now shows a compact `Available now` / `Next discovery phase` map. Titles, featured/top-row programming, and live title-room cues are backed now; Platforms, public uploads, public live rooms, events, Chi'llwood Originals, and Rachi updates stay planned until backed.
-- Library remains saved-title-only and now has saved-title scope pills plus future My Stuff copy for following, replays, events, and clips without creating fake rows.
-- Player was audited but not rewritten. Watch-Party Live remains content/player-driven, Audio Mix remains Watch-Party Live-only, Party Room remains a compatibility room action, and Live Watch-Party / Live Stage ownership stays outside Player.
-- User-facing `Channel` wording was tightened to `Platform` where the product means public creator surface.
-- `docs/NAVIGATION_TERMINOLOGY_MAP.md` records the terminology map, mode map, route/deeplink notes, and deferred app-flow work.
-- `npm run guard:navigation-terminology-policy` pins bottom nav, live naming separation, Profile/Platform separation, Explore/Library scope, Player Watch-Party Live / Audio Mix / Party Room terminology, and no normal bottom-nav Admin exposure.
-- Android proof on `R5CR120QCBF` used `./gradlew assembleRelease`, `adb install -r -d`, and screenshots at `/tmp/chillywood-navigation-terminology-proof-20260528/`.
-- Completion-pass Android proof lives at `/tmp/chillywood-nav-ia-completion-proof-20260528/`.
-- Modern Navigation IA Android proof lives at `/tmp/chillywood-modern-nav-ia-proof-20260528/`.
-- No LiveKit, Watch-Party route ownership, Party Room, old-room handling, Premium gate, money, Rachi, Clip Studio, Brand Studio, Admin permission, or backend schema behavior changed.
+- Profile remains accessible from the Home top avatar/profile entry, direct `/profile/[userId]` routes, Settings, and Profile actions.
+- Live Hub is already modernized and was not redesigned in the burn-down lane.
+- Explore now uses backed title search, public discovery feed rows, public creator videos, Rachi public-safe Originals, and public event summaries. Visible sections are backed or honest empty states: Search, Live Now, Platforms, Creator Videos, Chi'llwood Originals, Events, Replays, and Titles.
+- Library now uses backed saved titles, watch progress, and followed Platform profile read-back. Replays, events, and clips remain hidden until saved rows exist.
+- Player now has scoped surface modes for title, creator video, Spectator child playback, Watch-Party Live shared Player, and Live Watch-Party stage context. Audio Mix remains Watch-Party Live shared Player-only.
+- Watch-Party waiting room now has a UI-only host preflight for real title-linked Watch-Party Live entries; room creation, Premium gates, LiveKit token behavior, route ownership, Party Room, and old-room handling are unchanged.
+- Android proof on `R5CR120QCBF` lives at `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/`.
+- Valid proof files are `04-explore-current.*`, `05-library-backed-sections.*`, `06-player-normal-mode.*`, `09-host-preflight-details.*`, `10-home-bottom-nav-top-avatar.*`, and `11-top-avatar-profile-route.*`.
+- `01`/`02` proof captures in that folder are stale-bundle/dev-menu misses and are not claimed.
+- No fake Explore rows, fake Library rows, fake live rooms, fake replays, fake events, fake creator activity, fake Rachi content, fake money, LiveKit issuer change, Watch-Party route ownership change, Premium gate change, Party Room change, or backend schema change was made.
 
 Remaining limitations:
 
-- Explore is not yet unified global discovery.
-- Library is not yet a full My Stuff surface.
-- Host preflight remains a documented product recommendation, not a built flow.
-- Player remains multi-purpose and should be separated only in a future scoped lane.
-- Route/deeplink query handling remains mostly documented rather than rewritten; avoid risky router changes until backed read models are ready.
-- Profile avatar/background runtime proof remains skipped for now.
-- Spectator remaining runtime proof and Watch-Party Live two-device audio ducking proof remain separate device/account lanes.
+- Profile avatar/background proof is not closed. Owner Profile rendered and `profile-avatar-edit-trigger` was visible/enabled, but tap/long-press did not open the edit sheet in this dev-client session and no safe non-private gallery asset plus backend read-back fixture was available.
+- Spectator remaining proof is not newly closed. No safe Live Watch-Party / Reaction fixture was available in this lane; previous Watch-Party Live and replay child-room proof remains current.
+- Watch-Party Live true two-device speech-triggered ducking is not closed. `adb devices -l` showed only `R5CR120QCBF`, with no second device/emulator/account available.
+- Player component extraction remains a future cleanup; this pass added safe mode labeling/resolution without a full rewrite.
+- Route/deeplink cleanup remains mostly documented rather than rewritten to avoid route-owner drift.
 
 Recommended next lane:
 
-- Design backed Explore/Library read models first. Do not add fake creator/live/event/library rows.
-- Plan Player surface decomposition around playback, Watch-Party Live entry, comments/reactions, Premium gates, and owner-only states before any UI rewrite.
-- If product wants host preflight, design it around the existing waiting-room owner without changing LiveKit, Premium, Party Room, Live Stage, or Watch-Party route ownership.
+- Profile Media Runtime Closeout with one safe app-owned/non-private gallery asset, a signed-in owner account, viewer/signed-out checks, backend active-media read-back, removal/fallback proof, and public masking proof.
+- Spectator Live Watch-Party / Reaction Fixture Closeout with a real public-safe live-stage-compatible fixture and no original token/host/member leakage.
+- Watch-Party Live Two-Device Audio Ducking Closeout with two joined devices/accounts proving remote speech ducks/restores local video while Party Room and Live Watch-Party still have no Audio Mix.
+- Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
 
 ## Previous Recommended Lane: RevenueCat / Google Play Webhook Secret Linking And Signed Sandbox Proof
 

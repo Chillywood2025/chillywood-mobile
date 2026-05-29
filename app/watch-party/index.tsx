@@ -1140,6 +1140,64 @@ export default function WatchPartyIndexScreen() {
   const partyPermissionsBody = `${getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy)} ${getPartyContentAccessCopy(activeRoomContext?.contentAccessRule)} ${getPartyCapturePolicyCopy(activeRoomContext?.capturePolicy)}`;
   const waitingRoomReadinessRows = isLiveWaitingRoom ? liveReadinessRows : partyReadinessRows;
   const waitingRoomPermissionsBody = isLiveWaitingRoom ? livePermissionsBody : partyPermissionsBody;
+  const sourcePreflightStatus = isLiveWaitingRoom
+    ? "Ready"
+    : partyTitleId || partySourceId
+      ? "Ready"
+      : "Needed";
+  const sourcePreflightBody = isLiveWaitingRoom
+    ? "Live Watch-Party starts without a title source."
+    : partyTitleId || partySourceId
+      ? `${partyTitleName} is selected for Watch-Party Live.`
+      : "Open Watch-Party Live from Player, or enter the linked title id.";
+  const hostPreflightRows = [
+    {
+      label: "Room type",
+      status: isLiveWaitingRoom ? "Live Watch-Party" : "Watch-Party Live",
+      detail: isLiveWaitingRoom ? "People-first live room entry." : "Content-first Party Room entry.",
+    },
+    {
+      label: "Audience",
+      status: activeRoomContext?.joinPolicy === "locked" ? "Locked" : "Room code",
+      detail: isLiveWaitingRoom ? getJoinPolicyCopy(activeRoomContext?.joinPolicy) : getPartyJoinPolicyCopy(activeRoomContext?.joinPolicy),
+    },
+    {
+      label: "Mic / Camera",
+      status: isLiveWaitingRoom ? "Live Room" : "Party Room",
+      detail: isLiveWaitingRoom
+        ? "Mic and camera setup stays inside Live Room."
+        : "Watch-Party Live camera setup stays inside Party Room and shared Player.",
+    },
+    {
+      label: "Source / Content",
+      status: sourcePreflightStatus,
+      detail: sourcePreflightBody,
+    },
+    {
+      label: "Who can speak",
+      status: "Host managed",
+      detail: isLiveWaitingRoom
+        ? "Speaker seats stay controlled by the Live Room."
+        : "Party Room voice controls stay controlled by the room.",
+    },
+    {
+      label: "Safety controls",
+      status: "Destination room",
+      detail: "Access checks, reports, and host actions remain in their existing room surfaces.",
+    },
+    {
+      label: "Paid / Free status",
+      status: "Checked before entry",
+      detail: isLiveWaitingRoom
+        ? "Live access uses the existing Premium check."
+        : "Watch-Party Live access uses the existing Premium or Party Pass check.",
+    },
+    {
+      label: "Start",
+      status: isLiveWaitingRoom ? "Create Live Room" : "Create Party Room",
+      detail: "Start uses the existing room creation path.",
+    },
+  ];
   const waitingRoomInviteBody = isPreparingInitialCode
     ? (isLiveWaitingRoom
       ? "Preparing a shareable code for this live waiting room."
@@ -1164,6 +1222,22 @@ export default function WatchPartyIndexScreen() {
 
     return (
       <>
+        <View style={styles.hostPreflightCard}>
+          <View style={styles.hostPreflightHeader}>
+            <Text style={styles.hostPreflightLabel}>HOST PREFLIGHT</Text>
+            <Text style={styles.hostPreflightPill}>{isLiveWaitingRoom ? "Live" : "Party"}</Text>
+          </View>
+          {hostPreflightRows.map((row) => (
+            <View key={row.label} style={styles.hostPreflightRow}>
+              <View style={styles.hostPreflightCopy}>
+                <Text style={styles.hostPreflightTitle}>{row.label}</Text>
+                <Text style={styles.hostPreflightBody}>{row.detail}</Text>
+              </View>
+              <Text style={styles.hostPreflightStatus}>{row.status}</Text>
+            </View>
+          ))}
+        </View>
+
         <View style={styles.readinessCard}>
           <Text style={styles.readinessLabel}>SETUP STATUS</Text>
           {waitingRoomReadinessRows.map((entry) => (
@@ -1865,6 +1939,57 @@ const styles = StyleSheet.create({
   readinessTitle: { color: "#F2F5FC", fontSize: 13, fontWeight: "800" },
   readinessStatus: { color: "#97A3BC", fontSize: 11.5, fontWeight: "800" },
   readinessBody: { color: "#A7B0C3", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+
+  hostPreflightCard: {
+    backgroundColor: "rgba(12,12,16,0.92)",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    padding: 14,
+    gap: 10,
+  },
+  hostPreflightHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  hostPreflightLabel: { color: "#8FA2C8", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
+  hostPreflightPill: {
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    color: "#EAF0FF",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  hostPreflightRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+    paddingTop: 9,
+  },
+  hostPreflightCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  hostPreflightTitle: { color: "#F2F5FC", fontSize: 12.5, fontWeight: "900" },
+  hostPreflightBody: { color: "#A7B0C3", fontSize: 11.5, lineHeight: 16, fontWeight: "600" },
+  hostPreflightStatus: {
+    maxWidth: 116,
+    color: "#FFFFFF",
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "900",
+    textAlign: "right",
+  },
 
   permissionsCard: {
     backgroundColor: "rgba(12,12,16,0.92)",

@@ -66,24 +66,29 @@ Source truth:
 
 ## Explore Status
 Current implementation:
-- Searches and filters `titles` only.
-- Shows backed title metadata, featured/trending/top-row flags, and live-now title-room cues where available.
-- The header now separates `Available now` from `Next discovery phase` so users see the backed scope without fake global discovery.
-- Explore uses backed hero/title imagery when present and falls back to the Chi'llwood branded background when no backed hero image is available.
-- Does not invent creator, upload, event, live-room, or Rachi results.
+- Searches and filters `titles`.
+- Reads `readPublicDiscoveryFeedItems({ surface: "home" })` for public Platform/live/replay/discovery rows where the existing feed already exposes them.
+- Reads `readLatestPublicCreatorVideos` for public creator videos.
+- Reads Rachi public-safe Originals through the official Rachi account without draft/private inclusion.
+- Reads `readLatestPublicEventSummaries` for public event/replay summaries.
+- Renders compact backed or honest-empty sections: Search, Live Now, Platforms, Creator Videos, Chi'llwood Originals, Events, Replays, and Titles.
+- Uses backed hero/title imagery when present and falls back to the Chi'llwood branded background when no backed hero image is available.
+- Does not invent trending rows, creator rows, Platform rows, live state, replays, events, Rachi content, counts, or protected/private content.
 
 Recommended next Explore phase:
-- Add backed sections for Platforms, public uploads, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, Chi'llwood Originals, and Rachi official content.
+- Add purpose-built Explore read models if product wants ranked search across Platforms, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, replays, Chi'llwood Originals, and Rachi official content.
 - Keep each section hidden or empty-state honest until backed rows exist.
 - Avoid fake trending, fake recommendations, fake viewer counts, and protected/private content leakage.
-- Add read models before adding result cards. Do not use placeholder creator/platform/live rows.
+- Add ranking/read models before adding recommendation claims. Do not use placeholder creator/platform/live rows.
 
 ## Library Status
 Implemented status:
 - `My List` is renamed to `Library` in the bottom nav and screen copy.
-- Current backed content remains saved titles only.
-- Header scope pills show saved-title count and future My Stuff scope.
-- Empty state says other Library sections appear only when real saved items exist.
+- Current backed sections are Saved, Continue Watching, and Platforms.
+- Saved reads `readMyListIds` and resolves only real titles.
+- Continue Watching reads `readMergedWatchProgress` and resolves only titles with real progress.
+- Platforms reads `readFollowedChannelUserIds` and resolves only public profile read-back rows.
+- Empty state says replays, events, and clips appear only when real saved rows exist.
 - The Library route uses the Chi'llwood branded background behind the compact saved-title surface.
 
 Recommended Library/My Stuff phase:
@@ -111,16 +116,20 @@ Current modes seen in `app/player/[id].tsx`:
 - normal title playback
 - creator video playback
 - public Platform video playback
+- spectator child playback
 - Watch-Party Live shared-player mode
+- Live Watch-Party stage context
 - Premium/Party Pass/direct-room access checks
 - comments, reactions, report/share, and creator-video monetization messages where backed
 
 Audit result:
+- Player now has a scoped `PlayerSurfaceMode` resolver and presentation labels for title, creator video, Spectator child playback, Watch-Party Live shared Player, and Live Watch-Party stage contexts.
+- `docs/PLAYER_SURFACE_DECOMPOSITION.md` records the mode split and the deferred extraction guardrails.
 - Player correctly labels its content-first room path as `Watch-Party Live`.
 - `Audio Mix` remains inside Watch-Party Live shared-player controls and was not moved to Live Watch-Party, Party Room, or the Live Hub.
 - Player route-gate copy distinguishes rooms that belong to Live Watch-Party from Watch-Party Live.
 - `Open Party Room` remains a compatibility action only when a direct room route is appropriate.
-- No Player code was rewritten in the completion pass; a future Player lane should split or simplify the multi-mode UI only after preserving Premium gates, public/draft/private visibility, comments/reactions, report/share controls, and Watch-Party Live ownership.
+- No full Player rewrite happened in the burn-down pass; a future Player lane can extract components only after preserving Premium gates, public/draft/private visibility, comments/reactions, report/share controls, Spectator safety, and Watch-Party Live ownership.
 
 ## Live Hub UI Density
 Implemented status:
@@ -158,18 +167,15 @@ Guardrails:
 - Rachi remains `Official Chi'llywood`, appears through canonical public-safe surfaces, and is not positioned as a private-chat watcher.
 - Rachi Official Updates and Chi'llwood Originals stay backed-only; no fake posts, fake Originals, fake followers, fake likes, or fake engagement are allowed.
 
-## Host Preflight Recommendation
-Current backing exists across waiting-room/live-stage/player flows, but the product would benefit from one clearer preflight moment before the host enters:
-- Room type.
-- Audience and access.
-- Mic/camera readiness.
-- Paid/free status and Premium/access gates.
-- Who can speak.
-- Safety controls.
-- Source/content eligibility.
-- Start or schedule action.
+## Host Preflight Status
+Implemented status:
+- `app/watch-party/index.tsx` now shows a lightweight `HOST PREFLIGHT` card when a real waiting-room context exists, including title-linked Watch-Party Live entries.
+- Preflight rows are Room type, Audience, Mic / Camera, Source / Content, Who can speak, Safety controls, Paid / Free status, and Start.
+- The card clarifies existing state only. It does not create rooms, issue tokens, verify source rights, grant Premium, or change Party Room / Live Stage ownership.
+- Android proof for a title-linked Watch-Party Live entry is `09-host-preflight-details.*` in `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/`.
 
-This pass did not build a full preflight because it would touch room behavior and LiveKit-adjacent flow. The correct future location is the existing waiting-room owner before handoff into Party Room or Live Room.
+Remaining preflight work:
+- A fuller Live Watch-Party host preflight can be added only inside the existing `/watch-party?mode=live` owner and must preserve LiveKit token issuance, Premium gates, room creation, and old-room handling.
 
 ## Platform Studio Density
 Current state:
@@ -193,63 +199,48 @@ Recommendation:
 - No fake earnings, balances, payouts, tips, paid content, merch, checkout, or live money.
 
 ## Route And Deep Link Notes
-- `/(tabs)/index`: Home bottom tab.
-- `/(tabs)/explore`: Explore bottom tab.
-- `/(tabs)/live`: Live bottom tab.
-- `/(tabs)/my-list`: Library bottom tab.
-- `/(tabs)/profile`: hidden compatibility tab route; it should not render in the bottom nav and redirects/hands off to the signed-in user's Profile.
-- `/profile/[userId]`: Profile social identity.
-- `/channel/[userId]`: Public Platform, route name retained for compatibility.
-- `/channel-studio`: preferred Platform Studio route.
-- `/channel-settings`: compatibility route into Platform Studio.
-- `/player/[id]`: Player / playback-first route; owns content-first Watch-Party Live entry.
-- `/chat`: Chi'lly Chat inbox.
-- `/chat/[threadId]`: direct Chi'lly Chat thread.
-- `/chilly-circle`: Chi'lly Circle.
-- `/watch-party`: waiting room / code entry / live mode preparation.
-- `/watch-party/[partyId]`: Party Room.
-- `/watch-party/live-stage/[partyId]`: Live Room / Live Stage.
-- `/spectate/[itemId]`: Spectator metadata/playback eligibility.
-- `/admin`: Admin Command Center, backend-role protected.
-- `/admin?tab=money-center`: Admin Money Center where supported.
-- `/monetize`, `/revenue`, `/payouts`: compatibility redirects into Money Center.
-
-Query params currently known:
-- `/watch-party?mode=live` opens Live Watch-Party waiting-room flow.
-- `/channel/[userId]?preview=public` opens public Platform preview without owner controls.
-- `/channel-studio?tab=monetization&focus=...` opens Money Center sections.
-- `/admin?tab=money-center` and old admin money params map into Admin Money Center sections.
-- Some route params are intentionally documented rather than rewritten in this pass; risky router rewrites should wait for a scoped route/deeplink lane.
+| Path | User-facing label | Access | Query params | Known ignored/deferred params |
+| --- | --- | --- | --- | --- |
+| `/(tabs)/index` | Home | viewer signed-in/signed-out where route allows | none required | discovery ranking params deferred |
+| `/(tabs)/explore` | Explore | viewer | search text is local state | global search/ranking params deferred until read models exist |
+| `/(tabs)/live` | Live | viewer; full room entry still Premium/runtime gated | none required | room-owner params are forwarded only through existing actions |
+| `/(tabs)/my-list` | Library | signed-in/device-backed saved/progress state | none required | replay/event/clip anchors deferred until saved rows exist |
+| `/(tabs)/profile` | hidden Profile compatibility route | signed-in; hidden from bottom nav | none required | must stay `href: null` in bottom nav |
+| `/profile/[userId]` | Profile | owner, viewer, signed-out public-safe view where allowed | `userId` path param | raw storage/media params ignored |
+| `/channel/[userId]` | Platform | owner/viewer/signed-out public-safe view | `preview=public` hides owner controls | technical route name remains `/channel` for compatibility |
+| `/channel-studio` | Platform Studio | owner/creator | `tab`, `focus`, legacy money anchors | unsupported tabs should route to safe defaults |
+| `/channel-settings` | Platform Studio compatibility | owner/creator | `tab` where supported | should keep mapping into Studio instead of becoming a new product route |
+| `/player/[id]` | Player | entitlement/source/visibility gated | `partyId`, `source`, `liveMode`, `spectator`-style source params where existing owners send them | no generic fake playback/proof params |
+| `/watch-party` | Watch-Party waiting room | signed-in; Premium/runtime gates before full entry | `mode=live`, `titleId`, `source`, `sourceType`, `sourceId`, `roomCode`, `roomId`, `partyId` | source eligibility remains server-owned; rights UI params ignored |
+| `/watch-party/[partyId]` | Party Room | room member/host; Premium/runtime gated | `partyId` path param | Live Stage params must not retarget this route |
+| `/watch-party/live-stage/[partyId]` | Live Watch-Party / Live Stage | live room member/host; Premium/runtime/LiveKit gated | `partyId` path param | Watch-Party Live shared-player params must not retarget this route |
+| `/spectate/[itemId]` | Spectator | public-safe viewer metadata/playback, child-room starts require sign-in/Premium where policy requires | `itemId` path param | original token, host/member/control params must be ignored/blocked |
+| `/admin` | Admin | backend-role protected owner/admin/operator | `tab`, including `tab=money-center` | normal viewer nav must not expose this |
+| `/money-center` or Studio/Admin money anchors | Money Center | creator owner or Admin depending entry | creator/admin legacy `tab`/`focus` anchors | no checkout/live-money params activate behavior |
 
 Deferred route work:
 - Make Explore global only after backed read models exist.
 - Add richer Library sections only after saved/followed/reminder/replay read models are backed.
 - Avoid a bottom-tab Chat route until it can delegate to `/chat` without duplicate route ownership.
+- Normalize legacy route params in a scoped deeplink lane without changing LiveKit, Premium, Party Room, Live Stage, Player, Profile, or Admin ownership.
 
 ## Implemented In This Pass
-- Bottom nav changed from the previous Home / Explore / Live / Library / Profile state to Home / Explore / Live / Library.
-- Hid the Profile tab with `href: null` while preserving the Profile tab route file and direct `/profile/[userId]` route.
-- Verified the Home top avatar/profile entry remains the signed-in Profile path.
-- Added a Live tab that routes into existing Live Watch-Party and Watch-Party Live paths through existing Premium/runtime preflight and without changing room ownership.
-- Modernized the Live tab into a compact Live Hub launcher with the UI density patterns above.
-- Preserved the hidden Profile tab compatibility route so direct tab access still hands off to the signed-in user's canonical Profile.
-- Renamed visible `My List` copy to `Library` while keeping saved-title behavior only.
-- Updated Explore copy to state current title-search scope, list the backed-now discovery scope, and document the planned future discovery scope without fake results.
-- Added Library scope pills for saved-title-only truth and future My Stuff scope without fake rows.
-- Audited Player naming and pinned the source proof in the navigation guard without rewriting Player behavior.
-- Replaced several user-facing `Channel` labels with `Platform` where the product means public creator surface.
-- Added `guard:navigation-terminology-policy`.
+- Public V1 burn-down kept bottom nav at Home / Explore / Live / Library and verified Profile remains top-avatar/direct-route only.
+- Explore now renders backed title search, public discovery feed rows, creator videos, Rachi public-safe Originals, event summaries, replay rows where backed, and honest empty states.
+- Library now renders backed Saved, Continue Watching, and Platforms sections only.
+- Player now has scoped mode labels/resolution without a full component rewrite.
+- Watch-Party waiting room now has a UI-only host preflight for title-linked Watch-Party Live entries.
+- Navigation terminology guard now pins backed Explore/Library readers, Player mode labels, host preflight copy, bottom nav, top Profile entry, and no obvious fake/mock/sample/dummy rows in Explore/Library.
+- Android proof was captured on `R5CR120QCBF` at `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/`.
 
 ## Deferred
-- Full unified Explore.
-- Full Library/My Stuff.
-- Host preflight build.
-- Platform Studio structural rewrite.
-- Player route decomposition.
-- Full Explore and Library backing beyond current saved-title/title-search data.
+- Full ranked/global Explore beyond existing public feed/title/creator/Rachi/event read models.
+- Library replays, events, clips, downloads/offline, and reminders until saved rows/read models exist.
+- Full Player component extraction.
+- Full Live Watch-Party host preflight if needed inside the existing waiting-room owner.
 - Risky route/deeplink query rewrites.
-- Profile avatar/background runtime proof.
-- Remaining Spectator runtime proof.
+- Profile avatar/background runtime proof: owner route and edit trigger were visible, but the edit sheet did not open from tap/long-press in this dev-client session and no safe non-private gallery asset/read-back proof was available.
+- Spectator remaining runtime proof: no fresh Live Watch-Party / Reaction fixture was available; previous Watch-Party Live and replay child-room proof remains current.
 - Watch-Party Live two-device audio ducking proof until another safe device/account is available.
 
 ## Validation
@@ -298,3 +289,17 @@ Current Modern Navigation IA screenshots:
 - Player Watch-Party Live entry
 - Money Center simple first view
 - Admin absent from normal bottom nav
+
+Public V1 burn-down proof path: `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/`.
+
+Claimed Public V1 burn-down screenshots:
+- `04-explore-current.png` / `.xml`: rebuilt Explore with backed sections and bottom nav Home / Explore / Live / Library.
+- `05-library-backed-sections.png` / `.xml`: Library with Saved, Continue Watching, and Platforms backed sections or honest empty states.
+- `06-player-normal-mode.png` / `.xml`: normal title Player with `CHI'LLYWOOD · PLAYER` and `Title Player` mode label.
+- `09-host-preflight-details.png` / `.xml`: title-linked Watch-Party Live host preflight rows.
+- `10-home-bottom-nav-top-avatar.png` / `.xml`: Home bottom nav plus `Open your Profile` top avatar entry.
+- `11-top-avatar-profile-route.png` / `.xml`: top avatar opened canonical Profile.
+
+Unclaimed captures in that folder:
+- `01-*` and `02-*` are stale-bundle/dev-menu misses.
+- `12-*` and `13-*` show the owner Profile avatar edit trigger still visible after tap/long-press attempts, but no edit sheet; they are blocker evidence, not proof of avatar/background save.

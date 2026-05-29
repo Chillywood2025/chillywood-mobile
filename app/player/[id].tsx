@@ -294,6 +294,58 @@ const buildSpectatorPlayerTitle = (input: {
   content_access_rule: "open",
 });
 
+type PlayerSurfaceMode =
+  | "standalone-title"
+  | "standalone-creator-video"
+  | "spectator-child-playback"
+  | "watch-party-live-shared"
+  | "live-watch-party-stage";
+
+const resolvePlayerSurfaceMode = (input: {
+  inWatchParty: boolean;
+  isLiveModeFlag: boolean;
+  isSharedPartyPlayback: boolean;
+  isCreatorVideoPlayback: boolean;
+  isSpectatorPlayback: boolean;
+}): PlayerSurfaceMode => {
+  if (input.isSharedPartyPlayback) return "watch-party-live-shared";
+  if (input.inWatchParty && input.isLiveModeFlag) return "live-watch-party-stage";
+  if (input.isSpectatorPlayback) return "spectator-child-playback";
+  if (input.isCreatorVideoPlayback) return "standalone-creator-video";
+  return "standalone-title";
+};
+
+const getPlayerSurfacePresentation = (mode: PlayerSurfaceMode) => {
+  switch (mode) {
+    case "watch-party-live-shared":
+      return {
+        kicker: "CHI'LLYWOOD · WATCH-PARTY LIVE",
+        label: "Shared Player",
+      };
+    case "live-watch-party-stage":
+      return {
+        kicker: "CHI'LLYWOOD · LIVE WATCH-PARTY",
+        label: "Live Stage",
+      };
+    case "standalone-creator-video":
+      return {
+        kicker: "CHI'LLYWOOD · CREATOR VIDEO",
+        label: "Creator Video",
+      };
+    case "spectator-child-playback":
+      return {
+        kicker: "CHI'LLYWOOD · SPECTATOR",
+        label: "Spectator Playback",
+      };
+    case "standalone-title":
+    default:
+      return {
+        kicker: "CHI'LLYWOOD · PLAYER",
+        label: "Title Player",
+      };
+  }
+};
+
 type PartyParticipant = {
   id: string;
   name: string;
@@ -5804,6 +5856,14 @@ export default function PlayerScreen() {
 
   const isCreatorVideoPlayback = playbackSourceKind === "creator-video" || expectsCreatorVideo;
   const isSpectatorPlayback = playbackSourceKind === "spectator-playback" || expectsSpectatorPlayback;
+  const playerSurfaceMode = resolvePlayerSurfaceMode({
+    inWatchParty,
+    isLiveModeFlag,
+    isSharedPartyPlayback,
+    isCreatorVideoPlayback,
+    isSpectatorPlayback,
+  });
+  const playerSurfacePresentation = getPlayerSurfacePresentation(playerSurfaceMode);
   const creatorVideoPaidContentLocked = isCreatorVideoPlayback
     && creatorVideo?.paidContentAccess?.resolverStatus === "resolved"
     && creatorVideo.paidContentAccess.requiresPurchase
@@ -7823,9 +7883,12 @@ export default function PlayerScreen() {
         {!inWatchParty && !isLiveMode && isStandaloneFullscreen ? null : (
         <View style={[styles.topSection, styles.topSectionFramework, isSharedPartyPlayback && styles.topSectionWatchParty]}>
           <Text style={[styles.kicker, isSharedPartyPlayback && styles.kickerWatchParty]}>
-            {isSharedPartyPlayback ? "CHI'LLYWOOD · WATCH-PARTY LIVE" : "CHI'LLYWOOD · PLAYER"}
+            {playerSurfacePresentation.kicker}
           </Text>
           <Text style={[styles.header, isSharedPartyPlayback && styles.headerWatchParty]} numberOfLines={1}>{displayItem?.title ?? "Now Playing"}</Text>
+          <View style={[styles.playerSurfacePill, isSharedPartyPlayback && styles.playerSurfacePillWatchParty]}>
+            <Text style={styles.playerSurfacePillText}>{playerSurfacePresentation.label}</Text>
+          </View>
           {inWatchParty && partySyncRole && !isSharedPartyPlayback ? (
             <View style={[styles.partySyncPill, styles.partySyncPillFramework]}>
               <Text style={styles.partySyncPillText}>
@@ -8543,6 +8606,25 @@ const styles = StyleSheet.create({
   kickerWatchParty: { color: "#D2A7B5" },
   header: { color: "white", fontSize: 23, fontWeight: "900", lineHeight: 27 },
   headerWatchParty: { fontSize: 21, lineHeight: 24 },
+  playerSurfacePill: {
+    alignSelf: "flex-start",
+    marginTop: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  playerSurfacePillWatchParty: {
+    borderColor: "rgba(220,20,60,0.36)",
+    backgroundColor: "rgba(220,20,60,0.14)",
+  },
+  playerSurfacePillText: {
+    color: "#F2F3F7",
+    fontSize: 10,
+    fontWeight: "900",
+  },
   liveModeTopLabel: {
     color: "#FFCCD7",
     fontSize: 11,

@@ -2,6 +2,8 @@
 
 Status: repo-side implemented, single-device Android proof captured; two-device speech proof pending.
 
+May 29, 2026 burn-down update: the audio-mix code path was not changed. `adb devices -l` showed only `R5CR120QCBF`, with no second joined Android device/emulator/account available, so true speech-triggered ducking remains unproved. The feature remains single-device/control-surface proved only; do not claim two-device closure until Device A observes local video duck/restore when Device B speaks in the same Watch-Party Live shared Player.
+
 ## Route Ownership
 
 - Watch-Party Live shared player: `app/player/[id].tsx` when `partyId` is present and `liveMode` is not enabled.

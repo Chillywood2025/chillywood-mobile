@@ -7,6 +7,7 @@ Updated: 2026-05-25 for social attachment UX consistency and Profile social inte
 Updated: 2026-05-25 for the social attachment correction: no Platform Studio sheet option and native phone-gallery Photos picking.
 Updated: 2026-05-26 for Profile avatar/background management, Profile Actions, migration application, and Android startup proof.
 Updated: 2026-05-26 for owner-controlled Profile media status, public rendering masks, and profile-media reports.
+Updated: 2026-05-29 for Public V1 burn-down proof status: owner Profile route and avatar edit trigger rendered on current Android dev-client proof, but the edit sheet did not open from tap/long-press and no safe non-private gallery asset/backend read-back proof was available, so avatar/background save/remove proof remains open.
 Updated: 2026-05-26 for Profile Platform navigation cleanup and lightweight Rights Disclosure.
 
 This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Platform work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.

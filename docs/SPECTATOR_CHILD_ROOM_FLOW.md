@@ -88,6 +88,8 @@ Audit metadata includes actor/source/child ids, denial reason, created time, and
 ## Runtime Proof
 Android proof target is `R5CR120QCBF`. The follow-up fixture closeout restored the device proof environment enough for a current dev-client run: the notification shade was collapsed, the stale Dev Launcher error state was exited, Metro was restarted on `localhost:8081`, the app bundled successfully, deep links opened `/spectate/[itemId]`, and signed-in plus signed-out app-data states rendered on-device. UiAutomator can see the launcher after cleanup but still returns `null root node` once the React Native app is foregrounded, so app proof used `screencap`.
 
+May 29, 2026 burn-down update: no fresh safe Live Watch-Party / Reaction fixture was available in the current lane, so no new Spectator runtime closure is claimed. The previously captured Watch-Party Live child-room and replay child-room proof below remains the governing proof. The remaining gap is specifically a public-safe live-stage-compatible fixture that allows `start_live_reaction`, plus child live-stage proof with source attribution and no original token/host controls/member list leakage.
+
 Closeout screenshots are outside the repo at `/tmp/chillywood-spectator-child-room-proof-20260526/`:
 
 - `00-device-root-restored-launcher.png`: Android root restored and UiAutomator could see the launcher.

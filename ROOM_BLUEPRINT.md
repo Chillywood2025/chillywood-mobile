@@ -74,6 +74,7 @@ Before a feature or AI behavior belongs in a room, it should be tested against t
 - The `Live` bottom-tab UI should stay compact: Hero header, Compact action cards, Status pills, Primary/secondary CTAs, and collapsed `How Live works` detail are product presentation only, not route or permission authority.
 - Player is the content-first playback surface. It may expose Watch-Party Live entry and Watch-Party Live-only Audio Mix when the shared player is active, but it must not become Live Watch-Party / Live Stage or Party Room ownership.
 - Preserve the Party / Live split. Party flow is `Player -> Watch-Party Live -> Party Waiting Room -> Party Room -> shared party player`, and Party Room must not hand off to Live Stage.
+- Host preflight is allowed only as a clarification layer on existing waiting-room owners. It may summarize room type, audience, mic/camera state, source/content, speaker controls, safety controls, paid/free status, and the existing start path, but it must not become a permissions engine, rights disclosure surface, LiveKit token issuer, Premium bypass, route owner, or room-creation rewrite.
 - Treat Live Room as the canonical live-session shell on `/watch-party/live-stage/[partyId]`, and treat Live Stage as the in-room presentation state inside that same route, not as a separate product or route.
 - Treat Watch-Party Live / shared party player as a layer inside the Party flow, not a new top-level destination.
 - Treat Standalone Player as solo-first and playback-first.
