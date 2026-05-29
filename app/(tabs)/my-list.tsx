@@ -28,6 +28,7 @@ export default function MyListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<TitleRow[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const savedTitleCount = items.length;
 
   const getImageSource = useCallback((item?: TitleRow | null): ImageSourcePropType | null => {
     if (!item) return null;
@@ -143,8 +144,22 @@ export default function MyListScreen() {
           <View style={styles.headerBlock}>
             <Text style={styles.header}>Library</Text>
             <Text style={styles.headerBody}>
-              Saved titles live here now. Followed Platforms, upcoming watch parties, replays, clips, and broader My Stuff sections stay planned until backed.
+              Saved titles live here now. Following, replays, events, clips, and broader My Stuff sections appear only after real saved rows exist.
             </Text>
+            <View style={styles.libraryScopeRow}>
+              <View style={styles.scopePill}>
+                <Text style={styles.scopePillValue}>{savedTitleCount}</Text>
+                <Text style={styles.scopePillLabel}>Saved titles</Text>
+              </View>
+              <View style={[styles.scopePill, styles.scopePillMuted]}>
+                <Text style={styles.scopePillValue}>Future</Text>
+                <Text style={styles.scopePillLabel}>Platforms, replays, events, clips</Text>
+              </View>
+            </View>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Saved</Text>
+              <Text style={styles.sectionMeta}>Backed now</Text>
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -226,6 +241,57 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     fontWeight: "600",
+  },
+  libraryScopeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 4,
+  },
+  scopePill: {
+    minWidth: 120,
+    flexGrow: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(229,9,20,0.32)",
+    backgroundColor: "rgba(229,9,20,0.12)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  scopePillMuted: {
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+  },
+  scopePillValue: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  scopePillLabel: {
+    color: "#CBD3E1",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 4,
+  },
+  sectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  sectionMeta: {
+    color: "#9DA7BB",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   emptyCard: {
     borderRadius: 18,

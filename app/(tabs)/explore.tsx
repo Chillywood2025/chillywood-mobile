@@ -103,6 +103,15 @@ const matchesExploreSearch = (item: TitleRow, rawQuery: string) => {
   ].some((value) => String(value ?? "").toLowerCase().includes(query));
 };
 
+const EXPLORE_BACKED_NOW = [
+  "Titles",
+  "Featured and top-row programming",
+  "Live title-room cues",
+] as const;
+
+const EXPLORE_FUTURE_SCOPE =
+  "Platforms, creator videos, public live rooms, events, Chi'llywood Originals, and Rachi updates will join Explore only after backed discovery rows exist.";
+
 export default function ExploreScreen() {
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -353,20 +362,39 @@ export default function ExploreScreen() {
               <View style={styles.headerBlock}>
                 <Text style={styles.exploreTitle}>Explore</Text>
                 <Text style={styles.count}>
-                  {hasSearchQuery ? `Showing ${visibleTitlesCount} of ${titlesCount}` : `Titles: ${titlesCount}`}
+                  {hasSearchQuery ? `Showing ${visibleTitlesCount} of ${titlesCount} backed titles` : `Backed titles: ${titlesCount}`}
                 </Text>
                 <Text style={styles.headerBody}>
-                  Search titles here. Creator uploads, public live rooms, Rachi updates, and upcoming events are surfaced on Home while unified discovery rolls out.
+                  Search public-safe titles now. Broader creator, Platform, live, event, Originals, and Rachi discovery stays honest until each backing index exists.
                 </Text>
 
+                <View style={styles.discoveryScopeCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionTitle}>Available now</Text>
+                    <Text style={styles.sectionMeta}>Backed</Text>
+                  </View>
+                  <View style={styles.scopeChipRow}>
+                    {EXPLORE_BACKED_NOW.map((label) => (
+                      <View key={label} style={styles.scopeChip}>
+                        <Text style={styles.scopeChipText}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionTitle}>Next discovery phase</Text>
+                    <Text style={styles.sectionMeta}>Planned</Text>
+                  </View>
+                  <Text style={styles.scopeBody}>{EXPLORE_FUTURE_SCOPE}</Text>
+                </View>
+
                 <View style={styles.searchShell}>
-                  <Text style={styles.searchLabel}>Search</Text>
+                  <Text style={styles.searchLabel}>Search backed titles</Text>
                   <TextInput
                     testID="explore-title-search-input"
                     accessibilityLabel="Search Chi'llywood titles"
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    placeholder="Search titles, categories, or descriptions"
+                    placeholder="Search title, category, or description"
                     placeholderTextColor="#858C9D"
                     style={styles.searchInput}
                     autoCapitalize="none"
@@ -401,7 +429,7 @@ export default function ExploreScreen() {
                 <Text style={styles.mutedSmall}>
                   {hasSearchQuery
                     ? "Try another title, category, year, runtime, or description."
-                    : "The Chi&apos;llywood lineup will appear here once programming is live."}
+                    : "Chi'llywood titles will appear here once public-safe programming is backed."}
                 </Text>
               </View>
             }
@@ -442,6 +470,58 @@ const styles = StyleSheet.create({
     color: "#CFCFD8",
     fontSize: 13,
     lineHeight: 19,
+  },
+  discoveryScopeCard: {
+    marginTop: 4,
+    gap: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(9,12,20,0.72)",
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  sectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  sectionMeta: {
+    color: "#9DA7BB",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  scopeChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  scopeChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(229,9,20,0.32)",
+    backgroundColor: "rgba(229,9,20,0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  scopeChipText: {
+    color: "#FFE8EA",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  scopeBody: {
+    color: "#BFC7D7",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
   },
   searchShell: {
     marginTop: 2,

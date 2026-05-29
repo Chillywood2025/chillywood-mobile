@@ -71,6 +71,7 @@ Before a feature or AI behavior belongs in a room, it should be tested against t
 - Keep locked naming and route doctrine intact. `Live Watch-Party`, `Watch-Party Live`, `Live First`, `Party Room`, `Live Room`, and `Chi'lly Chat` are not interchangeable.
 - The normal `Live` bottom-tab entry is an orientation surface, not a new room owner. It may route to existing Live Watch-Party waiting-room flow, Watch-Party Live code entry, or title/player discovery, but it must not change Party Room, Live Stage, LiveKit, Premium, or old-room handling.
 - The `Live` bottom-tab UI should stay compact: Hero header, Compact action cards, Status pills, Primary/secondary CTAs, and collapsed `How Live works` detail are product presentation only, not route or permission authority.
+- Player is the content-first playback surface. It may expose Watch-Party Live entry and Watch-Party Live-only Audio Mix when the shared player is active, but it must not become Live Watch-Party / Live Stage or Party Room ownership.
 - Preserve the Party / Live split. Party flow is `Player -> Watch-Party Live -> Party Waiting Room -> Party Room -> shared party player`, and Party Room must not hand off to Live Stage.
 - Treat Live Room as the canonical live-session shell on `/watch-party/live-stage/[partyId]`, and treat Live Stage as the in-room presentation state inside that same route, not as a separate product or route.
 - Treat Watch-Party Live / shared party player as a layer inside the Party flow, not a new top-level destination.
@@ -821,7 +822,7 @@ Relationship to other rooms: Watch-Party Live is the title/player-driven social 
 - abusive or misleading room-control behavior should remain reportable and auditable
 
 ## 7. Standalone Player
-Relationship to other rooms: Standalone Player is the solo playback route and the launch surface for `Watch-Party Live`. Social viewing is a deliberate escalation from here, not the default state.
+Relationship to other rooms: Standalone Player is the solo playback route and the launch surface for `Watch-Party Live`. Social viewing is a deliberate escalation from here, not the default state. Player copy should keep `Watch-Party Live`, `Live Watch-Party`, and `Party Room` distinct.
 
 ### A. Room purpose
 - Standalone Player exists for focused solo playback.

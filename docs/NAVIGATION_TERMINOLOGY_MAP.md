@@ -1,7 +1,7 @@
 # Navigation Terminology Map
 
 ## Purpose
-This map records the current Chi'llywood app navigation and product language after the Navigation Terminology and App Flow Clarity Pass. It is a product map, not a route rewrite plan. Technical route names such as `/channel/[userId]` remain for compatibility when the user-facing concept is `Platform`.
+This map records the current Chi'llywood app navigation and product language after the Navigation Terminology Information Architecture Completion Pass. It is a product map, not a route rewrite plan. Technical route names such as `/channel/[userId]` remain for compatibility when the user-facing concept is `Platform`.
 
 ## Final Terminology
 - Profile = the user's social identity hub.
@@ -63,17 +63,20 @@ Rationale:
 Current implementation:
 - Searches and filters `titles` only.
 - Shows backed title metadata, featured/trending/top-row flags, and live-now title-room cues where available.
+- The header now separates `Available now` from `Next discovery phase` so users see the backed scope without fake global discovery.
 - Does not invent creator, upload, event, live-room, or Rachi results.
 
 Recommended next Explore phase:
 - Add backed sections for Platforms, public uploads, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, Chi'llwood Originals, and Rachi official content.
 - Keep each section hidden or empty-state honest until backed rows exist.
 - Avoid fake trending, fake recommendations, fake viewer counts, and protected/private content leakage.
+- Add read models before adding result cards. Do not use placeholder creator/platform/live rows.
 
 ## Library Status
 Implemented status:
 - `My List` is renamed to `Library` in the bottom nav and screen copy.
 - Current backed content remains saved titles only.
+- Header scope pills show saved-title count and future My Stuff scope.
 - Empty state says other Library sections appear only when real saved items exist.
 
 Recommended Library/My Stuff phase:
@@ -95,6 +98,22 @@ Recommended Library/My Stuff phase:
 - Live Watch-Party must not be routed into Party Room except through the approved waiting-room behavior.
 - Watch-Party Live must not be routed into Live Stage.
 - Audio Mix belongs only to Watch-Party Live shared player controls.
+
+## Player Consistency Audit
+Current modes seen in `app/player/[id].tsx`:
+- normal title playback
+- creator video playback
+- public Platform video playback
+- Watch-Party Live shared-player mode
+- Premium/Party Pass/direct-room access checks
+- comments, reactions, report/share, and creator-video monetization messages where backed
+
+Audit result:
+- Player correctly labels its content-first room path as `Watch-Party Live`.
+- `Audio Mix` remains inside Watch-Party Live shared-player controls and was not moved to Live Watch-Party, Party Room, or the Live Hub.
+- Player route-gate copy distinguishes rooms that belong to Live Watch-Party from Watch-Party Live.
+- `Open Party Room` remains a compatibility action only when a direct room route is appropriate.
+- No Player code was rewritten in the completion pass; a future Player lane should split or simplify the multi-mode UI only after preserving Premium gates, public/draft/private visibility, comments/reactions, report/share controls, and Watch-Party Live ownership.
 
 ## Live Hub UI Density
 Implemented status:
@@ -124,6 +143,12 @@ Guardrails:
 - Profile `View Platform` and Platform Studio `Preview Platform` map to `/channel/[userId]` with public-preview safeguards.
 - Brand Studio edits Platform branding, not Profile photo/background.
 - Settings and support copy should say Platform when the product means the public creator surface.
+
+## Chi'lly Circle / Chat / Rachi Check
+- Primary social-circle copy uses `Chi'lly Circle`; internal helper names may still use friend/friendship for compatibility.
+- Messaging copy uses `Chi'lly Chat`.
+- Rachi remains `Official Chi'llywood`, appears through canonical public-safe surfaces, and is not positioned as a private-chat watcher.
+- Rachi Official Updates and Chi'llwood Originals stay backed-only; no fake posts, fake Originals, fake followers, fake likes, or fake engagement are allowed.
 
 ## Host Preflight Recommendation
 Current backing exists across waiting-room/live-stage/player flows, but the product would benefit from one clearer preflight moment before the host enters:
@@ -164,6 +189,7 @@ Recommendation:
 - `/channel/[userId]`: Public Platform, route name retained for compatibility.
 - `/channel-studio`: preferred Platform Studio route.
 - `/channel-settings`: compatibility route into Platform Studio.
+- `/player/[id]`: Player / playback-first route; owns content-first Watch-Party Live entry.
 - `/chat`: Chi'lly Chat inbox.
 - `/chat/[threadId]`: direct Chi'lly Chat thread.
 - `/chilly-circle`: Chi'lly Circle.
@@ -172,6 +198,7 @@ Recommendation:
 - `/watch-party/live-stage/[partyId]`: Live Room / Live Stage.
 - `/spectate/[itemId]`: Spectator metadata/playback eligibility.
 - `/admin`: Admin Command Center, backend-role protected.
+- `/admin?tab=money-center`: Admin Money Center where supported.
 - `/monetize`, `/revenue`, `/payouts`: compatibility redirects into Money Center.
 
 Query params currently known:
@@ -179,6 +206,7 @@ Query params currently known:
 - `/channel/[userId]?preview=public` opens public Platform preview without owner controls.
 - `/channel-studio?tab=monetization&focus=...` opens Money Center sections.
 - `/admin?tab=money-center` and old admin money params map into Admin Money Center sections.
+- Some route params are intentionally documented rather than rewritten in this pass; risky router rewrites should wait for a scoped route/deeplink lane.
 
 Deferred route work:
 - Make Explore global only after backed read models exist.
@@ -191,7 +219,9 @@ Deferred route work:
 - Modernized the Live tab into a compact Live Hub launcher with the UI density patterns above.
 - Added a Profile tab that routes to the signed-in user's canonical Profile.
 - Renamed visible `My List` copy to `Library` while keeping saved-title behavior only.
-- Updated Explore copy to state current title-search scope and direct broader discovery to Home until backed.
+- Updated Explore copy to state current title-search scope, list the backed-now discovery scope, and document the planned future discovery scope without fake results.
+- Added Library scope pills for saved-title-only truth and future My Stuff scope without fake rows.
+- Audited Player naming and pinned the source proof in the navigation guard without rewriting Player behavior.
 - Replaced several user-facing `Channel` labels with `Platform` where the product means public creator surface.
 - Added `guard:navigation-terminology-policy`.
 
@@ -202,6 +232,7 @@ Deferred route work:
 - Platform Studio structural rewrite.
 - Player route decomposition.
 - Full Explore and Library backing beyond current saved-title/title-search data.
+- Risky route/deeplink query rewrites.
 
 ## Validation
 Run:
@@ -220,6 +251,8 @@ Run:
 - `npm run guard:old-room-handling`
 - `npm run guard:spectator-child-room-policy`
 - `npm run guard:rachi-official-policy`
+- `npm run guard:content-rights-policy`
+- `npm run guard:vod-quality-policy`
 - targeted grep proof for no user-facing Mini Platform
 - targeted grep proof for Live naming separation
 - `git diff --check`
@@ -230,6 +263,7 @@ Target device: `R5CR120QCBF`.
 
 Navigation proof path: `/tmp/chillywood-navigation-terminology-proof-20260528/`.
 Live Hub density proof path: `/tmp/chillywood-live-hub-density-proof-20260528/`.
+IA completion proof path: `/tmp/chillywood-nav-ia-completion-proof-20260528/`.
 
 Captured screenshots:
 - bottom navigation with Home / Explore / Live / Library / Profile
@@ -239,9 +273,11 @@ Captured screenshots:
 - Profile tab route handoff
 - Public Platform
 - Platform Studio
+- Player
 - Live tab with both live paths
 - compact Live Hub first view
 - `How Live works` collapsed and expanded
 - Open Live, Enter Code, and Browse route handoffs
 - Money Center simple first view
+- Rachi Official Updates / Chi'llwood Originals where backed on Home
 - Admin absent from normal bottom nav

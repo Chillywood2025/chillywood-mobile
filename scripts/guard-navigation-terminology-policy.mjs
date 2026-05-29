@@ -25,6 +25,7 @@ const profileTab = read("app/(tabs)/profile.tsx");
 const libraryTab = read("app/(tabs)/my-list.tsx");
 const explore = read("app/(tabs)/explore.tsx");
 const home = read("app/(tabs)/index.tsx");
+const player = read("app/player/[id].tsx");
 const iconSymbol = read("components/ui/icon-symbol.tsx");
 const masterVision = read("MASTER_VISION.md");
 const architectureRules = read("ARCHITECTURE_RULES.md");
@@ -68,9 +69,17 @@ assertIncludes(profileTab, "Profile is your social identity", "Profile/Platform 
 assertIncludes(profileTab, "Platform and Platform Studio stay separate", "Profile tab creator surface separation");
 assertIncludes(libraryTab, "Library", "Library label");
 assertIncludes(libraryTab, "Other Library sections will appear only when real saved items exist.", "no fake Library sections");
-assertIncludes(explore, "Search titles here.", "Explore current scope copy");
-assertIncludes(explore, "unified discovery rolls out", "Explore future plan copy");
+assertIncludes(libraryTab, "Saved titles live here now.", "Library backed scope copy");
+assertIncludes(libraryTab, "Following, replays, events, clips", "Library future scope copy");
+assertIncludes(explore, "Search public-safe titles now.", "Explore current scope copy");
+assertIncludes(explore, "EXPLORE_BACKED_NOW", "Explore backed section list");
+assertIncludes(explore, "EXPLORE_FUTURE_SCOPE", "Explore future plan copy");
+assertIncludes(explore, "Backed titles", "Explore no fake global count copy");
 assertIncludes(home, 'accessibilityLabel="Open your Profile"', "Home Profile affordance");
+assertIncludes(player, 'surfaceLabel="Watch-Party Live"', "Player Watch-Party Live surface label");
+assertIncludes(player, "Audio Mix", "Player Watch-Party Live audio mix label");
+assertIncludes(player, "This room belongs to Live Watch-Party, not Watch-Party Live.", "Player live naming split");
+assertIncludes(player, "Open Party Room", "Player Party Room compatibility action");
 
 assertIncludes(masterVision, "Watch-Party Live", "locked Watch-Party Live label");
 assertIncludes(masterVision, "Live Watch-Party", "locked Live Watch-Party label");

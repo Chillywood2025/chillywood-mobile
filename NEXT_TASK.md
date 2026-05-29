@@ -1,8 +1,8 @@
 # NEXT TASK
 
-## Recommended Lane: Explore / Library Backing Plan And Host Preflight Design
+## Recommended Lane: Explore / Library Backed Read Models And Player Surface Plan
 
-The Navigation Terminology and App Flow Clarity Pass and Live Hub Modern UI Density Pass are implemented and Android-proved. The next useful lane is backed read-model planning for full Explore/Library expansion plus a host preflight design, if product-approved.
+The Navigation Terminology and App Flow Clarity Pass, Live Hub Modern UI Density Pass, and Navigation Terminology Information Architecture Completion Pass are implemented and Android-proved. The next useful lane is backed read-model planning for full Explore/Library expansion plus a scoped Player surface plan, if product-approved.
 
 Closed truth:
 
@@ -16,11 +16,14 @@ Closed truth:
 - Watch-Party Live remains content/player-owned; the Live tab can join by code and points new content-first starts to Explore/title/Player.
 - Profile bottom tab routes to canonical `/profile/[userId]`.
 - `My List` is renamed to `Library`, but current backed content remains saved titles only.
-- Explore remains title search/filtering only and says broader creator/live/event discovery is on Home until unified discovery is backed.
+- Explore remains title search/filtering only and now shows a compact `Available now` / `Next discovery phase` map. Titles, featured/top-row programming, and live title-room cues are backed now; Platforms, public uploads, public live rooms, events, Chi'llwood Originals, and Rachi updates stay planned until backed.
+- Library remains saved-title-only and now has saved-title scope pills plus future My Stuff copy for following, replays, events, and clips without creating fake rows.
+- Player was audited but not rewritten. Watch-Party Live remains content/player-driven, Audio Mix remains Watch-Party Live-only, Party Room remains a compatibility room action, and Live Watch-Party / Live Stage ownership stays outside Player.
 - User-facing `Channel` wording was tightened to `Platform` where the product means public creator surface.
 - `docs/NAVIGATION_TERMINOLOGY_MAP.md` records the terminology map, mode map, route/deeplink notes, and deferred app-flow work.
-- `npm run guard:navigation-terminology-policy` pins bottom nav, live naming separation, Profile/Platform separation, Library scope, and no normal bottom-nav Admin exposure.
+- `npm run guard:navigation-terminology-policy` pins bottom nav, live naming separation, Profile/Platform separation, Explore/Library scope, Player Watch-Party Live / Audio Mix / Party Room terminology, and no normal bottom-nav Admin exposure.
 - Android proof on `R5CR120QCBF` used `./gradlew assembleRelease`, `adb install -r -d`, and screenshots at `/tmp/chillywood-navigation-terminology-proof-20260528/`.
+- Completion-pass Android proof lives at `/tmp/chillywood-nav-ia-completion-proof-20260528/`.
 - No LiveKit, Watch-Party route ownership, Party Room, old-room handling, Premium gate, money, Rachi, Clip Studio, Brand Studio, Admin permission, or backend schema behavior changed.
 
 Remaining limitations:
@@ -29,10 +32,12 @@ Remaining limitations:
 - Library is not yet a full My Stuff surface.
 - Host preflight remains a documented product recommendation, not a built flow.
 - Player remains multi-purpose and should be separated only in a future scoped lane.
+- Route/deeplink query handling remains mostly documented rather than rewritten; avoid risky router changes until backed read models are ready.
 
 Recommended next lane:
 
-- If product wants Explore/Library expansion, design backed read models first. Do not add fake creator/live/event/library rows.
+- Design backed Explore/Library read models first. Do not add fake creator/live/event/library rows.
+- Plan Player surface decomposition around playback, Watch-Party Live entry, comments/reactions, Premium gates, and owner-only states before any UI rewrite.
 - If product wants host preflight, design it around the existing waiting-room owner without changing LiveKit, Premium, Party Room, Live Stage, or Watch-Party route ownership.
 
 ## Previous Recommended Lane: RevenueCat / Google Play Webhook Secret Linking And Signed Sandbox Proof
