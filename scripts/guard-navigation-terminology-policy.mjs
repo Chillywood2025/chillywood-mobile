@@ -80,13 +80,16 @@ assertIncludes(libraryTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Library Chi'llwood b
 assertIncludes(explore, "Search titles, public people, Platforms, creator videos, Originals, events, and replays.", "Explore backed scope copy");
 assertIncludes(explore, "EXPLORE_SEARCH_SCOPES", "Explore search scope list");
 assertIncludes(explore, 'label: "People"', "Explore People search scope");
+assertIncludes(explore, 'label: "Originals"', "Explore Originals search scope");
+assertIncludes(explore, 'testID="explore-typeahead-results"', "Explore typeahead results");
+assertIncludes(explore, "EXPLORE_SEARCH_DEBOUNCE_MS", "Explore debounced search");
 assertIncludes(explore, "searchPublicPeople", "Explore public people search source");
 assertIncludes(explore, 'testID="explore-people-search-section"', "Explore People results section");
 assertIncludes(explore, "readPublicDiscoveryFeedItems({ surface: \"home\"", "Explore public discovery feed source");
 assertIncludes(explore, "readLatestPublicCreatorVideos", "Explore public creator video source");
 assertIncludes(explore, "readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId", "Explore Rachi Originals source");
 assertIncludes(explore, "No public replays yet", "Explore honest replay empty state");
-assertIncludes(explore, "Search Explore", "Explore unified search copy");
+assertIncludes(explore, "Search Chi'llwood", "Explore unified search copy");
 assertIncludes(explore, "CHILLYWOOD_BACKGROUND_SOURCE", "Explore Chi'llwood fallback background");
 ["fake", "mock row", "sample row", "dummy row"].forEach((needle) => {
   assertNotIncludes(explore, needle, "Explore backed data surface");

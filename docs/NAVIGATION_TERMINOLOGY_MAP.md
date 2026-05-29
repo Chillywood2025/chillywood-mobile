@@ -91,7 +91,8 @@ Android proof:
 ## Explore Status
 Current implementation:
 - Explore owns public people discovery. Profile remains the current user's identity and social feed surface, not global user search.
-- Search scopes are All, Content, People, Platforms, Live, and Events.
+- Search scopes are All, Content, People, Platforms, Originals, Live, and Events.
+- Search input uses debounced typeahead/autocomplete after two characters, grouped by backed public scope with compact suggestion rows and a clear search action.
 - Searches and filters `titles`.
 - Reads `search_public_people` for public People/Profile results.
 - Reads `readPublicDiscoveryFeedItems({ surface: "home" })` for public Platform/live/replay/discovery rows where the existing feed already exposes them.
@@ -102,10 +103,18 @@ Current implementation:
 - Uses backed hero/title imagery when present and falls back to the Chi'llwood branded background when no backed hero image is available.
 - Does not invent trending rows, creator rows, Platform rows, live state, replays, events, Rachi content, counts, or protected/private content.
 - Public People search supports username, display name, and the current public Platform name source. It does not support email, phone, private account identifiers, private roles, or staff/security/system metadata.
-- The public `search_public_people` RPC returns only public-safe fields: user id, display name, username, active avatar URL, official flag/label, public Platform flag/id, and short public bio.
+- Remote-applied migration `202605290003_public_people_search_operator_proof_hardening.sql` keeps the public `search_public_people` RPC returning only public-safe fields: user id, display name, username, active avatar URL, official flag/label, public Platform flag/id, and short public bio.
 - Public People search reuses `can_view_profile_content`, so private Profiles and blocked relationships stay hidden according to the existing profile policy.
-- Owner/operator/moderator/security/support/system/proof/service accounts are excluded from public People search unless they are an explicitly public official account. Rachi is the allowed explicit official result and appears as `Official Chi'llwood`.
+- Owner/operator/moderator/security/support/system/proof/service accounts and proof/operator display markers are excluded from public People search unless they are an explicitly public official account. Rachi is the allowed explicit official result and appears as `Official Chi'llwood`.
 - Owner/Admin email lookup remains an Admin/staff-only boundary. Public Explore does not add exact or partial email lookup.
+- Public Explore typeahead does not expose Admin, Money, provider readiness, reports, legal requests, audit rows, or private operational data.
+
+Owner/Admin search:
+- Owner/Admin search is permission-gated inside `/admin` and never appears in public Explore or Profile.
+- Admin `Search Admin` typeahead searches already-loaded Admin sources only: staff/user role roster, safety reports, DMCA cases, Money Audit events, kill switches, provider readiness, Rachi posts/Originals, Live Cost Guard/Live Ops, legal requests, and immutable audit rows.
+- Email lookup stays Owner/Admin-only. Admin result rows mask email identity, and public Explore never accepts email lookup or displays email.
+- Admin search opens existing Admin tabs/details where backed; it does not add a new public RPC, bypass RLS, expose provider secrets/raw payloads, activate money, or change LiveKit/Watch-Party/Premium behavior.
+- Query-level Admin search audit writing is not added in this lane; opening/mutating sensitive surfaces continues through existing Admin audit paths where present.
 
 Recommended next Explore phase:
 - Add purpose-built Explore read models if product wants ranked search across Platforms, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, replays, Chi'llwood Originals, and Rachi official content.
@@ -114,6 +123,14 @@ Recommended next Explore phase:
 - Add ranking/read models before adding recommendation claims. Do not use placeholder creator/platform/live rows.
 
 Android proof:
+- `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/` captures the Explore typeahead/Admin search production pass.
+- `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/00-home-bottom-nav.*` captures the unchanged Home / Explore / Live / Library bottom nav and top controls.
+- `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/01-explore-initial.*` captures Explore with public typeahead scopes.
+- `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/02-explore-typeahead-content.*` captures backed content plus People suggestions and confirms the previously visible `Admin Proof` style fixture is filtered out.
+- `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/03-explore-typeahead-rachi.*` captures Rachi public official/Originals search with no email visible.
+- `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/04-explore-typeahead-email-blocked.*` captures public email-shaped query no-result behavior.
+- `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/05-admin-search-initial.*` captures the owner/admin-only Search Admin panel.
+- `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/06-admin-search-rachi.*` captures Admin search over gated operational data with masked identity display.
 - `/tmp/chillywood-explore-people-search-proof-20260529/01-explore-search-scopes.*` captures Explore with public search scopes and bottom nav Home / Explore / Live / Library.
 - `/tmp/chillywood-explore-people-search-proof-20260529/02-explore-people-rachi-result.*` captures the Rachi public official People result with no email visible.
 - `/tmp/chillywood-explore-people-search-proof-20260529/03-people-result-profile-route.*` captures View Profile from the People result.
@@ -129,6 +146,7 @@ Validation:
 - `npm run guard:profile-production-policy`
 - `npm run guard:rachi-official-policy`
 - `npm run guard:public-user-search-policy`
+- `npm run guard:admin-search-policy`
 - `npm run guard:watch-party-livekit`
 - `npm run guard:old-room-handling`
 - `npm run guard:refresh-policy`

@@ -113,6 +113,7 @@ Money Center has two inspection levels:
 
 - Creator Platform Studio Money Center shows creator-owned/source-safe money events only. Rows open `Money Event Detail` with event/source label, status, environment, provider/capability label, timestamp where available, idempotency proof label, reason, next step, and explicit payable state.
 - Owner/Admin Money Center includes `Money Audit Explorer` for source rows, provider readiness, kill switch current state, kill switch audit rows, revenue-import/ledger/payout/webhook/sponsor/fraud setup rows, and blocked money actions.
+- Owner/Admin `Search Admin` may typeahead over Money Audit events, kill switches, provider readiness, and Live Cost Guard rows only inside the `/admin` permission gate. Result rows open existing Money Center / Live Ops surfaces, mask private identity fields, and must not expose raw provider payloads, provider secrets, webhook secrets, service-role values, authorization headers, or live-money controls.
 
 Creator-safe detail never renders raw provider payloads, service-role values, provider secrets, webhook secrets, private provider internals, other-user ids, or admin-only notes. Owner/Admin detail may show safe ids and safe technical labels, but still never renders provider secrets, raw private provider payloads, service-role values, webhook secret values, Stripe secret keys, RevenueCat secret keys, Google service-account JSON, authorization headers, signatures, tokens, or private metadata blobs.
 

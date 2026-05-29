@@ -19,7 +19,7 @@ const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include ${needle}`);
 };
 
-const migration = read("supabase/migrations/202605290002_public_people_search_rachi_official.sql");
+const migration = read("supabase/migrations/202605290003_public_people_search_operator_proof_hardening.sql");
 const helper = read("_lib/publicPeopleSearch.ts");
 const explore = read("app/(tabs)/explore.tsx");
 const packageJson = read("package.json");
@@ -29,6 +29,7 @@ const rachiDoc = read("docs/RACHI_OFFICIAL_ACCOUNT.md");
 assertIncludes(packageJson, "guard:public-user-search-policy", "package guard script");
 
 assertIncludes(migration, "create or replace function public.search_public_people", "public people search RPC");
+assertIncludes(migration, "public_people_search_is_internal_account_candidate", "public people internal-account helper");
 assertIncludes(migration, "returns table", "narrow RPC return table");
 assertIncludes(migration, "user_id text", "public user id return");
 assertIncludes(migration, "display_name text", "display name return");
@@ -44,6 +45,10 @@ assertIncludes(migration, "public.can_view_profile_content(profile.\"user_id\")"
 assertIncludes(migration, "profile_avatar_media_status", "non-active avatar mask");
 assertIncludes(migration, "platform_role_memberships", "staff account exclusion source");
 assertIncludes(migration, "lower(membership.\"role\") in ('owner', 'operator', 'moderator', 'security', 'support', 'system')", "staff role exclusion");
+assertIncludes(migration, "'%admin proof%'", "public proof/admin display exclusion");
+assertIncludes(migration, "'%moderator proof%'", "public moderator display exclusion");
+assertIncludes(migration, "'%test operator%'", "test operator display exclusion");
+assertIncludes(migration, "not public.public_people_search_is_internal_account_candidate", "RPC internal account helper enforcement");
 assertIncludes(migration, "profile.\"user_id\" = 'platform_rachi_official'", "explicit public Rachi exception");
 assertIncludes(migration, "explicit_official_candidates", "explicit official Rachi result");
 assertIncludes(migration, "Official Chi''llwood", "Rachi official public label");
@@ -56,16 +61,30 @@ assertNotIncludes(migration, "select *", "public people search broad select");
 assertIncludes(helper, "searchPublicPeople", "client search helper");
 assertIncludes(helper, "queryWithoutHandlePrefix.includes(\"@\")", "client email query block");
 assertIncludes(helper, "PublicPeopleSearchResult", "public-safe result type");
+assertIncludes(helper, "isPublicPeopleResultAllowed", "client public people internal-account filter");
+assertIncludes(helper, "INTERNAL_ACCOUNT_ID_PREFIXES", "client internal account id prefixes");
+assertIncludes(helper, "\\badmin proof\\b", "client proof/admin display filter");
+assertIncludes(helper, "\\bmoderator proof\\b", "client moderator display filter");
+assertIncludes(helper, "platform_rachi_official", "client explicit Rachi public exception");
 assertNotIncludes(helper, "email", "client public people helper email handling");
 
 assertIncludes(explore, "EXPLORE_SEARCH_SCOPES", "Explore search scopes");
 assertIncludes(explore, 'label: "People"', "Explore People scope");
+assertIncludes(explore, 'label: "Originals"', "Explore Originals scope");
+assertIncludes(explore, "EXPLORE_SEARCH_DEBOUNCE_MS", "Explore debounced search");
+assertIncludes(explore, "EXPLORE_TYPEAHEAD_MIN_LENGTH", "Explore typeahead threshold");
+assertIncludes(explore, 'testID="explore-typeahead-results"', "Explore typeahead results");
+assertIncludes(explore, 'testID="explore-search-clear"', "Explore clear search action");
 assertIncludes(explore, "searchPublicPeople", "Explore people helper usage");
 assertIncludes(explore, "View Profile", "People result Profile action");
 assertIncludes(explore, "View Platform", "People result Platform action");
 assertIncludes(explore, "person.officialLabel", "Rachi official label path");
 assertIncludes(explore, "No people found", "People empty state");
 assertIncludes(explore, "Try a username or creator name.", "People safe search prompt");
+assertIncludes(explore, "No matches found", "Explore typeahead empty state");
+assertIncludes(explore, "Try a username, creator, or title.", "Explore safe typeahead prompt");
+assertIncludes(explore, "isPrivateIdentifierLikePublicQuery", "Explore private identifier block");
+assertIncludes(explore, "queryWithoutHandlePrefix.includes(\"@\")", "Explore public identifier guard");
 assertNotIncludes(explore, "Search by email", "Explore email search copy");
 assertNotIncludes(explore, "Email", "Explore public email label");
 assertNotIncludes(explore, "friends", "Explore generic friends copy");

@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -77,16 +78,41 @@ type ExploreBackedSections = {
   publicEvents: CreatorEventSummary[];
 };
 
-type ExploreSearchScope = "all" | "content" | "people" | "platforms" | "live" | "events";
+type ExploreSearchScope = "all" | "content" | "people" | "platforms" | "originals" | "live" | "events";
+
+type ExploreTypeaheadGroupKey = Exclude<ExploreSearchScope, "all">;
+
+type ExploreTypeaheadSuggestion = {
+  id: string;
+  group: ExploreTypeaheadGroupKey;
+  label: string;
+  title: string;
+  subtitle: string;
+  badge?: string;
+  onPress: () => void;
+};
 
 const EXPLORE_SEARCH_SCOPES: Array<{ key: ExploreSearchScope; label: string }> = [
   { key: "all", label: "All" },
   { key: "content", label: "Content" },
   { key: "people", label: "People" },
   { key: "platforms", label: "Platforms" },
+  { key: "originals", label: "Originals" },
   { key: "live", label: "Live" },
   { key: "events", label: "Events" },
 ];
+
+const EXPLORE_TYPEAHEAD_GROUP_LABELS: Record<ExploreTypeaheadGroupKey, string> = {
+  content: "Content",
+  people: "People",
+  platforms: "Platforms",
+  originals: "Chi'llwood Originals",
+  live: "Live",
+  events: "Events",
+};
+
+const EXPLORE_TYPEAHEAD_MIN_LENGTH = 2;
+const EXPLORE_SEARCH_DEBOUNCE_MS = 300;
 
 const MAX_PROGRAM_SORT_ORDER = Number.MAX_SAFE_INTEGER;
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-branded-background.png");
@@ -142,8 +168,9 @@ const formatTitleBadgeList = (item: TitleRow, liveMetadata?: TitleLiveMetadata |
 };
 
 const matchesExploreSearch = (item: TitleRow, rawQuery: string) => {
-  const query = rawQuery.trim().toLowerCase();
+  const query = getPublicSearchNeedle(rawQuery);
   if (!query) return true;
+  if (isPrivateIdentifierLikePublicQuery(rawQuery)) return false;
 
   return [
     item.title,
@@ -155,10 +182,42 @@ const matchesExploreSearch = (item: TitleRow, rawQuery: string) => {
 };
 
 const matchesTextSearch = (rawQuery: string, values: Array<unknown>) => {
-  const query = rawQuery.trim().toLowerCase();
+  const query = getPublicSearchNeedle(rawQuery);
   if (!query) return true;
+  if (isPrivateIdentifierLikePublicQuery(rawQuery)) return false;
   return values.some((value) => String(value ?? "").toLowerCase().includes(query));
 };
+
+const getPublicSearchNeedle = (rawQuery: string) => rawQuery.trim().replace(/^@+/, "").toLowerCase();
+
+const isPrivateIdentifierLikePublicQuery = (rawQuery: string) => {
+  const queryWithoutHandlePrefix = rawQuery.trim().replace(/^@+/, "");
+  return queryWithoutHandlePrefix.includes("@");
+};
+
+const getTypeaheadRank = (rawQuery: string, values: Array<unknown>) => {
+  const query = getPublicSearchNeedle(rawQuery);
+  if (!query || isPrivateIdentifierLikePublicQuery(rawQuery)) return 99;
+
+  return values.reduce<number>((best, value) => {
+    const text = String(value ?? "").trim().toLowerCase();
+    if (!text) return best;
+    if (text === query) return Math.min(best, 0);
+    if (text.startsWith(query)) return Math.min(best, 1);
+    if (text.includes(query)) return Math.min(best, 2);
+    return best;
+  }, 99);
+};
+
+const sortByTypeaheadRank = <T,>(
+  rawQuery: string,
+  items: T[],
+  getValues: (item: T) => Array<unknown>,
+) => [...items]
+  .map((item) => ({ item, rank: getTypeaheadRank(rawQuery, getValues(item)) }))
+  .filter((entry) => entry.rank < 99)
+  .sort((a, b) => a.rank - b.rank)
+  .map((entry) => entry.item);
 
 const formatEventMode = (event: CreatorEventSummary) => {
   if (event.eventType === "live_watch_party") return "Live Watch-Party";
@@ -206,6 +265,7 @@ export default function ExploreScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [activeScope, setActiveScope] = useState<ExploreSearchScope>("all");
   const [peopleResults, setPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
   const [peopleLoading, setPeopleLoading] = useState(false);
@@ -216,15 +276,18 @@ export default function ExploreScreen() {
   const showContentScope = activeScope === "all" || activeScope === "content";
   const showPeopleScope = activeScope === "all" || activeScope === "people";
   const showPlatformScope = activeScope === "all" || activeScope === "platforms";
+  const showOriginalsScope = activeScope === "all" || activeScope === "originals";
   const showLiveScope = activeScope === "all" || activeScope === "live";
   const showEventScope = activeScope === "all" || activeScope === "events";
+  const publicSearchBlocked = isPrivateIdentifierLikePublicQuery(debouncedSearchQuery);
+  const publicSearchNeedle = getPublicSearchNeedle(debouncedSearchQuery);
   const filteredTitles = useMemo(
-    () => showContentScope ? programmedTitles.filter((item) => matchesExploreSearch(item, searchQuery)) : [],
-    [programmedTitles, searchQuery, showContentScope],
+    () => showContentScope ? programmedTitles.filter((item) => matchesExploreSearch(item, debouncedSearchQuery)) : [],
+    [debouncedSearchQuery, programmedTitles, showContentScope],
   );
   const titlesCount = programmedTitles.length;
   const visibleTitlesCount = filteredTitles.length;
-  const hasSearchQuery = searchQuery.trim().length > 0;
+  const hasSearchQuery = publicSearchNeedle.length > 0;
   const exploreCountLabel = activeScope === "people"
     ? hasSearchQuery
       ? `${peopleResults.length} public ${peopleResults.length === 1 ? "person" : "people"}`
@@ -249,58 +312,232 @@ export default function ExploreScreen() {
   const liveDiscoveryItems = useMemo(
     () => rankedDiscoveryItems
       .filter((item) => item.live_state === "live")
-      .filter((item) => matchesTextSearch(searchQuery, [item.title, item.subtitle, item.category_key]))
+      .filter((item) => matchesTextSearch(debouncedSearchQuery, [item.title, item.subtitle, item.category_key]))
       .slice(0, 8),
-    [rankedDiscoveryItems, searchQuery],
+    [debouncedSearchQuery, rankedDiscoveryItems],
   );
   const platformDiscoveryItems = useMemo(
     () => rankedDiscoveryItems
       .filter((item) => item.item_type === "channel_update")
-      .filter((item) => matchesTextSearch(searchQuery, [item.title, item.subtitle, item.category_key]))
+      .filter((item) => matchesTextSearch(debouncedSearchQuery, [item.title, item.subtitle, item.category_key]))
       .slice(0, 8),
-    [rankedDiscoveryItems, searchQuery],
+    [debouncedSearchQuery, rankedDiscoveryItems],
   );
   const replayDiscoveryItems = useMemo(
     () => rankedDiscoveryItems
       .filter((item) => item.live_state === "replay_available_later" || item.item_type === "replay_later")
-      .filter((item) => matchesTextSearch(searchQuery, [item.title, item.subtitle, item.category_key]))
+      .filter((item) => matchesTextSearch(debouncedSearchQuery, [item.title, item.subtitle, item.category_key]))
       .slice(0, 8),
-    [rankedDiscoveryItems, searchQuery],
+    [debouncedSearchQuery, rankedDiscoveryItems],
   );
   const creatorDiscoveryVideos = useMemo(
     () => sections.creatorVideos
       .filter((video) => video.ownerId !== RACHI_OFFICIAL_ACCOUNT.userId)
-      .filter((video) => matchesTextSearch(searchQuery, [video.title, video.description, video.publicClipMetadata?.titleText]))
+      .filter((video) => matchesTextSearch(debouncedSearchQuery, [video.title, video.description, video.publicClipMetadata?.titleText]))
       .slice(0, 8),
-    [sections.creatorVideos, searchQuery],
+    [debouncedSearchQuery, sections.creatorVideos],
   );
   const liveEvents = useMemo(
     () => sections.publicEvents
       .filter((event) => event.isLiveNow)
-      .filter((event) => matchesTextSearch(searchQuery, [event.eventTitle, event.eventType, event.status]))
+      .filter((event) => matchesTextSearch(debouncedSearchQuery, [event.eventTitle, event.eventType, event.status]))
       .slice(0, 6),
-    [sections.publicEvents, searchQuery],
+    [debouncedSearchQuery, sections.publicEvents],
   );
   const scheduledEvents = useMemo(
     () => sections.publicEvents
       .filter((event) => event.isUpcoming)
-      .filter((event) => matchesTextSearch(searchQuery, [event.eventTitle, event.eventType, event.status]))
+      .filter((event) => matchesTextSearch(debouncedSearchQuery, [event.eventTitle, event.eventType, event.status]))
       .slice(0, 8),
-    [sections.publicEvents, searchQuery],
+    [debouncedSearchQuery, sections.publicEvents],
   );
   const replayEvents = useMemo(
     () => sections.publicEvents
       .filter((event) => event.replay.isReplayAvailableNow)
-      .filter((event) => matchesTextSearch(searchQuery, [event.eventTitle, event.eventType, event.status]))
+      .filter((event) => matchesTextSearch(debouncedSearchQuery, [event.eventTitle, event.eventType, event.status]))
       .slice(0, 8),
-    [sections.publicEvents, searchQuery],
+    [debouncedSearchQuery, sections.publicEvents],
   );
   const rachiOriginals = useMemo(
     () => sections.rachiOriginals
-      .filter((video) => matchesTextSearch(searchQuery, [video.title, video.description, video.publicClipMetadata?.titleText]))
+      .filter((video) => matchesTextSearch(debouncedSearchQuery, [video.title, video.description, video.publicClipMetadata?.titleText]))
       .slice(0, 8),
-    [sections.rachiOriginals, searchQuery],
+    [debouncedSearchQuery, sections.rachiOriginals],
   );
+  const typeaheadGroups = useMemo(() => {
+    if (publicSearchNeedle.length < EXPLORE_TYPEAHEAD_MIN_LENGTH || publicSearchBlocked) {
+      return [] as Array<{ key: ExploreTypeaheadGroupKey; label: string; suggestions: ExploreTypeaheadSuggestion[] }>;
+    }
+
+    const groups: Array<{ key: ExploreTypeaheadGroupKey; label: string; suggestions: ExploreTypeaheadSuggestion[] }> = [];
+
+    if (showContentScope) {
+      const titleSuggestions = sortByTypeaheadRank(
+        debouncedSearchQuery,
+        programmedTitles,
+        (item) => [item.title, item.category, item.synopsis, item.year, item.runtime],
+      ).slice(0, 4).map<ExploreTypeaheadSuggestion>((item) => ({
+        id: `title-${item.id}`,
+        group: "content",
+        label: "Title",
+        title: item.title || "Untitled",
+        subtitle: buildExploreInfoLine(item) || "Chi'llwood title",
+        badge: "Content",
+        onPress: () => {
+          const safeId = String(item.id || item.slug || item.title);
+          router.push(`/title/${safeId}`);
+        },
+      }));
+
+      const creatorVideoSuggestions = sortByTypeaheadRank(
+        debouncedSearchQuery,
+        sections.creatorVideos.filter((video) => video.ownerId !== RACHI_OFFICIAL_ACCOUNT.userId),
+        (video) => [video.title, video.description, video.publicClipMetadata?.titleText],
+      ).slice(0, 3).map<ExploreTypeaheadSuggestion>((video) => ({
+        id: `creator-video-${video.id}`,
+        group: "content",
+        label: "Creator Video",
+        title: video.title || "Untitled Video",
+        subtitle: video.publicClipMetadata?.subtitleText || video.description || "Public creator video",
+        badge: "Content",
+        onPress: () => openCreatorVideo(video),
+      }));
+
+      const suggestions = [...titleSuggestions, ...creatorVideoSuggestions].slice(0, 6);
+      if (suggestions.length) {
+        groups.push({ key: "content", label: EXPLORE_TYPEAHEAD_GROUP_LABELS.content, suggestions });
+      }
+    }
+
+    if (showPeopleScope && peopleResults.length) {
+      groups.push({
+        key: "people",
+        label: EXPLORE_TYPEAHEAD_GROUP_LABELS.people,
+        suggestions: peopleResults.slice(0, 5).map((person) => ({
+          id: `person-${person.userId}`,
+          group: "people",
+          label: person.officialLabel || (person.hasPublicPlatform ? "Platform" : "Profile"),
+          title: person.displayName,
+          subtitle: person.username ? `@${person.username.replace(/^@+/, "")}` : "Public Profile",
+          badge: person.officialLabel || (person.hasPublicPlatform ? "Platform" : "Profile"),
+          onPress: () => openProfile(person.userId),
+        })),
+      });
+    }
+
+    if (showPlatformScope) {
+      const suggestions = sortByTypeaheadRank(
+        debouncedSearchQuery,
+        platformDiscoveryItems,
+        (item) => [item.title, item.subtitle, item.category_key],
+      ).slice(0, 5).map<ExploreTypeaheadSuggestion>((item) => ({
+        id: `platform-${item.id}`,
+        group: "platforms",
+        label: "Platform",
+        title: String(item.title ?? "").trim() || "Public Platform",
+        subtitle: String(item.subtitle ?? "").trim() || "Public Platform update",
+        badge: "Platform",
+        onPress: () => openDiscoveryFeedItem(item),
+      }));
+
+      if (suggestions.length) {
+        groups.push({ key: "platforms", label: EXPLORE_TYPEAHEAD_GROUP_LABELS.platforms, suggestions });
+      }
+    }
+
+    if (showOriginalsScope) {
+      const suggestions = sortByTypeaheadRank(
+        debouncedSearchQuery,
+        sections.rachiOriginals,
+        (video) => [video.title, video.description, video.publicClipMetadata?.titleText],
+      ).slice(0, 5).map<ExploreTypeaheadSuggestion>((video) => ({
+        id: `original-${video.id}`,
+        group: "originals",
+        label: "Official",
+        title: video.title || "Chi'llwood Original",
+        subtitle: video.publicClipMetadata?.subtitleText || video.description || "Rachi Original",
+        badge: "Originals",
+        onPress: () => openCreatorVideo(video),
+      }));
+
+      if (suggestions.length) {
+        groups.push({ key: "originals", label: EXPLORE_TYPEAHEAD_GROUP_LABELS.originals, suggestions });
+      }
+    }
+
+    if (showLiveScope) {
+      const liveFeedSuggestions = sortByTypeaheadRank(
+        debouncedSearchQuery,
+        liveDiscoveryItems,
+        (item) => [item.title, item.subtitle, item.category_key],
+      ).slice(0, 4).map<ExploreTypeaheadSuggestion>((item) => ({
+        id: `live-feed-${item.id}`,
+        group: "live",
+        label: "Live",
+        title: String(item.title ?? "").trim() || "Live Now",
+        subtitle: String(item.subtitle ?? "").trim() || getDiscoveryLiveLabel(item),
+        badge: "Live",
+        onPress: () => openDiscoveryFeedItem(item),
+      }));
+      const liveEventSuggestions = sortByTypeaheadRank(
+        debouncedSearchQuery,
+        liveEvents,
+        (event) => [event.eventTitle, event.eventType, event.status],
+      ).slice(0, 3).map<ExploreTypeaheadSuggestion>((event) => ({
+        id: `live-event-${event.id}`,
+        group: "live",
+        label: "Live Event",
+        title: event.eventTitle,
+        subtitle: formatEventMode(event),
+        badge: "Live",
+        onPress: () => openChannel(event.hostUserId),
+      }));
+      const suggestions = [...liveFeedSuggestions, ...liveEventSuggestions].slice(0, 6);
+      if (suggestions.length) {
+        groups.push({ key: "live", label: EXPLORE_TYPEAHEAD_GROUP_LABELS.live, suggestions });
+      }
+    }
+
+    if (showEventScope) {
+      const suggestions = sortByTypeaheadRank(
+        debouncedSearchQuery,
+        scheduledEvents,
+        (event) => [event.eventTitle, event.eventType, event.status],
+      ).slice(0, 5).map<ExploreTypeaheadSuggestion>((event) => ({
+        id: `event-${event.id}`,
+        group: "events",
+        label: "Event",
+        title: event.eventTitle,
+        subtitle: formatDateTime(event.startsAt),
+        badge: formatEventMode(event),
+        onPress: () => openChannel(event.hostUserId),
+      }));
+
+      if (suggestions.length) {
+        groups.push({ key: "events", label: EXPLORE_TYPEAHEAD_GROUP_LABELS.events, suggestions });
+      }
+    }
+
+    return groups;
+  }, [
+    debouncedSearchQuery,
+    liveDiscoveryItems,
+    liveEvents,
+    peopleResults,
+    platformDiscoveryItems,
+    programmedTitles,
+    publicSearchBlocked,
+    publicSearchNeedle.length,
+    scheduledEvents,
+    sections.creatorVideos,
+    sections.rachiOriginals,
+    showContentScope,
+    showEventScope,
+    showLiveScope,
+    showOriginalsScope,
+    showPeopleScope,
+    showPlatformScope,
+  ]);
 
   async function fetchTitleLiveMetadata(nextTitles: TitleRow[]) {
     const titleIds = nextTitles.map((item) => String(item.id)).filter(Boolean);
@@ -387,7 +624,15 @@ export default function ExploreScreen() {
   }, []);
 
   useEffect(() => {
-    const query = searchQuery.trim();
+    const timeout = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, EXPLORE_SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const query = debouncedSearchQuery.trim();
     const queryWithoutHandlePrefix = query.replace(/^@+/, "");
 
     if (!showPeopleScope || queryWithoutHandlePrefix.length < 2 || queryWithoutHandlePrefix.includes("@")) {
@@ -421,7 +666,7 @@ export default function ExploreScreen() {
       active = false;
       clearTimeout(timeout);
     };
-  }, [searchQuery, showPeopleScope]);
+  }, [debouncedSearchQuery, showPeopleScope]);
 
   function getExploreImageSource(item?: TitleRow | null): ImageSourcePropType | null {
     if (!item) return null;
@@ -664,7 +909,7 @@ export default function ExploreScreen() {
 
   const renderPeopleSearchSection = () => {
     if (!showPeopleScope) return null;
-    const query = searchQuery.trim().replace(/^@+/, "");
+    const query = debouncedSearchQuery.trim().replace(/^@+/, "");
     const hasPeopleQuery = query.length >= 2 && !query.includes("@");
     const showPeoplePrompt = activeScope === "people" && !hasPeopleQuery;
 
@@ -698,6 +943,67 @@ export default function ExploreScreen() {
           <View testID="explore-people-empty" style={styles.inlineEmpty}>
             <Text style={styles.inlineEmptyTitle}>No people found</Text>
             <Text style={styles.inlineEmptyText}>Try a username or creator name.</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderTypeaheadSuggestion = (suggestion: ExploreTypeaheadSuggestion) => (
+    <TouchableOpacity
+      key={`${suggestion.group}-${suggestion.id}`}
+      testID={`explore-typeahead-result-${suggestion.group}`}
+      activeOpacity={0.86}
+      style={styles.typeaheadRow}
+      onPress={suggestion.onPress}
+    >
+      <View style={styles.typeaheadIcon}>
+        <Text style={styles.typeaheadIconText}>{suggestion.title.slice(0, 1).toUpperCase()}</Text>
+      </View>
+      <View style={styles.typeaheadCopy}>
+        <View style={styles.peopleNameRow}>
+          <Text style={styles.typeaheadTitle} numberOfLines={1}>{suggestion.title}</Text>
+          {suggestion.badge ? <Text style={styles.typeaheadBadge}>{suggestion.badge}</Text> : null}
+        </View>
+        <Text style={styles.typeaheadSubtitle} numberOfLines={1}>{suggestion.subtitle}</Text>
+      </View>
+      <Text style={styles.typeaheadAction}>{suggestion.label}</Text>
+    </TouchableOpacity>
+  );
+
+  const renderExploreTypeahead = () => {
+    if (publicSearchNeedle.length < EXPLORE_TYPEAHEAD_MIN_LENGTH) return null;
+
+    const hasGroups = typeaheadGroups.some((group) => group.suggestions.length > 0);
+
+    return (
+      <View testID="explore-typeahead-results" style={styles.typeaheadPanel}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Suggestions</Text>
+          <Text style={styles.sectionMeta}>Typeahead</Text>
+        </View>
+        {peopleLoading && showPeopleScope ? (
+          <View style={styles.inlineEmpty}>
+            <Text style={styles.inlineEmptyTitle}>Searching people...</Text>
+          </View>
+        ) : null}
+        {hasGroups ? (
+          <View style={styles.typeaheadGroupList}>
+            {typeaheadGroups.map((group) => (
+              <View
+                key={group.key}
+                testID={`explore-typeahead-group-${group.key}`}
+                style={styles.typeaheadGroup}
+              >
+                <Text style={styles.typeaheadGroupTitle}>{group.label}</Text>
+                {group.suggestions.map(renderTypeaheadSuggestion)}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View testID="explore-typeahead-empty" style={styles.inlineEmpty}>
+            <Text style={styles.inlineEmptyTitle}>No matches found</Text>
+            <Text style={styles.inlineEmptyText}>Try a username, creator, or title.</Text>
           </View>
         )}
       </View>
@@ -822,20 +1128,35 @@ export default function ExploreScreen() {
                 </View>
 
                 <View style={styles.searchShell}>
-                  <Text style={styles.searchLabel}>Search Explore</Text>
-                  <TextInput
-                    testID="explore-search-input"
-                    accessibilityLabel="Search Chi'llwood Explore"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search title, person, Platform, or event"
-                    placeholderTextColor="#858C9D"
-                    style={styles.searchInput}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    clearButtonMode="while-editing"
-                  />
+                  <Text style={styles.searchLabel}>Search Chi'llwood</Text>
+                  <View style={styles.searchInputRow}>
+                    <MaterialIcons name="search" size={20} color="#AAB4C7" />
+                    <TextInput
+                      testID="explore-search-input"
+                      accessibilityLabel="Search Chi'llwood Explore"
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      placeholder="Search content, people, and Platforms"
+                      placeholderTextColor="#858C9D"
+                      style={styles.searchInput}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    {searchQuery.trim() ? (
+                      <Pressable
+                        testID="explore-search-clear"
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear Explore search"
+                        style={styles.searchClearButton}
+                        onPress={() => setSearchQuery("")}
+                      >
+                        <MaterialIcons name="close" size={18} color="#F4F7FF" />
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </View>
+
+                {renderExploreTypeahead()}
 
                 {activeScope !== "people" ? (
                 <View style={styles.statRow}>
@@ -882,11 +1203,11 @@ export default function ExploreScreen() {
                   `${creatorDiscoveryVideos.length} ready`,
                   creatorDiscoveryVideos.length > 0,
                   "No public creator videos yet",
-                  "Creator video cards come only from the public creator-video resolver.",
+                  "Public creator videos appear here when available.",
                   creatorDiscoveryVideos.map((video) => renderCreatorVideoCard(video)),
                 ) : null}
 
-                {showContentScope ? renderBackedSection(
+                {showOriginalsScope ? renderBackedSection(
                   "Chi'llwood Originals",
                   `${rachiOriginals.length} ready`,
                   rachiOriginals.length > 0,
@@ -1031,16 +1352,112 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
-  searchInput: {
+  searchInputRow: {
     minHeight: 46,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.055)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 44,
     color: "#FFFFFF",
-    paddingHorizontal: 14,
     fontSize: 14,
     fontWeight: "700",
+  },
+  searchClearButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  typeaheadPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(9,12,20,0.84)",
+    padding: 12,
+    gap: 10,
+  },
+  typeaheadGroupList: {
+    gap: 12,
+  },
+  typeaheadGroup: {
+    gap: 7,
+  },
+  typeaheadGroupTitle: {
+    color: "#9DA7BB",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  typeaheadRow: {
+    minHeight: 58,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+  },
+  typeaheadIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(229,9,20,0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(229,9,20,0.4)",
+  },
+  typeaheadIconText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  typeaheadCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  typeaheadTitle: {
+    flexShrink: 1,
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  typeaheadSubtitle: {
+    color: "#AEB7CA",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  typeaheadBadge: {
+    overflow: "hidden",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    color: "#EAF0FF",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  typeaheadAction: {
+    color: "#EAF0FF",
+    fontSize: 10,
+    fontWeight: "900",
   },
   statRow: {
     flexDirection: "row",

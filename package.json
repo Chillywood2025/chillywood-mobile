@@ -33,6 +33,7 @@
     "guard:profile-production-policy": "node ./scripts/guard-profile-production-policy.mjs",
     "guard:navigation-terminology-policy": "node ./scripts/guard-navigation-terminology-policy.mjs",
     "guard:public-user-search-policy": "node ./scripts/guard-public-user-search-policy.mjs",
+    "guard:admin-search-policy": "node ./scripts/guard-admin-search-policy.mjs",
     "guard:rachi-official-policy": "node ./scripts/guard-rachi-official-policy.mjs",
     "guard:platform-brand-studio-policy": "node ./scripts/guard-platform-brand-studio-policy.mjs",
     "guard:clip-studio-policy": "node ./scripts/guard-clip-studio-policy.mjs",

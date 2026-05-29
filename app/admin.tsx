@@ -380,6 +380,29 @@ type OperatorTabKey =
   | "ops-alerts"
   | "system";
 
+type AdminSearchScope =
+  | "all"
+  | "users"
+  | "reports"
+  | "money"
+  | "provider"
+  | "rachi"
+  | "live_ops"
+  | "legal"
+  | "audit";
+
+type AdminSearchResult = {
+  id: string;
+  scope: AdminSearchScope;
+  title: string;
+  subtitle: string;
+  meta: string;
+  badge: string;
+  tone: OwnerControlTone;
+  openLabel: string;
+  onPress: () => void;
+};
+
 type EditorForm = {
   id?: TitleId;
   title: string;
@@ -606,6 +629,19 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "legal", label: "Legal" },
   { key: "ops-alerts", label: "Ops Alerts" },
   { key: "system", label: "System" },
+];
+const ADMIN_SEARCH_DEBOUNCE_MS = 300;
+const ADMIN_SEARCH_MIN_LENGTH = 2;
+const ADMIN_SEARCH_SCOPES: readonly { key: AdminSearchScope; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "users", label: "Users" },
+  { key: "reports", label: "Reports" },
+  { key: "money", label: "Money" },
+  { key: "provider", label: "Provider" },
+  { key: "rachi", label: "Rachi" },
+  { key: "live_ops", label: "Live Ops" },
+  { key: "legal", label: "Legal" },
+  { key: "audit", label: "Audit" },
 ];
 const legalEvidenceTargetOptions: readonly { key: LegalEvidenceTargetType; label: string }[] = [
   { key: "user_id", label: "User / Account" },
@@ -1591,6 +1627,14 @@ const formatAuditDisplayText = (value: unknown) => {
   return text
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, (match) => maskOperatorIdentity(match))
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, (match) => formatCompactIdentifier(match));
+};
+
+const normalizeAdminSearchQuery = (value: string) => value.trim().toLowerCase();
+
+const adminSearchMatches = (query: string, values: readonly unknown[]) => {
+  const needle = normalizeAdminSearchQuery(query);
+  if (needle.length < ADMIN_SEARCH_MIN_LENGTH) return false;
+  return values.some((value) => String(value ?? "").toLowerCase().includes(needle));
 };
 
 type OwnerControlTone = "default" | "success" | "danger" | "manual" | "locked" | "info";
@@ -2802,6 +2846,9 @@ export default function AdminStudioScreen() {
   const [titles, setTitles] = useState<TitleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [adminSearchQuery, setAdminSearchQuery] = useState("");
+  const [adminSearchDebouncedQuery, setAdminSearchDebouncedQuery] = useState("");
+  const [adminSearchScope, setAdminSearchScope] = useState<AdminSearchScope>("all");
   const [manualHeroQuery, setManualHeroQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [operatorTab, setOperatorTab] = useState<OperatorTabKey>("home");
@@ -3342,6 +3389,14 @@ export default function AdminStudioScreen() {
       setOperatorTab(visibleOperatorTabs[0].key);
     }
   }, [operatorTab, visibleOperatorTabs]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setAdminSearchDebouncedQuery(adminSearchQuery);
+    }, ADMIN_SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [adminSearchQuery]);
 
   useEffect(() => {
     if (!canAccessAdmin || !visibleOperatorTabs.length) return;
@@ -6582,6 +6637,428 @@ export default function AdminStudioScreen() {
     setExpandedMoneySwitchRows((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  const visibleOperatorTabKeys = useMemo(
+    () => new Set<OperatorTabKey>(visibleOperatorTabs.map((tab) => tab.key)),
+    [visibleOperatorTabs],
+  );
+  const canOpenOperatorTab = useCallback(
+    (tab: OperatorTabKey) => visibleOperatorTabKeys.has(tab),
+    [visibleOperatorTabKeys],
+  );
+  const adminSearchCanUseScope = useCallback((scope: AdminSearchScope) => {
+    if (scope === "all") return true;
+    if (scope === "users") return canViewStaffRoles && canOpenOperatorTab("roles");
+    if (scope === "reports") return canReviewSafetyReports && canOpenOperatorTab("reports");
+    if (scope === "money") return canOpenOperatorTab("money-center") || canOpenOperatorTab("live-cost-guard");
+    if (scope === "provider") return canOpenOperatorTab("money-center");
+    if (scope === "rachi") return canAccessContentProgramming && canOpenOperatorTab("rachi");
+    if (scope === "live_ops") return canAccessLiveOps && (canOpenOperatorTab("live-ops-fix-center") || canOpenOperatorTab("live-cost-guard"));
+    if (scope === "legal") return (canAccessLegalEvidence || canAccessLegalIntake || canAccessDmca)
+      && (canOpenOperatorTab("legal") || canOpenOperatorTab("dmca"));
+    if (scope === "audit") return (canAccessAuditExplorer || canReviewSafetyReports) && canOpenOperatorTab("audit");
+    return false;
+  }, [
+    canAccessAuditExplorer,
+    canAccessContentProgramming,
+    canAccessDmca,
+    canAccessLegalEvidence,
+    canAccessLegalIntake,
+    canAccessLiveOps,
+    canOpenOperatorTab,
+    canReviewSafetyReports,
+    canViewStaffRoles,
+  ]);
+  const availableAdminSearchScopes = useMemo(
+    () => ADMIN_SEARCH_SCOPES.filter((scope) => adminSearchCanUseScope(scope.key)),
+    [adminSearchCanUseScope],
+  );
+  const adminSearchResults = useMemo<AdminSearchResult[]>(() => {
+    const queryText = adminSearchDebouncedQuery.trim();
+    if (!canAccessAdmin || queryText.length < ADMIN_SEARCH_MIN_LENGTH) return [];
+    const includeScope = (scope: AdminSearchScope) => (
+      adminSearchScope === "all" || adminSearchScope === scope
+    ) && adminSearchCanUseScope(scope);
+    const results: AdminSearchResult[] = [];
+
+    if (includeScope("users")) {
+      platformRoleRoster.forEach((entry) => {
+        if (!adminSearchMatches(queryText, [
+          entry.id,
+          entry.userId,
+          entry.email,
+          entry.identityLabel,
+          entry.role,
+          entry.status,
+          ...entry.permissionKeys,
+        ])) return;
+        results.push({
+          id: `user-${entry.id}`,
+          scope: "users",
+          title: entry.identityLabel || maskOperatorIdentity(entry.email) || `User ${formatCompactIdentifier(entry.userId)}`,
+          subtitle: `${formatPlatformRoleDisplayLabel(entry.role)} · ${formatModerationToken(entry.status)}`,
+          meta: `Email lookup is admin-only. ${entry.email ? maskOperatorIdentity(entry.email) : `User ${formatCompactIdentifier(entry.userId)}`}`,
+          badge: "Owner/Admin only",
+          tone: entry.status === "active" ? "info" : "locked",
+          openLabel: "View User",
+          onPress: () => {
+            setOperatorTab("roles");
+            setStaffRoleEmail(entry.email ?? "");
+            setStaffPermissionEmail(entry.email ?? "");
+          },
+        });
+      });
+    }
+
+    if (includeScope("reports")) {
+      safetyReports.forEach((report) => {
+        if (!adminSearchMatches(queryText, [
+          report.id,
+          report.reporterUserId,
+          report.targetId,
+          report.targetType,
+          report.category,
+          report.status,
+          report.severity,
+          report.note,
+          report.roomId,
+          report.titleId,
+          report.sourceSurface,
+          report.targetLabel,
+        ])) return;
+        results.push({
+          id: `report-${report.id}`,
+          scope: "reports",
+          title: buildReportTargetLine(report),
+          subtitle: `${formatReportRiskLabel(report)} · ${formatReportReviewState(report.status)}`,
+          meta: `Report ${formatCompactIdentifier(report.id)} · ${formatModerationTimestamp(report.createdAt)}`,
+          badge: "Report",
+          tone: getReportSeverityTone(report.severity),
+          openLabel: "View Report",
+          onPress: () => {
+            setOperatorTab("reports");
+            setSelectedSafetyReportId(report.id);
+            setSafetyReportDetailVisible(true);
+          },
+        });
+      });
+    }
+
+    if (includeScope("money")) {
+      adminMoneyAuditEvents.forEach((event) => {
+        if (!adminSearchMatches(queryText, [
+          event.id,
+          event.title,
+          event.summary,
+          event.category,
+          event.sourceTable,
+          event.sourceLabel,
+          event.statusLabel,
+          event.actorLabel,
+          event.actorUserId,
+          event.targetUserId,
+          event.creatorId,
+          event.provider,
+          event.capability,
+          event.providerEventId,
+          event.idempotencyLabel,
+          event.reason,
+          event.nextStep,
+          ...event.badges,
+        ])) return;
+        results.push({
+          id: `money-event-${event.id}`,
+          scope: "money",
+          title: event.title,
+          subtitle: `${event.sourceLabel} · ${event.statusLabel}`,
+          meta: event.providerEventId
+            ? `Provider event ${formatCompactIdentifier(event.providerEventId)}`
+            : event.nextStep,
+          badge: event.payable ? "Payable" : "Not payable",
+          tone: event.payable ? "manual" : "locked",
+          openLabel: "View Money Event",
+          onPress: () => {
+            setOperatorTab("money-center");
+            setAdminMoneyAuditFilter("all");
+            setSelectedAdminMoneyAuditEvent(event);
+            setExpandedAdminMoneyCenterSections((prev) => ({ ...prev, money_audit: true }));
+          },
+        });
+      });
+
+      moneySwitches.forEach((row) => {
+        if (!adminSearchMatches(queryText, [
+          row.key,
+          row.displayLabel,
+          row.description,
+          row.state,
+        ])) return;
+        results.push({
+          id: `money-switch-${row.key}`,
+          scope: "money",
+          title: row.displayLabel,
+          subtitle: `Kill switch · ${formatMoneySwitchState(row.state)}`,
+          meta: row.description,
+          badge: "Kill Switch",
+          tone: moneySwitchTone(row.state),
+          openLabel: "View Kill Switch",
+          onPress: () => {
+            setOperatorTab("money-center");
+            setExpandedAdminMoneyCenterSections((prev) => ({ ...prev, kill_switches: true }));
+            setExpandedMoneySwitchRows((prev) => ({ ...prev, [row.key]: true }));
+          },
+        });
+      });
+
+      liveCostGuardEvents.forEach((event) => {
+        if (!adminSearchMatches(queryText, [
+          event.id,
+          event.roomName,
+          event.participantIdentity,
+          event.severity,
+          event.source,
+          event.recommendedAction,
+          event.actionStatus,
+        ])) return;
+        results.push({
+          id: `live-cost-${event.id}`,
+          scope: "money",
+          title: `${formatModerationToken(event.severity)} Live Cost Guard`,
+          subtitle: `Room ${formatAuditDisplayText(event.roomName) || "not supplied"} · ${formatModerationToken(event.actionStatus)}`,
+          meta: formatModerationTimestamp(event.createdAt),
+          badge: "Live Ops",
+          tone: event.severity === "critical" || event.severity === "emergency" ? "danger" : "manual",
+          openLabel: "View Guard",
+          onPress: () => setOperatorTab("live-cost-guard"),
+        });
+      });
+    }
+
+    if (includeScope("provider")) {
+      providerReadinessRows.forEach((row) => {
+        if (!adminSearchMatches(queryText, [
+          row.provider,
+          row.capability,
+          row.status,
+          row.displayLabel,
+          row.displaySummary,
+          row.nextStep,
+        ])) return;
+        results.push({
+          id: `provider-${row.provider}-${row.capability}`,
+          scope: "provider",
+          title: row.displayLabel,
+          subtitle: `${formatModerationToken(row.provider)} · ${formatModerationToken(row.status)}`,
+          meta: row.nextStep || row.displaySummary,
+          badge: "Provider",
+          tone: providerReadinessStatusTone(row.status),
+          openLabel: "View Provider Status",
+          onPress: () => {
+            setOperatorTab("money-center");
+            setExpandedAdminMoneyCenterSections((prev) => ({ ...prev, provider_webhooks: true, technical: true }));
+          },
+        });
+      });
+    }
+
+    if (includeScope("rachi")) {
+      rachiPosts.forEach((post) => {
+        if (!adminSearchMatches(queryText, [
+          post.id,
+          post.body,
+          post.visibility,
+          post.moderationStatus,
+          RACHI_OFFICIAL_ACCOUNT.displayName,
+        ])) return;
+        results.push({
+          id: `rachi-post-${post.id}`,
+          scope: "rachi",
+          title: "Rachi Official Update",
+          subtitle: formatAuditDisplayText(post.body) || "Official Chi'llwood post",
+          meta: `${formatModerationToken(post.visibility)} · ${formatModerationTimestamp(post.createdAt)}`,
+          badge: "Official",
+          tone: post.visibility === "public" ? "success" : "manual",
+          openLabel: "View Rachi",
+          onPress: () => setOperatorTab("rachi"),
+        });
+      });
+
+      rachiOriginals.forEach((video) => {
+        if (!adminSearchMatches(queryText, [
+          video.id,
+          video.title,
+          video.description,
+          video.visibility,
+          video.moderationStatus,
+          RACHI_OFFICIAL_ACCOUNT.displayName,
+        ])) return;
+        results.push({
+          id: `rachi-original-${video.id}`,
+          scope: "rachi",
+          title: video.title || "Rachi Original",
+          subtitle: video.description || "Official Chi'llwood Original",
+          meta: `${formatModerationToken(video.visibility)} · ${formatModerationToken(video.moderationStatus)}`,
+          badge: "Original",
+          tone: video.visibility === "public" ? "success" : "manual",
+          openLabel: "View Rachi",
+          onPress: () => setOperatorTab("rachi"),
+        });
+      });
+    }
+
+    if (includeScope("live_ops")) {
+      liveOpsIncidents.forEach((incident) => {
+        if (!adminSearchMatches(queryText, [
+          incident.id,
+          incident.opsJobId,
+          incident.title,
+          incident.status,
+          incident.affectedRoute,
+          incident.affectedPurpose,
+          incident.affectedPlatform,
+          incident.affectedServerId,
+          incident.affectedThreadId,
+          incident.affectedCallId,
+          incident.riskLevel,
+          incident.likelyCause,
+          incident.suggestedFix,
+          ...incident.affectedRooms,
+          ...incident.detectedSymptoms,
+        ])) return;
+        results.push({
+          id: `live-ops-${incident.id}`,
+          scope: "live_ops",
+          title: incident.title,
+          subtitle: `${incident.affectedRoute} · ${formatLiveOpsToken(incident.status)}`,
+          meta: `Rooms ${incident.affectedRooms.length ? incident.affectedRooms.join(", ") : "not supplied"}`,
+          badge: formatLiveOpsToken(incident.riskLevel),
+          tone: incident.riskLevel === "critical" ? "danger" : incident.riskLevel === "high" ? "manual" : "info",
+          openLabel: "View Room",
+          onPress: () => setOperatorTab("live-ops-fix-center"),
+        });
+      });
+    }
+
+    if (includeScope("legal")) {
+      legalRequests.forEach((request) => {
+        if (!adminSearchMatches(queryText, [
+          request.id,
+          request.case_number,
+          request.request_type,
+          request.requesting_agency,
+          request.contact_name,
+          request.contact_email,
+          request.target_user_id,
+          request.target_content_id,
+          request.target_thread_id,
+          request.target_room_id,
+          request.target_report_id,
+          request.status,
+          request.notes,
+        ])) return;
+        results.push({
+          id: `legal-${request.id}`,
+          scope: "legal",
+          title: formatAuditDisplayText(request.requesting_agency) || "Legal Request",
+          subtitle: `${formatLegalStatus(request.status)} · ${formatCompactIdentifier(request.case_number || request.id)}`,
+          meta: request.contact_email ? `Contact ${maskOperatorIdentity(request.contact_email)}` : legalRequestPrimaryTarget(request).label,
+          badge: "Legal",
+          tone: legalStatusTone(request.status),
+          openLabel: "View Case",
+          onPress: () => {
+            setOperatorTab("legal");
+            void openLegalRequestDetail(String(request.id ?? ""));
+          },
+        });
+      });
+
+      dmcaCases.forEach((dmcaCase) => {
+        if (!adminSearchMatches(queryText, [
+          dmcaCase.id,
+          dmcaCase.caseNumber,
+          dmcaCase.status,
+          dmcaCase.reporterName,
+          dmcaCase.reporterCompany,
+          dmcaCase.reporterEmail,
+          dmcaCase.contentId,
+          dmcaCase.contentUrl,
+          dmcaCase.uploaderUserId,
+          dmcaCase.uploaderChannelId,
+          dmcaCase.publicSafeSummary,
+        ])) return;
+        results.push({
+          id: `dmca-${dmcaCase.id}`,
+          scope: "legal",
+          title: dmcaCase.caseNumber,
+          subtitle: `DMCA · ${formatModerationToken(dmcaCase.status)}`,
+          meta: `Reporter ${maskOperatorIdentity(dmcaCase.reporterEmail)}`,
+          badge: "DMCA",
+          tone: dmcaCase.status === "closed" ? "locked" : "manual",
+          openLabel: "View Case",
+          onPress: () => {
+            setOperatorTab("dmca");
+            void loadDmcaCaseDetail(dmcaCase.id);
+          },
+        });
+      });
+    }
+
+    if (includeScope("audit")) {
+      adminImmutableAuditReadModel.latestRows.forEach((row) => {
+        if (!adminSearchMatches(queryText, [
+          row.id,
+          row.actorUserId,
+          row.actorEmail,
+          row.actorRole,
+          row.action,
+          row.actionCategory,
+          row.targetType,
+          row.targetId,
+          row.targetUserId,
+          row.targetChannelUserId,
+          row.reason,
+          row.severity,
+          JSON.stringify(row.metadata ?? {}),
+        ])) return;
+        results.push({
+          id: `audit-${row.id}`,
+          scope: "audit",
+          title: auditOverviewTitle(row),
+          subtitle: `${auditOverviewCategoryLabels[resolveAuditOverviewCategory(row)]} · ${formatModerationToken(row.severity)}`,
+          meta: `${formatImmutableAuditActor(row)} · ${formatModerationTimestamp(row.createdAt)}`,
+          badge: "Audit",
+          tone: auditOverviewSeverityTone(row.severity),
+          openLabel: "View Audit",
+          onPress: () => {
+            setOperatorTab(canOpenOperatorTab("audit") ? "audit" : "audit-explorer");
+            setSelectedAuditOverviewRow(row);
+          },
+        });
+      });
+    }
+
+    return results.slice(0, 18);
+  }, [
+    adminImmutableAuditReadModel.latestRows,
+    adminMoneyAuditEvents,
+    adminSearchCanUseScope,
+    adminSearchDebouncedQuery,
+    adminSearchScope,
+    canAccessAdmin,
+    canOpenOperatorTab,
+    dmcaCases,
+    legalRequests,
+    liveCostGuardEvents,
+    liveOpsIncidents,
+    loadDmcaCaseDetail,
+    moneySwitches,
+    openLegalRequestDetail,
+    platformRoleRoster,
+    providerReadinessRows,
+    rachiOriginals,
+    rachiPosts,
+    safetyReports,
+  ]);
+
   const queueMoneySwitchChange = useCallback((row: PlatformMoneyKillSwitchRow, nextState: MoneyFeatureFlagState) => {
     if (row.state === nextState || moneySwitchBusyKey) return;
     setMoneySwitchConfirm({
@@ -9127,6 +9604,90 @@ export default function AdminStudioScreen() {
     );
   };
 
+  const renderAdminSearchPanel = () => {
+    if (!canAccessAdmin) return null;
+    const queryReady = adminSearchDebouncedQuery.trim().length >= ADMIN_SEARCH_MIN_LENGTH;
+    const hasResults = adminSearchResults.length > 0;
+
+    return (
+      <View testID="admin-search-panel" style={styles.adminSearchPanel}>
+        <View style={styles.ownerSectionHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.configKicker}>SEARCH ADMIN</Text>
+            <Text style={styles.adminSearchTitle}>Search Admin</Text>
+            <Text style={styles.adminSearchBody}>
+              Search users, reports, money events, rooms, or cases. Email lookup is admin-only.
+            </Text>
+          </View>
+          <OwnerStatusPill label="Owner/Admin only" tone="info" />
+        </View>
+
+        <TextInput
+          testID="admin-search-input"
+          value={adminSearchQuery}
+          onChangeText={setAdminSearchQuery}
+          placeholder="Search users, reports, money events, rooms, or cases"
+          placeholderTextColor="#8d8d8d"
+          style={styles.input}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.adminSearchScopeRow}>
+          {availableAdminSearchScopes.map((scope) => {
+            const active = adminSearchScope === scope.key;
+            return (
+              <TouchableOpacity
+                key={scope.key}
+                testID={`admin-search-scope-${scope.key}`}
+                style={[styles.toggleChip, active && styles.toggleChipActive]}
+                onPress={() => setAdminSearchScope(scope.key)}
+              >
+                <Text style={[styles.toggleChipText, active && styles.toggleChipTextActive]}>{scope.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {queryReady ? (
+          hasResults ? (
+            <View testID="admin-search-results" style={styles.adminSearchResultList}>
+              {adminSearchResults.map((result) => (
+                <TouchableOpacity
+                  key={result.id}
+                  testID={`admin-search-result-${result.scope}`}
+                  activeOpacity={0.86}
+                  style={styles.adminSearchResultRow}
+                  onPress={result.onPress}
+                >
+                  <View style={styles.adminSearchResultCopy}>
+                    <View style={styles.ownerSectionHeaderRow}>
+                      <Text style={styles.adminSearchResultTitle} numberOfLines={1}>{result.title}</Text>
+                      <OwnerStatusPill label={result.badge} tone={result.tone} />
+                    </View>
+                    <Text style={styles.adminSearchResultSubtitle} numberOfLines={2}>{result.subtitle}</Text>
+                    <Text style={styles.adminSearchResultMeta} numberOfLines={2}>{result.meta}</Text>
+                  </View>
+                  <Text style={styles.adminSearchOpenText}>{result.openLabel}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View testID="admin-search-empty" style={styles.configListRowSubtle}>
+              <Text style={styles.configListTitle}>No admin matches</Text>
+              <Text style={styles.configListBody}>Try another user, report, money event, room, or case.</Text>
+            </View>
+          )
+        ) : (
+          <View style={styles.configListRowSubtle}>
+            <Text style={styles.configListTitle}>Type at least two characters</Text>
+            <Text style={styles.configListBody}>Results are permission-gated and stay inside Admin.</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderSkeleton = () => (
     <View style={{ gap: 12 }}>
       {Array.from({ length: 4 }).map((_, index) => (
@@ -9218,6 +9779,8 @@ export default function AdminStudioScreen() {
             <Text style={styles.noticeText}>{notice.text}</Text>
           </View>
         )}
+
+        {renderAdminSearchPanel()}
 
         <ScrollView
           horizontal
@@ -18399,6 +18962,73 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
+  },
+  adminSearchPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(116,146,255,0.22)",
+    backgroundColor: "rgba(7,10,16,0.9)",
+    padding: 13,
+    gap: 11,
+  },
+  adminSearchTitle: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  adminSearchBody: {
+    color: "#BAC3D5",
+    fontSize: 12.5,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: 5,
+  },
+  adminSearchScopeRow: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  adminSearchResultList: {
+    gap: 8,
+  },
+  adminSearchResultRow: {
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 72,
+    padding: 11,
+  },
+  adminSearchResultCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  adminSearchResultTitle: {
+    color: "#FFFFFF",
+    flexShrink: 1,
+    fontSize: 13.5,
+    fontWeight: "900",
+  },
+  adminSearchResultSubtitle: {
+    color: "#D6DCE8",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+  },
+  adminSearchResultMeta: {
+    color: "#8F9AAF",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15,
+  },
+  adminSearchOpenText: {
+    color: "#F4F7FB",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   configHeaderRow: {
     flexDirection: "row",

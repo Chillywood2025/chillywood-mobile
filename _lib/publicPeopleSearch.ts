@@ -29,7 +29,53 @@ type PublicPeopleSearchRpc = PromiseLike<{
   error: { message?: string } | null;
 }>;
 
+const RACHI_PUBLIC_USER_ID = "platform_rachi_official";
+const INTERNAL_ACCOUNT_ID_PREFIXES = [
+  "admin_",
+  "moderator_",
+  "owner_",
+  "operator_",
+  "proof_",
+  "security_",
+  "service_",
+  "support_",
+  "system_",
+  "test_",
+];
+const INTERNAL_ACCOUNT_TEXT_PATTERNS = [
+  /\badmin proof\b/,
+  /\bmoderator proof\b/,
+  /\bowner proof\b/,
+  /\boperator proof\b/,
+  /\bsecurity proof\b/,
+  /\bsupport proof\b/,
+  /\bsystem proof\b/,
+  /\bservice proof\b/,
+  /\bproof account\b/,
+  /\btest operator\b/,
+  /\binternal operator\b/,
+  /\binternal moderator\b/,
+  /\binternal support\b/,
+];
+
 const toText = (value: unknown) => String(value ?? "").trim();
+const toPublicSafetyText = (value: unknown) => toText(value).toLowerCase();
+
+export const isPublicPeopleResultAllowed = (result: PublicPeopleSearchResult) => {
+  const userId = toPublicSafetyText(result.userId);
+  if (userId === RACHI_PUBLIC_USER_ID) return true;
+
+  const safetyValues = [
+    userId,
+    toPublicSafetyText(result.username),
+    toPublicSafetyText(result.displayName),
+  ].filter(Boolean);
+
+  return !safetyValues.some((value) => (
+    INTERNAL_ACCOUNT_ID_PREFIXES.some((prefix) => value.startsWith(prefix))
+    || INTERNAL_ACCOUNT_TEXT_PATTERNS.some((pattern) => pattern.test(value))
+  ));
+};
 
 const parsePublicPeopleSearchRow = (row: PublicPeopleSearchRow): PublicPeopleSearchResult | null => {
   const userId = toText(row.user_id);
@@ -70,5 +116,6 @@ export async function searchPublicPeople(query: string, options?: { limit?: numb
 
   return data
     .map(parsePublicPeopleSearchRow)
-    .filter((item): item is PublicPeopleSearchResult => !!item);
+    .filter((item): item is PublicPeopleSearchResult => !!item)
+    .filter(isPublicPeopleResultAllowed);
 }
