@@ -21,6 +21,21 @@ Admin Search typeahead searches already-loaded Admin data only:
 
 It does not add a public RPC, bypass RLS, expose provider secrets, or activate money.
 
+## Typeahead Behavior
+
+Admin Search uses a 300ms debounced input and begins suggestions after two characters.
+
+Current production search polish:
+
+- ranked results: exact match, prefix match, token-prefix match, then partial match
+- grouped scope chips for All, Users, Reports, Money, Provider, Rachi, Live Ops, Legal, and Audit where the current role can access them
+- result-type chips showing backed counts for the current query
+- session-local recent-search chips for safe non-email, non-secret-like queries
+- clear recent searches action
+- compact result rows with type badges and safe detail open actions
+
+Recent searches are local to the current Admin session, are not persisted, and deliberately skip email-shaped and secret-like queries.
+
 ## Audit Writer
 
 Migration `202605290004_admin_search_query_audit.sql` adds:

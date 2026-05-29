@@ -23,6 +23,7 @@ const packageJson = read("package.json");
 const admin = read("app/admin.tsx");
 const explore = read("app/(tabs)/explore.tsx");
 const navDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
+const adminTabsAuditDoc = read("docs/ADMIN_MAIN_TABS_UI_UX_AUDIT.md");
 const adminSearchAudit = read("_lib/adminSearchAudit.ts");
 const adminSearchAuditMigration = read("supabase/migrations/202605290004_admin_search_query_audit.sql");
 
@@ -31,10 +32,15 @@ assertIncludes(packageJson, "guard:admin-search-policy", "package guard script")
 assertIncludes(admin, "ADMIN_SEARCH_SCOPES", "Admin search scopes");
 assertIncludes(admin, "ADMIN_SEARCH_DEBOUNCE_MS", "Admin debounced search");
 assertIncludes(admin, "ADMIN_SEARCH_MIN_LENGTH", "Admin minimum query length");
+assertIncludes(admin, "adminSearchRank", "Admin ranked search results");
 assertIncludes(admin, "adminSearchQuery", "Admin search state");
 assertIncludes(admin, "adminSearchDebouncedQuery", "Admin debounced query state");
+assertIncludes(admin, "adminRecentSearches", "Admin local recent searches");
+assertIncludes(admin, "shouldRememberAdminSearchQuery", "Admin safe recent search filter");
 assertIncludes(admin, 'testID="admin-search-panel"', "Admin search panel");
 assertIncludes(admin, 'testID="admin-search-input"', "Admin search input");
+assertIncludes(admin, 'testID="admin-search-result-chips"', "Admin result type chips");
+assertIncludes(admin, 'testID="admin-search-recent"', "Admin recent search chips");
 assertIncludes(admin, "Search Admin", "Admin search title");
 assertIncludes(admin, "Email lookup is admin-only.", "Admin-only email boundary copy");
 assertIncludes(admin, "canAccessAdmin", "Admin access gate");
@@ -82,6 +88,16 @@ assertNotIncludes(explore, "platformRoleRoster", "Explore staff role source");
 
 assertIncludes(navDoc, "Owner/Admin search is permission-gated", "navigation admin search doc");
 assertIncludes(navDoc, "Email lookup stays Owner/Admin-only", "navigation admin email doc");
+
+assertIncludes(adminTabsAuditDoc, "Owner/Admin Main Tabs UI/UX Audit", "Admin tabs audit doc");
+assertIncludes(adminTabsAuditDoc, "Overview / Money Center / Users / Reports / Live Ops / Rachi / Legal / System / Owner Security", "Admin intended tab model doc");
+assertIncludes(adminTabsAuditDoc, "Current Main Tabs", "Admin current tab list doc");
+assertIncludes(adminTabsAuditDoc, "Search Scopes", "Admin search scopes doc");
+assertIncludes(adminTabsAuditDoc, "Detail Rows", "Admin detail rows doc");
+assertIncludes(adminTabsAuditDoc, "Normal-User Denial", "Admin normal-user denial doc");
+assertIncludes(adminTabsAuditDoc, "No new fake rows", "Admin no fake rows doc");
+assertIncludes(adminTabsAuditDoc, "Session-local recent searches", "Admin recent searches doc");
+assertIncludes(adminTabsAuditDoc, "Latest Android normal-user panel denial remains unclaimed", "Admin normal-user runtime blocker doc");
 
 if (process.exitCode) process.exit(process.exitCode);
 

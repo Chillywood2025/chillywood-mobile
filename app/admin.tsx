@@ -407,6 +407,15 @@ type AdminSearchResult = {
   onPress: () => void;
 };
 
+type AdminRecentSearch = {
+  id: string;
+  query: string;
+  scope: AdminSearchScope;
+  label: string;
+  meta: string;
+  createdAt: string;
+};
+
 type EditorForm = {
   id?: TitleId;
   title: string;
@@ -1641,6 +1650,29 @@ const adminSearchMatches = (query: string, values: readonly unknown[]) => {
   return values.some((value) => String(value ?? "").toLowerCase().includes(needle));
 };
 
+const adminSearchRank = (query: string, values: readonly unknown[]): number => {
+  const needle = normalizeAdminSearchQuery(query);
+  if (needle.length < ADMIN_SEARCH_MIN_LENGTH) return 0;
+  return values.reduce<number>((best, value) => {
+    const haystack = normalizeAdminSearchQuery(String(value ?? ""));
+    if (!haystack) return best;
+    if (haystack === needle) return Math.max(best, 120);
+    if (haystack.startsWith(needle)) return Math.max(best, 100);
+    if (haystack.split(/[\s:_/.-]+/g).some((token) => token.startsWith(needle))) return Math.max(best, 82);
+    if (haystack.includes(needle)) return Math.max(best, 60);
+    return best;
+  }, 0);
+};
+
+const isEmailLikeAdminSearchQuery = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
+
+const shouldRememberAdminSearchQuery = (value: string) => {
+  const query = value.trim();
+  if (query.length < ADMIN_SEARCH_MIN_LENGTH) return false;
+  if (isEmailLikeAdminSearchQuery(query)) return false;
+  return !/(secret|token|bearer|service[_-]?role|whsec_|sk_|pk_live|rk_live)/i.test(query);
+};
+
 type OwnerControlTone = "default" | "success" | "danger" | "manual" | "locked" | "info";
 type CanaryStatusFilter = "all" | "fail" | "manual_required" | "pass";
 type CanaryStatus = "pass" | "fail" | "manual_required";
@@ -2856,6 +2888,7 @@ export default function AdminStudioScreen() {
   const [adminSearchScope, setAdminSearchScope] = useState<AdminSearchScope>("all");
   const [adminSearchAuditReceipt, setAdminSearchAuditReceipt] = useState<AdminSearchAuditReceipt | null>(null);
   const [adminSearchAuditLoading, setAdminSearchAuditLoading] = useState(false);
+  const [adminRecentSearches, setAdminRecentSearches] = useState<AdminRecentSearch[]>([]);
   const [manualHeroQuery, setManualHeroQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [operatorTab, setOperatorTab] = useState<OperatorTabKey>("home");
@@ -6679,6 +6712,24 @@ export default function AdminStudioScreen() {
     () => ADMIN_SEARCH_SCOPES.filter((scope) => adminSearchCanUseScope(scope.key)),
     [adminSearchCanUseScope],
   );
+  const rememberAdminSearch = useCallback((query: string, scope: AdminSearchScope, resultCount: number | null) => {
+    const trimmedQuery = query.trim();
+    if (!shouldRememberAdminSearchQuery(trimmedQuery)) return;
+    const safeScope = adminSearchCanUseScope(scope) ? scope : "all";
+    const scopeLabel = ADMIN_SEARCH_SCOPES.find((option) => option.key === safeScope)?.label ?? "All";
+    const recent: AdminRecentSearch = {
+      id: `${safeScope}:${normalizeAdminSearchQuery(trimmedQuery)}`,
+      query: trimmedQuery,
+      scope: safeScope,
+      label: trimmedQuery.length > 28 ? `${trimmedQuery.slice(0, 26)}...` : trimmedQuery,
+      meta: `${scopeLabel}${resultCount === null ? "" : ` · ${resultCount} results`}`,
+      createdAt: new Date().toISOString(),
+    };
+    setAdminRecentSearches((current) => [
+      recent,
+      ...current.filter((item) => item.id !== recent.id),
+    ].slice(0, 6));
+  }, [adminSearchCanUseScope]);
   const adminSearchResults = useMemo<AdminSearchResult[]>(() => {
     const queryText = adminSearchDebouncedQuery.trim();
     if (!canAccessAdmin || queryText.length < ADMIN_SEARCH_MIN_LENGTH) return [];
@@ -7043,7 +7094,14 @@ export default function AdminStudioScreen() {
       });
     }
 
-    return results.slice(0, 18);
+    return results
+      .sort((a, b) => {
+        const rankA = adminSearchRank(queryText, [a.id, a.title, a.subtitle, a.meta, a.badge, a.scope]);
+        const rankB = adminSearchRank(queryText, [b.id, b.title, b.subtitle, b.meta, b.badge, b.scope]);
+        if (rankA !== rankB) return rankB - rankA;
+        return a.title.localeCompare(b.title);
+      })
+      .slice(0, 18);
   }, [
     adminImmutableAuditReadModel.latestRows,
     adminMoneyAuditEvents,
@@ -7065,6 +7123,12 @@ export default function AdminStudioScreen() {
     rachiPosts,
     safetyReports,
   ]);
+  const adminSearchResultScopeCounts = useMemo(() => {
+    return adminSearchResults.reduce<Record<AdminSearchScope, number>>((acc, result) => {
+      acc[result.scope] = (acc[result.scope] ?? 0) + 1;
+      return acc;
+    }, {} as Record<AdminSearchScope, number>);
+  }, [adminSearchResults]);
 
   useEffect(() => {
     const queryText = adminSearchDebouncedQuery.trim();
@@ -7092,7 +7156,10 @@ export default function AdminStudioScreen() {
       .then((receipt) => {
         if (cancelled) return;
         setAdminSearchAuditReceipt(receipt);
-        if (receipt.ok) void loadAdminImmutableAuditReadModel();
+        if (receipt.ok) {
+          rememberAdminSearch(queryText, adminSearchScope, receipt.resultCount ?? adminSearchResults.length);
+          void loadAdminImmutableAuditReadModel();
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -7123,6 +7190,7 @@ export default function AdminStudioScreen() {
     adminSearchScope,
     canAccessAdmin,
     loadAdminImmutableAuditReadModel,
+    rememberAdminSearch,
   ]);
 
   const openAdminSearchResult = useCallback((result: AdminSearchResult) => {
@@ -9768,6 +9836,54 @@ export default function AdminStudioScreen() {
             );
           })}
         </ScrollView>
+
+        {queryReady && hasResults ? (
+          <View testID="admin-search-result-chips" style={styles.adminSearchSuggestionGroup}>
+            <Text style={styles.adminSearchSuggestionTitle}>Result types</Text>
+            <View style={styles.adminSearchSuggestionRow}>
+              {ADMIN_SEARCH_SCOPES
+                .filter((scope) => scope.key !== "all" && (adminSearchResultScopeCounts[scope.key] ?? 0) > 0)
+                .map((scope) => (
+                  <TouchableOpacity
+                    key={scope.key}
+                    style={styles.adminSearchSuggestionChip}
+                    onPress={() => setAdminSearchScope(scope.key)}
+                  >
+                    <Text style={styles.adminSearchSuggestionChipText}>
+                      {`${scope.label} ${adminSearchResultScopeCounts[scope.key] ?? 0}`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+            </View>
+          </View>
+        ) : null}
+
+        {!queryReady && adminRecentSearches.length ? (
+          <View testID="admin-search-recent" style={styles.adminSearchSuggestionGroup}>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.adminSearchSuggestionTitle}>Recent searches</Text>
+              <TouchableOpacity onPress={() => setAdminRecentSearches([])}>
+                <Text style={styles.adminSearchClearText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.adminSearchSuggestionRow}>
+              {adminRecentSearches.map((recent) => (
+                <TouchableOpacity
+                  key={recent.id}
+                  style={styles.adminSearchRecentChip}
+                  onPress={() => {
+                    setAdminSearchScope(recent.scope);
+                    setAdminSearchQuery(recent.query);
+                  }}
+                >
+                  <Text style={styles.adminSearchRecentLabel}>{recent.label}</Text>
+                  <Text style={styles.adminSearchRecentMeta}>{recent.meta}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.adminSearchSuggestionMeta}>Recent searches stay local to this Admin session and skip email-shaped or secret-like queries.</Text>
+          </View>
+        ) : null}
 
         {queryReady ? (
           hasResults ? (
@@ -19120,6 +19236,69 @@ const styles = StyleSheet.create({
   adminSearchScopeRow: {
     gap: 8,
     paddingRight: 4,
+  },
+  adminSearchSuggestionGroup: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    gap: 8,
+    padding: 10,
+  },
+  adminSearchSuggestionTitle: {
+    color: "#F4F7FB",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0,
+    textTransform: "uppercase",
+  },
+  adminSearchSuggestionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  adminSearchSuggestionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(116,146,255,0.28)",
+    backgroundColor: "rgba(116,146,255,0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  adminSearchSuggestionChipText: {
+    color: "#DCE4FF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  adminSearchSuggestionMeta: {
+    color: "#8F9AAF",
+    fontSize: 10.5,
+    fontWeight: "800",
+    lineHeight: 15,
+  },
+  adminSearchRecentChip: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  adminSearchRecentLabel: {
+    color: "#FFFFFF",
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
+  adminSearchRecentMeta: {
+    color: "#98A4BA",
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  adminSearchClearText: {
+    color: "#F7C4D0",
+    fontSize: 11,
+    fontWeight: "900",
   },
   adminSearchResultList: {
     gap: 8,
