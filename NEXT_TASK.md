@@ -17,6 +17,11 @@ Closed truth:
 - Admin Search query-level audit writing is now implemented through remote-applied migration `202605290004_admin_search_query_audit.sql`, `_lib/adminSearchAudit.ts`, and the Admin Search audit receipt UI. It writes `admin_search_query`, `admin_search_email_lookup`, `admin_search_denied`, and `admin_search_result_opened` events into immutable Admin audit logs with masked query preview, query type, scope, result count, status, and no raw email/plain query storage in metadata.
 - Owner/Admin main tabs are audited in `docs/ADMIN_MAIN_TABS_UI_UX_AUDIT.md`. Current visible tabs remain route-safe and permission-gated, while the intended future model is Overview / Money Center / Users / Reports / Live Ops / Rachi / Legal / System / Owner Security.
 - Admin Search is modernized with ranked results, result-type count chips, and session-local recent searches that skip email-shaped or secret-like queries and are not persisted.
+- Owner/Admin visible IA is now consolidated to Overview / Money Center / Users / Reports / Live Ops / Rachi / Legal / System / Owner Security while legacy specialized state keys remain routable behind those groups.
+- Users staff-roster rows are backed and clickable into masked admin-safe detail sheets. Broader account/Premium/report/block/restriction status remains blocked on a dedicated admin-safe user read model.
+- Usage summaries open inspect-only drilldowns over the current admin usage read model. Missing event/session/activity row lists are labeled as read-model gaps instead of faked.
+- System cards open inspect-only detail sheets with source/status/no-secret boundaries. Historical build/deploy/system-event rows still need a dedicated read model.
+- Current Admin IA/drilldown proof lives at `/tmp/chillywood-admin-denial-ia-drilldown-proof-20260529/` and captures consolidated tabs, Users rows, masked user detail, Usage/System drilldowns, and an Admin Search audit-written receipt.
 - Normal-user Admin Search API/RLS denial proof passed with the configured non-staff proof account: no active platform role rows, denied Admin Search audit RPC response with masked email-shaped query, zero visible Admin audit rows, and no public email result fields. Android runtime denial for the new panel remains unclaimed because the attached app session was owner/admin and there was no safe account-switch/restore path in this lane.
 - New guard coverage includes `npm run guard:public-user-search-policy` for public typeahead and `npm run guard:admin-search-policy` for owner/admin search boundaries.
 - Android proof for the Explore People search safety pass lives at `/tmp/chillywood-explore-people-search-proof-20260529/`.
@@ -62,8 +67,9 @@ Remaining limitations:
 
 Recommended next lane:
 
-- Admin IA consolidation into Overview / Money Center / Users / Reports / Live Ops / Rachi / Legal / System / Owner Security only after each specialized tab has a preserved permission map, detail sheet, audit path, and no emergency-control regression.
 - Profile Media Runtime Closeout with one safe app-owned/non-private gallery asset, an attached Android device, a signed-in owner account, viewer/signed-out checks, compact sheet screenshots, gallery/native crop step proof without private photos, backend active-media read-back, removal/fallback proof, and public masking proof.
+- Admin Read Models Follow-Up for broader Users, Usage, and System drilldowns only after safe backend read models exist; do not fake missing rows.
+- Normal-user Android Admin denial recapture with a safe normal-user session and a reliable owner-session restore path.
 - Spectator Live Watch-Party / Reaction Fixture Closeout with a real public-safe live-stage-compatible fixture and no original token/host/member leakage.
 - Watch-Party Live Two-Device Audio Ducking Closeout with two joined devices/accounts proving remote speech ducks/restores local video while Party Room and Live Watch-Party still have no Audio Mix.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.

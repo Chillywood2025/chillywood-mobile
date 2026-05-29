@@ -55,6 +55,17 @@ Audit events:
 
 Audit metadata records search scope, query type, masked query preview, query length, result count, status, and explicit `raw_query_stored=false` / `email_plaintext_stored=false` markers. Email-shaped lookups are stored only as masked previews.
 
+## Current Drilldown Pass
+
+The Admin Denial IA Consolidation and Drilldown Production Pass keeps Admin Search owner/admin-only and routes backed results into inspectable Admin surfaces where safe:
+
+- user/staff-role results open masked Users drilldown sheets
+- money/provider/report/legal/Rachi/live/audit results continue opening their backed owner tabs/details
+- query-level audit receipts remain visible in the Admin Search panel
+- result-open audit writing remains active for backed result opens
+
+Recent searches remain session-local and skip email-shaped or secret-like queries.
+
 ## Denial And Privacy
 
 Normal users cannot see Admin Search, call useful Admin Search paths, or read Admin audit rows. If a non-admin authenticated account calls `write_admin_search_audit`, the RPC writes a denied audit event with masked query data and returns `ok=false` / `status=denied`.
@@ -73,6 +84,7 @@ Captured proof:
 - safe email-shaped Admin lookup audit written with masked preview
 - Admin Search audit receipt visible in the Admin UI
 - public Explore email-shaped query no-match UI proof
+- current Admin IA pass audit receipt screenshot at `/tmp/chillywood-admin-denial-ia-drilldown-proof-20260529/14-admin-search-rachi-results.png`
 
 API/RLS proof:
 
@@ -83,6 +95,8 @@ API/RLS proof:
 - public Rachi result remained `Official Chi'llwood`
 
 Android normal-user Admin Search denial for the new panel remains unclaimed because the attached device session was owner/admin and there was no safe session-switch/restore path in that lane.
+
+Current non-staff API/RLS proof is stored outside the repo at `/tmp/chillywood-admin-denial-ia-drilldown-proof-20260529/normal-user-api-denial.json`. It proves a configured non-staff proof account had zero active platform roles, received a denied Admin Search audit response, and saw zero Admin audit rows. Android panel denial still needs a safe normal-user runtime session.
 
 ## Validation
 

@@ -22,7 +22,24 @@ The long-term Admin model should feel like:
 - System
 - Owner Security
 
-The current implementation still keeps several specialized tabs because they already have route/state ownership and permission gates. No risky tab rewrite or route consolidation happened in this lane.
+The visible Admin tab row now uses this model. Several specialized state keys still exist behind those tabs because they already have route/state ownership, permission gates, and emergency/control semantics. The consolidation is therefore IA-safe: old links and search result actions still land in their backed owner surfaces, while the visible row reads as a control center.
+
+Canonical IA phrase: Overview / Money Center / Users / Reports / Live Ops / Rachi / Legal / System / Owner Security.
+
+## IA Consolidation Pass
+
+The May 29, 2026 Admin Denial IA Consolidation and Drilldown Production Pass made these safe production changes:
+
+- Visible top-level tabs are consolidated to Overview, Money Center, Users, Reports, Live Ops, Rachi, Legal, System, and Owner Security.
+- Specialized money tabs map into Money Center: Premium, Revenue, Payouts, Sponsors, Ads, Fraud, and Kill Switches.
+- Specialized system tabs map into System: Audit, Audit Explorer, Canary, Content, Networks, Ops Alerts, and Usage.
+- Specialized security tabs map into Owner Security: Permission Templates, Break Glass, and Safety.
+- DMCA maps into Legal, Roles maps into Users, and Live Cost Guard maps into Live Ops.
+- Users rows now open admin-safe staff-roster drilldown sheets with masked identity fields and safe actions only.
+- Usage count/status areas now open read-only detail sheets when backed, or clearly label the missing read model.
+- System status cards now open inspect-only detail sheets that state source, status, missing model, and the no-secrets boundary.
+
+No old state key was deleted. No permission gate, LiveKit token path, Premium gate, Watch-Party ownership, old-room handling, live-money state, provider secret, or fake Admin row was added.
 
 ## Current Main Tabs
 
@@ -41,15 +58,15 @@ The current implementation still keeps several specialized tabs because they alr
 | Canary | `canary` | Canary checks | Owner control canary helpers | owner_dev_only, needs_collapsible_sections | Existing expandable rows stay. |
 | Safety | `safety-dashboard` | Safety/security overview | Owner security status | production_ready | Keep. |
 | Rachi | `rachi` | Official posts, Originals, Rachi identity | Rachi RPCs/read models | production_ready, needs_typeahead_search | Covered by Rachi search scope. |
-| Users | `users` | User/staff lookup orientation | Role roster/search | needs_ui_density_fix, needs_backend_data | Do not fake broader user directory. Covered by staff-role search only. |
+| Users | `users` | User/staff lookup orientation | Role roster/search | production_ready, needs_backend_data | Staff roster count/status rows are clickable. Broader account/Premium/report/block status needs a dedicated admin-safe user read model. |
 | Money Center | `money-center` | Consolidated money readiness, switches, audit explorer | Money flags, provider readiness, finance read model | production_ready | Keep collapsible sections and clickable event/detail sheets. |
-| Usage | `usage` | Usage/meters/readiness | Admin usage read model | needs_clickable_detail_rows | Defer deeper drilldowns until backed details exist. |
+| Usage | `usage` | Usage/meters/readiness | Admin usage read model | production_ready, needs_backend_data | Top usage areas now open read-only drilldowns. Missing row-level models are labeled instead of faked. |
 | Networks | `networks` | Network proof/readiness | Security/network helpers | owner_dev_only | Keep masked; no raw sensitive detail. |
 | Live Cost Guard | `live-cost-guard` | Live cost/ops signals | Live Cost Guard rows | production_ready, needs_typeahead_search | Covered by Live Ops/Money search. |
 | Live Ops Fix Center | `live-ops-fix-center` | Live Ops incidents/remediation | Live Ops helpers | production_ready, needs_typeahead_search | Covered by Live Ops search. |
 | Legal | `legal` | Legal requests/evidence | Legal request helpers/RPCs | production_ready, needs_typeahead_search | Covered by Legal search. |
 | Ops Alerts | `ops-alerts` | Operational alerts | Admin ops read model | should_defer | Keep until broader System consolidation is safe. |
-| System | `system` | System/app config technical status | Runtime/app config/read models | owner_dev_only, should_consolidate | Defer consolidation to a dedicated Admin IA lane. |
+| System | `system` | System/app config technical status | Runtime/app config/read models | owner_dev_only, production_ready | System cards now open inspect-only drilldowns with source/status/no-secret boundaries. |
 
 Hidden compatibility money tabs such as Premium, Kill Switches, Ads, Revenue, Payouts, Sponsors, and Fraud are not part of the current visible Admin tab row; they remain mapped into Money Center section anchors.
 
@@ -92,6 +109,9 @@ Unbacked/deferred search:
 
 Current backed clickable details:
 
+- Staff roster user rows open masked admin-safe user detail sheets.
+- Usage summaries open read-only usage detail sheets; missing backend models are explicitly labeled.
+- System cards open inspect-only detail sheets that do not render secrets or raw provider payloads.
 - Reports open report detail.
 - DMCA cases open DMCA case detail.
 - Money events open Money Event Detail.
@@ -104,9 +124,10 @@ Current backed clickable details:
 
 Deferred detail work:
 
-- Usage and System need deeper row-level backend detail before every count can drill down.
-- A broader Users tab needs a safe admin user-detail read model before normal profile/private operational data can be shown.
-- Canary/Ops Alerts can be consolidated only after a dedicated Admin IA pass.
+- A broader Users tab needs a safe admin user-detail read model before normal profile/private operational data, Premium status, report/block status, or restriction status can be shown.
+- Usage needs row-level event/session/activity read models before every count becomes a real list.
+- System needs a richer system-event/build/deploy read model before every status card can open historical rows.
+- Canary/Ops Alerts remain specialized system-owned surfaces until their row models are safe to merge.
 
 ## Normal-User Denial
 
@@ -117,12 +138,27 @@ Source and RLS proof remains current:
 - Public Explore has no Admin scope and no email lookup.
 - `write_admin_search_audit` returns denied for non-admin authenticated callers while writing only masked audit metadata.
 - Normal users cannot read Admin audit rows.
+- A configured non-staff proof account signed in through the local API harness with zero active platform roles; `write_admin_search_audit` returned `status=denied`, and Admin audit row visibility was zero.
 
-Latest Android normal-user panel denial remains unclaimed because the attached runtime session was owner/admin. Recapture it only when a safe normal-user session can be restored without losing the owner/admin proof session.
+Latest Android normal-user panel denial remains unclaimed because the attached runtime session was owner/admin and there was no safe owner-session restore path after switching accounts. Recapture it only when a safe normal-user session can be restored without losing the owner/admin proof session.
 
 ## Android Proof
 
 Current lane proof path:
+
+- `/tmp/chillywood-admin-denial-ia-drilldown-proof-20260529/`
+
+Captured in this pass:
+
+- Admin Overview consolidated tab row.
+- Users staff roster drilldown rows.
+- Masked user detail sheet.
+- Usage tab and usage detail sheet.
+- System tab and system detail sheet.
+- Admin Search audit-written receipt.
+- API/RLS normal-user denial summary at `normal-user-api-denial.json`.
+
+Previous lane proof path:
 
 - `/tmp/chillywood-admin-main-tabs-ui-ux-audit-proof-20260529/`
 
@@ -157,4 +193,4 @@ Required validation for this lane:
 
 ## Next Recommended Lane
 
-Admin IA consolidation should be a separate lane. It can compress the current specialized tabs into the intended Overview / Money Center / Users / Reports / Live Ops / Rachi / Legal / System / Owner Security model only after each moved tab has a preserved route/state owner, permission mapping, detail sheet, and no regression in audit or emergency controls.
+Next Admin lane should add the missing backed read models, not fake UI rows: broader admin-safe user directory/detail, usage event/session/activity rows, and system event/build/deploy history. Normal-user Android denial should also be recaptured with a safe normal-user session and a reliable owner-session restore path.

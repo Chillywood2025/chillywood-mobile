@@ -24,6 +24,7 @@ const admin = read("app/admin.tsx");
 const explore = read("app/(tabs)/explore.tsx");
 const navDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
 const adminTabsAuditDoc = read("docs/ADMIN_MAIN_TABS_UI_UX_AUDIT.md");
+const adminIaDoc = read("docs/ADMIN_IA_CONSOLIDATION.md");
 const adminSearchAudit = read("_lib/adminSearchAudit.ts");
 const adminSearchAuditMigration = read("supabase/migrations/202605290004_admin_search_query_audit.sql");
 
@@ -64,6 +65,15 @@ assertIncludes(admin, "Owner/Admin only", "Admin-only result badge");
 assertIncludes(admin, "writeAdminSearchAudit", "Admin search audit writer hook");
 assertIncludes(admin, 'testID="admin-search-audit-status"', "Admin search audit status UI");
 assertIncludes(admin, "admin_search_result_opened", "Admin search result-open audit");
+assertIncludes(admin, "ADMIN_MAIN_TAB_KEYS", "Admin consolidated tab keys");
+assertIncludes(admin, "ADMIN_TAB_MAIN_GROUP", "Admin specialized tab group map");
+assertIncludes(admin, "selectedAdminDrilldown", "Admin drilldown detail modal state");
+assertIncludes(admin, "openAdminUserDrilldown", "Admin user drilldown opener");
+assertIncludes(admin, "openUsageDrilldown", "Admin usage drilldown opener");
+assertIncludes(admin, "openSystemCardDetail", "Admin system drilldown opener");
+assertIncludes(admin, "Copy Safe ID", "Admin safe id action");
+assertIncludes(admin, "Needs read model", "Admin missing read model copy");
+assertIncludes(admin, "This detail panel does not expose secrets", "Admin no-secret detail boundary");
 
 assertIncludes(adminSearchAudit, "write_admin_search_audit", "Admin search audit RPC client");
 assertIncludes(adminSearchAudit, "p_query", "Admin search audit query parameter");
@@ -98,6 +108,17 @@ assertIncludes(adminTabsAuditDoc, "Normal-User Denial", "Admin normal-user denia
 assertIncludes(adminTabsAuditDoc, "No new fake rows", "Admin no fake rows doc");
 assertIncludes(adminTabsAuditDoc, "Session-local recent searches", "Admin recent searches doc");
 assertIncludes(adminTabsAuditDoc, "Latest Android normal-user panel denial remains unclaimed", "Admin normal-user runtime blocker doc");
+assertIncludes(adminTabsAuditDoc, "IA Consolidation Pass", "Admin IA consolidation doc section");
+assertIncludes(adminTabsAuditDoc, "Staff roster user rows open masked admin-safe user detail sheets", "Admin user drilldown doc");
+assertIncludes(adminTabsAuditDoc, "Usage summaries open read-only usage detail sheets", "Admin usage drilldown doc");
+assertIncludes(adminTabsAuditDoc, "System cards open inspect-only detail sheets", "Admin system drilldown doc");
+
+assertIncludes(adminIaDoc, "Admin IA Consolidation", "Admin IA consolidation doc");
+assertIncludes(adminIaDoc, "Final Visible Admin IA", "Admin final IA doc");
+assertIncludes(adminIaDoc, "Consolidation Map", "Admin consolidation map doc");
+assertIncludes(adminIaDoc, "Drilldown Status", "Admin drilldown status doc");
+assertIncludes(adminIaDoc, "Normal-user API/RLS proof passed", "Admin normal-user API denial doc");
+assertIncludes(adminIaDoc, "No fake rows should be added", "Admin no fake drilldown doc");
 
 if (process.exitCode) process.exit(process.exitCode);
 

@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -416,6 +417,22 @@ type AdminRecentSearch = {
   createdAt: string;
 };
 
+type AdminDrilldownAction = {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+};
+
+type AdminDrilldownDetail = {
+  title: string;
+  subtitle?: string;
+  statusLabel: string;
+  tone: OwnerControlTone;
+  body?: string;
+  rows: { label: string; value: string }[];
+  actions?: AdminDrilldownAction[];
+};
+
 type EditorForm = {
   id?: TitleId;
   title: string;
@@ -643,6 +660,43 @@ const operatorTabs: { key: OperatorTabKey; label: string }[] = [
   { key: "ops-alerts", label: "Ops Alerts" },
   { key: "system", label: "System" },
 ];
+const ADMIN_MAIN_TAB_KEYS: readonly OperatorTabKey[] = [
+  "home",
+  "money-center",
+  "users",
+  "reports",
+  "live-ops-fix-center",
+  "rachi",
+  "legal",
+  "system",
+  "owner-security",
+];
+const ADMIN_MAIN_TAB_LABELS: Partial<Record<OperatorTabKey, string>> = {
+  home: "Overview",
+  "live-ops-fix-center": "Live Ops",
+};
+const ADMIN_TAB_MAIN_GROUP: Partial<Record<OperatorTabKey, OperatorTabKey>> = {
+  ads: "money-center",
+  audit: "system",
+  "audit-explorer": "system",
+  "break-glass": "owner-security",
+  canary: "system",
+  content: "system",
+  dmca: "legal",
+  fraud: "money-center",
+  "kill-switches": "money-center",
+  "live-cost-guard": "live-ops-fix-center",
+  networks: "system",
+  "ops-alerts": "system",
+  payouts: "money-center",
+  "permission-templates": "owner-security",
+  premium: "money-center",
+  revenue: "money-center",
+  roles: "users",
+  "safety-dashboard": "owner-security",
+  sponsors: "money-center",
+  usage: "system",
+};
 const ADMIN_SEARCH_DEBOUNCE_MS = 300;
 const ADMIN_SEARCH_MIN_LENGTH = 2;
 const ADMIN_SEARCH_SCOPES: readonly { key: AdminSearchScope; label: string }[] = [
@@ -2889,6 +2943,7 @@ export default function AdminStudioScreen() {
   const [adminSearchAuditReceipt, setAdminSearchAuditReceipt] = useState<AdminSearchAuditReceipt | null>(null);
   const [adminSearchAuditLoading, setAdminSearchAuditLoading] = useState(false);
   const [adminRecentSearches, setAdminRecentSearches] = useState<AdminRecentSearch[]>([]);
+  const [selectedAdminDrilldown, setSelectedAdminDrilldown] = useState<AdminDrilldownDetail | null>(null);
   const [manualHeroQuery, setManualHeroQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [operatorTab, setOperatorTab] = useState<OperatorTabKey>("home");
@@ -3244,6 +3299,19 @@ export default function AdminStudioScreen() {
       canViewStaffRoles,
     ],
   );
+  const adminMainTabs = useMemo(
+    () => {
+      const visibleKeys = new Set(visibleOperatorTabs.map((tab) => tab.key));
+      return ADMIN_MAIN_TAB_KEYS
+        .filter((key) => visibleKeys.has(key))
+        .map((key) => ({
+          key,
+          label: ADMIN_MAIN_TAB_LABELS[key] ?? operatorTabs.find((tab) => tab.key === key)?.label ?? formatModerationToken(key),
+        }));
+    },
+    [visibleOperatorTabs],
+  );
+  const activeAdminMainTabKey = ADMIN_TAB_MAIN_GROUP[operatorTab] ?? operatorTab;
   const staffRoleOptions = useMemo<readonly { key: PlatformStaffManagementRole; label: string }[]>(
     () => {
       if (canManageAdminStaff) {
@@ -3286,6 +3354,71 @@ export default function AdminStudioScreen() {
     && staffPermissionDraftChanged
     && staffPermissionReason.trim().length >= 6
     && staffPermissionBusy === null;
+  const openAdminDrilldown = useCallback((detail: AdminDrilldownDetail) => {
+    setSelectedAdminDrilldown(detail);
+  }, []);
+  const openAdminUserDrilldown = useCallback((entry: PlatformRoleRosterEntry) => {
+    const userId = entry.userId ?? "";
+    const maskedIdentity = maskOperatorIdentity(entry.identityLabel || entry.email || "Admin user");
+    const permissionSummary = isOwnerStaff
+      ? formatPermissionSummary(entry.permissionKeys)
+      : "Owner-only permission detail";
+    openAdminDrilldown({
+      title: maskedIdentity,
+      subtitle: `${formatPlatformRoleDisplayLabel(entry.role)} · ${formatModerationToken(entry.status)}`,
+      statusLabel: entry.status === "active" ? "Active" : formatModerationToken(entry.status),
+      tone: entry.status === "active" ? "info" : "locked",
+      body: "Admin-safe user detail is sourced from the staff role roster. Broader account, Premium, report, and restriction status still need a dedicated read model before they can appear here.",
+      rows: [
+        { label: "User id", value: userId ? formatCompactIdentifier(userId) : "not returned" },
+        { label: "Display", value: maskedIdentity },
+        { label: "Email", value: entry.email ? maskOperatorIdentity(entry.email) : "not returned" },
+        { label: "Role", value: formatPlatformRoleDisplayLabel(entry.role) },
+        { label: "Status", value: formatModerationToken(entry.status) },
+        { label: "Granted", value: entry.grantedAt ? formatModerationTimestamp(entry.grantedAt) : "timestamp unavailable" },
+        { label: "Granted by", value: entry.grantedBy ? formatAuditDisplayText(entry.grantedBy) : "not returned" },
+        { label: "Scoped permissions", value: `${entry.permissionKeys.length}` },
+        { label: "Permission summary", value: permissionSummary },
+      ],
+      actions: [
+        {
+          label: "View Profile",
+          disabled: !userId,
+          onPress: () => {
+            if (!userId) return;
+            setSelectedAdminDrilldown(null);
+            router.push(`/profile/${userId}`);
+          },
+        },
+        {
+          label: "View Platform",
+          disabled: !userId,
+          onPress: () => {
+            if (!userId) return;
+            setSelectedAdminDrilldown(null);
+            router.push(`/channel/${userId}`);
+          },
+        },
+        {
+          label: "Open Role Tools",
+          onPress: () => {
+            setSelectedAdminDrilldown(null);
+            setOperatorTab("roles");
+            setStaffRoleEmail(entry.email ?? "");
+            setStaffPermissionEmail(entry.email ?? "");
+          },
+        },
+        {
+          label: "Copy Safe ID",
+          disabled: !userId,
+          onPress: () => {
+            if (!userId) return;
+            void Clipboard.setStringAsync(userId);
+          },
+        },
+      ],
+    });
+  }, [isOwnerStaff, openAdminDrilldown, router]);
   const selectedSafetyReport = useMemo(
     () => safetyReports.find((report) => report.id === selectedSafetyReportId) ?? null,
     [safetyReports, selectedSafetyReportId],
@@ -4967,6 +5100,179 @@ export default function AdminStudioScreen() {
     runtimeConfig,
     runtimeConfigIssues.length,
   ]);
+  const openUsageDrilldown = useCallback((section: string) => {
+    const commonRows = [
+      { label: "Source", value: "Admin usage read model" },
+      { label: "Billing truth", value: "No" },
+    ];
+    if (section === "internal") {
+      openAdminDrilldown({
+        title: "Internal Usage Metering",
+        subtitle: "Read-only usage detail",
+        statusLabel: adminV1ReadModel.internalUsageSchemaConnected ? "Connected" : "Needs read model",
+        tone: adminV1ReadModel.internalUsageSchemaConnected ? "info" : "locked",
+        body: "Creator-video upload usage writer is backed. Broader app usage writers are not claimed until their read/write paths exist.",
+        rows: [
+          ...commonRows,
+          { label: "Meter events", value: formatAdminV1Count(adminV1ReadModel.usageMeterEventsCount, adminV1ReadModel.loading) },
+          { label: "Daily summaries", value: formatAdminV1Count(adminV1ReadModel.usageDailySummariesCount, adminV1ReadModel.loading) },
+          { label: "Monthly summaries", value: formatAdminV1Count(adminV1ReadModel.usageMonthlySummariesCount, adminV1ReadModel.loading) },
+          { label: "Missing model", value: adminV1ReadModel.internalUsageSchemaConnected ? "none for current counts" : "admin-readable usage event summary RPC" },
+        ],
+      });
+      return;
+    }
+    if (section === "provider") {
+      openAdminDrilldown({
+        title: "Provider Usage Imports",
+        subtitle: "Server-side import status",
+        statusLabel: adminV1ReadModel.providerUsageSchemaConnected ? "Connected" : "Needs setup",
+        tone: adminV1ReadModel.providerUsageSchemaConnected ? "info" : "locked",
+        body: "Provider imports are server-side only and are not customer billing, overage, payout, revenue, or invoice truth.",
+        rows: [
+          ...commonRows,
+          { label: "Import records", value: formatAdminV1Count(adminV1ReadModel.providerUsageImportsCount, adminV1ReadModel.loading) },
+          { label: "Provider daily rows", value: formatAdminV1Count(adminV1ReadModel.providerUsageDailyCount, adminV1ReadModel.loading) },
+          { label: "Imported storage", value: adminV1ReadModel.providerImportedStorageBytes === null ? "not connected" : formatUsageBytes(adminV1ReadModel.providerImportedStorageBytes) },
+          { label: "Imported requests", value: adminV1ReadModel.providerImportedRequestCount === null ? "not connected" : String(adminV1ReadModel.providerImportedRequestCount) },
+          { label: "Network metric rows", value: adminV1ReadModel.providerImportedNetworkMetricCount === null ? "not connected" : String(adminV1ReadModel.providerImportedNetworkMetricCount) },
+        ],
+      });
+      return;
+    }
+    if (section === "reconciliation") {
+      openAdminDrilldown({
+        title: "Provider Reconciliation",
+        subtitle: "Read-only comparison status",
+        statusLabel: adminV1ReadModel.providerUsageReconciliationCount === null ? "Needs read model" : "Readable",
+        tone: adminV1ReadModel.providerUsageReconciliationCount === null ? "locked" : "info",
+        body: "Reconciliation compares already-backed provider usage rows with internal summaries. It does not import provider bills or create charges.",
+        rows: [
+          ...commonRows,
+          { label: "Reconciliation rows", value: formatAdminV1Count(adminV1ReadModel.providerUsageReconciliationCount, adminV1ReadModel.loading) },
+          { label: "Pending", value: formatAdminV1Count(adminV1ReadModel.providerUsageReconciliationPendingCount, adminV1ReadModel.loading) },
+          { label: "Matched", value: formatAdminV1Count(adminV1ReadModel.providerUsageReconciliationMatchedCount, adminV1ReadModel.loading) },
+          { label: "Variance", value: formatAdminV1Count(adminV1ReadModel.providerUsageReconciliationVarianceCount, adminV1ReadModel.loading) },
+          { label: "Latest status", value: adminV1ReadModel.latestProviderUsageReconciliationStatus ?? "not connected" },
+          { label: "Latest at", value: formatProviderImportDate(adminV1ReadModel.latestProviderUsageReconciliationAt) },
+        ],
+      });
+      return;
+    }
+    const map: Record<string, AdminDrilldownDetail> = {
+      live: {
+        title: "Live Now Usage",
+        subtitle: "DB estimate",
+        statusLabel: adminV1ReadModel.activeLiveRoomCount === null ? "Needs read model" : "Readable",
+        tone: adminV1ReadModel.activeLiveRoomCount === null ? "locked" : "info",
+        body: "This count is an Admin usage estimate. It is not LiveKit billing truth.",
+        rows: [
+          ...commonRows,
+          { label: "Active live rooms", value: formatAdminV1Count(adminV1ReadModel.activeLiveRoomCount, adminV1ReadModel.loading) },
+          { label: "Missing model", value: adminV1ReadModel.activeLiveRoomCount === null ? "live room usage detail rows" : "none for current estimate" },
+        ],
+      },
+      watch_party: {
+        title: "Watch-Party Usage",
+        subtitle: "DB estimate",
+        statusLabel: adminV1ReadModel.activeWatchPartyCount === null ? "Needs read model" : "Readable",
+        tone: adminV1ReadModel.activeWatchPartyCount === null ? "locked" : "info",
+        body: "This count is a room-record estimate. It is not billing, ticket, or Premium truth.",
+        rows: [
+          ...commonRows,
+          { label: "Active Watch-Parties", value: formatAdminV1Count(adminV1ReadModel.activeWatchPartyCount, adminV1ReadModel.loading) },
+          { label: "Missing model", value: adminV1ReadModel.activeWatchPartyCount === null ? "watch-party usage detail rows" : "none for current estimate" },
+        ],
+      },
+      uploads: {
+        title: "Uploads / Media",
+        subtitle: "Backed creator-video count",
+        statusLabel: adminV1ReadModel.uploadsTodayCount === null ? "Needs read model" : "Readable",
+        tone: adminV1ReadModel.uploadsTodayCount === null ? "locked" : "info",
+        body: "Upload counts are read-only and do not expose upload-disable or deletion actions here.",
+        rows: [
+          ...commonRows,
+          { label: "Uploads today", value: formatAdminV1Count(adminV1ReadModel.uploadsTodayCount, adminV1ReadModel.loading) },
+        ],
+      },
+      storage: {
+        title: "Storage Metadata Estimate",
+        subtitle: "Metadata estimate",
+        statusLabel: adminV1ReadModel.storageMetadataEstimateBytes === null ? "Needs read model" : "Readable",
+        tone: adminV1ReadModel.storageMetadataEstimateBytes === null ? "locked" : "info",
+        body: "This is metadata from creator-video and social-attachment records, not storage billing truth.",
+        rows: [
+          ...commonRows,
+          { label: "Estimated bytes", value: adminV1ReadModel.storageMetadataEstimateBytes === null ? "not connected" : formatUsageBytes(adminV1ReadModel.storageMetadataEstimateBytes) },
+          { label: "Rows read", value: formatAdminV1Count(adminV1ReadModel.storageMetadataRowsRead, adminV1ReadModel.loading) },
+        ],
+      },
+      participant_minutes: {
+        title: "Participant-Minutes DB Estimate",
+        subtitle: "Room membership estimate",
+        statusLabel: adminV1ReadModel.participantMinutesEstimate === null ? "Needs read model" : "Readable",
+        tone: adminV1ReadModel.participantMinutesEstimate === null ? "locked" : "info",
+        body: "This is estimated from room membership records. It is not LiveKit billing truth.",
+        rows: [
+          ...commonRows,
+          { label: "Participant minutes", value: adminV1ReadModel.participantMinutesEstimate === null ? "not connected" : formatUsageMinutes(adminV1ReadModel.participantMinutesEstimate) },
+          { label: "Membership rows", value: formatAdminV1Count(adminV1ReadModel.participantMembershipRowsRead, adminV1ReadModel.loading) },
+        ],
+      },
+      bandwidth: {
+        title: "Bandwidth Metering",
+        subtitle: "Metering-event foundation",
+        statusLabel: adminV1ReadModel.bandwidthMeteringBytes === null ? "Needs read model" : "Readable",
+        tone: adminV1ReadModel.bandwidthMeteringBytes === null ? "locked" : "info",
+        body: "This is not ad, payout, creator revenue, or provider billing truth.",
+        rows: [
+          ...commonRows,
+          { label: "Bandwidth bytes", value: adminV1ReadModel.bandwidthMeteringBytes === null ? "not connected" : formatUsageBytes(adminV1ReadModel.bandwidthMeteringBytes) },
+          { label: "Bandwidth rows", value: formatAdminV1Count(adminV1ReadModel.bandwidthMeteringRowsRead, adminV1ReadModel.loading) },
+        ],
+      },
+      cost_risk: {
+        title: "Cost Risk Flags",
+        subtitle: "Current usage blockers",
+        statusLabel: "Needs read model",
+        tone: "locked",
+        body: "LiveKit metering and provider-side billing detail are intentionally not claimed until backed provider read models exist.",
+        rows: [
+          ...commonRows,
+          { label: "LiveKit metering", value: "not connected" },
+          { label: "Provider billing", value: "not connected" },
+          { label: "Needed next", value: "provider billing and live-media cost read models" },
+        ],
+      },
+    };
+    const detail = map[section];
+    if (detail) openAdminDrilldown(detail);
+  }, [adminV1ReadModel, openAdminDrilldown]);
+  const openSystemCardDetail = useCallback((card: AdminDashboardCard) => {
+    openAdminDrilldown({
+      title: card.label,
+      subtitle: "System detail",
+      statusLabel: card.value,
+      tone: card.tone === "unavailable" ? "locked" : "info",
+      body: card.body,
+      rows: [
+        { label: "Source", value: "Runtime/app config read model" },
+        { label: "Status", value: card.value },
+        { label: "Admin action", value: "Inspect only" },
+        { label: "Secrets", value: "not rendered" },
+        { label: "Missing read model", value: card.tone === "unavailable" ? "backed system health/detail row" : "none for this presence check" },
+      ],
+      actions: card.destination && visibleOperatorTabs.some((tab) => tab.key === card.destination)
+        ? [{
+          label: "Open Related Section",
+          onPress: () => {
+            setSelectedAdminDrilldown(null);
+            setOperatorTab(card.destination as OperatorTabKey);
+          },
+        }]
+        : undefined,
+    });
+  }, [openAdminDrilldown, visibleOperatorTabs]);
 
   const rachiManagementCards = useMemo<readonly AdminDashboardCard[]>(() => [
     {
@@ -6752,16 +7058,15 @@ export default function AdminStudioScreen() {
         results.push({
           id: `user-${entry.id}`,
           scope: "users",
-          title: entry.identityLabel || maskOperatorIdentity(entry.email) || `User ${formatCompactIdentifier(entry.userId)}`,
+          title: maskOperatorIdentity(entry.identityLabel || entry.email) || `User ${formatCompactIdentifier(entry.userId)}`,
           subtitle: `${formatPlatformRoleDisplayLabel(entry.role)} · ${formatModerationToken(entry.status)}`,
           meta: `Email lookup is admin-only. ${entry.email ? maskOperatorIdentity(entry.email) : `User ${formatCompactIdentifier(entry.userId)}`}`,
           badge: "Owner/Admin only",
           tone: entry.status === "active" ? "info" : "locked",
           openLabel: "View User",
           onPress: () => {
-            setOperatorTab("roles");
-            setStaffRoleEmail(entry.email ?? "");
-            setStaffPermissionEmail(entry.email ?? "");
+            setOperatorTab("users");
+            openAdminUserDrilldown(entry);
           },
         });
       });
@@ -7116,6 +7421,7 @@ export default function AdminStudioScreen() {
     liveOpsIncidents,
     loadDmcaCaseDetail,
     moneySwitches,
+    openAdminUserDrilldown,
     openLegalRequestDetail,
     platformRoleRoster,
     providerReadinessRows,
@@ -9376,7 +9682,7 @@ export default function AdminStudioScreen() {
         {renderAdminMoneyAuditEventRows(
           filteredAdminMoneyAuditEvents,
           "No matching money events",
-          "Try another filter. No fake audit rows are created for empty states.",
+          "Try another filter. Empty filters stay empty.",
           12,
         )}
       </View>
@@ -10037,8 +10343,8 @@ export default function AdminStudioScreen() {
           contentContainerStyle={styles.tabBar}
           style={styles.tabBarScroller}
         >
-          {visibleOperatorTabs.map((tab) => {
-            const active = operatorTab === tab.key;
+          {adminMainTabs.map((tab) => {
+            const active = activeAdminMainTabKey === tab.key;
             return (
               <TouchableOpacity
                 key={tab.key}
@@ -11676,19 +11982,88 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>USERS</Text>
               <Text style={styles.configTitle}>Users</Text>
               <Text style={styles.configBody}>
-                Future admin user tools will show account, Profile, Platform, Premium, and restriction status here.
+                Admin-safe user detail comes from the backed staff role roster. Broader account, Premium, reports, blocks, and restriction status need a dedicated read model before they appear here.
               </Text>
             </View>
-            <View style={[styles.badge, styles.badgeOff]}>
-              <Text style={styles.badgeText}>Foundation only</Text>
+            <View style={[styles.badge, canViewStaffRoles ? styles.badgeScheduled : styles.badgeOff]}>
+              <Text style={styles.badgeText}>{canViewStaffRoles ? "Backed roster" : "Locked"}</Text>
             </View>
           </View>
-          <View style={styles.configListRow}>
-            <View style={styles.configListCopy}>
-              <Text style={styles.configListTitle}>User search is not connected yet.</Text>
-              <Text style={styles.configListBody}>
-                No user ban, suspend, upload-disable, live-disable, reset-password, entitlement-edit, or deletion action is exposed in V1A.
-              </Text>
+          <View style={styles.ownerMetricGrid}>
+            <OwnerMetricTile
+              label="Active Staff"
+              tone={staffSnapshotSummary ? "info" : "locked"}
+              value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.activeCount : "Not Connected"}
+            />
+            <OwnerMetricTile
+              label="Owners"
+              tone={staffSnapshotSummary ? "success" : "locked"}
+              value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.ownerCount : "Not Connected"}
+            />
+            <OwnerMetricTile
+              label="Admins"
+              tone={staffSnapshotSummary ? "info" : "locked"}
+              value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.operatorCount : "Not Connected"}
+            />
+            <OwnerMetricTile
+              label="Moderators"
+              tone={staffSnapshotSummary ? "manual" : "locked"}
+              value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.moderatorCount : "Not Connected"}
+            />
+          </View>
+          <View style={styles.configList}>
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Staff Roster Drilldowns</Text>
+                <OwnerStatusPill label={canViewStaffRoles ? `${platformRoleRoster.length} visible` : "Locked"} tone={canViewStaffRoles ? "info" : "locked"} />
+              </View>
+              {!canViewStaffRoles ? (
+                <OwnerDisabledReason reason="Users drilldowns require staff-role visibility. Normal users cannot load Admin user rows, staff emails, or Admin Search." />
+              ) : platformRoleRosterLoading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading users...</Text>
+                </View>
+              ) : platformRoleRoster.length ? (
+                <View style={styles.ownerControlList}>
+                  {platformRoleRoster.map((entry) => (
+                    <OwnerControlRow
+                      key={`admin-user-drilldown-${entry.id}`}
+                      message={`${entry.grantedAt ? `Granted ${formatModerationTimestamp(entry.grantedAt)}` : "Grant timestamp unavailable"} · ${entry.permissionKeys.length} scoped permission${entry.permissionKeys.length === 1 ? "" : "s"}`}
+                      meta={entry.email ? maskOperatorIdentity(entry.email) : "email not returned"}
+                      onPress={() => openAdminUserDrilldown(entry)}
+                      statusLabel={entry.status === "active" ? formatPlatformRoleDisplayLabel(entry.role) : formatModerationToken(entry.status)}
+                      title={maskOperatorIdentity(entry.identityLabel)}
+                      tone={entry.status === "active" ? "info" : "locked"}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <OwnerEmptyState
+                  body="The backed staff-role roster query succeeded, but no user rows are visible in this slice."
+                  title="No admin user rows"
+                />
+              )}
+            </View>
+            <View style={styles.configListRow}>
+              <View style={styles.configListCopy}>
+                <Text style={styles.configListTitle}>Broader user directory</Text>
+                <Text style={styles.configListBody}>
+                  Account-wide user search, Premium status, report/block status, restriction state, and account actions need a dedicated admin-safe read model.
+                </Text>
+                <Text style={styles.configListBody}>
+                  No user ban, suspend, upload-disable, live-disable, reset-password, entitlement-edit, or deletion action is exposed here.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.configListActions}>
+              <TouchableOpacity
+                style={[styles.ownerSecondaryButton, !canOpenOperatorTab("roles") && styles.configSaveBtnDisabled]}
+                onPress={() => setOperatorTab("roles")}
+                disabled={!canOpenOperatorTab("roles")}
+              >
+                <Text style={styles.ownerSecondaryButtonText}>{canOpenOperatorTab("roles") ? "Open Roles & Permissions" : "Roles locked"}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -11798,7 +12173,11 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
-            <View style={styles.configListRow}>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("internal")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Internal Usage Metering</Text>
                 <Text style={styles.configListBody}>
@@ -11810,8 +12189,12 @@ export default function AdminStudioScreen() {
                   Read-only foundation. Creator video upload usage writer is active; broader app usage writers are not connected yet.
                 </Text>
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("provider")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Provider Usage Imports</Text>
                 <Text style={styles.configListBody}>
@@ -11895,8 +12278,12 @@ export default function AdminStudioScreen() {
                   </Text>
                 ) : null}
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("reconciliation")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Reconciliation</Text>
                 <Text style={styles.configListBody}>
@@ -11917,8 +12304,12 @@ export default function AdminStudioScreen() {
                 </Text>
                 <Text style={styles.configListBody}>No invoice send, customer charge, payment link, overage billing, or fake provider bill is active.</Text>
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("live")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Live Now</Text>
                 <Text style={styles.configListBody}>
@@ -11927,8 +12318,12 @@ export default function AdminStudioScreen() {
                     : `${adminV1ReadModel.activeLiveRoomCount} active live room record${adminV1ReadModel.activeLiveRoomCount === 1 ? "" : "s"} · DB estimate`}
                 </Text>
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("watch_party")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Watch-Parties</Text>
                 <Text style={styles.configListBody}>
@@ -11937,8 +12332,12 @@ export default function AdminStudioScreen() {
                     : `${adminV1ReadModel.activeWatchPartyCount} active watch-party room record${adminV1ReadModel.activeWatchPartyCount === 1 ? "" : "s"} · DB estimate`}
                 </Text>
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("uploads")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Uploads / Media</Text>
                 <Text style={styles.configListBody}>
@@ -11947,8 +12346,12 @@ export default function AdminStudioScreen() {
                     : `${adminV1ReadModel.uploadsTodayCount} creator video upload record${adminV1ReadModel.uploadsTodayCount === 1 ? "" : "s"} created today.`}
                 </Text>
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("storage")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Storage Metadata Estimate</Text>
                 <Text style={styles.configListBody}>
@@ -11962,8 +12365,12 @@ export default function AdminStudioScreen() {
                   </Text>
                 ) : null}
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("participant_minutes")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Participant-Minutes DB Estimate</Text>
                 <Text style={styles.configListBody}>
@@ -11977,8 +12384,12 @@ export default function AdminStudioScreen() {
                   </Text>
                 ) : null}
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("bandwidth")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Bandwidth Metering</Text>
                 <Text style={styles.configListBody}>
@@ -11992,14 +12403,18 @@ export default function AdminStudioScreen() {
                   </Text>
                 ) : null}
               </View>
-            </View>
-            <View style={styles.configListRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              style={styles.configListRow}
+              onPress={() => openUsageDrilldown("cost_risk")}
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Cost Risk Flags</Text>
                 <Text style={styles.configListBody}>LiveKit metering is not connected yet.</Text>
                 <Text style={styles.configListBody}>Provider-side storage and bandwidth billing are not connected yet.</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
         ) : null}
@@ -15346,17 +15761,19 @@ export default function AdminStudioScreen() {
           </View>
           <View style={styles.dashboardGrid}>
             {systemStatusCards.map((card) => (
-              <View
+              <TouchableOpacity
                 key={card.label}
+                activeOpacity={0.84}
                 style={[
                   styles.dashboardMetricCard,
                   card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
                 ]}
+                onPress={() => openSystemCardDetail(card)}
               >
                 <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
                 <Text style={styles.dashboardMetricValue}>{card.value}</Text>
                 <Text style={styles.dashboardMetricBody}>{card.body}</Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
@@ -16647,6 +17064,70 @@ export default function AdminStudioScreen() {
                   <Text style={styles.configListBody}>
                     Allowed actions are inspection-only: view details, check provider status, review kill switches, and open the runbook. This view cannot approve payouts, import revenue, activate checkout, mark sandbox as production, or create balances.
                   </Text>
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={selectedAdminDrilldown !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedAdminDrilldown(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>{selectedAdminDrilldown?.title ?? "Admin Detail"}</Text>
+                {selectedAdminDrilldown?.subtitle ? (
+                  <Text style={styles.ownerPanelMeta}>{selectedAdminDrilldown.subtitle}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedAdminDrilldown(null)}>
+                <Text style={styles.closeText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            {selectedAdminDrilldown ? (
+              <ScrollView style={{ maxHeight: 560 }} contentContainerStyle={{ gap: 12, paddingBottom: 18 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Status</Text>
+                    <OwnerStatusPill label={selectedAdminDrilldown.statusLabel} tone={selectedAdminDrilldown.tone} />
+                  </View>
+                  {selectedAdminDrilldown.body ? (
+                    <Text style={styles.configListBody}>{selectedAdminDrilldown.body}</Text>
+                  ) : null}
+                  <OwnerDetailGrid rows={selectedAdminDrilldown.rows} />
+                </View>
+                {selectedAdminDrilldown.actions?.length ? (
+                  <View style={styles.contentPanel}>
+                    <View style={styles.ownerSectionHeaderRow}>
+                      <Text style={styles.ownerSectionTitle}>Actions</Text>
+                      <OwnerStatusPill label="Safe links" tone="info" />
+                    </View>
+                    <View style={styles.configListActions}>
+                      {selectedAdminDrilldown.actions.map((action) => (
+                        <TouchableOpacity
+                          key={action.label}
+                          style={[styles.ownerSecondaryButton, action.disabled && styles.configSaveBtnDisabled]}
+                          onPress={action.onPress}
+                          disabled={action.disabled}
+                        >
+                          <Text style={styles.ownerSecondaryButtonText}>{action.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+                <View style={styles.contentPanel}>
+                  <View style={styles.ownerSectionHeaderRow}>
+                    <Text style={styles.ownerSectionTitle}>Safety Boundary</Text>
+                    <OwnerStatusPill label="Inspect only" tone="locked" />
+                  </View>
+                  <OwnerDisabledReason reason="This detail panel does not expose secrets, raw provider payloads, service-role keys, private security context, live-money actions, or destructive account controls." />
                 </View>
               </ScrollView>
             ) : null}
