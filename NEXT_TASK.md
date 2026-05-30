@@ -18,7 +18,7 @@ Current launch truth:
 - Proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`.
 - Full validation passed and is logged at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`.
 - Store/legal/account-deletion ops proof lives at `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/`.
-- Admin Users/Usage/System read-model UI/UX is now production-polished repo-side. Users has a searchable/filterable admin-safe staff roster with masked sectioned drilldowns; Usage has grouped read-model metrics and explicit no-money-action drilldowns; System has grouped runtime/compliance/provider setup cards and no-secret sectioned drilldowns. This did not add a broader user directory, row-level usage history, system event/build/deploy history, schema/RLS changes, or fake rows.
+- Admin Users/Usage/System read-model gaps are now backend-backed where the current schema supports them. Remote-applied migrations `20260530173834` and `20260530174810` add permission-gated RPCs for broader Users account/Premium/report/block/profile-media/deletion-request signals, recent Usage rows, and System history over immutable audit/event tables. The mobile Admin UI reads them through `_lib/adminReadModels.ts` without exposing auth secrets, raw storage paths, provider secrets, LiveKit tokens, raw room tokens, service-role keys, provider payload values, or destructive account controls. Remaining Admin gap is external build/deploy/provider-dashboard history that is not present in current audit/event tables; Android visual proof was not recaptured in this backend closeout.
 - Public legal URLs returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms.
 - Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`; DKIM remains unverified until a real outbound provider issues/publishes selector records and test delivery is proved.
 - Automated malware scanning is not configured. Current protection is validation, storage policy, visibility gates, moderation status, admin action, and manual review.
@@ -40,7 +40,7 @@ External lane scope:
 Next engineering lane if external Play/legal work is being handled manually:
 
 - Release Diagnostics And Signed-Out/Signed-In Route Smoke Closeout.
-- Then close manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, RevenueCat/Google signed sandbox proof, and true backend Admin read models only when the required devices/accounts/provider access or safe schema support exist.
+- Then close manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, RevenueCat/Google signed sandbox proof, and any remaining external Admin system-history proof only when the required devices/accounts/provider access or safe schema support exists.
 
 ## Previous Recommended Lane: Profile Media Runtime Save/Read-Back Proof
 
@@ -60,9 +60,9 @@ Closed truth:
 - Owner/Admin main tabs are audited in `docs/ADMIN_MAIN_TABS_UI_UX_AUDIT.md`. Current visible tabs remain route-safe and permission-gated, while the intended future model is Overview / Money Center / Users / Reports / Live Ops / Rachi / Legal / System / Owner Security.
 - Admin Search is modernized with ranked results, result-type count chips, and session-local recent searches that skip email-shaped or secret-like queries and are not persisted.
 - Owner/Admin visible IA is now consolidated to Overview / Money Center / Users / Reports / Live Ops / Rachi / Legal / System / Owner Security while legacy specialized state keys remain routable behind those groups.
-- Users staff-roster rows are backed and clickable into masked admin-safe detail sheets. Broader account/Premium/report/block/restriction status remains blocked on a dedicated admin-safe user read model.
-- Usage summaries open inspect-only drilldowns over the current admin usage read model. Missing event/session/activity row lists are labeled as read-model gaps instead of faked.
-- System cards open inspect-only detail sheets with source/status/no-secret boundaries. Historical build/deploy/system-event rows still need a dedicated read model.
+- Users staff-roster rows are backed and clickable into masked admin-safe detail sheets; the broader Users RPC now adds account, Premium, report, block, Profile media, deletion-request, and public-content count signals without destructive actions.
+- Usage summaries open inspect-only drilldowns over the current admin usage read model; the new Usage detail RPC adds recent usage/provider/room/media metadata rows while still creating no billing, payout, invoice, ad, Premium, provider-bill, live-money, or creator-earnings truth.
+- System cards open inspect-only detail sheets with source/status/no-secret boundaries; the new System history RPC adds immutable audit/event rows where backed, while external build/deploy/provider-dashboard history remains unclaimed.
 - Current Admin IA/drilldown proof lives at `/tmp/chillywood-admin-denial-ia-drilldown-proof-20260529/` and captures consolidated tabs, Users rows, masked user detail, Usage/System drilldowns, and an Admin Search audit-written receipt.
 - Normal-user Admin Search API/RLS denial proof passed with the configured non-staff proof account: no active platform role rows, denied Admin Search audit RPC response with masked email-shaped query, zero visible Admin audit rows, and no public email result fields. Android runtime denial for the new panel remains unclaimed because the attached app session was owner/admin and there was no safe account-switch/restore path in this lane.
 - New guard coverage includes `npm run guard:public-user-search-policy` for public typeahead and `npm run guard:admin-search-policy` for owner/admin search boundaries.
@@ -110,7 +110,7 @@ Remaining limitations:
 Recommended next lane:
 
 - Profile Media Runtime Closeout with one safe app-owned/non-private gallery asset, an attached Android device, a signed-in owner account, viewer/signed-out checks, compact sheet screenshots, gallery/native crop step proof without private photos, backend active-media read-back, removal/fallback proof, and public masking proof.
-- Admin backend read-model follow-up for broader account/Premium/report/block/restriction status, row-level usage event/session/activity rows, and historical system/build/deploy rows only after safe backend read models exist; do not fake missing rows.
+- Admin external system-history follow-up only if Play/provider/build/deploy dashboards need their own backed event source. Do not fake external dashboard rows.
 - Normal-user Android Admin denial recapture with a safe normal-user session and a reliable owner-session restore path.
 - Spectator Live Watch-Party / Reaction Fixture Closeout with a real public-safe live-stage-compatible fixture and no original token/host/member leakage.
 - Watch-Party Live Two-Device Audio Ducking Closeout with two joined devices/accounts proving remote speech ducks/restores local video while Party Room and Live Watch-Party still have no Audio Mix.

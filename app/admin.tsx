@@ -161,6 +161,20 @@ import {
   type TitleAccessRule,
 } from "../_lib/monetization";
 import {
+  createEmptyAdminSystemHistoryReadModel,
+  createEmptyAdminUsageDetailReadModel,
+  createEmptyAdminUsersReadModel,
+  readAdminSystemHistoryReadModel,
+  readAdminUsageDetailReadModel,
+  readAdminUsersReadModel,
+  type AdminSystemHistoryReadModel,
+  type AdminSystemHistoryRow,
+  type AdminUsageDetailReadModel,
+  type AdminUsageDetailRow,
+  type AdminUserReadModelItem,
+  type AdminUsersReadModel,
+} from "../_lib/adminReadModels";
+import {
   formatUsageBytes,
   formatUsageMinutes,
   readAdminUsageReadModel,
@@ -582,6 +596,18 @@ type AdminV1ReadModel = AdminUsageReadModel & {
   loading: boolean;
 };
 
+type AdminUsersReadModelWithLoading = AdminUsersReadModel & {
+  loading: boolean;
+};
+
+type AdminUsageDetailReadModelWithLoading = AdminUsageDetailReadModel & {
+  loading: boolean;
+};
+
+type AdminSystemHistoryReadModelWithLoading = AdminSystemHistoryReadModel & {
+  loading: boolean;
+};
+
 type AdminFinanceReadModelWithLoading = AdminFinanceReadModel & {
   loading: boolean;
 };
@@ -865,6 +891,21 @@ const EMPTY_ADMIN_V1_READ_MODEL: AdminV1ReadModel = {
   providerImportedRequestCount: null,
   providerImportedNetworkMetricCount: null,
   generatedAt: new Date(0).toISOString(),
+};
+const EMPTY_ADMIN_USERS_READ_MODEL: AdminUsersReadModelWithLoading = {
+  ...createEmptyAdminUsersReadModel(),
+  generatedAt: new Date(0).toISOString(),
+  loading: false,
+};
+const EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL: AdminUsageDetailReadModelWithLoading = {
+  ...createEmptyAdminUsageDetailReadModel(),
+  generatedAt: new Date(0).toISOString(),
+  loading: false,
+};
+const EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL: AdminSystemHistoryReadModelWithLoading = {
+  ...createEmptyAdminSystemHistoryReadModel(),
+  generatedAt: new Date(0).toISOString(),
+  loading: false,
 };
 const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   loading: false,
@@ -2499,6 +2540,45 @@ const formatAdminReadModelTimestamp = (value: string | null | undefined) => {
   return new Date(parsed).toLocaleString();
 };
 
+const formatAdminReadModelNumber = (value: number | null | undefined, loading = false) => {
+  if (loading) return "Loading";
+  if (typeof value !== "number" || !Number.isFinite(value)) return "Not connected";
+  return String(value);
+};
+
+const adminUserStatusTone = (status: string): OwnerControlTone => {
+  const normalized = status.toLowerCase();
+  if (normalized === "active") return "success";
+  if (normalized === "banned" || normalized === "deleted") return "danger";
+  if (normalized === "unconfirmed" || normalized === "anonymous") return "manual";
+  return "locked";
+};
+
+const adminUsageRowTone = (row: AdminUsageDetailRow): OwnerControlTone => {
+  const status = String(row.status ?? "").toLowerCase();
+  if (["failed", "error", "removed", "hidden"].includes(status)) return "danger";
+  if (["pending", "reviewing", "variance", "dry_run"].some((token) => status.includes(token))) return "manual";
+  if (row.rowGroup === "provider" || row.rowGroup === "reconciliation") return "manual";
+  if (row.rowGroup === "storage" || row.rowGroup === "uploads") return "info";
+  return "success";
+};
+
+const adminSystemHistoryRowTone = (row: AdminSystemHistoryRow): OwnerControlTone => {
+  const severity = String(row.severity ?? "").toLowerCase();
+  const status = String(row.status ?? "").toLowerCase();
+  if (["critical", "high", "danger"].includes(severity) || ["failed", "denied", "error"].includes(status)) return "danger";
+  if (["warning", "manual", "dry_run"].includes(severity) || ["reviewing", "pending"].includes(status)) return "manual";
+  if (row.source === "livekit_token" || row.source === "security") return "info";
+  return "success";
+};
+
+const formatAdminUsageQuantity = (row: AdminUsageDetailRow) => {
+  if (row.quantity === null) return row.unit ? `Unit ${formatModerationToken(row.unit)}` : "No quantity";
+  if (row.unit === "bytes") return formatUsageBytes(row.quantity);
+  const quantity = Number.isInteger(row.quantity) ? String(row.quantity) : row.quantity.toFixed(2);
+  return row.unit ? `${quantity} ${row.unit}` : quantity;
+};
+
 const formatHomeCount = (value: number | null | undefined, loading: boolean) => {
   if (loading) return "Loading";
   return typeof value === "number" && Number.isFinite(value) ? String(value) : "Not Connected";
@@ -3206,6 +3286,12 @@ export default function AdminStudioScreen() {
   const [selectedAdminMoneyAuditEvent, setSelectedAdminMoneyAuditEvent] = useState<MoneyAuditEvent | null>(null);
   const [expandedMoneySwitchRows, setExpandedMoneySwitchRows] = useState<Record<string, boolean>>({});
   const [adminV1ReadModel, setAdminV1ReadModel] = useState<AdminV1ReadModel>(EMPTY_ADMIN_V1_READ_MODEL);
+  const [adminUsersReadModel, setAdminUsersReadModel] =
+    useState<AdminUsersReadModelWithLoading>(EMPTY_ADMIN_USERS_READ_MODEL);
+  const [adminUsageDetailReadModel, setAdminUsageDetailReadModel] =
+    useState<AdminUsageDetailReadModelWithLoading>(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
+  const [adminSystemHistoryReadModel, setAdminSystemHistoryReadModel] =
+    useState<AdminSystemHistoryReadModelWithLoading>(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
   const [adminImmutableAuditReadModel, setAdminImmutableAuditReadModel] =
@@ -3388,6 +3474,16 @@ export default function AdminStudioScreen() {
   const staffRosterLastRefreshedLabel = platformRoleRosterGeneratedAt
     ? formatAdminReadModelTimestamp(platformRoleRosterGeneratedAt)
     : "Not refreshed";
+  const adminUsersReadModelByUserId = useMemo(() => {
+    const map = new Map<string, AdminUserReadModelItem>();
+    for (const item of adminUsersReadModel.items) map.set(item.userId, item);
+    return map;
+  }, [adminUsersReadModel.items]);
+  const adminUsersReadModelLastRefreshedLabel = formatAdminReadModelTimestamp(adminUsersReadModel.generatedAt);
+  const adminUsageDetailLastRefreshedLabel = formatAdminReadModelTimestamp(adminUsageDetailReadModel.generatedAt);
+  const adminSystemHistoryLastRefreshedLabel = formatAdminReadModelTimestamp(adminSystemHistoryReadModel.generatedAt);
+  const adminUsageDetailRows = adminUsageDetailReadModel.items;
+  const adminSystemHistoryRows = adminSystemHistoryReadModel.items;
   const usageSliceSignals = useMemo(() => [
     adminV1ReadModel.internalUsageSchemaConnected,
     adminV1ReadModel.providerUsageSchemaConnected,
@@ -3433,22 +3529,32 @@ export default function AdminStudioScreen() {
   }, []);
   const openAdminUserDrilldown = useCallback((entry: PlatformRoleRosterEntry) => {
     const userId = entry.userId ?? "";
+    const broaderUser = userId
+      ? adminUsersReadModelByUserId.get(userId) ?? null
+      : adminUsersReadModel.items.find((item) => entry.email && item.email?.toLowerCase() === entry.email.toLowerCase()) ?? null;
     const maskedIdentity = maskOperatorIdentity(entry.identityLabel || entry.email || "Admin user");
     const permissionSummary = isOwnerStaff
       ? formatPermissionSummary(entry.permissionKeys)
       : "Owner-only permission detail";
+    const broaderCoverage = broaderUser ? "Connected" : adminUsersReadModel.connected ? "No matching row" : "Not connected";
     openAdminDrilldown({
       title: maskedIdentity,
       subtitle: `${formatPlatformRoleDisplayLabel(entry.role)} · ${formatModerationToken(entry.status)}`,
       statusLabel: entry.status === "active" ? "Active" : formatModerationToken(entry.status),
       tone: entry.status === "active" ? "info" : "locked",
-      body: "Admin-safe user detail is sourced from the staff role roster. Broader account, Premium, report, and restriction status still need a dedicated read model before they can appear here.",
+      body: broaderUser
+        ? "Admin-safe user detail combines the staff role roster with the broader Users read model. Destructive account actions remain withheld from this drilldown."
+        : "Admin-safe user detail is sourced from the staff role roster. The broader Users read model did not return a matching account row for this staff entry.",
       rows: [
         { label: "User id", value: userId ? formatCompactIdentifier(userId) : "not returned" },
         { label: "Display", value: maskedIdentity },
         { label: "Email", value: entry.email ? maskOperatorIdentity(entry.email) : "not returned" },
         { label: "Role", value: formatPlatformRoleDisplayLabel(entry.role) },
         { label: "Status", value: formatModerationToken(entry.status) },
+        { label: "Account status", value: broaderUser ? formatModerationToken(broaderUser.authStatus) : broaderCoverage },
+        { label: "Premium", value: broaderUser?.premium?.status ? formatModerationToken(broaderUser.premium.status) : "No active row returned" },
+        { label: "Open reports", value: broaderUser ? formatAdminReadModelNumber(broaderUser.counts.openReportsTargetingUser) : "Not connected" },
+        { label: "Blocks received", value: broaderUser ? formatAdminReadModelNumber(broaderUser.counts.blocksReceived) : "Not connected" },
         { label: "Granted", value: entry.grantedAt ? formatModerationTimestamp(entry.grantedAt) : "timestamp unavailable" },
         { label: "Granted by", value: entry.grantedBy ? formatAuditDisplayText(entry.grantedBy) : "not returned" },
         { label: "Scoped permissions", value: `${entry.permissionKeys.length}` },
@@ -3457,17 +3563,34 @@ export default function AdminStudioScreen() {
       sections: [
         {
           title: "Read Model Coverage",
-          statusLabel: "Staff slice",
-          tone: "info",
-          body: "This panel is limited to the admin-safe staff roster. It does not claim account-wide user state until a dedicated Users read model exists.",
+          statusLabel: broaderCoverage,
+          tone: broaderUser ? "success" : adminUsersReadModel.connected ? "manual" : "locked",
+          body: broaderUser
+            ? "The broader Users read model supplies account, Premium, report, block, profile media, deletion-request, and public-content counts without exposing auth secrets or raw storage paths."
+            : "This staff row remains visible from the role roster, but the broader Users read model either was not connected or did not include a matching account row in the current limit/filter.",
           rows: [
             { label: "Current source", value: "Staff role roster" },
-            { label: "Account status", value: "Not in this read model" },
-            { label: "Premium status", value: "Read from Money Center when backed" },
-            { label: "Reports / blocks", value: "Use Reports and Owner Security surfaces" },
+            { label: "Broader source", value: adminUsersReadModel.connected ? "Users read model" : "Not connected" },
+            { label: "Generated", value: adminUsersReadModelLastRefreshedLabel },
+            { label: "Account status", value: broaderUser ? formatModerationToken(broaderUser.authStatus) : "Not returned" },
+            { label: "Profile visibility", value: broaderUser ? formatModerationToken(broaderUser.profileVisibility) : "Not returned" },
+            { label: "Reports / blocks", value: broaderUser ? `${broaderUser.counts.openReportsTargetingUser ?? 0} open · ${broaderUser.counts.blocksReceived ?? 0} blocks received` : "Not returned" },
             { label: "Destructive actions", value: "Not exposed here" },
           ],
         },
+        ...(broaderUser ? [{
+          title: "Account Signals",
+          statusLabel: formatModerationToken(broaderUser.authStatus),
+          tone: adminUserStatusTone(broaderUser.authStatus),
+          rows: [
+            { label: "Created", value: broaderUser.createdAt ? formatModerationTimestamp(broaderUser.createdAt) : "Not returned" },
+            { label: "Last sign-in", value: broaderUser.lastSignInAt ? formatModerationTimestamp(broaderUser.lastSignInAt) : "Not returned" },
+            { label: "Email confirmed", value: broaderUser.emailConfirmedAt ? formatModerationTimestamp(broaderUser.emailConfirmedAt) : "Not returned" },
+            { label: "Avatar media", value: formatModerationToken(broaderUser.profileAvatarMediaStatus) },
+            { label: "Background media", value: formatModerationToken(broaderUser.profileBackgroundMediaStatus) },
+            { label: "Deletion requests", value: formatAdminReadModelNumber(broaderUser.counts.accountDeletionRequests) },
+          ],
+        } satisfies AdminDrilldownSection] : []),
         {
           title: "Safe Identifiers",
           statusLabel: "Masked",
@@ -3518,7 +3641,15 @@ export default function AdminStudioScreen() {
         },
       ],
     });
-  }, [isOwnerStaff, openAdminDrilldown, router]);
+  }, [
+    adminUsersReadModel.connected,
+    adminUsersReadModel.items,
+    adminUsersReadModelByUserId,
+    adminUsersReadModelLastRefreshedLabel,
+    isOwnerStaff,
+    openAdminDrilldown,
+    router,
+  ]);
   const selectedSafetyReport = useMemo(
     () => safetyReports.find((report) => report.id === selectedSafetyReportId) ?? null,
     [safetyReports, selectedSafetyReportId],
@@ -3829,6 +3960,9 @@ export default function AdminStudioScreen() {
       setAdminMoneyAuditSourceRows([]);
       setSelectedAdminMoneyAuditEvent(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
+      setAdminUsersReadModel(EMPTY_ADMIN_USERS_READ_MODEL);
+      setAdminUsageDetailReadModel(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
+      setAdminSystemHistoryReadModel(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
       setAuditOverviewCategoryFilter("all");
@@ -3932,6 +4066,9 @@ export default function AdminStudioScreen() {
       setAdminMoneyAuditSourceRows([]);
       setSelectedAdminMoneyAuditEvent(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
+      setAdminUsersReadModel(EMPTY_ADMIN_USERS_READ_MODEL);
+      setAdminUsageDetailReadModel(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
+      setAdminSystemHistoryReadModel(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
       setAuditOverviewCategoryFilter("all");
@@ -3957,6 +4094,9 @@ export default function AdminStudioScreen() {
       setLiveOpsNotice(null);
       setLiveOpsActionBusy(null);
       setAdminV1ReadModel(EMPTY_ADMIN_V1_READ_MODEL);
+      setAdminUsersReadModel(EMPTY_ADMIN_USERS_READ_MODEL);
+      setAdminUsageDetailReadModel(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
+      setAdminSystemHistoryReadModel(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminMoneyAuditSourceRows([]);
       setSelectedAdminMoneyAuditEvent(null);
@@ -5234,6 +5374,7 @@ export default function AdminStudioScreen() {
         rows: [
           { label: "Generated", value: formatAdminReadModelTimestamp(adminV1ReadModel.generatedAt) },
           { label: "Readable slices", value: adminV1ReadModel.loading ? "Loading" : `${usageReadableSliceCount}/${usageSliceTotal}` },
+          { label: "Detail rows", value: formatAdminReadModelNumber(adminUsageDetailReadModel.summary.filteredRows, adminUsageDetailReadModel.loading) },
           { label: "Provider imports", value: adminV1ReadModel.providerImportStatuses.length ? `${providerImportConnectedCount}/${adminV1ReadModel.providerImportStatuses.length} connected` : "No provider imports visible" },
           { label: "Attention", value: providerImportAttentionCount ? `${providerImportAttentionCount} provider import issue${providerImportAttentionCount === 1 ? "" : "s"}` : "No provider import issue shown" },
         ],
@@ -5437,6 +5578,8 @@ export default function AdminStudioScreen() {
     if (detail) openAdminDrilldown(detail);
   }, [
     adminV1ReadModel,
+    adminUsageDetailReadModel.loading,
+    adminUsageDetailReadModel.summary.filteredRows,
     openAdminDrilldown,
     providerImportAttentionCount,
     providerImportConnectedCount,
@@ -5455,7 +5598,8 @@ export default function AdminStudioScreen() {
         { label: "Status", value: card.value },
         { label: "Admin action", value: "Inspect only" },
         { label: "Secrets", value: "not rendered" },
-        { label: "Missing read model", value: card.tone === "unavailable" ? "backed system health/detail row" : "none for this presence check" },
+        { label: "History rows", value: formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.filteredRows, adminSystemHistoryReadModel.loading) },
+        { label: "Missing read model", value: card.tone === "unavailable" ? "external health/build/deploy proof if not already audited" : "none for this presence check" },
       ],
       sections: [
         {
@@ -5467,6 +5611,7 @@ export default function AdminStudioScreen() {
             { label: "Needs setup", value: String(systemNeedsSetupCardCount) },
             { label: "Runtime issues", value: runtimeConfigIssues.length ? String(runtimeConfigIssues.length) : "0" },
             { label: "Secrets boundary", value: "Values are presence-checked only" },
+            { label: "System history", value: adminSystemHistoryReadModel.connected ? "Connected" : "Not connected" },
           ],
         },
         {
@@ -5477,7 +5622,7 @@ export default function AdminStudioScreen() {
             ? "A future server read model should provide health, history, or external setup proof for this card before Admin shows deeper detail."
             : "This card has enough read-only presence proof for the current Admin surface.",
           rows: [
-            { label: "Historical rows", value: "Not claimed here" },
+            { label: "Historical rows", value: adminSystemHistoryReadModel.connected ? "Audit/event history connected" : "Not connected" },
             { label: "External provider proof", value: "Documented outside this card" },
           ],
         },
@@ -5494,6 +5639,9 @@ export default function AdminStudioScreen() {
     });
   }, [
     openAdminDrilldown,
+    adminSystemHistoryReadModel.connected,
+    adminSystemHistoryReadModel.loading,
+    adminSystemHistoryReadModel.summary.filteredRows,
     runtimeConfigIssues.length,
     systemNeedsSetupCardCount,
     systemReadyCardCount,
@@ -6415,6 +6563,55 @@ export default function AdminStudioScreen() {
     const usageReadModel = await readAdminUsageReadModel();
     setAdminV1ReadModel({ ...usageReadModel, loading: false });
   }, []);
+
+  const loadAdminUsersReadModel = useCallback(async (queryOverride?: string) => {
+    setAdminUsersReadModel((current) => ({ ...current, loading: true }));
+
+    const usersReadModel = await readAdminUsersReadModel({
+      query: queryOverride ?? adminUsersQuery,
+      limit: 50,
+    });
+    setAdminUsersReadModel({ ...usersReadModel, loading: false });
+  }, [adminUsersQuery]);
+
+  const loadAdminUsageDetailReadModel = useCallback(async (section = "all") => {
+    setAdminUsageDetailReadModel((current) => ({ ...current, loading: true, section }));
+
+    const usageDetailReadModel = await readAdminUsageDetailReadModel({
+      section,
+      limit: 50,
+    });
+    setAdminUsageDetailReadModel({ ...usageDetailReadModel, loading: false });
+  }, []);
+
+  const loadAdminSystemHistoryReadModel = useCallback(async (source = "all") => {
+    setAdminSystemHistoryReadModel((current) => ({ ...current, loading: true, source }));
+
+    const systemHistoryReadModel = await readAdminSystemHistoryReadModel({
+      source,
+      limit: 50,
+    });
+    setAdminSystemHistoryReadModel({ ...systemHistoryReadModel, loading: false });
+  }, []);
+
+  useEffect(() => {
+    if (!canAccessAdmin) {
+      setAdminUsersReadModel(EMPTY_ADMIN_USERS_READ_MODEL);
+      setAdminUsageDetailReadModel(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
+      setAdminSystemHistoryReadModel(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
+      return;
+    }
+
+    if (operatorTab === "users") void loadAdminUsersReadModel();
+    if (operatorTab === "usage") void loadAdminUsageDetailReadModel("all");
+    if (operatorTab === "system") void loadAdminSystemHistoryReadModel("all");
+  }, [
+    canAccessAdmin,
+    loadAdminSystemHistoryReadModel,
+    loadAdminUsageDetailReadModel,
+    loadAdminUsersReadModel,
+    operatorTab,
+  ]);
 
   const loadAdminFinanceReadModel = useCallback(async () => {
     setAdminFinanceReadModel((current) => ({ ...current, loading: true }));
@@ -12209,7 +12406,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>USERS</Text>
               <Text style={styles.configTitle}>Users</Text>
               <Text style={styles.configBody}>
-                Admin-safe user detail comes from the backed staff role roster. Broader account, Premium, reports, blocks, and restriction status need a dedicated read model before they appear here.
+                Admin-safe user detail combines the backed staff role roster with a broader Users read model for account, Premium, report, block, profile media, and deletion-request signals.
               </Text>
             </View>
             <View style={[styles.badge, canViewStaffRoles ? styles.badgeScheduled : styles.badgeOff]}>
@@ -12222,7 +12419,7 @@ export default function AdminStudioScreen() {
               badgeTone={canViewStaffRoles ? "info" : "locked"}
               kicker="READ MODEL"
               lastRunLabel={`Last refreshed ${staffRosterLastRefreshedLabel}`}
-              subtitle="This view filters the backed staff roster only. Broader account, entitlement, block, report, and deletion state remains outside this read model."
+              subtitle="Staff-role detail remains separate from the broader account read model. Account state is inspect-only and never exposes auth secrets, raw storage paths, password resets, bans, or entitlement edits here."
               title="User Operations"
             />
             <View style={styles.ownerMetricGrid}>
@@ -12245,6 +12442,26 @@ export default function AdminStudioScreen() {
                 label="Inactive"
                 tone={revokedPlatformRoleRoster.length ? "manual" : "success"}
                 value={platformRoleRosterLoading ? "Loading" : revokedPlatformRoleRoster.length}
+              />
+              <OwnerMetricTile
+                label="Accounts"
+                tone={adminUsersReadModel.connected ? "success" : "locked"}
+                value={formatAdminReadModelNumber(adminUsersReadModel.summary.totalUsers, adminUsersReadModel.loading)}
+              />
+              <OwnerMetricTile
+                label="Open Reports"
+                tone={(adminUsersReadModel.summary.openTargetedReports ?? 0) > 0 ? "manual" : adminUsersReadModel.connected ? "success" : "locked"}
+                value={formatAdminReadModelNumber(adminUsersReadModel.summary.openTargetedReports, adminUsersReadModel.loading)}
+              />
+              <OwnerMetricTile
+                label="Active Blocks"
+                tone={(adminUsersReadModel.summary.activeBlocks ?? 0) > 0 ? "manual" : adminUsersReadModel.connected ? "success" : "locked"}
+                value={formatAdminReadModelNumber(adminUsersReadModel.summary.activeBlocks, adminUsersReadModel.loading)}
+              />
+              <OwnerMetricTile
+                label="Deletion Requests"
+                tone={(adminUsersReadModel.summary.accountDeletionRequests ?? 0) > 0 ? "manual" : adminUsersReadModel.connected ? "success" : "locked"}
+                value={formatAdminReadModelNumber(adminUsersReadModel.summary.accountDeletionRequests, adminUsersReadModel.loading)}
               />
             </View>
           </View>
@@ -12312,16 +12529,119 @@ export default function AdminStudioScreen() {
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
                 <Text style={styles.ownerSectionTitle}>Broader User Directory</Text>
-                <OwnerStatusPill label="Read model needed" tone="locked" />
+                <OwnerStatusPill
+                  label={adminUsersReadModel.loading ? "Loading" : adminUsersReadModel.connected ? `${adminUsersReadModel.items.length} rows` : "Locked"}
+                  tone={adminUsersReadModel.connected ? "success" : "locked"}
+                />
               </View>
-              <OwnerDetailGrid
-                rows={[
-                  { label: "Current coverage", value: "Staff role roster" },
-                  { label: "Not shown", value: "Account, Premium, report, block, restriction, deletion status" },
-                  { label: "Actions withheld", value: "Ban, suspend, reset password, entitlement edit, deletion" },
-                  { label: "Safe path", value: "Use Admin Search, Reports, Legal, and Owner Security where backed" },
-                ]}
+              <OwnerControlPanelHeader
+                badgeLabel={adminUsersReadModel.connected ? "Connected" : "Permission gated"}
+                badgeTone={adminUsersReadModel.connected ? "success" : "locked"}
+                kicker="ACCOUNT READ MODEL"
+                lastRunLabel={`Generated ${adminUsersReadModelLastRefreshedLabel}`}
+                subtitle="Rows are inspect-only and limited to account, entitlement, report, block, profile media, and public-content metadata. Passwords, auth tokens, raw storage paths, and destructive account actions are not returned."
+                title="Account Signals"
+                actions={(
+                  <TouchableOpacity
+                    style={[styles.ownerSecondaryButton, adminUsersReadModel.loading && styles.configSaveBtnDisabled]}
+                    disabled={adminUsersReadModel.loading}
+                    onPress={() => { void loadAdminUsersReadModel(); }}
+                  >
+                    <Text style={styles.ownerSecondaryButtonText}>{adminUsersReadModel.loading ? "Refreshing" : "Refresh Directory"}</Text>
+                  </TouchableOpacity>
+                )}
               />
+              {adminUsersReadModel.loading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading account signals...</Text>
+                </View>
+              ) : !adminUsersReadModel.connected ? (
+                <OwnerDisabledReason reason="The Users read model is available only to Owner/Admin or scoped support, reports, legal, user lookup, or security-review roles." />
+              ) : adminUsersReadModel.items.length ? (
+                <View style={styles.ownerControlList}>
+                  {adminUsersReadModel.items.map((entry) => (
+                    <OwnerControlRow
+                      key={`admin-users-read-model-${entry.userId}`}
+                      message={`${entry.counts.openReportsTargetingUser ?? 0} open report${entry.counts.openReportsTargetingUser === 1 ? "" : "s"} · ${entry.counts.blocksReceived ?? 0} block${entry.counts.blocksReceived === 1 ? "" : "s"} received · ${entry.counts.publicProfilePosts ?? 0}/${entry.counts.profilePosts ?? 0} public posts`}
+                      meta={`${entry.email ? maskOperatorIdentity(entry.email) : "email not returned"} · Created ${entry.createdAt ? formatModerationTimestamp(entry.createdAt) : "time unavailable"}`}
+                      onPress={() => openAdminDrilldown({
+                        title: maskOperatorIdentity(entry.identityLabel),
+                        subtitle: "Broader user read model",
+                        statusLabel: formatModerationToken(entry.authStatus),
+                        tone: adminUserStatusTone(entry.authStatus),
+                        body: "This account drilldown is inspect-only. Ban, suspend, password reset, entitlement edit, and deletion actions stay outside this Users read model.",
+                        rows: [
+                          { label: "User id", value: formatCompactIdentifier(entry.userId) },
+                          { label: "Email", value: entry.email ? maskOperatorIdentity(entry.email) : "not returned" },
+                          { label: "Username", value: entry.username ?? "not returned" },
+                          { label: "Display", value: entry.displayName ?? "not returned" },
+                          { label: "Auth status", value: formatModerationToken(entry.authStatus) },
+                          { label: "Profile visibility", value: formatModerationToken(entry.profileVisibility) },
+                          { label: "Premium", value: entry.premium?.status ? formatModerationToken(entry.premium.status) : "No active row returned" },
+                          { label: "Deletion requests", value: formatAdminReadModelNumber(entry.counts.accountDeletionRequests) },
+                        ],
+                        sections: [
+                          {
+                            title: "Safety Signals",
+                            statusLabel: `${entry.counts.openReportsTargetingUser ?? 0} open`,
+                            tone: (entry.counts.openReportsTargetingUser ?? 0) > 0 ? "manual" : "success",
+                            rows: [
+                              { label: "Reports made", value: formatAdminReadModelNumber(entry.counts.reportsMade) },
+                              { label: "Reports touching user", value: formatAdminReadModelNumber(entry.counts.reportsTargetingUser) },
+                              { label: "Open reports", value: formatAdminReadModelNumber(entry.counts.openReportsTargetingUser) },
+                              { label: "Blocks created", value: formatAdminReadModelNumber(entry.counts.blocksCreated) },
+                              { label: "Blocks received", value: formatAdminReadModelNumber(entry.counts.blocksReceived) },
+                            ],
+                          },
+                          {
+                            title: "Profile / Platform Signals",
+                            statusLabel: "Metadata only",
+                            tone: "info",
+                            rows: [
+                              { label: "Avatar media", value: formatModerationToken(entry.profileAvatarMediaStatus) },
+                              { label: "Background media", value: formatModerationToken(entry.profileBackgroundMediaStatus) },
+                              { label: "Profile posts", value: `${entry.counts.publicProfilePosts ?? 0}/${entry.counts.profilePosts ?? 0} public` },
+                              { label: "Platform videos", value: `${entry.counts.publicCreatorVideos ?? 0}/${entry.counts.creatorVideos ?? 0} public` },
+                              { label: "Staff roles", value: String(entry.staffRoles.length) },
+                            ],
+                          },
+                        ],
+                        actions: [
+                          {
+                            label: "View Profile",
+                            onPress: () => {
+                              setSelectedAdminDrilldown(null);
+                              router.push(`/profile/${entry.userId}`);
+                            },
+                          },
+                          {
+                            label: "View Platform",
+                            onPress: () => {
+                              setSelectedAdminDrilldown(null);
+                              router.push(`/channel/${entry.userId}`);
+                            },
+                          },
+                          {
+                            label: "Copy Safe ID",
+                            onPress: () => {
+                              void Clipboard.setStringAsync(entry.userId);
+                            },
+                          },
+                        ],
+                      })}
+                      statusLabel={formatModerationToken(entry.authStatus)}
+                      title={maskOperatorIdentity(entry.identityLabel)}
+                      tone={adminUserStatusTone(entry.authStatus)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <OwnerEmptyState
+                  body="The broader Users read model is connected, but no account rows matched the current filter."
+                  title="No account rows"
+                />
+              )}
             </View>
             <View style={styles.configListActions}>
               <TouchableOpacity
@@ -12444,9 +12764,18 @@ export default function AdminStudioScreen() {
               badgeLabel="No billing truth"
               badgeTone="locked"
               kicker="READ MODELS"
-              lastRunLabel={`Generated ${formatAdminReadModelTimestamp(adminV1ReadModel.generatedAt)}`}
+              lastRunLabel={`Generated ${formatAdminReadModelTimestamp(adminV1ReadModel.generatedAt)} · Rows ${adminUsageDetailLastRefreshedLabel}`}
               subtitle="Summaries stay read-only and explicitly separate internal usage estimates from provider billing, payouts, Premium, ads, and creator earnings."
               title="Usage Operations"
+              actions={(
+                <TouchableOpacity
+                  style={[styles.ownerSecondaryButton, adminUsageDetailReadModel.loading && styles.configSaveBtnDisabled]}
+                  disabled={adminUsageDetailReadModel.loading}
+                  onPress={() => { void loadAdminUsageDetailReadModel("all"); }}
+                >
+                  <Text style={styles.ownerSecondaryButtonText}>{adminUsageDetailReadModel.loading ? "Refreshing" : "Refresh Rows"}</Text>
+                </TouchableOpacity>
+              )}
             />
             <View style={styles.ownerMetricGrid}>
               <OwnerMetricTile
@@ -12468,6 +12797,26 @@ export default function AdminStudioScreen() {
                 label="Need Models"
                 tone={usageNeedsReadModelCount ? "manual" : "success"}
                 value={adminV1ReadModel.loading ? "Loading" : usageNeedsReadModelCount}
+              />
+              <OwnerMetricTile
+                label="Recent Rows"
+                tone={adminUsageDetailReadModel.connected ? "success" : "locked"}
+                value={formatAdminReadModelNumber(adminUsageDetailReadModel.summary.filteredRows, adminUsageDetailReadModel.loading)}
+              />
+              <OwnerMetricTile
+                label="Room Rows"
+                tone={adminUsageDetailReadModel.connected ? "info" : "locked"}
+                value={formatAdminReadModelNumber(adminUsageDetailReadModel.summary.roomRows, adminUsageDetailReadModel.loading)}
+              />
+              <OwnerMetricTile
+                label="Media Rows"
+                tone={adminUsageDetailReadModel.connected ? "info" : "locked"}
+                value={formatAdminReadModelNumber(adminUsageDetailReadModel.summary.mediaRows, adminUsageDetailReadModel.loading)}
+              />
+              <OwnerMetricTile
+                label="Provider Rows"
+                tone={(adminUsageDetailReadModel.summary.providerRows ?? 0) > 0 ? "manual" : adminUsageDetailReadModel.connected ? "success" : "locked"}
+                value={formatAdminReadModelNumber(adminUsageDetailReadModel.summary.providerRows, adminUsageDetailReadModel.loading)}
               />
             </View>
           </View>
@@ -12596,6 +12945,75 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListBody}>No invoice send, customer charge, payment link, overage billing, or provider bill activation is available here.</Text>
               </View>
             </TouchableOpacity>
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Recent Usage Rows</Text>
+                <OwnerStatusPill
+                  label={adminUsageDetailReadModel.loading ? "Loading" : adminUsageDetailReadModel.connected ? `${adminUsageDetailRows.length} rows` : "Locked"}
+                  tone={adminUsageDetailReadModel.connected ? "success" : "locked"}
+                />
+              </View>
+              {adminUsageDetailReadModel.loading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading usage rows...</Text>
+                </View>
+              ) : !adminUsageDetailReadModel.connected ? (
+                <OwnerDisabledReason reason="Usage row drilldowns require Owner/Admin or scoped audit, security, live-ops, billing-support, or reports-review permission." />
+              ) : adminUsageDetailRows.length ? (
+                <View style={styles.ownerControlList}>
+                  {adminUsageDetailRows.slice(0, 12).map((entry) => (
+                    <OwnerControlRow
+                      key={`admin-usage-row-${entry.rowKind}-${entry.rowId}`}
+                      message={`${formatAdminUsageQuantity(entry)} · ${entry.source ?? "read model"} · ${entry.occurredAt ? formatModerationTimestamp(entry.occurredAt) : "time unavailable"}`}
+                      meta={[
+                        entry.userId ? `User ${formatCompactIdentifier(entry.userId)}` : null,
+                        entry.roomId ? `Room ${formatCompactIdentifier(entry.roomId)}` : null,
+                        entry.mediaId ? `Media ${formatCompactIdentifier(entry.mediaId)}` : null,
+                      ].filter(Boolean).join(" · ") || "No user, room, or media id returned"}
+                      onPress={() => openAdminDrilldown({
+                        title: formatModerationToken(entry.rowKind),
+                        subtitle: formatModerationToken(entry.rowGroup),
+                        statusLabel: entry.status ? formatModerationToken(entry.status) : "Read-only",
+                        tone: adminUsageRowTone(entry),
+                        body: "This row is read-only usage evidence. It is not billing, payout, Premium, ads, invoice, or creator-earnings truth.",
+                        rows: [
+                          { label: "Row id", value: formatCompactIdentifier(entry.rowId) },
+                          { label: "Occurred", value: entry.occurredAt ? formatModerationTimestamp(entry.occurredAt) : "Time unavailable" },
+                          { label: "Primary", value: entry.primaryLabel },
+                          { label: "Secondary", value: entry.secondaryLabel ?? "not returned" },
+                          { label: "Metric", value: entry.metricKey ?? "not returned" },
+                          { label: "Quantity", value: formatAdminUsageQuantity(entry) },
+                          { label: "Status", value: entry.status ? formatModerationToken(entry.status) : "Read-only" },
+                          { label: "Source", value: entry.source ?? "usage read model" },
+                        ],
+                        sections: [
+                          {
+                            title: "Safe Identifiers",
+                            statusLabel: "Masked",
+                            tone: "info",
+                            rows: [
+                              { label: "User", value: entry.userId ? formatCompactIdentifier(entry.userId) : "not returned" },
+                              { label: "Room", value: entry.roomId ? formatCompactIdentifier(entry.roomId) : "not returned" },
+                              { label: "Media", value: entry.mediaId ? formatCompactIdentifier(entry.mediaId) : "not returned" },
+                              { label: "Raw storage path", value: "not returned" },
+                            ],
+                          },
+                        ],
+                      })}
+                      statusLabel={entry.status ? formatModerationToken(entry.status) : formatModerationToken(entry.rowGroup)}
+                      title={entry.primaryLabel}
+                      tone={adminUsageRowTone(entry)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <OwnerEmptyState
+                  body="The usage row read model is connected, but no rows were returned for this section."
+                  title="No usage rows"
+                />
+              )}
+            </View>
             <View style={styles.ownerSectionHeaderRow}>
               <Text style={styles.ownerSectionTitle}>Room & Media Estimates</Text>
               <OwnerStatusPill label="DB estimates" tone="manual" />
@@ -16063,17 +16481,117 @@ export default function AdminStudioScreen() {
               badgeLabel="Secrets hidden"
               badgeTone="success"
               kicker="READ MODELS"
+              lastRunLabel={`History ${adminSystemHistoryLastRefreshedLabel}`}
               subtitle="System cards are grouped by operational intent. They show presence and setup state only, not secrets or external provider dashboards."
               title="System Operations"
+              actions={(
+                <TouchableOpacity
+                  style={[styles.ownerSecondaryButton, adminSystemHistoryReadModel.loading && styles.configSaveBtnDisabled]}
+                  disabled={adminSystemHistoryReadModel.loading}
+                  onPress={() => { void loadAdminSystemHistoryReadModel("all"); }}
+                >
+                  <Text style={styles.ownerSecondaryButtonText}>{adminSystemHistoryReadModel.loading ? "Refreshing" : "Refresh History"}</Text>
+                </TouchableOpacity>
+              )}
             />
             <View style={styles.ownerMetricGrid}>
               <OwnerMetricTile label="Ready" value={systemReadyCardCount} tone={systemReadyCardCount ? "success" : "locked"} />
               <OwnerMetricTile label="Needs Setup" value={systemNeedsSetupCardCount} tone={systemNeedsSetupCardCount ? "manual" : "success"} />
               <OwnerMetricTile label="Runtime Issues" value={runtimeConfigIssues.length} tone={runtimeConfigIssues.length ? "manual" : "success"} />
               <OwnerMetricTile label="Inspect Only" value={systemStatusCards.length} tone="info" />
+              <OwnerMetricTile
+                label="History Rows"
+                value={formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.filteredRows, adminSystemHistoryReadModel.loading)}
+                tone={adminSystemHistoryReadModel.connected ? "success" : "locked"}
+              />
+              <OwnerMetricTile
+                label="LiveKit Audit"
+                value={formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.liveKitRows, adminSystemHistoryReadModel.loading)}
+                tone={adminSystemHistoryReadModel.connected ? "info" : "locked"}
+              />
+              <OwnerMetricTile
+                label="Security Rows"
+                value={formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.securityRows, adminSystemHistoryReadModel.loading)}
+                tone={(adminSystemHistoryReadModel.summary.securityRows ?? 0) > 0 ? "manual" : adminSystemHistoryReadModel.connected ? "success" : "locked"}
+              />
+              <OwnerMetricTile
+                label="Legal Rows"
+                value={formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.legalRows, adminSystemHistoryReadModel.loading)}
+                tone={adminSystemHistoryReadModel.connected ? "info" : "locked"}
+              />
             </View>
           </View>
           <View style={styles.configList}>
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>System History</Text>
+                <OwnerStatusPill
+                  label={adminSystemHistoryReadModel.loading ? "Loading" : adminSystemHistoryReadModel.connected ? `${adminSystemHistoryRows.length} rows` : "Locked"}
+                  tone={adminSystemHistoryReadModel.connected ? "success" : "locked"}
+                />
+              </View>
+              {adminSystemHistoryReadModel.loading ? (
+                <View style={styles.configLoadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.configLoadingText}>Loading system history...</Text>
+                </View>
+              ) : !adminSystemHistoryReadModel.connected ? (
+                <OwnerDisabledReason reason="System history requires Owner/Admin or scoped audit, security, live-ops, billing-support, or reports-review permission." />
+              ) : adminSystemHistoryRows.length ? (
+                <View style={styles.ownerControlList}>
+                  {adminSystemHistoryRows.slice(0, 12).map((entry) => (
+                    <OwnerControlRow
+                      key={`admin-system-history-${entry.source}-${entry.rowId}`}
+                      message={`${entry.occurredAt ? formatModerationTimestamp(entry.occurredAt) : "time unavailable"} · ${entry.resultLabel ? formatAuditDisplayText(entry.resultLabel) : "No result label"} · ${entry.metadataFieldCount} metadata field${entry.metadataFieldCount === 1 ? "" : "s"} hidden`}
+                      meta={[
+                        entry.actorRole ? formatModerationToken(entry.actorRole) : null,
+                        entry.targetType ? `${formatModerationToken(entry.targetType)} ${entry.targetId ? formatCompactIdentifier(entry.targetId) : ""}`.trim() : null,
+                        entry.roomId ? `Room ${formatCompactIdentifier(entry.roomId)}` : null,
+                      ].filter(Boolean).join(" · ") || "No actor or target returned"}
+                      onPress={() => openAdminDrilldown({
+                        title: formatModerationToken(entry.eventType),
+                        subtitle: formatModerationToken(entry.source),
+                        statusLabel: entry.status ? formatModerationToken(entry.status) : entry.severity ? formatModerationToken(entry.severity) : "Audit row",
+                        tone: adminSystemHistoryRowTone(entry),
+                        body: "This system history row is secret-safe audit evidence. Metadata values, provider secrets, LiveKit tokens, raw room tokens, service-role keys, and raw provider payloads are not returned.",
+                        rows: [
+                          { label: "Source", value: formatModerationToken(entry.source) },
+                          { label: "Row id", value: formatCompactIdentifier(entry.rowId) },
+                          { label: "Occurred", value: entry.occurredAt ? formatModerationTimestamp(entry.occurredAt) : "Time unavailable" },
+                          { label: "Event", value: formatModerationToken(entry.eventType) },
+                          { label: "Category", value: entry.category ? formatModerationToken(entry.category) : "not returned" },
+                          { label: "Status", value: entry.status ? formatModerationToken(entry.status) : "not returned" },
+                          { label: "Severity", value: entry.severity ? formatModerationToken(entry.severity) : "not returned" },
+                          { label: "Metadata values", value: "Hidden" },
+                        ],
+                        sections: [
+                          {
+                            title: "Safe Identifiers",
+                            statusLabel: "Masked",
+                            tone: "info",
+                            rows: [
+                              { label: "Actor role", value: entry.actorRole ? formatModerationToken(entry.actorRole) : "not returned" },
+                              { label: "Actor user", value: entry.actorUserId ? formatCompactIdentifier(entry.actorUserId) : "not returned" },
+                              { label: "Target", value: entry.targetType ? `${formatModerationToken(entry.targetType)} ${entry.targetId ? formatCompactIdentifier(entry.targetId) : ""}`.trim() : "not returned" },
+                              { label: "Room", value: entry.roomId ? formatCompactIdentifier(entry.roomId) : "not returned" },
+                              { label: "Metadata field count", value: String(entry.metadataFieldCount) },
+                            ],
+                          },
+                        ],
+                      })}
+                      statusLabel={entry.status ? formatModerationToken(entry.status) : formatModerationToken(entry.source)}
+                      title={formatModerationToken(entry.eventType)}
+                      tone={adminSystemHistoryRowTone(entry)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <OwnerEmptyState
+                  body="The system history read model is connected, but no immutable audit or event rows were returned."
+                  title="No system history rows"
+                />
+              )}
+            </View>
             {[
               { title: "Runtime & Config", cards: runtimeSystemCards, tone: "info" as OwnerControlTone },
               { title: "Compliance & Audit", cards: complianceSystemCards, tone: "success" as OwnerControlTone },

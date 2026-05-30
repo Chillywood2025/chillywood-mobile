@@ -41,14 +41,17 @@ The May 29, 2026 Admin Denial IA Consolidation and Drilldown Production Pass mad
 
 No old state key was deleted. No permission gate, LiveKit token path, Premium gate, Watch-Party ownership, old-room handling, live-money state, provider secret, or fake Admin row was added.
 
-The May 30, 2026 Admin Read Models UI/UX Production Pass polished the three broad drilldown tabs without adding new schema or fake data:
+The May 30, 2026 Admin Read Models UI/UX Production Pass polished the three broad drilldown tabs. The later backend closeout added permission-gated RPCs instead of fake rows or public table/view exposure:
 
 - Users now opens on a User Operations read-model hero with visible/active/permissioned/inactive metrics, role filters, and a search filter over the already-loaded staff roster.
-- User detail sheets are sectioned into Status, Read Model Coverage, Safe Identifiers, Actions, and Safety Boundary.
+- User detail sheets are sectioned into Status, Read Model Coverage, Account Signals, Safety Signals, Profile / Platform Signals, Safe Identifiers, Actions, and Safety Boundary.
+- The broader Users read model now returns account status, Premium status, report/block counts, Profile media status, deletion-request counts, public Profile post counts, public Platform video counts, and staff-role summaries without auth secrets, passwords, raw storage paths, or destructive controls.
 - Usage now opens on a Usage Operations read-model hero with readable-slice/provider-import/attention/gap metrics and grouped Metering & Provider Reads, Room & Media Estimates, and Cost Risk Boundary sections.
 - Usage detail sheets now include Coverage and Boundary sections that explicitly state no billing, payout, invoice, ad, Premium grant, creator-earnings, provider-bill, or live-money action is available there.
+- The Usage detail read model now returns recent usage-meter, usage rollup, provider import, provider daily, reconciliation, room membership, creator-video, and social-attachment metadata rows. It still returns no raw storage path and no provider billing truth.
 - System now opens on a System Operations read-model hero with ready/needs-setup/runtime-issue/inspect-only metrics and groups cards into Runtime & Config, Compliance & Audit, and Provider Setup.
 - System detail sheets now include System Overview and Next Read Model sections while keeping secrets and external provider dashboards out of the mobile Admin panel.
+- The System history read model now returns secret-safe immutable audit/event rows from Admin, Live Ops, security, LiveKit token/routing, media security, legal evidence, DMCA, and Spectator child-room audit tables. Metadata values, provider secrets, LiveKit tokens, raw room tokens, and service-role keys are not returned.
 
 ## Current Main Tabs
 
@@ -67,15 +70,15 @@ The May 30, 2026 Admin Read Models UI/UX Production Pass polished the three broa
 | Canary | `canary` | Canary checks | Owner control canary helpers | owner_dev_only, needs_collapsible_sections | Existing expandable rows stay. |
 | Safety | `safety-dashboard` | Safety/security overview | Owner security status | production_ready | Keep. |
 | Rachi | `rachi` | Official posts, Originals, Rachi identity | Rachi RPCs/read models | production_ready, needs_typeahead_search | Covered by Rachi search scope. |
-| Users | `users` | User/staff lookup orientation | Role roster/search | production_ready, needs_backend_data | Staff roster rows are searchable/filterable and clickable. Broader account/Premium/report/block/restriction status needs a dedicated admin-safe user read model. |
+| Users | `users` | User/staff lookup orientation | Role roster/search + admin Users RPC | production_ready | Staff roster rows are searchable/filterable and clickable; broader account/Premium/report/block/Profile-media/deletion signals are backed read-only. Destructive user actions remain outside this surface. |
 | Money Center | `money-center` | Consolidated money readiness, switches, audit explorer | Money flags, provider readiness, finance read model | production_ready | Keep collapsible sections and clickable event/detail sheets. |
-| Usage | `usage` | Usage/meters/readiness | Admin usage read model | production_ready, needs_backend_data | Usage is grouped into read-model summaries with sectioned drilldowns. Missing row-level event/session/activity models are labeled instead of faked. |
+| Usage | `usage` | Usage/meters/readiness | Admin usage summary + usage detail RPC | production_ready | Usage is grouped into read-model summaries with recent row-level usage/provider/room/media metadata. It still creates no billing, payout, invoice, Premium, ads, provider bill, live-money, or earnings truth. |
 | Networks | `networks` | Network proof/readiness | Security/network helpers | owner_dev_only | Keep masked; no raw sensitive detail. |
 | Live Cost Guard | `live-cost-guard` | Live cost/ops signals | Live Cost Guard rows | production_ready, needs_typeahead_search | Covered by Live Ops/Money search. |
 | Live Ops Fix Center | `live-ops-fix-center` | Live Ops incidents/remediation | Live Ops helpers | production_ready, needs_typeahead_search | Covered by Live Ops search. |
 | Legal | `legal` | Legal requests/evidence | Legal request helpers/RPCs | production_ready, needs_typeahead_search | Covered by Legal search. |
 | Ops Alerts | `ops-alerts` | Operational alerts | Admin ops read model | should_defer | Keep until broader System consolidation is safe. |
-| System | `system` | System/app config technical status | Runtime/app config/read models | owner_dev_only, production_ready | System cards are grouped by runtime/compliance/provider setup and open inspect-only drilldowns with source/status/no-secret boundaries. |
+| System | `system` | System/app config technical status | Runtime/app config + system history RPC | owner_dev_only, production_ready | System cards are grouped by runtime/compliance/provider setup and open inspect-only drilldowns with source/status/no-secret boundaries plus immutable audit/event history. External build/deploy/provider-dashboard history remains unclaimed. |
 
 Hidden compatibility money tabs such as Premium, Kill Switches, Ads, Revenue, Payouts, Sponsors, and Fraud are not part of the current visible Admin tab row; they remain mapped into Money Center section anchors.
 
@@ -109,7 +112,7 @@ Backed global Admin Search scopes:
 
 Unbacked/deferred search:
 
-- A full normal-user directory beyond staff/role/user-read models.
+- Destructive normal-user account operations such as ban, suspend, password reset, entitlement edit, or account deletion completion.
 - Raw provider payload search.
 - Secret, token, webhook-signature, service-role, or private security-context search.
 - Payout approval, revenue import activation, or live-money action search.
@@ -120,8 +123,8 @@ Current backed clickable details:
 
 - Staff roster user rows open masked admin-safe user detail sheets.
 - Staff roster rows can be filtered by role/status and searched within the already-loaded admin-safe roster.
-- Usage summaries open read-only usage detail sheets; missing backend models are explicitly labeled.
-- System cards open inspect-only detail sheets that do not render secrets or raw provider payloads.
+- Usage summaries open read-only usage detail sheets and recent usage/provider/room/media row detail.
+- System cards open inspect-only detail sheets and secret-safe system history rows that do not render secrets, metadata values, or raw provider payloads.
 - Reports open report detail.
 - DMCA cases open DMCA case detail.
 - Money events open Money Event Detail.
@@ -134,9 +137,9 @@ Current backed clickable details:
 
 Deferred detail work:
 
-- A broader Users tab needs a safe admin user-detail read model before normal profile/private operational data, Premium status, report/block status, or restriction status can be shown.
-- Usage needs row-level event/session/activity read models before every count becomes a real list.
-- System needs a richer system-event/build/deploy read model before every status card can open historical rows.
+- Users destructive/admin action workflows remain intentionally outside the read model.
+- Usage still needs true provider billing and LiveKit billing imports only if product policy wants them; current rows remain evidence, not billing truth.
+- System still needs an external build/deploy/provider-dashboard event source before those histories can be shown.
 - Canary/Ops Alerts remain specialized system-owned surfaces until their row models are safe to merge.
 
 ## Normal-User Denial
@@ -203,4 +206,4 @@ Required validation for this lane:
 
 ## Next Recommended Lane
 
-Next Admin lane should add the missing backed read models, not fake UI rows: broader admin-safe user directory/detail, usage event/session/activity rows, and system event/build/deploy history. Normal-user Android denial should also be recaptured with a safe normal-user session and a reliable owner-session restore path.
+Next Admin lane should recapture Android visual proof for the backed Users/Usage/System rows and normal-user Admin denial with a safe normal-user session plus reliable owner-session restore. External build/deploy/provider-dashboard history should only be added if a real event source exists; do not fake dashboard rows.
