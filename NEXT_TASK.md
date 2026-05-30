@@ -1,28 +1,31 @@
 # NEXT TASK
 
-## Recommended Lane: Android Release Candidate Build And Route Smoke Proof
+## Recommended Lane: Store Legal Account Deletion Acceptance Closeout
 
-Public V1 readiness audit is complete in `docs/PUBLIC_V1_READINESS_BLOCKER_MAP.md`.
+Public V1 eight-blocker burn-down is complete in `docs/PUBLIC_V1_READINESS_BLOCKER_MAP.md`.
 
 Current launch truth:
 
 - Chi'llywood is safe for continued controlled Android testing with live money off and honest scope.
 - Chi'llywood is not ready for broad public launch.
 - No new P0 app-code/security failure was found by the audit.
-- P0 blockers are current release-candidate Android proof and external store/legal/account-deletion acceptance.
-- The audit records 12 P1 blockers and 10 P2 deferrals.
-- Required validation passed: typecheck, runtime validation, all requested guards, Supabase migration list, linked schema lint, dry-run, and git diff checks.
-- Command proof lives at `/tmp/chillywood-public-v1-readiness-20260529/commands.log`.
-- Referenced Android proof remains in the existing `/tmp/chillywood-*` proof folders; this docs lane did not create new screenshots.
+- Current release Android build/install/open proof is now captured: release APK/AAB built, release APK installed on `R5CR120QCBF`, and the app opened past splash into Home.
+- Fresh route proof exists for Home, Explore, Live, Library, Profile, public Platform, Platform Studio, Player, Money Center, Admin, Watch-Party, Live Watch-Party, Spectator unavailable state, Settings/Profile Appearance, Support, Account Deletion, Copyright Report, Moderation Policy, Privacy, and Terms.
+- The only remaining P0 blocker is external store/legal/account-deletion acceptance.
+- The map records 12 P1 blockers and 10 P2 deferrals.
+- Proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`.
+- Full validation passed and is logged at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`.
+- Profile media manual proof remains partial by design: avatar edit sheet and Settings Appearance are proved, safe app-owned assets are staged, but save/read-back/remove/fallback is left for manual runtime proof later.
 
 Next lane scope:
 
-- Build/install a current release-like Android artifact from current `main`.
-- Capture app launch, splash/icon where feasible, Home, Explore, Library, Live, Profile, Platform, Platform Studio, Player, Watch-Party Live, Live Watch-Party where available, Spectator, Money Center, Admin, Rachi, Search, Settings, legal/support/account deletion, signed-out and signed-in handoffs.
-- Run release logging/redaction checks for tokens, signed URLs, provider payloads, service-role values, private identifiers, and noisy production logs.
-- Confirm release route smoke without adding features, changing LiveKit/Watch-Party/Premium behavior, or activating live money.
+- Finish Play Console listing/content rating/Data Safety/account-deletion acceptance.
+- Get attorney/legal approval for Terms, Privacy, DMCA/copyright, support, account deletion, moderation, Premium terms, and data safety claims.
+- Confirm support/account-deletion operational ownership, inbox routing, response SLA, and deletion request workflow.
+- Keep live money off and do not fake Premium, payouts, ads, earnings, or provider readiness.
+- Do not add new product features while closing this blocker.
 
-After that lane, close Profile media save/read-back and blocked/private fixtures, then store/legal acceptance.
+After that lane, close the smaller engineering/runtime leftovers: release diagnostics/log-redaction, full signed-out/signed-in route sweep, manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, and RevenueCat/Google signed sandbox proof only when the required devices/accounts/provider access exist.
 
 ## Previous Recommended Lane: Profile Media Runtime Save/Read-Back Proof
 

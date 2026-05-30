@@ -1,6 +1,6 @@
 # Provider-Link Readiness Runbook
 
-Last updated: May 27, 2026
+Last updated: May 29, 2026
 
 This runbook records the provider-link readiness scaffold for Premium, RevenueCat, Google Play Billing, Stripe, Stripe Connect, payouts, revenue imports, tips, paid content, Watch-Party seats, ads, and future commerce.
 
@@ -11,6 +11,8 @@ Platform Studio Money Center is the normal creator-facing home for these statuse
 Money Center also has inspection drilldowns. Creator Platform Studio rows open sanitized `Money Event Detail` sheets for creator-owned/source-safe setup, sandbox, readiness, ledger, provider, and switch events. Owner/Admin Money Center has `Money Audit Explorer` for source rows, provider readiness, kill switch state/audit, ledger/revenue/payout/webhook/sponsor/fraud setup rows, and blocked money actions. These drilldowns are inspect-only and cannot activate checkout, payouts, transfers, withdrawals, balances, paid access, Premium, or live money.
 
 May 29, 2026 Admin Search audit closeout: Owner/Admin `Search Admin` can search provider readiness and money audit rows only inside `/admin`, and those searches now write masked immutable audit events through `write_admin_search_audit`. The audit metadata records scope, query type, masked preview, status, and result count, but never provider secrets, raw payloads, webhook secret values, service-role values, authorization headers, or plaintext email search text. This is an audit/readiness hardening only; it does not change provider readiness state or enable live money.
+
+May 29, 2026 Public V1 eight-blocker burn-down provider refresh: proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`. Names-only Supabase secret inventory still found no `REVENUECAT_WEBHOOK_SECRET` or `GOOGLE_PLAY_WEBHOOK_SECRET`. Unsigned RevenueCat and Google Play webhook smoke returned setup-required/fail-closed responses with no Premium grant, no subscription grant, and no live-money action. Stripe Connect unsigned smoke still rejected invalid signatures. Android Money Center proof showed provider/money state as not active. This keeps RevenueCat/Google as setup/sandbox-only blockers for monetized launch and does not activate Premium, checkout, payouts, balances, paid content, tips, ads, or live money.
 
 ## Readiness Source Of Truth
 

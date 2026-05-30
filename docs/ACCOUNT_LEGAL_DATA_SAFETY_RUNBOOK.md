@@ -1,12 +1,18 @@
 # Account, Legal, And Play Data Safety Runbook
 
-Date: 2026-04-27
+Date: 2026-05-29
 
 Lane: Account deletion / legal URLs / Play Data Safety
 
 Purpose: prepare Chi'llywood's account deletion, legal/support URL, content policy, copyright/DMCA, user-generated-content safety, and Google Play Data Safety readiness without deleting accounts, changing external dashboards, or claiming legal approval.
 
 This runbook is not legal advice and does not complete Google Play Console submission. It is a repo-backed source of truth for what the app currently supports and what a release owner must enter or verify manually.
+
+## May 29, 2026 Public V1 Burn-Down Update
+
+Current Android release proof is captured at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`. The release APK installed and opened on `R5CR120QCBF`, Settings and legal/support/account-deletion routes were captured, and the public legal/support URL audit returned HTTP 200 for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms after redirects where applicable.
+
+This proof confirms the legal/account surfaces are reachable in the current build. It does not complete Play Console Data Safety, content rating, store listing entry, account deletion URL acceptance, attorney approval, support/account-deletion SLA ownership, or final external operations acceptance.
 
 ## Official References To Recheck Before Submission
 

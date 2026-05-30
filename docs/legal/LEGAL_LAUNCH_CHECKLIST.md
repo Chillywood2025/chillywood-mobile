@@ -1,8 +1,12 @@
 # Legal Launch Checklist
 
-Last updated: May 22, 2026
+Last updated: May 29, 2026
 
 > Repo launch note: Attorney review required before public launch. This checklist is the status map for repo policy drafting and external legal/setup blockers.
+
+## May 29, 2026 Public V1 Burn-Down Proof
+
+Public V1 eight-blocker burn-down proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`. The release APK installed and opened on Android device `R5CR120QCBF`, in-app Settings/Support/Account Deletion/Privacy/Terms/Copyright Report/Moderation Policy routes were captured, and public legal/support URLs returned HTTP 200 after redirects where applicable. This closes the current repo/runtime proof that the legal surfaces are reachable, but it does not complete attorney approval, Google Play Data Safety/content-rating/listing entry, account deletion URL acceptance, support/account-deletion SLA ownership, or external legal operations acceptance.
 
 ## May 21, 2026 Production Legal Policy Source
 

@@ -13,39 +13,57 @@ Chi'llywood is safe enough for continued controlled Android testing when live mo
 
 No P0 code/security failure was found in this audit. The current hard launch blockers are release/store/legal proof blockers rather than newly discovered app-code regressions.
 
-Counts in this map:
+Counts after the May 29, 2026 eight-blocker burn-down:
 
-- P0 blockers: 2
+- P0 blockers: 1
 - P1 blockers: 12
 - P2 deferrals: 10
 
 Command proof:
 
 - Full command log: `/tmp/chillywood-public-v1-readiness-20260529/commands.log`
+- Eight-blocker burn-down validation log: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`
 - All required commands returned status `0`.
 - `supabase db lint --linked --schema public --fail-on error` reported no schema errors.
 - `supabase db push --dry-run` reported the remote database is up to date.
-- `git status --short` showed only `?? artifacts/` and `?? supabase/.temp/`.
+- Burn-down targeted proof showed only docs/state files changed; app code, native code, Supabase migrations/functions, guard scripts, LiveKit token issuer, Watch-Party route ownership, old-room handling, Premium gates, RLS, and money code were untouched.
+- `git status --short` showed only docs/state changes plus existing untracked `?? artifacts/` and `?? supabase/.temp/`.
 
 Android proof posture:
 
 - Device available during audit: `R5CR120QCBF`.
-- This docs lane references current proof instead of creating new screenshots.
+- The eight-blocker burn-down created fresh current release proof at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`.
 - Current proof paths are listed below per area.
 - Missing screenshots are not claimed.
 
+## Eight Blocker Burn-Down Update
+
+Date: 2026-05-29
+Proof folder: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`
+
+| Blocker | Status after burn-down | Class after burn-down | Public test blocker | Broad launch blocker | Evidence | Remaining blocker / next lane |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1. Current release Android AAB/APK build/install/open proof | Partial, P0 build/install/open portion closed | P1 route-smoke/diagnostics | No for controlled Android test | Yes until final route/log smoke | `android/app/build/outputs/apk/release/app-release.apk` 196M sha256 `1341122010fad711ab256f5c04a6c67000061346aeaca5c95b7a54194aa6f21b`; `android/app/build/outputs/bundle/release/app-release.aab` 126M sha256 `fbe91629a16e3d0143106296d527b91e86bbb1dad80f3a53b01994d416be2f0a`; install `Success`; screenshots `01` through `19`, `43` through `50` in the proof folder | Full signed-out/signed-in route sweep, release diagnostics/log-redaction, Crashlytics/Performance/vitals proof |
+| 2. Store/legal/account-deletion acceptance | Partial | P0 | Yes for public distribution | Yes | Public legal URLs returned 200 in `public-legal-url-check.tsv`; in-app Settings, Support, Account Deletion, Privacy, Terms, Copyright Report, and Moderation Policy routes captured | External Play Console/Data Safety/content-rating/account-deletion acceptance, attorney/legal approval, support/account deletion SLA ownership |
+| 3. Profile media save/read-back/remove/fallback proof | Partial | P1 | Yes for media personalization claim | Yes for broad social launch | Owner Profile avatar edit sheet opens; Settings `Profile Appearance` shows Profile Photo/Profile Background; safe app-owned proof assets staged on device in `safe-profile-media-assets-on-device.txt`; proof screenshots `21`, `26`, `30` | User will complete manual picker/save later. Current native picker surfaced Android file picker rather than a gallery-first surface; save/read-back/remove/fallback and public masking are not claimed |
+| 4. Second-account, blocked, private runtime fixtures | Blocked | P1 | Yes for broad social proof | Yes | Source/guard proof remains current; no second account credentials or safe blocked/private fixtures were available | Provide owner account, normal viewer account, signed-out state, backend blocked relation, private profile/platform fixture, and owner-session restore path |
+| 5. Watch-Party Live two-device/reconnect proof | Blocked | P1 | Yes if broad live launch is promoted | Yes for broad live launch | `adb-devices-for-two-device-proof.txt` shows only `R5CR120QCBF`; current Watch-Party and Live Watch-Party route screenshots captured | Second device/emulator plus second account; prove remote speech ducking/restoration, reconnect, old-room handling, and no route ownership regression |
+| 6. Spectator Live Watch-Party / Reaction fixture proof | Blocked | P1 | Yes if Spectator live reaction is promoted | Yes | `48-spectator-t1-route.png` proves unavailable state for ineligible/private metadata; Spectator guard remains current | True public-safe live-stage-compatible source, Reaction source, replay archive, private/ineligible/ended/reuse-disabled fixtures |
+| 7. RevenueCat/Google provider proof | Partial | P1 for monetized launch | No while live money/Premium claims stay off | Yes for monetized launch | `provider-secret-name-inventory.txt` shows no RevenueCat/Google webhook secret names; `provider-webhook-smoke.tsv` shows RevenueCat/Google setup-required/fail-closed with no Premium/live-money action; Money Center screenshot shows `Not active` | Link RevenueCat/Google provider secrets and dashboard permissions server-side; run signed sandbox events without granting fake Premium/live money |
+| 8. Moderation/legal ops runtime closure | Partial | P0/P1 | Yes for public distribution | Yes | Support, Copyright Report, Moderation Policy, Admin Reports tab, and public legal URLs captured | Attorney/legal approval, external inbox/provider ownership, report lifecycle/admin action proof, account deletion operations, profile-media moderation/admin removal proof |
+
 ## Top 10 Launch Blockers
 
-1. **P0 - Current release candidate proof is missing.** A current `main` Play-style AAB/APK install plus app-open and route smoke must be captured before public release.
-2. **P0 - Store/legal acceptance is not complete.** Attorney/legal approval, Play Data Safety, account deletion URL acceptance, listing/content rating, and final support/account-deletion ownership remain external blockers.
-3. **P1 - Profile media runtime closure is incomplete.** Avatar/background picker opens, but save/read-back/remove/fallback/public masking still needs a safe app-owned asset and owner/backend proof.
-4. **P1 - Second-account, blocked, and private runtime fixtures remain incomplete.** API/static proof exists, but full runtime fixture proof must not be faked.
-5. **P1 - Broad current route smoke is referenced, not freshly captured in this lane.** A final release-candidate route sweep is still required.
-6. **P1 - Watch-Party Live two-device speech/reconnect proof remains incomplete.** Single-device controls are proved; true remote speech ducking needs two joined devices/accounts.
-7. **P1 - Spectator Live Watch-Party / Reaction needs a true compatible source fixture.** Replay and Watch-Party Live child room are proved; VOD/replay must not be relabeled as live.
-8. **P1 - Provider setup remains sandbox/setup-only.** RevenueCat/Google signed webhook proof and external provider permissions/secrets remain incomplete for broad monetized launch.
-9. **P1 - Moderation/legal ops have remaining runtime/ops gaps.** Attorney review, automated malware scanning, outbound email automation, richer general report lifecycle proof, and profile-media admin review tooling remain pending.
-10. **P1 - Release diagnostics/logging proof remains pending.** Firebase Crashlytics/Performance, production log redaction, Android vitals/pre-launch report, and release log audit must be run on the release candidate.
+1. **P0 - Store/legal/account-deletion acceptance is not complete.** Attorney/legal approval, Play Data Safety, account deletion URL acceptance, listing/content rating, and final support/account-deletion ownership remain external blockers.
+2. **P1 - Profile media runtime closure is incomplete.** Owner avatar/settings entry and safe assets are proved, but save/read-back/remove/fallback/public masking still need manual safe-asset proof.
+3. **P1 - Second-account, blocked, and private runtime fixtures remain incomplete.** API/static proof exists, but full runtime fixture proof must not be faked.
+4. **P1 - Watch-Party Live two-device speech/reconnect proof remains incomplete.** Single-device/current route proof exists; true remote speech ducking needs two joined devices/accounts.
+5. **P1 - Spectator Live Watch-Party / Reaction needs a true compatible source fixture.** Ineligible unavailable state is captured; VOD/replay must not be relabeled as live.
+6. **P1 - Provider setup remains sandbox/setup-only.** RevenueCat/Google signed webhook proof and external provider permissions/secrets remain incomplete for broad monetized launch.
+7. **P1 - Moderation/legal ops have remaining runtime/ops gaps.** Attorney review, automated malware scanning, outbound email automation, richer report lifecycle proof, and profile-media admin review tooling remain pending.
+8. **P1 - Release diagnostics/logging proof remains pending.** Firebase Crashlytics/Performance, production log redaction, Android vitals/pre-launch report, and release log audit must be run on the release candidate.
+9. **P1 - Full signed-out/signed-in release route sweep remains pending.** The current release build opened core authenticated routes, but fixture-backed account-state proof is still incomplete.
+10. **P1 - Creator upload/playback release lifecycle needs one final current-build proof.** Player route opened; full upload/draft/publish/unpublish/delete lifecycle remains a release-candidate smoke task.
 
 ## Top 10 Safe Deferrals
 
@@ -82,7 +100,7 @@ Android proof posture:
 
 ## Not Ready For Broad Public Launch
 
-- No fresh release-candidate AAB/APK plus full app-open route smoke was captured in this audit.
+- Fresh release-candidate APK/AAB build, install, open, Home/bottom-nav smoke, and several core authenticated routes were captured, but full signed-out/signed-in route sweep and release diagnostics remain incomplete.
 - Play Console listing, content rating, Data Safety, account deletion acceptance, and final store assets are not complete.
 - Attorney/legal approval remains required for launch policy text and support/account-deletion process.
 - Profile media save/read-back/remove/fallback and public masking runtime proof remains open.
@@ -93,23 +111,23 @@ Android proof posture:
 
 ## Android-Only Release Readiness
 
-Status: **partial, launch-blocked for broad public release**.
+Status: **partial; current build/install/open proof is closed, broad public release still blocked**.
 
 Evidence:
 
 - App identity exists in `app.json`: app name `Chi'llywood`, package `com.chillywood.mobile`, scheme `chillywoodmobile`, icon/splash/adaptive icon assets.
 - `eas.json` has `production` App Bundle and `production-apk` internal APK profiles.
 - Google Play package/developer verification is recorded complete in `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`.
-- Earlier EAS/Internal Test purchase proof exists for versionCode 3, but this audit did not build or install a current release candidate from `5ed7db5`.
-- Current device proof is referenced from `/tmp`, not freshly captured here.
+- Earlier EAS/Internal Test purchase proof exists for versionCode 3.
+- The eight-blocker burn-down built `assembleRelease` and `bundleRelease` from current `main`, installed the release APK on `R5CR120QCBF`, opened past splash, captured Home/bottom nav, and captured Profile, public Platform, Platform Studio, Player, Money Center, Admin, Watch-Party, Live Watch-Party, Spectator unavailable state, Settings/legal/support routes, Privacy, and Terms.
 
-Launch blocker:
+Remaining launch blocker:
 
-- Build/install/open current release candidate and capture Home, Explore, Library, Live, Profile, Platform, Studio, Player, Watch-Party, Spectator, Money Center, Admin, Rachi, Search, Settings, legal/support, and signed-out/signed-in handoffs.
+- Complete the full signed-out/signed-in route sweep, release diagnostics/log redaction, Android vitals/pre-launch report, and fixture-backed Profile/media/privacy/live/Spectator proofs.
 
 Recommended next lane:
 
-- Android Release Candidate Build And Route Smoke Proof.
+- Store Legal Account Deletion Acceptance Closeout, plus a smaller release diagnostics and signed-out/signed-in route-smoke follow-up.
 
 ## iOS Summary
 
@@ -162,7 +180,7 @@ Blockers:
 
 | Area | Status | Class | Launch-blocking | Evidence / proof path | Files / routes involved | Exact blocker | Recommended next lane |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1. App launch / Android release | Partial | P0/P1 | Yes | `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`, `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`, existing `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/` | `app.json`, `app.config.ts`, `eas.json`, Android package `com.chillywood.mobile` | Current release-candidate AAB/APK build/install/open and full route smoke were not captured in this lane. | Android Release Candidate Build And Route Smoke Proof |
+| 1. App launch / Android release | Partial | P1 | Yes for broad launch diagnostics, no for controlled Android test | `docs/ANDROID_RELEASE_EAS_RUNBOOK.md`, `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md`, `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`, existing `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/` | `app.json`, `app.config.ts`, `eas.json`, Android package `com.chillywood.mobile` | Current release APK/AAB build/install/open is proved; full signed-out/signed-in route sweep, release diagnostics/log-redaction, and Play pre-launch/vitals proof remain. | Release Diagnostics And Route Smoke Closeout |
 | 2. Auth / onboarding / account | Partial | P0/P1 | Yes for public release | `docs/legal/LEGAL_LAUNCH_CHECKLIST.md`, `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`, `docs/public-v1-release-checklist.md` | `app/(auth)`, `app/settings.tsx`, `app/account-deletion.tsx`, `app/privacy.tsx`, `app/terms.tsx`, `app/support.tsx` | Legal approval, Play account deletion acceptance, support/account deletion SLA, and release signup/session smoke remain. | Legal Store Acceptance And Release Auth Smoke |
 | 3. Navigation / IA | Ready for controlled test | P1 final smoke | No, unless release smoke fails | `/tmp/chillywood-modern-nav-ia-proof-20260528/`, `/tmp/chillywood-home-profile-cleanup-proof-20260529/`, guards passed | `app/(tabs)/index.tsx`, `app/(tabs)/explore.tsx`, `app/(tabs)/live.tsx`, `app/(tabs)/my-list.tsx`, `app/profile/[userId].tsx`, `docs/NAVIGATION_TERMINOLOGY_MAP.md` | Needs final release-candidate no-regression smoke only. | Android Route Smoke |
 | 4. Home / Explore / Library | Partial-ready | P1 | No for closed test | `/tmp/chillywood-home-continue-watching-proof-20260529/`, `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/`, `/tmp/chillywood-explore-people-search-proof-20260529/`, `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/` | `app/(tabs)/index.tsx`, `app/(tabs)/explore.tsx`, `app/(tabs)/my-list.tsx`, `_lib/publicPeopleSearch.ts`, `_lib/discoveryFeed.ts` | Final current release route smoke and non-Rachi public user fixture proof remain. | Public Discovery Release Smoke |
@@ -183,7 +201,7 @@ Blockers:
 
 ## Validation Commands
 
-All commands below passed with status `0` in `/tmp/chillywood-public-v1-readiness-20260529/commands.log`:
+All commands below passed with status `0` in both `/tmp/chillywood-public-v1-readiness-20260529/commands.log` and the May 29 eight-blocker burn-down validation log `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`:
 
 - `git status --short`
 - `git log --oneline -5`
@@ -215,6 +233,7 @@ All commands below passed with status `0` in `/tmp/chillywood-public-v1-readines
 
 ## Proof Paths Referenced
 
+- `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`
 - `/tmp/chillywood-admin-denial-ia-drilldown-proof-20260529/`
 - `/tmp/chillywood-admin-main-tabs-ui-ux-audit-proof-20260529/`
 - `/tmp/chillywood-explore-typeahead-admin-search-proof-20260529/`
@@ -238,14 +257,16 @@ All commands below passed with status `0` in `/tmp/chillywood-public-v1-readines
 
 ## Next Recommended Lane
 
-Run **Android Release Candidate Build And Route Smoke Proof** first.
+Run **Store Legal Account Deletion Acceptance Closeout** first, while keeping Profile media manual runtime proof as the next owner-device follow-up.
 
 Scope:
 
-- build/install a current release-like Android artifact from current `main`
-- capture app launch, legal/settings/support, Home, Explore, Library, Live, Profile, Platform, Platform Studio, Player, Watch-Party Live, Live Watch-Party where available, Spectator, Money Center, Admin, Rachi, Search, signed-out and signed-in handoffs
-- run release logging/redaction checks
+- finish Play Console listing/content rating/Data Safety/account-deletion acceptance
+- get attorney/legal approval for launch policies, account deletion, copyright/DMCA, support, moderation, and data safety claims
+- confirm support/account-deletion ownership, SLA, and operational inbox routing
+- keep release diagnostics/log-redaction and signed-out/signed-in route smoke as the next engineering follow-up
+- let the owner finish Profile media picker/save/read-back/remove/fallback manually with safe app-owned assets
 - do not activate live money
 - do not add new features
 
-After that, close Profile media save/read-back and privacy fixtures, then store/legal acceptance.
+After that, close Profile media save/read-back and privacy fixtures, Watch-Party two-device proof, Spectator live-compatible fixture proof, and RevenueCat/Google signed sandbox proof only when their required accounts/devices/provider access exist.
