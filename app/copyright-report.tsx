@@ -178,7 +178,7 @@ export default function CopyrightReportPage() {
       setAttachments([]);
       Alert.alert(
         "Copyright report received",
-        `Case ${result.caseNumber} has been recorded for review.${uploadedCount ? ` ${uploadedCount} evidence file${uploadedCount === 1 ? "" : "s"} uploaded for manual malware review.` : ""}`,
+        `Case ${result.caseNumber} has been recorded for review.${uploadedCount ? ` ${uploadedCount} evidence file${uploadedCount === 1 ? "" : "s"} uploaded and queued for malware scanning.` : ""}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit this copyright report right now.";
@@ -279,7 +279,7 @@ export default function CopyrightReportPage() {
           <View style={styles.attachmentBox}>
             <Text style={styles.disabledTitle}>Evidence files</Text>
             <Text style={styles.disabledText}>
-              Optional screenshots, PDFs, WebP/JPEG/PNG images, or plain-text notes. Files are private to legal operators. Automated malware scanning is not configured; uploads are marked pending manual review.
+              Optional screenshots, PDFs, WebP/JPEG/PNG images, or plain-text notes. Files are private to legal operators and are queued for malware scanning before operators rely on them.
             </Text>
             <TouchableOpacity style={[styles.secondaryButton, busy && styles.disabled]} disabled={busy} onPress={pickAttachments}>
               <Text style={styles.secondaryButtonText}>Add Evidence Files</Text>
@@ -335,7 +335,7 @@ export default function CopyrightReportPage() {
               <Text style={styles.successText}>{submittedCaseNumber}</Text>
               <Text style={styles.successMeta}>
                 {submittedAttachmentCount
-                  ? `${submittedAttachmentCount} evidence file${submittedAttachmentCount === 1 ? "" : "s"} uploaded; scan status pending manual review.`
+                  ? `${submittedAttachmentCount} evidence file${submittedAttachmentCount === 1 ? "" : "s"} uploaded; scan status pending.`
                   : `No evidence files uploaded. Supporting files can still be sent to ${LEGAL_SUPPORT_EMAIL} with the case number.`}
               </Text>
             </View>

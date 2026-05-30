@@ -57,6 +57,14 @@ export type SocialAttachmentSurfaceType =
   | "watch_party_room_message";
 
 export type SocialAttachmentKind = "image" | "video" | "audio" | "document" | "file";
+export type SocialAttachmentScanStatus =
+  | "pending_scan"
+  | "scanning"
+  | "clean"
+  | "malware_detected"
+  | "scan_failed"
+  | "manual_review"
+  | "quarantined";
 
 export type SocialAttachmentFile = {
   uri: string;
@@ -81,16 +89,29 @@ export type SocialAttachment = {
   moderationReason: string | null;
   moderatedAt: string | null;
   moderatedBy: string | null;
+  scanStatus: SocialAttachmentScanStatus;
+  scanProvider: string | null;
+  scanResult: string | null;
+  scannedAt: string | null;
+  scanError: string | null;
   createdAt: string;
   updatedAt: string;
   signedUrl: string;
 };
 
-type SocialAttachmentRow = Tables<"social_attachments">;
+type SocialAttachmentRow = Tables<"social_attachments"> & {
+  scan_status?: string | null;
+  scan_provider?: string | null;
+  scan_result?: string | null;
+  scanned_at?: string | null;
+  scan_error?: string | null;
+};
 type SocialAttachmentInsert = TablesInsert<"social_attachments">;
 
 const SOCIAL_ATTACHMENT_SELECT =
-  "id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,size_bytes,original_file_name,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at";
+  "id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,size_bytes,original_file_name,moderation_status,moderation_reason,moderated_at,moderated_by,scan_status,scan_provider,scan_result,scanned_at,scan_error,created_at,updated_at";
+
+const SOCIAL_ATTACHMENT_PUBLIC_SAFE_SCAN_STATUSES = ["clean", "manual_review"] as const;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -263,6 +284,26 @@ const normalizeModerationStatus = (value: unknown): SocialAttachment["moderation
   return "clean";
 };
 
+const normalizeScanStatus = (value: unknown): SocialAttachmentScanStatus => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "pending_scan"
+    || normalized === "scanning"
+    || normalized === "clean"
+    || normalized === "malware_detected"
+    || normalized === "scan_failed"
+    || normalized === "manual_review"
+    || normalized === "quarantined"
+  ) {
+    return normalized;
+  }
+  return "pending_scan";
+};
+
+export const isSocialAttachmentScanPublicSafe = (status?: string | null) => (
+  (SOCIAL_ATTACHMENT_PUBLIC_SAFE_SCAN_STATUSES as readonly string[]).includes(normalizeScanStatus(status))
+);
+
 async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAttachment> {
   const storagePath = toText(row.storage_path);
   const storageProvider = normalizeMediaStorageProvider(row.storage_provider);
@@ -272,15 +313,22 @@ async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAt
     fallbackBucket: SOCIAL_ATTACHMENT_BUCKET,
   });
   const storageObjectKey = toText(row.storage_object_key) || storagePath;
-  const signedUrl = storageProvider === "s3" && storageObjectKey
-    ? await createSignedMediaDownload({
-      surfaceType: "social_attachment",
-      provider: storageProvider,
-      bucket: storageBucket,
-      objectKey: storageObjectKey,
-      recordId: toText(row.id),
-    }).catch(() => "")
-    : await createSupabaseSignedUrl(storagePath);
+  const scanStatus = normalizeScanStatus(row.scan_status);
+  const moderationStatus = normalizeModerationStatus(row.moderation_status);
+  const canDisplayAttachment = moderationStatus !== "hidden"
+    && moderationStatus !== "removed"
+    && isSocialAttachmentScanPublicSafe(scanStatus);
+  const signedUrl = canDisplayAttachment
+    ? storageProvider === "s3" && storageObjectKey
+      ? await createSignedMediaDownload({
+        surfaceType: "social_attachment",
+        provider: storageProvider,
+        bucket: storageBucket,
+        objectKey: storageObjectKey,
+        recordId: toText(row.id),
+      }).catch(() => "")
+      : await createSupabaseSignedUrl(storagePath)
+    : "";
 
   return {
     id: toText(row.id),
@@ -294,10 +342,15 @@ async function parseSocialAttachment(row: SocialAttachmentRow): Promise<SocialAt
     mimeType: toText(row.mime_type) || "application/octet-stream",
     sizeBytes: Math.max(0, Number(row.size_bytes ?? 0) || 0),
     originalFileName: toText(row.original_file_name) || null,
-    moderationStatus: normalizeModerationStatus(row.moderation_status),
+    moderationStatus,
     moderationReason: toText(row.moderation_reason) || null,
     moderatedAt: toText(row.moderated_at) || null,
     moderatedBy: toText(row.moderated_by) || null,
+    scanStatus,
+    scanProvider: toText(row.scan_provider) || null,
+    scanResult: toText(row.scan_result) || null,
+    scannedAt: toText(row.scanned_at) || null,
+    scanError: toText(row.scan_error) || null,
     createdAt: toText(row.created_at) || new Date().toISOString(),
     updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
     signedUrl,
@@ -319,6 +372,7 @@ export async function readSocialAttachmentsForSurfaces(
     .in("surface_id", normalizedSurfaceIds)
     .is("deleted_at", null)
     .in("moderation_status", ["clean", "reported"])
+    .in("scan_status", [...SOCIAL_ATTACHMENT_PUBLIC_SAFE_SCAN_STATUSES])
     .order("created_at", { ascending: true })
     .limit(Math.max(1, Math.min(200, normalizedSurfaceIds.length * 4)))
     .returns<SocialAttachmentRow[]>();
@@ -359,7 +413,7 @@ export async function createSocialAttachmentForSurface(input: {
     sizeBytes: input.file.size,
   });
 
-  const payload: SocialAttachmentInsert = {
+  const payload: SocialAttachmentInsert & Record<string, unknown> = {
     id,
     owner_user_id: userId,
     surface_type: input.surfaceType,
@@ -372,6 +426,11 @@ export async function createSocialAttachmentForSurface(input: {
     size_bytes: Math.max(0, Number(input.file.size ?? 0) || 0),
     original_file_name: fileName,
     moderation_status: "clean",
+    scan_status: "pending_scan",
+    scan_provider: "clamav",
+    scan_result: null,
+    scanned_at: null,
+    scan_error: null,
     updated_at: new Date().toISOString(),
   };
 

@@ -210,7 +210,18 @@ export type DmcaAttachment = {
   originalFilename: string;
   mimeType: string;
   sizeBytes: number;
-  scanStatus: "pending_manual_review" | "not_configured" | "clean" | "quarantined" | "rejected" | string;
+  scanStatus:
+    | "pending_manual_review"
+    | "pending_scan"
+    | "scanning"
+    | "scan_failed"
+    | "manual_review"
+    | "not_configured"
+    | "clean"
+    | "malware_detected"
+    | "quarantined"
+    | "rejected"
+    | string;
   scanProvider: string;
   scanNotes: string | null;
   retentionStatus: string;
@@ -438,8 +449,8 @@ const parseAttachment = (row: any): DmcaAttachment => ({
   originalFilename: toText(row.original_filename),
   mimeType: toText(row.mime_type),
   sizeBytes: Number(row.size_bytes ?? 0),
-  scanStatus: toText(row.scan_status) || "pending_manual_review",
-  scanProvider: toText(row.scan_provider) || "manual_review_required",
+  scanStatus: toText(row.scan_status) || "pending_scan",
+  scanProvider: toText(row.scan_provider) || "clamav",
   scanNotes: toText(row.scan_notes) || null,
   retentionStatus: toText(row.retention_status) || "active_legal_hold",
   preservedForEvidence: row.preserved_for_evidence !== false,

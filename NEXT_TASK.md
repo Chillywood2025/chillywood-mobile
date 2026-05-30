@@ -14,14 +14,14 @@ Current launch truth:
 - The remaining P0 is external Play/Data Safety/account-deletion/legal acceptance, not a repo code blocker.
 - Current release Android build/install/open proof is now captured: release APK/AAB built, release APK installed on `R5CR120QCBF`, and the app opened past splash into Home.
 - Fresh route proof exists for Home, Explore, Live, Library, Profile, public Platform, Platform Studio, Player, Money Center, Admin, Watch-Party, Live Watch-Party, Spectator unavailable state, Settings/Profile Appearance, Support, Account Deletion, Copyright Report, Moderation Policy, Privacy, and Terms.
-- The map records 11 P1 blockers and 11 P2 deferrals after the malware-scanning launch-policy decision closeout.
+- The map records 12 P1 blockers and 10 P2 deferrals after the malware-scanning pipeline implementation. Scanner implementation is repo-side complete; deployment/runtime proof is still pending.
 - Proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`.
 - Full validation passed and is logged at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`.
 - Store/legal/account-deletion ops proof lives at `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/`.
 - Admin Users/Usage/System read-model gaps are now backend-backed where the current schema supports them. Remote-applied migrations `20260530173834`, `20260530174810`, and `20260530180452` add permission-gated RPCs for broader Users account/Premium/report/block/profile-media/deletion-request signals, recent Usage rows, and System history over immutable audit/event tables. System history now includes real provider readiness audit and Stripe provider webhook event rows when backed; database proof returned 59 provider rows without returning provider payload values or secrets. The mobile Admin UI reads them through `_lib/adminReadModels.ts` without exposing auth secrets, raw storage paths, provider secrets, LiveKit tokens, raw room tokens, service-role keys, metadata values, provider payload values, or destructive account controls. Current Android release proof lives at `/tmp/chillywood-admin-read-model-gap-closeout-20260530/` and captures Users, Usage, and System read-model surfaces. Remaining Admin gap is release build/deploy history because no backed event table/source exists for it yet.
 - Public legal URLs returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms.
 - Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`; DKIM remains unverified until a real outbound provider issues/publishes selector records and test delivery is proved.
-- Malware scanning decision is closed for controlled Public V1: automated scanner integration is not configured, required, or claimed for the current controlled Android/public-test launch boundary. Current protection remains validation, storage policy, visibility gates, moderation status, admin action, and manual review. Broad/high-volume UGC scanner integration is a P2 future provider lane unless Play/legal review explicitly requires it for the chosen release scope.
+- Malware scanning is now implemented repo-side: new media scan metadata, `media_scan_jobs`, service-role scan RPCs, upload/update triggers, public-safe rendering gates, and a Dockerized ClamAV worker live in the repo. Production deployment/runtime proof is still pending, so do not claim scanner coverage is operational until the worker is deployed with server-side secrets and a benign/blocked fixture proof passes.
 - Support/moderation/account deletion roles and SLA targets are mapped, but staffing and final operating acceptance remain external.
 - Profile media manual proof remains partial by design: avatar edit sheet and Settings Appearance are proved, safe app-owned assets are staged, but save/read-back/remove/fallback is left for manual runtime proof later.
 - Blocker 8 moderation/legal ops is repo-side closed as an app-code/schema blocker: general safety reports, admin status/action RPCs, immutable report audit rows, DMCA tooling, Profile media report actions, and Profile media hide/remove/restore/masking are backed. Remaining Blocker 8 work is external operations and optional disposable-fixture visual proof, logged at `/tmp/chillywood-blocker8-moderation-legal-closeout-20260529/`.
@@ -33,14 +33,14 @@ External lane scope:
 - Confirm support/account-deletion operational ownership, inbox routing, response SLA, and deletion request workflow.
 - Confirm the human moderation/support owner and operational playbook for general reports, profile-media reports, DMCA, appeals, and account deletion.
 - Select and verify outbound email provider/DKIM if automated support/legal receipts will be claimed.
-- Do not claim automated malware scanning. Keep the current validation/manual-review policy unless Play/legal review explicitly reclassifies scanner integration as required, then run a dedicated scanner foundation lane before making scanner claims.
+- Do not claim production malware scanning is operational until the ClamAV worker deployment and runtime proof are captured. The implementation exists; the next scanner work is deployment/proof, not foundation.
 - Keep live money off and do not fake Premium, payouts, ads, earnings, or provider readiness.
 - Do not add new product features while closing this blocker.
 
 Next engineering lane if external Play/legal work is being handled manually:
 
 - Release Diagnostics And Signed-Out/Signed-In Route Smoke Closeout.
-- Then close manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, RevenueCat/Google signed sandbox proof, and release build/deploy history only if a real event source is added.
+- Then close Malware Scanner Deployment And Runtime Proof, manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, RevenueCat/Google signed sandbox proof, and release build/deploy history only if a real event source is added.
 
 ## Previous Recommended Lane: Profile Media Runtime Save/Read-Back Proof
 

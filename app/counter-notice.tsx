@@ -189,7 +189,7 @@ export default function CounterNoticePage() {
       }
 
       setAttachments([]);
-      setNotice(`Counter-notice received.${uploadedCount ? ` ${uploadedCount} evidence file${uploadedCount === 1 ? "" : "s"} uploaded for manual malware review.` : ""}`);
+      setNotice(`Counter-notice received.${uploadedCount ? ` ${uploadedCount} evidence file${uploadedCount === 1 ? "" : "s"} uploaded and queued for malware scanning.` : ""}`);
       Alert.alert("Counter-notice received", "Your counter-notice has been recorded for legal review.");
       await loadCase();
     } catch (error) {
@@ -329,7 +329,7 @@ export default function CounterNoticePage() {
           <View style={styles.attachmentBox}>
             <Text style={styles.boxTitle}>Evidence files</Text>
             <Text style={styles.boxText}>
-              Optional screenshots, PDFs, images, or plain-text evidence. Files are private to legal operators. Automated malware scanning is not configured; uploads are marked pending manual review.
+              Optional screenshots, PDFs, images, or plain-text evidence. Files are private to legal operators and are queued for malware scanning before operators rely on them.
             </Text>
             <TouchableOpacity style={[styles.secondaryButton, busy && styles.disabled]} disabled={busy} onPress={pickAttachments}>
               <Text style={styles.secondaryButtonText}>Add Evidence Files</Text>

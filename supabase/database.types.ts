@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       admin_canary_runs: {
@@ -4309,6 +4284,90 @@ export type Database = {
           },
         ]
       }
+      media_scan_jobs: {
+        Row: {
+          attempt_count: number
+          claimed_at: string | null
+          claimed_by: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          finding_name: string | null
+          id: string
+          max_attempts: number
+          metadata: Json
+          mime_type: string | null
+          owner_user_id: string | null
+          priority: number
+          scanner_provider: string | null
+          scanner_version: string | null
+          signature_version: string | null
+          size_bytes: number
+          status: string
+          storage_bucket: string
+          storage_object_key: string
+          storage_provider: string
+          target_column: string
+          target_id: string
+          target_table: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          finding_name?: string | null
+          id?: string
+          max_attempts?: number
+          metadata?: Json
+          mime_type?: string | null
+          owner_user_id?: string | null
+          priority?: number
+          scanner_provider?: string | null
+          scanner_version?: string | null
+          signature_version?: string | null
+          size_bytes?: number
+          status?: string
+          storage_bucket: string
+          storage_object_key: string
+          storage_provider?: string
+          target_column: string
+          target_id: string
+          target_table: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          finding_name?: string | null
+          id?: string
+          max_attempts?: number
+          metadata?: Json
+          mime_type?: string | null
+          owner_user_id?: string | null
+          priority?: number
+          scanner_provider?: string | null
+          scanner_version?: string | null
+          signature_version?: string | null
+          size_bytes?: number
+          status?: string
+          storage_bucket?: string
+          storage_object_key?: string
+          storage_provider?: string
+          target_column?: string
+          target_id?: string
+          target_table?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       media_security_audit_events: {
         Row: {
           action: string
@@ -5469,6 +5528,12 @@ export type Database = {
           moderation_status: string
           original_file_name: string | null
           owner_user_id: string
+          quarantined_at: string | null
+          scan_error: string | null
+          scan_provider: string | null
+          scan_result: string | null
+          scan_status: string
+          scanned_at: string | null
           storage_bucket: string
           storage_object_key: string
           storage_path: string
@@ -5492,6 +5557,12 @@ export type Database = {
           moderation_status?: string
           original_file_name?: string | null
           owner_user_id: string
+          quarantined_at?: string | null
+          scan_error?: string | null
+          scan_provider?: string | null
+          scan_result?: string | null
+          scan_status?: string
+          scanned_at?: string | null
           storage_bucket?: string
           storage_object_key: string
           storage_path: string
@@ -5515,6 +5586,12 @@ export type Database = {
           moderation_status?: string
           original_file_name?: string | null
           owner_user_id?: string
+          quarantined_at?: string | null
+          scan_error?: string | null
+          scan_provider?: string | null
+          scan_result?: string | null
+          scan_status?: string
+          scanned_at?: string | null
           storage_bucket?: string
           storage_object_key?: string
           storage_path?: string
@@ -5861,6 +5938,81 @@ export type Database = {
           target_user_id?: string | null
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      platform_money_kill_switch_audit: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          new_state: string
+          old_state: string | null
+          reason: string
+          security_context_id: string | null
+          switch_key: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          new_state: string
+          old_state?: string | null
+          reason: string
+          security_context_id?: string | null
+          switch_key: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          new_state?: string
+          old_state?: string | null
+          reason?: string
+          security_context_id?: string | null
+          switch_key?: string
+        }
+        Relationships: []
+      }
+      platform_money_kill_switches: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_label: string
+          id: string
+          key: string
+          owner_only_reason: string | null
+          reason: string | null
+          state: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_label: string
+          id?: string
+          key: string
+          owner_only_reason?: string | null
+          reason?: string | null
+          state: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_label?: string
+          id?: string
+          key?: string
+          owner_only_reason?: string | null
+          reason?: string | null
+          state?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -6958,6 +7110,12 @@ export type Database = {
           moderation_status: string
           original_file_name: string | null
           owner_user_id: string
+          quarantined_at: string | null
+          scan_error: string | null
+          scan_provider: string | null
+          scan_result: string | null
+          scan_status: string
+          scanned_at: string | null
           size_bytes: number
           storage_bucket: string
           storage_object_key: string | null
@@ -6978,6 +7136,12 @@ export type Database = {
           moderation_status?: string
           original_file_name?: string | null
           owner_user_id: string
+          quarantined_at?: string | null
+          scan_error?: string | null
+          scan_provider?: string | null
+          scan_result?: string | null
+          scan_status?: string
+          scanned_at?: string | null
           size_bytes?: number
           storage_bucket?: string
           storage_object_key?: string | null
@@ -6998,6 +7162,12 @@ export type Database = {
           moderation_status?: string
           original_file_name?: string | null
           owner_user_id?: string
+          quarantined_at?: string | null
+          scan_error?: string | null
+          scan_provider?: string | null
+          scan_result?: string | null
+          scan_status?: string
+          scanned_at?: string | null
           size_bytes?: number
           storage_bucket?: string
           storage_object_key?: string | null
@@ -8139,12 +8309,22 @@ export type Database = {
           profile_avatar_focal_y: number
           profile_avatar_media_flagged_at: string | null
           profile_avatar_media_status: string
+          profile_avatar_scan_error: string | null
+          profile_avatar_scan_provider: string | null
+          profile_avatar_scan_result: string | null
+          profile_avatar_scan_status: string
+          profile_avatar_scanned_at: string | null
           profile_background_fit_mode: string
           profile_background_focal_x: number
           profile_background_focal_y: number
           profile_background_media_flagged_at: string | null
           profile_background_media_status: string
           profile_background_overlay_strength: number
+          profile_background_scan_error: string | null
+          profile_background_scan_provider: string | null
+          profile_background_scan_result: string | null
+          profile_background_scan_status: string
+          profile_background_scanned_at: string | null
           profile_background_url: string | null
           profile_media_updated_at: string | null
           profile_visibility: string
@@ -8175,12 +8355,22 @@ export type Database = {
           profile_avatar_focal_y?: number
           profile_avatar_media_flagged_at?: string | null
           profile_avatar_media_status?: string
+          profile_avatar_scan_error?: string | null
+          profile_avatar_scan_provider?: string | null
+          profile_avatar_scan_result?: string | null
+          profile_avatar_scan_status?: string
+          profile_avatar_scanned_at?: string | null
           profile_background_fit_mode?: string
           profile_background_focal_x?: number
           profile_background_focal_y?: number
           profile_background_media_flagged_at?: string | null
           profile_background_media_status?: string
           profile_background_overlay_strength?: number
+          profile_background_scan_error?: string | null
+          profile_background_scan_provider?: string | null
+          profile_background_scan_result?: string | null
+          profile_background_scan_status?: string
+          profile_background_scanned_at?: string | null
           profile_background_url?: string | null
           profile_media_updated_at?: string | null
           profile_visibility?: string
@@ -8211,12 +8401,22 @@ export type Database = {
           profile_avatar_focal_y?: number
           profile_avatar_media_flagged_at?: string | null
           profile_avatar_media_status?: string
+          profile_avatar_scan_error?: string | null
+          profile_avatar_scan_provider?: string | null
+          profile_avatar_scan_result?: string | null
+          profile_avatar_scan_status?: string
+          profile_avatar_scanned_at?: string | null
           profile_background_fit_mode?: string
           profile_background_focal_x?: number
           profile_background_focal_y?: number
           profile_background_media_flagged_at?: string | null
           profile_background_media_status?: string
           profile_background_overlay_strength?: number
+          profile_background_scan_error?: string | null
+          profile_background_scan_provider?: string | null
+          profile_background_scan_result?: string | null
+          profile_background_scan_status?: string
+          profile_background_scanned_at?: string | null
           profile_background_url?: string | null
           profile_media_updated_at?: string | null
           profile_visibility?: string
@@ -8322,6 +8522,12 @@ export type Database = {
           manifest_path: string | null
           owner_id: string
           quality_label: string
+          quarantined_at: string | null
+          scan_error: string | null
+          scan_provider: string | null
+          scan_result: string | null
+          scan_status: string
+          scanned_at: string | null
           status: string
           storage_bucket: string | null
           storage_path: string | null
@@ -8342,6 +8548,12 @@ export type Database = {
           manifest_path?: string | null
           owner_id: string
           quality_label: string
+          quarantined_at?: string | null
+          scan_error?: string | null
+          scan_provider?: string | null
+          scan_result?: string | null
+          scan_status?: string
+          scanned_at?: string | null
           status?: string
           storage_bucket?: string | null
           storage_path?: string | null
@@ -8362,6 +8574,12 @@ export type Database = {
           manifest_path?: string | null
           owner_id?: string
           quality_label?: string
+          quarantined_at?: string | null
+          scan_error?: string | null
+          scan_provider?: string | null
+          scan_result?: string | null
+          scan_status?: string
+          scanned_at?: string | null
           status?: string
           storage_bucket?: string | null
           storage_path?: string | null
@@ -8392,6 +8610,12 @@ export type Database = {
           moderation_status: string
           owner_id: string
           playback_url: string | null
+          quarantined_at: string | null
+          scan_error: string | null
+          scan_provider: string | null
+          scan_result: string | null
+          scan_status: string
+          scanned_at: string | null
           storage_bucket: string
           storage_object_key: string | null
           storage_path: string | null
@@ -8414,6 +8638,12 @@ export type Database = {
           moderation_status?: string
           owner_id: string
           playback_url?: string | null
+          quarantined_at?: string | null
+          scan_error?: string | null
+          scan_provider?: string | null
+          scan_result?: string | null
+          scan_status?: string
+          scanned_at?: string | null
           storage_bucket?: string
           storage_object_key?: string | null
           storage_path?: string | null
@@ -8436,6 +8666,12 @@ export type Database = {
           moderation_status?: string
           owner_id?: string
           playback_url?: string | null
+          quarantined_at?: string | null
+          scan_error?: string | null
+          scan_provider?: string | null
+          scan_result?: string | null
+          scan_status?: string
+          scanned_at?: string | null
           storage_bucket?: string
           storage_object_key?: string | null
           storage_path?: string | null
@@ -9102,6 +9338,12 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_read_model_jsonb_object_key_count: {
+        Args: { p_value: Json }
+        Returns: number
+      }
+      admin_read_models_can_read_ops: { Args: never; Returns: boolean }
+      admin_read_models_can_read_users: { Args: never; Returns: boolean }
       admin_reports_actor_can_review: { Args: never; Returns: boolean }
       admin_reports_actor_can_target_action: { Args: never; Returns: boolean }
       admin_reports_assert_reviewer: { Args: never; Returns: undefined }
@@ -9205,6 +9447,10 @@ export type Database = {
         }
         Returns: Json
       }
+      assert_money_feature_allowed: {
+        Args: { p_key: string; p_require_live_money?: boolean }
+        Returns: undefined
+      }
       calculate_creator_instant_cashout_fee: {
         Args: { p_amount_cents: number }
         Returns: number
@@ -9229,9 +9475,39 @@ export type Database = {
         Args: { target_thread_id: string }
         Returns: boolean
       }
+      claim_media_scan_jobs: {
+        Args: { p_max_jobs?: number; p_worker_id?: string }
+        Returns: {
+          attempt_count: number
+          id: string
+          metadata: Json
+          mime_type: string
+          owner_user_id: string
+          size_bytes: number
+          storage_bucket: string
+          storage_object_key: string
+          storage_provider: string
+          target_column: string
+          target_id: string
+          target_table: string
+        }[]
+      }
       communication_room_join_allowed: {
         Args: { joining_user_id: string; target_room_id: string }
         Returns: boolean
+      }
+      complete_media_scan_job: {
+        Args: {
+          p_duration_ms?: number
+          p_error_message?: string
+          p_finding_name?: string
+          p_job_id: string
+          p_scanner_provider?: string
+          p_scanner_version?: string
+          p_signature_version?: string
+          p_status: string
+        }
+        Returns: Json
       }
       create_creator_product_listing: {
         Args: {
@@ -9289,9 +9565,64 @@ export type Database = {
         }
         Returns: string
       }
+      enqueue_media_scan_job: {
+        Args: {
+          p_metadata?: Json
+          p_mime_type?: string
+          p_owner_user_id: string
+          p_priority?: number
+          p_size_bytes?: number
+          p_storage_bucket: string
+          p_storage_object_key: string
+          p_storage_provider: string
+          p_target_column: string
+          p_target_id: string
+          p_target_table: string
+        }
+        Returns: string
+      }
       get_admin_content_config: { Args: never; Returns: Json }
       get_admin_report_detail: { Args: { p_report_id: number }; Returns: Json }
       get_admin_reports_overview: { Args: never; Returns: Json }
+      get_admin_system_history_read_model: {
+        Args: { p_limit?: number; p_source?: string }
+        Returns: Json
+      }
+      get_admin_usage_detail_read_model: {
+        Args: { p_limit?: number; p_section?: string }
+        Returns: Json
+      }
+      get_admin_users_read_model: {
+        Args: { p_limit?: number; p_query?: string }
+        Returns: Json
+      }
+      get_money_feature_flags_summary: {
+        Args: never
+        Returns: {
+          display_label: string
+          display_summary: string
+          key: string
+          public_safe: boolean
+          state: string
+          updated_at: string
+        }[]
+      }
+      get_platform_money_kill_switches: {
+        Args: never
+        Returns: {
+          created_at: string
+          description: string
+          display_label: string
+          key: string
+          latest_audit_at: string
+          latest_audit_reason: string
+          owner_only_reason: string
+          reason: string
+          state: string
+          updated_at: string
+          updated_by: string
+        }[]
+      }
       get_provider_readiness_summary: {
         Args: never
         Returns: {
@@ -9320,6 +9651,10 @@ export type Database = {
         Returns: boolean
       }
       is_current_platform_owner: { Args: never; Returns: boolean }
+      is_money_feature_allowed: {
+        Args: { p_key: string; p_require_live_money?: boolean }
+        Returns: boolean
+      }
       is_platform_owner_user: {
         Args: { target_user_id: string }
         Returns: boolean
@@ -9442,9 +9777,30 @@ export type Database = {
           target_user_id: string
         }[]
       }
+      list_platform_money_kill_switch_audit: {
+        Args: { p_limit?: number }
+        Returns: {
+          actor_user_id: string
+          created_at: string
+          id: string
+          new_state: string
+          old_state: string
+          reason: string
+          security_context_id: string
+          switch_key: string
+        }[]
+      }
       list_staff_scoped_permissions_by_email: {
         Args: { p_target_email: string }
         Returns: string[]
+      }
+      media_scan_object_key_from_public_url: {
+        Args: { bucket_name: string; media_url: string }
+        Returns: string
+      }
+      media_scan_public_safe: {
+        Args: { scan_status: string }
+        Returns: boolean
       }
       monetization_has_active_premium: {
         Args: { p_user_id: string }
@@ -9460,6 +9816,14 @@ export type Database = {
           p_target_type: string
         }
         Returns: undefined
+      }
+      money_kill_switch_public_summary: {
+        Args: { p_state: string }
+        Returns: string
+      }
+      money_kill_switch_state_label: {
+        Args: { p_state: string }
+        Returns: string
       }
       owner_security_center_table_status: { Args: never; Returns: Json }
       platform_actor_should_write_app_audit: {
@@ -9541,6 +9905,10 @@ export type Database = {
           p_target_user_id: string
         }
         Returns: undefined
+      }
+      public_people_search_is_internal_account_candidate: {
+        Args: { p_display_name: string; p_user_id: string; p_username: string }
+        Returns: boolean
       }
       read_my_dmca_counter_notice_case: {
         Args: { p_case_id: string }
@@ -9736,6 +10104,16 @@ export type Database = {
           p_currency?: string
           p_is_paid: boolean
           p_price_cents: number
+        }
+        Returns: Json
+      }
+      set_platform_money_kill_switch_state: {
+        Args: {
+          p_key: string
+          p_metadata?: Json
+          p_owner_only_reason?: string
+          p_reason: string
+          p_state: string
         }
         Returns: Json
       }
@@ -9988,9 +10366,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

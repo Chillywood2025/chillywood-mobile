@@ -229,11 +229,16 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
   const oldStatus = kind === "avatar"
     ? existingProfile.profileAvatarMediaStatus
     : existingProfile.profileBackgroundMediaStatus;
-  const patch: UserProfileUpdate = kind === "avatar"
+  const patch: UserProfileUpdate & Record<string, unknown> = kind === "avatar"
     ? {
         avatar_url: publicUrl,
         profile_avatar_media_status: "active",
         profile_avatar_media_flagged_at: null,
+        profile_avatar_scan_status: "pending_scan",
+        profile_avatar_scan_provider: "clamav",
+        profile_avatar_scan_result: null,
+        profile_avatar_scanned_at: null,
+        profile_avatar_scan_error: null,
         profile_avatar_fit_mode: "fill",
         profile_avatar_focal_x: 0.5,
         profile_avatar_focal_y: 0.5,
@@ -244,6 +249,11 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
         profile_background_url: publicUrl,
         profile_background_media_status: "active",
         profile_background_media_flagged_at: null,
+        profile_background_scan_status: "pending_scan",
+        profile_background_scan_provider: "clamav",
+        profile_background_scan_result: null,
+        profile_background_scanned_at: null,
+        profile_background_scan_error: null,
         profile_background_fit_mode: "fill",
         profile_background_focal_x: 0.5,
         profile_background_focal_y: 0.5,
@@ -292,11 +302,16 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
     ? existingProfile.profileAvatarMediaStatus
     : existingProfile.profileBackgroundMediaStatus;
   const now = new Date().toISOString();
-  const patch: UserProfileUpdate = kind === "avatar"
+  const patch: UserProfileUpdate & Record<string, unknown> = kind === "avatar"
     ? {
         avatar_url: null,
         profile_avatar_media_status: "user_removed",
         profile_avatar_media_flagged_at: null,
+        profile_avatar_scan_status: "manual_review",
+        profile_avatar_scan_provider: null,
+        profile_avatar_scan_result: "user_removed",
+        profile_avatar_scanned_at: null,
+        profile_avatar_scan_error: null,
         profile_avatar_fit_mode: "fill",
         profile_avatar_focal_x: 0.5,
         profile_avatar_focal_y: 0.5,
@@ -307,6 +322,11 @@ export async function removeProfileMedia(kind: ProfileMediaKind): Promise<UserPr
         profile_background_url: null,
         profile_background_media_status: "user_removed",
         profile_background_media_flagged_at: null,
+        profile_background_scan_status: "manual_review",
+        profile_background_scan_provider: null,
+        profile_background_scan_result: "user_removed",
+        profile_background_scanned_at: null,
+        profile_background_scan_error: null,
         profile_background_fit_mode: "fill",
         profile_background_focal_x: 0.5,
         profile_background_focal_y: 0.5,

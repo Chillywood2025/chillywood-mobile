@@ -82,7 +82,7 @@ Implemented backed flow:
 
 ## Attachment And Public Intake Limits
 
-Public notice intake and uploader counter-notice intake support evidence attachments through the private `dmca-evidence` storage bucket and `dmca_attachments` metadata table. Public submitters upload only to the case-scoped intake path, uploader counter-notice submitters upload only for their own case/content, and Admin/legal operators can read attachment metadata through scoped DMCA access. Anonymous public download is denied. Automated malware scanning is not configured, so uploaded evidence is marked pending manual review instead of fake-scan-passed.
+Public notice intake and uploader counter-notice intake support evidence attachments through the private `dmca-evidence` storage bucket and `dmca_attachments` metadata table. Public submitters upload only to the case-scoped intake path, uploader counter-notice submitters upload only for their own case/content, and Admin/legal operators can read attachment metadata through scoped DMCA access. Anonymous public download is denied. New evidence rows queue `pending_scan` / `clamav`; production scanner coverage must not be claimed until the ClamAV worker deployment/runtime proof is captured.
 
 Automated inbound email ingestion is not configured. Manual email intake is enabled through support/admin recording and is clearly labeled in the Admin UI and canary status.
 
@@ -143,7 +143,7 @@ Share only what is needed to process the claim, counter-notice, legal request, o
 - DMCA designated agent public contact and U.S. Copyright Office registration are recorded as complete from the provided registration details.
 - Outbound email automation is still pending; notification templates/status recording are implemented for manual support/admin workflow and template coverage is proved. The Admin UI states: `Manual email intake enabled. Automated email ingestion not configured.`
 - Uploader-facing counter-notice submission is implemented and proved for the affected authenticated uploader, with other-user denial.
-- DMCA attachment upload/storage/retention is implemented for public notices and uploader counter-notices; automated malware scanning remains not configured, so scan status remains pending manual review.
+- DMCA attachment upload/storage/retention is implemented for public notices and uploader counter-notices; repo-side malware scan queueing is implemented and production worker proof remains pending.
 - The hosted public DMCA URL is configured and live at `https://chillywoodstream.com/copyright-report`.
 - Content mutation is enabled for `creator_video`, `profile_post`, `profile_post_comment`, `comment`, `creator_video_comment`, `reply`, `social_attachment`, and `attachment`. `live_room`, `channel`, and `other` remain preserve-only/disabled with exact missing-backend reasons; no LiveKit action is part of DMCA mutation coverage.
 - Proof/demo/canary cases are marked `is_test_case` and hidden from production clients.
