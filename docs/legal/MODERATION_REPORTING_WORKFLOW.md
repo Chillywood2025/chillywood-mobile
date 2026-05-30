@@ -12,6 +12,23 @@ Last updated: May 29, 2026
 - admin/operator review;
 - automated detection later.
 
+## May 29, 2026 Ops Closeout Update
+
+Store/legal/account-deletion ops closeout mapped the remaining launch operations without claiming staffing or external acceptance. The detailed closeout lives at `docs/legal/STORE_LEGAL_ACCOUNT_DELETION_ACCEPTANCE_CLOSEOUT.md`.
+
+Current operations truth:
+
+- general safety report intake, Admin Reports review, report status changes, target hide/remove/restore, immutable audit rows, Profile Photo/Profile Background reports, Profile media status actions, and non-active Profile media masking are repo-backed;
+- support/moderation/account deletion ownership is mapped by role, but launch staffing and SLA acceptance remain external;
+- outbound legal/support email remains manual until an outbound provider, DKIM, delivery proof, bounce handling, and templates are configured;
+- automated malware scanning is not active. Current protection is upload validation, storage policy, visibility gates, moderation status, admin action, and manual review;
+- optional disposable report lifecycle visual proof was not run because no safe disposable fixture was provided and production reports must not be faked.
+
+Supporting runbooks:
+
+- `docs/legal/OUTBOUND_EMAIL_DKIM_RUNBOOK.md`
+- `docs/security/MALWARE_SCANNING_READINESS_PLAN.md`
+
 ## Report Categories
 
 Public policy categories:

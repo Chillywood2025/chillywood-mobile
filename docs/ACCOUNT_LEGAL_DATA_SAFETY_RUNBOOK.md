@@ -14,6 +14,28 @@ Current Android release proof is captured at `/tmp/chillywood-public-v1-eight-bl
 
 This proof confirms the legal/account surfaces are reachable in the current build. It does not complete Play Console Data Safety, content rating, store listing entry, account deletion URL acceptance, attorney approval, support/account-deletion SLA ownership, or final external operations acceptance.
 
+## May 29, 2026 Store Legal Account Deletion Ops Closeout
+
+Detailed closeout: `docs/legal/STORE_LEGAL_ACCOUNT_DELETION_ACCEPTANCE_CLOSEOUT.md`.
+
+The repo-side acceptance package is now mapped more explicitly:
+
+- public legal URL proof lives at `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/public-legal-url-check.tsv`;
+- email/DNS proof lives at `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/dns-email-check.txt`;
+- Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`;
+- DKIM is not verified because common public selectors returned no DKIM record;
+- outbound legal/support email remains manual until a real provider is selected, domain-verified, DKIM-published, and test-proved;
+- automated malware scanning is not configured and must not be claimed;
+- support/moderation/account deletion ownership is mapped by role, but staffing/SLA approval remains external;
+- optional disposable-fixture report lifecycle visual proof was not run because no safe disposable fixture was provided and production reports must not be faked.
+
+New supporting runbooks:
+
+- `docs/legal/OUTBOUND_EMAIL_DKIM_RUNBOOK.md`
+- `docs/security/MALWARE_SCANNING_READINESS_PLAN.md`
+
+The launch classification remains: one P0 external blocker for Play/Data Safety/account-deletion/legal acceptance, with support/DKIM/malware scanning as P1 operational blockers before broad public launch.
+
 ## Official References To Recheck Before Submission
 
 Use current official docs during final setup because requirements can change:

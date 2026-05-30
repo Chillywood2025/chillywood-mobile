@@ -16,6 +16,25 @@ Proof for this follow-up is recorded at `/tmp/chillywood-blocker8-moderation-leg
 
 Remaining launch blockers are external/operational: attorney approval, Google Play policy acceptance, support/account-deletion SLA ownership, outbound email/DKIM, automated malware scanning, and an optional disposable-fixture visual drill for a full general report lifecycle if the launch owner wants one more runtime receipt. Do not fake reports or create real moderation rows without a safe disposable target.
 
+## May 29, 2026 Store Legal Account Deletion Ops Closeout
+
+Closeout doc: `docs/legal/STORE_LEGAL_ACCOUNT_DELETION_ACCEPTANCE_CLOSEOUT.md`.
+
+Repo-side legal/support/account-deletion reachability is current:
+
+- public legal URLs returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms;
+- Android release proof still covers Settings, Support, Account Deletion, Copyright Report, Moderation Policy, Admin Reports, Privacy, and Terms;
+- account deletion remains an honest request-based flow and does not claim destructive deletion completion;
+- support/moderation/account deletion operational roles and SLA targets are mapped, but staffing/owner acceptance remains external;
+- outbound email/DKIM is not complete. Cloudflare MX, SPF, and DMARC baseline exist, but no DKIM record was found for common selectors and no provider delivery proof is claimed;
+- automated malware scanning is not configured. Current protection is validation, storage policy, moderation status, admin action, and manual review. Do not claim automated scanning;
+- optional disposable report lifecycle visual proof remains fixture-blocked and must not be faked.
+
+Supporting docs:
+
+- `docs/legal/OUTBOUND_EMAIL_DKIM_RUNBOOK.md`
+- `docs/security/MALWARE_SCANNING_READINESS_PLAN.md`
+
 ## May 21, 2026 Production Legal Policy Source
 
 Canonical mobile/static policy text now lives in `legal/policies.mjs` and is rendered by:

@@ -1,33 +1,44 @@
 # NEXT TASK
 
-## Recommended Lane: Store Legal Account Deletion Acceptance Closeout
+## Recommended Lane: Play Console Data Safety And Account Deletion Submission
 
 Public V1 eight-blocker burn-down is complete in `docs/PUBLIC_V1_READINESS_BLOCKER_MAP.md`.
+Store Legal Account Deletion Ops Closeout is documented in `docs/legal/STORE_LEGAL_ACCOUNT_DELETION_ACCEPTANCE_CLOSEOUT.md`.
 
 Current launch truth:
 
 - Chi'llywood is safe for continued controlled Android testing with live money off and honest scope.
 - Chi'llywood is not ready for broad public launch.
 - No new P0 app-code/security failure was found by the audit.
+- The remaining P0 is external Play/Data Safety/account-deletion/legal acceptance, not a repo code blocker.
 - Current release Android build/install/open proof is now captured: release APK/AAB built, release APK installed on `R5CR120QCBF`, and the app opened past splash into Home.
 - Fresh route proof exists for Home, Explore, Live, Library, Profile, public Platform, Platform Studio, Player, Money Center, Admin, Watch-Party, Live Watch-Party, Spectator unavailable state, Settings/Profile Appearance, Support, Account Deletion, Copyright Report, Moderation Policy, Privacy, and Terms.
-- The only remaining P0 blocker is external store/legal/account-deletion acceptance.
 - The map records 12 P1 blockers and 10 P2 deferrals.
 - Proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`.
 - Full validation passed and is logged at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`.
+- Store/legal/account-deletion ops proof lives at `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/`.
+- Public legal URLs returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms.
+- Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`; DKIM remains unverified until a real outbound provider issues/publishes selector records and test delivery is proved.
+- Automated malware scanning is not configured. Current protection is validation, storage policy, visibility gates, moderation status, admin action, and manual review.
+- Support/moderation/account deletion roles and SLA targets are mapped, but staffing and final operating acceptance remain external.
 - Profile media manual proof remains partial by design: avatar edit sheet and Settings Appearance are proved, safe app-owned assets are staged, but save/read-back/remove/fallback is left for manual runtime proof later.
 - Blocker 8 moderation/legal ops is repo-side closed as an app-code/schema blocker: general safety reports, admin status/action RPCs, immutable report audit rows, DMCA tooling, Profile media report actions, and Profile media hide/remove/restore/masking are backed. Remaining Blocker 8 work is external operations and optional disposable-fixture visual proof, logged at `/tmp/chillywood-blocker8-moderation-legal-closeout-20260529/`.
 
-Next lane scope:
+External lane scope:
 
 - Finish Play Console listing/content rating/Data Safety/account-deletion acceptance.
 - Get attorney/legal approval for Terms, Privacy, DMCA/copyright, support, account deletion, moderation, Premium terms, and data safety claims.
 - Confirm support/account-deletion operational ownership, inbox routing, response SLA, and deletion request workflow.
 - Confirm the human moderation/support owner and operational playbook for general reports, profile-media reports, DMCA, appeals, and account deletion.
+- Select and verify outbound email provider/DKIM if automated support/legal receipts will be claimed.
+- Decide whether automated malware scanning is required for broad public UGC launch and, if yes, run a dedicated scanner foundation lane.
 - Keep live money off and do not fake Premium, payouts, ads, earnings, or provider readiness.
 - Do not add new product features while closing this blocker.
 
-After that lane, close the smaller engineering/runtime leftovers: release diagnostics/log-redaction, full signed-out/signed-in route sweep, manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, and RevenueCat/Google signed sandbox proof only when the required devices/accounts/provider access exist.
+Next engineering lane if external Play/legal work is being handled manually:
+
+- Release Diagnostics And Signed-Out/Signed-In Route Smoke Closeout.
+- Then close manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, and RevenueCat/Google signed sandbox proof only when the required devices/accounts/provider access exist.
 
 ## Previous Recommended Lane: Profile Media Runtime Save/Read-Back Proof
 

@@ -21,10 +21,19 @@ Counts after the May 29, 2026 eight-blocker burn-down:
 
 Blocker 8 follow-up on May 29, 2026 closed the stale repo-side moderation tooling gap. General safety reports, report status updates, target hide/remove/restore, immutable report audit rows, DMCA intake/counter-notice tooling, public legal/support routes, and Profile media report/admin hide/remove/restore paths are backed in code and migrations. The remaining Blocker 8 work is external/operational: attorney approval, Play/legal acceptance, support/account-deletion SLA ownership, outbound email/DKIM, automated malware scanning, and a disposable-fixture report lifecycle drill if the launch owner wants one more visual runtime receipt. This does not add a second P0 beyond the existing store/legal/account-deletion acceptance blocker.
 
+Store Legal Account Deletion Ops closeout on May 29, 2026 mapped the remaining external side without claiming acceptance. Public legal URLs for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms returned HTTP 200 after redirects. DNS proof shows Cloudflare MX, SPF, and DMARC baseline records for `chillywoodstream.com`; common DKIM selectors did not return a DKIM record, so DKIM remains unverified until a real outbound provider is configured. The closeout added:
+
+- `docs/legal/STORE_LEGAL_ACCOUNT_DELETION_ACCEPTANCE_CLOSEOUT.md`
+- `docs/legal/OUTBOUND_EMAIL_DKIM_RUNBOOK.md`
+- `docs/security/MALWARE_SCANNING_READINESS_PLAN.md`
+
+The updated status is unchanged by count: P0 blockers: 1, P1 blockers: 12, P2 deferrals: 10. The P0 remains external Play/Data Safety/account-deletion/legal acceptance, not an app-code security defect.
+
 Command proof:
 
 - Full command log: `/tmp/chillywood-public-v1-readiness-20260529/commands.log`
 - Eight-blocker burn-down validation log: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`
+- Store/legal/account-deletion ops proof folder: `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/`
 - All required commands returned status `0`.
 - `supabase db lint --linked --schema public --fail-on error` reported no schema errors.
 - `supabase db push --dry-run` reported the remote database is up to date.
