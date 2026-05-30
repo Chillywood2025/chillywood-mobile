@@ -1,6 +1,6 @@
 # Admin IA Consolidation
 
-Updated: 2026-05-29
+Updated: 2026-05-30
 
 ## Scope
 
@@ -40,19 +40,24 @@ No backed functionality was deleted.
 Users:
 
 - Staff roster rows are backed and open masked admin-safe detail sheets.
+- The Users surface now has a compact User Operations read-model hero, visible/active/permissioned/inactive metrics, role-status filter chips, and a search filter over the already-loaded staff roster.
 - Safe actions are View Profile, View Platform, Open Role Tools, and Copy Safe ID.
+- User detail sheets now include sectioned Read Model Coverage and Safe Identifiers panels so operators can see what is backed and what is not claimed.
 - Broader account detail, Premium state, report/block status, and restriction status need a dedicated admin-safe user read model.
 
 Usage:
 
-- Existing admin usage read-model summaries open inspect-only detail sheets.
+- Existing admin usage read-model summaries open inspect-only detail sheets with Coverage and Boundary sections.
+- The Usage surface now has a Usage Operations read-model hero, readable-slice/provider-import/attention/gap metrics, and grouped Metering & Provider Reads, Room & Media Estimates, and Cost Risk Boundary sections.
 - Provider import/reconciliation/status rows use real connected counts when present.
 - Missing usage event/session/activity detail lists are labeled as read-model gaps.
+- Usage still creates no charges, payouts, invoices, ads, Premium grants, creator earnings, provider bills, or live-money action.
 
 System:
 
-- Runtime/app config/status cards open inspect-only detail sheets.
-- Detail panels show source, status, admin action, secret boundary, and missing read model.
+- Runtime/app config/status cards open inspect-only detail sheets with System Overview and Next Read Model sections.
+- The System surface now groups cards into Runtime & Config, Compliance & Audit, and Provider Setup, with ready/needs-setup/runtime-issue/inspect-only metrics.
+- Detail panels show source, status, admin action, secret boundary, and missing read model without rendering provider payloads or secrets.
 - Historical build/deploy/system-event rows still need a dedicated read model.
 
 ## Audit And Denial

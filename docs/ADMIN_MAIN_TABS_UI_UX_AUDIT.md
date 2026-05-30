@@ -1,6 +1,6 @@
 # Owner/Admin Main Tabs UI/UX Audit
 
-Updated: 2026-05-29
+Updated: 2026-05-30
 
 ## Scope
 
@@ -41,6 +41,15 @@ The May 29, 2026 Admin Denial IA Consolidation and Drilldown Production Pass mad
 
 No old state key was deleted. No permission gate, LiveKit token path, Premium gate, Watch-Party ownership, old-room handling, live-money state, provider secret, or fake Admin row was added.
 
+The May 30, 2026 Admin Read Models UI/UX Production Pass polished the three broad drilldown tabs without adding new schema or fake data:
+
+- Users now opens on a User Operations read-model hero with visible/active/permissioned/inactive metrics, role filters, and a search filter over the already-loaded staff roster.
+- User detail sheets are sectioned into Status, Read Model Coverage, Safe Identifiers, Actions, and Safety Boundary.
+- Usage now opens on a Usage Operations read-model hero with readable-slice/provider-import/attention/gap metrics and grouped Metering & Provider Reads, Room & Media Estimates, and Cost Risk Boundary sections.
+- Usage detail sheets now include Coverage and Boundary sections that explicitly state no billing, payout, invoice, ad, Premium grant, creator-earnings, provider-bill, or live-money action is available there.
+- System now opens on a System Operations read-model hero with ready/needs-setup/runtime-issue/inspect-only metrics and groups cards into Runtime & Config, Compliance & Audit, and Provider Setup.
+- System detail sheets now include System Overview and Next Read Model sections while keeping secrets and external provider dashboards out of the mobile Admin panel.
+
 ## Current Main Tabs
 
 | Tab | State key | Controls / purpose | Backing | Current classification | Lane decision |
@@ -58,15 +67,15 @@ No old state key was deleted. No permission gate, LiveKit token path, Premium ga
 | Canary | `canary` | Canary checks | Owner control canary helpers | owner_dev_only, needs_collapsible_sections | Existing expandable rows stay. |
 | Safety | `safety-dashboard` | Safety/security overview | Owner security status | production_ready | Keep. |
 | Rachi | `rachi` | Official posts, Originals, Rachi identity | Rachi RPCs/read models | production_ready, needs_typeahead_search | Covered by Rachi search scope. |
-| Users | `users` | User/staff lookup orientation | Role roster/search | production_ready, needs_backend_data | Staff roster count/status rows are clickable. Broader account/Premium/report/block status needs a dedicated admin-safe user read model. |
+| Users | `users` | User/staff lookup orientation | Role roster/search | production_ready, needs_backend_data | Staff roster rows are searchable/filterable and clickable. Broader account/Premium/report/block/restriction status needs a dedicated admin-safe user read model. |
 | Money Center | `money-center` | Consolidated money readiness, switches, audit explorer | Money flags, provider readiness, finance read model | production_ready | Keep collapsible sections and clickable event/detail sheets. |
-| Usage | `usage` | Usage/meters/readiness | Admin usage read model | production_ready, needs_backend_data | Top usage areas now open read-only drilldowns. Missing row-level models are labeled instead of faked. |
+| Usage | `usage` | Usage/meters/readiness | Admin usage read model | production_ready, needs_backend_data | Usage is grouped into read-model summaries with sectioned drilldowns. Missing row-level event/session/activity models are labeled instead of faked. |
 | Networks | `networks` | Network proof/readiness | Security/network helpers | owner_dev_only | Keep masked; no raw sensitive detail. |
 | Live Cost Guard | `live-cost-guard` | Live cost/ops signals | Live Cost Guard rows | production_ready, needs_typeahead_search | Covered by Live Ops/Money search. |
 | Live Ops Fix Center | `live-ops-fix-center` | Live Ops incidents/remediation | Live Ops helpers | production_ready, needs_typeahead_search | Covered by Live Ops search. |
 | Legal | `legal` | Legal requests/evidence | Legal request helpers/RPCs | production_ready, needs_typeahead_search | Covered by Legal search. |
 | Ops Alerts | `ops-alerts` | Operational alerts | Admin ops read model | should_defer | Keep until broader System consolidation is safe. |
-| System | `system` | System/app config technical status | Runtime/app config/read models | owner_dev_only, production_ready | System cards now open inspect-only drilldowns with source/status/no-secret boundaries. |
+| System | `system` | System/app config technical status | Runtime/app config/read models | owner_dev_only, production_ready | System cards are grouped by runtime/compliance/provider setup and open inspect-only drilldowns with source/status/no-secret boundaries. |
 
 Hidden compatibility money tabs such as Premium, Kill Switches, Ads, Revenue, Payouts, Sponsors, and Fraud are not part of the current visible Admin tab row; they remain mapped into Money Center section anchors.
 
@@ -110,6 +119,7 @@ Unbacked/deferred search:
 Current backed clickable details:
 
 - Staff roster user rows open masked admin-safe user detail sheets.
+- Staff roster rows can be filtered by role/status and searched within the already-loaded admin-safe roster.
 - Usage summaries open read-only usage detail sheets; missing backend models are explicitly labeled.
 - System cards open inspect-only detail sheets that do not render secrets or raw provider payloads.
 - Reports open report detail.

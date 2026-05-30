@@ -18,6 +18,7 @@ Current launch truth:
 - Proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`.
 - Full validation passed and is logged at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`.
 - Store/legal/account-deletion ops proof lives at `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/`.
+- Admin Users/Usage/System read-model UI/UX is now production-polished repo-side. Users has a searchable/filterable admin-safe staff roster with masked sectioned drilldowns; Usage has grouped read-model metrics and explicit no-money-action drilldowns; System has grouped runtime/compliance/provider setup cards and no-secret sectioned drilldowns. This did not add a broader user directory, row-level usage history, system event/build/deploy history, schema/RLS changes, or fake rows.
 - Public legal URLs returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms.
 - Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`; DKIM remains unverified until a real outbound provider issues/publishes selector records and test delivery is proved.
 - Automated malware scanning is not configured. Current protection is validation, storage policy, visibility gates, moderation status, admin action, and manual review.
@@ -39,7 +40,7 @@ External lane scope:
 Next engineering lane if external Play/legal work is being handled manually:
 
 - Release Diagnostics And Signed-Out/Signed-In Route Smoke Closeout.
-- Then close manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, and RevenueCat/Google signed sandbox proof only when the required devices/accounts/provider access exist.
+- Then close manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof, Spectator live-compatible fixture, RevenueCat/Google signed sandbox proof, and true backend Admin read models only when the required devices/accounts/provider access or safe schema support exist.
 
 ## Previous Recommended Lane: Profile Media Runtime Save/Read-Back Proof
 
@@ -109,7 +110,7 @@ Remaining limitations:
 Recommended next lane:
 
 - Profile Media Runtime Closeout with one safe app-owned/non-private gallery asset, an attached Android device, a signed-in owner account, viewer/signed-out checks, compact sheet screenshots, gallery/native crop step proof without private photos, backend active-media read-back, removal/fallback proof, and public masking proof.
-- Admin Read Models Follow-Up for broader Users, Usage, and System drilldowns only after safe backend read models exist; do not fake missing rows.
+- Admin backend read-model follow-up for broader account/Premium/report/block/restriction status, row-level usage event/session/activity rows, and historical system/build/deploy rows only after safe backend read models exist; do not fake missing rows.
 - Normal-user Android Admin denial recapture with a safe normal-user session and a reliable owner-session restore path.
 - Spectator Live Watch-Party / Reaction Fixture Closeout with a real public-safe live-stage-compatible fixture and no original token/host/member leakage.
 - Watch-Party Live Two-Device Audio Ducking Closeout with two joined devices/accounts proving remote speech ducks/restores local video while Party Room and Live Watch-Party still have no Audio Mix.

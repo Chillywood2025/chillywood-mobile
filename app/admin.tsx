@@ -423,6 +423,14 @@ type AdminDrilldownAction = {
   disabled?: boolean;
 };
 
+type AdminDrilldownSection = {
+  title: string;
+  statusLabel?: string;
+  tone?: OwnerControlTone;
+  body?: string;
+  rows?: { label: string; value: string }[];
+};
+
 type AdminDrilldownDetail = {
   title: string;
   subtitle?: string;
@@ -430,6 +438,7 @@ type AdminDrilldownDetail = {
   tone: OwnerControlTone;
   body?: string;
   rows: { label: string; value: string }[];
+  sections?: AdminDrilldownSection[];
   actions?: AdminDrilldownAction[];
 };
 
@@ -799,6 +808,14 @@ const roleAuditFilterOptions: readonly { key: RoleAuditFilterKey; label: string 
   { key: "owners", label: "Owners" },
   { key: "admins", label: "Admins" },
   { key: "moderators", label: "Moderators" },
+];
+type AdminUsersRoleFilter = "all" | "owner" | "operator" | "moderator" | "inactive";
+const adminUsersRoleFilterOptions: readonly { key: AdminUsersRoleFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "owner", label: "Owners" },
+  { key: "operator", label: "Admins" },
+  { key: "moderator", label: "Moderators" },
+  { key: "inactive", label: "Inactive" },
 ];
 type RoleConfirmState =
   | {
@@ -2476,6 +2493,12 @@ const formatAdminV1Count = (value: number | null, loading: boolean) => {
   return value === null ? "Not connected yet" : String(value);
 };
 
+const formatAdminReadModelTimestamp = (value: string | null | undefined) => {
+  const parsed = Date.parse(String(value ?? ""));
+  if (!Number.isFinite(parsed) || parsed <= 0) return "Not refreshed";
+  return new Date(parsed).toLocaleString();
+};
+
 const formatHomeCount = (value: number | null | undefined, loading: boolean) => {
   if (loading) return "Loading";
   return typeof value === "number" && Number.isFinite(value) ? String(value) : "Not Connected";
@@ -2978,6 +3001,8 @@ export default function AdminStudioScreen() {
     useState<PlatformRoleRosterReadModel["summary"] | null>(null);
   const [platformRoleRosterGeneratedAt, setPlatformRoleRosterGeneratedAt] = useState<string | null>(null);
   const [platformRoleRosterLoading, setPlatformRoleRosterLoading] = useState(false);
+  const [adminUsersQuery, setAdminUsersQuery] = useState("");
+  const [adminUsersRoleFilter, setAdminUsersRoleFilter] = useState<AdminUsersRoleFilter>("all");
   const [staffRoleEmail, setStaffRoleEmail] = useState("");
   const [staffRoleTarget, setStaffRoleTarget] = useState<PlatformStaffManagementRole>("moderator");
   const [staffRoleReason, setStaffRoleReason] = useState("");
@@ -3336,6 +3361,55 @@ export default function AdminStudioScreen() {
     () => platformRoleRoster.filter((entry) => entry.status !== "active"),
     [platformRoleRoster],
   );
+  const permissionedPlatformRoleRoster = useMemo(
+    () => activePlatformRoleRoster.filter((entry) => entry.permissionKeys.length > 0),
+    [activePlatformRoleRoster],
+  );
+  const filteredPlatformRoleRoster = useMemo(() => {
+    const normalizedQuery = normalizeAdminSearchQuery(adminUsersQuery);
+    return platformRoleRoster.filter((entry) => {
+      const roleMatches = adminUsersRoleFilter === "all"
+        || (adminUsersRoleFilter === "inactive"
+          ? entry.status !== "active"
+          : entry.role === adminUsersRoleFilter);
+      if (!roleMatches) return false;
+      if (!normalizedQuery) return true;
+      const haystack = [
+        entry.identityLabel,
+        entry.email,
+        entry.userId,
+        entry.role,
+        entry.status,
+        entry.permissionKeys.join(" "),
+      ].map((value) => normalizeAdminSearchQuery(String(value ?? ""))).join(" ");
+      return haystack.includes(normalizedQuery);
+    });
+  }, [adminUsersQuery, adminUsersRoleFilter, platformRoleRoster]);
+  const staffRosterLastRefreshedLabel = platformRoleRosterGeneratedAt
+    ? formatAdminReadModelTimestamp(platformRoleRosterGeneratedAt)
+    : "Not refreshed";
+  const usageSliceSignals = useMemo(() => [
+    adminV1ReadModel.internalUsageSchemaConnected,
+    adminV1ReadModel.providerUsageSchemaConnected,
+    adminV1ReadModel.providerUsageReconciliationCount !== null,
+    adminV1ReadModel.activeLiveRoomCount !== null,
+    adminV1ReadModel.activeWatchPartyCount !== null,
+    adminV1ReadModel.uploadsTodayCount !== null,
+    adminV1ReadModel.storageMetadataEstimateBytes !== null,
+    adminV1ReadModel.participantMinutesEstimate !== null,
+    adminV1ReadModel.bandwidthMeteringBytes !== null,
+  ], [adminV1ReadModel]);
+  const usageSliceTotal = usageSliceSignals.length;
+  const usageReadableSliceCount = usageSliceSignals.filter(Boolean).length;
+  const usageNeedsReadModelCount = usageSliceTotal - usageReadableSliceCount;
+  const providerImportConnectedCount = useMemo(
+    () => adminV1ReadModel.providerImportStatuses.filter((entry) => entry.status === "connected").length,
+    [adminV1ReadModel.providerImportStatuses],
+  );
+  const providerImportAttentionCount = useMemo(
+    () => adminV1ReadModel.providerImportStatuses.filter((entry) => entry.status === "partial" || entry.status === "failed").length,
+    [adminV1ReadModel.providerImportStatuses],
+  );
   const normalizedStaffPermissionEmail = staffPermissionEmail.trim().toLowerCase();
   const staffPermissionDraftChanged = staffPermissionSavedKeys !== null
     && normalizedStaffPermissionEmail === staffPermissionLoadedEmail
@@ -3379,6 +3453,32 @@ export default function AdminStudioScreen() {
         { label: "Granted by", value: entry.grantedBy ? formatAuditDisplayText(entry.grantedBy) : "not returned" },
         { label: "Scoped permissions", value: `${entry.permissionKeys.length}` },
         { label: "Permission summary", value: permissionSummary },
+      ],
+      sections: [
+        {
+          title: "Read Model Coverage",
+          statusLabel: "Staff slice",
+          tone: "info",
+          body: "This panel is limited to the admin-safe staff roster. It does not claim account-wide user state until a dedicated Users read model exists.",
+          rows: [
+            { label: "Current source", value: "Staff role roster" },
+            { label: "Account status", value: "Not in this read model" },
+            { label: "Premium status", value: "Read from Money Center when backed" },
+            { label: "Reports / blocks", value: "Use Reports and Owner Security surfaces" },
+            { label: "Destructive actions", value: "Not exposed here" },
+          ],
+        },
+        {
+          title: "Safe Identifiers",
+          statusLabel: "Masked",
+          tone: "success",
+          rows: [
+            { label: "Displayed identity", value: maskedIdentity },
+            { label: "Email rendering", value: entry.email ? "Masked" : "Not returned" },
+            { label: "Full user id", value: userId ? "Copy action only" : "Not returned" },
+            { label: "Permission detail", value: isOwnerStaff ? "Owner visible" : "Owner-only" },
+          ],
+        },
       ],
       actions: [
         {
@@ -5100,10 +5200,55 @@ export default function AdminStudioScreen() {
     runtimeConfig,
     runtimeConfigIssues.length,
   ]);
+  const systemReadyCardCount = useMemo(
+    () => systemStatusCards.filter((card) => card.tone !== "unavailable").length,
+    [systemStatusCards],
+  );
+  const systemNeedsSetupCardCount = systemStatusCards.length - systemReadyCardCount;
+  const runtimeSystemCards = useMemo(
+    () => systemStatusCards.filter((card) => ["App Config", "Runtime Config", "Feature Flags", "Supabase Setup", "LiveKit URL Setup"].includes(card.label)),
+    [systemStatusCards],
+  );
+  const complianceSystemCards = useMemo(
+    () => systemStatusCards.filter((card) => ["Immutable Audit", "Legal URLs", "Readiness Docs"].includes(card.label)),
+    [systemStatusCards],
+  );
+  const providerSystemCards = useMemo(
+    () => systemStatusCards.filter((card) => ["RevenueCat Public Setup"].includes(card.label)),
+    [systemStatusCards],
+  );
   const openUsageDrilldown = useCallback((section: string) => {
     const commonRows = [
       { label: "Source", value: "Admin usage read model" },
       { label: "Billing truth", value: "No" },
+    ];
+    const usageSections = (
+      coverage: string,
+      missing: string,
+      boundary = "Read-only evidence. No charges, payouts, invoices, ads, Premium grants, or creator earnings are created from this panel.",
+    ): AdminDrilldownSection[] => [
+      {
+        title: "Coverage",
+        statusLabel: coverage,
+        tone: coverage === "Connected" || coverage === "Readable" ? "success" : "locked",
+        rows: [
+          { label: "Generated", value: formatAdminReadModelTimestamp(adminV1ReadModel.generatedAt) },
+          { label: "Readable slices", value: adminV1ReadModel.loading ? "Loading" : `${usageReadableSliceCount}/${usageSliceTotal}` },
+          { label: "Provider imports", value: adminV1ReadModel.providerImportStatuses.length ? `${providerImportConnectedCount}/${adminV1ReadModel.providerImportStatuses.length} connected` : "No provider imports visible" },
+          { label: "Attention", value: providerImportAttentionCount ? `${providerImportAttentionCount} provider import issue${providerImportAttentionCount === 1 ? "" : "s"}` : "No provider import issue shown" },
+        ],
+      },
+      {
+        title: "Boundary",
+        statusLabel: "No money action",
+        tone: "locked",
+        body: boundary,
+        rows: [
+          { label: "Missing next", value: missing },
+          { label: "Live money", value: "Not activated" },
+          { label: "Provider billing", value: "Not claimed" },
+        ],
+      },
     ];
     if (section === "internal") {
       openAdminDrilldown({
@@ -5119,6 +5264,10 @@ export default function AdminStudioScreen() {
           { label: "Monthly summaries", value: formatAdminV1Count(adminV1ReadModel.usageMonthlySummariesCount, adminV1ReadModel.loading) },
           { label: "Missing model", value: adminV1ReadModel.internalUsageSchemaConnected ? "none for current counts" : "admin-readable usage event summary RPC" },
         ],
+        sections: usageSections(
+          adminV1ReadModel.internalUsageSchemaConnected ? "Connected" : "Needs model",
+          adminV1ReadModel.internalUsageSchemaConnected ? "session/activity detail rows" : "admin-readable usage event summary",
+        ),
       });
       return;
     }
@@ -5137,6 +5286,10 @@ export default function AdminStudioScreen() {
           { label: "Imported requests", value: adminV1ReadModel.providerImportedRequestCount === null ? "not connected" : String(adminV1ReadModel.providerImportedRequestCount) },
           { label: "Network metric rows", value: adminV1ReadModel.providerImportedNetworkMetricCount === null ? "not connected" : String(adminV1ReadModel.providerImportedNetworkMetricCount) },
         ],
+        sections: usageSections(
+          adminV1ReadModel.providerUsageSchemaConnected ? "Connected" : "Needs setup",
+          "exact provider billing totals and dashboard acceptance proof",
+        ),
       });
       return;
     }
@@ -5156,6 +5309,10 @@ export default function AdminStudioScreen() {
           { label: "Latest status", value: adminV1ReadModel.latestProviderUsageReconciliationStatus ?? "not connected" },
           { label: "Latest at", value: formatProviderImportDate(adminV1ReadModel.latestProviderUsageReconciliationAt) },
         ],
+        sections: usageSections(
+          adminV1ReadModel.providerUsageReconciliationCount === null ? "Needs model" : "Readable",
+          "provider billing import and variance review workflow",
+        ),
       });
       return;
     }
@@ -5171,6 +5328,11 @@ export default function AdminStudioScreen() {
           { label: "Active live rooms", value: formatAdminV1Count(adminV1ReadModel.activeLiveRoomCount, adminV1ReadModel.loading) },
           { label: "Missing model", value: adminV1ReadModel.activeLiveRoomCount === null ? "live room usage detail rows" : "none for current estimate" },
         ],
+        sections: usageSections(
+          adminV1ReadModel.activeLiveRoomCount === null ? "Needs model" : "Readable",
+          "LiveKit-backed session and reconnect detail rows",
+          "Room counts are DB estimates only. LiveKit token issuer, permissions, and route ownership remain unchanged.",
+        ),
       },
       watch_party: {
         title: "Watch-Party Usage",
@@ -5183,6 +5345,11 @@ export default function AdminStudioScreen() {
           { label: "Active Watch-Parties", value: formatAdminV1Count(adminV1ReadModel.activeWatchPartyCount, adminV1ReadModel.loading) },
           { label: "Missing model", value: adminV1ReadModel.activeWatchPartyCount === null ? "watch-party usage detail rows" : "none for current estimate" },
         ],
+        sections: usageSections(
+          adminV1ReadModel.activeWatchPartyCount === null ? "Needs model" : "Readable",
+          "Watch-Party participant/session detail rows",
+          "Watch-Party counts are DB estimates only. Route ownership and old-room handling remain unchanged.",
+        ),
       },
       uploads: {
         title: "Uploads / Media",
@@ -5194,6 +5361,10 @@ export default function AdminStudioScreen() {
           ...commonRows,
           { label: "Uploads today", value: formatAdminV1Count(adminV1ReadModel.uploadsTodayCount, adminV1ReadModel.loading) },
         ],
+        sections: usageSections(
+          adminV1ReadModel.uploadsTodayCount === null ? "Needs model" : "Readable",
+          "media-processing event detail and failure reason rows",
+        ),
       },
       storage: {
         title: "Storage Metadata Estimate",
@@ -5206,6 +5377,10 @@ export default function AdminStudioScreen() {
           { label: "Estimated bytes", value: adminV1ReadModel.storageMetadataEstimateBytes === null ? "not connected" : formatUsageBytes(adminV1ReadModel.storageMetadataEstimateBytes) },
           { label: "Rows read", value: formatAdminV1Count(adminV1ReadModel.storageMetadataRowsRead, adminV1ReadModel.loading) },
         ],
+        sections: usageSections(
+          adminV1ReadModel.storageMetadataEstimateBytes === null ? "Needs model" : "Readable",
+          "bucket/provider storage bill import",
+        ),
       },
       participant_minutes: {
         title: "Participant-Minutes DB Estimate",
@@ -5218,6 +5393,10 @@ export default function AdminStudioScreen() {
           { label: "Participant minutes", value: adminV1ReadModel.participantMinutesEstimate === null ? "not connected" : formatUsageMinutes(adminV1ReadModel.participantMinutesEstimate) },
           { label: "Membership rows", value: formatAdminV1Count(adminV1ReadModel.participantMembershipRowsRead, adminV1ReadModel.loading) },
         ],
+        sections: usageSections(
+          adminV1ReadModel.participantMinutesEstimate === null ? "Needs model" : "Readable",
+          "joined/left event history and second-device proof",
+        ),
       },
       bandwidth: {
         title: "Bandwidth Metering",
@@ -5230,6 +5409,10 @@ export default function AdminStudioScreen() {
           { label: "Bandwidth bytes", value: adminV1ReadModel.bandwidthMeteringBytes === null ? "not connected" : formatUsageBytes(adminV1ReadModel.bandwidthMeteringBytes) },
           { label: "Bandwidth rows", value: formatAdminV1Count(adminV1ReadModel.bandwidthMeteringRowsRead, adminV1ReadModel.loading) },
         ],
+        sections: usageSections(
+          adminV1ReadModel.bandwidthMeteringBytes === null ? "Needs model" : "Readable",
+          "provider network metric normalization",
+        ),
       },
       cost_risk: {
         title: "Cost Risk Flags",
@@ -5243,11 +5426,23 @@ export default function AdminStudioScreen() {
           { label: "Provider billing", value: "not connected" },
           { label: "Needed next", value: "provider billing and live-media cost read models" },
         ],
+        sections: usageSections(
+          "Needs model",
+          "provider billing, LiveKit usage, and alert threshold read models",
+          "Cost risk is intentionally conservative. No provider total is treated as payable truth.",
+        ),
       },
     };
     const detail = map[section];
     if (detail) openAdminDrilldown(detail);
-  }, [adminV1ReadModel, openAdminDrilldown]);
+  }, [
+    adminV1ReadModel,
+    openAdminDrilldown,
+    providerImportAttentionCount,
+    providerImportConnectedCount,
+    usageReadableSliceCount,
+    usageSliceTotal,
+  ]);
   const openSystemCardDetail = useCallback((card: AdminDashboardCard) => {
     openAdminDrilldown({
       title: card.label,
@@ -5262,6 +5457,31 @@ export default function AdminStudioScreen() {
         { label: "Secrets", value: "not rendered" },
         { label: "Missing read model", value: card.tone === "unavailable" ? "backed system health/detail row" : "none for this presence check" },
       ],
+      sections: [
+        {
+          title: "System Overview",
+          statusLabel: `${systemReadyCardCount}/${systemStatusCards.length} ready`,
+          tone: systemNeedsSetupCardCount ? "manual" : "success",
+          rows: [
+            { label: "Ready checks", value: String(systemReadyCardCount) },
+            { label: "Needs setup", value: String(systemNeedsSetupCardCount) },
+            { label: "Runtime issues", value: runtimeConfigIssues.length ? String(runtimeConfigIssues.length) : "0" },
+            { label: "Secrets boundary", value: "Values are presence-checked only" },
+          ],
+        },
+        {
+          title: "Next Read Model",
+          statusLabel: card.tone === "unavailable" ? "Needed" : "Covered",
+          tone: card.tone === "unavailable" ? "locked" : "info",
+          body: card.tone === "unavailable"
+            ? "A future server read model should provide health, history, or external setup proof for this card before Admin shows deeper detail."
+            : "This card has enough read-only presence proof for the current Admin surface.",
+          rows: [
+            { label: "Historical rows", value: "Not claimed here" },
+            { label: "External provider proof", value: "Documented outside this card" },
+          ],
+        },
+      ],
       actions: card.destination && visibleOperatorTabs.some((tab) => tab.key === card.destination)
         ? [{
           label: "Open Related Section",
@@ -5272,7 +5492,14 @@ export default function AdminStudioScreen() {
         }]
         : undefined,
     });
-  }, [openAdminDrilldown, visibleOperatorTabs]);
+  }, [
+    openAdminDrilldown,
+    runtimeConfigIssues.length,
+    systemNeedsSetupCardCount,
+    systemReadyCardCount,
+    systemStatusCards.length,
+    visibleOperatorTabs,
+  ]);
 
   const rachiManagementCards = useMemo<readonly AdminDashboardCard[]>(() => [
     {
@@ -11989,33 +12216,46 @@ export default function AdminStudioScreen() {
               <Text style={styles.badgeText}>{canViewStaffRoles ? "Backed roster" : "Locked"}</Text>
             </View>
           </View>
-          <View style={styles.ownerMetricGrid}>
-            <OwnerMetricTile
-              label="Active Staff"
-              tone={staffSnapshotSummary ? "info" : "locked"}
-              value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.activeCount : "Not Connected"}
+          <View style={styles.contentHeroPanel}>
+            <OwnerControlPanelHeader
+              badgeLabel={canViewStaffRoles ? "Admin-safe" : "Locked"}
+              badgeTone={canViewStaffRoles ? "info" : "locked"}
+              kicker="READ MODEL"
+              lastRunLabel={`Last refreshed ${staffRosterLastRefreshedLabel}`}
+              subtitle="This view filters the backed staff roster only. Broader account, entitlement, block, report, and deletion state remains outside this read model."
+              title="User Operations"
             />
-            <OwnerMetricTile
-              label="Owners"
-              tone={staffSnapshotSummary ? "success" : "locked"}
-              value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.ownerCount : "Not Connected"}
-            />
-            <OwnerMetricTile
-              label="Admins"
-              tone={staffSnapshotSummary ? "info" : "locked"}
-              value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.operatorCount : "Not Connected"}
-            />
-            <OwnerMetricTile
-              label="Moderators"
-              tone={staffSnapshotSummary ? "manual" : "locked"}
-              value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.moderatorCount : "Not Connected"}
-            />
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile
+                label="Visible Roles"
+                tone={staffSnapshotSummary ? "info" : "locked"}
+                value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.totalVisibleRoles : "Not Connected"}
+              />
+              <OwnerMetricTile
+                label="Active Staff"
+                tone={staffSnapshotSummary ? "success" : "locked"}
+                value={platformRoleRosterLoading ? "Loading" : staffSnapshotSummary ? staffSnapshotSummary.activeCount : "Not Connected"}
+              />
+              <OwnerMetricTile
+                label="Permissioned"
+                tone={permissionedPlatformRoleRoster.length ? "info" : "locked"}
+                value={platformRoleRosterLoading ? "Loading" : permissionedPlatformRoleRoster.length}
+              />
+              <OwnerMetricTile
+                label="Inactive"
+                tone={revokedPlatformRoleRoster.length ? "manual" : "success"}
+                value={platformRoleRosterLoading ? "Loading" : revokedPlatformRoleRoster.length}
+              />
+            </View>
           </View>
           <View style={styles.configList}>
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
                 <Text style={styles.ownerSectionTitle}>Staff Roster Drilldowns</Text>
-                <OwnerStatusPill label={canViewStaffRoles ? `${platformRoleRoster.length} visible` : "Locked"} tone={canViewStaffRoles ? "info" : "locked"} />
+                <OwnerStatusPill
+                  label={canViewStaffRoles ? `${filteredPlatformRoleRoster.length}/${platformRoleRoster.length} shown` : "Locked"}
+                  tone={canViewStaffRoles ? "info" : "locked"}
+                />
               </View>
               {!canViewStaffRoles ? (
                 <OwnerDisabledReason reason="Users drilldowns require staff-role visibility. Normal users cannot load Admin user rows, staff emails, or Admin Search." />
@@ -12025,19 +12265,43 @@ export default function AdminStudioScreen() {
                   <Text style={styles.configLoadingText}>Loading users...</Text>
                 </View>
               ) : platformRoleRoster.length ? (
-                <View style={styles.ownerControlList}>
-                  {platformRoleRoster.map((entry) => (
-                    <OwnerControlRow
-                      key={`admin-user-drilldown-${entry.id}`}
-                      message={`${entry.grantedAt ? `Granted ${formatModerationTimestamp(entry.grantedAt)}` : "Grant timestamp unavailable"} · ${entry.permissionKeys.length} scoped permission${entry.permissionKeys.length === 1 ? "" : "s"}`}
-                      meta={entry.email ? maskOperatorIdentity(entry.email) : "email not returned"}
-                      onPress={() => openAdminUserDrilldown(entry)}
-                      statusLabel={entry.status === "active" ? formatPlatformRoleDisplayLabel(entry.role) : formatModerationToken(entry.status)}
-                      title={maskOperatorIdentity(entry.identityLabel)}
-                      tone={entry.status === "active" ? "info" : "locked"}
+                <>
+                  <View style={styles.ownerToolbarPanel}>
+                    <OwnerFilterChips
+                      onChange={setAdminUsersRoleFilter}
+                      options={adminUsersRoleFilterOptions}
+                      value={adminUsersRoleFilter}
                     />
-                  ))}
-                </View>
+                    <TextInput
+                      autoCapitalize="none"
+                      placeholder="Filter visible staff roster"
+                      placeholderTextColor="#788196"
+                      style={styles.input}
+                      value={adminUsersQuery}
+                      onChangeText={setAdminUsersQuery}
+                    />
+                  </View>
+                  {filteredPlatformRoleRoster.length ? (
+                    <View style={styles.ownerControlList}>
+                      {filteredPlatformRoleRoster.map((entry) => (
+                        <OwnerControlRow
+                          key={`admin-user-drilldown-${entry.id}`}
+                          message={`${entry.grantedAt ? `Granted ${formatModerationTimestamp(entry.grantedAt)}` : "Grant timestamp unavailable"} · ${entry.permissionKeys.length} scoped permission${entry.permissionKeys.length === 1 ? "" : "s"}`}
+                          meta={entry.email ? maskOperatorIdentity(entry.email) : "email not returned"}
+                          onPress={() => openAdminUserDrilldown(entry)}
+                          statusLabel={entry.status === "active" ? formatPlatformRoleDisplayLabel(entry.role) : formatModerationToken(entry.status)}
+                          title={maskOperatorIdentity(entry.identityLabel)}
+                          tone={entry.status === "active" ? "info" : "locked"}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <OwnerEmptyState
+                      body="No visible staff roster rows match the current filter."
+                      title="No matching users"
+                    />
+                  )}
+                </>
               ) : (
                 <OwnerEmptyState
                   body="The backed staff-role roster query succeeded, but no user rows are visible in this slice."
@@ -12045,16 +12309,19 @@ export default function AdminStudioScreen() {
                 />
               )}
             </View>
-            <View style={styles.configListRow}>
-              <View style={styles.configListCopy}>
-                <Text style={styles.configListTitle}>Broader user directory</Text>
-                <Text style={styles.configListBody}>
-                  Account-wide user search, Premium status, report/block status, restriction state, and account actions need a dedicated admin-safe read model.
-                </Text>
-                <Text style={styles.configListBody}>
-                  No user ban, suspend, upload-disable, live-disable, reset-password, entitlement-edit, or deletion action is exposed here.
-                </Text>
+            <View style={styles.contentPanel}>
+              <View style={styles.ownerSectionHeaderRow}>
+                <Text style={styles.ownerSectionTitle}>Broader User Directory</Text>
+                <OwnerStatusPill label="Read model needed" tone="locked" />
               </View>
+              <OwnerDetailGrid
+                rows={[
+                  { label: "Current coverage", value: "Staff role roster" },
+                  { label: "Not shown", value: "Account, Premium, report, block, restriction, deletion status" },
+                  { label: "Actions withheld", value: "Ban, suspend, reset password, entitlement edit, deletion" },
+                  { label: "Safe path", value: "Use Admin Search, Reports, Legal, and Owner Security where backed" },
+                ]}
+              />
             </View>
             <View style={styles.configListActions}>
               <TouchableOpacity
@@ -12172,7 +12439,43 @@ export default function AdminStudioScreen() {
               <Text style={styles.badgeText}>Read-only</Text>
             </View>
           </View>
+          <View style={styles.contentHeroPanel}>
+            <OwnerControlPanelHeader
+              badgeLabel="No billing truth"
+              badgeTone="locked"
+              kicker="READ MODELS"
+              lastRunLabel={`Generated ${formatAdminReadModelTimestamp(adminV1ReadModel.generatedAt)}`}
+              subtitle="Summaries stay read-only and explicitly separate internal usage estimates from provider billing, payouts, Premium, ads, and creator earnings."
+              title="Usage Operations"
+            />
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile
+                label="Readable Slices"
+                tone={usageNeedsReadModelCount ? "manual" : "success"}
+                value={adminV1ReadModel.loading ? "Loading" : `${usageReadableSliceCount}/${usageSliceTotal}`}
+              />
+              <OwnerMetricTile
+                label="Provider Imports"
+                tone={providerImportConnectedCount ? "info" : "locked"}
+                value={adminV1ReadModel.loading ? "Loading" : `${providerImportConnectedCount}/${adminV1ReadModel.providerImportStatuses.length || 0}`}
+              />
+              <OwnerMetricTile
+                label="Attention"
+                tone={providerImportAttentionCount ? "manual" : "success"}
+                value={adminV1ReadModel.loading ? "Loading" : providerImportAttentionCount}
+              />
+              <OwnerMetricTile
+                label="Need Models"
+                tone={usageNeedsReadModelCount ? "manual" : "success"}
+                value={adminV1ReadModel.loading ? "Loading" : usageNeedsReadModelCount}
+              />
+            </View>
+          </View>
           <View style={styles.configList}>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Metering & Provider Reads</Text>
+              <OwnerStatusPill label="Inspect" tone="info" />
+            </View>
             <TouchableOpacity
               activeOpacity={0.84}
               style={styles.configListRow}
@@ -12202,20 +12505,8 @@ export default function AdminStudioScreen() {
                     ? `Schema connected. ${adminV1ReadModel.providerUsageImportsCount ?? 0} import record${adminV1ReadModel.providerUsageImportsCount === 1 ? "" : "s"} and ${adminV1ReadModel.providerUsageDailyCount ?? 0} provider usage row${adminV1ReadModel.providerUsageDailyCount === 1 ? "" : "s"} are readable.`
                     : "Provider import schema is not connected yet."}
                 </Text>
-                <Text style={styles.configListBody}>Provider imports are server-side only.</Text>
                 <Text style={styles.configListBody}>
-                  Provider imports are not customer billing, overage, payout, revenue, or invoice truth.
-                </Text>
-                <Text style={styles.configListBody}>Cloudflare R2 import uses provider analytics when configured.</Text>
-                <Text style={styles.configListBody}>
-                  Hetzner Object Storage import uses S3 bucket inventory metadata when configured.
-                </Text>
-                <Text style={styles.configListBody}>Hetzner server import uses provider server metrics when configured.</Text>
-                <Text style={styles.configListBody}>
-                  Hetzner Object Storage storage values are metadata estimates, not Hetzner traffic or billing truth.
-                </Text>
-                <Text style={styles.configListBody}>
-                  OVH imports need a later exact provider API lane.
+                  Provider cards show import status only. They are not customer billing, overage, payout, revenue, invoice, or creator-earnings truth.
                 </Text>
                 <View style={styles.providerUsageGrid}>
                   {adminV1ReadModel.providerImportStatuses.map((providerStatus) => (
@@ -12302,9 +12593,13 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListBody}>
                   Imported provider billing snapshots: {adminV1ReadModel.providerBillingSnapshotImportedCount ?? 0}. No provider billing total is customer billing truth.
                 </Text>
-                <Text style={styles.configListBody}>No invoice send, customer charge, payment link, overage billing, or fake provider bill is active.</Text>
+                <Text style={styles.configListBody}>No invoice send, customer charge, payment link, overage billing, or provider bill activation is available here.</Text>
               </View>
             </TouchableOpacity>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Room & Media Estimates</Text>
+              <OwnerStatusPill label="DB estimates" tone="manual" />
+            </View>
             <TouchableOpacity
               activeOpacity={0.84}
               style={styles.configListRow}
@@ -12404,6 +12699,10 @@ export default function AdminStudioScreen() {
                 ) : null}
               </View>
             </TouchableOpacity>
+            <View style={styles.ownerSectionHeaderRow}>
+              <Text style={styles.ownerSectionTitle}>Cost Risk Boundary</Text>
+              <OwnerStatusPill label="Conservative" tone="locked" />
+            </View>
             <TouchableOpacity
               activeOpacity={0.84}
               style={styles.configListRow}
@@ -15759,21 +16058,50 @@ export default function AdminStudioScreen() {
               <Text style={styles.badgeText}>Read-only</Text>
             </View>
           </View>
-          <View style={styles.dashboardGrid}>
-            {systemStatusCards.map((card) => (
-              <TouchableOpacity
-                key={card.label}
-                activeOpacity={0.84}
-                style={[
-                  styles.dashboardMetricCard,
-                  card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
-                ]}
-                onPress={() => openSystemCardDetail(card)}
-              >
-                <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
-                <Text style={styles.dashboardMetricValue}>{card.value}</Text>
-                <Text style={styles.dashboardMetricBody}>{card.body}</Text>
-              </TouchableOpacity>
+          <View style={styles.contentHeroPanel}>
+            <OwnerControlPanelHeader
+              badgeLabel="Secrets hidden"
+              badgeTone="success"
+              kicker="READ MODELS"
+              subtitle="System cards are grouped by operational intent. They show presence and setup state only, not secrets or external provider dashboards."
+              title="System Operations"
+            />
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Ready" value={systemReadyCardCount} tone={systemReadyCardCount ? "success" : "locked"} />
+              <OwnerMetricTile label="Needs Setup" value={systemNeedsSetupCardCount} tone={systemNeedsSetupCardCount ? "manual" : "success"} />
+              <OwnerMetricTile label="Runtime Issues" value={runtimeConfigIssues.length} tone={runtimeConfigIssues.length ? "manual" : "success"} />
+              <OwnerMetricTile label="Inspect Only" value={systemStatusCards.length} tone="info" />
+            </View>
+          </View>
+          <View style={styles.configList}>
+            {[
+              { title: "Runtime & Config", cards: runtimeSystemCards, tone: "info" as OwnerControlTone },
+              { title: "Compliance & Audit", cards: complianceSystemCards, tone: "success" as OwnerControlTone },
+              { title: "Provider Setup", cards: providerSystemCards, tone: "manual" as OwnerControlTone },
+            ].map((group) => (
+              <View key={group.title} style={styles.contentPanel}>
+                <View style={styles.ownerSectionHeaderRow}>
+                  <Text style={styles.ownerSectionTitle}>{group.title}</Text>
+                  <OwnerStatusPill label={`${group.cards.length} checks`} tone={group.tone} />
+                </View>
+                <View style={styles.dashboardGrid}>
+                  {group.cards.map((card) => (
+                    <TouchableOpacity
+                      key={card.label}
+                      activeOpacity={0.84}
+                      style={[
+                        styles.dashboardMetricCard,
+                        card.tone === "unavailable" && styles.dashboardMetricCardUnavailable,
+                      ]}
+                      onPress={() => openSystemCardDetail(card)}
+                    >
+                      <Text style={styles.dashboardMetricLabel}>{card.label}</Text>
+                      <Text style={styles.dashboardMetricValue}>{card.value}</Text>
+                      <Text style={styles.dashboardMetricBody}>{card.body}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
             ))}
           </View>
         </View>
@@ -17102,6 +17430,18 @@ export default function AdminStudioScreen() {
                   ) : null}
                   <OwnerDetailGrid rows={selectedAdminDrilldown.rows} />
                 </View>
+                {selectedAdminDrilldown.sections?.map((section) => (
+                  <View key={section.title} style={styles.contentPanel}>
+                    <View style={styles.ownerSectionHeaderRow}>
+                      <Text style={styles.ownerSectionTitle}>{section.title}</Text>
+                      {section.statusLabel ? (
+                        <OwnerStatusPill label={section.statusLabel} tone={section.tone ?? "default"} />
+                      ) : null}
+                    </View>
+                    {section.body ? <Text style={styles.configListBody}>{section.body}</Text> : null}
+                    {section.rows?.length ? <OwnerDetailGrid rows={section.rows} /> : null}
+                  </View>
+                ))}
                 {selectedAdminDrilldown.actions?.length ? (
                   <View style={styles.contentPanel}>
                     <View style={styles.ownerSectionHeaderRow}>
