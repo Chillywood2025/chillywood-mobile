@@ -16,12 +16,14 @@ Current launch truth:
 - Proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`.
 - Full validation passed and is logged at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`.
 - Profile media manual proof remains partial by design: avatar edit sheet and Settings Appearance are proved, safe app-owned assets are staged, but save/read-back/remove/fallback is left for manual runtime proof later.
+- Blocker 8 moderation/legal ops is repo-side closed as an app-code/schema blocker: general safety reports, admin status/action RPCs, immutable report audit rows, DMCA tooling, Profile media report actions, and Profile media hide/remove/restore/masking are backed. Remaining Blocker 8 work is external operations and optional disposable-fixture visual proof, logged at `/tmp/chillywood-blocker8-moderation-legal-closeout-20260529/`.
 
 Next lane scope:
 
 - Finish Play Console listing/content rating/Data Safety/account-deletion acceptance.
 - Get attorney/legal approval for Terms, Privacy, DMCA/copyright, support, account deletion, moderation, Premium terms, and data safety claims.
 - Confirm support/account-deletion operational ownership, inbox routing, response SLA, and deletion request workflow.
+- Confirm the human moderation/support owner and operational playbook for general reports, profile-media reports, DMCA, appeals, and account deletion.
 - Keep live money off and do not fake Premium, payouts, ads, earnings, or provider readiness.
 - Do not add new product features while closing this blocker.
 

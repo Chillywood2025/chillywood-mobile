@@ -1,6 +1,6 @@
 # Moderation And Reporting Workflow
 
-Last updated: May 22, 2026
+Last updated: May 29, 2026
 
 > Repo launch note: Attorney review required before public launch. This workflow documents current and required operations; it does not claim a complete trust-and-safety organization exists.
 
@@ -90,7 +90,11 @@ Users may appeal certain actions through support where supported. Repeat abuse, 
 Current admin tooling:
 
 - recent safety reports can be read by platform roles;
-- creator-video moderation status can be set to hidden, removed, or clean by owner/operator roles;
+- report queue overview/list/detail reads are backed by `safety_reports` RPCs;
+- report status actions are backed: Mark Reviewed, Dismiss, and Escalate require a reason, update status/resolution timestamps, and write immutable audit rows;
+- target moderation actions are backed: Hide From Public, Remove From Public, and Restore Clean require a selected report plus reason and write immutable target-action audit rows;
+- creator videos, profile posts, profile post comments, creator-video comments, social attachments, and Profile media can be actioned where their public read paths honor moderation/status fields;
+- Profile Photo and Profile Background can be reported from the Profile Actions sheet when the media exists; admin target actions set Profile media to `flagged`, `admin_removed`, or `active`, and public Profile reads mask non-active media;
 - DMCA cases are backed by dedicated tables for formal notices, counter-notices, content actions, strikes, and audit history;
 - Owner can always access Admin DMCA; approved Admin/operator access requires `dmca_review`, `copyright_review`, or `legal_review`; moderators and regular users are denied server-side;
 - Owner or scoped Admin/operator can list/detail DMCA cases, mark case statuses, record hide/disable/restore/rejected-no-action/preserved-evidence actions, add/remove/dispute/resolve strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view functional case history;
@@ -98,7 +102,6 @@ Current admin tooling:
 - live backed/Admin DMCA proof passed with disposable reporter/uploader/admin/viewer accounts and safe profile-post/comment/creator-video content, including invalid notice rejection, notice creation, Admin list/detail/status, content hide/restore, public hidden/restored visibility, strike/repeat-infringer review, rejected no-strike behavior, counter-notice deadlines, court-action restore blocking, RLS/private-data denial, generic report compatibility, and proof-content cleanup;
 - production Admin DMCA/public-legal closeout proof on physical Android `R5CR120QCBF` returned `60 pass`, `0 manual_required`, and `0 failed`, including hosted public DMCA URL reachability, public form submission, private evidence attachment upload/access denial, uploader self-service counter-notice/other-user denial, Admin readback/cleanup, email-intake mode, and content mutation coverage;
 - proof/demo/canary DMCA cases are marked test-only and hidden from production clients;
-- first-class open/resolved report workflow is not connected;
 - fraud runtime enforcement hooks are not connected;
 - payout holds are foundation-only unless a future release proves enforcement.
 
@@ -108,12 +111,15 @@ Outbound email automation is pending. Admin/support notification templates exist
 
 ## Launch Gaps
 
-- report status lifecycle: open, investigating, actioned, dismissed, appealed, closed;
+- attorney/legal approval of the workflow and policy language;
+- Google Play/Data Safety/account deletion acceptance where the workflow is referenced in store claims;
+- support/moderation owner, response SLA, escalation playbook, and account deletion operations owner;
+- outbound email automation proof and DKIM after a real outbound provider is configured;
+- automated malware scanning for evidence attachments if launch policy requires automation instead of manual scan-review;
+- optional disposable-fixture runtime drill for a full general report lifecycle if the launch owner wants fresh visual proof beyond source/guard/Admin screenshot proof;
 - reviewer assignment queue;
 - automated evidence bundle;
 - user-facing appeal center;
-- uploader-facing counter-notice submission route;
 - live-room/channel DMCA action tooling;
-- outbound email automation proof;
 - dedicated fraud/sponsor/payout enforcement workflow;
 - final severe-safety escalation owner and SLA.

@@ -8,6 +8,14 @@ Last updated: May 29, 2026
 
 Public V1 eight-blocker burn-down proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`. The release APK installed and opened on Android device `R5CR120QCBF`, in-app Settings/Support/Account Deletion/Privacy/Terms/Copyright Report/Moderation Policy routes were captured, and public legal/support URLs returned HTTP 200 after redirects where applicable. This closes the current repo/runtime proof that the legal surfaces are reachable, but it does not complete attorney approval, Google Play Data Safety/content-rating/listing entry, account deletion URL acceptance, support/account-deletion SLA ownership, or external legal operations acceptance.
 
+## May 29, 2026 Moderation/Legal Ops Blocker 8 Follow-Up
+
+Blocker 8 is no longer blocked on missing repo-side moderation tooling. Safety report intake is backed by `safety_reports`, client insert guards, and the contextual report sheet. Admin report review is backed by `read_admin_reports`, `update_admin_report_status`, `apply_admin_report_target_action`, and `list_admin_report_audit_events`, with immutable `platform_admin_audit_logs` rows for status and target actions. Backed target actions cover creator videos, profile posts, profile post comments, creator-video comments, social attachments, and Profile media. Profile Photo/Profile Background reports are reachable from the Profile Actions sheet when media exists, and profile media target actions set `flagged`, `admin_removed`, or `active` while public profile reads mask non-active media.
+
+Proof for this follow-up is recorded at `/tmp/chillywood-blocker8-moderation-legal-closeout-20260529/`, and the current release screenshots in `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/` remain the visual proof for Support, Account Deletion, Copyright Report, Moderation Policy, Admin Reports, Privacy, and Terms.
+
+Remaining launch blockers are external/operational: attorney approval, Google Play policy acceptance, support/account-deletion SLA ownership, outbound email/DKIM, automated malware scanning, and an optional disposable-fixture visual drill for a full general report lifecycle if the launch owner wants one more runtime receipt. Do not fake reports or create real moderation rows without a safe disposable target.
+
 ## May 21, 2026 Production Legal Policy Source
 
 Canonical mobile/static policy text now lives in `legal/policies.mjs` and is rendered by:
@@ -78,7 +86,7 @@ Status key:
 | Fraud/forfeiture rules | Drafted pending attorney review | Fraud foundations exist; live enforcement not connected. |
 | Sponsor disclosure rules | Drafted pending attorney review | Sponsor money/checkout remains not active. |
 | Banned content policy | Drafted pending attorney review | Policy created. |
-| Moderation/reporting workflow | Drafted pending attorney review / partially implemented | Generic reporting/admin moderation foundation exists; dedicated production DMCA Admin case-management tooling exists; public hosted DMCA form, private evidence attachments, and uploader-facing counter-notice self-service are canary-proved. General report lifecycle, outbound email automation, automated malware scanning, and fraud/sponsor enforcement remain pending. |
+| Moderation/reporting workflow | Drafted pending attorney review / repo-side report lifecycle backed | Generic reporting/admin moderation lifecycle is backed for intake, admin status changes, target hide/remove/restore, immutable audit, and Profile media report/admin actions. Dedicated production DMCA Admin case-management tooling exists; public hosted DMCA form, private evidence attachments, and uploader-facing counter-notice self-service are canary-proved. Outbound email automation, automated malware scanning, external ops SLA, attorney approval, and fraud/sponsor enforcement remain pending. |
 
 ## Required External Blockers Before Public Launch
 
