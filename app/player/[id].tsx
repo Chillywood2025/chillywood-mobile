@@ -94,13 +94,6 @@ import {
     resolveWatchPartySourceId,
     resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
-import {
-    clearTitleShare,
-    markTitleShared,
-    readTitleEngagementState,
-    toggleTitleLike,
-    type TitleEngagementState,
-} from "../../_lib/contentEngagement";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import type { Tables } from "../../supabase/database.types";
@@ -346,6 +339,10 @@ const getPlayerSurfacePresentation = (mode: PlayerSurfaceMode) => {
       };
   }
 };
+
+const buildStandaloneTitleDeepLink = (titleId: string) => (
+  `chillywoodmobile://player/${encodeURIComponent(String(titleId ?? "").trim())}`
+);
 
 const formatPlaybackRateLabel = (rate: number) => `${Number(rate.toFixed(2)).toString()}x`;
 
@@ -669,19 +666,8 @@ type StandalonePlayerTopChromeProps = {
   playbackGateActive: boolean;
   overlayOpacity: Animated.Value;
   overlayTranslateY: Animated.Value;
-  myListBusy: boolean;
-  inMyList: boolean;
-  canSaveToList: boolean;
-  onToggleMyList: () => void;
-  canLike: boolean;
-  engagementState: TitleEngagementState | null;
-  engagementLoading: boolean;
-  engagementBusy: "like" | "share" | null;
-  onToggleLike: () => void;
-  canMarkShared: boolean;
-  onToggleShare: () => void;
-  canShareCreatorVideo: boolean;
-  onShareCreatorVideo: () => void;
+  canShare: boolean;
+  onShare: () => void;
   canStartWatchPartyLive: boolean;
   onWatchParty: () => void;
   canReport: boolean;
@@ -694,26 +680,15 @@ function StandalonePlayerTopChrome({
   playbackGateActive,
   overlayOpacity,
   overlayTranslateY,
-  myListBusy,
-  inMyList,
-  canSaveToList,
-  onToggleMyList,
-  canLike,
-  engagementState,
-  engagementLoading,
-  engagementBusy,
-  onToggleLike,
-  canMarkShared,
-  onToggleShare,
-  canShareCreatorVideo,
-  onShareCreatorVideo,
+  canShare,
+  onShare,
   canStartWatchPartyLive,
   onWatchParty,
   canReport,
   reportBusy,
   onReport,
 }: StandalonePlayerTopChromeProps) {
-  const hasTopLeftActions = canShareCreatorVideo || canReport || canSaveToList || canLike || canMarkShared;
+  const hasTopLeftActions = canShare || canReport;
 
   return (
     <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
@@ -730,10 +705,10 @@ function StandalonePlayerTopChrome({
         >
           <View style={styles.standaloneTopActionBar}>
             <View style={styles.standaloneTopLeftActions}>
-              {canShareCreatorVideo ? (
+              {canShare ? (
                 <TouchableOpacity
                   style={styles.compactChip}
-                  onPress={onShareCreatorVideo}
+                  onPress={onShare}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.compactChipText}>Share</Text>
@@ -747,42 +722,6 @@ function StandalonePlayerTopChrome({
                   activeOpacity={0.85}
                 >
                   <Text style={styles.compactChipText}>{reportBusy ? "Sending..." : "Report"}</Text>
-                </TouchableOpacity>
-              ) : null}
-              {canSaveToList ? (
-                <TouchableOpacity
-                  style={[styles.compactChip, inMyList && styles.compactChipAccent, myListBusy && styles.secondaryBtnDisabled]}
-                  onPress={onToggleMyList}
-                  disabled={myListBusy}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.compactChipText, inMyList && styles.compactChipTextAccent]}>
-                    {inMyList ? "In List" : "+ List"}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {canLike ? (
-                <TouchableOpacity
-                  style={[styles.compactChip, engagementState?.liked && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
-                  onPress={onToggleLike}
-                  disabled={engagementLoading || engagementBusy !== null}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.compactChipText, engagementState?.liked && styles.compactChipTextAccent]}>
-                    {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {canMarkShared ? (
-                <TouchableOpacity
-                  style={[styles.compactChip, engagementState?.shared && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
-                  onPress={onToggleShare}
-                  disabled={engagementLoading || engagementBusy !== null}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
-                    {engagementBusy === "share" ? "Sharing..." : engagementState?.shared ? "Shared" : "Share"}
-                  </Text>
                 </TouchableOpacity>
               ) : null}
               {!hasTopLeftActions ? <View style={styles.standaloneTopSpacer} /> : null}
@@ -1123,9 +1062,8 @@ export default function PlayerScreen() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [myListIds, setMyListIds] = useState<string[]>([]);
   const [myListBusy, setMyListBusy] = useState(false);
-  const [engagementState, setEngagementState] = useState<TitleEngagementState | null>(null);
-  const [engagementLoading, setEngagementLoading] = useState(false);
-  const [engagementBusy, setEngagementBusy] = useState<"like" | "share" | null>(null);
+  const [titleReportVisible, setTitleReportVisible] = useState(false);
+  const [titleReportBusy, setTitleReportBusy] = useState(false);
   const [creatorVideoReportVisible, setCreatorVideoReportVisible] = useState(false);
   const [creatorVideoReportBusy, setCreatorVideoReportBusy] = useState(false);
   const [creatorVideoComments, setCreatorVideoComments] = useState<CreatorVideoComment[]>([]);
@@ -1596,42 +1534,6 @@ export default function PlayerScreen() {
       active = false;
     };
   }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    if (
-      inWatchParty
-      || isLiveModeFlag
-      || !titleId
-      || expectsCreatorVideo
-      || expectsSpectatorPlayback
-      || playbackSourceKind === "creator-video"
-      || playbackSourceKind === "spectator-playback"
-    ) {
-      setEngagementState(null);
-      setEngagementLoading(false);
-      return () => {
-        active = false;
-      };
-    }
-
-    setEngagementLoading(true);
-    readTitleEngagementState(titleId)
-      .then((nextState) => {
-        if (active) setEngagementState(nextState);
-      })
-      .catch(() => {
-        if (active) setEngagementState(null);
-      })
-      .finally(() => {
-        if (active) setEngagementLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [expectsCreatorVideo, expectsSpectatorPlayback, inWatchParty, isLiveModeFlag, playbackSourceKind, titleId]);
 
   useEffect(() => {
     let active = true;
@@ -4242,47 +4144,22 @@ export default function PlayerScreen() {
     }
   }, [item?.poster_url, item?.thumbnail_url, item?.title, myListBusy, titleId]);
 
-  const onToggleStandaloneLike = useCallback(async () => {
-    if (!titleId || engagementBusy) return;
-    resetAutoHideTimer();
-
-    if (!isSignedIn) {
-      Alert.alert("Sign in required", "Sign in to like titles on Chi'llywood.");
+  const onShareStandaloneTitle = useCallback(async () => {
+    if (!titleId || !hasResolvedPlatformTitle) {
+      Alert.alert("Share unavailable", "Chi'llywood could not resolve this title for sharing.");
       return;
     }
-
-    setEngagementBusy("like");
-    try {
-      const nextState = await toggleTitleLike(titleId);
-      setEngagementState(nextState);
-    } catch {
-      Alert.alert("Like unavailable", "Unable to update this title like right now.");
-    } finally {
-      setEngagementBusy(null);
-    }
-  }, [engagementBusy, isSignedIn, resetAutoHideTimer, titleId]);
-
-  const onToggleStandaloneShare = useCallback(async () => {
-    if (!titleId || engagementBusy) return;
     resetAutoHideTimer();
 
-    if (!isSignedIn) {
-      Alert.alert("Sign in required", "Sign in to mark titles as shared on Chi'llywood.");
-      return;
-    }
-
-    setEngagementBusy("share");
     try {
-      const nextState = engagementState?.shared
-        ? await clearTitleShare(titleId)
-        : await markTitleShared(titleId);
-      setEngagementState(nextState);
+      const titleLabel = String(item?.title ?? (localTitle as any)?.title ?? "this title").trim() || "this title";
+      await Share.share({
+        message: `Watch ${titleLabel} on Chi'llywood: ${buildStandaloneTitleDeepLink(titleId)}`,
+      });
     } catch {
-      Alert.alert("Share unavailable", "Unable to update this shared-title state right now.");
-    } finally {
-      setEngagementBusy(null);
+      Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
     }
-  }, [engagementBusy, engagementState?.shared, isSignedIn, resetAutoHideTimer, titleId]);
+  }, [hasResolvedPlatformTitle, item?.title, localTitle, resetAutoHideTimer, titleId]);
 
   const onShareCreatorVideo = useCallback(async () => {
     resetAutoHideTimer();
@@ -4493,6 +4370,46 @@ export default function PlayerScreen() {
       },
     });
   }, [cleanId, creatorVideo, ensureWatchPartyLivePremium, hasResolvedPlatformTitle, isPlaying, isSignedIn, playbackSourceKind, titleId, titleLoading, item?.id, item?.title, localTitle]);
+
+  const onSubmitTitleReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
+    if (!titleId || !hasResolvedPlatformTitle || titleReportBusy) return;
+
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in before sending a title safety report.");
+      return;
+    }
+
+    setTitleReportBusy(true);
+    try {
+      const titleLabel = String(item?.title ?? (localTitle as any)?.title ?? "Title").trim() || "Title";
+      await submitSafetyReport({
+        targetType: "title",
+        targetId: titleId,
+        category: input.category,
+        note: input.note,
+        titleId,
+        context: buildSafetyReportContext({
+          sourceSurface: "player",
+          sourceRoute: `/player/${encodeURIComponent(titleId)}`,
+          targetLabel: titleLabel,
+          targetRoleLabel: "Title",
+          platformOwnedTarget: false,
+          context: {
+            sourceKind: "title",
+          },
+        }),
+      });
+      setTitleReportVisible(false);
+      Alert.alert("Report sent", "Thanks. Chi'llywood moderation can review this title.");
+    } catch (error) {
+      Alert.alert(
+        "Report unavailable",
+        error instanceof Error ? error.message : "Unable to send this report right now.",
+      );
+    } finally {
+      setTitleReportBusy(false);
+    }
+  }, [hasResolvedPlatformTitle, isSignedIn, item?.title, localTitle, titleId, titleReportBusy]);
 
   const onSubmitCreatorVideoReport = useCallback(async (input: { category: SafetyReportCategory; note: string }) => {
     if (playbackSourceKind !== "creator-video" || !titleId || creatorVideoReportBusy) return;
@@ -6492,9 +6409,8 @@ export default function PlayerScreen() {
     standalonePlaybackUnknown,
   ]);
   const showStandaloneAccessOverlay = isStandalonePlayer && standalonePlaybackGateActive && !!standaloneAccessPresentation;
-  const canSaveStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback;
-  const canLikeStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback;
-  const canMarkStandaloneShared = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback && !standaloneAccessLoading && !!standaloneAccess?.isAllowed;
+  const canShareStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback && hasResolvedPlatformTitle;
+  const canReportStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback && hasResolvedPlatformTitle;
   const canShareStandaloneCreatorVideo = isStandalonePlayer && isCreatorVideoPubliclyShareable(creatorVideo);
   const canStartStandaloneWatchPartyLive = isStandalonePlayer
     && !isSpectatorPlayback
@@ -8555,6 +8471,17 @@ export default function PlayerScreen() {
             ) : null}
 
             <ReportSheet
+              visible={titleReportVisible}
+              title="Report title"
+              description="Send this title to Chi'llywood moderation review."
+              busy={titleReportBusy}
+              onSubmit={onSubmitTitleReport}
+              onClose={() => {
+                if (!titleReportBusy) setTitleReportVisible(false);
+              }}
+            />
+
+            <ReportSheet
               visible={creatorVideoReportVisible}
               title="Report creator video"
               description="Send this uploaded video to Chi'llywood moderation review."
@@ -8673,24 +8600,19 @@ export default function PlayerScreen() {
                 playbackGateActive={standalonePlaybackGateActive}
                 overlayOpacity={compactControlsOpacity}
                 overlayTranslateY={compactControlsTranslateY}
-                myListBusy={myListBusy}
-                inMyList={inMyList}
-                canSaveToList={canSaveStandaloneTitle}
-                onToggleMyList={onToggleMyList}
-                canLike={canLikeStandaloneTitle}
-                engagementState={engagementState}
-                engagementLoading={engagementLoading}
-                engagementBusy={engagementBusy}
-                onToggleLike={onToggleStandaloneLike}
-                canMarkShared={canMarkStandaloneShared}
-                onToggleShare={onToggleStandaloneShare}
-                canShareCreatorVideo={canShareStandaloneCreatorVideo}
-                onShareCreatorVideo={onShareCreatorVideo}
+                canShare={isCreatorVideoPlayback ? canShareStandaloneCreatorVideo : canShareStandaloneTitle}
+                onShare={isCreatorVideoPlayback ? onShareCreatorVideo : onShareStandaloneTitle}
                 canStartWatchPartyLive={canStartStandaloneWatchPartyLive}
                 onWatchParty={onWatchParty}
-                canReport={isCreatorVideoPlayback}
-                reportBusy={creatorVideoReportBusy}
-                onReport={() => setCreatorVideoReportVisible(true)}
+                canReport={isCreatorVideoPlayback || canReportStandaloneTitle}
+                reportBusy={isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy}
+                onReport={() => {
+                  if (isCreatorVideoPlayback) {
+                    setCreatorVideoReportVisible(true);
+                    return;
+                  }
+                  setTitleReportVisible(true);
+                }}
               />
             )}
 
