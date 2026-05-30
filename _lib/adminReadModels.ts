@@ -150,6 +150,54 @@ export type AdminSystemHistoryReadModel = {
   items: AdminSystemHistoryRow[];
 };
 
+export type AdminMediaScanSummary = {
+  filteredRows: number | null;
+  totalRows: number | null;
+  pendingRows: number | null;
+  scanningRows: number | null;
+  cleanRows: number | null;
+  malwareDetectedRows: number | null;
+  scanFailedRows: number | null;
+  manualReviewRows: number | null;
+  quarantinedRows: number | null;
+  staleScanningRows: number | null;
+  oldestPendingAt: string | null;
+  latestCompletedAt: string | null;
+  latestClaimedAt: string | null;
+};
+
+export type AdminMediaScanJob = {
+  jobId: string;
+  targetTable: string;
+  targetColumn: string;
+  targetId: string;
+  status: string;
+  priority: number | null;
+  attemptCount: number | null;
+  maxAttempts: number | null;
+  claimedBy: string | null;
+  claimedAt: string | null;
+  completedAt: string | null;
+  scannerProvider: string | null;
+  scannerVersion: string | null;
+  signatureVersion: string | null;
+  findingName: string | null;
+  errorPresent: boolean;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  metadataFieldCount: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminMediaScanReadModel = {
+  connected: boolean;
+  generatedAt: string;
+  status: string;
+  summary: AdminMediaScanSummary;
+  items: AdminMediaScanJob[];
+};
+
 const adminReadModelRpc = supabase as unknown as {
   rpc: (
     fn: string,
@@ -237,6 +285,22 @@ const emptySystemHistorySummary = (): AdminSystemHistorySummary => ({
   latestAt: null,
 });
 
+const emptyMediaScanSummary = (): AdminMediaScanSummary => ({
+  filteredRows: null,
+  totalRows: null,
+  pendingRows: null,
+  scanningRows: null,
+  cleanRows: null,
+  malwareDetectedRows: null,
+  scanFailedRows: null,
+  manualReviewRows: null,
+  quarantinedRows: null,
+  staleScanningRows: null,
+  oldestPendingAt: null,
+  latestCompletedAt: null,
+  latestClaimedAt: null,
+});
+
 export const createEmptyAdminUsersReadModel = (): AdminUsersReadModel => ({
   connected: false,
   generatedAt: nowIso(),
@@ -257,6 +321,14 @@ export const createEmptyAdminSystemHistoryReadModel = (source = "all"): AdminSys
   generatedAt: nowIso(),
   source,
   summary: emptySystemHistorySummary(),
+  items: [],
+});
+
+export const createEmptyAdminMediaScanReadModel = (status = "all"): AdminMediaScanReadModel => ({
+  connected: false,
+  generatedAt: nowIso(),
+  status,
+  summary: emptyMediaScanSummary(),
   items: [],
 });
 
@@ -425,6 +497,54 @@ const normalizeSystemHistoryRow = (value: unknown): AdminSystemHistoryRow | null
   };
 };
 
+const normalizeMediaScanSummary = (value: unknown): AdminMediaScanSummary => {
+  const row = asRecord(value);
+  return {
+    filteredRows: asInteger(row.filteredRows),
+    totalRows: asInteger(row.totalRows),
+    pendingRows: asInteger(row.pendingRows),
+    scanningRows: asInteger(row.scanningRows),
+    cleanRows: asInteger(row.cleanRows),
+    malwareDetectedRows: asInteger(row.malwareDetectedRows),
+    scanFailedRows: asInteger(row.scanFailedRows),
+    manualReviewRows: asInteger(row.manualReviewRows),
+    quarantinedRows: asInteger(row.quarantinedRows),
+    staleScanningRows: asInteger(row.staleScanningRows),
+    oldestPendingAt: asString(row.oldestPendingAt),
+    latestCompletedAt: asString(row.latestCompletedAt),
+    latestClaimedAt: asString(row.latestClaimedAt),
+  };
+};
+
+const normalizeMediaScanJob = (value: unknown): AdminMediaScanJob | null => {
+  const row = asRecord(value);
+  const jobId = asString(row.jobId);
+  if (!jobId) return null;
+  return {
+    jobId,
+    targetTable: asString(row.targetTable) ?? "unknown",
+    targetColumn: asString(row.targetColumn) ?? "media",
+    targetId: asString(row.targetId) ?? "unknown",
+    status: asString(row.status) ?? "unknown",
+    priority: asInteger(row.priority),
+    attemptCount: asInteger(row.attemptCount),
+    maxAttempts: asInteger(row.maxAttempts),
+    claimedBy: asString(row.claimedBy),
+    claimedAt: asString(row.claimedAt),
+    completedAt: asString(row.completedAt),
+    scannerProvider: asString(row.scannerProvider),
+    scannerVersion: asString(row.scannerVersion),
+    signatureVersion: asString(row.signatureVersion),
+    findingName: asString(row.findingName),
+    errorPresent: row.errorPresent === true,
+    mimeType: asString(row.mimeType),
+    sizeBytes: asNumber(row.sizeBytes),
+    metadataFieldCount: asInteger(row.metadataFieldCount) ?? 0,
+    createdAt: asString(row.createdAt),
+    updatedAt: asString(row.updatedAt),
+  };
+};
+
 export async function readAdminUsersReadModel(options?: {
   query?: string;
   limit?: number;
@@ -494,5 +614,31 @@ export async function readAdminSystemHistoryReadModel(options?: {
     };
   } catch {
     return createEmptyAdminSystemHistoryReadModel(source);
+  }
+}
+
+export async function readAdminMediaScanReadModel(options?: {
+  status?: string;
+  limit?: number;
+}): Promise<AdminMediaScanReadModel> {
+  const status = options?.status ?? "all";
+  try {
+    const { data, error } = await adminReadModelRpc.rpc("get_admin_media_scan_read_model", {
+      p_status: status,
+      p_limit: options?.limit ?? 50,
+    });
+    if (error) throw error;
+    const payload = asRecord(data);
+    return {
+      connected: payload.connected === true,
+      generatedAt: asString(payload.generatedAt) ?? nowIso(),
+      status: asString(payload.status) ?? status,
+      summary: normalizeMediaScanSummary(payload.summary),
+      items: asArray(payload.items)
+        .map(normalizeMediaScanJob)
+        .filter((entry): entry is AdminMediaScanJob => !!entry),
+    };
+  } catch {
+    return createEmptyAdminMediaScanReadModel(status);
   }
 }

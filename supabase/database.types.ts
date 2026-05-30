@@ -9582,6 +9582,10 @@ export type Database = {
         Returns: string
       }
       get_admin_content_config: { Args: never; Returns: Json }
+      get_admin_media_scan_read_model: {
+        Args: { p_limit?: number; p_status?: string }
+        Returns: Json
+      }
       get_admin_report_detail: { Args: { p_report_id: number }; Returns: Json }
       get_admin_reports_overview: { Args: never; Returns: Json }
       get_admin_system_history_read_model: {

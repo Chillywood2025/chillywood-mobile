@@ -161,12 +161,16 @@ import {
   type TitleAccessRule,
 } from "../_lib/monetization";
 import {
+  createEmptyAdminMediaScanReadModel,
   createEmptyAdminSystemHistoryReadModel,
   createEmptyAdminUsageDetailReadModel,
   createEmptyAdminUsersReadModel,
+  readAdminMediaScanReadModel,
   readAdminSystemHistoryReadModel,
   readAdminUsageDetailReadModel,
   readAdminUsersReadModel,
+  type AdminMediaScanJob,
+  type AdminMediaScanReadModel,
   type AdminSystemHistoryReadModel,
   type AdminSystemHistoryRow,
   type AdminUsageDetailReadModel,
@@ -608,6 +612,23 @@ type AdminSystemHistoryReadModelWithLoading = AdminSystemHistoryReadModel & {
   loading: boolean;
 };
 
+type AdminMediaScanReadModelWithLoading = AdminMediaScanReadModel & {
+  loading: boolean;
+};
+
+type AdminMediaScanStatusFilter = "all" | "pending_scan" | "scanning" | "clean" | "malware_detected" | "scan_failed" | "manual_review" | "quarantined";
+
+const ADMIN_MEDIA_SCAN_STATUS_FILTERS: { key: AdminMediaScanStatusFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "pending_scan", label: "Pending" },
+  { key: "scanning", label: "Scanning" },
+  { key: "clean", label: "Clean" },
+  { key: "malware_detected", label: "Blocked" },
+  { key: "scan_failed", label: "Failed" },
+  { key: "manual_review", label: "Review" },
+  { key: "quarantined", label: "Quarantined" },
+];
+
 type AdminFinanceReadModelWithLoading = AdminFinanceReadModel & {
   loading: boolean;
 };
@@ -904,6 +925,11 @@ const EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL: AdminUsageDetailReadModelWithLoading 
 };
 const EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL: AdminSystemHistoryReadModelWithLoading = {
   ...createEmptyAdminSystemHistoryReadModel(),
+  generatedAt: new Date(0).toISOString(),
+  loading: false,
+};
+const EMPTY_ADMIN_MEDIA_SCAN_READ_MODEL: AdminMediaScanReadModelWithLoading = {
+  ...createEmptyAdminMediaScanReadModel(),
   generatedAt: new Date(0).toISOString(),
   loading: false,
 };
@@ -2572,6 +2598,14 @@ const adminSystemHistoryRowTone = (row: AdminSystemHistoryRow): OwnerControlTone
   return "success";
 };
 
+const adminMediaScanJobTone = (job: AdminMediaScanJob): OwnerControlTone => {
+  const status = job.status.toLowerCase();
+  if (status === "malware_detected" || status === "quarantined") return "danger";
+  if (status === "scan_failed" || status === "manual_review" || status === "pending_scan" || status === "scanning") return "manual";
+  if (status === "clean") return "success";
+  return "info";
+};
+
 const formatAdminUsageQuantity = (row: AdminUsageDetailRow) => {
   if (row.quantity === null) return row.unit ? `Unit ${formatModerationToken(row.unit)}` : "No quantity";
   if (row.unit === "bytes") return formatUsageBytes(row.quantity);
@@ -3292,6 +3326,10 @@ export default function AdminStudioScreen() {
     useState<AdminUsageDetailReadModelWithLoading>(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
   const [adminSystemHistoryReadModel, setAdminSystemHistoryReadModel] =
     useState<AdminSystemHistoryReadModelWithLoading>(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
+  const [adminMediaScanReadModel, setAdminMediaScanReadModel] =
+    useState<AdminMediaScanReadModelWithLoading>(EMPTY_ADMIN_MEDIA_SCAN_READ_MODEL);
+  const [adminMediaScanStatusFilter, setAdminMediaScanStatusFilter] =
+    useState<AdminMediaScanStatusFilter>("all");
   const [adminFinanceReadModel, setAdminFinanceReadModel] =
     useState<AdminFinanceReadModelWithLoading>(EMPTY_ADMIN_FINANCE_READ_MODEL);
   const [adminImmutableAuditReadModel, setAdminImmutableAuditReadModel] =
@@ -3482,8 +3520,10 @@ export default function AdminStudioScreen() {
   const adminUsersReadModelLastRefreshedLabel = formatAdminReadModelTimestamp(adminUsersReadModel.generatedAt);
   const adminUsageDetailLastRefreshedLabel = formatAdminReadModelTimestamp(adminUsageDetailReadModel.generatedAt);
   const adminSystemHistoryLastRefreshedLabel = formatAdminReadModelTimestamp(adminSystemHistoryReadModel.generatedAt);
+  const adminMediaScanLastRefreshedLabel = formatAdminReadModelTimestamp(adminMediaScanReadModel.generatedAt);
   const adminUsageDetailRows = adminUsageDetailReadModel.items;
   const adminSystemHistoryRows = adminSystemHistoryReadModel.items;
+  const adminMediaScanRows = adminMediaScanReadModel.items;
   const usageSliceSignals = useMemo(() => [
     adminV1ReadModel.internalUsageSchemaConnected,
     adminV1ReadModel.providerUsageSchemaConnected,
@@ -3963,6 +4003,8 @@ export default function AdminStudioScreen() {
       setAdminUsersReadModel(EMPTY_ADMIN_USERS_READ_MODEL);
       setAdminUsageDetailReadModel(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
       setAdminSystemHistoryReadModel(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
+      setAdminMediaScanReadModel(EMPTY_ADMIN_MEDIA_SCAN_READ_MODEL);
+      setAdminMediaScanStatusFilter("all");
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
       setAuditOverviewCategoryFilter("all");
@@ -4069,6 +4111,8 @@ export default function AdminStudioScreen() {
       setAdminUsersReadModel(EMPTY_ADMIN_USERS_READ_MODEL);
       setAdminUsageDetailReadModel(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
       setAdminSystemHistoryReadModel(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
+      setAdminMediaScanReadModel(EMPTY_ADMIN_MEDIA_SCAN_READ_MODEL);
+      setAdminMediaScanStatusFilter("all");
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminImmutableAuditReadModel(EMPTY_ADMIN_IMMUTABLE_AUDIT_READ_MODEL);
       setAuditOverviewCategoryFilter("all");
@@ -4097,6 +4141,8 @@ export default function AdminStudioScreen() {
       setAdminUsersReadModel(EMPTY_ADMIN_USERS_READ_MODEL);
       setAdminUsageDetailReadModel(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
       setAdminSystemHistoryReadModel(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
+      setAdminMediaScanReadModel(EMPTY_ADMIN_MEDIA_SCAN_READ_MODEL);
+      setAdminMediaScanStatusFilter("all");
       setAdminFinanceReadModel(EMPTY_ADMIN_FINANCE_READ_MODEL);
       setAdminMoneyAuditSourceRows([]);
       setSelectedAdminMoneyAuditEvent(null);
@@ -5308,6 +5354,18 @@ export default function AdminStudioScreen() {
         tone: adminImmutableAuditReadModel.connected ? "default" : "unavailable",
       },
       {
+        label: "Malware Scanner",
+        value: adminMediaScanReadModel.loading
+          ? "Loading"
+          : adminMediaScanReadModel.connected
+            ? "Connected"
+            : "Not connected yet",
+        body: adminMediaScanReadModel.connected
+          ? "Sanitized scan job status is readable in Admin without storage paths or raw errors."
+          : "Scanner status requires the Owner/Admin media scan read model.",
+        tone: adminMediaScanReadModel.connected ? "default" : "unavailable",
+      },
+      {
         label: "RevenueCat Public Setup",
         value: hasRevenueCatPublicKey ? "Ready" : "Not connected yet",
         body: "Public SDK-key presence only. RevenueCat dashboard/setup is not changed here.",
@@ -5334,6 +5392,8 @@ export default function AdminStudioScreen() {
   }, [
     adminImmutableAuditReadModel.connected,
     adminImmutableAuditReadModel.loading,
+    adminMediaScanReadModel.connected,
+    adminMediaScanReadModel.loading,
     appConfigConnected,
     configLoading,
     liveKitConfigured,
@@ -5350,7 +5410,7 @@ export default function AdminStudioScreen() {
     [systemStatusCards],
   );
   const complianceSystemCards = useMemo(
-    () => systemStatusCards.filter((card) => ["Immutable Audit", "Legal URLs", "Readiness Docs"].includes(card.label)),
+    () => systemStatusCards.filter((card) => ["Immutable Audit", "Malware Scanner", "Legal URLs", "Readiness Docs"].includes(card.label)),
     [systemStatusCards],
   );
   const providerSystemCards = useMemo(
@@ -6594,19 +6654,36 @@ export default function AdminStudioScreen() {
     setAdminSystemHistoryReadModel({ ...systemHistoryReadModel, loading: false });
   }, []);
 
+  const loadAdminMediaScanReadModel = useCallback(async (status: AdminMediaScanStatusFilter = "all") => {
+    setAdminMediaScanReadModel((current) => ({ ...current, loading: true, status }));
+
+    const mediaScanReadModel = await readAdminMediaScanReadModel({
+      status,
+      limit: 50,
+    });
+    setAdminMediaScanReadModel({ ...mediaScanReadModel, loading: false });
+  }, []);
+
   useEffect(() => {
     if (!canAccessAdmin) {
       setAdminUsersReadModel(EMPTY_ADMIN_USERS_READ_MODEL);
       setAdminUsageDetailReadModel(EMPTY_ADMIN_USAGE_DETAIL_READ_MODEL);
       setAdminSystemHistoryReadModel(EMPTY_ADMIN_SYSTEM_HISTORY_READ_MODEL);
+      setAdminMediaScanReadModel(EMPTY_ADMIN_MEDIA_SCAN_READ_MODEL);
+      setAdminMediaScanStatusFilter("all");
       return;
     }
 
     if (operatorTab === "users") void loadAdminUsersReadModel();
     if (operatorTab === "usage") void loadAdminUsageDetailReadModel("all");
-    if (operatorTab === "system") void loadAdminSystemHistoryReadModel("all");
+    if (operatorTab === "system") {
+      void loadAdminSystemHistoryReadModel("all");
+      void loadAdminMediaScanReadModel(adminMediaScanStatusFilter);
+    }
   }, [
+    adminMediaScanStatusFilter,
     canAccessAdmin,
+    loadAdminMediaScanReadModel,
     loadAdminSystemHistoryReadModel,
     loadAdminUsageDetailReadModel,
     loadAdminUsersReadModel,
@@ -16486,11 +16563,14 @@ export default function AdminStudioScreen() {
               title="System Operations"
               actions={(
                 <TouchableOpacity
-                  style={[styles.ownerSecondaryButton, adminSystemHistoryReadModel.loading && styles.configSaveBtnDisabled]}
-                  disabled={adminSystemHistoryReadModel.loading}
-                  onPress={() => { void loadAdminSystemHistoryReadModel("all"); }}
+                  style={[styles.ownerSecondaryButton, (adminSystemHistoryReadModel.loading || adminMediaScanReadModel.loading) && styles.configSaveBtnDisabled]}
+                  disabled={adminSystemHistoryReadModel.loading || adminMediaScanReadModel.loading}
+                  onPress={() => {
+                    void loadAdminSystemHistoryReadModel("all");
+                    void loadAdminMediaScanReadModel(adminMediaScanStatusFilter);
+                  }}
                 >
-                  <Text style={styles.ownerSecondaryButtonText}>{adminSystemHistoryReadModel.loading ? "Refreshing" : "Refresh History"}</Text>
+                  <Text style={styles.ownerSecondaryButtonText}>{adminSystemHistoryReadModel.loading || adminMediaScanReadModel.loading ? "Refreshing" : "Refresh Status"}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -16518,6 +16598,27 @@ export default function AdminStudioScreen() {
                 label="Legal Rows"
                 value={formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.legalRows, adminSystemHistoryReadModel.loading)}
                 tone={adminSystemHistoryReadModel.connected ? "info" : "locked"}
+              />
+              <OwnerMetricTile
+                label="Scan Jobs"
+                value={formatAdminReadModelNumber(adminMediaScanReadModel.summary.totalRows, adminMediaScanReadModel.loading)}
+                tone={adminMediaScanReadModel.connected ? "info" : "locked"}
+              />
+              <OwnerMetricTile
+                label="Scan Issues"
+                value={formatAdminReadModelNumber(
+                  (adminMediaScanReadModel.summary.malwareDetectedRows ?? 0)
+                    + (adminMediaScanReadModel.summary.scanFailedRows ?? 0)
+                    + (adminMediaScanReadModel.summary.quarantinedRows ?? 0),
+                  adminMediaScanReadModel.loading,
+                )}
+                tone={
+                  ((adminMediaScanReadModel.summary.malwareDetectedRows ?? 0)
+                    + (adminMediaScanReadModel.summary.scanFailedRows ?? 0)
+                    + (adminMediaScanReadModel.summary.quarantinedRows ?? 0)) > 0
+                    ? "danger"
+                    : adminMediaScanReadModel.connected ? "success" : "locked"
+                }
               />
               <OwnerMetricTile
                 label="Provider Rows"
@@ -16597,6 +16698,120 @@ export default function AdminStudioScreen() {
                 />
               )}
             </View>
+            <View style={styles.contentPanel}>
+                <View style={styles.ownerSectionHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.ownerSectionTitle}>Malware Scanner</Text>
+                    <Text style={styles.configListBody}>
+                      Sanitized scan job results only. Storage buckets, object keys, raw paths, raw error bodies, service-role keys, and metadata values are not returned.
+                    </Text>
+                  </View>
+                  <OwnerStatusPill
+                    label={adminMediaScanReadModel.loading ? "Loading" : adminMediaScanReadModel.connected ? `${adminMediaScanRows.length} jobs` : "Locked"}
+                    tone={adminMediaScanReadModel.connected ? "success" : "locked"}
+                  />
+                </View>
+                <View style={styles.ownerFilterRow}>
+                  {ADMIN_MEDIA_SCAN_STATUS_FILTERS.map((option) => {
+                    const active = adminMediaScanStatusFilter === option.key;
+                    return (
+                      <TouchableOpacity
+                        key={`admin-media-scan-filter-${option.key}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        style={[styles.ownerFilterChip, active && styles.ownerFilterChipActive]}
+                        onPress={() => setAdminMediaScanStatusFilter(option.key)}
+                      >
+                        <Text style={[styles.ownerFilterChipText, active && styles.ownerFilterChipTextActive]}>{option.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <View style={styles.ownerMetricGrid}>
+                  <OwnerMetricTile
+                    label="Pending"
+                    value={formatAdminReadModelNumber(adminMediaScanReadModel.summary.pendingRows, adminMediaScanReadModel.loading)}
+                    tone={(adminMediaScanReadModel.summary.pendingRows ?? 0) > 0 ? "manual" : adminMediaScanReadModel.connected ? "success" : "locked"}
+                  />
+                  <OwnerMetricTile
+                    label="Clean"
+                    value={formatAdminReadModelNumber(adminMediaScanReadModel.summary.cleanRows, adminMediaScanReadModel.loading)}
+                    tone={adminMediaScanReadModel.connected ? "success" : "locked"}
+                  />
+                  <OwnerMetricTile
+                    label="Blocked"
+                    value={formatAdminReadModelNumber(adminMediaScanReadModel.summary.malwareDetectedRows, adminMediaScanReadModel.loading)}
+                    tone={(adminMediaScanReadModel.summary.malwareDetectedRows ?? 0) > 0 ? "danger" : adminMediaScanReadModel.connected ? "success" : "locked"}
+                  />
+                  <OwnerMetricTile
+                    label="Failed"
+                    value={formatAdminReadModelNumber(adminMediaScanReadModel.summary.scanFailedRows, adminMediaScanReadModel.loading)}
+                    tone={(adminMediaScanReadModel.summary.scanFailedRows ?? 0) > 0 ? "manual" : adminMediaScanReadModel.connected ? "success" : "locked"}
+                  />
+                </View>
+                {adminMediaScanReadModel.loading ? (
+                  <View style={styles.configLoadingRow}>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.configLoadingText}>Loading scanner status...</Text>
+                  </View>
+                ) : !adminMediaScanReadModel.connected ? (
+                  <OwnerDisabledReason reason="Scanner status requires Owner/Admin or scoped operations read-model access." />
+                ) : adminMediaScanRows.length ? (
+                  <View style={styles.ownerControlList}>
+                    {adminMediaScanRows.slice(0, 12).map((job) => (
+                      <OwnerControlRow
+                        key={`admin-media-scan-${job.jobId}`}
+                        message={[
+                          job.completedAt ? `Completed ${formatModerationTimestamp(job.completedAt)}` : job.claimedAt ? `Claimed ${formatModerationTimestamp(job.claimedAt)}` : job.createdAt ? `Queued ${formatModerationTimestamp(job.createdAt)}` : "Time unavailable",
+                          `${formatModerationToken(job.targetTable)} / ${formatModerationToken(job.targetColumn)}`,
+                          job.findingName ? formatAuditDisplayText(job.findingName) : null,
+                          job.errorPresent ? "error stored" : null,
+                        ].filter(Boolean).join(" · ")}
+                        meta={[
+                          `Target ${formatCompactIdentifier(job.targetId)}`,
+                          job.scannerProvider ? formatModerationToken(job.scannerProvider) : null,
+                          job.signatureVersion ? `Sig ${formatCompactIdentifier(job.signatureVersion)}` : null,
+                          job.sizeBytes !== null ? formatUsageBytes(job.sizeBytes) : null,
+                        ].filter(Boolean).join(" · ") || "No scanner metadata returned"}
+                        onPress={() => openAdminDrilldown({
+                          title: "Malware Scan Result",
+                          subtitle: `${formatModerationToken(job.targetTable)} · ${formatCompactIdentifier(job.jobId)}`,
+                          statusLabel: formatModerationToken(job.status),
+                          tone: adminMediaScanJobTone(job),
+                          body: "This Admin view is intentionally sanitized. It proves scan status and scanner metadata without returning storage buckets, object keys, raw paths, raw error text, service-role values, or metadata values.",
+                          rows: [
+                            { label: "Job id", value: formatCompactIdentifier(job.jobId) },
+                            { label: "Target", value: `${formatModerationToken(job.targetTable)} / ${formatModerationToken(job.targetColumn)}` },
+                            { label: "Target id", value: formatCompactIdentifier(job.targetId) },
+                            { label: "Status", value: formatModerationToken(job.status) },
+                            { label: "Finding", value: job.findingName ? formatAuditDisplayText(job.findingName) : "none returned" },
+                            { label: "Error", value: job.errorPresent ? "Stored but hidden" : "none" },
+                            { label: "Attempts", value: `${job.attemptCount ?? 0}/${job.maxAttempts ?? 0}` },
+                            { label: "Size", value: job.sizeBytes !== null ? formatUsageBytes(job.sizeBytes) : "not returned" },
+                            { label: "MIME", value: job.mimeType ? formatModerationToken(job.mimeType) : "not returned" },
+                            { label: "Scanner", value: job.scannerProvider ? formatModerationToken(job.scannerProvider) : "not returned" },
+                            { label: "Scanner version", value: job.scannerVersion ?? "not returned" },
+                            { label: "Signature version", value: job.signatureVersion ?? "not returned" },
+                            { label: "Created", value: job.createdAt ? formatModerationTimestamp(job.createdAt) : "not returned" },
+                            { label: "Claimed", value: job.claimedAt ? formatModerationTimestamp(job.claimedAt) : "not returned" },
+                            { label: "Completed", value: job.completedAt ? formatModerationTimestamp(job.completedAt) : "not returned" },
+                            { label: "Metadata values", value: `Hidden (${job.metadataFieldCount} field${job.metadataFieldCount === 1 ? "" : "s"})` },
+                          ],
+                        })}
+                        statusLabel={formatModerationToken(job.status)}
+                        title={`${formatModerationToken(job.targetTable)} scan`}
+                        tone={adminMediaScanJobTone(job)}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <OwnerEmptyState
+                    body="The scanner read model is connected, but no scan jobs were returned for this filter."
+                    title="No scan jobs"
+                  />
+                )}
+                <Text style={styles.ownerPanelMeta}>{`Scanner status refreshed ${adminMediaScanLastRefreshedLabel}`}</Text>
+              </View>
             {[
               { title: "Runtime & Config", cards: runtimeSystemCards, tone: "info" as OwnerControlTone },
               { title: "Compliance & Audit", cards: complianceSystemCards, tone: "success" as OwnerControlTone },
