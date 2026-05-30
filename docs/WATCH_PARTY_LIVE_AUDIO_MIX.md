@@ -6,6 +6,8 @@ May 29, 2026 burn-down update: the audio-mix code path was not changed. `adb dev
 
 May 30, 2026 LiveKit optimization update: Watch-Party Live shared-player camera seats now use the shared LiveKit v1 room options with `adaptiveStream: true` and `dynacast: true`, while camera publish keeps the existing `simulcast: true`, 720p/30fps/1.7 Mbps mobile-safe defaults. This did not change Audio Mix, audio publish permissions, video-audio publisher behavior, Party Room ownership, Live Stage ownership, token issuance, Premium gates, old-room handling, or the four-seat launch cap. Audio RED was audited as an inherited SDK default and was not explicitly changed.
 
+May 30, 2026 multi-participant emulator proof update: proof at `/tmp/chillywood-livekit-multi-participant-proof-20260530/` did not close two-device speech or reconnect behavior. Two emulators booted but were system/launcher-ANR unstable, the single-emulator fallback reached only the app splash before Android system ANR, and the attached physical device was locked on the PIN bouncer. Audio Mix remains single-device/control-surface proved only until an unlocked physical device plus a stable second signed-in device/emulator can join the same Watch-Party Live shared Player.
+
 ## Route Ownership
 
 - Watch-Party Live shared player: `app/player/[id].tsx` when `partyId` is present and `liveMode` is not enabled.

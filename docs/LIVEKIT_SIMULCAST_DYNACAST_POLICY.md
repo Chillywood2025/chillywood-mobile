@@ -94,9 +94,79 @@ Captured:
 
 Release APK: `android/app/build/outputs/apk/release/app-release.apk`, `205639147` bytes, installed successfully over the existing device session.
 
+## Multi-Participant Device/Emulator Proof Attempt
+
+Date: 2026-05-30.
+
+Proof path: `/tmp/chillywood-livekit-multi-participant-proof-20260530/`.
+
+Starting HEAD: `09da3fd`.
+
+Attempted setup:
+
+- Physical device: `R5CR120QCBF`, model `SM_N986U1`.
+- Available AVDs: `Chillywood_API_34`, `Maestro_Pixel_6_API_33_1`, `Pixel_8`.
+- The local `emulator` binary was available at `~/Library/Android/sdk/emulator/emulator`, not on the default shell `PATH`.
+
+Result:
+
+- `Chillywood_API_34` and `Pixel_8` booted together; `Maestro_Pixel_6_API_33_1` did not attach as a usable adb device.
+- Running two emulators was not stable enough for app-room proof: Android system/launcher ANRs blocked app navigation.
+- The single-emulator fallback with `Chillywood_API_34` booted, installed/opened `com.chillywood.mobile`, and captured the Chi'llywood splash, then Android system ANR blocked reaching Home or a LiveKit room.
+- The release APK installed/opened on `R5CR120QCBF` and `MainActivity` focused, but the physical device was on the Android PIN bouncer, so adb could not continue visual route navigation or joined-room proof.
+- Final adb state returned to `R5CR120QCBF` only; emulators were stopped.
+
+Release APK evidence:
+
+- Path: `android/app/build/outputs/apk/release/app-release.apk`.
+- SHA-256: `94a5154c5ab894d57ce03009115a6e86ff2888d750d7d7b9423c2df217b82e5e`.
+
+What this proves:
+
+- The current release APK could be installed/opened on the attached physical device.
+- A local emulator can boot and open the current app to splash, but the local emulator runtime was not stable enough for room proof.
+- No LiveKit-sensitive files changed during the proof lane.
+- Seat caps stayed at `LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS = 4` and `COMMUNICATION_ROOM_MAX_PARTICIPANTS = 4`.
+
+What this does not prove:
+
+- Live Watch-Party joined-room presence.
+- Watch-Party Live joined-room presence.
+- Host/speaker/viewer role behavior across devices.
+- Remote camera/mic media.
+- Reconnect from inside a real room.
+- TURN/cellular behavior.
+- 10-participant staging/load behavior.
+
+Exact blockers:
+
+- Physical Android device needs to be unlocked before route navigation can continue.
+- At least one stable second device/emulator is needed.
+- Safe signed-in owner/viewer accounts and a valid room fixture are needed.
+- Emulator mic/camera proof is not equivalent to real phone media proof even when emulator launch is stable.
+
+Validation for this proof attempt:
+
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `npm run guard:livekit-simulcast-dynacast-policy`
+- `npm run guard:refresh-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:provider-readiness-policy`
+- `npm run guard:money-center-policy`
+- `npm run guard:clip-studio-policy`
+- `npm run guard:platform-brand-studio-policy`
+- `npm run guard:spectator-child-room-policy`
+- targeted proof for no LiveKit-sensitive file diffs, no seat-limit increase, and no video-audio publisher
+- `git diff --check`
+- `git diff --cached --check`
+
 ## Limitations
 
-This pass does not claim multi-user performance proof. Only one Android device was attached (`R5CR120QCBF`), and no safe valid joined room fixture was available during the closeout. Camera/mic joined-room controls and remote video behavior still need a two-device/account proof.
+This pass does not claim multi-user performance proof. The follow-up emulator attempt did not produce a usable joined-room proof: emulators were Android system/launcher-ANR unstable and the attached physical device was locked. Camera/mic joined-room controls and remote video behavior still need an unlocked-device, multi-device/account proof.
 
 Seat limits must not be raised until all of the following pass:
 

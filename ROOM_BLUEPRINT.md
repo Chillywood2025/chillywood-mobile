@@ -153,6 +153,7 @@ This section is the durable room-scale truth for `Watch-Party Live`, `Party Room
   - true simultaneous live media scale
 - Public v1 does not assume `500+` equal live camera feeds in either Party or Live flow.
 - The current repo-owned live-media reality remains a small active-seat model, with the reusable communication-room transport still grounded in a small-room reference cap of `4` active live seats until stronger infrastructure is intentionally adopted. Simulcast/dynacast/adaptive stream make current seats more bandwidth-efficient; they do not justify raising seat limits without TURN/cellular proof, reconnect proof, two-device media proof, 10-participant staging/load proof, and server CPU/RAM/bandwidth review.
+- May 30, 2026 local emulator proof did not satisfy those prerequisites: two emulators booted but were Android system/launcher-ANR unstable, the single-emulator fallback reached only app splash before system ANR, and the attached physical device was locked at the PIN bouncer. Treat this as a proof blocker, not capacity evidence.
 - `Watch-Party Live` stays content-first: host visibility and a curated social presence layer matter, but broader membership should not be modeled as equal live tiles for everyone.
 - `Live Watch-Party` / `Live Stage` stays host-anchored: a limited number of true live seats can be active at once while the broader audience participates through comments, reactions, requests, and selective featuring.
 
