@@ -658,7 +658,7 @@ export function LiveKitStageMediaSurface({
   const roomKey = `${joinContract.roomName}:${joinContract.participantToken}`;
   const room = useMemo(() => {
     void roomKey;
-    const nextRoom = new Room(createLiveKitV1RoomOptions({ adaptiveStream: layout !== "bubble-grid", dynacast: false }));
+    const nextRoom = new Room(createLiveKitV1RoomOptions({ adaptiveStream: true, dynacast: true }));
     patchLiveKitSignalReadingLoop(
       nextRoom,
       surfaceLabel,

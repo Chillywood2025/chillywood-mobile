@@ -8,6 +8,8 @@ Google Play Data Safety Account Deletion Acceptance Closeout and the field-by-fi
 
 Current launch truth:
 
+- LiveKit Simulcast/Dynacast safe optimization is now scoped to current camera-room surfaces. Watch-Party Live shared-player camera seats and Live Watch-Party / Live Stage camera seats use `adaptiveStream: true`, `dynacast: true`, and the existing SDK-supported `simulcast: true` publish default. Mobile camera capture remains capped at 720p/30fps/1.7 Mbps, Audio RED remains inherited from the SDK default without an audio behavior change, and `LIVE_WATCH_PARTY_MAX_SPEAKER_SEATS` remains `4`. Chi'lly Chat video calls were audited and are excluded because they use the separate direct `RTCPeerConnection` communication stack, not LiveKit Room options; they retain their four-participant and 640x480 ideal / 720p max / 24fps max posture.
+- Proof for that lane lives at `/tmp/chillywood-livekit-simulcast-dynacast-proof-20260530/`; only one Android device was available, so two-device media/performance, TURN/cellular, reconnect, and 10-participant load proof remain future prerequisites before any seat-limit increase.
 - Google Play execution package is now created without claiming external acceptance. Owner/operator docs are:
   - `docs/google-play/PLAY_CONSOLE_EXECUTION_CHECKLIST.md`
   - `docs/google-play/PLAY_CONSOLE_FIELD_BY_FIELD_ANSWERS.md`

@@ -118,6 +118,7 @@ Only use these where they actually fit the room:
 - Live Waiting Room leads into Live Room on `/watch-party/live-stage/[partyId]`.
 - Live Stage is an in-room presentation mode inside Live Room.
 - Party Room owns the social watch-together shell.
+- LiveKit camera-room efficiency is scoped to Watch-Party Live shared-player camera seats and Live Watch-Party / Live Stage only. Those surfaces may use SDK-supported simulcast, dynacast, and adaptive stream; Party Room route ownership, standalone Player/HLS/VOD playback, Spectator playback, token issuance, role approval, old-room handling, Premium gates, codec/E2EE choices, autoscaling, and seat limits must not be changed by efficiency tuning lanes.
 - Party Room may provide viewer-local Party Feeds personalization such as participant pinning, but that personalization must stay inside `/watch-party/[partyId]`, must not alter host authority, room membership, LiveKit transport, shared playback, Premium gates, Live Stage, Chi'lly Chat calls, or other users' views, and must clear safely when the target participant is absent.
 - LiveKit RTC transport for Watch-Party Live, Live Stage, and Chi'lly Chat calls is assigned by the backed server registry/router, now remote-proved against `chillywood-prod-01`. Existing rooms stay pinned to their assigned server; a draining server receives no new rooms but does not disconnect assigned rooms. Current production has one Hetzner server record, `chillywood-prod-01`, until real usage requires adding additional boxes.
 - Watch-Party Live / shared party player owns the synchronized playback layer inside the Party flow.
@@ -151,7 +152,7 @@ This section is the durable room-scale truth for `Watch-Party Live`, `Party Room
   - UI/rendering scale
   - true simultaneous live media scale
 - Public v1 does not assume `500+` equal live camera feeds in either Party or Live flow.
-- The current repo-owned live-media reality remains a small active-seat model, with the reusable communication-room transport still grounded in a small-room reference cap of `4` active live seats until stronger infrastructure is intentionally adopted.
+- The current repo-owned live-media reality remains a small active-seat model, with the reusable communication-room transport still grounded in a small-room reference cap of `4` active live seats until stronger infrastructure is intentionally adopted. Simulcast/dynacast/adaptive stream make current seats more bandwidth-efficient; they do not justify raising seat limits without TURN/cellular proof, reconnect proof, two-device media proof, 10-participant staging/load proof, and server CPU/RAM/bandwidth review.
 - `Watch-Party Live` stays content-first: host visibility and a curated social presence layer matter, but broader membership should not be modeled as equal live tiles for everyone.
 - `Live Watch-Party` / `Live Stage` stays host-anchored: a limited number of true live seats can be active at once while the broader audience participates through comments, reactions, requests, and selective featuring.
 

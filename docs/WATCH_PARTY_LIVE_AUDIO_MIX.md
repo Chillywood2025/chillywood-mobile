@@ -4,6 +4,8 @@ Status: repo-side implemented, single-device Android proof captured; two-device 
 
 May 29, 2026 burn-down update: the audio-mix code path was not changed. `adb devices -l` showed only `R5CR120QCBF`, with no second joined Android device/emulator/account available, so true speech-triggered ducking remains unproved. The feature remains single-device/control-surface proved only; do not claim two-device closure until Device A observes local video duck/restore when Device B speaks in the same Watch-Party Live shared Player.
 
+May 30, 2026 LiveKit optimization update: Watch-Party Live shared-player camera seats now use the shared LiveKit v1 room options with `adaptiveStream: true` and `dynacast: true`, while camera publish keeps the existing `simulcast: true`, 720p/30fps/1.7 Mbps mobile-safe defaults. This did not change Audio Mix, audio publish permissions, video-audio publisher behavior, Party Room ownership, Live Stage ownership, token issuance, Premium gates, old-room handling, or the four-seat launch cap. Audio RED was audited as an inherited SDK default and was not explicitly changed.
+
 ## Route Ownership
 
 - Watch-Party Live shared player: `app/player/[id].tsx` when `partyId` is present and `liveMode` is not enabled.

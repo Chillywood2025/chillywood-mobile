@@ -499,7 +499,7 @@ function LiveKitHybridCommunityRoomHost({
   const roomKey = `${joinContract.roomName}:${joinContract.participantToken}`;
   const room = useMemo(() => {
     void roomKey;
-    const nextRoom = new Room(createLiveKitV1RoomOptions({ adaptiveStream: true, dynacast: false }));
+    const nextRoom = new Room(createLiveKitV1RoomOptions({ adaptiveStream: true, dynacast: true }));
     patchLiveKitSignalReadingLoop(
       nextRoom,
       "Hybrid Live Stage",

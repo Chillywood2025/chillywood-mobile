@@ -44,6 +44,8 @@ export const createLiveKitV1RoomOptions = (options: Pick<RoomOptions, "adaptiveS
   ...options,
   videoCaptureDefaults: LIVE_VIDEO_CAPTURE_OPTIONS,
   publishDefaults: {
+    // Keep the LiveKit camera publish path on SDK-supported simulcast layers.
+    // Room-level dynacast/adaptive stream is scoped by each LiveKit room owner.
     simulcast: true,
     videoEncoding: {
       maxBitrate: LIVE_VIDEO_ENCODING_MAX_BITRATE_BPS,
