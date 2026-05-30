@@ -5,7 +5,7 @@ Lane: Store Legal Account Deletion Ops Closeout
 Starting HEAD: `73e02a0` (`Close out moderation legal blocker docs`)
 Proof folder: `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/`
 
-This closeout records what is repo-backed, what was runtime or URL checked, and what remains external for Google Play, legal approval, support operations, account deletion operations, outbound email, and malware scanning. It does not claim Play Console acceptance, Data Safety approval, attorney approval, DKIM verification, support staffing, account deletion fulfillment, or automated malware scanning.
+This closeout records what is repo-backed, what was runtime or URL checked, and what remains external for Google Play, legal approval, support operations, account deletion operations, outbound email, and malware-scanning policy. It does not claim Play Console acceptance, Data Safety approval, attorney approval, DKIM verification, support staffing, account deletion fulfillment, or automated malware scanning.
 
 ## Official References To Recheck
 
@@ -113,9 +113,10 @@ Current status:
 - No automated malware scanner is integrated or claimed.
 - Current protections are MIME/type validation, size limits, storage ownership policies, private buckets where applicable, public rendering gates, moderation statuses, admin hide/remove actions, and manual review.
 - DMCA evidence attachments explicitly carry manual-review / scanner-not-configured posture.
-- Broad public UGC launch should add scanner-backed staging/quarantine, scan status, fail-closed rendering for high-risk public files, admin review, and cleanup.
+- Controlled Public V1 Android/public testing does not require automated malware scanning and must not claim it.
+- Broad/high-volume UGC scanner integration is a P2 future provider lane unless Google Play review, counsel, or launch ownership explicitly reclassifies it as required for the chosen release scope.
 
-Launch classification: **P1** for broad public launch with open UGC uploads; acceptable for controlled testing only with manual review and no claim of automated malware scanning.
+Launch classification after May 30 decision closeout: **closed for controlled Public V1**, **P2 future provider lane** for broad/high-volume UGC unless reclassified by Play/legal review. No scanner is configured or claimed.
 
 ## Disposable Report Lifecycle Proof
 
@@ -143,14 +144,14 @@ Exact fixture required to run later:
 | Play / Data Safety / account deletion acceptance | External blocked | P0 | Yes for public Play distribution; no for private controlled testing | Yes | Complete Play Console forms, account deletion URL entry, content rating, store listing, test account instructions, and save external proof. |
 | Support / moderation / account deletion SLA owner | Mapped, external owner pending | P1 | No if owner manually monitors test feedback | Yes | Assign named owner/operator coverage, response/action targets, escalation, and audit process. |
 | Outbound email / DKIM | DNS baseline proved, outbound/DKIM pending | P1 | No | Yes for polished support/legal ops | Choose outbound provider, verify domain, publish DKIM, send test receipt, save proof outside repo. |
-| Automated malware scanning | Current validation/moderation only; scanner not integrated | P1 | No for controlled testing with manual review | Yes for broad UGC launch if launch policy requires automated scanning | Pick scanner architecture/provider and add staging/quarantine plus scan-status gates in a future security lane. |
+| Automated malware scanning decision | Closed for controlled Public V1; scanner not integrated or claimed | P2 future provider lane unless Play/legal reclassifies | No | No under current controlled-launch policy; yes only if Play/legal/launch ownership makes it required for the selected release scope | Keep no-scanner claims out of product/legal copy. If reclassified, pick scanner architecture/provider and add staging/quarantine plus scan-status gates in a future security lane. |
 | Optional disposable report lifecycle visual proof | Blocked on safe fixture | P2/P1 optional | No | No if source/backend proof is accepted; yes only if launch owner requires visual receipt | Provide disposable accounts/target and run the harmless report/hide/restore cleanup drill. |
 
-Counts remain:
+Counts after the May 30 malware-scanning decision closeout:
 
 - P0 blockers: 1
-- P1 blockers: 12
-- P2 deferrals: 10
+- P1 blockers: 11
+- P2 deferrals: 11
 
 The remaining P0 is external store/legal/account-deletion acceptance, not a newly discovered app-code defect.
 

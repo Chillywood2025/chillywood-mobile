@@ -28,6 +28,7 @@
     "guard:provider-readiness-policy": "node ./scripts/guard-provider-readiness-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",
     "guard:owner-security-center": "node ./scripts/guard-owner-security-center.mjs",
+    "guard:malware-scanning-policy": "node ./scripts/guard-malware-scanning-policy.mjs",
     "guard:security-request-context": "node ./scripts/guard-security-request-context.mjs && npm run guard:security-context-proxy-proof",
     "guard:security-context-proxy-proof": "node ./scripts/guard-security-context-proxy-proof.mjs",
     "guard:profile-production-policy": "node ./scripts/guard-profile-production-policy.mjs",

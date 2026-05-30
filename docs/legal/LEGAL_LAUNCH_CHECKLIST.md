@@ -14,7 +14,7 @@ Blocker 8 is no longer blocked on missing repo-side moderation tooling. Safety r
 
 Proof for this follow-up is recorded at `/tmp/chillywood-blocker8-moderation-legal-closeout-20260529/`, and the current release screenshots in `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/` remain the visual proof for Support, Account Deletion, Copyright Report, Moderation Policy, Admin Reports, Privacy, and Terms.
 
-Remaining launch blockers are external/operational: attorney approval, Google Play policy acceptance, support/account-deletion SLA ownership, outbound email/DKIM, automated malware scanning, and an optional disposable-fixture visual drill for a full general report lifecycle if the launch owner wants one more runtime receipt. Do not fake reports or create real moderation rows without a safe disposable target.
+Remaining launch blockers are external/operational: attorney approval, Google Play policy acceptance, support/account-deletion SLA ownership, outbound email/DKIM, and an optional disposable-fixture visual drill for a full general report lifecycle if the launch owner wants one more runtime receipt. Automated malware scanning is not configured or claimed; after the May 30 decision closeout, it is not required for controlled Public V1 and is a P2 future provider lane unless Play/legal review explicitly reclassifies it. Do not fake reports or create real moderation rows without a safe disposable target.
 
 ## May 29, 2026 Store Legal Account Deletion Ops Closeout
 
@@ -27,7 +27,7 @@ Repo-side legal/support/account-deletion reachability is current:
 - account deletion remains an honest request-based flow and does not claim destructive deletion completion;
 - support/moderation/account deletion operational roles and SLA targets are mapped, but staffing/owner acceptance remains external;
 - outbound email/DKIM is not complete. Cloudflare MX, SPF, and DMARC baseline exist, but no DKIM record was found for common selectors and no provider delivery proof is claimed;
-- automated malware scanning is not configured. Current protection is validation, storage policy, moderation status, admin action, and manual review. Do not claim automated scanning;
+- automated malware scanning is not configured or claimed. Current protection is validation, storage policy, moderation status, admin action, and manual review; scanner integration is a future provider lane unless Play/legal review reclassifies it;
 - optional disposable report lifecycle visual proof remains fixture-blocked and must not be faked.
 
 Supporting docs:
@@ -105,7 +105,7 @@ Status key:
 | Fraud/forfeiture rules | Drafted pending attorney review | Fraud foundations exist; live enforcement not connected. |
 | Sponsor disclosure rules | Drafted pending attorney review | Sponsor money/checkout remains not active. |
 | Banned content policy | Drafted pending attorney review | Policy created. |
-| Moderation/reporting workflow | Drafted pending attorney review / repo-side report lifecycle backed | Generic reporting/admin moderation lifecycle is backed for intake, admin status changes, target hide/remove/restore, immutable audit, and Profile media report/admin actions. Dedicated production DMCA Admin case-management tooling exists; public hosted DMCA form, private evidence attachments, and uploader-facing counter-notice self-service are canary-proved. Outbound email automation, automated malware scanning, external ops SLA, attorney approval, and fraud/sponsor enforcement remain pending. |
+| Moderation/reporting workflow | Drafted pending attorney review / repo-side report lifecycle backed | Generic reporting/admin moderation lifecycle is backed for intake, admin status changes, target hide/remove/restore, immutable audit, and Profile media report/admin actions. Dedicated production DMCA Admin case-management tooling exists; public hosted DMCA form, private evidence attachments, and uploader-facing counter-notice self-service are canary-proved. Outbound email automation, external ops SLA, attorney approval, and fraud/sponsor enforcement remain pending. Automated malware scanning remains unconfigured and unclaimed, but is P2/future unless Play/legal review requires it for the selected launch scope. |
 
 ## Required External Blockers Before Public Launch
 
