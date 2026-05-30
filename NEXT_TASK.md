@@ -1,19 +1,26 @@
 # NEXT TASK
 
-## Recommended Lane: Owner Play Console Submission And Release Diagnostics
+## Recommended Lane: Owner Play Console Submission And Fresh Release AAB
 
 Public V1 eight-blocker burn-down is complete in `docs/PUBLIC_V1_READINESS_BLOCKER_MAP.md`.
 Store Legal Account Deletion Ops Closeout is documented in `docs/legal/STORE_LEGAL_ACCOUNT_DELETION_ACCEPTANCE_CLOSEOUT.md`.
-Google Play Data Safety Account Deletion Acceptance Closeout is now repo-side packaged in `docs/google-play/`.
+Google Play Data Safety Account Deletion Acceptance Closeout and the field-by-field Play Console operator packet are now repo-side packaged in `docs/google-play/`.
 
 Current launch truth:
 
 - Google Play execution package is now created without claiming external acceptance. Owner/operator docs are:
   - `docs/google-play/PLAY_CONSOLE_EXECUTION_CHECKLIST.md`
+  - `docs/google-play/PLAY_CONSOLE_FIELD_BY_FIELD_ANSWERS.md`
   - `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md`
   - `docs/google-play/ACCOUNT_DELETION_URL_CONTENT.md`
   - `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`
+  - `docs/google-play/PLAY_REVIEWER_TEST_ACCOUNT_PACKET.md`
+  - `docs/google-play/CONTENT_RATING_QUESTIONNAIRE_PREP.md`
+  - `docs/google-play/RELEASE_UPLOAD_CHECKLIST.md`
   - `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md`
+- The new field-by-field packet covers App details, Store listing, App category, Contact details, Privacy Policy, App access, Ads declaration, Content rating, Target audience, News declaration, Data Safety, Account deletion, UGC/moderation, financial/in-app purchases, sensitive permissions, release notes, closed testing, App bundle upload, and reviewer instructions.
+- The existing AAB proof remains evidence only; rebuild a fresh current-HEAD AAB before any Play upload. Current repo values are package `com.chillywood.mobile`, versionName `1.0.0`, and versionCode `8`.
+- Field-packet consistency findings to resolve before submission: owner/legal should review older legal-policy creator-surface wording against current `Platform` terminology, confirm Firebase/RevenueCat/Google Play collection state for Data Safety, confirm the Ads answer before saving "No ads", approve account-deletion SLA/support owner, and recapture direct Support route proof during the next route smoke.
 - Public URL proof for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Moderation Policy, Community Guidelines, and Creator Rules lives at `/tmp/chillywood-google-play-acceptance-closeout-20260530/public-url-check.tsv` and returned HTTP 200 after redirects.
 - Android proof for Settings Legal and Support, Privacy, Terms, Account Deletion, Copyright Report, and Moderation Policy lives at `/tmp/chillywood-google-play-acceptance-closeout-20260530/android/`. The direct Support deep link did not resolve during this proof, so use the May 29 release proof folder as the current visual Support route reference unless a later route smoke recaptures Support.
 - The remaining P0 is still external Play/Data Safety/account-deletion/legal acceptance. Do not reduce P0 to 0 until Play Console entries are accepted and legal/owner approval exists.
@@ -38,7 +45,8 @@ Current launch truth:
 
 External lane scope:
 
-- Finish Play Console listing/content rating/Data Safety/account-deletion acceptance using the new `docs/google-play/` package.
+- Finish Play Console listing/content rating/Data Safety/account-deletion acceptance using the field-by-field `docs/google-play/` package.
+- Build a fresh current-HEAD AAB before Play upload and save path/size/hash/pre-launch proof outside the repo.
 - Get attorney/legal approval for Terms, Privacy, DMCA/copyright, support, account deletion, moderation, Premium terms, and data safety claims.
 - Confirm support/account-deletion operational ownership, inbox routing, response SLA, and deletion request workflow.
 - Confirm the human moderation/support owner and operational playbook for general reports, profile-media reports, DMCA, appeals, and account deletion.

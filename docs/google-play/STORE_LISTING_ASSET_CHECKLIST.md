@@ -1,7 +1,7 @@
 # Google Play Store Listing Asset Checklist
 
 Date: 2026-05-30
-Status: repo evidence prepared; final Play listing assets still external
+Status: field-ready checklist prepared; final Play listing assets still external
 
 This checklist records what exists in the repo and what the owner/operator must upload or approve in Play Console. It does not claim store listing completion.
 
@@ -16,6 +16,8 @@ This checklist records what exists in the repo and what the owner/operator must 
 | Contact email | `support@chillywoodstream.com` | repo_ready, SLA external | Confirm inbox owner/SLA |
 | Privacy URL | `https://chillywoodstream.com/privacy` | repo_ready, legal external | Enter after legal approval |
 | Account deletion URL | `https://chillywoodstream.com/account-deletion` | repo_ready, Play external | Enter and wait for acceptance |
+| Website URL | `https://chillywoodstream.com` | repo_ready, owner confirmation | Enter if owner wants the public site listed |
+| Support URL | `https://chillywoodstream.com/support` | repo_ready, SLA external | Enter if Play offers a support URL field |
 
 ## Graphic Assets
 
@@ -33,10 +35,22 @@ This checklist records what exists in the repo and what the owner/operator must 
 
 | Field | Draft / rule | Status |
 | --- | --- | --- |
-| Short description | Use a concise social streaming description that does not claim fake money, ads, payouts, or free copyrighted content | owner/legal approval required |
-| Full description | Use `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md` as source, but keep user-facing creator-surface wording as "Platform" before submission | needs copy review |
+| Short description | Draft: `Upload, watch together, go live, and build your creator Platform.` | owner/legal approval required |
+| Alternate short description | Draft: `A premium social streaming home for creators, Platforms, and watch parties.` | owner/legal approval required |
+| Full description | Use `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md` as source, but keep user-facing creator-surface wording as "Platform" before submission and remove any unproved/future claim | needs copy review |
 | Release notes | State only actual current-build changes | external_required |
 | Tags | streaming, video, creators, social, entertainment, live, chat, watch party if Play supports them | owner approval required |
+
+## Release Artifact Entry
+
+| Field | Current proof value | Status | Owner action |
+| --- | --- | --- | --- |
+| Prior AAB proof path | `android/app/build/outputs/bundle/release/app-release.aab` | evidence only | Rebuild a fresh current-HEAD AAB before Play upload |
+| Prior AAB proof size/hash | 126M; `fbe91629a16e3d0143106296d527b91e86bbb1dad80f3a53b01994d416be2f0a` | evidence only | Do not treat as final upload proof |
+| Version name | `1.0.0` | repo_ready | Confirm acceptable for intended track |
+| Version code | `8` | repo_ready | Confirm it is greater than the last Play-uploaded versionCode before upload |
+
+Release upload details now live in `docs/google-play/RELEASE_UPLOAD_CHECKLIST.md`.
 
 ## Policy Declarations
 
@@ -58,4 +72,4 @@ This checklist records what exists in the repo and what the owner/operator must 
 
 ## Remaining Store Listing Blocker
 
-Store listing is **partial** until the owner uploads final approved assets/copy in Play Console and saves external proof. This is part of the remaining external P0 bundle.
+Store listing is **partial** until the owner uploads final approved assets/copy in Play Console and saves external proof. This is part of the remaining external P0 bundle. The repo now has field-ready operator docs, but Google Play listing completion is still not claimed.

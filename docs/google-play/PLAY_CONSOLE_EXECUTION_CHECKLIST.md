@@ -27,8 +27,12 @@ This checklist is for the owner/operator completing Google Play Console. It does
 | Earlier release/legal screenshots | `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/` |
 | Malware scanner production proof | `/tmp/chillywood-malware-scanner-production-proof-20260530/` |
 | Data Safety evidence map | `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md` |
+| Field-by-field answers | `docs/google-play/PLAY_CONSOLE_FIELD_BY_FIELD_ANSWERS.md` |
 | Account deletion URL content | `docs/google-play/ACCOUNT_DELETION_URL_CONTENT.md` |
 | Reviewer access instructions | `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md` |
+| Reviewer test account packet | `docs/google-play/PLAY_REVIEWER_TEST_ACCOUNT_PACKET.md` |
+| Content rating prep | `docs/google-play/CONTENT_RATING_QUESTIONNAIRE_PREP.md` |
+| Release upload checklist | `docs/google-play/RELEASE_UPLOAD_CHECKLIST.md` |
 | Store listing asset checklist | `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md` |
 
 ## Console Checklist

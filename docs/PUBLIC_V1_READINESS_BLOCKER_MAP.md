@@ -39,6 +39,15 @@ Google Play Data Safety Account Deletion Acceptance Closeout on May 30, 2026 add
 
 Proof lives at `/tmp/chillywood-google-play-acceptance-closeout-20260530/`. Public legal/support URLs returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Moderation Policy, Community Guidelines, and Creator Rules. Android proof on `R5CR120QCBF` captures Settings Legal and Support, Privacy, Terms, Account Deletion, Copyright Report, and Moderation Policy. The direct Support deep link did not resolve in that proof, so the May 29 release proof remains the current visual Support route reference. The P0 count stays 1 until Play Console accepts the Data Safety/account deletion/content-rating/listing entries and the owner/legal operator approves the legal and operational claims.
 
+Google Play Console Field-By-Field Completion Assistant on May 30, 2026 added the operator-facing completion packet:
+
+- `docs/google-play/PLAY_CONSOLE_FIELD_BY_FIELD_ANSWERS.md`
+- `docs/google-play/PLAY_REVIEWER_TEST_ACCOUNT_PACKET.md`
+- `docs/google-play/CONTENT_RATING_QUESTIONNAIRE_PREP.md`
+- `docs/google-play/RELEASE_UPLOAD_CHECKLIST.md`
+
+`docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md` is also updated with draft listing copy, asset gaps, version fields, and release artifact boundaries. The packet covers the Play Console fields for App details, Store listing, Category, Contact details, Privacy Policy, App access, Ads, Content rating, Target audience, News declaration, Data Safety, Account deletion, UGC/moderation, financial/in-app purchases, sensitive permissions, release notes, closed testing, app bundle upload, and reviewer instructions. It does not claim external completion. Consistency findings before submission: existing public legal policy source still contains some historical creator-surface wording to review against current `Platform` terminology, Firebase/RevenueCat/Google Play final collection/provider state needs owner confirmation for Data Safety, the existing AAB proof is evidence only and a fresh current-HEAD AAB is required before upload, the direct Support route should be recaptured, and Ads should be declared "No ads" only if the owner confirms no ad SDK/ad delivery/paid placement in the submitted build. The P0 count stays 1.
+
 Command proof:
 
 - Full command log: `/tmp/chillywood-public-v1-readiness-20260529/commands.log`
