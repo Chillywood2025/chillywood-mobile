@@ -29,11 +29,22 @@ Store Legal Account Deletion Ops closeout on May 29, 2026 mapped the remaining e
 
 After the May 30 malware-scanning production closeout, the updated status is P0 blockers: 1, P1 blockers: 10, P2 deferrals: 10. The P0 remains external Play/Data Safety/account-deletion/legal acceptance, not an app-code security defect.
 
+Google Play Data Safety Account Deletion Acceptance Closeout on May 30, 2026 added the owner/operator execution package without claiming external acceptance:
+
+- `docs/google-play/PLAY_CONSOLE_EXECUTION_CHECKLIST.md`
+- `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md`
+- `docs/google-play/ACCOUNT_DELETION_URL_CONTENT.md`
+- `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`
+- `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md`
+
+Proof lives at `/tmp/chillywood-google-play-acceptance-closeout-20260530/`. Public legal/support URLs returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Moderation Policy, Community Guidelines, and Creator Rules. Android proof on `R5CR120QCBF` captures Settings Legal and Support, Privacy, Terms, Account Deletion, Copyright Report, and Moderation Policy. The direct Support deep link did not resolve in that proof, so the May 29 release proof remains the current visual Support route reference. The P0 count stays 1 until Play Console accepts the Data Safety/account deletion/content-rating/listing entries and the owner/legal operator approves the legal and operational claims.
+
 Command proof:
 
 - Full command log: `/tmp/chillywood-public-v1-readiness-20260529/commands.log`
 - Eight-blocker burn-down validation log: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/full-validation.log`
 - Store/legal/account-deletion ops proof folder: `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/`
+- Google Play execution package proof folder: `/tmp/chillywood-google-play-acceptance-closeout-20260530/`
 - Malware scanner runtime proof folder: `/tmp/chillywood-malware-scanner-runtime-proof-20260530/`
 - Malware scanner production/Admin review proof folder: `/tmp/chillywood-malware-scanner-production-proof-20260530/`
 - All required commands returned status `0`.
@@ -67,7 +78,7 @@ Proof folder: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`
 
 ## Top 10 Launch Blockers
 
-1. **P0 - Store/legal/account-deletion acceptance is not complete.** Attorney/legal approval, Play Data Safety, account deletion URL acceptance, listing/content rating, and final support/account-deletion ownership remain external blockers.
+1. **P0 - Store/legal/account-deletion acceptance is not complete.** The repo-side Google Play execution package is ready in `docs/google-play/`, but attorney/legal approval, Play Data Safety, account deletion URL acceptance, listing/content rating, and final support/account-deletion ownership remain external blockers.
 2. **P1 - Profile media runtime closure is incomplete.** Owner avatar/settings entry and safe assets are proved, but save/read-back/remove/fallback/public masking still need manual safe-asset proof.
 3. **P1 - Second-account, blocked, and private runtime fixtures remain incomplete.** API/static proof exists, but full runtime fixture proof must not be faked.
 4. **P1 - Watch-Party Live two-device speech/reconnect proof remains incomplete.** Single-device/current route proof exists; true remote speech ducking needs two joined devices/accounts.
@@ -274,11 +285,11 @@ All commands below passed with status `0` in both `/tmp/chillywood-public-v1-rea
 
 ## Next Recommended Lane
 
-Run **Store Legal Account Deletion Acceptance Closeout** first, while keeping Profile media manual runtime proof as the next owner-device follow-up.
+Run **Owner Play Console Submission And Release Diagnostics** first, while keeping Profile media manual runtime proof as the next owner-device follow-up.
 
 Scope:
 
-- finish Play Console listing/content rating/Data Safety/account-deletion acceptance
+- finish Play Console listing/content rating/Data Safety/account-deletion acceptance using `docs/google-play/`
 - get attorney/legal approval for launch policies, account deletion, copyright/DMCA, support, moderation, and data safety claims
 - confirm support/account-deletion ownership, SLA, and operational inbox routing
 - confirm the human moderation/support owner and the external operational playbook for reports, profile-media reports, DMCA, appeals, and account deletion

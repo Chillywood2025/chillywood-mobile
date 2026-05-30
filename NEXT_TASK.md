@@ -1,12 +1,22 @@
 # NEXT TASK
 
-## Recommended Lane: Play Console Data Safety And Account Deletion Submission
+## Recommended Lane: Owner Play Console Submission And Release Diagnostics
 
 Public V1 eight-blocker burn-down is complete in `docs/PUBLIC_V1_READINESS_BLOCKER_MAP.md`.
 Store Legal Account Deletion Ops Closeout is documented in `docs/legal/STORE_LEGAL_ACCOUNT_DELETION_ACCEPTANCE_CLOSEOUT.md`.
+Google Play Data Safety Account Deletion Acceptance Closeout is now repo-side packaged in `docs/google-play/`.
 
 Current launch truth:
 
+- Google Play execution package is now created without claiming external acceptance. Owner/operator docs are:
+  - `docs/google-play/PLAY_CONSOLE_EXECUTION_CHECKLIST.md`
+  - `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md`
+  - `docs/google-play/ACCOUNT_DELETION_URL_CONTENT.md`
+  - `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`
+  - `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md`
+- Public URL proof for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Moderation Policy, Community Guidelines, and Creator Rules lives at `/tmp/chillywood-google-play-acceptance-closeout-20260530/public-url-check.tsv` and returned HTTP 200 after redirects.
+- Android proof for Settings Legal and Support, Privacy, Terms, Account Deletion, Copyright Report, and Moderation Policy lives at `/tmp/chillywood-google-play-acceptance-closeout-20260530/android/`. The direct Support deep link did not resolve during this proof, so use the May 29 release proof folder as the current visual Support route reference unless a later route smoke recaptures Support.
+- The remaining P0 is still external Play/Data Safety/account-deletion/legal acceptance. Do not reduce P0 to 0 until Play Console entries are accepted and legal/owner approval exists.
 - Standalone Player playback regression/menu polish is closed for the normal title Player runtime path. The Android root cause was native video/tap-layer ownership: video loaded, but the standalone center tap path did not reliably own Android taps. The Player now routes native video touches through an overlay gesture target and keeps real controls above it. The later playback-control simplification removed the black standalone Playback sheet entirely: no visible `Playback`, `Speed and quality`, `Quality`, Auto-quality row, or tune/settings icon remains on the normal title Player. Quality stays automatic/internal, while the compact `1x` chip cycles speed directly without opening a panel. Watch-Party Live remains top-right where eligible. Current proof lives at `/tmp/chillywood-player-playback-control-20260530/`; earlier playback-to-`0:03` proof remains at `/tmp/chillywood-standalone-player-playback-menu-fix-20260529/`.
 - Chi'llywood is safe for continued controlled Android testing with live money off and honest scope.
 - Chi'llywood is not ready for broad public launch.
@@ -28,7 +38,7 @@ Current launch truth:
 
 External lane scope:
 
-- Finish Play Console listing/content rating/Data Safety/account-deletion acceptance.
+- Finish Play Console listing/content rating/Data Safety/account-deletion acceptance using the new `docs/google-play/` package.
 - Get attorney/legal approval for Terms, Privacy, DMCA/copyright, support, account deletion, moderation, Premium terms, and data safety claims.
 - Confirm support/account-deletion operational ownership, inbox routing, response SLA, and deletion request workflow.
 - Confirm the human moderation/support owner and operational playbook for general reports, profile-media reports, DMCA, appeals, and account deletion.

@@ -21,7 +21,7 @@ Current operations truth:
 - general safety report intake, Admin Reports review, report status changes, target hide/remove/restore, immutable audit rows, Profile Photo/Profile Background reports, Profile media status actions, and non-active Profile media masking are repo-backed;
 - support/moderation/account deletion ownership is mapped by role, but launch staffing and SLA acceptance remain external;
 - outbound legal/support email remains manual until an outbound provider, DKIM, delivery proof, bounce handling, and templates are configured;
-- repo-side malware scanning is implemented, and production scanner coverage waits on worker deployment/runtime proof;
+- repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable;
 - optional disposable report lifecycle visual proof was not run because no safe disposable fixture was provided and production reports must not be faked.
 
 Supporting runbooks:
@@ -124,7 +124,7 @@ Current admin tooling:
 
 DMCA content disable/restore support currently covers `creator_video`, `profile_post`, `profile_post_comment`, `comment`, `creator_video_comment`, `reply`, `social_attachment`, and `attachment`. `live_room`, `channel`, and `other` remain preserve-only/disabled with exact missing-backend reasons and require support/legal handling; no LiveKit action is part of DMCA mutation coverage.
 
-Outbound email automation is pending. Admin/support notification templates exist for receipt confirmation, incomplete notice, rejection, uploader notice, counter-notice receipt/forwarding, restore eligibility, content restore, and repeat-infringer warnings, but sending remains manual unless a future email lane proves automation. DMCA evidence attachment storage/retention is backed through private `dmca-evidence` storage and Admin-only metadata readback; new evidence rows queue `pending_scan` / `clamav`, and production scanner coverage waits on ClamAV worker deployment proof.
+Outbound email automation is pending. Admin/support notification templates exist for receipt confirmation, incomplete notice, rejection, uploader notice, counter-notice receipt/forwarding, restore eligibility, content restore, and repeat-infringer warnings, but sending remains manual unless a future email lane proves automation. DMCA evidence attachment storage/retention is backed through private `dmca-evidence` storage and Admin-only metadata readback; new evidence rows queue `pending_scan` / `clamav`, and production scanner coverage is proved by the May 30 ClamAV worker proof.
 
 ## Launch Gaps
 
@@ -132,7 +132,7 @@ Outbound email automation is pending. Admin/support notification templates exist
 - Google Play/Data Safety/account deletion acceptance where the workflow is referenced in store claims;
 - support/moderation owner, response SLA, escalation playbook, and account deletion operations owner;
 - outbound email automation proof and DKIM after a real outbound provider is configured;
-- production malware scanner worker deployment/runtime proof;
+- production malware scanner monitoring/SLO polish only; deployment/runtime proof is closed;
 - optional disposable-fixture runtime drill for a full general report lifecycle if the launch owner wants fresh visual proof beyond source/guard/Admin screenshot proof;
 - reviewer assignment queue;
 - automated evidence bundle;

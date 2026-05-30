@@ -14,7 +14,7 @@ Blocker 8 is no longer blocked on missing repo-side moderation tooling. Safety r
 
 Proof for this follow-up is recorded at `/tmp/chillywood-blocker8-moderation-legal-closeout-20260529/`, and the current release screenshots in `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/` remain the visual proof for Support, Account Deletion, Copyright Report, Moderation Policy, Admin Reports, Privacy, and Terms.
 
-Remaining launch blockers are external/operational plus scanner deployment proof: attorney approval, Google Play policy acceptance, support/account-deletion SLA ownership, outbound email/DKIM, an optional disposable-fixture visual drill for a full general report lifecycle, and production ClamAV worker runtime proof. Repo-side malware scanning is implemented, but operational scanner coverage must not be claimed until deployment proof exists. Do not fake reports or create real moderation rows without a safe disposable target.
+Remaining launch blockers are external/operational: attorney approval, Google Play policy acceptance, support/account-deletion SLA ownership, outbound email/DKIM, and an optional disposable-fixture visual drill for a full general report lifecycle. Production ClamAV worker deployment/runtime proof is now closed. Do not fake reports or create real moderation rows without a safe disposable target.
 
 ## May 29, 2026 Store Legal Account Deletion Ops Closeout
 
@@ -27,13 +27,29 @@ Repo-side legal/support/account-deletion reachability is current:
 - account deletion remains an honest request-based flow and does not claim destructive deletion completion;
 - support/moderation/account deletion operational roles and SLA targets are mapped, but staffing/owner acceptance remains external;
 - outbound email/DKIM is not complete. Cloudflare MX, SPF, and DMARC baseline exist, but no DKIM record was found for common selectors and no provider delivery proof is claimed;
-- repo-side malware scanning is implemented. Production scanner coverage must not be claimed until the ClamAV worker is deployed with server-side secrets and runtime proof passes;
+- repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable;
 - optional disposable report lifecycle visual proof remains fixture-blocked and must not be faked.
 
 Supporting docs:
 
 - `docs/legal/OUTBOUND_EMAIL_DKIM_RUNBOOK.md`
 - `docs/security/MALWARE_SCANNING_READINESS_PLAN.md`
+
+## May 30, 2026 Google Play Execution Package
+
+The repo-side Play Console package is complete and does not claim external acceptance:
+
+- `docs/google-play/PLAY_CONSOLE_EXECUTION_CHECKLIST.md`
+- `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md`
+- `docs/google-play/ACCOUNT_DELETION_URL_CONTENT.md`
+- `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`
+- `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md`
+
+Proof folder: `/tmp/chillywood-google-play-acceptance-closeout-20260530/`.
+
+Current URL proof returns HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Moderation Policy, Community Guidelines, and Creator Rules. Android proof captures Settings Legal and Support, Privacy, Terms, Account Deletion, Copyright Report, and Moderation Policy. Direct Support deep-link proof did not resolve in this run, so the May 29 release proof remains the current Support visual proof until the next route smoke.
+
+Production malware scanning is now closed: the ClamAV worker is deployed on `chillywood-prod-01`, benign and EICAR runtime proof passed, public gates fail closed, and Admin scanner review is sanitized. DKIM, Play/Data Safety/content-rating/account-deletion acceptance, legal approval, account deletion fulfillment, and support staffing remain external.
 
 ## May 21, 2026 Production Legal Policy Source
 
@@ -95,7 +111,7 @@ Status key:
 | Creator Monetization / Revenue Disclaimer | Full production draft pending attorney review / linked in app | `app/creator-monetization.tsx`; confirms uploads do not automatically create payment or revenue-share rights. |
 | DMCA agent public page/contact | Done / attorney review pending | Public copyright page now lists Chi'llywood's designated agent contact: Chi'llywood Copyright Agent / Chi'llywood, `support@chillywoodstream.com`, 9316 S Kimbark, Chicago, IL 60619, phone `3124879454`. |
 | Copyright Office DMCA agent registration | Done | User-provided registration truth records Chi'llywood DMCA registration number `DMCA-1072720`; public Copyright Office directory status was checked as active effective May 13, 2026. |
-| Copyright report flow | Implemented / hosted public URL live / live backed proof passed / scanner deployment proof pending / attorney review pending | `app/copyright-report.tsx` and hosted `https://chillywoodstream.com/copyright-report` collect formal notice fields and submit to `dmca_cases` through `submit_dmca_notice`; generic report sheet and Settings Legal & Support link copyright users to the formal route. Admin manual intake is backed by `admin_dmca_create_case`. Safe proof passed with invalid-notice rejection, public form case creation, private evidence attachment upload/access denial, Admin list/detail visibility, supported content hide/restore, filters/search, test-only proof-case hygiene, and access denial for normal users. New uploaded evidence queues `pending_scan` / `clamav`; production worker scan proof remains pending. |
+| Copyright report flow | Implemented / hosted public URL live / live backed proof passed / scanner production proof passed / attorney review pending | `app/copyright-report.tsx` and hosted `https://chillywoodstream.com/copyright-report` collect formal notice fields and submit to `dmca_cases` through `submit_dmca_notice`; generic report sheet and Settings Legal & Support link copyright users to the formal route. Admin manual intake is backed by `admin_dmca_create_case`. Safe proof passed with invalid-notice rejection, public form case creation, private evidence attachment upload/access denial, Admin list/detail visibility, supported content hide/restore, filters/search, test-only proof-case hygiene, and access denial for normal users. New uploaded evidence queues `pending_scan` / `clamav`; production worker proof shows clean/EICAR outcomes and sanitized Admin scanner review. |
 | Counter-notice workflow | Admin-recorded and uploader self-service workflows implemented and proved / attorney review pending | Admin can record counter-notices received through Support, forwarding, 10-14 business-day windows, court action notices, restore eligibility, and court-action restore blocking. Authenticated uploaders can submit counter-notices for their own cases through `app/counter-notice.tsx`; the backed RPC denies other users' cases and supports optional private evidence attachments. |
 | Repeat infringer policy | Implemented and live-proof passed for Admin tracking / attorney review pending | `dmca_strikes` tracks active/removed/disputed/resolved/expired strikes and can open repeat-infringer review; proof confirmed valid takedown strike creation, rejected notice no-strike behavior, strike dispute/resolve, Admin visibility, and no automatic termination. |
 | Account deletion in-app path | Linked in app / policy proof automated | Settings opens the full Account Deletion policy and support contact remains available. |
@@ -105,7 +121,7 @@ Status key:
 | Fraud/forfeiture rules | Drafted pending attorney review | Fraud foundations exist; live enforcement not connected. |
 | Sponsor disclosure rules | Drafted pending attorney review | Sponsor money/checkout remains not active. |
 | Banned content policy | Drafted pending attorney review | Policy created. |
-| Moderation/reporting workflow | Drafted pending attorney review / repo-side report lifecycle and scanner pipeline backed | Generic reporting/admin moderation lifecycle is backed for intake, admin status changes, target hide/remove/restore, immutable audit, and Profile media report/admin actions. Dedicated production DMCA Admin case-management tooling exists; public hosted DMCA form, private evidence attachments, uploader-facing counter-notice self-service, and repo-side malware scan queueing/gates are backed. Outbound email automation, external ops SLA, attorney approval, scanner worker deployment proof, and fraud/sponsor enforcement remain pending. |
+| Moderation/reporting workflow | Drafted pending attorney review / repo-side report lifecycle and scanner pipeline backed | Generic reporting/admin moderation lifecycle is backed for intake, admin status changes, target hide/remove/restore, immutable audit, and Profile media report/admin actions. Dedicated production DMCA Admin case-management tooling exists; public hosted DMCA form, private evidence attachments, uploader-facing counter-notice self-service, and repo-side malware scan queueing/gates are backed. Production scanner deployment/runtime proof is closed. Outbound email automation, external ops SLA, attorney approval, and fraud/sponsor enforcement remain pending. |
 
 ## Required External Blockers Before Public Launch
 

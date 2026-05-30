@@ -1,0 +1,51 @@
+# Google Play Data Safety Evidence Map
+
+Date: 2026-05-30
+Status: repo evidence prepared; owner/legal confirmation required before Play submission
+
+This document maps Chi'llywood repo truth to likely Google Play Data Safety answers. It is not a submitted form and does not claim Google Play acceptance. When uncertain, the owner must confirm behavior and third-party SDK disclosures before submission.
+
+## Data Type Map
+
+| Data type | Collected | Shared | Required/optional | Purpose | Retention/deletion note | Repo evidence | Confirmation needed |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Account info: email, user id, username/display name | Yes | Service providers only unless legally required | Required for account features | App functionality, account management, security, support | Deletion/de-identification request-based; legal/security/moderation retention may apply | Supabase Auth, `_lib/userData.ts`, `app/(auth)`, `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` | Owner/legal confirms exact retention/SLA |
+| Profile data: avatar, background, bio, posts | Yes | Public where user chooses public visibility; service providers | Optional except basic profile identity | App functionality, personalization, public profile | Active public media may render; user_removed/flagged/admin_removed media is masked; deletion subject to retention | `_lib/profileMedia.ts`, `app/profile/[userId].tsx`, `202605260002_profile_media_status_policy.sql` | Confirm final public/private profile policy |
+| User-generated content: posts, comments, replies, uploads, attachments | Yes | Public/room/thread participants where user posts; service providers | Optional | App functionality, social/creator content, moderation | Hidden/removed/private/draft content should not render publicly; deletion request subject to legal/safety retention | `_lib/profilePosts.ts`, `_lib/socialAttachments.ts`, `_lib/creatorVideos.ts`, moderation migrations | Confirm retention and public visibility text |
+| Photos/videos/files selected by user | Yes when uploaded | Public only when user makes content public and gates pass; service providers | Optional | Profile media, creator uploads, social attachments, DMCA evidence | New media scan statuses gate public rendering; private DMCA evidence remains legal/admin-only | `expo-image-picker`, `expo-document-picker`, scanner migrations, `docs/security/MALWARE_SCANNING_READINESS_PLAN.md` | Confirm final scanner coverage wording |
+| Camera/microphone/live participation | Conditional, when user grants access and joins live/call surfaces | LiveKit/room participants for live media | Optional | Live Stage, Watch-Party Live, calls/communication | Current repo does not claim retained live recordings unless a later feature proves it | Android permissions, LiveKit packages, `livekit-token` function, room routes | Confirm no recording/retention claim in release |
+| Chi'lly Chat messages | Yes if user uses chat | Chat participants and service providers; moderation/legal where required | Optional | Messaging, app functionality, safety | Deletion/de-identification subject to recipient context and safety/legal retention | `_lib/chat.ts`, `/chat` routes, docs for Chi'lly Chat | Confirm chat retention and moderation posture |
+| App activity: playback progress, likes, saves, follows/Chi'lly Circle, search, reports | Yes/conditional | Service providers; public only where designed | Mixed | App functionality, personalization, analytics, safety | Account-linked records covered by deletion process subject to retention exceptions | `_lib/userData.ts`, `_lib/contentEngagement.ts`, `_lib/friendGraph.ts`, `_lib/moderation.ts`, Explore/search helpers | Confirm whether search history is stored in release |
+| Diagnostics/crash/performance | Yes if Firebase collection enabled in release | Firebase/Google as service provider | Generally required for app quality if enabled | Diagnostics, crash reporting, performance | Retention controlled by Firebase/project settings plus deletion/de-identification where possible | `@react-native-firebase/crashlytics`, `@react-native-firebase/perf`, `app.config.ts`, `android/app/google-services.json` | Owner confirms Firebase collection settings |
+| Analytics/app interactions | Yes if Firebase Analytics enabled in release | Firebase/Google as service provider | Conditional | Analytics, app functionality, product quality | Account-linked analytics may be reset/de-identified where possible; aggregate retention per provider | `@react-native-firebase/analytics`, `_lib/analytics.ts`, `_lib/firebaseAnalytics.ts` | Owner confirms analytics enabled/disabled and purposes |
+| Device or other IDs: push token, install/app instance ids, provider ids | Conditional | Expo/Firebase/RevenueCat/Supabase as service providers | Required for notifications/billing/diagnostics where used | App functionality, notifications, security, billing, diagnostics | Push tokens should be revoked/deleted on account/device removal where backed | `_lib/notifications.ts`, Expo notifications, Firebase packages, RevenueCat SDK | Confirm exact device ID categories from SDK disclosures |
+| Purchase history / subscription entitlement | Conditional if Premium ships | Google Play/RevenueCat and app backend | Optional unless user purchases | Premium access, restore/manage subscriptions, fraud/accounting | Financial/legal records may be retained; no live money activation in this lane | `_lib/revenuecat.ts`, RevenueCat packages, Money Center docs | Confirm whether Premium is live in submitted build |
+| Approximate location / IP/security context | Conditional via provider/network security logs, not app location feature | Service providers/security systems | Required for security/fraud where recorded | Security, fraud prevention, compliance | Raw public UI should not expose raw IP; security records may be retained | Trusted network proof docs, security context migrations, no `expo-location` package | Owner/legal confirms provider IP disclosure |
+| Contacts/address book | No repo feature evidence | No | Not applicable | Not used | Not applicable | No contacts package/permission found | Confirm no provider SDK collects contacts |
+| Health/fitness/SMS/call logs/precise location | No repo feature evidence | No | Not applicable | Not used | Not applicable | Manifest/packages do not show these feature owners | Confirm no SDK adds these at build time |
+
+## Third-Party SDK / Provider Audit
+
+| Provider / SDK | Active or scaffolded | Purpose | Data sent/received | Data Safety implication | Owner confirmation needed |
+| --- | --- | --- | --- | --- | --- |
+| Supabase | Active | Auth, database, storage, edge functions, RLS-backed APIs | Account ids, email/auth, UGC, profile/media metadata, reports, chat/activity records | Service provider for most app functionality, storage, security | Confirm project retention/backups and deletion procedure |
+| LiveKit | Active | Live rooms, Watch-Party Live, communication media | Room identity, token-authorized room participation, camera/mic streams | Service provider for audio/video live participation | Confirm no recording unless later enabled |
+| Firebase Analytics | Installed/used | App analytics/screen/event tracking | App events, user id/user properties when set | Declare analytics/app activity if enabled | Confirm collection state in release |
+| Firebase Crashlytics | Installed | Crash diagnostics | Crash logs, device/app info, identifiers | Declare diagnostics/crash data if enabled | Confirm collection state and retention |
+| Firebase Performance | Installed | Performance diagnostics | Performance traces, device/app info | Declare diagnostics/performance if enabled | Confirm collection state |
+| Firebase Remote Config | Installed/scaffolded | Runtime config | App instance/config context | Declare device/app info if active | Confirm active use in release |
+| Expo Notifications / FCM | Active where user registers | Push notifications | Expo push tokens, device notification status | Declare device IDs/tokens and notifications | Confirm notification rollout |
+| RevenueCat | Installed/configured for Android public key when available | Premium subscriptions/entitlements | Purchase/customer identifiers, entitlement status | Declare purchase history and identifiers if Premium ships | Confirm offering/product active state |
+| Google Play Billing | Active through RevenueCat/Play setup if Premium ships | Android digital purchases | Purchase tokens/subscription state | Play Billing policy/Data Safety purchase history | Confirm submitted build includes purchase flow |
+| Stripe | Backend/test-mode setup only for payouts/provider readiness | Creator payout/provider foundation, not Android digital goods | Provider event ids/readiness rows server-side | Do not declare user-facing card collection by app unless live flow added | Confirm no live money activation |
+| Cloudflare Pages/Email Routing/DNS | Active for legal web and inbound support routing | Public legal pages, support email routing | Support email traffic if used | Support communications handled outside app | Confirm inbox owner and DKIM/outbound provider |
+| Hetzner ClamAV worker | Active production service | Malware scanning of uploaded media | Storage object bytes and scan metadata via Supabase service-role server-side | Security/fraud prevention; not a public SDK | Confirm monitoring/SLO owner |
+| OpenAI | Not active by repo evidence | Future/deferred only | None | Do not declare as active | Reconfirm if future AI features are added |
+
+## Play Form Notes
+
+- Google defines collection broadly as data transmitted off device, including data sent by SDKs. Treat Firebase/RevenueCat/Supabase/LiveKit SDK disclosures as part of the answer set.
+- Do not answer "No data collected." This app has accounts, UGC, media uploads, reports, chat/live features, analytics/diagnostics packages, and push notification support.
+- Do not claim data is not shared without confirming Google Play's service-provider rules and each SDK/provider disclosure.
+- Do not claim automated deletion completion. Current account deletion is request-based with manual/ops steps.
+- Do not claim advertising/marketing data use unless live ads or marketing tracking are enabled and proved.

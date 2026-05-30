@@ -5,7 +5,7 @@ Lane: Store Legal Account Deletion Ops Closeout
 Starting HEAD: `73e02a0` (`Close out moderation legal blocker docs`)
 Proof folder: `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/`
 
-This closeout records what is repo-backed, what was runtime or URL checked, and what remains external for Google Play, legal approval, support operations, account deletion operations, outbound email, and malware-scanning operations. It does not claim Play Console acceptance, Data Safety approval, attorney approval, DKIM verification, support staffing, account deletion fulfillment, or production scanner deployment proof.
+This closeout records what is repo-backed, what was runtime or URL checked, and what remains external for Google Play, legal approval, support operations, account deletion operations, and outbound email. It does not claim Play Console acceptance, Data Safety approval, attorney approval, DKIM verification, support staffing, or account deletion fulfillment. Production scanner deployment proof was closed later on May 30, 2026.
 
 ## Official References To Recheck
 
@@ -14,6 +14,22 @@ Google Play requirements can change. Recheck these official references during th
 - Google Play User Generated Content policy: `https://support.google.com/googleplay/android-developer/answer/9876937`
 - Google Play Data Safety: `https://support.google.com/googleplay/android-developer/answer/10787469`
 - Google Play account deletion requirements: `https://support.google.com/googleplay/android-developer/answer/13327111`
+
+## May 30, 2026 Google Play Execution Package Update
+
+The repo-side owner/operator execution package is now created:
+
+- `docs/google-play/PLAY_CONSOLE_EXECUTION_CHECKLIST.md`
+- `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md`
+- `docs/google-play/ACCOUNT_DELETION_URL_CONTENT.md`
+- `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`
+- `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md`
+
+Proof folder: `/tmp/chillywood-google-play-acceptance-closeout-20260530/`.
+
+Public URL proof returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Moderation Policy, Community Guidelines, and Creator Rules. Android proof on `R5CR120QCBF` captured Settings Legal and Support, Privacy, Terms, Account Deletion, Copyright Report, and Moderation Policy. The direct Support deep link did not resolve in that proof, so prior May 29 release Support proof remains current until recaptured.
+
+Production malware scanning is now closed: `chillywood-prod-01` runs the ClamAV worker, benign/EICAR proof passed, public rendering fails closed for unsafe scan states, and Admin scan-result review is sanitized. DKIM remains unverified; Play Console/Data Safety/content-rating/account-deletion acceptance, legal approval, account deletion fulfillment, and support staffing remain external.
 
 ## Evidence
 
@@ -38,10 +54,10 @@ Google Play requirements can change. Recheck these official references during th
 | DMCA / copyright | `app/copyright.tsx`, `app/copyright-report.tsx`, `_lib/dmca.ts`, Admin Legal/DMCA tooling. | Copyright Report URL returned HTTP 200; screenshot exists. | Attorney review; maintain designated agent registration/contact; define outbound notice process. | Partial | P0/P1 | `docs/legal/LEGAL_LAUNCH_CHECKLIST.md`; screenshot `44-copyright-report-route.png` |
 | Account deletion instructions | `app/account-deletion.tsx`, public legal site, Settings/support handoff. | `https://chillywoodstream.com/account-deletion` returned HTTP 200; Android route screenshot exists. | Enter URL in Play Console, confirm it satisfies account-deletion policy, and define manual deletion/de-identification process. | Partial | P0 | `public-legal-url-check.tsv`; screenshot `19-account-deletion-route.png` |
 | In-app account deletion path | Settings and Support route link to account deletion/support path. | Existing Settings/Support/Account Deletion screenshots prove reachability. | Prove support queue receipt for deletion requests and assign SLA owner. | Partial | P0/P1 | `app/settings.tsx`; `components/system/support-screen.tsx` |
-| Data collection / Data Safety answers | `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` maps data types and SDK disclosures to repo evidence. | No Play Console acceptance claimed. | Release owner completes Play Data Safety form using current SDK/provider truth and saves external proof. | Blocked external | P0 | `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` |
+| Data collection / Data Safety answers | `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md` maps data types, third-party SDKs, and provider disclosures to repo evidence. | No Play Console acceptance claimed. | Release owner completes Play Data Safety form using current SDK/provider truth and saves external proof. | Blocked external | P0 | `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md` |
 | Content rating readiness | UGC, live, chat, copyright, moderation, and support policy text exists. | No Play Console content-rating receipt claimed. | Complete Play content rating questionnaire with final policy/legal owner. | Blocked external | P0/P1 | `legal/policies.mjs`; `docs/legal/LEGAL_LAUNCH_CHECKLIST.md` |
-| App access / test account readiness | Current Android proof used an owner session; public/signed-out routes are available. | Full Play review test-account proof is not captured in this lane. | Prepare Play test account instructions that do not expose secrets and do not grant admin access. | Partial | P1 | `docs/PUBLIC_V1_READINESS_BLOCKER_MAP.md` |
-| Store listing assets / screenshots | Current release screenshots exist outside the repo. | Legal/settings/admin screenshots are available in the eight-blocker proof folder. | Select final store screenshots, feature graphic, short/full descriptions, and privacy disclosures in Play Console. | Partial | P1 | `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/` |
+| App access / test account readiness | Current Android proof used an owner session; public/signed-out routes are available. | Full Play review test-account proof is not captured in this lane. | Use `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`; enter test credentials only in Play Console. | Partial | P1 | `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md` |
+| Store listing assets / screenshots | Current release screenshots exist outside the repo. | Legal/settings/admin screenshots are available in the eight-blocker proof folder and May 30 legal proof folder. | Select final store screenshots, feature graphic, short/full descriptions, and privacy disclosures in Play Console. | Partial | P1 | `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md` |
 | Paid digital goods policy | Premium remains gated; live money is off; Money Center docs separate Google/RevenueCat and Stripe roles. | Money Center screenshot exists; provider proof remains sandbox/setup-only. | Do not promote paid digital goods until RevenueCat/Google proof and Play billing compliance are complete. | Partial | P1 for monetized launch | `docs/MONEY_CENTER_PRODUCT_POLICY.md` |
 | Ads status | Ads defaults remain disabled; no fake ad revenue or live ad delivery. | No live ad proof claimed. | Declare no active ads unless a later ad provider lane proves real delivery and disclosures. | Partial | P1/P2 | `ROADMAP.md`; guard stack |
 | User-generated content / moderation | Report intake, Admin reports, target actions, audit rows, DMCA tooling, Profile media report actions are backed. | Admin Reports, Copyright Report, and Moderation Policy screenshots exist. | Assign moderation/support owner, SLA, escalation, and optional disposable-fixture lifecycle proof. | Partial | P1 | `docs/legal/MODERATION_REPORTING_WORKFLOW.md` |
@@ -116,7 +132,7 @@ Current status:
 - Public rendering/storage gates require `clean` or explicit `manual_review` legacy status.
 - Production worker deployment/runtime proof is still pending and must not be claimed until captured.
 
-Launch classification after May 30 scanner implementation: **repo-side implemented**, **P1 runtime/deployment proof pending** for broad launch. The app must not claim operational scanning until the worker is deployed with server-side secrets and scan proof is captured.
+Launch classification after the May 30 scanner production closeout: **closed as a repo-side launch blocker**. The app can claim configured upload scan paths are scanned by the production ClamAV worker, with the limitation that future hardening can still add alert SLO polish and signed-delivery revocation for already-leaked public bucket URLs.
 
 ## Disposable Report Lifecycle Proof
 
@@ -144,20 +160,20 @@ Exact fixture required to run later:
 | Play / Data Safety / account deletion acceptance | External blocked | P0 | Yes for public Play distribution; no for private controlled testing | Yes | Complete Play Console forms, account deletion URL entry, content rating, store listing, test account instructions, and save external proof. |
 | Support / moderation / account deletion SLA owner | Mapped, external owner pending | P1 | No if owner manually monitors test feedback | Yes | Assign named owner/operator coverage, response/action targets, escalation, and audit process. |
 | Outbound email / DKIM | DNS baseline proved, outbound/DKIM pending | P1 | No | Yes for polished support/legal ops | Choose outbound provider, verify domain, publish DKIM, send test receipt, save proof outside repo. |
-| Malware scanner deployment proof | Repo-side pipeline implemented; runtime proof pending | P1 deployment/security proof | No for controlled Android testing with assigned operators | Yes before broad public UGC launch | Deploy the worker, run benign and approved blocked fixture scans, prove public non-leak for pending/failed/malware statuses, and save proof outside repo. |
+| Malware scanner deployment proof | Closed | Not a current blocker | No | No | Production worker is deployed, benign/EICAR proof passed, public gates fail closed, and Admin scan-result review is sanitized. Future work is monitoring/SLO polish and signed-delivery hardening only. |
 | Optional disposable report lifecycle visual proof | Blocked on safe fixture | P2/P1 optional | No | No if source/backend proof is accepted; yes only if launch owner requires visual receipt | Provide disposable accounts/target and run the harmless report/hide/restore cleanup drill. |
 
 Counts after the May 30 malware-scanning pipeline implementation:
 
 - P0 blockers: 1
-- P1 blockers: 12
+- P1 blockers: 10
 - P2 deferrals: 10
 
 The remaining P0 is external store/legal/account-deletion acceptance, not a newly discovered app-code defect.
 
 ## Recommended Next Lane
 
-External/manual lane: **Play Console Data Safety And Account Deletion Submission**.
+External/manual lane: **Play Console Data Safety And Account Deletion Submission** using `docs/google-play/`.
 
 Engineering lane after external setup or in parallel: **Release Diagnostics And Signed-Out/Signed-In Route Smoke Closeout**.
 

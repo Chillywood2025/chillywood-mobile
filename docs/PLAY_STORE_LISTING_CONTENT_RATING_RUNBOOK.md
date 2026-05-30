@@ -33,6 +33,8 @@ Current official Google Play guidance says store listing preview assets include 
 
 ## Current Repo Snapshot
 
+May 30, 2026 update: the current owner/operator Play Console execution package lives in `docs/google-play/`. Use those docs as the primary submission package. This older runbook remains a supporting asset/copy reference and must use current user-facing terminology: **Profile** for social identity, **Platform** for public creator surface, and **Platform Studio** for creator tools.
+
 | Item | Current repo truth | Status |
 | --- | --- | --- |
 | App name | `Chi'llywood` in `app.json` | Implemented / Proof Pending |
@@ -42,7 +44,7 @@ Current official Google Play guidance says store listing preview assets include 
 | Category posture | Social streaming / entertainment app with creator upload, Player, Watch-Party, Live, Chat, Premium, and safety surfaces | External Setup Pending |
 | Legal routes | `/privacy`, `/terms`, `/account-deletion`, `/community-guidelines`, `/copyright`, `/support`; pages are expanded structured draft policies, not short placeholders | Implemented / Proof Pending |
 | Hosted legal URL fallbacks | Privacy, Terms, and Account Deletion fallback URLs exist in `app.config.ts` | External Setup Pending until final approval |
-| Data Safety prep | `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` maps data categories | External Setup Pending |
+| Data Safety prep | `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md` maps data categories and SDK/provider implications | External Setup Pending |
 | Android release prep | `docs/ANDROID_RELEASE_EAS_RUNBOOK.md` maps build/signing path | External Setup Pending |
 | Production env prep | `docs/PRODUCTION_ENV_SECRETS_RUNBOOK.md` maps env and secret boundaries | External Setup Pending |
 | Store screenshots | No dedicated store screenshot/mockup folder found outside ignored build artifacts | Missing |
@@ -71,17 +73,17 @@ Notes:
 
 Draft, pending owner/legal approval:
 
-`Upload, watch together, go live, and build your creator channel.`
+`Upload, watch together, go live, and build your creator Platform.`
 
 Why this fits v1:
 
-- Mentions creator upload, watch-together behavior, Live, and Channel.
+- Mentions creator upload, watch-together behavior, Live, and Platform.
 - Does not promise paid creator media, payouts, tips, ads, native game streaming, VIPs, or comment media uploads.
 - Should fit Play's short-description limit, but the release owner must confirm the current Play Console character count.
 
 Alternate draft:
 
-`A premium social streaming home for creators, channels, and watch parties.`
+`A premium social streaming home for creators, Platforms, and watch parties.`
 
 Use only one final short description.
 
@@ -90,7 +92,7 @@ Use only one final short description.
 Draft, pending owner/legal approval:
 
 ```text
-Chi'llywood is a premium social streaming space where every account has a Profile and a Channel.
+Chi'llywood is a premium social streaming space where every account has a Profile and a Platform.
 
 Build your public identity, upload creator videos to your Platform, watch in a standalone Player, and bring people into Watch-Party Live rooms when the content is ready to share. Chi'llywood keeps Profile and Platform connected: your Profile is who you are, and your Platform is where your creator videos live.
 
@@ -98,7 +100,7 @@ Watch platform titles, creator uploads, and shared rooms with a modern Player ex
 
 Creator uploads, chat, profiles, rooms, and live features are protected by community guidelines, report paths, and moderation review. Some Premium, billing, and live features may require sign-in, subscription access, or staged rollout availability.
 
-Public v1 focuses on Profile, Channel, creator videos, Player, Watch-Party, Live, Chat, Premium access, and safety basics. Native game streaming, paid creator media, tips, coins, payouts, VIP systems, comment media uploads, ads, and advanced Platform Studio tools are not live v1 features unless a future release explicitly adds and proves them.
+Public v1 focuses on Profile, Platform, creator videos, Player, Watch-Party, Live, Chat, Premium access, and safety basics. Native game streaming, paid creator media, tips, coins, payouts, VIP systems, comment media uploads, ads, and advanced Platform Studio tools are not live v1 features unless a future release explicitly adds and proves them.
 ```
 
 Description guardrails:
@@ -116,7 +118,7 @@ Recommended primary category:
 
 Reason:
 
-- Chi'llywood's Public v1 center of gravity is video watching, creator channels, Watch-Party, Player, Live, and social streaming.
+- Chi'llywood's Public v1 center of gravity is video watching, creator Platforms, Watch-Party, Player, Live, and social streaming.
 
 Alternative to review:
 
@@ -297,8 +299,8 @@ Use a preview or release-like Android build from current `main`, not a Metro-onl
 Capture clean demo data with no secrets, no test emails, no signed URLs, and no unapproved user content:
 
 1. Home / discovery with platform titles and live entry points visible.
-2. Public Profile + Channel showing the connected Profile/Channel identity.
-3. Owner Channel Settings Content panel showing Upload/Manage Video if owner-only screenshots are acceptable for store use.
+2. Public Profile + Platform showing the connected Profile/Platform identity.
+3. Owner Platform Studio Content panel showing Upload/Manage Video if owner-only screenshots are acceptable for store use.
 4. Creator video card opening standalone Player route `/player/[id]?source=creator-video`.
 5. Premium standalone Player with a valid platform or creator video, no debug overlays.
 6. Watch-Party Waiting Room or Party Room using normal content Watch-Party flow.
@@ -325,7 +327,7 @@ Recommended concept:
 
 - Chi'llywood wordmark or name.
 - Premium dark streaming background with a subtle Chicago/social-streaming visual cue.
-- One simple value line such as "Profile. Channel. Watch together."
+- One simple value line such as "Profile. Platform. Watch together."
 - No device screenshots with tiny unreadable text.
 - No claims like "#1", "free movies", "earn money", "watch anything", or "game streaming".
 - No Google Play badge inside the feature graphic.
@@ -341,7 +343,7 @@ Current app facts that must be considered:
 
 | Topic | Current app truth | Guidance for questionnaire prep |
 | --- | --- | --- |
-| User-generated content | Creator-upload videos, profiles/channels, chat/messages, reports, rooms/live behavior | Answer yes where Play asks about UGC or user interaction. |
+| User-generated content | Creator-upload videos, Profiles/Platforms, chat/messages, reports, rooms/live behavior | Answer yes where Play asks about UGC or user interaction. |
 | Social features / chat | Chi'lly Chat direct threads and room/social surfaces exist | Disclose social/user interaction accurately. |
 | Live video/camera/microphone | LiveKit/Live Stage uses camera and mic with permissions in `app.json` | Disclose camera/mic/live communication behavior. |
 | Account creation | Supabase auth signup/signin exist | Disclose account creation/sign-in. |
@@ -378,7 +380,7 @@ Do not make these inconsistent claims:
 | Bad claim | Why it is wrong for current app truth |
 | --- | --- |
 | "No user data collected" | App uses accounts, profiles, uploads, chat, rooms/live participation, reports, support, diagnostics, and possibly purchase entitlements. |
-| "No user-generated content" | Creator uploads, profiles/channels, chat, rooms, and live participation are user-generated or user interaction surfaces. |
+| "No user-generated content" | Creator uploads, Profiles/Platforms, chat, rooms, and live participation are user-generated or user interaction surfaces. |
 | "No camera/microphone" | `CAMERA` and `RECORD_AUDIO` are declared and Live Stage uses them. |
 | "No purchases" | Premium/RevenueCat foundations exist; if Premium ships, purchases/subscriptions must be disclosed. |
 | "No diagnostics" | Firebase Crashlytics/Performance helpers and config exist. If enabled, diagnostics/performance must be disclosed. |
@@ -388,7 +390,7 @@ Do not make these inconsistent claims:
 
 Data Safety next action:
 
-- Privacy/legal owner should use `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md` plus current SDK disclosures to fill Play Console Data Safety.
+- Privacy/legal owner should use `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md` plus current SDK disclosures to fill Play Console Data Safety.
 - Store owner should keep listing copy consistent with those answers.
 
 ## UGC And Store Policy Readiness
@@ -397,7 +399,7 @@ Chi'llywood has UGC and user interaction. Store readiness must cover:
 
 | Requirement area | Current repo truth | Status | Next action |
 | --- | --- | --- | --- |
-| Terms/user policy | `/terms` and `/community-guidelines` exist with expanded Profile/Channel, UGC, creator upload, room, live, chat, Premium, moderation, and legal-review sections | Implemented / Proof Pending | Legal approval and Play-visible public URL proof. |
+| Terms/user policy | `/terms` and `/community-guidelines` exist with expanded Profile/Platform, UGC, creator upload, room, live, chat, Premium, moderation, and legal-review sections | Implemented / Proof Pending | Legal approval and Play-visible public URL proof. |
 | UGC rules | Community Guidelines cover creator uploads, live rooms, Watch-Party, chat/messages/comments/reactions, copyright/media rights, minor safety, reporting, enforcement, repeat violations, and manual review posture | Implemented / Proof Pending | Confirm final policy copy and hosted URL. |
 | Report abuse | Report sheet/moderation helper/player/admin foundation exists | Implemented / Proof Pending | Prove report writes and admin review on launch backend. |
 | Blocking users | Audience/blocking foundations exist in docs and `channel_audience_blocks`; direct 1:1 block UX/proof is not fully proven | Partial / Proof Pending | Evaluate whether Play's UGC/direct interaction policy requires a visible block action before launch. |
@@ -434,7 +436,7 @@ Important UGC legal readiness still pending before final store submission:
 8. Add tablet screenshots only if target/distribution strategy requires or benefits from them.
 9. Enter Privacy Policy URL.
 10. Complete App access instructions if sign-in/test account access is needed for review.
-11. Complete Data Safety using `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`.
+11. Complete Data Safety using `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md`.
 12. Complete Content Rating questionnaire accurately.
 13. Complete Target audience and content.
 14. Complete Ads declaration based on final release truth.

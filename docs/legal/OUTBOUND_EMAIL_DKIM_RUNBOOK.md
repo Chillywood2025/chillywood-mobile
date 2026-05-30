@@ -7,6 +7,8 @@ This runbook documents the current email posture and the exact external setup re
 
 ## Current Truth
 
+May 30, 2026 proof refresh: `/tmp/chillywood-google-play-acceptance-closeout-20260530/dns-email-check.txt` again shows Cloudflare MX, SPF, and DMARC baseline records for `chillywoodstream.com`; common selectors `default`, `google`, `selector1`, `selector2`, `mail`, and `k1` returned no DKIM TXT record. DKIM remains external/unverified.
+
 | Item | Current status | Evidence |
 | --- | --- | --- |
 | Support email | `support@chillywoodstream.com` is the public support contact. | `app.config.ts`; Support/legal docs |
