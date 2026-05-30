@@ -121,6 +121,7 @@ export type AdminSystemHistorySummary = {
   mediaSecurityRows: number | null;
   legalRows: number | null;
   spectatorRows: number | null;
+  providerRows: number | null;
   latestAt: string | null;
 };
 
@@ -232,6 +233,7 @@ const emptySystemHistorySummary = (): AdminSystemHistorySummary => ({
   mediaSecurityRows: null,
   legalRows: null,
   spectatorRows: null,
+  providerRows: null,
   latestAt: null,
 });
 
@@ -395,6 +397,7 @@ const normalizeSystemHistorySummary = (value: unknown): AdminSystemHistorySummar
     mediaSecurityRows: asInteger(row.mediaSecurityRows),
     legalRows: asInteger(row.legalRows),
     spectatorRows: asInteger(row.spectatorRows),
+    providerRows: asInteger(row.providerRows),
     latestAt: asString(row.latestAt),
   };
 };

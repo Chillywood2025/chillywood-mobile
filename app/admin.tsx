@@ -16519,6 +16519,11 @@ export default function AdminStudioScreen() {
                 value={formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.legalRows, adminSystemHistoryReadModel.loading)}
                 tone={adminSystemHistoryReadModel.connected ? "info" : "locked"}
               />
+              <OwnerMetricTile
+                label="Provider Rows"
+                value={formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.providerRows, adminSystemHistoryReadModel.loading)}
+                tone={(adminSystemHistoryReadModel.summary.providerRows ?? 0) > 0 ? "manual" : adminSystemHistoryReadModel.connected ? "success" : "locked"}
+              />
             </View>
           </View>
           <View style={styles.configList}>

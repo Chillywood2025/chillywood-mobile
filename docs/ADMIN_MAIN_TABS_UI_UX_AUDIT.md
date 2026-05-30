@@ -51,7 +51,7 @@ The May 30, 2026 Admin Read Models UI/UX Production Pass polished the three broa
 - The Usage detail read model now returns recent usage-meter, usage rollup, provider import, provider daily, reconciliation, room membership, creator-video, and social-attachment metadata rows. It still returns no raw storage path and no provider billing truth.
 - System now opens on a System Operations read-model hero with ready/needs-setup/runtime-issue/inspect-only metrics and groups cards into Runtime & Config, Compliance & Audit, and Provider Setup.
 - System detail sheets now include System Overview and Next Read Model sections while keeping secrets and external provider dashboards out of the mobile Admin panel.
-- The System history read model now returns secret-safe immutable audit/event rows from Admin, Live Ops, security, LiveKit token/routing, media security, legal evidence, DMCA, and Spectator child-room audit tables. Metadata values, provider secrets, LiveKit tokens, raw room tokens, and service-role keys are not returned.
+- The System history read model now returns secret-safe immutable audit/event rows from Admin, Live Ops, security, LiveKit token/routing, media security, legal evidence, DMCA, Spectator child-room, provider readiness audit, and provider webhook event tables. Metadata values, provider secrets, provider payload values, LiveKit tokens, raw room tokens, and service-role keys are not returned.
 
 ## Current Main Tabs
 
@@ -78,7 +78,7 @@ The May 30, 2026 Admin Read Models UI/UX Production Pass polished the three broa
 | Live Ops Fix Center | `live-ops-fix-center` | Live Ops incidents/remediation | Live Ops helpers | production_ready, needs_typeahead_search | Covered by Live Ops search. |
 | Legal | `legal` | Legal requests/evidence | Legal request helpers/RPCs | production_ready, needs_typeahead_search | Covered by Legal search. |
 | Ops Alerts | `ops-alerts` | Operational alerts | Admin ops read model | should_defer | Keep until broader System consolidation is safe. |
-| System | `system` | System/app config technical status | Runtime/app config + system history RPC | owner_dev_only, production_ready | System cards are grouped by runtime/compliance/provider setup and open inspect-only drilldowns with source/status/no-secret boundaries plus immutable audit/event history. External build/deploy/provider-dashboard history remains unclaimed. |
+| System | `system` | System/app config technical status | Runtime/app config + system history RPC | owner_dev_only, production_ready | System cards are grouped by runtime/compliance/provider setup and open inspect-only drilldowns with source/status/no-secret boundaries plus immutable audit/event history. Provider readiness/webhook history is backed; release build/deploy history remains unclaimed. |
 
 Hidden compatibility money tabs such as Premium, Kill Switches, Ads, Revenue, Payouts, Sponsors, and Fraud are not part of the current visible Admin tab row; they remain mapped into Money Center section anchors.
 
@@ -139,7 +139,7 @@ Deferred detail work:
 
 - Users destructive/admin action workflows remain intentionally outside the read model.
 - Usage still needs true provider billing and LiveKit billing imports only if product policy wants them; current rows remain evidence, not billing truth.
-- System still needs an external build/deploy/provider-dashboard event source before those histories can be shown.
+- System still needs a release build/deploy event source before those histories can be shown.
 - Canary/Ops Alerts remain specialized system-owned surfaces until their row models are safe to merge.
 
 ## Normal-User Denial
@@ -206,4 +206,4 @@ Required validation for this lane:
 
 ## Next Recommended Lane
 
-Next Admin lane should recapture Android visual proof for the backed Users/Usage/System rows and normal-user Admin denial with a safe normal-user session plus reliable owner-session restore. External build/deploy/provider-dashboard history should only be added if a real event source exists; do not fake dashboard rows.
+Next Admin lane should recapture normal-user Admin denial with a safe normal-user session plus reliable owner-session restore. Release build/deploy history should only be added if a real event source exists; do not fake dashboard rows. Current Users/Usage/System Android proof is captured at `/tmp/chillywood-admin-read-model-gap-closeout-20260530/`.

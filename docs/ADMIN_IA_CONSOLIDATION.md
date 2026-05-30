@@ -60,9 +60,9 @@ System:
 - Runtime/app config/status cards open inspect-only detail sheets with System Overview and Next Read Model sections.
 - The System surface now groups cards into Runtime & Config, Compliance & Audit, and Provider Setup, with ready/needs-setup/runtime-issue/inspect-only metrics.
 - Detail panels show source, status, admin action, secret boundary, and System History without rendering provider payloads or secrets.
-- `get_admin_system_history_read_model` is remote-applied and returns immutable audit/event rows from admin audit, Live Ops audit, security audit, LiveKit token/routing audit, media security audit, legal evidence, DMCA, and Spectator child-room audit tables.
-- The System RPC returns metadata field counts only, not metadata values. Provider secrets, provider payloads, LiveKit tokens, raw room tokens, service-role keys, and external dashboard data stay out of mobile Admin.
-- External build/deploy/provider-dashboard history still needs a backed event source if the product wants it in Admin.
+- `get_admin_system_history_read_model` is remote-applied and returns immutable audit/event rows from admin audit, Live Ops audit, security audit, LiveKit token/routing audit, media security audit, legal evidence, DMCA, Spectator child-room audit, provider readiness audit, and provider webhook event tables.
+- The System RPC returns metadata field counts only, not metadata values. Provider secrets, provider payload values, LiveKit tokens, raw room tokens, service-role keys, and external dashboard credentials stay out of mobile Admin.
+- Provider readiness/webhook history is now shown when represented by backed audit/event tables; release build/deploy history still needs a backed event source if the product wants it in Admin.
 
 ## Audit And Denial
 
@@ -121,6 +121,6 @@ Captured:
 ## Remaining Limits
 
 - Runtime Android normal-user denial still needs a safe normal-user session plus owner-session restore path.
-- External build/deploy/provider-dashboard history is still not in Admin unless it is represented by existing audit/event rows.
-- Android visual proof should be recaptured for Users/Usage/System after the next native/runtime proof pass.
+- Release build/deploy history is still not in Admin because no backed event source exists yet.
+- Android visual proof for Users/Usage/System on the current release build is captured at `/tmp/chillywood-admin-read-model-gap-closeout-20260530/`.
 - No fake rows should be added to hide those gaps.
