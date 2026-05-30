@@ -191,7 +191,6 @@ const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
-const PLAYBACK_QUALITY_AUTO_LABEL = "Auto";
 const WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT = 0.85;
 const WATCH_PARTY_LIVE_VOICE_VOLUME_DEFAULT = 1;
 const WATCH_PARTY_LIVE_DUCKED_VIDEO_VOLUME_DEFAULT = 0.3;
@@ -744,78 +743,6 @@ function StandalonePlayerTopChrome({
   );
 }
 
-type StandalonePlaybackMenuProps = {
-  visible: boolean;
-  playbackRate: number;
-  onSelectRate: (rate: number) => void;
-  onClose: () => void;
-};
-
-function StandalonePlaybackMenu({
-  visible,
-  playbackRate,
-  onSelectRate,
-  onClose,
-}: StandalonePlaybackMenuProps) {
-  if (!visible) return null;
-
-  return (
-    <View style={styles.standalonePlaybackMenu}>
-      <View style={styles.standalonePlaybackMenuHeader}>
-        <View>
-          <Text style={styles.standalonePlaybackMenuTitle}>Playback</Text>
-          <Text style={styles.standalonePlaybackMenuSubtitle}>Speed and quality</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.standalonePlaybackCloseBtn}
-          onPress={onClose}
-          activeOpacity={0.85}
-          accessibilityLabel="Close playback controls"
-        >
-          <MaterialIcons name="close" size={17} color="#EEF1F7" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.standalonePlaybackSectionHeader}>
-        <Text style={styles.standalonePlaybackSectionLabel}>Speed</Text>
-        <Text style={styles.standalonePlaybackSectionValue}>{formatPlaybackRateLabel(playbackRate)}</Text>
-      </View>
-      <View style={styles.standalonePlaybackSpeedList}>
-        {SPEED_OPTIONS.map((option) => {
-          const active = playbackRate === option;
-          return (
-            <TouchableOpacity
-              key={option}
-              style={[styles.standalonePlaybackOption, active && styles.standalonePlaybackOptionActive]}
-              onPress={() => onSelectRate(option)}
-              activeOpacity={0.85}
-            >
-              <View>
-                <Text style={[styles.standalonePlaybackOptionText, active && styles.standalonePlaybackOptionTextActive]}>
-                  {formatPlaybackRateLabel(option)}
-                </Text>
-                {option === 1 ? <Text style={styles.standalonePlaybackOptionNote}>Normal</Text> : null}
-              </View>
-              {active ? <MaterialIcons name="check" size={18} color="#FFFFFF" /> : null}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <Text style={styles.standalonePlaybackSectionLabel}>Quality</Text>
-      <View style={[styles.standalonePlaybackQualityRow, styles.standalonePlaybackQualityRowActive]}>
-        <View>
-          <Text style={styles.standalonePlaybackQualityLabel}>{PLAYBACK_QUALITY_AUTO_LABEL}</Text>
-          <Text style={styles.standalonePlaybackQualityNote}>
-            More options appear when available.
-          </Text>
-        </View>
-        <MaterialIcons name="check" size={18} color="#FFFFFF" />
-      </View>
-    </View>
-  );
-}
-
 const getLiveFaceFilterPresentation = (filterId: LiveFaceFilterId) => {
   switch (filterId) {
     case "studio":
@@ -1081,7 +1008,6 @@ export default function PlayerScreen() {
   const [creatorVideoCommentKeyboardOpen, setCreatorVideoCommentKeyboardOpen] = useState(false);
   const [watchPartyCommentKeyboardOpen, setWatchPartyCommentKeyboardOpen] = useState(false);
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
-  const [playbackMenuOpen, setPlaybackMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
@@ -2941,10 +2867,6 @@ export default function PlayerScreen() {
   }, []);
 
   useEffect(() => {
-    if (!controlsVisible) setPlaybackMenuOpen(false);
-  }, [controlsVisible]);
-
-  useEffect(() => {
     if (Platform.OS === "web") return;
     if (!inWatchParty) return;
     const currentTrackedUserId = String(partyUserId || "").trim() || "anon";
@@ -4661,13 +4583,21 @@ export default function PlayerScreen() {
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
     setPlaybackRate(rate);
-    setPlaybackMenuOpen(false);
     try {
       await videoRef.current?.setRateAsync(rate, true);
     } catch {
       // ignore unsupported rate transitions
     }
   }, [resetAutoHideTimer]);
+
+  const onCycleStandalonePlaybackRate = useCallback(() => {
+    const currentIndex = SPEED_OPTIONS.findIndex((option) => option === playbackRate);
+    const oneXIndex = SPEED_OPTIONS.findIndex((option) => option === 1);
+    const nextIndex = currentIndex >= 0
+      ? (currentIndex + 1) % SPEED_OPTIONS.length
+      : Math.max(0, oneXIndex);
+    void onSelectRate(SPEED_OPTIONS[nextIndex] ?? 1);
+  }, [onSelectRate, playbackRate]);
 
   const onToggleWatchPartyComments = useCallback(() => {
     if (!inWatchParty || isLiveModeFlag) return;
@@ -6300,7 +6230,6 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!isStandalonePlayer || !standalonePlaybackGateActive) return;
-    setPlaybackMenuOpen(false);
     setIsPlaying(false);
     videoRef.current?.pauseAsync().catch(() => {});
   }, [isStandalonePlayer, standalonePlaybackGateActive]);
@@ -6310,8 +6239,6 @@ export default function PlayerScreen() {
       setWatchPartyMenuOpen(false);
       return;
     }
-
-    setPlaybackMenuOpen(false);
 
     if (!effectiveControlsVisible) {
       setWatchPartyMenuOpen(false);
@@ -8616,17 +8543,6 @@ export default function PlayerScreen() {
               />
             )}
 
-            {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
-              <StandalonePlaybackMenu
-                visible={controlsVisible && playbackMenuOpen}
-                playbackRate={playbackRate}
-                onSelectRate={onSelectRate}
-                onClose={() => {
-                  setPlaybackMenuOpen(false);
-                  resetAutoHideTimer();
-                }}
-              />
-            ) : null}
               </>
             )}
 
@@ -8709,15 +8625,13 @@ export default function PlayerScreen() {
                       <Text style={styles.compactActionBtnText}>Back</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.compactActionBtn, styles.compactPlaybackBtn, playbackMenuOpen && styles.compactActionBtnActive]}
+                      style={[styles.compactActionBtn, styles.compactPlaybackBtn]}
                       onPress={() => {
                         setControlsVisible(true);
-                        setPlaybackMenuOpen((value) => !value);
-                        resetAutoHideTimer();
+                        onCycleStandalonePlaybackRate();
                       }}
-                      accessibilityLabel="Open playback speed and quality controls"
+                      accessibilityLabel={`Playback speed ${formatPlaybackRateLabel(playbackRate)}. Tap to change speed.`}
                     >
-                      <MaterialIcons name="tune" size={16} color="#EEF1F7" />
                       <Text style={styles.compactActionBtnText}>{formatPlaybackRateLabel(playbackRate)}</Text>
                     </TouchableOpacity>
                   </View>
@@ -9351,133 +9265,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
   },
-  standalonePlaybackMenu: {
-    position: "absolute",
-    left: 24,
-    right: 24,
-    bottom: 116,
-    zIndex: 48,
-    elevation: 48,
-    maxHeight: "40%",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(8,8,12,0.82)",
-    paddingHorizontal: 10,
-    paddingTop: 9,
-    paddingBottom: 10,
-    gap: 7,
-  },
-  standalonePlaybackMenuHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  standalonePlaybackMenuTitle: {
-    color: "#F5F7FF",
-    fontSize: 13.5,
-    fontWeight: "900",
-  },
-  standalonePlaybackMenuSubtitle: {
-    marginTop: 1,
-    color: "#AAB2C4",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  standalonePlaybackCloseBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  standalonePlaybackSectionLabel: {
-    color: "#C9CFDB",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  standalonePlaybackSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  standalonePlaybackSectionValue: {
-    color: "#F4F7FF",
-    fontSize: 10.5,
-    fontWeight: "900",
-  },
-  standalonePlaybackSpeedList: {
-    gap: 5,
-  },
-  standalonePlaybackOption: {
-    minHeight: 35,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  standalonePlaybackOptionActive: {
-    borderColor: "rgba(220,20,60,0.5)",
-    backgroundColor: "rgba(220,20,60,0.16)",
-  },
-  standalonePlaybackOptionText: {
-    color: "#DCE2EF",
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  standalonePlaybackOptionTextActive: {
-    color: "#FFFFFF",
-  },
-  standalonePlaybackOptionNote: {
-    marginTop: 1,
-    color: "#AEB6C8",
-    fontSize: 9.5,
-    fontWeight: "800",
-  },
-  standalonePlaybackQualityRow: {
-    minHeight: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  standalonePlaybackQualityRowActive: {
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  standalonePlaybackQualityLabel: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  standalonePlaybackQualityNote: {
-    marginTop: 2,
-    color: "#C2CADB",
-    fontSize: 10,
-    fontWeight: "700",
-  },
   partyReactionBurstWrap: {
     position: "absolute",
     right: 8,
@@ -9915,14 +9702,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  compactActionBtnActive: {
-    borderColor: "rgba(220,20,60,0.64)",
-    backgroundColor: "rgba(220,20,60,0.22)",
-  },
   compactPlaybackBtn: {
     flex: 0,
-    minWidth: 118,
-    paddingHorizontal: 14,
+    minWidth: 72,
+    paddingHorizontal: 16,
   },
   compactActionBtnText: {
     color: "#EEF1F7",
