@@ -198,6 +198,7 @@ const UUID_LIKE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f
 const PAN_SCRUB_SEEK_THROTTLE_MILLIS = 16;
 const PAN_SCRUB_MIN_DRAG_PIXELS = 4;
 const SPEED_OPTIONS = [0.5, 1, 1.25, 1.5, 2] as const;
+const PLAYBACK_QUALITY_AUTO_LABEL = "Auto";
 const WATCH_PARTY_LIVE_VIDEO_VOLUME_DEFAULT = 0.85;
 const WATCH_PARTY_LIVE_VOICE_VOLUME_DEFAULT = 1;
 const WATCH_PARTY_LIVE_DUCKED_VIDEO_VOLUME_DEFAULT = 0.3;
@@ -345,6 +346,8 @@ const getPlayerSurfacePresentation = (mode: PlayerSurfaceMode) => {
       };
   }
 };
+
+const formatPlaybackRateLabel = (rate: number) => `${Number(rate.toFixed(2)).toString()}x`;
 
 type PartyParticipant = {
   id: string;
@@ -651,6 +654,7 @@ const SharedAndroidVideoSurface = forwardRef<PlayerController, SharedAndroidVide
         key={videoViewKey}
         player={player}
         style={style}
+        pointerEvents="none"
         nativeControls={false}
         contentFit={contentFit}
         surfaceType="textureView"
@@ -669,8 +673,6 @@ type StandalonePlayerTopChromeProps = {
   inMyList: boolean;
   canSaveToList: boolean;
   onToggleMyList: () => void;
-  playbackRate: number;
-  onToggleSpeedMenu: () => void;
   canLike: boolean;
   engagementState: TitleEngagementState | null;
   engagementLoading: boolean;
@@ -680,12 +682,11 @@ type StandalonePlayerTopChromeProps = {
   onToggleShare: () => void;
   canShareCreatorVideo: boolean;
   onShareCreatorVideo: () => void;
+  canStartWatchPartyLive: boolean;
   onWatchParty: () => void;
   canReport: boolean;
   reportBusy: boolean;
   onReport: () => void;
-  speedMenuOpen: boolean;
-  onSelectRate: (rate: number) => void;
 };
 
 function StandalonePlayerTopChrome({
@@ -697,8 +698,6 @@ function StandalonePlayerTopChrome({
   inMyList,
   canSaveToList,
   onToggleMyList,
-  playbackRate,
-  onToggleSpeedMenu,
   canLike,
   engagementState,
   engagementLoading,
@@ -708,27 +707,28 @@ function StandalonePlayerTopChrome({
   onToggleShare,
   canShareCreatorVideo,
   onShareCreatorVideo,
+  canStartWatchPartyLive,
   onWatchParty,
   canReport,
   reportBusy,
   onReport,
-  speedMenuOpen,
-  onSelectRate,
 }: StandalonePlayerTopChromeProps) {
+  const hasTopLeftActions = canShareCreatorVideo || canReport || canSaveToList || canLike || canMarkShared;
+
   return (
-    <>
-      <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
-        {!playbackGateActive ? (
-          <Animated.View
-            pointerEvents={controlsVisible ? "auto" : "none"}
-            style={[
-              styles.standaloneOverlayActions,
-              {
-                opacity: overlayOpacity,
-                transform: [{ translateY: overlayTranslateY }],
-              },
-            ]}
-          >
+    <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
+      {!playbackGateActive ? (
+        <Animated.View
+          pointerEvents={controlsVisible ? "auto" : "none"}
+          style={[
+            styles.standaloneOverlayActions,
+            {
+              opacity: overlayOpacity,
+              transform: [{ translateY: overlayTranslateY }],
+            },
+          ]}
+        >
+          <View style={styles.standaloneTopActionBar}>
             <View style={styles.standaloneTopLeftActions}>
               {canShareCreatorVideo ? (
                 <TouchableOpacity
@@ -749,36 +749,18 @@ function StandalonePlayerTopChrome({
                   <Text style={styles.compactChipText}>{reportBusy ? "Sending..." : "Report"}</Text>
                 </TouchableOpacity>
               ) : null}
-            </View>
-            <View style={styles.standaloneTopRightActions}>
-              <TouchableOpacity
-                style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, styles.standaloneSocialHandoffBtn]}
-                onPress={onWatchParty}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.partyOverlayChipText}>Watch-Party Live</Text>
-              </TouchableOpacity>
-              <View style={styles.standaloneUtilityRow}>
-                {canSaveToList ? (
-                  <TouchableOpacity
-                    style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, myListBusy && styles.secondaryBtnDisabled]}
-                    onPress={onToggleMyList}
-                    disabled={myListBusy}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.partyOverlayChipText}>{inMyList ? "✓ List" : "+ List"}</Text>
-                  </TouchableOpacity>
-                ) : null}
+              {canSaveToList ? (
                 <TouchableOpacity
-                  style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle]}
-                  onPress={onToggleSpeedMenu}
+                  style={[styles.compactChip, inMyList && styles.compactChipAccent, myListBusy && styles.secondaryBtnDisabled]}
+                  onPress={onToggleMyList}
+                  disabled={myListBusy}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.partyOverlayChipText}>{playbackRate}x</Text>
+                  <Text style={[styles.compactChipText, inMyList && styles.compactChipTextAccent]}>
+                    {inMyList ? "In List" : "+ List"}
+                  </Text>
                 </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.standaloneEngagementRow}>
+              ) : null}
               {canLike ? (
                 <TouchableOpacity
                   style={[styles.compactChip, engagementState?.liked && styles.compactChipAccent, (engagementLoading || engagementBusy !== null) && styles.secondaryBtnDisabled]}
@@ -799,33 +781,99 @@ function StandalonePlayerTopChrome({
                   activeOpacity={0.85}
                 >
                   <Text style={[styles.compactChipText, engagementState?.shared && styles.compactChipTextAccent]}>
-                    {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
+                    {engagementBusy === "share" ? "Sharing..." : engagementState?.shared ? "Shared" : "Share"}
                   </Text>
                 </TouchableOpacity>
               ) : null}
+              {!hasTopLeftActions ? <View style={styles.standaloneTopSpacer} /> : null}
             </View>
-          </Animated.View>
-        ) : null}
+            <View style={styles.standaloneTopRightActions}>
+              {canStartWatchPartyLive ? (
+                <TouchableOpacity
+                  style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, styles.standaloneSocialHandoffBtn]}
+                  onPress={onWatchParty}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.partyOverlayChipText}>Watch-Party Live</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+}
+
+type StandalonePlaybackMenuProps = {
+  visible: boolean;
+  playbackRate: number;
+  onSelectRate: (rate: number) => void;
+  onClose: () => void;
+};
+
+function StandalonePlaybackMenu({
+  visible,
+  playbackRate,
+  onSelectRate,
+  onClose,
+}: StandalonePlaybackMenuProps) {
+  if (!visible) return null;
+
+  return (
+    <View style={styles.standalonePlaybackMenu}>
+      <View style={styles.standalonePlaybackMenuHeader}>
+        <View>
+          <Text style={styles.standalonePlaybackMenuTitle}>Playback</Text>
+          <Text style={styles.standalonePlaybackMenuSubtitle}>Speed and quality</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.standalonePlaybackCloseBtn}
+          onPress={onClose}
+          activeOpacity={0.85}
+          accessibilityLabel="Close playback controls"
+        >
+          <MaterialIcons name="close" size={17} color="#EEF1F7" />
+        </TouchableOpacity>
       </View>
 
-      {controlsVisible && speedMenuOpen ? (
-        <View style={styles.partySpeedOverlayMenu}>
-          {SPEED_OPTIONS.map((option) => {
-            const active = playbackRate === option;
-            return (
-              <TouchableOpacity
-                key={option}
-                style={[styles.partySpeedOverlayChip, active && styles.partySpeedOverlayChipActive]}
-                onPress={() => onSelectRate(option)}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.partySpeedOverlayChipText, active && styles.partySpeedOverlayChipTextActive]}>{option}x</Text>
-              </TouchableOpacity>
-            );
-          })}
+      <View style={styles.standalonePlaybackSectionHeader}>
+        <Text style={styles.standalonePlaybackSectionLabel}>Speed</Text>
+        <Text style={styles.standalonePlaybackSectionValue}>{formatPlaybackRateLabel(playbackRate)}</Text>
+      </View>
+      <View style={styles.standalonePlaybackSpeedList}>
+        {SPEED_OPTIONS.map((option) => {
+          const active = playbackRate === option;
+          return (
+            <TouchableOpacity
+              key={option}
+              style={[styles.standalonePlaybackOption, active && styles.standalonePlaybackOptionActive]}
+              onPress={() => onSelectRate(option)}
+              activeOpacity={0.85}
+            >
+              <View>
+                <Text style={[styles.standalonePlaybackOptionText, active && styles.standalonePlaybackOptionTextActive]}>
+                  {formatPlaybackRateLabel(option)}
+                </Text>
+                {option === 1 ? <Text style={styles.standalonePlaybackOptionNote}>Normal</Text> : null}
+              </View>
+              {active ? <MaterialIcons name="check" size={18} color="#FFFFFF" /> : null}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={styles.standalonePlaybackSectionLabel}>Quality</Text>
+      <View style={[styles.standalonePlaybackQualityRow, styles.standalonePlaybackQualityRowActive]}>
+        <View>
+          <Text style={styles.standalonePlaybackQualityLabel}>{PLAYBACK_QUALITY_AUTO_LABEL}</Text>
+          <Text style={styles.standalonePlaybackQualityNote}>
+            More options appear when available.
+          </Text>
         </View>
-      ) : null}
-    </>
+        <MaterialIcons name="check" size={18} color="#FFFFFF" />
+      </View>
+    </View>
   );
 }
 
@@ -924,6 +972,58 @@ const touchDistance = (touches: readonly { pageX: number; pageY: number }[]) => 
   const dx = b.pageX - a.pageX;
   const dy = b.pageY - a.pageY;
   return Math.sqrt(dx * dx + dy * dy);
+};
+
+type PlayerTouch = {
+  pageX: number;
+  pageY: number;
+  locationX?: number;
+  locationY?: number;
+};
+
+type ZoomTranslation = {
+  x: number;
+  y: number;
+};
+
+type ZoomLayout = {
+  width: number;
+  height: number;
+};
+
+const getTouchFocalPoint = (touches: readonly PlayerTouch[], layout: ZoomLayout): ZoomTranslation | null => {
+  if (touches.length < 2 || layout.width <= 0 || layout.height <= 0) return null;
+  const [a, b] = touches;
+  const hasLocalCoordinates =
+    typeof a.locationX === "number"
+    && Number.isFinite(a.locationX)
+    && typeof b.locationX === "number"
+    && Number.isFinite(b.locationX)
+    && typeof a.locationY === "number"
+    && Number.isFinite(a.locationY)
+    && typeof b.locationY === "number"
+    && Number.isFinite(b.locationY);
+
+  const midpointX = hasLocalCoordinates ? ((a.locationX ?? 0) + (b.locationX ?? 0)) / 2 : layout.width / 2;
+  const midpointY = hasLocalCoordinates ? ((a.locationY ?? 0) + (b.locationY ?? 0)) / 2 : layout.height / 2;
+
+  return {
+    x: clamp(midpointX - layout.width / 2, -layout.width / 2, layout.width / 2),
+    y: clamp(midpointY - layout.height / 2, -layout.height / 2, layout.height / 2),
+  };
+};
+
+const clampZoomTranslation = (translation: ZoomTranslation, scale: number, layout: ZoomLayout): ZoomTranslation => {
+  if (scale <= 1.01 || layout.width <= 0 || layout.height <= 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const maxX = Math.max(0, ((scale - 1) * layout.width) / 2);
+  const maxY = Math.max(0, ((scale - 1) * layout.height) / 2);
+  return {
+    x: clamp(translation.x, -maxX, maxX),
+    y: clamp(translation.y, -maxY, maxY),
+  };
 };
 
 export default function PlayerScreen() {
@@ -1043,7 +1143,7 @@ export default function PlayerScreen() {
   const [creatorVideoCommentKeyboardOpen, setCreatorVideoCommentKeyboardOpen] = useState(false);
   const [watchPartyCommentKeyboardOpen, setWatchPartyCommentKeyboardOpen] = useState(false);
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
-  const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
+  const [playbackMenuOpen, setPlaybackMenuOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
@@ -1167,7 +1267,11 @@ export default function PlayerScreen() {
   }, []);
 
   const zoomScale = useRef(new Animated.Value(1)).current;
+  const zoomTranslateX = useRef(new Animated.Value(0)).current;
+  const zoomTranslateY = useRef(new Animated.Value(0)).current;
   const zoomScaleValueRef = useRef(1);
+  const zoomTranslateXValueRef = useRef(0);
+  const zoomTranslateYValueRef = useRef(0);
   const durationRef = useRef(0);
   const currentPositionRef = useRef(0);
   const lastProgressWriteAtRef = useRef(0);
@@ -1180,6 +1284,10 @@ export default function PlayerScreen() {
   const wasPlayingBeforeScrubRef = useRef(false);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartScaleRef = useRef(1);
+  const pinchStartFocalRef = useRef<ZoomTranslation | null>(null);
+  const pinchStartTranslateRef = useRef<ZoomTranslation>({ x: 0, y: 0 });
+  const zoomPanStartTranslateRef = useRef<ZoomTranslation>({ x: 0, y: 0 });
+  const videoLayoutRef = useRef<ZoomLayout>({ width: 0, height: 0 });
   const seekFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideControlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1257,6 +1365,20 @@ export default function PlayerScreen() {
       zoomScale.removeListener(listener);
     };
   }, [zoomScale]);
+
+  useEffect(() => {
+    const translateXListener = zoomTranslateX.addListener(({ value }) => {
+      zoomTranslateXValueRef.current = value;
+    });
+    const translateYListener = zoomTranslateY.addListener(({ value }) => {
+      zoomTranslateYValueRef.current = value;
+    });
+
+    return () => {
+      zoomTranslateX.removeListener(translateXListener);
+      zoomTranslateY.removeListener(translateYListener);
+    };
+  }, [zoomTranslateX, zoomTranslateY]);
 
   useEffect(() => {
     let active = true;
@@ -2917,6 +3039,10 @@ export default function PlayerScreen() {
   }, []);
 
   useEffect(() => {
+    if (!controlsVisible) setPlaybackMenuOpen(false);
+  }, [controlsVisible]);
+
+  useEffect(() => {
     if (Platform.OS === "web") return;
     if (!inWatchParty) return;
     const currentTrackedUserId = String(partyUserId || "").trim() || "anon";
@@ -3134,17 +3260,48 @@ export default function PlayerScreen() {
     [blockViewerSharedPlaybackControl, isPlaying, isSharedPartyPlayback, persistProgress, showSeekFeedback, syncHostSharedPlayback],
   );
 
-  const animateZoomTo = useCallback(
-    (next: number) => {
-      Animated.timing(zoomScale, {
-        toValue: clamp(next, MIN_ZOOM, MAX_ZOOM),
-        duration: 180,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+  const setZoomTransform = useCallback(
+    (nextScale: number, nextTranslation: ZoomTranslation) => {
+      const safeScale = clamp(nextScale, MIN_ZOOM, MAX_ZOOM);
+      const clampedTranslation = clampZoomTranslation(nextTranslation, safeScale, videoLayoutRef.current);
+      zoomScale.setValue(safeScale);
+      zoomTranslateX.setValue(clampedTranslation.x);
+      zoomTranslateY.setValue(clampedTranslation.y);
     },
-    [zoomScale],
+    [zoomScale, zoomTranslateX, zoomTranslateY],
   );
+
+  const animateZoomTransform = useCallback(
+    (nextScale: number, nextTranslation: ZoomTranslation) => {
+      const safeScale = clamp(nextScale, MIN_ZOOM, MAX_ZOOM);
+      const clampedTranslation = clampZoomTranslation(nextTranslation, safeScale, videoLayoutRef.current);
+      Animated.parallel([
+        Animated.timing(zoomScale, {
+          toValue: safeScale,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(zoomTranslateX, {
+          toValue: clampedTranslation.x,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(zoomTranslateY, {
+          toValue: clampedTranslation.y,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    },
+    [zoomScale, zoomTranslateX, zoomTranslateY],
+  );
+
+  const resetZoom = useCallback(() => {
+    animateZoomTransform(1, { x: 0, y: 0 });
+  }, [animateZoomTransform]);
 
   const resetAutoHideTimer = useCallback(() => {
     if (hideControlsTimeoutRef.current) {
@@ -3434,6 +3591,19 @@ export default function PlayerScreen() {
       return;
     }
 
+    const reachedEnd =
+      isVideoReady &&
+      (
+        didJustFinishRef.current ||
+        (durationRef.current > 0 && currentPositionRef.current >= durationRef.current - PLAYBACK_END_REPLAY_THRESHOLD_MILLIS)
+      );
+
+    if (reachedEnd) {
+      setControlsVisible(true);
+      void replayFromStart();
+      return;
+    }
+
     if (!controlsVisible) {
       showControlsAndResetAutoHideTimer();
       return;
@@ -3444,25 +3614,24 @@ export default function PlayerScreen() {
     if (!isVideoReady) return;
     if (shouldAutoplayNextRef.current && nextTitleId) return;
 
-    const reachedEnd =
-      didJustFinishRef.current ||
-      (durationRef.current > 0 && currentPositionRef.current >= durationRef.current - PLAYBACK_END_REPLAY_THRESHOLD_MILLIS);
-
-    if (reachedEnd) {
-      void replayFromStart();
-      return;
-    }
-
     if (isPlaying) {
-      videoRef.current?.pauseAsync().catch(() => {});
+      videoRef.current
+        ?.pauseAsync()
+        .then(() => setIsPlaying(false))
+        .catch(() => {});
     } else {
-      videoRef.current?.playAsync().catch(() => {});
+      videoRef.current
+        ?.playAsync()
+        .then(() => setIsPlaying(true))
+        .catch(() => {});
     }
   };
 
   const resetGestureState = useCallback(() => {
     swipeLastAppliedStepRef.current = 0;
     pinchStartDistanceRef.current = null;
+    pinchStartFocalRef.current = null;
+    pinchStartTranslateRef.current = { x: 0, y: 0 };
   }, []);
 
   const panResponder = useMemo(
@@ -3470,12 +3639,25 @@ export default function PlayerScreen() {
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (event, gestureState) => {
-          return event.nativeEvent.touches.length >= 2 || Math.abs(gestureState.dx) > 8 || Math.abs(gestureState.dy) > 8;
+          const isZoomed = zoomScaleValueRef.current > 1.01;
+          const dragThreshold = isZoomed ? 2 : 8;
+          return event.nativeEvent.touches.length >= 2
+            || Math.abs(gestureState.dx) > dragThreshold
+            || Math.abs(gestureState.dy) > dragThreshold;
         },
         onPanResponderGrant: () => {
           resetAutoHideTimer();
           swipeLastAppliedStepRef.current = 0;
           pinchStartDistanceRef.current = null;
+          pinchStartFocalRef.current = null;
+          pinchStartTranslateRef.current = {
+            x: zoomTranslateXValueRef.current,
+            y: zoomTranslateYValueRef.current,
+          };
+          zoomPanStartTranslateRef.current = {
+            x: zoomTranslateXValueRef.current,
+            y: zoomTranslateYValueRef.current,
+          };
           panScrubStartPositionRef.current = currentPositionRef.current;
           panScrubLastSeekAtRef.current = 0;
           panIsScrubbingRef.current = false;
@@ -3487,20 +3669,46 @@ export default function PlayerScreen() {
           if (touches.length >= 2) {
             const distance = touchDistance(touches);
             if (!distance) return;
+            const focalPoint = getTouchFocalPoint(touches, videoLayoutRef.current);
 
             if (!pinchStartDistanceRef.current) {
               pinchStartDistanceRef.current = distance;
               pinchStartScaleRef.current = zoomScaleValueRef.current;
+              pinchStartFocalRef.current = focalPoint;
+              pinchStartTranslateRef.current = {
+                x: zoomTranslateXValueRef.current,
+                y: zoomTranslateYValueRef.current,
+              };
               return;
             }
 
             const ratio = distance / pinchStartDistanceRef.current;
             const nextScale = clamp(pinchStartScaleRef.current * ratio, MIN_ZOOM, MAX_ZOOM);
-            zoomScale.setValue(nextScale);
+            const startFocal = pinchStartFocalRef.current ?? focalPoint ?? { x: 0, y: 0 };
+            const focalDrag = focalPoint
+              ? {
+                  x: focalPoint.x - startFocal.x,
+                  y: focalPoint.y - startFocal.y,
+                }
+              : { x: 0, y: 0 };
+            setZoomTransform(nextScale, {
+              x: pinchStartTranslateRef.current.x + focalDrag.x + startFocal.x * (pinchStartScaleRef.current - nextScale),
+              y: pinchStartTranslateRef.current.y + focalDrag.y + startFocal.y * (pinchStartScaleRef.current - nextScale),
+            });
             return;
           }
 
           pinchStartDistanceRef.current = null;
+          pinchStartFocalRef.current = null;
+
+          if (zoomScaleValueRef.current > 1.01) {
+            setZoomTransform(zoomScaleValueRef.current, {
+              x: zoomPanStartTranslateRef.current.x + gestureState.dx,
+              y: zoomPanStartTranslateRef.current.y + gestureState.dy,
+            });
+            return;
+          }
+
           const duration = durationRef.current;
           if (duration <= 0) return;
           if (Math.abs(gestureState.dx) < PAN_SCRUB_MIN_DRAG_PIXELS) return;
@@ -3555,7 +3763,7 @@ export default function PlayerScreen() {
             panWasPlayingBeforeScrubRef.current = false;
 
             if (zoomScaleValueRef.current <= 1.05) {
-              animateZoomTo(1);
+              resetZoom();
             }
             resetGestureState();
             return;
@@ -3578,9 +3786,13 @@ export default function PlayerScreen() {
               }
 
               lastTapRef.current = 0;
-              const half = (videoWidthRef.current || 1) / 2;
-              const isLeftSide = event.nativeEvent.locationX <= half;
-              applySeekDelta(isLeftSide ? -STEP_MILLIS : STEP_MILLIS).catch(() => {});
+              if (zoomScaleValueRef.current > 1.01) {
+                resetZoom();
+              } else {
+                const half = (videoWidthRef.current || 1) / 2;
+                const isLeftSide = event.nativeEvent.locationX <= half;
+                applySeekDelta(isLeftSide ? -STEP_MILLIS : STEP_MILLIS).catch(() => {});
+              }
             } else {
               lastTapRef.current = now;
               singleTapTimeoutRef.current = setTimeout(() => {
@@ -3591,7 +3803,12 @@ export default function PlayerScreen() {
           }
 
           if (zoomScaleValueRef.current <= 1.05) {
-            animateZoomTo(1);
+            resetZoom();
+          } else {
+            animateZoomTransform(zoomScaleValueRef.current, {
+              x: zoomTranslateXValueRef.current,
+              y: zoomTranslateYValueRef.current,
+            });
           }
           resetGestureState();
         },
@@ -3616,13 +3833,18 @@ export default function PlayerScreen() {
           }
 
           if (zoomScaleValueRef.current <= 1.05) {
-            animateZoomTo(1);
+            resetZoom();
+          } else {
+            animateZoomTransform(zoomScaleValueRef.current, {
+              x: zoomTranslateXValueRef.current,
+              y: zoomTranslateYValueRef.current,
+            });
           }
           resetGestureState();
         },
       }),
     [
-      animateZoomTo,
+      animateZoomTransform,
       applySeekDelta,
       blockViewerSharedPlaybackControl,
       handleSingleTap,
@@ -3633,9 +3855,10 @@ export default function PlayerScreen() {
       persistProgress,
       resetAutoHideTimer,
       resetGestureState,
+      resetZoom,
+      setZoomTransform,
       showControlsAndResetAutoHideTimer,
       syncHostSharedPlayback,
-      zoomScale,
     ],
   );
 
@@ -3978,6 +4201,18 @@ export default function PlayerScreen() {
     }
 
     try {
+      if (upNextIntervalRef.current) {
+        clearInterval(upNextIntervalRef.current);
+        upNextIntervalRef.current = null;
+      }
+      if (nextAutoplayTimeoutRef.current) {
+        clearTimeout(nextAutoplayTimeoutRef.current);
+        nextAutoplayTimeoutRef.current = null;
+      }
+      shouldAutoplayNextRef.current = false;
+      setShowUpNext(false);
+      setUpNextCountdown(UP_NEXT_COUNTDOWN_SECONDS);
+      setUpNextCanceled(false);
       await videoRef.current?.setPositionAsync(0);
       await videoRef.current?.playAsync();
       didJustFinishRef.current = false;
@@ -4509,7 +4744,7 @@ export default function PlayerScreen() {
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
     setPlaybackRate(rate);
-    setSpeedMenuOpen(false);
+    setPlaybackMenuOpen(false);
     try {
       await videoRef.current?.setRateAsync(rate, true);
     } catch {
@@ -6148,7 +6383,7 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!isStandalonePlayer || !standalonePlaybackGateActive) return;
-    setSpeedMenuOpen(false);
+    setPlaybackMenuOpen(false);
     setIsPlaying(false);
     videoRef.current?.pauseAsync().catch(() => {});
   }, [isStandalonePlayer, standalonePlaybackGateActive]);
@@ -6159,7 +6394,7 @@ export default function PlayerScreen() {
       return;
     }
 
-    setSpeedMenuOpen(false);
+    setPlaybackMenuOpen(false);
 
     if (!effectiveControlsVisible) {
       setWatchPartyMenuOpen(false);
@@ -6261,6 +6496,11 @@ export default function PlayerScreen() {
   const canLikeStandaloneTitle = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback;
   const canMarkStandaloneShared = isStandalonePlayer && !isCreatorVideoPlayback && !isSpectatorPlayback && !standaloneAccessLoading && !!standaloneAccess?.isAllowed;
   const canShareStandaloneCreatorVideo = isStandalonePlayer && isCreatorVideoPubliclyShareable(creatorVideo);
+  const canStartStandaloneWatchPartyLive = isStandalonePlayer
+    && !isSpectatorPlayback
+    && !standalonePlaybackGateActive
+    && !isCreatorVideoPlaybackUnavailable
+    && !isPlatformVideoUnavailable;
   useEffect(() => {
     if (!isStandalonePlayer || !isCreatorVideoPlayback) {
       setCreatorVideoComments([]);
@@ -7917,9 +8157,22 @@ export default function PlayerScreen() {
               !inWatchParty && !isLiveMode && isCreatorVideoPlayback && creatorVideoCommentKeyboardOpen && styles.videoWrapCreatorDiscussionKeyboard,
               isLiveMode && styles.liveRoomWrap,
             ]}
-            {...(!isLiveMode && !shouldUseSharedAndroidVideoSurface && !watchPartyLiveSharedPlaybackControlsLocked ? panResponder.panHandlers : {})}
             onLayout={(event) => {
-              videoWidthRef.current = event.nativeEvent.layout.width;
+              const { width, height } = event.nativeEvent.layout;
+              videoWidthRef.current = width;
+              videoLayoutRef.current = { width, height };
+              if (zoomScaleValueRef.current > 1.01) {
+                const clampedTranslation = clampZoomTranslation(
+                  {
+                    x: zoomTranslateXValueRef.current,
+                    y: zoomTranslateYValueRef.current,
+                  },
+                  zoomScaleValueRef.current,
+                  videoLayoutRef.current,
+                );
+                zoomTranslateX.setValue(clampedTranslation.x);
+                zoomTranslateY.setValue(clampedTranslation.y);
+              }
             }}
           >
             {shouldUseLiveSpeakerStage ? (
@@ -8099,7 +8352,19 @@ export default function PlayerScreen() {
             {inWatchParty && entryBoostActive ? (
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
-            <Animated.View style={[styles.videoAnimatedWrap, { transform: [{ scale: zoomScale }] }]}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.videoAnimatedWrap,
+                {
+                  transform: [
+                    { translateX: zoomTranslateX },
+                    { translateY: zoomTranslateY },
+                    { scale: zoomScale },
+                  ],
+                },
+              ]}
+            >
               {playbackSource && !standalonePlaybackSourceFailed ? (
                 shouldUseSharedAndroidVideoSurface ? (
                   <SharedAndroidVideoSurface
@@ -8120,6 +8385,7 @@ export default function PlayerScreen() {
                     }}
                     source={playbackSource}
                     style={styles.video}
+                    pointerEvents="none"
                     resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
                     shouldPlay={isLiveMode ? true : isPlaying}
                     isLooping={false}
@@ -8184,16 +8450,6 @@ export default function PlayerScreen() {
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Toggle shared playback"
-              />
-            ) : null}
-
-            {isCreatorStandalonePlaybackSurface ? (
-              <Pressable
-                pointerEvents={controlsVisible ? "none" : "auto"}
-                style={styles.creatorStandaloneSurfaceTapTarget}
-                onPress={showControlsAndResetAutoHideTimer}
-                accessibilityRole="button"
-                accessibilityLabel="Show player controls"
               />
             ) : null}
 
@@ -8421,8 +8677,6 @@ export default function PlayerScreen() {
                 inMyList={inMyList}
                 canSaveToList={canSaveStandaloneTitle}
                 onToggleMyList={onToggleMyList}
-                playbackRate={playbackRate}
-                onToggleSpeedMenu={() => setSpeedMenuOpen((value) => !value)}
                 canLike={canLikeStandaloneTitle}
                 engagementState={engagementState}
                 engagementLoading={engagementLoading}
@@ -8432,14 +8686,25 @@ export default function PlayerScreen() {
                 onToggleShare={onToggleStandaloneShare}
                 canShareCreatorVideo={canShareStandaloneCreatorVideo}
                 onShareCreatorVideo={onShareCreatorVideo}
+                canStartWatchPartyLive={canStartStandaloneWatchPartyLive}
                 onWatchParty={onWatchParty}
                 canReport={isCreatorVideoPlayback}
                 reportBusy={creatorVideoReportBusy}
                 onReport={() => setCreatorVideoReportVisible(true)}
-                speedMenuOpen={speedMenuOpen}
-                onSelectRate={onSelectRate}
               />
             )}
+
+            {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
+              <StandalonePlaybackMenu
+                visible={controlsVisible && playbackMenuOpen}
+                playbackRate={playbackRate}
+                onSelectRate={onSelectRate}
+                onClose={() => {
+                  setPlaybackMenuOpen(false);
+                  resetAutoHideTimer();
+                }}
+              />
+            ) : null}
               </>
             )}
 
@@ -8499,7 +8764,7 @@ export default function PlayerScreen() {
 
               {zoomLevel > 1.01 && !inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
                 <View style={styles.controlsRow}>
-                  <TouchableOpacity style={styles.controlBtn} onPress={() => animateZoomTo(1)}>
+                  <TouchableOpacity style={styles.controlBtn} onPress={resetZoom}>
                     <Text style={styles.controlBtnText}>Reset Zoom</Text>
                   </TouchableOpacity>
                 </View>
@@ -8517,16 +8782,35 @@ export default function PlayerScreen() {
                   ]}
                 >
                   <View style={styles.compactActionRow}>
-                    <TouchableOpacity style={styles.compactActionBtn} onPress={replayFromStart}>
-                      <Text style={styles.compactActionBtnText}>Replay</Text>
-                    </TouchableOpacity>
                     <TouchableOpacity style={styles.compactActionBtn} onPress={() => router.back()}>
+                      <MaterialIcons name="arrow-back" size={16} color="#EEF1F7" />
                       <Text style={styles.compactActionBtnText}>Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.compactActionBtn, styles.compactPlaybackBtn, playbackMenuOpen && styles.compactActionBtnActive]}
+                      onPress={() => {
+                        setControlsVisible(true);
+                        setPlaybackMenuOpen((value) => !value);
+                        resetAutoHideTimer();
+                      }}
+                      accessibilityLabel="Open playback speed and quality controls"
+                    >
+                      <MaterialIcons name="tune" size={16} color="#EEF1F7" />
+                      <Text style={styles.compactActionBtnText}>{formatPlaybackRateLabel(playbackRate)}</Text>
                     </TouchableOpacity>
                   </View>
                 </Animated.View>
               ) : null}
             </View>
+
+            {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
+              <View
+                collapsable={false}
+                pointerEvents="auto"
+                style={styles.standaloneVideoGestureTarget}
+                {...panResponder.panHandlers}
+              />
+            ) : null}
           </View>
 
           {renderCreatorVideoCommentsPanel()}
@@ -8922,8 +9206,13 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  creatorStandaloneSurfaceTapTarget: {
+  standaloneVideoGestureTarget: {
     ...StyleSheet.absoluteFillObject,
+    top: 60,
+    bottom: 82,
+    zIndex: 40,
+    elevation: 40,
+    backgroundColor: "transparent",
   },
   sharedAndroidVideoTapTarget: {
     ...StyleSheet.absoluteFillObject,
@@ -9040,6 +9329,8 @@ const styles = StyleSheet.create({
     top: 8,
     left: 8,
     right: 8,
+    zIndex: 46,
+    elevation: 46,
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
@@ -9093,33 +9384,31 @@ const styles = StyleSheet.create({
   },
   standaloneOverlayActions: {
     width: "100%",
-    minHeight: 104,
+    minHeight: 70,
     alignItems: "stretch",
     gap: 7,
+  },
+  standaloneTopActionBar: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
   },
   standaloneTopLeftActions: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     gap: 6,
-    maxWidth: "58%",
+    maxWidth: "62%",
+  },
+  standaloneTopSpacer: {
+    width: 1,
+    height: 1,
   },
   standaloneTopRightActions: {
-    alignSelf: "flex-end",
     alignItems: "flex-end",
     gap: 6,
-  },
-  standaloneUtilityRow: {
-    flexDirection: "row",
-    gap: 5,
-  },
-  standaloneEngagementRow: {
-    alignSelf: "flex-end",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    gap: 6,
-    maxWidth: "88%",
+    maxWidth: "38%",
   },
   partyOverlayChip: {
     borderRadius: 999,
@@ -9140,35 +9429,132 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
   },
-  partySpeedOverlayMenu: {
+  standalonePlaybackMenu: {
     position: "absolute",
-    top: 40,
-    right: 8,
-    flexDirection: "row",
-    gap: 6,
-    flexWrap: "wrap",
-    maxWidth: "72%",
-    justifyContent: "flex-end",
-  },
-  partySpeedOverlayChip: {
-    borderRadius: 999,
+    left: 24,
+    right: 24,
+    bottom: 116,
+    zIndex: 48,
+    elevation: 48,
+    maxHeight: "40%",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(0,0,0,0.42)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(8,8,12,0.82)",
+    paddingHorizontal: 10,
+    paddingTop: 9,
+    paddingBottom: 10,
+    gap: 7,
   },
-  partySpeedOverlayChipActive: {
-    borderColor: "rgba(220,20,60,0.72)",
-    backgroundColor: "rgba(220,20,60,0.28)",
+  standalonePlaybackMenuHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
-  partySpeedOverlayChipText: {
-    color: "#DADEE8",
+  standalonePlaybackMenuTitle: {
+    color: "#F5F7FF",
+    fontSize: 13.5,
+    fontWeight: "900",
+  },
+  standalonePlaybackMenuSubtitle: {
+    marginTop: 1,
+    color: "#AAB2C4",
     fontSize: 10,
     fontWeight: "800",
   },
-  partySpeedOverlayChipTextActive: {
-    color: "#fff",
+  standalonePlaybackCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  standalonePlaybackSectionLabel: {
+    color: "#C9CFDB",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  standalonePlaybackSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  standalonePlaybackSectionValue: {
+    color: "#F4F7FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  standalonePlaybackSpeedList: {
+    gap: 5,
+  },
+  standalonePlaybackOption: {
+    minHeight: 35,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  standalonePlaybackOptionActive: {
+    borderColor: "rgba(220,20,60,0.5)",
+    backgroundColor: "rgba(220,20,60,0.16)",
+  },
+  standalonePlaybackOptionText: {
+    color: "#DCE2EF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  standalonePlaybackOptionTextActive: {
+    color: "#FFFFFF",
+  },
+  standalonePlaybackOptionNote: {
+    marginTop: 1,
+    color: "#AEB6C8",
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+  standalonePlaybackQualityRow: {
+    minHeight: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  standalonePlaybackQualityRowActive: {
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  standalonePlaybackQualityLabel: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  standalonePlaybackQualityNote: {
+    marginTop: 2,
+    color: "#C2CADB",
+    fontSize: 10,
+    fontWeight: "700",
   },
   partyReactionBurstWrap: {
     position: "absolute",
@@ -9564,6 +9950,8 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 0,
     gap: 4,
+    zIndex: 47,
+    elevation: 47,
   },
   compactChip: {
     borderRadius: 999,
@@ -9594,14 +9982,25 @@ const styles = StyleSheet.create({
   },
   compactActionBtn: {
     flex: 1,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 5,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(0,0,0,0.28)",
     paddingHorizontal: 10,
     paddingVertical: 7,
+  },
+  compactActionBtnActive: {
+    borderColor: "rgba(220,20,60,0.64)",
+    backgroundColor: "rgba(220,20,60,0.22)",
+  },
+  compactPlaybackBtn: {
+    flex: 0,
+    minWidth: 118,
+    paddingHorizontal: 14,
   },
   compactActionBtnText: {
     color: "#EEF1F7",
@@ -9625,6 +10024,8 @@ const styles = StyleSheet.create({
     right: 10,
     bottom: 8,
     gap: 5,
+    zIndex: 47,
+    elevation: 47,
   },
   playerFrameworkBottomStackWatchParty: {
     gap: 3,

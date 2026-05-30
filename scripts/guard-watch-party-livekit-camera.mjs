@@ -137,7 +137,7 @@ const playerSharedPlaybackSync = sliceBetween(
 const playerSharedPlaybackSeekDelta = sliceBetween(
   player,
   "const applySeekDelta = useCallback(",
-  "const animateZoomTo = useCallback(",
+  "const setZoomTransform = useCallback(",
   "Player Watch-Party shared playback seek boundary",
 );
 const playerSharedPlaybackTap = sliceBetween(
@@ -1058,8 +1058,28 @@ assertIncludes(
 );
 assertIncludes(
   player,
-  "!shouldUseSharedAndroidVideoSurface && !watchPartyLiveSharedPlaybackControlsLocked ? panResponder.panHandlers : {}",
-  "Player Watch-Party viewer surface scrub handlers must be removed while shared playback is locked",
+  "!inWatchParty && !isLiveMode && !standalonePlaybackGateActive",
+  "Player Watch-Party shared surface must not receive the standalone gesture target",
+);
+assertIncludes(
+  player,
+  "style={styles.standaloneVideoGestureTarget}",
+  "Player standalone gesture target must stay explicit for visible-control play/pause taps",
+);
+assertIncludes(
+  player,
+  "top: 60",
+  "Player standalone gesture target must stay below top standalone controls",
+);
+assertIncludes(
+  player,
+  "bottom: 82",
+  "Player standalone gesture target must stay above bottom standalone controls",
+);
+assertIncludes(
+  player,
+  "zIndex: 40",
+  "Player standalone gesture target must stay below standalone control chrome and above the video",
 );
 assertIncludes(
   player,

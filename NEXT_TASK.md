@@ -7,6 +7,7 @@ Store Legal Account Deletion Ops Closeout is documented in `docs/legal/STORE_LEG
 
 Current launch truth:
 
+- Standalone Player playback regression/menu polish is closed for the normal title Player runtime path. The Android root cause was native video/tap-layer ownership: video loaded, but the standalone center tap path did not reliably own Android taps. The Player now routes native video touches through an overlay gesture target, keeps controls/menu above it, and normal title Player played to `0:03` on `R5CR120QCBF`. The Playback menu uses clean Speed rows plus Auto-only Quality, with no loose speed pills, no giant red Auto card, no bottom Replay button, and Watch-Party Live kept top-right where eligible. Proof lives at `/tmp/chillywood-standalone-player-playback-menu-fix-20260529/`.
 - Chi'llywood is safe for continued controlled Android testing with live money off and honest scope.
 - Chi'llywood is not ready for broad public launch.
 - No new P0 app-code/security failure was found by the audit.

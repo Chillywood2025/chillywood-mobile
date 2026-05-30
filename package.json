@@ -31,6 +31,7 @@
     "guard:security-request-context": "node ./scripts/guard-security-request-context.mjs && npm run guard:security-context-proxy-proof",
     "guard:security-context-proxy-proof": "node ./scripts/guard-security-context-proxy-proof.mjs",
     "guard:profile-production-policy": "node ./scripts/guard-profile-production-policy.mjs",
+    "guard:player-overlay-policy": "node ./scripts/guard-player-overlay-policy.mjs",
     "guard:navigation-terminology-policy": "node ./scripts/guard-navigation-terminology-policy.mjs",
     "guard:public-user-search-policy": "node ./scripts/guard-public-user-search-policy.mjs",
     "guard:admin-search-policy": "node ./scripts/guard-admin-search-policy.mjs",
