@@ -171,8 +171,8 @@ export const getCreatorVideoTooLargeMessage = (size?: number | null, maxUploadSi
 export const getCreatorVideoStorageLimitMessage = (size?: number | null) => {
   const fileSize = formatCreatorVideoFileSize(size);
   return fileSize
-    ? `Creator storage rejected this ${fileSize} movie. Raise the creator-videos Storage global and bucket limits, then try again.`
-    : "Creator storage rejected this movie size. Raise the creator-videos Storage global and bucket limits, then try again.";
+    ? `This ${fileSize} movie is above the current upload limit. Increase the creator video upload limit, then try again.`
+    : "This movie is above the current upload limit. Increase the creator video upload limit, then try again.";
 };
 
 const normalizeVisibility = (value: unknown): CreatorVideoVisibility => (
@@ -630,7 +630,7 @@ export async function uploadCreatorVideo(input: {
   }
 
   logCreatorVideoUpload("storage_upload_succeeded", { id });
-  if (!uploadedObject) throw new Error("Creator media storage did not return an upload object.");
+  if (!uploadedObject) throw new Error("Video upload could not be completed. Try again.");
 
   const payload: CreatorVideoInsert = {
     id,

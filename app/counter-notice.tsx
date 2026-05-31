@@ -397,7 +397,7 @@ export default function CounterNoticePage() {
           </TouchableOpacity>
           {!caseRecord ? (
             <Text style={styles.disabledReason}>
-              Submission unlocks after the backend confirms this case is tied to your signed-in uploader account.
+              Submission unlocks after this case is matched to your signed-in uploader account.
             </Text>
           ) : null}
         </View>

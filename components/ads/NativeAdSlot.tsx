@@ -232,8 +232,8 @@ export function NativeAdSlot({
 
   const renderCopy = useMemo(() => ({
     kicker: "Sponsored",
-    title: "Ad placeholder",
-    body: "Native/feed placement foundation. No real ad is loaded.",
+    title: "Sponsored placement",
+    body: "No ad is loaded in this spot right now.",
   }), []);
 
   if (disabled || !recordResult?.recorded) return null;

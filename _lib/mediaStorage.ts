@@ -81,7 +81,7 @@ async function getSignedInAccessToken() {
   const { data, error } = await supabase.auth.getSession();
   const accessToken = toText(data.session?.access_token);
   if (error || !accessToken) {
-    throw new Error("Sign in before using media storage.");
+    throw new Error("Sign in before uploading media.");
   }
   return accessToken;
 }
@@ -132,7 +132,7 @@ async function callMediaStorageFunction<T>(body: Record<string, unknown>): Promi
       body: JSON.stringify(body),
     },
     MEDIA_STORAGE_REQUEST_TIMEOUT_MS,
-    "Media storage took too long to respond. Try again.",
+    "Media upload took too long. Try again.",
   );
 
   const payload = await response.json().catch(() => null) as {
@@ -141,13 +141,11 @@ async function callMediaStorageFunction<T>(body: Record<string, unknown>): Promi
   } | T | null;
 
   if (!response.ok) {
-    const message = toText((payload as { message?: unknown } | null)?.message)
-      || "Media storage is not available right now.";
-    throw new Error(message);
+    throw new Error("Media upload is not available right now.");
   }
 
   if (!payload || typeof payload !== "object") {
-    throw new Error("Media storage returned an invalid response.");
+    throw new Error("Media upload is not available right now.");
   }
 
   return payload as T;
@@ -174,7 +172,7 @@ export async function createSignedMediaUpload(input: {
   const expiresAt = toText(payload.expiresAt);
 
   if (provider !== "s3" || !bucket || !objectKey || !uploadUrl) {
-    throw new Error("Media storage returned an incomplete upload contract.");
+    throw new Error("Media upload is not available right now.");
   }
 
   return {
@@ -225,7 +223,7 @@ export async function deleteStoredMediaObject(input: {
 }
 
 class SlowDownUploadError extends Error {
-  constructor(message = "Media storage is busy right now. Please try again in a moment.") {
+  constructor(message = "Media upload is busy right now. Please try again in a moment.") {
     super(message);
     this.name = "SlowDownUploadError";
   }
@@ -397,7 +395,7 @@ const objectHasReadableBytes = async (signedUrl: string, expectedSize?: number |
         signedUrl,
         { headers: { Range: "bytes=0-0" } },
         MEDIA_STORAGE_REQUEST_TIMEOUT_MS,
-        "Media storage verification took too long. Try again.",
+        "Media upload verification took too long. Try again.",
       );
       if (rangeProbe.status === 416) return false;
       if (rangeProbe.ok) {

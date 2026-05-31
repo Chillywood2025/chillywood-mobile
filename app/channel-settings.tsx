@@ -392,7 +392,7 @@ const formatCreatorVideoUiError = (error: unknown, fallback: string, fileSize?: 
     return "This account cannot complete that creator video action right now.";
   }
   if (message.includes("storage") || message.includes("bucket") || message.includes("upload")) {
-    return "The video could not be saved to creator storage right now. Try again in a moment.";
+    return "The video could not be saved right now. Try again in a moment.";
   }
   if (message.includes("file") || message.includes("mime") || message.includes("unsupported")) {
     return "Choose an MP4, MOV, WebM, or M4V video file.";
@@ -695,7 +695,7 @@ const analyticsUnavailableMetricDefinitions: readonly {
   {
     key: "contentLaunches",
     label: "Content Launches",
-    missingBody: "Creator-facing content-performance aggregates are not backed yet.",
+    missingBody: "Creator-facing content insights are not available yet.",
     laterBody: "This stays later until creator content-performance aggregates are supported.",
   },
   {
@@ -943,7 +943,7 @@ const getVideoLifecycleCopy = (input: {
   if (input.saving && input.editingVideoId) {
     return {
       label: "Saving Metadata",
-      body: "Updating backed title, description, thumbnail URL, or visibility.",
+      body: "Updating title, description, thumbnail, or visibility.",
       tone: "active" as const,
     };
   }
@@ -951,7 +951,7 @@ const getVideoLifecycleCopy = (input: {
   if (input.saving) {
     return {
       label: "Uploading...",
-      body: "Saving the selected file to creator storage. Percent progress is not backed yet.",
+      body: "Saving the selected file to your Platform library.",
       tone: "active" as const,
     };
   }
@@ -959,7 +959,7 @@ const getVideoLifecycleCopy = (input: {
   if (input.editingVideoId) {
     return {
       label: "Editing Metadata",
-      body: "Existing media stays in place. This edits backed metadata and visibility only.",
+      body: "Existing media stays in place. This edits details and visibility only.",
       tone: "ready" as const,
     };
   }
@@ -967,7 +967,7 @@ const getVideoLifecycleCopy = (input: {
   if (input.lifecycleState === "succeeded") {
     return {
       label: "Upload Succeeded",
-      body: "The video was saved to creator storage and added to your platform library.",
+      body: "The video was saved and added to your Platform library.",
       tone: "success" as const,
     };
   }
@@ -2887,7 +2887,7 @@ export function ChannelStudioScreen() {
         {
           title: "Creator Balance",
           status: "near_term",
-          body: "Verified earnings will appear only after real ledger rows exist.",
+          body: "Verified earnings will appear only after real ledger entries exist.",
         },
         {
           title: "Payouts",
@@ -2929,12 +2929,12 @@ export function ChannelStudioScreen() {
     },
     {
       title: "Live & Events",
-      body: "Room defaults, creator events, and backed scheduling posture.",
+      body: "Room defaults, creator events, and scheduling status.",
       sections: [
         {
           title: "Access Defaults",
           status: "current",
-          body: "Room defaults and backed creator grants.",
+          body: "Room defaults and creator access.",
         },
         {
           title: "Live Events",
@@ -2956,7 +2956,7 @@ export function ChannelStudioScreen() {
     },
     {
       title: "Insights",
-      body: "Only backed summaries render here; assistant-style help stays later.",
+      body: "Only available summaries appear here; assistant-style help stays later.",
       sections: [
         {
           title: "Analytics",
@@ -3043,7 +3043,7 @@ export function ChannelStudioScreen() {
     {
       label: "Followers",
       value: formatCount(audienceSummary?.followerCount ?? null),
-      body: "Real Platform follower relationships from the landed audience schema.",
+      body: "Real Platform follower relationships.",
     },
     {
       label: "Subscribers",
@@ -3058,31 +3058,31 @@ export function ChannelStudioScreen() {
     {
       label: "Blocked",
       value: formatCount(audienceSummary?.blockedAudienceCount ?? null),
-      body: "Blocked audience rows already supported by current schema truth.",
+      body: "Blocked audience entries are supported for this Platform.",
     },
   ];
   const audienceVisibilityCards: readonly SummaryMetricCard[] = [
     {
       label: "Public Activity",
       value: formatPublicActivityVisibility(audienceSummary?.publicActivityVisibility ?? null),
-      body: "Profile-backed audience visibility truth now lives on the Platform profile record.",
+      body: "Audience visibility comes from this Platform profile.",
     },
     {
       label: "Follower Surface",
       value: formatVisibilitySurface(audienceSummary?.followerSurfaceEnabled ?? null),
-      body: "Shows whether follower visibility can appear on the Platform surface from current backed truth.",
+      body: "Shows whether follower visibility can appear on this Platform.",
     },
     {
       label: "Subscriber Surface",
       value: formatVisibilitySurface(audienceSummary?.subscriberSurfaceEnabled ?? null),
-      body: "Shows whether subscriber visibility can appear on the Platform surface from current backed truth.",
+      body: "Shows whether subscriber visibility can appear on this Platform.",
     },
   ];
   const audienceUnavailableCards: readonly SummaryMetricCard[] = [
     {
       label: "VIP / Mod / Co-Host",
       value: "Later",
-      body: "Audience-role rosters are not backed yet.",
+      body: "Audience-role rosters are not available yet.",
       tone: "unavailable",
     },
   ];
@@ -3327,7 +3327,7 @@ export function ChannelStudioScreen() {
       value: String(upcomingEvents.length),
       body: nextUpcomingEvent
         ? `Next up: ${nextUpcomingEvent.eventTitle}`
-        : "No future scheduled event is currently backed by creator event truth.",
+        : "No future scheduled event is available yet.",
     },
     {
       label: "Live Now",
@@ -3340,7 +3340,7 @@ export function ChannelStudioScreen() {
       label: "Replay Ready",
       value: String(replayReadyEvents.length),
       body: replayReadyEvents.length
-        ? "Replay is backed for ended events currently open for viewing."
+        ? "Replay is available for ended events currently open for viewing."
         : "No creator event replay is currently available.",
     },
     {
@@ -3506,12 +3506,12 @@ export function ChannelStudioScreen() {
     ...(pendingAudienceRequestCount == null ? [] : [{
       label: "Audience Requests",
       value: String(pendingAudienceRequestCount),
-      body: "Pending backed audience requests.",
+      body: "Pending audience requests.",
     }]),
     ...(blockedAudienceCount == null ? [] : [{
       label: "Blocked Users",
       value: String(blockedAudienceCount),
-      body: "Blocked audience rows in current Platform truth.",
+      body: "Blocked audience entries for this Platform.",
     }]),
     ...(audienceSubscriberCount == null ? [] : [{
       label: "Subscribers",
@@ -4333,7 +4333,7 @@ export function ChannelStudioScreen() {
           {renderClipAccordion({
             id: "advanced",
             title: "Coming Later",
-            summary: "Advanced editor tools stay locked until backed.",
+            summary: "Advanced editor tools stay locked until they are available.",
             status: "Locked",
             statusTone: "muted",
             children: (
@@ -4946,7 +4946,7 @@ export function ChannelStudioScreen() {
           <View style={styles.panelHeader}>
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>Needs Attention</Text>
-              <Text style={styles.panelSubtitle}>Only backed, actionable items show here.</Text>
+              <Text style={styles.panelSubtitle}>Only available actions show here.</Text>
             </View>
           </View>
           <View style={styles.eventList}>
@@ -5058,7 +5058,7 @@ export function ChannelStudioScreen() {
               })}
               {renderStudioActionRow({
                 title: "Schedule event",
-                body: "Use the backed creator event form.",
+                body: "Use the creator event form.",
                 value: "Open",
                 onPress: () => openStudioTab("live", { focus: "schedule" }),
               })}
@@ -5201,7 +5201,7 @@ export function ChannelStudioScreen() {
             <>
               {renderStudioActionRow({
                 title: "Insights overview",
-                body: creatorAnalyticsSummary ? "Open backed room, event, and audience signals." : "Insights will appear after your platform has activity.",
+                body: creatorAnalyticsSummary ? "Open room, event, and audience signals." : "Insights will appear after your platform has activity.",
                 value: "Open",
                 onPress: () => openStudioTab("insights", { focus: "overview" }),
               })}
@@ -5670,14 +5670,14 @@ export function ChannelStudioScreen() {
                   body: "Live scene switching is not active here yet.",
                   value: "Not available",
                   tone: "muted",
-                  onPress: () => showStudioUnavailable("Not available yet", "Starting Soon cards need a backed scene renderer before creators can publish them."),
+                  onPress: () => showStudioUnavailable("Not available yet", "Starting Soon cards need a public scene renderer before creators can publish them."),
                 })}
                 {renderStudioActionRow({
                   title: "Offline Card",
                   body: "Offline presentation can be previewed in a later Brand Studio lane.",
                   value: "Not available",
                   tone: "muted",
-                  onPress: () => showStudioUnavailable("Not available yet", "Offline Cards need a backed public renderer before they can launch."),
+                  onPress: () => showStudioUnavailable("Not available yet", "Offline Cards need a public renderer before they can launch."),
                 })}
               </>
             ),
@@ -5845,8 +5845,8 @@ export function ChannelStudioScreen() {
 
   const renderCreatorMoneyEventRows = (
     events: readonly MoneyAuditEvent[],
-    emptyTitle = "No money rows returned",
-    emptyBody = "Money setup, readiness, sandbox, and ledger rows will appear here when they are safely readable.",
+    emptyTitle = "No money activity yet",
+    emptyBody = "Money setup, readiness, sandbox, and ledger activity will appear here when it is safely readable.",
     limit = 4,
   ) => {
     const visibleEvents = events.slice(0, limit);
@@ -6110,7 +6110,7 @@ export function ChannelStudioScreen() {
       {
         label: "Balance states",
         value: "Pending later",
-        body: "Future rows must separate pending, available, paid, refunded, reversed, and blocked states.",
+        body: "Future balance states must separate pending, available, paid, refunded, reversed, and blocked states.",
         tone: "unavailable",
       },
     ];
@@ -6277,7 +6277,7 @@ export function ChannelStudioScreen() {
       {
         label: "Webhook checks",
         value: getMoneyFeatureStateLabel(providerWebhooksFlag.state),
-        body: "Technical status only. Secret values and provider payloads are never shown.",
+        body: "Status only. Secret values and private provider details are never shown.",
         tone: switchTone(providerWebhooksFlag.state) === "default" ? "default" : "unavailable",
       },
     ];
@@ -6310,7 +6310,7 @@ export function ChannelStudioScreen() {
           {renderSummaryMetricCards([
             { label: "Money Center", value: unavailableStatus, body: moneyCenterFeatureFlag.displaySummary, tone: "unavailable" },
             { label: "Provider checks", value: providerOverallStatus, body: "Provider checks are the source of readiness truth.", tone: "unavailable" },
-            { label: "Live money", value: getMoneyFeatureStateLabel(liveMoneyFeatureFlag.state), body: "Live money stays off until owner approval and provider proof pass.", tone: "unavailable" },
+            { label: "Live money", value: getMoneyFeatureStateLabel(liveMoneyFeatureFlag.state), body: "Live money stays off until owner approval and provider checks pass.", tone: "unavailable" },
           ])}
         </View>
       );
@@ -6393,7 +6393,7 @@ export function ChannelStudioScreen() {
                 {renderCreatorMoneyEventRows(
                   overviewEvents,
                   "No creator money events yet",
-                  "Setup, sandbox, readiness, and ledger details will appear here when there are safe rows for this creator.",
+                  "Setup, sandbox, readiness, and ledger details will appear here when there is safe activity for this creator.",
                   5,
                 )}
               </>
@@ -6411,8 +6411,8 @@ export function ChannelStudioScreen() {
                 {renderSummaryMetricCards(digitalSalesCards)}
                 {renderCreatorMoneyEventRows(
                   digitalEvents,
-                  "No digital sales rows yet",
-                  "Digital sales setup rows, sandbox provider events, and readiness checks will appear here when safely readable.",
+                  "No digital sales activity yet",
+                  "Digital sales setup, sandbox provider events, and readiness checks will appear here when safely readable.",
                   4,
                 )}
                 {renderStudioActionRow({
@@ -6436,8 +6436,8 @@ export function ChannelStudioScreen() {
                 {renderSummaryMetricCards(tipsCards)}
                 {renderCreatorMoneyEventRows(
                   digitalEvents.filter((event) => event.title.toLowerCase().includes("tip") || event.sourceLabel.toLowerCase().includes("tip")),
-                  "No tips rows yet",
-                  "Tips are planned/setup only. Any future sandbox rows will be marked sandbox only and not payable.",
+                  "No tips activity yet",
+                  "Tips are planned/setup only. Any future sandbox activity will be marked sandbox only and not payable.",
                   3,
                 )}
                 <View style={styles.eventEmptyCard}>
@@ -6459,8 +6459,8 @@ export function ChannelStudioScreen() {
                 {renderSummaryMetricCards(watchPartySeatCards)}
                 {renderCreatorMoneyEventRows(
                   providerEvents.filter((event) => event.capability === "google_play_subscription_product" || event.capability === "paid_content"),
-                  "No Watch-Party seat rows yet",
-                  "Paid seats stay setup/planned until Google Play or RevenueCat provider proof exists.",
+                  "No Watch-Party seat activity yet",
+                  "Paid seats stay planned until Google Play or RevenueCat provider setup is ready.",
                   3,
                 )}
               </>
@@ -6478,8 +6478,8 @@ export function ChannelStudioScreen() {
                 {renderSummaryMetricCards(paidContentCards)}
                 {renderCreatorMoneyEventRows(
                   digitalEvents.filter((event) => event.title.toLowerCase().includes("content") || event.capability === "paid_content"),
-                  "No paid content rows yet",
-                  "Paid content setup rows are not paywalls and do not unlock access until provider proof exists.",
+                  "No paid content activity yet",
+                  "Paid content setup does not unlock access until provider setup is ready.",
                   3,
                 )}
               </>
@@ -6497,8 +6497,8 @@ export function ChannelStudioScreen() {
                 {renderSummaryMetricCards(merchCards)}
                 {renderCreatorMoneyEventRows(
                   merchEvents,
-                  "No merch rows yet",
-                  "Physical merch setup rows will appear here when safe creator-owned records exist.",
+                  "No merch activity yet",
+                  "Physical merch setup will appear here when safe creator-owned records exist.",
                   3,
                 )}
               </>
@@ -6516,12 +6516,12 @@ export function ChannelStudioScreen() {
                 {renderSummaryMetricCards(balanceCards)}
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>No verified earnings yet.</Text>
-                  <Text style={styles.eventEmptyBody}>No dollar amount is shown until verified ledger rows exist. Pending, available, paid, refunded, reversed, and blocked balances stay separate.</Text>
+                  <Text style={styles.eventEmptyBody}>No dollar amount is shown until verified ledger entries exist. Pending, available, paid, refunded, reversed, and blocked balances stay separate.</Text>
                 </View>
                 {renderCreatorMoneyEventRows(
                   balanceEvents,
-                  "No verified ledger rows yet",
-                  "Any setup/readiness row here is not payable and does not create a balance.",
+                  "No verified ledger entries yet",
+                  "Any setup or readiness activity here is not payable and does not create a balance.",
                   5,
                 )}
               </>
@@ -6579,8 +6579,8 @@ export function ChannelStudioScreen() {
                 </View>
                 {renderCreatorMoneyEventRows(
                   payoutEvents,
-                  "No payout rows yet",
-                  "Payout setup and request rows are not withdrawable while payout and live-money switches are off.",
+                  "No payout activity yet",
+                  "Payout setup and requests are not withdrawable while payout and live-money switches are off.",
                   4,
                 )}
               </>
@@ -6618,7 +6618,7 @@ export function ChannelStudioScreen() {
                 {renderCreatorMoneyEventRows(
                   providerEvents,
                   "No provider readiness details yet",
-                  "Provider readiness rows are sanitized and never expose secrets or raw payloads.",
+                  "Provider readiness details are sanitized and never expose secrets or private provider details.",
                   6,
                 )}
               </>
@@ -6628,7 +6628,7 @@ export function ChannelStudioScreen() {
           {renderMonetizationAccordion({
             id: "future",
             title: "Future Tools",
-            summary: "Money tools that stay planned until backed.",
+            summary: "Money tools that stay planned until they are available.",
             status: "Planned",
             statusTone: "muted",
             children: (
@@ -6666,7 +6666,7 @@ export function ChannelStudioScreen() {
           <Text style={styles.panelStatusMuted}>CREATOR SAFE</Text>
         </View>
         <Text style={styles.permissionCopy}>
-          Platform Studio shows creator-safe safety controls here. Admin-only queues and enforcement tools stay in Admin unless this account already has backed review access.
+          Platform Studio shows creator-safe safety controls here. Admin-only queues and enforcement tools stay in Admin unless this account has review access.
         </Text>
       </View>
 
@@ -6687,7 +6687,7 @@ export function ChannelStudioScreen() {
               {recentSafetyReportCount == null
                 ? "Creator-facing report review is not available to this account."
                 : recentSafetyReportCount
-                  ? "Reports are visible to this account through backed review access."
+                  ? "Reports are visible to this account through review access."
                   : "No reports waiting."}
             </Text>
           </View>
@@ -6695,7 +6695,7 @@ export function ChannelStudioScreen() {
             <Text style={styles.summaryLabel}>Blocked accounts</Text>
             <Text style={styles.summaryValue}>{blockedAudienceCount == null ? "Protected" : String(blockedAudienceCount)}</Text>
             <Text style={styles.summaryBody}>
-              {blockedAudienceCount ? "Platform-owned audience blocks are backed here." : "No blocked accounts."}
+              {blockedAudienceCount ? "Platform-owned audience blocks appear here." : "No blocked accounts."}
             </Text>
           </View>
           <View style={styles.summaryCard}>
@@ -6728,7 +6728,7 @@ export function ChannelStudioScreen() {
               showStudioUnavailable(
                 recentSafetyReportCount ? "Reports visible" : "No reports waiting",
                 recentSafetyReportCount
-                  ? "This account has backed report visibility. Use Admin for operator review actions; Platform Studio keeps creator-facing controls here."
+                  ? "This account has report visibility. Use Admin for operator review actions; Platform Studio keeps creator-facing controls here."
                   : "No reports are waiting for this platform right now.",
               );
             },
@@ -6819,7 +6819,7 @@ export function ChannelStudioScreen() {
         })}
         {renderQuickActionCard({
           title: "Schedule Event",
-          body: "Use the backed creator event form below.",
+          body: "Use the creator event form below.",
           onPress: () => openStudioTab("live", { focus: "schedule" }),
         })}
         {renderQuickActionCard({
@@ -7232,7 +7232,7 @@ export function ChannelStudioScreen() {
 
               <Text style={styles.sectionLabel}>Request Review</Text>
               <Text style={styles.permissionCopy}>
-                Enter a backed request id to approve, decline, or cancel it. `follow` requests are real now; `subscriber_access` stays unsupported until subscriber mutation truth exists.
+                Enter a request id to approve, decline, or cancel it. Follow requests are active now; subscriber access is not available yet.
               </Text>
               <TextInput
                 style={styles.input}
@@ -7325,7 +7325,7 @@ export function ChannelStudioScreen() {
 
               <Text style={styles.sectionLabel}>Follower Relationship</Text>
               <Text style={styles.permissionCopy}>
-                Remove a backed follower relationship by follower user id when creator-side cleanup is needed. This stays separate from viewer-side follow or unfollow actions and does not invent subscriber mutation.
+                Remove a follower relationship by follower user id when creator-side cleanup is needed. This stays separate from viewer-side follow or unfollow actions.
               </Text>
               <TextInput
                 style={styles.input}
@@ -7371,7 +7371,7 @@ export function ChannelStudioScreen() {
 
               <Text style={styles.sectionLabel}>Blocked Audience</Text>
               <Text style={styles.permissionCopy}>
-                Block and unblock use the real Platform-owned audience boundary already backed by schema truth. VIP, moderator, and co-host roles still stay out.
+                Block and unblock use the Platform-owned audience boundary. VIP, moderator, and co-host roles stay separate.
               </Text>
               <TextInput
                 style={styles.input}
@@ -7466,12 +7466,12 @@ export function ChannelStudioScreen() {
               <View style={styles.panelHeader}>
                 <View style={styles.panelHeaderCopy}>
                   <Text style={styles.panelTitle}>Insights</Text>
-                  <Text style={styles.panelSubtitle}>Track what is actually backed by your platform data today.</Text>
+                  <Text style={styles.panelSubtitle}>Track what your Platform data shows today.</Text>
                 </View>
                 <Text style={styles.panelStatus}>CURRENT SUMMARY</Text>
               </View>
               <Text style={styles.permissionCopy}>
-                Only backed creator analytics render here. Unsupported metrics stay unavailable instead of being zeroed or fabricated.
+                Only available creator analytics appear here. Unsupported metrics stay unavailable instead of being zeroed or fabricated.
               </Text>
               <Text style={styles.sectionLabel}>Platform Metrics</Text>
               <View style={styles.summaryGrid}>
@@ -7568,7 +7568,7 @@ export function ChannelStudioScreen() {
                   { label: "Status", value: selectedCreatorMoneyAuditEvent.statusLabel },
                   { label: "Environment", value: selectedCreatorMoneyAuditEvent.environment },
                   { label: "Payable", value: selectedCreatorMoneyAuditEvent.payable ? "Yes" : "No" },
-                  { label: "Provider", value: selectedCreatorMoneyAuditEvent.provider || "not provider-backed" },
+                  { label: "Provider", value: selectedCreatorMoneyAuditEvent.provider || "No provider" },
                   { label: "Capability", value: selectedCreatorMoneyAuditEvent.capability || "not returned" },
                   { label: "Provider event", value: selectedCreatorMoneyAuditEvent.providerEventId ? "Recorded" : "not returned" },
                   { label: "Idempotency", value: selectedCreatorMoneyAuditEvent.idempotencyLabel },

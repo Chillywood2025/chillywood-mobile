@@ -2426,13 +2426,13 @@ export default function WatchPartyLiveStageScreen({
   ]);
   const heroFallbackInitial = String(heroParticipant?.displayName || "H").trim().slice(0, 1).toUpperCase();
   const liveKitJoinUnavailableTitle = liveKitJoinUnavailable?.responseError === "no_eligible_livekit_server"
-    ? "LiveKit server unavailable"
+    ? "Live video unavailable"
     : liveKitJoinUnavailable
-      ? "LiveKit join unavailable"
+      ? "Live room unavailable"
       : "";
-  const liveKitJoinUnavailableBody = liveKitJoinUnavailable?.responseError === "no_eligible_livekit_server"
-    ? "No healthy LiveKit server heartbeat is available for new rooms. Restart the registry heartbeat, then retry."
-    : liveKitJoinUnavailable?.message ?? "";
+  const liveKitJoinUnavailableBody = liveKitJoinUnavailable
+    ? "Live video is temporarily unavailable. Try again in a moment."
+    : "";
   const selectedStageEffect = getLiveEffectById(selectedStageEffectId);
   const stageEffectAppliedToCamera = isLiveEffectAppliedToCamera(selectedStageEffect);
   const activeStageLookLabel = canUseStageEffects && stageEffectAppliedToCamera
@@ -2443,7 +2443,7 @@ export default function WatchPartyLiveStageScreen({
   const hybridCommentDisabled = (!hybridCommentDraft.trim() && !hybridCommentAttachmentFile) || hybridCommentSending;
   const stageEffectsTitle = canUseStageEffects ? CHILLYFECTS_BRAND_NAME : "Chi’llyfects catalog";
   const stageEffectsBody = canUseStageEffects
-    ? "Chi’llyfects are selectable as a foundation only. This build does not process the outgoing LiveKit camera track."
+    ? "Chi’llyfects can be previewed here. Live camera effects are still being prepared."
     : "Viewers can browse the Chi’llyfects catalog. Camera Chi’llyfects require a speaker or host camera role.";
   const stageEffectsHelper = getLiveEffectStatusCopy(selectedStageEffect);
   const stageTopChromeStatusLabel = `${lowerCommunityCountLabel} · ${liveStageProtectionStatus}${controlsLocked ? " · Controls locked" : ""}`;

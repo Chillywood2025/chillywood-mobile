@@ -124,30 +124,30 @@ const sourceClient = supabase as unknown as {
 
 const SOURCE_LABELS: Record<string, string> = {
   [PLATFORM_FINANCE_LEDGER_EVENTS_TABLE]: "Financial event",
-  [CREATOR_REVENUE_SOURCE_IMPORT_RECORDS_TABLE]: "Revenue import readiness row",
-  [CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE]: "Share ledger setup row",
-  [CREATOR_EARNINGS_LEDGER_TABLE]: "Creator earnings ledger row",
-  [CREATOR_PAYOUT_ACCOUNTS_TABLE]: "Payout account readiness row",
+  [CREATOR_REVENUE_SOURCE_IMPORT_RECORDS_TABLE]: "Revenue import readiness entry",
+  [CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE]: "Share ledger setup entry",
+  [CREATOR_EARNINGS_LEDGER_TABLE]: "Creator earnings ledger entry",
+  [CREATOR_PAYOUT_ACCOUNTS_TABLE]: "Payout account readiness entry",
   [CREATOR_PAYOUT_PROVIDER_WEBHOOK_EVENTS_TABLE]: "Payout provider webhook event",
-  [CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE]: "Payout provider transfer row",
-  [CREATOR_PAYOUT_AUDIT_LOG_TABLE]: "Payout audit row",
-  [CREATOR_PAYOUT_REQUESTS_TABLE]: "Payout request row",
-  [CREATOR_CONTENT_PRICES_TABLE]: "Paid content setup row",
-  [PAID_CONTENT_PURCHASES_TABLE]: "Paid content purchase row",
-  [CONTENT_ACCESS_GRANTS_TABLE]: "Content access grant row",
-  [CREATOR_TIP_TRANSACTIONS_TABLE]: "Tip setup row",
-  [CREATOR_PRODUCTS_TABLE]: "Merch product setup row",
-  [CREATOR_PRODUCT_ORDERS_TABLE]: "Merch order row",
+  [CREATOR_PAYOUT_PROVIDER_TRANSFERS_TABLE]: "Payout provider transfer entry",
+  [CREATOR_PAYOUT_AUDIT_LOG_TABLE]: "Payout audit entry",
+  [CREATOR_PAYOUT_REQUESTS_TABLE]: "Payout request entry",
+  [CREATOR_CONTENT_PRICES_TABLE]: "Paid content setup entry",
+  [PAID_CONTENT_PURCHASES_TABLE]: "Paid content purchase entry",
+  [CONTENT_ACCESS_GRANTS_TABLE]: "Content access grant entry",
+  [CREATOR_TIP_TRANSACTIONS_TABLE]: "Tip setup entry",
+  [CREATOR_PRODUCTS_TABLE]: "Merch product setup entry",
+  [CREATOR_PRODUCT_ORDERS_TABLE]: "Merch order entry",
   [MONETIZATION_WEBHOOK_EVENTS_TABLE]: "Digital provider webhook event",
-  [MONETIZATION_AUDIT_LOG_TABLE]: "Creator monetization audit row",
-  [SPONSOR_REVIEW_QUEUE_RECORDS_TABLE]: "Sponsor review queue row",
-  [SPONSOR_DISCLOSURE_RECORDS_TABLE]: "Sponsor disclosure row",
-  [SPONSOR_SAFETY_REVIEW_RECORDS_TABLE]: "Sponsor safety review row",
-  [SPONSOR_PAYMENT_RECORDS_TABLE]: "Sponsor payment readiness row",
-  [FRAUD_REVIEW_QUEUE_RECORDS_TABLE]: "Fraud review queue row",
-  [FRAUD_ACTION_RECORDS_TABLE]: "Fraud action row",
-  [FRAUD_AUDIT_LOGS_TABLE]: "Fraud audit row",
-  [PLATFORM_FRAUD_HOLDS_TABLE]: "Payment risk hold row",
+  [MONETIZATION_AUDIT_LOG_TABLE]: "Creator monetization audit entry",
+  [SPONSOR_REVIEW_QUEUE_RECORDS_TABLE]: "Sponsor review queue entry",
+  [SPONSOR_DISCLOSURE_RECORDS_TABLE]: "Sponsor disclosure entry",
+  [SPONSOR_SAFETY_REVIEW_RECORDS_TABLE]: "Sponsor safety review entry",
+  [SPONSOR_PAYMENT_RECORDS_TABLE]: "Sponsor payment readiness entry",
+  [FRAUD_REVIEW_QUEUE_RECORDS_TABLE]: "Fraud review queue entry",
+  [FRAUD_ACTION_RECORDS_TABLE]: "Fraud action entry",
+  [FRAUD_AUDIT_LOGS_TABLE]: "Fraud audit entry",
+  [PLATFORM_FRAUD_HOLDS_TABLE]: "Payment risk hold entry",
 };
 
 const ADMIN_SOURCE_TABLES = [
@@ -405,8 +405,8 @@ const eventFromSourceRow = (
   const category = eventCategoryForTable(source.table);
   const reason = source.reason
     || (source.environment === "sandbox"
-      ? "Sandbox provider/test rows are proof only and cannot create payable creator balance."
-      : "Setup/readiness rows do not create payable creator balance.");
+      ? "Sandbox provider activity is not payable and cannot create a creator balance."
+      : "Setup and readiness activity does not create a creator balance.");
 
   return {
     id: source.id,
@@ -427,7 +427,7 @@ const eventFromSourceRow = (
     providerEventId: options.creatorSafe ? (source.providerEventId ? "Recorded" : null) : source.providerEventId,
     idempotencyLabel: source.idempotencyKeyPresent ? "Duplicate-safe source recorded" : "No duplicate key returned",
     reason,
-    nextStep: "Keep provider proof, kill switches, and ledger verification separate before any live-money lane.",
+    nextStep: "Keep provider checks, safety switches, and ledger verification separate before any live-money lane.",
     createdAt: source.createdAt,
     updatedAt: source.updatedAt,
     rowCount: null,
@@ -442,7 +442,7 @@ const eventFromSourceRow = (
       { label: "Status", value: sourceStatus },
       { label: "Environment", value: source.environment },
       { label: "Payable", value: "No" },
-      { label: "Provider", value: source.provider || "not provider-backed" },
+      { label: "Provider", value: source.provider || "No provider" },
       { label: "Capability", value: source.capability || "not returned" },
       { label: "Provider event id", value: options.creatorSafe ? (source.providerEventId ? "Recorded" : "not returned") : (source.providerEventId || "not returned") },
       { label: "Idempotency", value: source.idempotencyKeyPresent ? "Duplicate-safe source recorded" : "No duplicate key returned" },
@@ -473,7 +473,7 @@ const eventFromCount = ({
   reason: string;
   nextStep: string;
 }): MoneyAuditEvent => {
-  const countLabel = count === null ? "Source not connected" : `${count} ${count === 1 ? "row" : "rows"}`;
+  const countLabel = count === null ? "Source not connected" : `${count} ${count === 1 ? "entry" : "entries"}`;
   const statusLabel = environment === "sandbox" ? "Sandbox only" : count && count > 0 ? "Setup only" : "No payable balance";
   return {
     id,
@@ -546,14 +546,14 @@ export function buildCreatorMoneyAuditEvents({
       count: count ?? null,
       generatedAt,
       reason,
-      nextStep: "Use provider proof and verified production ledger rows before any payable balance can appear.",
+      nextStep: "Use provider checks and verified production ledger entries before any payable balance can appear.",
     }));
   };
 
   addCreatorCount(CREATOR_EARNINGS_LEDGER_TABLE, summary?.ledgerRows, "Creator balance detail", "ledger", "No verified production ledger amount is available to show.");
   addCreatorCount(CREATOR_PAYOUT_REQUESTS_TABLE, summary?.payoutRequestRows, "Payout request detail", "payouts", "Payout requests are not withdrawable while payouts and live money are off.");
   addCreatorCount(CREATOR_TIP_TRANSACTIONS_TABLE, summary?.tipRows, "Tips setup detail", "digital_sales", "Tips are setup/planned only until store/provider products are proven.");
-  addCreatorCount(CREATOR_CONTENT_PRICES_TABLE, summary?.pricingRows, "Paid content setup detail", "digital_sales", "Paid content setup rows do not unlock checkout or access.");
+  addCreatorCount(CREATOR_CONTENT_PRICES_TABLE, summary?.pricingRows, "Paid content setup detail", "digital_sales", "Paid content setup does not unlock checkout or access.");
   addCreatorCount(CREATOR_PRODUCTS_TABLE, summary?.productRows, "Merch setup detail", "merch", "Merch setup is physical-goods planning and does not create digital access.");
 
   providerRows.forEach((row) => {
@@ -581,9 +581,9 @@ export function buildCreatorMoneyAuditEvents({
       providerEventId: null,
       idempotencyLabel: "Readiness summary only",
       reason: row.status === "active" && !liveMoneyOn
-        ? "Provider proof may be active, but live money is still off and this does not create a payable balance."
+        ? "Provider checks may be active, but live money is still off and this does not create a payable balance."
         : row.displaySummary || "Provider checks are the source of readiness truth.",
-      nextStep: row.nextStep || "Complete provider proof before activation.",
+      nextStep: row.nextStep || "Complete provider checks before activation.",
       createdAt: row.lastCheckedAt || generatedAt,
       updatedAt: row.lastCheckedAt,
       rowCount: null,
@@ -598,7 +598,7 @@ export function buildCreatorMoneyAuditEvents({
         { label: "Environment", value: row.status === "sandbox_ready" ? "sandbox" : row.status === "active" ? "production" : "setup" },
         { label: "Live money allowed", value: row.isLiveMoneyEnabled && liveMoneyOn ? "Provider says yes; action guards still required" : "No" },
         { label: "Payable", value: "No" },
-        { label: "Next step", value: row.nextStep || "Complete provider proof before activation." },
+        { label: "Next step", value: row.nextStep || "Complete provider checks before activation." },
       ],
     });
   });
@@ -679,20 +679,20 @@ export function buildAdminMoneyAuditEvents({
       generatedAt: readModel.generatedAt,
       environment,
       reason,
-      nextStep: "Use source rows, provider proof, and audited switches before any production money action.",
+      nextStep: "Use source entries, provider checks, and audited switches before any production money action.",
     }));
   };
 
-  addCountFallback(PLATFORM_FINANCE_LEDGER_EVENTS_TABLE, readModel.financeLedgerEventCount, "Financial events", "ledger", "Financial event rows are setup/readiness proof only until provider-backed production ledger proof exists.");
+  addCountFallback(PLATFORM_FINANCE_LEDGER_EVENTS_TABLE, readModel.financeLedgerEventCount, "Financial events", "ledger", "Financial event entries are setup/readiness only until provider-backed production ledger checks pass.");
   addCountFallback(CREATOR_REVENUE_SOURCE_IMPORT_RECORDS_TABLE, readModel.creatorRevenueSourceImportRecordCount, "Revenue imports", "revenue_imports", "Revenue imports are not connected to production money yet.");
-  addCountFallback(CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE, readModel.creatorRevenueShareLedgerEntryCount, "Share ledger", "ledger", "Share ledger rows are not payable without verified production source revenue.");
-  addCountFallback(CREATOR_EARNINGS_LEDGER_TABLE, readModel.creatorEarningsLedgerCount, "Creator earnings ledger", "ledger", "Creator earnings rows must be verified before any balance is payable.");
-  addCountFallback(CREATOR_PAYOUT_PROVIDER_WEBHOOK_EVENTS_TABLE, readModel.creatorPayoutProviderWebhookEventCount, "Payout provider webhook events", "webhooks", "Sandbox/test webhook rows are readiness proof only and do not release payouts.", "sandbox");
+  addCountFallback(CREATOR_REVENUE_SHARE_LEDGER_ENTRIES_TABLE, readModel.creatorRevenueShareLedgerEntryCount, "Share ledger", "ledger", "Share ledger entries are not payable without verified production source revenue.");
+  addCountFallback(CREATOR_EARNINGS_LEDGER_TABLE, readModel.creatorEarningsLedgerCount, "Creator earnings ledger", "ledger", "Creator earnings entries must be verified before any balance is payable.");
+  addCountFallback(CREATOR_PAYOUT_PROVIDER_WEBHOOK_EVENTS_TABLE, readModel.creatorPayoutProviderWebhookEventCount, "Payout provider webhook events", "webhooks", "Sandbox/test webhook entries are readiness-only and do not release payouts.", "sandbox");
   addCountFallback(MONETIZATION_WEBHOOK_EVENTS_TABLE, readModel.monetizationWebhookEventCount, "Digital provider webhook events", "webhooks", "Digital provider webhooks cannot activate live money while switches are off.", "sandbox");
-  addCountFallback(SPONSOR_REVIEW_QUEUE_RECORDS_TABLE, readModel.sponsorReviewQueueRecordCount, "Sponsor review queue", "sponsors_ads", "Sponsor review queue rows are review/setup only.");
-  addCountFallback(SPONSOR_PAYMENT_RECORDS_TABLE, readModel.sponsorPaymentRecordCount, "Sponsor payment readiness", "sponsors_ads", "Sponsor payment rows do not create brand charge or creator split.");
-  addCountFallback(FRAUD_REVIEW_QUEUE_RECORDS_TABLE, readModel.fraudReviewQueueRecordCount, "Fraud review queue", "fraud_risk", "Fraud rows are review/setup proof and do not clear or block money automatically.");
-  addCountFallback(PLATFORM_FRAUD_HOLDS_TABLE, readModel.platformFraudHoldCount, "Payment risk holds", "fraud_risk", "Risk hold rows do not pause payouts unless a future backend action enforces them.");
+  addCountFallback(SPONSOR_REVIEW_QUEUE_RECORDS_TABLE, readModel.sponsorReviewQueueRecordCount, "Sponsor review queue", "sponsors_ads", "Sponsor review queue entries are review/setup only.");
+  addCountFallback(SPONSOR_PAYMENT_RECORDS_TABLE, readModel.sponsorPaymentRecordCount, "Sponsor payment readiness", "sponsors_ads", "Sponsor payment entries do not create brand charge or creator split.");
+  addCountFallback(FRAUD_REVIEW_QUEUE_RECORDS_TABLE, readModel.fraudReviewQueueRecordCount, "Fraud review queue", "fraud_risk", "Fraud review entries are setup-only and do not clear or block money automatically.");
+  addCountFallback(PLATFORM_FRAUD_HOLDS_TABLE, readModel.platformFraudHoldCount, "Payment risk holds", "fraud_risk", "Risk hold entries do not pause payouts unless a future enforcement action applies them.");
 
   providerRows.forEach((row) => {
     const environment: MoneyAuditEnvironment = row.status === "sandbox_ready" ? "sandbox" : row.status === "active" ? "production" : "setup";
@@ -715,7 +715,7 @@ export function buildAdminMoneyAuditEvents({
       providerEventId: null,
       idempotencyLabel: "Readiness summary only",
       reason: row.displaySummary || "Provider readiness remains source of truth.",
-      nextStep: row.nextStep || "Complete provider proof before activation.",
+      nextStep: row.nextStep || "Complete provider checks before activation.",
       createdAt: row.lastCheckedAt || readModel.generatedAt,
       updatedAt: row.lastCheckedAt,
       rowCount: null,
@@ -731,7 +731,7 @@ export function buildAdminMoneyAuditEvents({
         { label: "Proof source", value: "get_provider_readiness_summary" },
         { label: "Live money allowed", value: row.isLiveMoneyEnabled && liveMoneyEnabled ? "Provider and global switch allow; action guards still required" : "No" },
         { label: "Blocked by live_money_enabled", value: liveMoneyEnabled ? "No" : "Yes" },
-        { label: "Next step", value: row.nextStep || "Complete provider proof before activation." },
+        { label: "Next step", value: row.nextStep || "Complete provider checks before activation." },
       ],
     });
   });
@@ -740,7 +740,7 @@ export function buildAdminMoneyAuditEvents({
     events.push({
       id: `admin-switch:${row.key}`,
       title: row.displayLabel,
-      summary: `${getMoneyFeatureStateLabel(row.state)}. Current backend-enforced switch state.`,
+      summary: `${getMoneyFeatureStateLabel(row.state)}. Current enforced switch state.`,
       category: "kill_switches",
       sourceTable: "platform_money_kill_switches",
       sourceLabel: "Money kill switch",
@@ -783,7 +783,7 @@ export function buildAdminMoneyAuditEvents({
       category: "kill_switches",
       sourceTable: "platform_money_kill_switch_audit",
       sourceLabel: "Kill switch audit",
-      statusLabel: row.newState === "sandbox_only" ? "Sandbox only" : "Audit row",
+      statusLabel: row.newState === "sandbox_only" ? "Sandbox only" : "Audit entry",
       environment: row.newState === "sandbox_only" ? "sandbox" : "setup",
       payable: false,
       actorLabel: row.actorUserId ? "Admin actor" : "System/default",
@@ -793,7 +793,7 @@ export function buildAdminMoneyAuditEvents({
       provider: null,
       capability: row.switchKey,
       providerEventId: null,
-      idempotencyLabel: "Immutable audit row",
+      idempotencyLabel: "Immutable audit entry",
       reason: row.reason,
       nextStep: "Review switch history before enabling any high-risk capability.",
       createdAt: row.createdAt || readModel.generatedAt,
@@ -832,7 +832,7 @@ export function buildAdminMoneyAuditEvents({
       providerEventId: null,
       idempotencyLabel: "Global block",
       reason: "Global live-money switch remains off.",
-      nextStep: "Keep sandbox and setup proof separate from production money activation.",
+      nextStep: "Keep sandbox and setup checks separate from production money activation.",
       createdAt: readModel.generatedAt,
       updatedAt: null,
       rowCount: null,

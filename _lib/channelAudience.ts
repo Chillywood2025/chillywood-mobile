@@ -954,7 +954,7 @@ async function reviewChannelAudienceRequest(
       status: "unsupported",
       reason: "subscriber_mutation_unsupported",
       message:
-        "Approving subscriber-access requests stays unsupported in this helper foundation pass because creator/channel subscriber mutation truth is still operator, billing-sync, or manual-backfill driven.",
+        "Subscriber access requests are not available for creator-side approval yet.",
       actorScope: context.actorScope,
       requiredScope: "unsupported",
       channelUserId: request.channel_user_id,
@@ -1297,6 +1297,6 @@ export function getChannelSubscriberRelationshipActionSupport(): ChannelSubscrib
     requiredScope: "unsupported",
     reason: "subscriber_mutation_unsupported",
     message:
-      "Creator/channel subscriber relationship mutation stays unsupported in this helper foundation pass because current truth is still operator, billing-sync, or manual-backfill driven rather than a creator-side workflow.",
+      "Subscriber relationship changes are not available in creator tools yet.",
   };
 }

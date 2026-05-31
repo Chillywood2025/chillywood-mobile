@@ -1209,8 +1209,8 @@ assertIncludes(
 );
 assertIncludes(
   liveStage,
-  "LiveKit server unavailable",
-  "Live Stage must show an explicit LiveKit server unavailable state instead of a silent avatar fallback",
+  "Live video unavailable",
+  "Live Stage must show a user-safe unavailable state instead of a silent avatar fallback",
 );
 assertIncludes(
   liveStageEntryHandler,

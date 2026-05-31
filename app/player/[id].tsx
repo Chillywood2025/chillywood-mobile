@@ -7514,7 +7514,7 @@ export default function PlayerScreen() {
         </TouchableOpacity>
       </View>
       <Text style={styles.liveFilterSheetBody}>
-        Chi’llyfects here are preview-only looks. This build does not process the outgoing LiveKit camera track.
+        Chi’llyfects here are preview-only looks. Live camera effects are still being prepared.
       </Text>
       <Text style={styles.liveFilterSheetHelper}>{activeLiveFaceFilter.subtitle}</Text>
       <View style={styles.liveFilterOptionRow}>
@@ -8258,9 +8258,9 @@ export default function PlayerScreen() {
                   {isCreatorVideoPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>
                       {creatorVideoPaidContentLocked
-                        ? `Checkout is not active yet${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. Buying creator-paid content does not require Premium once provider proof is ready.`
+                        ? `Checkout is not active yet${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. Buying creator-paid content does not require Premium. Payment setup still needs to be ready.`
                         : playbackLoadError
-                        ? "This upload could not be loaded from storage. Re-upload or repair the video file."
+                        ? "This upload could not be loaded. Re-upload or repair the video file."
                         : "This upload does not have a playable source yet."}
                     </Text>
                   ) : null}

@@ -33,6 +33,31 @@ Not covered:
 - Removed React Native-visible `&apos;` entities from app UI copy across auth, Home, Admin, Rachi, Chat, Player, Profile/Platform, legal, support, subscribe, title, and room surfaces.
 - Added `guard:critical-ux-polish-policy` to prevent regression on raw crash summary, raw key account/support/profile errors, sensitive redirect params, and visible apostrophe entities.
 
+## Normal User Technical Copy Cleanup
+
+Follow-up cleanup on May 31, 2026 removed remaining implementation wording from normal-user and creator-facing copy without changing behavior.
+
+Cleaned surfaces:
+
+- Live effects / Chi'llyfects preview copy.
+- Live Watch-Party / Live Stage unavailable states.
+- Player paid-content and playback-unavailable copy.
+- Native ad placeholder copy.
+- Platform Studio creator upload lifecycle, audience, analytics, and Money Center setup states.
+- Counter-notice disabled state.
+- Media upload and creator-video upload error helpers.
+- LiveKit join failure messages returned to UI.
+- Premium temporary-hold copy.
+- Spectator unavailable copy.
+- Provider readiness next-step copy.
+- Subscriber-audience unsupported-action copy.
+
+The copy now uses product-safe language such as `entries`, `checks`, `not available yet`, `try again`, and `you don't have access` instead of normal-user-facing `backend`, `RPC`, `RLS`, `rows`, `proof`, `foundation`, `not wired`, `storage`, `token endpoint`, or raw provider/internal wording.
+
+## Owner/Admin Exceptions
+
+Owner/Admin technical surfaces may still show useful operational detail when the route is gated and the detail is safe. This pass intentionally does not strip admin-only proof/debug/audit wording from Admin tools. The guard focuses on normal-user and creator-facing surfaces, not internal variables, logs, test/guard files, or gated Admin audit tooling.
+
 ## Owner/Admin/Moderator Notes
 
 - Admin and Rachi owner/operator copy now uses real apostrophes instead of HTML entities.
@@ -51,6 +76,29 @@ Passed:
 - `npm run guard:profile-production-policy`
 - `npm run guard:platform-brand-studio-policy`
 - `npm run guard:clip-studio-policy`
+- `npm run guard:public-user-search-policy`
+- `npm run guard:admin-search-policy`
+- `npm run guard:money-center-policy`
+- `npm run guard:provider-readiness-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:stripe-connect-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `npm run guard:spectator-child-room-policy`
+- `npm run guard:malware-scanning-policy`
+- `npm run guard:vod-quality-policy`
+- `npm run guard:livekit-simulcast-dynacast-policy`
+- `npm run guard:refresh-policy`
+- `npm run guard:content-rights-policy`
+- `npm run guard:watch-party-live-audio-mix`
+- `npm run guard:player-overlay-policy`
+- `npm run guard:admin-auth-safety`
+
+Device status:
+
+- `adb devices` found `R5CR120QCBF`.
+- No fresh Android build/install visual route proof is claimed for the technical-copy cleanup. The next proof lane should install the current build and capture the cleaned empty/error states.
 
 ## Remaining Proof
 

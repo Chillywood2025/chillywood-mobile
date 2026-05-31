@@ -50,7 +50,7 @@ export function LiveEffectsPanel({
       {showHeader ? (
         <View style={styles.header}>
           <View style={styles.headerCopy}>
-            <Text style={styles.kicker}>CHI’LLYFECTS FOUNDATION</Text>
+            <Text style={styles.kicker}>CHI’LLYFECTS PREVIEW</Text>
             <Text style={styles.title}>{CHILLYFECTS_BRAND_NAME}</Text>
           </View>
           <View style={styles.activePill}>
@@ -63,8 +63,8 @@ export function LiveEffectsPanel({
 
       <Text style={styles.body}>
         {cameraAvailable
-          ? `${surfaceLabel} can show the Chi’llyfects catalog, but this build does not process the outgoing camera track.`
-          : `${surfaceLabel} Chi’llyfects turn on only when your camera role is active. Real processing is still a later lane.`}
+          ? `${surfaceLabel} can show the Chi’llyfects catalog. Live camera effects are still being prepared.`
+          : `${surfaceLabel} Chi’llyfects turn on when your camera role is active. Live camera effects are still being prepared.`}
       </Text>
       <View style={styles.selectedCard}>
         <View style={styles.selectedHeader}>

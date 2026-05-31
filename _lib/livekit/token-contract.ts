@@ -152,7 +152,7 @@ export async function requestLiveKitParticipantToken(
       requestedGrants,
       reason: "not_configured",
       message:
-        "LiveKit runtime config is not set yet. Keep using the current realtime path until the backend token endpoint and server URL are configured.",
+        "Live video is not available yet. Try the current room experience for now.",
       endpoint: config.tokenEndpoint || undefined,
       serverUrl: config.serverUrl || undefined,
     };
@@ -170,7 +170,7 @@ export async function requestLiveKitParticipantToken(
       requestedGrants,
       reason: "unauthenticated",
       message:
-        "LiveKit token requests require an authenticated Chi'llywood session. Sign in first or keep using the current fallback path.",
+        "Sign in to join live video.",
       endpoint: config.tokenEndpoint,
       serverUrl: config.serverUrl,
     };
@@ -203,7 +203,7 @@ export async function requestLiveKitParticipantToken(
       requestedGrants,
       reason: "request_failed",
       message:
-        "Chi'llywood could not reach the LiveKit token endpoint. The app foundation is in place, but backend token issuance still needs to come online.",
+        "Live video is temporarily unavailable. Try again in a moment.",
       endpoint: config.tokenEndpoint,
       serverUrl: config.serverUrl,
     };
@@ -215,9 +215,9 @@ export async function requestLiveKitParticipantToken(
       message?: unknown;
     } | null;
     const responseError = String(errorPayload?.error ?? "").trim();
-    const responseMessage = String(errorPayload?.message ?? "").trim();
-    const message = responseMessage
-      || `LiveKit token issuance failed with status ${response.status}. The backend token endpoint still needs to return a valid participant token.`;
+    const message = response.status === 401 || response.status === 403
+      ? "You don’t have access to join this live video."
+      : "Live video is temporarily unavailable. Try again in a moment.";
 
     return {
       status: "unavailable",
@@ -257,7 +257,7 @@ export async function requestLiveKitParticipantToken(
       requestedGrants,
       reason: "invalid_response",
       message:
-        "LiveKit token issuance returned an incomplete response. The backend contract must return both serverUrl and participantToken.",
+        "Live video is temporarily unavailable. Try again in a moment.",
       endpoint: config.tokenEndpoint,
       serverUrl: config.serverUrl,
     };

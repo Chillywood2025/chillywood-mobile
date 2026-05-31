@@ -143,7 +143,7 @@ export const getProviderReadinessFallbackSummary = (): ProviderReadinessSummaryR
     status: "disabled",
     displayLabel: "Not active yet",
     displaySummary: "Payout release stays disabled while readiness cannot be checked.",
-    nextStep: "Link providers and run proof before enabling.",
+    nextStep: "Link providers and finish checks before enabling.",
     lastCheckedAt: null,
     isLiveMoneyEnabled: false,
     publicSafe: true,

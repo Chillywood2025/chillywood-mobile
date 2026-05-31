@@ -258,7 +258,7 @@ const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
 
 export const PREMIUM_PURCHASE_SHELL_ON_HOLD = true;
 export const PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
-  "Premium purchase is temporarily unavailable while Google Play and RevenueCat proof is rechecked.";
+  "Premium purchase is temporarily unavailable while Google Play and RevenueCat access is checked.";
 
 export const isPremiumPurchaseShellAvailable = () => {
   const runtime = getAppMonetizationRuntimeFeatures();
@@ -1155,8 +1155,8 @@ export async function readMonetizationAccessSheetState(options: {
       snapshot,
       presentation: {
         ...presentation,
-        title: "Premium proof is being rechecked",
-        body: "Premium purchase and restore actions are temporarily unavailable. This does not grant Premium; existing access still requires trusted entitlement truth.",
+        title: "Premium access is being checked",
+        body: "Premium purchase and restore actions are temporarily unavailable. This does not grant Premium; existing access still requires trusted entitlement status.",
         actionLabel: "Unavailable",
       },
       primaryAction: "retry",

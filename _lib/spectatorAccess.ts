@@ -141,6 +141,6 @@ export function resolveSpectatorAccess(
     canShowMetadata: true,
     canShowPlayback: false,
     canJoinFullRoom: requiresPremium ? !!options?.viewerIsPremium : false,
-    safeCopy: "Spectator metadata is available. Playback remains blocked until broadcast proof exists.",
+    safeCopy: "Spectator details are available. Playback remains blocked until the broadcast is ready.",
   };
 }

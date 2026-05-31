@@ -2,7 +2,7 @@
 
 ## Recommended Lane: Whole App One-Device Polish Route Proof
 
-Latest repo-side lane before the next proof lane: Whole App Safety / Flow / State / Critical UX Polish Pass. This was a safe production-polish pass, not a redesign. It adds `_lib/userFacingErrors.ts`, wires production-safe error copy into Settings, Profile, Support, Copyright Report, and Platform Studio event-save paths, removes raw exception text from the root error-boundary feedback summary/analytics payload, strips token/password/secret-style params from auth `redirectTo`, and replaces React Native-visible `&apos;` entities across app UI copy. New guard: `npm run guard:critical-ux-polish-policy`. Closeout doc: `docs/WHOLE_APP_PRODUCTION_POLISH_PASS.md`.
+Latest repo-side lane before the next proof lane: Normal User Technical Copy Cleanup Pass. This was a copy/UX polish pass, not a redesign. It builds on the Whole App Safety / Flow / State / Critical UX Polish Pass by removing remaining normal-user and creator-facing technical wording from Live effects, Live Stage unavailable states, Player paid-content/playback fallback, native ad placeholder copy, Platform Studio creator upload/analytics/audience/Money Center setup copy, counter-notice disabled copy, media upload helpers, creator-video upload errors, LiveKit join failures, Premium hold copy, Spectator unavailable copy, provider readiness next steps, and subscriber-audience unsupported-action copy. Owner/Admin technical details remain allowed when gated and useful. Updated guard: `npm run guard:critical-ux-polish-policy`. Closeout doc: `docs/WHOLE_APP_PRODUCTION_POLISH_PASS.md`.
 
 Validation passed:
 
@@ -14,13 +14,18 @@ Validation passed:
 - `npm run guard:profile-production-policy`
 - `npm run guard:platform-brand-studio-policy`
 - `npm run guard:clip-studio-policy`
+- full targeted guard stack through LiveKit, old-room handling, Spectator, malware scanning, VOD quality, content rights, player overlay, and Admin auth safety
 
 Next proof should verify on Android:
 
+- Fresh current build installs on `R5CR120QCBF`.
 - Auth/login/signup copy shows no HTML entities.
 - Home, Explore, Library, Player, Chat, Profile, Platform, Platform Studio, Settings, Support/legal, Admin, and Rachi surfaces still load.
 - Root error boundary recovery copy is production-facing if a safe test boundary can be triggered.
 - Settings/Profile/Support/Copyright failure states show friendly copy without raw RLS/storage/auth/backend text.
+- Live Stage/room unavailable states use production-facing copy without LiveKit token/server wording.
+- Player paid-content and unavailable states do not expose storage/provider-proof wording.
+- Platform Studio creator setup/Money Center states use product-safe entries/checks wording without rows/proof wording.
 - Owner/admin/moderator surfaces still hide normal-user-restricted actions and do not expose raw debug/proof copy.
 - Permission-denied states for picker/camera/mic/notifications remain clean when testable.
 

@@ -48,7 +48,7 @@ export const WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY = {
 
 export const PREMIUM_LIVE_GATE_PROOF_HOLD = true;
 export const PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE =
-  "Premium live entry is temporarily open for proof while Google Play and RevenueCat access is rechecked. This does not grant Premium.";
+  "Premium live entry is temporarily open while Google Play and RevenueCat access is checked. This does not grant Premium.";
 
 const RUNTIME_CONTROL_DISABLED_COPY: Record<RuntimeControlledLiveFeature["controlKey"], {
   title: string;
