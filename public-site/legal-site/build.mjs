@@ -185,7 +185,7 @@ function renderCopyrightReportPage() {
     ["social_attachment", "Social attachment"],
     ["attachment", "Attachment"],
     ["live_room", "Live room"],
-    ["channel", "Channel"],
+    ["channel", "Platform"],
     ["other", "Other"],
   ];
 
@@ -301,7 +301,7 @@ ${contentTypeOptions.map(([value, label]) => `              <option value="${esc
     const mimeType = String(file.type || "").toLowerCase();
     if (!ALLOWED_ATTACHMENT_TYPES.includes(mimeType)) throw new Error(file.name + " is not an allowed DMCA evidence type.");
     if (!file.size || file.size > MAX_ATTACHMENT_BYTES) throw new Error(file.name + " must be 10 MB or smaller.");
-    if (!attachmentToken) throw new Error("Attachment upload token was not returned for this case.");
+    if (!attachmentToken) throw new Error("Attachment upload could not be prepared for this case.");
     const objectPath = "public-intake/" + caseId + "/" + attachmentToken + "/" + objectName(file.name);
     const upload = await fetch(storageObjectUrl(objectPath), {
       method: "POST",
@@ -347,7 +347,7 @@ ${contentTypeOptions.map(([value, label]) => `              <option value="${esc
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     button.disabled = true;
-    setStatus("Public DMCA form disabled: Supabase public URL or public anon key is not configured for this static build.", "error");
+    setStatus("Public DMCA form is not available right now. Contact support@chillywoodstream.com to file a copyright notice.", "error");
     return;
   }
 

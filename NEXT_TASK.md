@@ -1,8 +1,10 @@
 # NEXT TASK
 
-## Recommended Lane: Whole App One-Device Polish Route Proof
+## Recommended Lane: Profile Media Viewer And Removal Runtime Closeout
 
-Latest repo-side lane before the next proof lane: Normal User Technical Copy Cleanup Pass. This was a copy/UX polish pass, not a redesign. It builds on the Whole App Safety / Flow / State / Critical UX Polish Pass by removing remaining normal-user and creator-facing technical wording from Live effects, Live Stage unavailable states, Player paid-content/playback fallback, native ad placeholder copy, Platform Studio creator upload/analytics/audience/Money Center setup copy, counter-notice disabled copy, media upload helpers, creator-video upload errors, LiveKit join failures, Premium hold copy, Spectator unavailable copy, provider readiness next steps, and subscriber-audience unsupported-action copy. Owner/Admin technical details remain allowed when gated and useful. Updated guard: `npm run guard:critical-ux-polish-policy`. Closeout doc: `docs/WHOLE_APP_PRODUCTION_POLISH_PASS.md`.
+Latest repo-side lane before the next proof lane: Current Build User-Facing Copy Visual Smoke. The current release APK was rebuilt, release JS bundle was force-refreshed, installed on `R5CR120QCBF`, and opened past splash into Home. Proof path: `/tmp/chillywood-current-build-copy-visual-smoke-20260531/`. Final APK: `android/app/build/outputs/apk/release/app-release.apk`, `205661499` bytes, SHA-256 `6fe62ce802d0c382c3e02ca720f59e6800a2cfd22e0542d8c8f1d0202c7804c6`.
+
+Captured surfaces include Home, Explore/no-match, Library, Live Hub, owner Profile, Platform Studio, Brand Studio, Clip Studio, Money Center, public Platform, Player, Support, Copyright Report, Account Deletion, Settings legal/account, Watch-Party Live entry, Live Stage unavailable, and Spectator unavailable safe states where reachable. The smoke found one public legal copy issue on Account Deletion: `approved backend deletion` / `magic instant wipe`. The shared legal policy source, generated public legal site, and legal-site builder now use production-safe deletion/de-identification copy and Platform terminology. `guard:critical-ux-polish-policy` now covers those public legal regressions. The final UI text scan found no banned normal-user technical placeholder copy in current/final captures; the remaining visible `Proof` text is backed fixture account data, not app chrome.
 
 Validation passed:
 
@@ -10,24 +12,32 @@ Validation passed:
 - `npm run validate:runtime`
 - `npm run guard:critical-ux-polish-policy`
 - `npm run guard:navigation-terminology-policy`
-- `npm run guard:rachi-official-policy`
 - `npm run guard:profile-production-policy`
+- `npm run guard:rachi-official-policy`
+- `npm run guard:public-user-search-policy`
+- `npm run guard:admin-search-policy`
+- `npm run guard:money-center-policy`
+- `npm run guard:provider-readiness-policy`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:stripe-connect-policy`
 - `npm run guard:platform-brand-studio-policy`
 - `npm run guard:clip-studio-policy`
-- full targeted guard stack through LiveKit, old-room handling, Spectator, malware scanning, VOD quality, content rights, player overlay, and Admin auth safety
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `npm run guard:spectator-child-room-policy`
+- `npm run guard:malware-scanning-policy`
+- `npm run guard:vod-quality-policy`
+- `npm run guard:refresh-policy`
+- `npm run guard:livekit-simulcast-dynacast-policy`
 
-Next proof should verify on Android:
+Next proof should verify:
 
-- Fresh current build installs on `R5CR120QCBF`.
-- Auth/login/signup copy shows no HTML entities.
-- Home, Explore, Library, Player, Chat, Profile, Platform, Platform Studio, Settings, Support/legal, Admin, and Rachi surfaces still load.
-- Root error boundary recovery copy is production-facing if a safe test boundary can be triggered.
-- Settings/Profile/Support/Copyright failure states show friendly copy without raw RLS/storage/auth/backend text.
-- Live Stage/room unavailable states use production-facing copy without LiveKit token/server wording.
-- Player paid-content and unavailable states do not expose storage/provider-proof wording.
-- Platform Studio creator setup/Money Center states use product-safe entries/checks wording without rows/proof wording.
-- Owner/admin/moderator surfaces still hide normal-user-restricted actions and do not expose raw debug/proof copy.
-- Permission-denied states for picker/camera/mic/notifications remain clean when testable.
+- Profile Photo remove/fallback plus backend `user_removed` read-back after the modern review-sheet flow.
+- Profile Background remove/fallback plus backend `user_removed` read-back after the full-page background fix.
+- Viewer and signed-out users cannot edit Profile media.
+- Viewer and signed-out users cannot see non-active avatar/background media.
+- Optional recapture of signed-out/auth route copy, Chat, Admin denial, and permission-denied picker/camera/mic/notification states when safe fixtures are available.
 
 Keep screenshots outside the repo.
 

@@ -54,6 +54,45 @@ Cleaned surfaces:
 
 The copy now uses product-safe language such as `entries`, `checks`, `not available yet`, `try again`, and `you don't have access` instead of normal-user-facing `backend`, `RPC`, `RLS`, `rows`, `proof`, `foundation`, `not wired`, `storage`, `token endpoint`, or raw provider/internal wording.
 
+## Current Build Visual Smoke
+
+Follow-up Android proof on May 31, 2026 installed and opened the current release build on `R5CR120QCBF`.
+
+Proof folder:
+
+- `/tmp/chillywood-current-build-copy-visual-smoke-20260531/`
+
+Final release APK proof:
+
+- `android/app/build/outputs/apk/release/app-release.apk`
+- `205661499` bytes
+- SHA-256 `6fe62ce802d0c382c3e02ca720f59e6800a2cfd22e0542d8c8f1d0202c7804c6`
+
+Captured normal-user/creator surfaces where reachable:
+
+- Home
+- Explore and no-match search
+- Library
+- Live Hub
+- owner Profile
+- public Platform
+- Platform Studio
+- Brand Studio
+- Clip Studio
+- Money Center
+- Player
+- Support
+- Copyright Report
+- Account Deletion
+- Settings legal/account area
+- Watch-Party Live entry
+- Live Stage unavailable state
+- Spectator unavailable state
+
+The smoke found one real public legal copy issue on Account Deletion: visible `approved backend deletion` and `magic instant wipe` wording. The shared legal policy source, generated public legal pages, and legal-site builder now use production-safe deletion/de-identification copy. The public DMCA content-type label now shows `Platform` while preserving the existing internal value. `guard:critical-ux-polish-policy` now checks these public legal regressions.
+
+Final current UI text scan found no banned normal-user technical placeholder copy in current/final captures. The only visible `Proof` text was the backed fixture account name/handle used by the signed-in owner session, not app chrome or product copy.
+
 ## Owner/Admin Exceptions
 
 Owner/Admin technical surfaces may still show useful operational detail when the route is gated and the detail is safe. This pass intentionally does not strip admin-only proof/debug/audit wording from Admin tools. The guard focuses on normal-user and creator-facing surfaces, not internal variables, logs, test/guard files, or gated Admin audit tooling.
@@ -98,10 +137,12 @@ Passed:
 Device status:
 
 - `adb devices` found `R5CR120QCBF`.
-- No fresh Android build/install visual route proof is claimed for the technical-copy cleanup. The next proof lane should install the current build and capture the cleaned empty/error states.
+- Current release APK installed with `Success`.
+- App opened past splash into Home.
+- Fresh visual proof is captured at `/tmp/chillywood-current-build-copy-visual-smoke-20260531/`.
 
 ## Remaining Proof
 
-- One-device visual route proof for the polished copy across Home, Auth, Settings, Profile, Platform, Player, Chat, Support/legal, Admin, and moderator/report flows.
+- Signed-out/auth route copy, Chat, Admin denial, and moderator-account denial visual proof when safe fixtures are available.
 - Permission-denied proof for photo/file picker, camera, microphone, notifications, and admin/moderator-denied actions.
 - Deeper route-by-route visual design pass remains separate if the owner wants layout-level modernization rather than safety/copy/state polish.

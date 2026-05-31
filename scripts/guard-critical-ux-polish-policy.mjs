@@ -81,6 +81,8 @@ const spectatorAccess = read("_lib/spectatorAccess.ts");
 const mediaStorage = read("_lib/mediaStorage.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const liveKitTokenContract = read("_lib/livekit/token-contract.ts");
+const legalPolicies = read("legal/policies.mjs");
+const legalSiteBuild = read("public-site/legal-site/build.mjs");
 
 for (const [label, source] of [
   ["Settings", settings],
@@ -172,6 +174,36 @@ for (const [label, source, forbiddenPhrases] of normalUserCopyChecks) {
     assertNotIncludes(source, phrase, `${label} normal-user technical copy`);
   }
 }
+
+for (const phrase of [
+  "approved backend deletion",
+  "magic instant wipe",
+  "service-role credentials",
+  "Profile, Channel",
+  "channel display",
+  "Channel setup",
+  "public channel",
+  "token request metadata",
+  "Supabase",
+]) {
+  assertNotIncludes(legalPolicies, phrase, "Public legal policy normal-user technical copy");
+}
+assertIncludes(
+  legalPolicies,
+  "approved deletion or de-identification process",
+  "Account deletion production copy",
+);
+assertIncludes(legalSiteBuild, "[\"channel\", \"Platform\"]", "Public DMCA Platform option label");
+assertNotIncludes(
+  legalSiteBuild,
+  "Public DMCA form disabled: Supabase public URL or public anon key is not configured for this static build.",
+  "Public DMCA unavailable copy",
+);
+assertNotIncludes(
+  legalSiteBuild,
+  "Attachment upload token was not returned for this case.",
+  "Public DMCA attachment copy",
+);
 
 if (process.exitCode) process.exit(process.exitCode);
 
