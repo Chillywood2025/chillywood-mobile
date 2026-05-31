@@ -65,8 +65,25 @@ assertIncludes(reviewContextMigration, `set_config('app.platform_brand_review_co
 assertIncludes(reviewContextMigration, `v_review_context <> 'review_platform_brand_asset'`, "asset trigger context gate");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('reports_review')`, "review queue reports access");
-assertIncludes(channelSettings, `canReviewPlatformBrandAssets ? renderBrandAccordion({`, "review accordion role gate");
-assertIncludes(channelSettings, `title: "Review and Publishing"`, "review accordion title");
+assertIncludes(channelSettings, `canReviewPlatformBrandAssets ? (`, "review queue role gate");
+assertIncludes(channelSettings, `title: "Review & Publish"`, "review accordion title");
+assertIncludes(channelSettings, `createInitialBrandSections(routeParams.tab, routeParams.focus)`, "collapsed Brand Studio first view");
+assertIncludes(channelSettings, `activeBrandSheetSection`, "Brand Studio bottom sheet state");
+assertIncludes(channelSettings, `styles.assetManagerSheet`, "Brand Studio modal bottom sheet");
+assertIncludes(channelSettings, `setActiveBrandSheetSection(id)`, "asset card opens bottom sheet");
+assertIncludes(channelSettings, `platformBranding?.heroImage ? (`, "hero adjustment controls require media");
+assertIncludes(channelSettings, `platformBranding?.backgroundImage ? (`, "background adjustment controls require media");
+assertIncludes(channelSettings, `title: "Adjust Hero Image"`, "hero post-selection adjust step");
+assertIncludes(channelSettings, `title: "Adjust Background"`, "background post-selection adjust step");
+assertIncludes(channelSettings, `thumbnailAsset: platformBranding?.heroImage`, "hero collapsed thumbnail");
+assertIncludes(channelSettings, `These appear on your public Platform, separate from your Profile photo.`, "Profile/Platform media separation copy");
+assertIncludes(channelSettings, `formatPlatformBrandScanStatus`, "Brand Studio scan status readout");
+assertIncludes(platformBranding, `preparePlatformBrandUploadUri`, "Android content URI staging");
+assertIncludes(platformBranding, `FileSystem.uploadAsync`, "Brand Studio robust Android upload");
+assertIncludes(platformBranding, `assertPlatformBrandUploadReadable`, "Brand Studio upload read-back verification");
+assertIncludes(platformBranding, `.eq("asset_state", "published")`, "public asset state filter");
+assertIncludes(platformBranding, `formatPlatformBrandScanStatus`, "scan status formatter");
+assertIncludes(platformBranding, `scanStatus: normalizeScanStatus`, "scan status parsing");
 
 assertIncludes(cleanupMigration, `grant execute on function public."platform_brand_asset_cleanup_candidates"(integer, integer) to service_role`, "cleanup service-role grant");
 assertIncludes(cleanupMigration, `platform_brand_cleanup_service_role_required`, "cleanup runtime service-role guard");

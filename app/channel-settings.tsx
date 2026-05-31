@@ -157,6 +157,7 @@ import {
 import {
   formatPlatformBrandAssetStatus,
   formatPlatformBrandFileSize,
+  formatPlatformBrandScanStatus,
   getPlatformBrandAssetValidationMessage,
   normalizePlatformBrandFitMode,
   normalizePlatformBrandThemePreset,
@@ -572,6 +573,12 @@ const formatPlatformBrandAssetTypeLabel = (value?: PlatformBrandAssetType | null
 
 const getBrandAssetReviewCopy = (asset?: PlatformBrandAsset | null) => {
   if (!asset) return "No asset selected yet.";
+  if (asset.scanStatus === "malware_detected" || asset.scanStatus === "scan_failed" || asset.scanStatus === "quarantined") {
+    return "Blocked by safety checks and will not appear publicly.";
+  }
+  if (asset.scanStatus === "pending_scan" || asset.scanStatus === "scanning") {
+    return "Saved as draft while safety checks run.";
+  }
   if (asset.assetState === "published" && ["clean", "reported"].includes(asset.moderationStatus)) {
     return "Published on the public Platform.";
   }
@@ -793,6 +800,25 @@ const BRAND_BLUR_OPTIONS: readonly { label: string; value: number }[] = [
   { label: "Strong", value: 0.7 },
 ];
 
+const createInitialBrandSections = (
+  tab: unknown,
+  focus: unknown,
+): ReadonlySet<BrandStudioSectionId> => {
+  const normalized = String(Array.isArray(focus) ? focus[0] : focus ?? "").trim().toLowerCase();
+  if (String(Array.isArray(tab) ? tab[0] : tab ?? "").trim().toLowerCase() !== "brand" && !normalized) {
+    return new Set<BrandStudioSectionId>();
+  }
+  if (normalized === "hero") return new Set<BrandStudioSectionId>(["hero"]);
+  if (normalized === "background") return new Set<BrandStudioSectionId>(["background"]);
+  if (normalized === "brandkit" || normalized === "brand-kit" || normalized === "avatar" || normalized === "logo") {
+    return new Set<BrandStudioSectionId>(["brandKit"]);
+  }
+  if (normalized === "theme") return new Set<BrandStudioSectionId>(["theme"]);
+  if (normalized === "review") return new Set<BrandStudioSectionId>(["review"]);
+  if (normalized === "preview") return new Set<BrandStudioSectionId>(["preview"]);
+  return new Set<BrandStudioSectionId>();
+};
+
 const normalizeStudioTabId = (value: unknown): StudioTabId | null => {
   const normalized = String(Array.isArray(value) ? value[0] : value ?? "").trim().toLowerCase();
   if (normalized === "monetize" || normalized === "payouts" || normalized === "revenue") {
@@ -989,8 +1015,8 @@ export function ChannelStudioScreen() {
   const [expandedMonetizationSections, setExpandedMonetizationSections] = useState<ReadonlySet<MonetizationSectionId>>(
     () => createInitialMonetizationSections(routeParams.tab, routeParams.focus),
   );
-  const [expandedBrandSections, setExpandedBrandSections] = useState<ReadonlySet<BrandStudioSectionId>>(
-    () => new Set<BrandStudioSectionId>(["hero"]),
+  const [activeBrandSheetSection, setActiveBrandSheetSection] = useState<BrandStudioSectionId | null>(
+    () => Array.from(createInitialBrandSections(routeParams.tab, routeParams.focus))[0] ?? null,
   );
   const [expandedClipSections, setExpandedClipSections] = useState<ReadonlySet<ClipStudioSectionId>>(
     () => new Set<ClipStudioSectionId>(["media", "title", "templates", "save"]),
@@ -1005,6 +1031,7 @@ export function ChannelStudioScreen() {
   const [brandSaving, setBrandSaving] = useState(false);
   const [brandNotice, setBrandNotice] = useState<string | null>(null);
   const [brandBusyAssetType, setBrandBusyAssetType] = useState<PlatformBrandAssetType | null>(null);
+  const [brandPreviewFailedAssetIds, setBrandPreviewFailedAssetIds] = useState<ReadonlySet<string>>(() => new Set());
   const [brandReviewReason, setBrandReviewReason] = useState("");
   const [brandReviewBusyAssetId, setBrandReviewBusyAssetId] = useState<string | null>(null);
   const [brandReviewQueueAssets, setBrandReviewQueueAssets] = useState<PlatformBrandAsset[]>([]);
@@ -1143,14 +1170,6 @@ export function ChannelStudioScreen() {
   };
   const toggleMonetizationSection = (id: MonetizationSectionId) => {
     setExpandedMonetizationSections((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-  const toggleBrandSection = (id: BrandStudioSectionId) => {
-    setExpandedBrandSections((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -3308,7 +3327,7 @@ export function ChannelStudioScreen() {
   const brandHeroSource = getPlatformBrandHeroSource(platformBranding);
   const brandHeroStatus = formatPlatformBrandAssetStatus(platformBranding?.heroImage);
   const brandBackgroundStatus = formatPlatformBrandAssetStatus(platformBranding?.backgroundImage);
-  const brandKitReady = !!(platformBranding?.avatar || platformBranding?.logo || profile?.avatarUrl);
+  const brandKitReady = !!(platformBranding?.avatar || platformBranding?.logo);
   const brandHasPendingReview = (platformBranding?.assets ?? []).some((asset) => asset.moderationStatus === "pending_review");
   const brandReviewAssets = (platformBranding?.assets ?? []).filter((asset) => (
     !asset.deletedAt
@@ -4501,6 +4520,8 @@ export function ChannelStudioScreen() {
     summary,
     status,
     statusTone = "default",
+    thumbnailAsset,
+    thumbnailLabel,
     children,
   }: {
     id: BrandStudioSectionId;
@@ -4508,19 +4529,28 @@ export function ChannelStudioScreen() {
     summary: string;
     status?: string;
     statusTone?: "default" | "muted" | "warning";
+    thumbnailAsset?: PlatformBrandAsset | null;
+    thumbnailLabel?: string;
     children: React.ReactNode;
   }) => {
-    const expanded = expandedBrandSections.has(id);
+    const expanded = activeBrandSheetSection === id;
     return (
       <View style={styles.studioAccordionCard}>
         <TouchableOpacity
           style={styles.studioAccordionHeader}
           activeOpacity={0.86}
-          onPress={() => toggleBrandSection(id)}
+          onPress={() => setActiveBrandSheetSection(id)}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={`${title}. ${summary}`}
         >
+          <View style={styles.brandAssetThumb}>
+            {thumbnailAsset?.signedUrl ? (
+              <Image source={{ uri: thumbnailAsset.signedUrl }} style={styles.brandAssetThumbImage} resizeMode="cover" />
+            ) : (
+              <Text style={styles.brandAssetThumbText}>{thumbnailLabel ?? title.slice(0, 2).toUpperCase()}</Text>
+            )}
+          </View>
           <View style={styles.studioAccordionCopy}>
             <Text style={styles.studioAccordionTitle}>{title}</Text>
             <Text style={styles.studioAccordionSummary}>{summary}</Text>
@@ -4530,7 +4560,37 @@ export function ChannelStudioScreen() {
             <Text style={styles.studioAccordionChevron}>{expanded ? "⌄" : "›"}</Text>
           </View>
         </TouchableOpacity>
-        {expanded ? <View style={styles.studioAccordionBody}>{children}</View> : null}
+        <Modal
+          visible={expanded}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setActiveBrandSheetSection(null)}
+        >
+          <View style={styles.assetManagerSheetOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setActiveBrandSheetSection(null)}
+            />
+            <View style={styles.assetManagerSheet}>
+              <View style={styles.assetManagerSheetHandle} />
+              <View style={styles.assetManagerSheetHeader}>
+                <View style={styles.studioAccordionCopy}>
+                  <Text style={styles.assetManagerSheetTitle}>{title}</Text>
+                  <Text style={styles.assetManagerSheetSummary}>{summary}</Text>
+                </View>
+                {status ? renderStudioStatusPill(status, statusTone) : null}
+              </View>
+              <ScrollView
+                style={styles.assetManagerSheetScroll}
+                contentContainerStyle={styles.assetManagerSheetBody}
+                showsVerticalScrollIndicator={false}
+              >
+                {children}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   };
@@ -4583,28 +4643,41 @@ export function ChannelStudioScreen() {
     title: string;
     asset?: PlatformBrandAsset | null;
     fallback: string;
-  }) => (
-    <View style={styles.brandPreviewCard}>
-      <View style={styles.brandPreviewMedia}>
-        {asset?.signedUrl ? (
-          <Image source={{ uri: asset.signedUrl }} style={styles.brandPreviewImage} resizeMode="cover" />
-        ) : (
-          <ImageBackground source={SKYLINE_SOURCE} style={styles.brandPreviewFallback} resizeMode="cover">
-            <View style={styles.brandPreviewFallbackScrim} />
-            <Text style={styles.brandPreviewFallbackText}>{fallback}</Text>
-          </ImageBackground>
-        )}
-        <View pointerEvents="none" style={styles.brandSafeAreaFrame} />
-      </View>
-      <View style={styles.brandPreviewCopy}>
-        <Text style={styles.brandPreviewTitle}>{title}</Text>
-        <Text style={styles.brandPreviewBody}>{getBrandAssetReviewCopy(asset)}</Text>
-        {asset?.fileSizeBytes ? (
-          <Text style={styles.brandPreviewMeta}>{formatPlatformBrandFileSize(asset.fileSizeBytes)}</Text>
+  }) => {
+    const canShowPreview = !!asset?.signedUrl && !brandPreviewFailedAssetIds.has(asset.id);
+    return (
+      <View style={styles.brandPreviewCard}>
+        {canShowPreview ? (
+          <View style={styles.brandPreviewMedia}>
+            <Image
+              source={{ uri: asset.signedUrl }}
+              style={styles.brandPreviewImage}
+              resizeMode="cover"
+              onError={() => {
+                if (!asset?.id) return;
+                setBrandPreviewFailedAssetIds((current) => {
+                  const next = new Set(current);
+                  next.add(asset.id);
+                  return next;
+                });
+              }}
+            />
+            <View pointerEvents="none" style={styles.brandSafeAreaFrame} />
+          </View>
         ) : null}
+        <View style={styles.brandPreviewCopy}>
+          <Text style={styles.brandPreviewTitle}>{title}</Text>
+          <Text style={styles.brandPreviewBody}>{getBrandAssetReviewCopy(asset)}</Text>
+          {asset?.fileSizeBytes ? (
+            <Text style={styles.brandPreviewMeta}>{formatPlatformBrandFileSize(asset.fileSizeBytes)}</Text>
+          ) : null}
+          {asset ? (
+            <Text style={styles.brandPreviewMeta}>{formatPlatformBrandScanStatus(asset)}</Text>
+          ) : null}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderBrandReviewAsset = (asset: PlatformBrandAsset) => {
     const status = formatPlatformBrandAssetStatus(asset);
@@ -5087,7 +5160,7 @@ export function ChannelStudioScreen() {
                 tone: brandHasPendingReview ? "warning" : "default",
                 onPress: () => {
                   openStudioTab("brand", { focus: "hero" });
-                  setExpandedBrandSections(new Set<BrandStudioSectionId>(["hero"]));
+                  setActiveBrandSheetSection("hero");
                 },
               })}
               {renderStudioActionRow({
@@ -5146,7 +5219,7 @@ export function ChannelStudioScreen() {
             <View style={styles.brandStudioHeroOverlay} />
             <View style={styles.brandStudioHeroCopy}>
               <Text style={styles.panelTitle}>Brand Studio</Text>
-              <Text style={styles.panelSubtitle}>Stage Design for Hero Media, Background, Brand Kit, theme, and preview.</Text>
+              <Text style={styles.panelSubtitle}>Design your public Platform.</Text>
               <View style={styles.previewChipRow}>
                 {renderStudioStatusPill(brandStatusLabel, brandHasPendingReview ? "warning" : brandPublished ? "default" : "muted")}
                 {renderStudioStatusPill(`${formatBrandThemeLabel(draft?.themePreset)}`, "muted")}
@@ -5169,16 +5242,6 @@ export function ChannelStudioScreen() {
             </View>
           </View>
           <View style={styles.brandStudioActions}>
-            <TouchableOpacity
-              style={[styles.eventPrimaryButton, brandSaving && styles.eventPrimaryButtonDisabled]}
-              activeOpacity={0.88}
-              disabled={brandSaving}
-              onPress={() => {
-                setExpandedBrandSections(new Set<BrandStudioSectionId>(["hero"]));
-              }}
-            >
-              <Text style={styles.eventPrimaryButtonText}>Edit Hero</Text>
-            </TouchableOpacity>
             {renderPreviewChannelAction()}
           </View>
         </View>
@@ -5193,16 +5256,13 @@ export function ChannelStudioScreen() {
           {renderBrandAccordion({
             id: "hero",
             title: "Hero Media",
-            summary: "Hero Image, Hero Reel, crop, fit, overlay, and safe area.",
+            summary: platformBranding?.heroImage ? "Adjust image framing and overlay." : "Choose a public Platform hero image.",
             status: brandHeroStatus,
             statusTone: platformBranding?.heroImage?.moderationStatus === "pending_review" ? "warning" : "muted",
+            thumbnailAsset: platformBranding?.heroImage,
+            thumbnailLabel: "Hero",
             children: (
               <>
-                {renderBrandAssetPreview({
-                  title: "Hero Image",
-                  asset: platformBranding?.heroImage,
-                  fallback: "HERO MEDIA",
-                })}
                 <View style={styles.brandButtonRow}>
                   <TouchableOpacity
                     style={[styles.eventPrimaryButton, heroBusy && styles.eventPrimaryButtonDisabled]}
@@ -5212,11 +5272,12 @@ export function ChannelStudioScreen() {
                   >
                     {brandBusyAssetType === "hero_image"
                       ? <ActivityIndicator color="#fff" />
-                      : <Text style={styles.eventPrimaryButtonText}>Upload Image</Text>}
+                      : <Text style={styles.eventPrimaryButtonText}>{platformBranding?.heroImage ? "Change Image" : "Choose Image"}</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.eventSecondaryButton}
+                    style={[styles.eventSecondaryButton, styles.eventPrimaryButtonDisabled]}
                     activeOpacity={0.88}
+                    disabled
                     onPress={() => {
                       showStudioUnavailable(
                         "Hero Reel not available yet",
@@ -5224,48 +5285,64 @@ export function ChannelStudioScreen() {
                       );
                     }}
                   >
-                    <Text style={styles.eventSecondaryButtonText}>Hero Reel</Text>
+                    <Text style={styles.eventSecondaryButtonText}>Hero Reel · Coming later</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.sectionLabel}>Fit</Text>
-                <View style={styles.chipRow}>
-                  {BRAND_FIT_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.chip, draft?.heroFitMode === option.id && styles.chipActive]}
-                      activeOpacity={0.86}
-                      onPress={() => updateBrandDraft({ heroFitMode: option.id })}
-                    >
-                      <Text style={[styles.chipText, draft?.heroFitMode === option.id && styles.chipTextActive]}>{option.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={styles.permissionCopy}>
-                  Fit settings save presentation metadata now. Drag reposition can be added when a backed gesture cropper is approved.
-                </Text>
-                <Text style={styles.sectionLabel}>Overlay</Text>
-                <View style={styles.chipRow}>
-                  {BRAND_OVERLAY_OPTIONS.map((option) => {
-                    const active = Math.abs((draft?.overlayStrength ?? 0.7) - option.value) < 0.02;
-                    return (
+                {platformBranding?.heroImage ? (
+                  <>
+                    {renderBrandAssetPreview({
+                      title: "Adjust Hero Image",
+                      asset: platformBranding.heroImage,
+                      fallback: "HERO MEDIA",
+                    })}
+                    <Text style={styles.sectionLabel}>Fit</Text>
+                    <View style={styles.chipRow}>
+                      {BRAND_FIT_OPTIONS.map((option) => (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[styles.chip, draft?.heroFitMode === option.id && styles.chipActive]}
+                          activeOpacity={0.86}
+                          onPress={() => updateBrandDraft({ heroFitMode: option.id })}
+                        >
+                          <Text style={[styles.chipText, draft?.heroFitMode === option.id && styles.chipTextActive]}>{option.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={styles.sectionLabel}>Overlay</Text>
+                    <View style={styles.chipRow}>
+                      {BRAND_OVERLAY_OPTIONS.map((option) => {
+                        const active = Math.abs((draft?.overlayStrength ?? 0.7) - option.value) < 0.02;
+                        return (
+                          <TouchableOpacity
+                            key={option.label}
+                            style={[styles.chip, active && styles.chipActive]}
+                            activeOpacity={0.86}
+                            onPress={() => updateBrandDraft({ overlayStrength: option.value })}
+                          >
+                            <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <View style={styles.brandButtonRow}>
                       <TouchableOpacity
-                        key={option.label}
-                        style={[styles.chip, active && styles.chipActive]}
-                        activeOpacity={0.86}
-                        onPress={() => updateBrandDraft({ overlayStrength: option.value })}
+                        style={[styles.eventPrimaryButton, brandSaving && styles.eventPrimaryButtonDisabled]}
+                        activeOpacity={0.88}
+                        disabled={brandSaving}
+                        onPress={() => void saveBrandDraftPatch()}
                       >
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
+                        <Text style={styles.eventPrimaryButtonText}>Save Draft</Text>
                       </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {renderStudioActionRow({
-                  title: "Remove Hero Image",
-                  body: platformBranding?.heroImage ? "Remove this image from the Brand Studio draft." : "No Hero Image selected yet.",
-                  value: platformBranding?.heroImage ? "Remove" : "Empty",
-                  tone: platformBranding?.heroImage ? "warning" : "muted",
-                  onPress: () => confirmRemoveBrandAsset("hero_image", platformBranding?.heroImage ?? null),
-                })}
+                      <TouchableOpacity
+                        style={styles.eventSecondaryButton}
+                        activeOpacity={0.88}
+                        onPress={() => confirmRemoveBrandAsset("hero_image", platformBranding.heroImage)}
+                      >
+                        <Text style={styles.eventSecondaryButtonText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : null}
               </>
             ),
           })}
@@ -5273,16 +5350,13 @@ export function ChannelStudioScreen() {
           {renderBrandAccordion({
             id: "background",
             title: "Background",
-            summary: "Platform Background, fit, dim, blur, and readability.",
+            summary: platformBranding?.backgroundImage ? "Adjust fit and readability." : "Choose a Platform background.",
             status: brandBackgroundStatus,
             statusTone: platformBranding?.backgroundImage?.moderationStatus === "pending_review" ? "warning" : "muted",
+            thumbnailAsset: platformBranding?.backgroundImage,
+            thumbnailLabel: "Bg",
             children: (
               <>
-                {renderBrandAssetPreview({
-                  title: "Platform Background",
-                  asset: platformBranding?.backgroundImage,
-                  fallback: "BACKGROUND",
-                })}
                 <View style={styles.brandButtonRow}>
                   <TouchableOpacity
                     style={[styles.eventPrimaryButton, backgroundBusy && styles.eventPrimaryButtonDisabled]}
@@ -5292,45 +5366,64 @@ export function ChannelStudioScreen() {
                   >
                     {brandBusyAssetType === "background_image"
                       ? <ActivityIndicator color="#fff" />
-                      : <Text style={styles.eventPrimaryButtonText}>Upload Background</Text>}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.eventSecondaryButton}
-                    activeOpacity={0.88}
-                    onPress={() => confirmRemoveBrandAsset("background_image", platformBranding?.backgroundImage ?? null)}
-                  >
-                    <Text style={styles.eventSecondaryButtonText}>Remove</Text>
+                      : <Text style={styles.eventPrimaryButtonText}>{platformBranding?.backgroundImage ? "Change Background" : "Choose Background"}</Text>}
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.sectionLabel}>Background Fit</Text>
-                <View style={styles.chipRow}>
-                  {BRAND_FIT_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.chip, draft?.backgroundFitMode === option.id && styles.chipActive]}
-                      activeOpacity={0.86}
-                      onPress={() => updateBrandDraft({ backgroundFitMode: option.id })}
-                    >
-                      <Text style={[styles.chipText, draft?.backgroundFitMode === option.id && styles.chipTextActive]}>{option.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={styles.sectionLabel}>Blur Background</Text>
-                <View style={styles.chipRow}>
-                  {BRAND_BLUR_OPTIONS.map((option) => {
-                    const active = Math.abs((draft?.blurStrength ?? 0) - option.value) < 0.02;
-                    return (
+                {platformBranding?.backgroundImage ? (
+                  <>
+                    {renderBrandAssetPreview({
+                      title: "Adjust Background",
+                      asset: platformBranding.backgroundImage,
+                      fallback: "BACKGROUND",
+                    })}
+                    <Text style={styles.sectionLabel}>Fit</Text>
+                    <View style={styles.chipRow}>
+                      {BRAND_FIT_OPTIONS.map((option) => (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[styles.chip, draft?.backgroundFitMode === option.id && styles.chipActive]}
+                          activeOpacity={0.86}
+                          onPress={() => updateBrandDraft({ backgroundFitMode: option.id })}
+                        >
+                          <Text style={[styles.chipText, draft?.backgroundFitMode === option.id && styles.chipTextActive]}>{option.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={styles.sectionLabel}>Blur</Text>
+                    <View style={styles.chipRow}>
+                      {BRAND_BLUR_OPTIONS.map((option) => {
+                        const active = Math.abs((draft?.blurStrength ?? 0) - option.value) < 0.02;
+                        return (
+                          <TouchableOpacity
+                            key={option.label}
+                            style={[styles.chip, active && styles.chipActive]}
+                            activeOpacity={0.86}
+                            onPress={() => updateBrandDraft({ blurStrength: option.value })}
+                          >
+                            <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <View style={styles.brandButtonRow}>
                       <TouchableOpacity
-                        key={option.label}
-                        style={[styles.chip, active && styles.chipActive]}
-                        activeOpacity={0.86}
-                        onPress={() => updateBrandDraft({ blurStrength: option.value })}
+                        style={[styles.eventPrimaryButton, brandSaving && styles.eventPrimaryButtonDisabled]}
+                        activeOpacity={0.88}
+                        disabled={brandSaving}
+                        onPress={() => void saveBrandDraftPatch()}
                       >
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
+                        <Text style={styles.eventPrimaryButtonText}>Save Draft</Text>
                       </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                      <TouchableOpacity
+                        style={styles.eventSecondaryButton}
+                        activeOpacity={0.88}
+                        onPress={() => confirmRemoveBrandAsset("background_image", platformBranding.backgroundImage)}
+                      >
+                        <Text style={styles.eventSecondaryButtonText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : null}
               </>
             ),
           })}
@@ -5338,13 +5431,15 @@ export function ChannelStudioScreen() {
           {renderBrandAccordion({
             id: "brandKit",
             title: "Avatar and Logo",
-            summary: "Platform avatar, logo mark, and optional Brand Mark.",
+            summary: "Public Platform identity assets.",
             status: brandKitReady ? "Ready" : "Not set",
             statusTone: brandKitReady ? "default" : "muted",
+            thumbnailAsset: platformBranding?.avatar ?? platformBranding?.logo,
+            thumbnailLabel: "ID",
             children: (
               <>
                 <Text style={styles.permissionCopy}>
-                  Platform avatar appears on your public Platform. Your Profile photo stays separate.
+                  These appear on your public Platform, separate from your Profile photo.
                 </Text>
                 <View style={styles.brandKitGrid}>
                   {renderBrandAssetPreview({
@@ -5365,7 +5460,7 @@ export function ChannelStudioScreen() {
                     disabled={kitBusy || brandSaving}
                     onPress={() => pickPlatformBrandAsset("avatar")}
                   >
-                    <Text style={styles.eventPrimaryButtonText}>Upload Avatar</Text>
+                    <Text style={styles.eventPrimaryButtonText}>{platformBranding?.avatar ? "Change Avatar" : "Choose Avatar"}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.eventSecondaryButton}
@@ -5373,7 +5468,7 @@ export function ChannelStudioScreen() {
                     disabled={kitBusy || brandSaving}
                     onPress={() => pickPlatformBrandAsset("logo")}
                   >
-                    <Text style={styles.eventSecondaryButtonText}>Upload Logo</Text>
+                    <Text style={styles.eventSecondaryButtonText}>{platformBranding?.logo ? "Change Logo" : "Choose Logo"}</Text>
                   </TouchableOpacity>
                 </View>
                 {renderStudioActionRow({
@@ -5505,56 +5600,47 @@ export function ChannelStudioScreen() {
             ),
           })}
 
-          {canReviewPlatformBrandAssets ? renderBrandAccordion({
+          {renderBrandAccordion({
             id: "review",
-            title: "Review and Publishing",
-            summary: "Approve or reject public-facing Platform assets.",
+            title: "Review & Publish",
+            summary: "Draft, safety, review, and public status.",
             status: brandReviewQueueLoading
               ? "Loading"
               : (brandReviewQueuePendingCount || brandPendingReviewCount)
                 ? `${brandReviewQueuePendingCount || brandPendingReviewCount} waiting`
-                : "Ready",
+                : brandPublished ? "Live" : "Draft",
             statusTone: (brandReviewQueuePendingCount || brandPendingReviewCount) ? "warning" : "default",
+            thumbnailAsset: platformBranding?.heroImage ?? platformBranding?.backgroundImage ?? platformBranding?.avatar,
+            thumbnailLabel: "Pub",
             children: (
               <>
+                <View style={styles.brandStatusGrid}>
+                  <View style={styles.homeSnapshotCard}>
+                    <Text style={styles.homeSnapshotLabel}>Public</Text>
+                    <Text style={styles.homeSnapshotBody}>{brandPublished ? "Published profile settings are live." : "Nothing new is live until publish."}</Text>
+                  </View>
+                  <View style={styles.homeSnapshotCard}>
+                    <Text style={styles.homeSnapshotLabel}>Draft</Text>
+                    <Text style={styles.homeSnapshotBody}>{(platformBranding?.assets ?? []).length ? "Saved Brand Studio assets exist." : "No Brand Studio media selected."}</Text>
+                  </View>
+                  <View style={styles.homeSnapshotCard}>
+                    <Text style={styles.homeSnapshotLabel}>Safety</Text>
+                    <Text style={styles.homeSnapshotBody}>
+                      {platformBranding?.assets?.some((asset) => asset.scanStatus === "pending_scan" || asset.scanStatus === "scanning")
+                        ? "Safety checks are still running."
+                        : platformBranding?.assets?.some((asset) => asset.scanStatus === "malware_detected" || asset.scanStatus === "scan_failed" || asset.scanStatus === "quarantined")
+                          ? "One asset is blocked."
+                          : "No blocked asset detected."}
+                    </Text>
+                  </View>
+                  <View style={styles.homeSnapshotCard}>
+                    <Text style={styles.homeSnapshotLabel}>Review</Text>
+                    <Text style={styles.homeSnapshotBody}>{brandPendingReviewCount ? `${brandPendingReviewCount} asset${brandPendingReviewCount === 1 ? "" : "s"} waiting.` : "No owner-visible asset waiting."}</Text>
+                  </View>
+                </View>
                 <Text style={styles.permissionCopy}>
-                  Approval means moderation-safe. Creators still publish Brand Studio changes before approved assets appear publicly.
+                  Draft and pending-review media stay off the public Platform. Media is saved as draft while safety checks run.
                 </Text>
-                <TextInput
-                  style={[styles.input, styles.brandReviewReasonInput]}
-                  placeholder="Review reason for reject or archive"
-                  placeholderTextColor="#8d8d8d"
-                  value={brandReviewReason}
-                  onChangeText={setBrandReviewReason}
-                  multiline
-                  textAlignVertical="top"
-                />
-                {brandReviewQueueLoading ? (
-                  <View style={styles.loadingCard}>
-                    <ActivityIndicator color="#fff" />
-                    <Text style={styles.loadingText}>Loading review queue...</Text>
-                  </View>
-                ) : brandReviewDisplayAssets.length ? (
-                  <View style={styles.eventList}>
-                    {brandReviewDisplayAssets.map(renderBrandReviewAsset)}
-                  </View>
-                ) : (
-                  <View style={styles.eventEmptyCard}>
-                    <Text style={styles.eventEmptyTitle}>No brand assets waiting.</Text>
-                    <Text style={styles.eventEmptyBody}>Upload Hero Media, Background, Avatar, or Logo assets before review.</Text>
-                  </View>
-                )}
-              </>
-            ),
-          }) : null}
-
-          {renderBrandAccordion({
-            id: "preview",
-            title: "Public Preview",
-            summary: "Preview the public Platform without drafts or owner controls.",
-            status: "Safe",
-            children: (
-              <>
                 {renderStudioActionRow({
                   title: "Preview Platform",
                   body: "Opens as visitors see it. Draft and pending-review assets stay hidden.",
@@ -5577,7 +5663,7 @@ export function ChannelStudioScreen() {
                   },
                 })}
                 {renderStudioActionRow({
-                  title: "Publish Changes",
+                  title: "Submit / Publish Reviewed Changes",
                   body: "Publish reviewed assets and current theme settings to the public Platform.",
                   value: brandSaving ? "Publishing" : "Publish",
                   tone: brandHasPendingReview ? "warning" : "default",
@@ -5585,104 +5671,34 @@ export function ChannelStudioScreen() {
                     void publishBrandDraft();
                   },
                 })}
-              </>
-            ),
-          })}
-
-          {renderBrandAccordion({
-            id: "defaults",
-            title: "Platform Defaults",
-            summary: "Current backed role, access, Watch-Party, and communication defaults.",
-            status: "Backed",
-            children: (
-              <>
-                <Text style={styles.sectionLabel}>Platform Role</Text>
-                <View style={styles.chipRow}>
-                  {(["viewer", "host", "creator"] as UserChannelRole[]).map((role) => (
-                    <TouchableOpacity
-                      key={role}
-                      style={[styles.chip, profile.channelRole === role && styles.chipActive]}
-                      onPress={() => updateProfile({ channelRole: role })}
-                    >
-                      <Text style={[styles.chipText, profile.channelRole === role && styles.chipTextActive]}>
-                        {formatChannelRoleLabel(role) || role}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <View style={styles.accessSummaryCard}>
-                  <Text style={styles.accessSummaryKicker}>CURRENT ACCESS POSTURE</Text>
-                  <Text style={styles.accessSummaryTitle}>{accessSummary.title}</Text>
-                  <Text style={styles.accessSummaryBody}>{accessSummary.body}</Text>
-                </View>
-                <Text style={styles.sectionLabel}>Watch-Party Join Policy</Text>
-                <View style={styles.chipRow}>
-                  {(["open", "locked"] as const).map((value) => (
-                    <TouchableOpacity
-                      key={value}
-                      style={[styles.chip, profile.defaultWatchPartyJoinPolicy === value && styles.chipActive]}
-                      onPress={() => updateProfile({ defaultWatchPartyJoinPolicy: value })}
-                    >
-                      <Text style={[styles.chipText, profile.defaultWatchPartyJoinPolicy === value && styles.chipTextActive]}>
-                        {formatJoinPolicyLabel(value)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={styles.sectionLabel}>Watch-Party Content Access</Text>
-                <View style={styles.chipRow}>
-                  {(["open", "party_pass", "premium"] as const).map((value) => {
-                    const blocked =
-                      (value === "party_pass" && creatorPermissions?.canUsePartyPassRooms === false)
-                      || (value === "premium" && creatorPermissions?.canUsePremiumRooms === false);
-                    return (
-                      <TouchableOpacity
-                        key={value}
-                        style={[
-                          styles.chip,
-                          profile.defaultWatchPartyContentAccessRule === value && styles.chipActive,
-                          blocked && styles.chipDisabled,
-                        ]}
-                        onPress={() => {
-                          if (blocked) return;
-                          updateProfile({ defaultWatchPartyContentAccessRule: value });
-                        }}
-                        disabled={blocked}
-                      >
-                        <Text style={[styles.chipText, profile.defaultWatchPartyContentAccessRule === value && styles.chipTextActive]}>
-                          {formatRoomDefaultAccessLabel(value)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <Text style={styles.sectionLabel}>Communication Access</Text>
-                <View style={styles.chipRow}>
-                  {(["open", "party_pass", "premium"] as const).map((value) => {
-                    const blocked =
-                      (value === "party_pass" && creatorPermissions?.canUsePartyPassRooms === false)
-                      || (value === "premium" && creatorPermissions?.canUsePremiumRooms === false);
-                    return (
-                      <TouchableOpacity
-                        key={value}
-                        style={[
-                          styles.chip,
-                          profile.defaultCommunicationContentAccessRule === value && styles.chipActive,
-                          blocked && styles.chipDisabled,
-                        ]}
-                        onPress={() => {
-                          if (blocked) return;
-                          updateProfile({ defaultCommunicationContentAccessRule: value });
-                        }}
-                        disabled={blocked}
-                      >
-                        <Text style={[styles.chipText, profile.defaultCommunicationContentAccessRule === value && styles.chipTextActive]}>
-                          {formatRoomDefaultAccessLabel(value)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                {canReviewPlatformBrandAssets ? (
+                  <>
+                    <TextInput
+                      style={[styles.input, styles.brandReviewReasonInput]}
+                      placeholder="Review reason for reject or archive"
+                      placeholderTextColor="#8d8d8d"
+                      value={brandReviewReason}
+                      onChangeText={setBrandReviewReason}
+                      multiline
+                      textAlignVertical="top"
+                    />
+                    {brandReviewQueueLoading ? (
+                      <View style={styles.loadingCard}>
+                        <ActivityIndicator color="#fff" />
+                        <Text style={styles.loadingText}>Loading review queue...</Text>
+                      </View>
+                    ) : brandReviewDisplayAssets.length ? (
+                      <View style={styles.eventList}>
+                        {brandReviewDisplayAssets.map(renderBrandReviewAsset)}
+                      </View>
+                    ) : (
+                      <View style={styles.eventEmptyCard}>
+                        <Text style={styles.eventEmptyTitle}>No brand assets waiting.</Text>
+                        <Text style={styles.eventEmptyBody}>Upload Hero Media, Background, Avatar, or Logo assets before review.</Text>
+                      </View>
+                    )}
+                  </>
+                ) : null}
               </>
             ),
           })}
@@ -7730,6 +7746,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  brandAssetThumb: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  brandAssetThumbImage: {
+    width: "100%",
+    height: "100%",
+  },
+  brandAssetThumbText: {
+    color: "#DDE6F8",
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
   studioAccordionCopy: {
     flex: 1,
     gap: 4,
@@ -7762,6 +7799,58 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.08)",
     padding: 12,
     gap: 9,
+  },
+  assetManagerSheetOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.54)",
+  },
+  assetManagerSheet: {
+    maxHeight: "86%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(9,13,21,0.98)",
+    paddingTop: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 18,
+  },
+  assetManagerSheetHandle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.24)",
+    marginBottom: 12,
+  },
+  assetManagerSheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 4,
+    paddingBottom: 12,
+  },
+  assetManagerSheetTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: "900",
+  },
+  assetManagerSheetSummary: {
+    color: "#AEB8CE",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  assetManagerSheetScroll: {
+    maxHeight: "100%",
+  },
+  assetManagerSheetBody: {
+    gap: 10,
+    paddingBottom: 22,
   },
   studioActionList: {
     gap: 9,
@@ -8050,7 +8139,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   brandStudioHeroMedia: {
-    minHeight: 216,
+    minHeight: 156,
     justifyContent: "flex-end",
     backgroundColor: "#0B1018",
   },
@@ -8110,6 +8199,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  brandPreviewEmpty: {
+    width: "100%",
+    height: "100%",
+    minHeight: 96,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
   brandPreviewFallbackScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(5,7,12,0.62)",
@@ -8154,7 +8251,13 @@ const styles = StyleSheet.create({
   },
   brandButtonRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
+  },
+  brandStatusGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
   },
   brandReviewReasonInput: {
     minHeight: 76,

@@ -1,7 +1,8 @@
 import { File } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
-import { supabase } from "./supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
 
 export const PLATFORM_BRAND_BUCKET = "platform-brand-assets";
 export const PLATFORM_BRAND_SIGNED_URL_SECONDS = 60 * 60;
@@ -21,6 +22,15 @@ export type PlatformBrandFitMode = "fill" | "fit" | "center";
 export type PlatformBrandThemePreset = "city_night" | "studio_red" | "clean_dark" | "spotlight" | "classic";
 export type PlatformBrandAssetState = "draft" | "published" | "archived";
 export type PlatformBrandModerationStatus = "pending_review" | "clean" | "reported" | "hidden" | "removed" | "rejected";
+export type PlatformBrandScanStatus =
+  | "pending_scan"
+  | "scanning"
+  | "clean"
+  | "malware_detected"
+  | "scan_failed"
+  | "manual_review"
+  | "quarantined"
+  | "skipped";
 export type PlatformBrandReviewAction = "approve" | "reject" | "archive";
 
 export type PlatformBrandAssetFile = {
@@ -49,6 +59,11 @@ export type PlatformBrandAsset = {
   moderationReason: string | null;
   moderatedAt: string | null;
   moderatedBy: string | null;
+  scanStatus: PlatformBrandScanStatus;
+  scanProvider: string | null;
+  scanResult: string | null;
+  scannedAt: string | null;
+  quarantinedAt: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -113,13 +128,14 @@ type PlatformBrandProfileUpdate = TablesUpdate<"platform_brand_profiles">;
 type PublicPlatformBrandProfileRow = Omit<PlatformBrandProfileRow, "created_at">;
 
 const PLATFORM_BRAND_ASSET_SELECT =
-  "id,owner_user_id,asset_type,asset_state,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,width,height,duration_ms,file_size_bytes,original_file_name,moderation_status,moderation_reason,moderated_at,moderated_by,created_at,updated_at,deleted_at";
+  "id,owner_user_id,asset_type,asset_state,storage_provider,storage_bucket,storage_object_key,storage_path,mime_type,width,height,duration_ms,file_size_bytes,original_file_name,moderation_status,moderation_reason,moderated_at,moderated_by,scan_status,scan_provider,scan_result,scanned_at,quarantined_at,created_at,updated_at,deleted_at";
 
 const PLATFORM_BRAND_PROFILE_SELECT =
   "owner_user_id,hero_image_asset_id,hero_video_asset_id,hero_poster_asset_id,background_image_asset_id,avatar_asset_id,logo_asset_id,watermark_asset_id,spotlight_video_id,theme_preset,accent_color,hero_fit_mode,hero_focal_x,hero_focal_y,hero_crop_scale,background_fit_mode,background_focal_x,background_focal_y,overlay_strength,blur_strength,published_at,created_at,updated_at";
 
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
+const PLATFORM_BRAND_UPLOAD_TIMEOUT_MS = 120000;
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -144,6 +160,8 @@ const getExtensionFromName = (name?: string | null) => {
   if (!normalized.includes(".")) return "";
   return normalized.split(".").pop()?.replace(/[^a-z0-9]/g, "") ?? "";
 };
+
+const encodeStoragePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
 
 const inferMimeType = (file: PlatformBrandAssetFile, assetType: PlatformBrandAssetType) => {
   const provided = toText(file.mimeType).toLowerCase();
@@ -216,6 +234,22 @@ const normalizeModerationStatus = (value: unknown): PlatformBrandModerationStatu
   return "pending_review";
 };
 
+const normalizeScanStatus = (value: unknown): PlatformBrandScanStatus => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "scanning"
+    || normalized === "clean"
+    || normalized === "malware_detected"
+    || normalized === "scan_failed"
+    || normalized === "manual_review"
+    || normalized === "quarantined"
+    || normalized === "skipped"
+  ) {
+    return normalized;
+  }
+  return "pending_scan";
+};
+
 export const normalizePlatformBrandFitMode = (value: unknown): PlatformBrandFitMode => {
   const normalized = toText(value).toLowerCase();
   if (normalized === "fit" || normalized === "center") return normalized;
@@ -274,6 +308,26 @@ export const formatPlatformBrandAssetStatus = (asset?: PlatformBrandAsset | null
     return "Needs changes";
   }
   return asset.assetState === "draft" ? "Draft" : "Ready";
+};
+
+export const formatPlatformBrandScanStatus = (asset?: PlatformBrandAsset | null) => {
+  if (!asset) return "Not queued";
+  switch (asset.scanStatus) {
+    case "clean":
+      return "Safety clear";
+    case "manual_review":
+    case "skipped":
+      return "Safety reviewed";
+    case "scanning":
+      return "Checking";
+    case "malware_detected":
+      return "Blocked";
+    case "scan_failed":
+    case "quarantined":
+      return "Safety failed";
+    default:
+      return "Safety pending";
+  }
 };
 
 const createDefaultPlatformBrandProfile = (ownerUserId: string): PlatformBrandProfile => ({
@@ -341,6 +395,13 @@ async function createPlatformBrandSignedUrl(asset: Pick<PlatformBrandAssetRow, "
 }
 
 async function parseAsset(row: PlatformBrandAssetRow): Promise<PlatformBrandAsset> {
+  const scanRow = row as PlatformBrandAssetRow & {
+    scan_status?: unknown;
+    scan_provider?: unknown;
+    scan_result?: unknown;
+    scanned_at?: unknown;
+    quarantined_at?: unknown;
+  };
   return {
     id: toText(row.id),
     ownerUserId: toText(row.owner_user_id),
@@ -360,11 +421,123 @@ async function parseAsset(row: PlatformBrandAssetRow): Promise<PlatformBrandAsse
     moderationReason: toText(row.moderation_reason) || null,
     moderatedAt: toText(row.moderated_at) || null,
     moderatedBy: toText(row.moderated_by) || null,
+    scanStatus: normalizeScanStatus(scanRow.scan_status),
+    scanProvider: toText(scanRow.scan_provider) || null,
+    scanResult: toText(scanRow.scan_result) || null,
+    scannedAt: toText(scanRow.scanned_at) || null,
+    quarantinedAt: toText(scanRow.quarantined_at) || null,
     createdAt: toText(row.created_at) || new Date().toISOString(),
     updatedAt: toText(row.updated_at) || toText(row.created_at) || new Date().toISOString(),
     deletedAt: toText(row.deleted_at) || null,
     signedUrl: await createPlatformBrandSignedUrl(row),
   };
+}
+
+async function getSignedInAccessToken() {
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = toText(data.session?.access_token);
+  if (error || !accessToken) throw new Error("Sign in before saving Platform media.");
+  return accessToken;
+}
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+async function preparePlatformBrandUploadUri(file: PlatformBrandAssetFile, assetType: PlatformBrandAssetType) {
+  const sourceUri = toText(file.uri);
+  if (!sourceUri) throw new Error("Choose a Platform asset first.");
+
+  if (!sourceUri.startsWith("content://") || !FileSystem.cacheDirectory) {
+    return { uri: sourceUri, cleanup: async () => undefined };
+  }
+
+  const cacheUri = `${FileSystem.cacheDirectory}platform-brand-${createClientId()}.${getFileExtension(file, assetType)}`;
+  await withTimeout(
+    FileSystem.copyAsync({ from: sourceUri, to: cacheUri }),
+    20000,
+    "Platform media took too long to prepare. Try again.",
+  );
+
+  return {
+    uri: cacheUri,
+    cleanup: async () => {
+      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
+    },
+  };
+}
+
+async function getPreparedPlatformBrandFileSize(uri: string, fallback?: number | null) {
+  const parsed = Number(fallback);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  const info = await FileSystem.getInfoAsync(uri).catch(() => null);
+  const size = Number(info && "size" in info ? info.size : 0);
+  return Number.isFinite(size) && size > 0 ? size : 0;
+}
+
+async function uploadPlatformBrandFileToStorage(input: {
+  storagePath: string;
+  uri: string;
+  mimeType: string;
+}) {
+  const accessToken = await getSignedInAccessToken();
+  const uploadUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PLATFORM_BRAND_BUCKET}/${encodeStoragePath(input.storagePath)}`;
+
+  try {
+    const result = await withTimeout(
+      FileSystem.uploadAsync(uploadUrl, input.uri, {
+        httpMethod: "POST",
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+          "Content-Type": input.mimeType,
+          "x-upsert": "false",
+        },
+      }),
+      PLATFORM_BRAND_UPLOAD_TIMEOUT_MS,
+      "Platform media upload took too long. Try again.",
+    );
+    if (result.status >= 200 && result.status < 300) return;
+  } catch {
+    // Fall back to the SDK path below; some platforms handle Expo File bodies better than uploadAsync.
+  }
+
+  const localFile = new File(input.uri);
+  const upload = await supabase.storage
+    .from(PLATFORM_BRAND_BUCKET)
+    .upload(input.storagePath, localFile as unknown as Blob, {
+      contentType: input.mimeType,
+      upsert: false,
+    });
+  if (upload.error) throw upload.error;
+}
+
+async function assertPlatformBrandUploadReadable(storagePath: string, expectedSize: number) {
+  if (expectedSize <= 0) return;
+  const { data, error } = await supabase.storage
+    .from(PLATFORM_BRAND_BUCKET)
+    .createSignedUrl(storagePath, 60);
+  if (error || !data?.signedUrl) throw new Error("Platform media could not be verified after upload.");
+
+  const response = await withTimeout(
+    fetch(data.signedUrl, { headers: { Range: "bytes=0-0" } }),
+    20000,
+    "Platform media verification took too long. Try again.",
+  );
+  if (!response.ok) throw new Error("Platform media could not be verified after upload.");
+  const body = await response.arrayBuffer();
+  if (body.byteLength <= 0) throw new Error("Platform media could not be verified after upload.");
 }
 
 const createBundle = (profile: PlatformBrandProfile, assets: PlatformBrandAsset[]): PlatformBrandingBundle => {
@@ -557,15 +730,20 @@ export async function uploadPlatformBrandAsset(input: {
   const mimeType = inferMimeType(input.file, input.assetType);
   const extension = getFileExtension(input.file, input.assetType);
   const storagePath = `${ownerUserId}/${input.assetType}/${id}.${extension}`;
-  const localFile = new File(input.file.uri);
+  const prepared = await preparePlatformBrandUploadUri(input.file, input.assetType);
 
-  const upload = await supabase.storage
-    .from(PLATFORM_BRAND_BUCKET)
-    .upload(storagePath, localFile as unknown as Blob, {
-      contentType: mimeType,
-      upsert: false,
+  let fileSizeBytes = Math.max(0, Number(input.file.size ?? 0) || 0);
+  try {
+    fileSizeBytes = await getPreparedPlatformBrandFileSize(prepared.uri, fileSizeBytes);
+    await uploadPlatformBrandFileToStorage({
+      storagePath,
+      uri: prepared.uri,
+      mimeType,
     });
-  if (upload.error) throw upload.error;
+    await assertPlatformBrandUploadReadable(storagePath, fileSizeBytes);
+  } finally {
+    await prepared.cleanup();
+  }
 
   const payload: PlatformBrandAssetInsert = {
     id,
@@ -577,7 +755,7 @@ export async function uploadPlatformBrandAsset(input: {
     storage_object_key: storagePath,
     storage_path: storagePath,
     mime_type: mimeType,
-    file_size_bytes: Math.max(0, Number(input.file.size ?? 0) || 0),
+    file_size_bytes: fileSizeBytes,
     original_file_name: toText(input.file.name) || null,
     moderation_status: "pending_review",
     updated_at: new Date().toISOString(),

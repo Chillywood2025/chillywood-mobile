@@ -1,6 +1,34 @@
 # Platform Brand Studio
 
-Updated: 2026-05-24
+Updated: 2026-05-30
+
+## May 30, 2026 Modern Asset Manager Upload Fix
+
+Brand Studio is now treated as the Platform branding workspace, not Profile media editing. Profile photo/background remain in Profile Appearance and continue to use the separate `profile-media` bucket and Profile Appearance sheets.
+
+Upload blocker root cause: Brand Studio used `expo-document-picker` and passed the returned Android URI directly into Supabase Storage as an Expo `File`, then trusted the write without a byte read-back. That path was brittle for Android `content://`/cache URIs and could fail before a usable draft/read-back existed.
+
+Upload fix: Brand Studio now stages Android `content://` picks into cache when needed, uploads through a Supabase Storage REST binary path with the signed-in user's bearer token and anon API key, falls back to the existing SDK upload path when needed, probes a short signed read-back range after upload, then creates the draft `platform_brand_assets` row. Errors stay creator-safe and do not expose buckets, object keys, raw paths, signed URLs, or service-role details.
+
+Modern layout: the Brand tab opens as a compact asset manager overview unless a deep-link focus opens a section editor. Sections are compact glassy asset cards with thumbnails, status pills, short summaries, and one-handed action rows: Hero Media, Background, Avatar and Logo, Theme, Scene Presets, and Review & Publish. Tapping a card opens a modal bottom sheet. Hero/background Fit / Fill / Center and overlay/blur controls render only inside the bottom sheet after media exists. Empty states no longer show giant blank preview editors or remove actions for missing media.
+
+Review/public rules remain unchanged: uploads are draft assets with `pending_review` moderation and `pending_scan` malware status; public Platform rendering requires published state, moderation-safe status, not deleted, and scan-public-safe status through the existing public-safe database gates. Pending, rejected, removed, scan-failed, quarantined, or malware-detected assets must not render publicly.
+
+Asset model mapping for the current schema:
+
+- `hero_image` maps to Hero Image.
+- `hero_video` is the future Hero Reel field and remains disabled in normal UI until reviewed video processing/public playback is backed.
+- `background_image` maps to Platform background.
+- `avatar` maps to Platform avatar.
+- `logo` maps to Platform logo.
+- `watermark` maps to future Brand Mark/watermark and remains unavailable for public video rendering.
+- Theme and scene presets are saved as profile presentation metadata; scene presets only apply backed theme/overlay draft metadata and do not fake a live scene renderer.
+
+Status model:
+
+- Current database state uses `asset_state` values `draft`, `published`, and `archived`, plus moderation values `pending_review`, `clean`, `reported`, `hidden`, `removed`, and `rejected`.
+- User-facing Brand Studio groups these into Draft, Needs review, Approved, Live, Needs changes, and Removed.
+- Malware scanning adds `scan_status` values including `pending_scan`, `scanning`, `clean`, `malware_detected`, `scan_failed`, `manual_review`, and `quarantined`; the UI summarizes them as Safety pending/checking/clear/reviewed/blocked/failed.
 
 Brand Studio is the creator-facing Stage Design area inside Platform Studio. It customizes the public look of a creator's Platform while keeping Profile settings separate.
 
