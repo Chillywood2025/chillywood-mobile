@@ -25,6 +25,8 @@ const profileTab = read("app/(tabs)/profile.tsx");
 const libraryTab = read("app/(tabs)/my-list.tsx");
 const explore = read("app/(tabs)/explore.tsx");
 const home = read("app/(tabs)/index.tsx");
+const homeRoute = read("app/home.tsx");
+const libraryRoute = read("app/library.tsx");
 const player = read("app/player/[id].tsx");
 const watchPartyIndex = read("app/watch-party/index.tsx");
 const mainTabTopBar = read("components/navigation/main-tab-top-bar.tsx");
@@ -96,6 +98,8 @@ assertIncludes(explore, "CHILLYWOOD_BACKGROUND_SOURCE", "Explore Chi'llwood fall
   assertNotIncludes(libraryTab, needle, "Library backed data surface");
 });
 assertIncludes(home, 'accessibilityLabel="Open your Profile"', "Home Profile affordance");
+assertIncludes(homeRoute, '<Redirect href="/(tabs)" />', "Home user-facing route alias");
+assertIncludes(libraryRoute, '<Redirect href="/(tabs)/my-list" />', "Library user-facing route alias");
 assertIncludes(home, 'testID="main-tab-home-profile-entry"', "Home top Profile entry test id");
 assertIncludes(home, 'testID="main-tab-home-settings-action"', "Home top Settings test id");
 assertIncludes(home, 'pathname: "/profile/[userId]"', "Home top Profile route");
