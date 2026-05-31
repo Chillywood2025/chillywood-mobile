@@ -65,6 +65,18 @@ type ProfileImagePreviewSheetProps = {
   onClose: () => void;
 };
 
+type ProfileMediaReviewSheetProps = {
+  visible: boolean;
+  kind: "avatar" | "background";
+  imageUri?: string;
+  fitMode?: ProfileAppearanceFitMode;
+  busy?: boolean;
+  onSelectFitMode: (fitMode: ProfileAppearanceFitMode) => void;
+  onChooseAnother: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+};
+
 const fitLabels: Record<ProfileAppearanceFitMode, string> = {
   fill: "Fill",
   fit: "Fit",
@@ -269,7 +281,7 @@ export function ProfileAppearanceSheet({
                     <View style={styles.previewCopy}>
                       <Text style={styles.previewTitle}>Adjust Background</Text>
                       <Text style={styles.previewBody}>
-                        Keep the Profile header readable.
+                        Keep the Profile page readable.
                       </Text>
                     </View>
                   </View>
@@ -505,6 +517,133 @@ export function ProfileImagePreviewSheet({
   );
 }
 
+export function ProfileMediaReviewSheet({
+  visible,
+  kind,
+  imageUri,
+  fitMode = "fill",
+  busy = false,
+  onSelectFitMode,
+  onChooseAnother,
+  onSave,
+  onCancel,
+}: ProfileMediaReviewSheetProps) {
+  const isAvatar = kind === "avatar";
+  const title = isAvatar ? "Review Profile Photo" : "Review Profile Background";
+  const body = isAvatar
+    ? "Choose how the photo fits inside your Profile avatar before saving."
+    : "Choose how the background fits your Profile page. Platform branding stays in Brand Studio.";
+  const saveLabel = isAvatar ? "Save Photo" : "Save Background";
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
+      <View style={styles.previewOverlay}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={busy ? undefined : onCancel}
+        />
+        <View style={styles.reviewSheet} testID="profile-media-review-sheet">
+          <View style={styles.handle} />
+          <Text style={styles.kicker}>PROFILE APPEARANCE</Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.body}>{body}</Text>
+
+          <View
+            style={[
+              styles.reviewPreviewFrame,
+              isAvatar ? styles.reviewAvatarFrame : styles.reviewBackgroundFrame,
+            ]}
+          >
+            {imageUri ? (
+              <Image
+                source={{ uri: imageUri }}
+                style={styles.previewImage}
+                resizeMode={resizeModeForFit(fitMode)}
+              />
+            ) : (
+              <MaterialIcons
+                name={isAvatar ? "person" : "image"}
+                size={42}
+                color="#DCE5F5"
+              />
+            )}
+          </View>
+
+          <View style={styles.fitPanel} testID="profile-media-review-fit-controls">
+            <Text style={styles.fitPanelLabel}>{isAvatar ? "Photo Fit" : "Background Fit"}</Text>
+            <View style={styles.fitRow}>
+              {(["fill", "fit", "center"] as const).map((mode) => {
+                const active = fitMode === mode;
+                return (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[
+                      styles.fitChip,
+                      active && styles.fitChipActive,
+                      busy && styles.optionDisabled,
+                    ]}
+                    activeOpacity={0.84}
+                    disabled={busy}
+                    onPress={() => onSelectFitMode(mode)}
+                  >
+                    <Text
+                      style={[
+                        styles.fitChipText,
+                        active && styles.fitChipTextActive,
+                      ]}
+                    >
+                      {fitLabels[mode]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.reviewActions}>
+            <TouchableOpacity
+              style={[styles.secondaryButton, busy && styles.optionDisabled]}
+              activeOpacity={0.84}
+              disabled={busy}
+              onPress={onChooseAnother}
+            >
+              <MaterialIcons name="photo-library" size={18} color="#E6ECFA" />
+              <Text style={styles.secondaryButtonText}>Choose Different</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.primaryButton, busy && styles.optionDisabled]}
+              activeOpacity={0.86}
+              disabled={busy || !imageUri}
+              onPress={onSave}
+            >
+              {busy ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <MaterialIcons name="check" size={18} color="#FFFFFF" />
+              )}
+              <Text style={styles.primaryButtonText}>{busy ? "Saving" : saveLabel}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.cancelButton}
+            activeOpacity={0.84}
+            disabled={busy}
+            onPress={onCancel}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -533,6 +672,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   previewSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#080B12",
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  reviewSheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
@@ -769,5 +920,76 @@ const styles = StyleSheet.create({
   largePreviewWide: {
     aspectRatio: 4,
     maxHeight: 180,
+  },
+  reviewPreviewFrame: {
+    alignSelf: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewAvatarFrame: {
+    width: 184,
+    height: 184,
+    borderRadius: 92,
+  },
+  reviewBackgroundFrame: {
+    width: "100%",
+    aspectRatio: 2.7,
+    maxHeight: 190,
+    borderRadius: 20,
+  },
+  fitPanel: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 12,
+    gap: 10,
+  },
+  fitPanelLabel: {
+    color: "#DCE5F5",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  reviewActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  secondaryButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 10,
+  },
+  secondaryButtonText: {
+    color: "#E6ECFA",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  primaryButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: "#E11D48",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 10,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
   },
 });

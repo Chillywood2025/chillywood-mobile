@@ -51,11 +51,13 @@ import {
   removeProfileMedia,
   updateProfileMediaFitMode,
   uploadProfileMedia,
+  type ProfileMediaImageFile,
   type ProfileMediaKind,
 } from "../_lib/profileMedia";
 import {
   ProfileAppearanceSheet,
   ProfileImagePreviewSheet,
+  ProfileMediaReviewSheet,
 } from "../components/profile/profile-media-sheets";
 
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
@@ -349,6 +351,11 @@ export default function SettingsScreen() {
     imageUrl?: string;
     fitMode?: ProfileAppearanceFitMode;
   } | null>(null);
+  const [profileMediaReview, setProfileMediaReview] = useState<{
+    kind: ProfileMediaKind;
+    file: ProfileMediaImageFile;
+    fitMode: ProfileAppearanceFitMode;
+  } | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
@@ -637,13 +644,38 @@ export default function SettingsScreen() {
     if (profileAppearanceBusy) return;
 
     setProfileAppearanceSheetKind(null);
-    setProfileAppearanceBusy(kind);
     try {
       const file = await pickProfileMediaImage(kind);
       if (!file) return;
-      const nextProfile = await uploadProfileMedia(kind, file);
+      setProfileMediaReview({
+        kind,
+        file,
+        fitMode: kind === "avatar"
+          ? myProfile?.profileAvatarFitMode ?? "fill"
+          : myProfile?.profileBackgroundFitMode ?? "fill",
+      });
+    } catch (error) {
+      Alert.alert(
+        "Profile Appearance",
+        error instanceof Error ? error.message : "Unable to choose a Profile image right now.",
+      );
+    }
+  }, [myProfile?.profileAvatarFitMode, myProfile?.profileBackgroundFitMode, profileAppearanceBusy]);
+
+  const onSaveProfileMediaReview = useCallback(async () => {
+    if (!profileMediaReview || profileAppearanceBusy) return;
+
+    setProfileAppearanceBusy(profileMediaReview.kind);
+    try {
+      const nextProfile = await uploadProfileMedia(profileMediaReview.kind, profileMediaReview.file, {
+        fitMode: profileMediaReview.fitMode,
+      });
       setMyProfile(nextProfile);
-      Alert.alert("Profile Appearance", kind === "avatar" ? "Profile photo updated." : "Profile background updated.");
+      setProfileMediaReview(null);
+      Alert.alert(
+        "Profile Appearance",
+        profileMediaReview.kind === "avatar" ? "Profile photo updated." : "Profile background updated.",
+      );
     } catch (error) {
       Alert.alert(
         "Profile Appearance",
@@ -652,7 +684,7 @@ export default function SettingsScreen() {
     } finally {
       setProfileAppearanceBusy(null);
     }
-  }, [profileAppearanceBusy]);
+  }, [profileAppearanceBusy, profileMediaReview]);
 
   const onRemoveProfileMedia = useCallback((kind: ProfileMediaKind) => {
     const imageUrl = kind === "avatar" ? activeProfilePhotoUrl : activeProfileBackgroundUrl;
@@ -1475,6 +1507,28 @@ export default function SettingsScreen() {
         imageUrl={profileImagePreview?.imageUrl}
         fitMode={profileImagePreview?.fitMode}
         onClose={() => setProfileImagePreview(null)}
+      />
+      <ProfileMediaReviewSheet
+        visible={!!profileMediaReview}
+        kind={profileMediaReview?.kind ?? "avatar"}
+        imageUri={profileMediaReview?.file.uri}
+        fitMode={profileMediaReview?.fitMode}
+        busy={profileMediaReview ? profileAppearanceBusy === profileMediaReview.kind : false}
+        onSelectFitMode={(fitMode) => {
+          setProfileMediaReview((current) => current ? { ...current, fitMode } : current);
+        }}
+        onChooseAnother={() => {
+          if (!profileMediaReview || profileAppearanceBusy) return;
+          const { kind } = profileMediaReview;
+          setProfileMediaReview(null);
+          void onChooseProfileMedia(kind);
+        }}
+        onSave={() => {
+          void onSaveProfileMediaReview();
+        }}
+        onCancel={() => {
+          if (!profileAppearanceBusy) setProfileMediaReview(null);
+        }}
       />
     </ImageBackground>
   );

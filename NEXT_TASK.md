@@ -1,17 +1,18 @@
 # NEXT TASK
 
-## Recommended Lane: Current Android Runtime Proof For Profile Media And Brand Draft Preview
+## Recommended Lane: Profile Media Viewer And Removal Runtime Closeout
 
-Latest repo-side lane before the next proof lane: Profile Media Reliability and Brand Draft Preview Fix. Brand Studio pending-review media still does not render on the public Platform; that is intentional. The new owner-only `Preview Brand Draft` route shows saved Brand Studio visuals before review without exposing owner controls or draft creator content to public viewers. Normal `Preview Platform` remains the reviewed public view. Profile Photo/Profile Background upload now uses Android-safe content-URI staging, Supabase Storage REST upload with SDK fallback, signed read-back verification, native photo-library picker with `legacy: false`, oval square avatar crop, and wide 4:1 background crop. Profile and Settings close their bottom sheets before native picker/remove flows.
+Latest repo-side lane before the next proof lane: Profile Media Modern Review and Full-Page Background Fix. Brand Studio pending-review media still does not render on the public Platform; that is intentional. Owner-only `Preview Brand Draft` remains the way to inspect saved Brand Studio visuals before review without exposing owner controls or draft creator content to public viewers. Normal `Preview Platform` remains the reviewed public view. Profile Photo/Profile Background upload still uses Android-safe content-URI staging, Supabase Storage REST upload with SDK fallback, and signed read-back verification, but the broken Android native crop UI is no longer used. The app now opens the phone photo library with `legacy: false`, then shows a Chi'llwood in-app review sheet with a real preview and Fill/Fit/Center choices before saving. Profile Background now renders as a readable full-page Profile skin, not just the top cover/header area.
 
-Next proof should install the current build and verify:
+Current Android one-device proof lives at `/tmp/chillywood-profile-brand-media-one-device-proof-20260531/` and includes the rebuilt release APK install/open, safe proof images staged on `R5CR120QCBF`, Settings/Profile Appearance, avatar save proof from the prior device step, background save/update proof, and a current full-page Profile background screenshot behind Profile actions, tabs, composer, and feed. Current APK metadata from this lane: `android/app/build/outputs/apk/release/app-release.apk`, `205656923` bytes, SHA-256 `c78e72bc47c7a90e5166d66ecbf7d07daa7c3cd424cce4c9743f373fd943ed70`.
 
-- Brand Studio `Preview Platform` shows reviewed public assets only.
-- Brand Studio `Preview Brand Draft` shows owner-only saved draft/pending visuals.
-- A non-owner/signed-out public Platform cannot use or see draft preview assets.
-- Settings/Profile Appearance can choose a safe app-owned image for Profile Photo, save it, read back active status, show it on Profile/Settings, remove it, and show fallback.
-- Profile Background can choose a safe app-owned image, save it, read back active status, render a readable wide banner, remove it, and show fallback.
-- Viewer/signed-out users cannot edit Profile media.
+Next proof should verify:
+
+- Brand Studio `Preview Brand Draft` visual route on the current installed build if the owner needs a fresh screenshot; source/guard proof is current.
+- A non-owner/signed-out public Platform cannot use or see draft Brand Studio preview assets.
+- Profile Photo remove/fallback plus backend `user_removed` read-back after the new review-sheet flow.
+- Profile Background remove/fallback plus backend `user_removed` read-back after the full-page background fix.
+- Viewer/signed-out users cannot edit Profile media and cannot see non-active avatar/background media.
 
 Do not use private gallery photos. Use app-owned/safe proof assets only, and keep screenshots outside the repo.
 
@@ -68,7 +69,7 @@ Current launch truth:
 - Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`; DKIM remains unverified until a real outbound provider issues/publishes selector records and test delivery is proved.
 - Malware scanning is now implemented, runtime-proved, production-deployed, and Admin-reviewable: new media scan metadata, `media_scan_jobs`, service-role scan RPCs, upload/update triggers, public-safe rendering gates, a ClamAV worker, Hetzner compose/deploy scaffold, sanitized Admin scan read model, and Admin System > Malware Scanner panel are in place. Proof at `/tmp/chillywood-malware-scanner-runtime-proof-20260530/` scanned temporary private `dmca-evidence` objects against linked Supabase. Production proof at `/tmp/chillywood-malware-scanner-production-proof-20260530/` shows `chillywood-prod-01` running the healthy scanner service, benign proof media read back `clean`, EICAR read back `malware_detected`, Admin read model returned both statuses without raw storage paths/secrets, and all proof objects/jobs were cleaned.
 - Support/moderation/account deletion roles and SLA targets are mapped, but staffing and final operating acceptance remain external.
-- Profile media manual proof remains partial by design: avatar edit sheet and Settings Appearance are proved, safe app-owned assets are staged, but save/read-back/remove/fallback is left for manual runtime proof later.
+- Profile media manual proof is partially closed on one Android device: avatar/background picker return and save/update were proved with safe app-owned assets, the current APK was rebuilt/installed, and Profile Background now visibly covers the full Profile page. Remove/fallback, non-owner/signed-out, and backend `user_removed` read-back remain the next proof items.
 - Blocker 8 moderation/legal ops is repo-side closed as an app-code/schema blocker: general safety reports, admin status/action RPCs, immutable report audit rows, DMCA tooling, Profile media report actions, and Profile media hide/remove/restore/masking are backed. Remaining Blocker 8 work is external operations and optional disposable-fixture visual proof, logged at `/tmp/chillywood-blocker8-moderation-legal-closeout-20260529/`.
 
 External lane scope:
@@ -88,7 +89,7 @@ Next engineering lane if external Play/legal work is being handled manually:
 
 - Release Diagnostics And Signed-Out/Signed-In Route Smoke Closeout.
 - Firebase Test Lab Signed-In Route Instrumentation Proof, only after safe test credentials are provided outside committed files.
-- Then close manual Profile media save/read-back/remove/fallback, second-account/blocked/private fixtures, Watch-Party two-device proof on unlocked/stable devices, Spectator live-compatible fixture, RevenueCat/Google signed sandbox proof, and release build/deploy history only if a real event source is added.
+- Then close Profile media remove/fallback plus viewer/signed-out public masking, second-account/blocked/private fixtures, Watch-Party two-device proof on unlocked/stable devices, Spectator live-compatible fixture, RevenueCat/Google signed sandbox proof, and release build/deploy history only if a real event source is added.
 
 ## Previous Recommended Lane: Profile Media Runtime Save/Read-Back Proof
 
@@ -129,9 +130,9 @@ Closed truth:
 - Profile feed empty state is cleaned up: owners see `No posts yet` with a `Create Post` action that focuses the composer; viewers see `No public posts yet`; the old `Your feed is ready when you are` card and random feed-level Platform CTA are gone.
 - Android proof for this cleanup lives at `/tmp/chillywood-home-profile-cleanup-proof-20260529/`.
 - Profile Photo first-sheet UX is corrected and Android-proved on `R5CR120QCBF`: owner avatar tap/long-press opens a compact `Profile Photo` bottom action sheet with `Change Photo`, conditional `Remove Photo` only when a real photo exists, and `Cancel`.
-- The Profile Photo first sheet no longer shows a preview card, disabled `View Photo`, disabled `Remove Photo`, Fit/Fill/Center controls, crop explanation copy, or a disabled save action before an image is selected.
-- Profile Photo crop/edit still uses the backed native phone gallery path through `expo-image-picker` with `allowsEditing`; `Change Photo` was proved to open Android DocumentsUI, but no picker screenshot was captured because private gallery thumbnails must not be recorded. Custom in-app drag/pinch repositioning remains a future enhancement unless it is actually built and proved.
-- Profile Background remains separate and Android-proved. Its first sheet is compact, and background Fit/Fill/Center positioning controls appear only after a real background image exists inside `Adjust Background`.
+- The Profile Photo first sheet no longer shows a preview card, disabled `View Photo`, disabled `Remove Photo`, crop explanation copy, or a disabled save action before an image is selected.
+- Profile Photo no longer uses the broken native Android crop UI. The app opens the backed phone gallery path through `expo-image-picker` with editing disabled, then shows an in-app review sheet with a real preview and Fill/Fit/Center choices before saving. Custom drag/pinch repositioning remains a future enhancement unless it is actually built and proved.
+- Profile Background remains separate and Android-proved. Its first sheet is compact, the save path uses the same in-app review sheet, and the saved background now renders behind the full Profile page rather than only the top cover/header.
 - Live Hub is already modernized and was not redesigned in the burn-down lane.
 - Explore now uses backed title search, public discovery feed rows, public creator videos, Rachi public-safe Originals, and public event summaries. Visible sections are backed or honest empty states: Search, Live Now, Platforms, Creator Videos, Chi'llwood Originals, Events, Replays, and Titles.
 - Library now uses backed saved titles, watch progress, and followed Platform profile read-back. Replays, events, and clips remain hidden until saved rows exist.
@@ -140,24 +141,24 @@ Closed truth:
 - Android proof on `R5CR120QCBF` lives at `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/`.
 - Valid proof files are `04-explore-current.*`, `05-library-backed-sections.*`, `06-player-normal-mode.*`, `09-host-preflight-details.*`, `10-home-bottom-nav-top-avatar.*`, and `11-top-avatar-profile-route.*`.
 - Profile Photo picker correction proof lives at `/tmp/chillywood-profile-photo-picker-proof-20260529/` with owner Profile, tap sheet, long-press sheet, DocumentsUI focus proof, Settings Profile Appearance, and Profile Background sheet captures.
-- Current Profile proof in `/tmp/chillywood-admin-search-audit-denial-spectator-profile-proof-20260529/` also captures the compact owner photo sheet and a safe Chi'llywood image visible in Android DocumentsUI. The native picker did not hand the selected safe image back to the app during automation, so save/read-back/remove/fallback is not claimed.
+- Current Profile proof for the latest media/background fix lives at `/tmp/chillywood-profile-brand-media-one-device-proof-20260531/` and captures safe image staging, current APK install/open, Settings/Profile Appearance, avatar/background save/update behavior from the device flow, and a full-page Profile background screenshot. Remove/fallback, viewer/signed-out, and `user_removed` backend read-back remain unclaimed.
 - `01`/`02` proof captures in that folder are stale-bundle/dev-menu misses and are not claimed.
 - No fake Explore rows, fake Library rows, fake live rooms, fake replays, fake events, fake creator activity, fake Rachi content, fake money, LiveKit issuer change, Watch-Party route ownership change, Premium gate change, Party Room change, or backend schema change was made.
 
 Remaining limitations:
 
-- Profile avatar/background save/read-back proof is not closed. The first-sheet UX, native picker launch, and a safe Chi'llywood picker asset are proved, but Android DocumentsUI did not return the selected image to the app during automation; save/remove/fallback also still needs backend active-media read-back from the owner session.
+- Profile avatar/background save proof is partially closed on the owner device, but remove/fallback, viewer/signed-out masking, and backend `user_removed` read-back still need a focused proof pass.
 - Spectator remaining proof is not newly closed. No safe Live Watch-Party / Reaction fixture was available in the latest closeout lane; previous Watch-Party Live and replay child-room proof remains current.
 - Watch-Party Live true two-device speech-triggered ducking is not closed. `adb devices -l` showed only `R5CR120QCBF`, with no second device/emulator/account available.
 - Player component extraction remains a future cleanup; this pass added safe mode labeling/resolution without a full rewrite.
 - Route/deeplink cleanup remains mostly documented rather than rewritten to avoid route-owner drift.
-- Profile media safe-asset save/read-back remains open even though the compact picker UI is fixed.
+- Profile media safe-asset save/read-back is partly closed; remove/fallback and viewer/signed-out masking remain open.
 - Explore People search runtime proof uses the explicit public Rachi official account. Capture a separate normal public user/creator result only when a safe public fixture exists; do not fake one.
 - Admin Search audit writing is closed for query/result-open events. Future Admin proof can add richer reason-required audit policy per sensitive scope only if product/security policy requires it.
 
 Recommended next lane:
 
-- Profile Media Runtime Closeout with one safe app-owned/non-private gallery asset, an attached Android device, a signed-in owner account, viewer/signed-out checks, compact sheet screenshots, gallery/native crop step proof without private photos, backend active-media read-back, removal/fallback proof, and public masking proof.
+- Profile Media Runtime Closeout with one safe app-owned/non-private gallery asset, an attached Android device, a signed-in owner account, viewer/signed-out checks, in-app review-sheet screenshots, backend active/user_removed read-back, removal/fallback proof, and public masking proof.
 - Admin external system-history follow-up only if Play/provider/build/deploy dashboards need their own backed event source. Do not fake external dashboard rows.
 - Normal-user Android Admin denial recapture with a safe normal-user session and a reliable owner-session restore path.
 - Spectator Live Watch-Party / Reaction Fixture Closeout with a real public-safe live-stage-compatible fixture and no original token/host/member leakage.
@@ -390,7 +391,7 @@ Closed repo-side truth:
 
 - Owner tap and long-press on their Profile avatar opens `Edit Profile Photo`; viewers tap or long-press another avatar to open `Profile Actions`.
 - Profile Settings has a compact `Profile Appearance` section with `Profile Photo`, `Profile Background`, and `Preview Profile`.
-- Profile photo/background upload uses the phone photo gallery through `expo-image-picker`, supports safe crop/fit level through square or wide edit plus Fill/Fit/Center, validates JPG/PNG/WebP and size limits, and writes only the signed-in user's Profile fields.
+- Profile photo/background upload uses the phone photo gallery through `expo-image-picker`, avoids the broken native Android cropper, supports safe fit level through an in-app review sheet with Fill/Fit/Center, validates JPG/PNG/WebP and size limits, and writes only the signed-in user's Profile fields.
 - Profile background is personal Profile appearance only. Platform hero/background/logo and Brand Studio assets remain separate.
 - Viewer `Profile Actions` offers View Profile Photo, Chi'lly Chat, View Platform, Block User, Report User, and Share Profile where backed.
 - Block User requires sign-in and confirmation, refuses owner/self block, writes through the existing viewer-owned `channel_audience_blocks` helper path, refreshes relationship state, and blocked Chi'lly Chat entry refuses direct-thread creation.

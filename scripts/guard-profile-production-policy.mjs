@@ -68,7 +68,9 @@ assertNotIncludes(profile, `Your feed is ready when you are.`, "old Profile feed
 assertNotIncludes(profile, `<Text style={styles.feedEmptyButtonText}>{isSelfProfile ? "Platform" : "View Platform"}</Text>`, "random Profile feed Platform CTA");
 assertIncludes(profile, `friendState?.availability === "blocked"`, "blocked Chi'lly Circle action guard");
 assertIncludes(profile, `ProfileAppearanceSheet`, "owner Profile appearance sheet");
+assertIncludes(profile, `ProfileMediaReviewSheet`, "owner Profile media review sheet");
 assertIncludes(profile, `ProfileActionsSheet`, "viewer Profile actions sheet");
+assertIncludes(profile, `styles.fullBackgroundOverlayWithImage`, "Profile background full-page skin overlay");
 assertIncludes(profile, `onPressProfileAvatar`, "Profile avatar tap action");
 assertIncludes(profile, `styles.avatarPressable`, "Profile avatar edit hit target");
 assertIncludes(profile, `onLongPress={onPressProfileAvatar}`, "Profile avatar long-press action");
@@ -89,12 +91,14 @@ assertIncludes(profile, `profileMediaPublicState: isProfileMediaActive(mediaStat
 assertIncludes(settings, `title="Profile Appearance"`, "Settings Profile Appearance section");
 assertIncludes(settings, `title="Profile Photo"`, "Settings Profile Photo control");
 assertIncludes(settings, `title="Profile Background"`, "Settings Profile Background control");
+assertIncludes(settings, `ProfileMediaReviewSheet`, "Settings Profile media review sheet");
 assertIncludes(settings, `Platform branding stays in Brand Studio.`, "Profile/Platform branding separation copy");
 assertIncludes(profileMedia, `PROFILE_MEDIA_BUCKET = "profile-media"`, "Profile media bucket");
 assertIncludes(profileMedia, `ImagePicker.launchImageLibraryAsync`, "Profile media phone gallery picker");
-assertIncludes(profileMedia, `allowsEditing: true`, "Profile media crop/edit support");
+assertIncludes(profileMedia, `allowsEditing: false`, "Profile media avoids broken native cropper");
 assertIncludes(profileMedia, `defaultTab: "photos"`, "Profile media gallery tab");
 assertIncludes(profileMedia, `legacy: false`, "Profile media modern photo-library picker");
+assertIncludes(profileMedia, `options: ProfileMediaUploadOptions = {}`, "Profile media in-app review fit options");
 assertIncludes(profileMedia, `prepareProfileMediaUploadUri`, "Profile media Android content URI staging");
 assertIncludes(profileMedia, `FileSystem.uploadAsync`, "Profile media robust Android upload");
 assertIncludes(profileMedia, `assertProfileMediaUploadReadable`, "Profile media upload read-back verification");
@@ -112,6 +116,9 @@ assertIncludes(profileMediaSheets, `testID="profile-avatar-remove-action"`, "Pro
 assertIncludes(profileMediaSheets, `hasImage ? (`, "Profile Photo remove gating");
 assertIncludes(profileMediaSheets, `testID="profile-background-action-sheet"`, "compact Profile Background action sheet");
 assertIncludes(profileMediaSheets, `testID="profile-background-adjust-fit-controls"`, "Profile Background adjust controls");
+assertIncludes(profileMediaSheets, `testID="profile-media-review-sheet"`, "Profile media in-app review sheet");
+assertIncludes(profileMediaSheets, `Review Profile Photo`, "Profile media review photo title");
+assertIncludes(profileMediaSheets, `Review Profile Background`, "Profile media review background title");
 assertNotIncludes(profileMediaSheets, `Edit Profile Photo`, "Profile Photo sheet title");
 assertNotIncludes(profileMediaSheets, `No image yet`, "Profile Photo empty-state copy");
 assertNotIncludes(profileMediaSheets, `Add an image first.`, "Profile Photo disabled preview copy");

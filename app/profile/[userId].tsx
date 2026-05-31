@@ -111,6 +111,7 @@ import {
   removeProfileMedia,
   updateProfileMediaFitMode,
   uploadProfileMedia,
+  type ProfileMediaImageFile,
   type ProfileMediaKind,
 } from "../../_lib/profileMedia";
 import {
@@ -145,6 +146,7 @@ import {
   ProfileActionsSheet,
   ProfileAppearanceSheet,
   ProfileImagePreviewSheet,
+  ProfileMediaReviewSheet,
 } from "../../components/profile/profile-media-sheets";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -552,6 +554,11 @@ export default function ProfileScreen() {
     title: string;
     imageUrl?: string;
     fitMode?: ProfileAppearanceFitMode;
+  } | null>(null);
+  const [profileMediaReview, setProfileMediaReview] = useState<{
+    kind: ProfileMediaKind;
+    file: ProfileMediaImageFile;
+    fitMode: ProfileAppearanceFitMode;
   } | null>(null);
   const [profileAppearanceBusy, setProfileAppearanceBusy] = useState<ProfileMediaKind | null>(null);
   const [profileBlockBusy, setProfileBlockBusy] = useState(false);
@@ -1702,13 +1709,32 @@ export default function ProfileScreen() {
 
     if (kind === "avatar") setProfilePhotoSheetVisible(false);
     if (kind === "background") setProfileBackgroundSheetVisible(false);
-    setProfileAppearanceBusy(kind);
     try {
       const file = await pickProfileMediaImage(kind);
       if (!file) return;
-      const nextProfile = await uploadProfileMedia(kind, file);
+      setProfileMediaReview({
+        kind,
+        file,
+        fitMode: kind === "avatar" ? profile.profileAvatarFitMode : profile.profileBackgroundFitMode,
+      });
+    } catch (error) {
+      Alert.alert(
+        "Profile Appearance",
+        error instanceof Error ? error.message : "Unable to choose a Profile image right now.",
+      );
+    }
+  };
+  const onSaveProfileMediaReview = async () => {
+    if (!isSelfProfile || !profileMediaReview || profileAppearanceBusy) return;
+
+    setProfileAppearanceBusy(profileMediaReview.kind);
+    try {
+      const nextProfile = await uploadProfileMedia(profileMediaReview.kind, profileMediaReview.file, {
+        fitMode: profileMediaReview.fitMode,
+      });
       setChannelAccessProfile(nextProfile);
-      Alert.alert("Profile Appearance", kind === "avatar" ? "Profile photo updated." : "Profile background updated.");
+      setProfileMediaReview(null);
+      Alert.alert("Profile Appearance", profileMediaReview.kind === "avatar" ? "Profile photo updated." : "Profile background updated.");
     } catch (error) {
       Alert.alert(
         "Profile Appearance",
@@ -3800,8 +3826,24 @@ export default function ProfileScreen() {
       testID="profile-screen"
       accessibilityLabel="Chi'llywood profile screen"
     >
-      <View style={styles.fullBackgroundFallback} pointerEvents="none" />
-      <View style={styles.fullBackgroundOverlay} pointerEvents="none" />
+      {visibleProfileBackgroundUrl ? (
+        <View style={styles.fullBackground} pointerEvents="none">
+          <Image
+            source={{ uri: visibleProfileBackgroundUrl }}
+            style={styles.fullBackgroundImage}
+            resizeMode={resolveProfileImageResizeMode(profile.profileBackgroundFitMode)}
+          />
+        </View>
+      ) : (
+        <View style={styles.fullBackgroundFallback} pointerEvents="none" />
+      )}
+      <View
+        style={[
+          styles.fullBackgroundOverlay,
+          visibleProfileBackgroundUrl && styles.fullBackgroundOverlayWithImage,
+        ]}
+        pointerEvents="none"
+      />
 
       <KeyboardAvoidingView
         style={styles.outerFlex}
@@ -4467,6 +4509,28 @@ export default function ProfileScreen() {
         fitMode={profileImagePreview?.fitMode}
         onClose={() => setProfileImagePreview(null)}
       />
+      <ProfileMediaReviewSheet
+        visible={!!profileMediaReview && isSelfProfile}
+        kind={profileMediaReview?.kind ?? "avatar"}
+        imageUri={profileMediaReview?.file.uri}
+        fitMode={profileMediaReview?.fitMode}
+        busy={profileMediaReview ? profileAppearanceBusy === profileMediaReview.kind : false}
+        onSelectFitMode={(fitMode) => {
+          setProfileMediaReview((current) => current ? { ...current, fitMode } : current);
+        }}
+        onChooseAnother={() => {
+          if (!profileMediaReview || profileAppearanceBusy) return;
+          const { kind } = profileMediaReview;
+          setProfileMediaReview(null);
+          void onChooseProfileMedia(kind);
+        }}
+        onSave={() => {
+          void onSaveProfileMediaReview();
+        }}
+        onCancel={() => {
+          if (!profileAppearanceBusy) setProfileMediaReview(null);
+        }}
+      />
       {watchPartyPremiumGate?.reason === "premium_required" ? (
         <AccessSheet
           visible={watchPartyPremiumSheetVisible}
@@ -4515,6 +4579,10 @@ const styles = StyleSheet.create({
   fullBackground: {
     ...StyleSheet.absoluteFillObject,
   },
+  fullBackgroundImage: {
+    width: "100%",
+    height: "100%",
+  },
   fullBackgroundFallback: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#0B0B10",
@@ -4522,6 +4590,9 @@ const styles = StyleSheet.create({
   fullBackgroundOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  fullBackgroundOverlayWithImage: {
+    backgroundColor: "rgba(0,0,0,0.7)",
   },
   screen: { flex: 1, backgroundColor: "transparent" },
   content: { paddingTop: 56, paddingBottom: 52, paddingHorizontal: 18, gap: 16 },

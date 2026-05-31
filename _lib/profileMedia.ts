@@ -31,6 +31,10 @@ export type ProfileMediaImageFile = {
   size?: number | null;
 };
 
+type ProfileMediaUploadOptions = {
+  fitMode?: ProfileAppearanceFitMode;
+};
+
 type UserProfileUpdate = TablesUpdate<"user_profiles">;
 
 const PROFILE_MEDIA_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -308,10 +312,8 @@ export async function pickProfileMediaImage(kind: ProfileMediaKind): Promise<Pro
   const ImagePicker = await loadImagePicker();
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
-    allowsEditing: true,
-    aspect: kind === "avatar" ? [1, 1] : [4, 1],
-    shape: kind === "avatar" ? "oval" : "rectangle",
-    quality: 0.92,
+    allowsEditing: false,
+    quality: 1,
     exif: false,
     base64: false,
     defaultTab: "photos",
@@ -324,12 +326,17 @@ export async function pickProfileMediaImage(kind: ProfileMediaKind): Promise<Pro
   return buildProfileMediaFileFromImageAsset(kind, asset);
 }
 
-export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMediaImageFile): Promise<UserProfile> {
+export async function uploadProfileMedia(
+  kind: ProfileMediaKind,
+  file: ProfileMediaImageFile,
+  options: ProfileMediaUploadOptions = {},
+): Promise<UserProfile> {
   const userId = await getSignedInUserId();
   const existingProfile = await readUserProfile();
   const { uri, mimeType, size } = await validateProfileMediaFile(kind, file);
   const objectKey = buildProfileMediaObjectKey(userId, kind, mimeType);
   const prepared = await prepareProfileMediaUploadUri({ ...file, uri }, kind, mimeType);
+  const nextFitMode = normalizeProfileAppearanceFitMode(options.fitMode);
 
   try {
     const preparedSize = await getPreparedProfileMediaFileSize(prepared.uri, size);
@@ -369,7 +376,7 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
         profile_avatar_scan_result: null,
         profile_avatar_scanned_at: null,
         profile_avatar_scan_error: null,
-        profile_avatar_fit_mode: "fill",
+        profile_avatar_fit_mode: nextFitMode,
         profile_avatar_focal_x: 0.5,
         profile_avatar_focal_y: 0.5,
         profile_media_updated_at: now,
@@ -384,7 +391,7 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
         profile_background_scan_result: null,
         profile_background_scanned_at: null,
         profile_background_scan_error: null,
-        profile_background_fit_mode: "fill",
+        profile_background_fit_mode: nextFitMode,
         profile_background_focal_x: 0.5,
         profile_background_focal_y: 0.5,
         profile_background_overlay_strength: 0.58,
@@ -397,7 +404,7 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
         avatarUrl: publicUrl,
         profileAvatarMediaStatus: "active",
         profileAvatarMediaFlaggedAt: undefined,
-        profileAvatarFitMode: "fill",
+        profileAvatarFitMode: nextFitMode,
         profileAvatarFocalX: 0.5,
         profileAvatarFocalY: 0.5,
       })
@@ -406,7 +413,7 @@ export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMe
         profileBackgroundUrl: publicUrl,
         profileBackgroundMediaStatus: "active",
         profileBackgroundMediaFlaggedAt: undefined,
-        profileBackgroundFitMode: "fill",
+        profileBackgroundFitMode: nextFitMode,
         profileBackgroundFocalX: 0.5,
         profileBackgroundFocalY: 0.5,
         profileBackgroundOverlayStrength: 0.58,
