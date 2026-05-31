@@ -18,10 +18,10 @@ The mode resolver is intentionally narrow. It only changes labels/presentation a
 
 As of May 29, 2026, standalone Player surfaces share the same production overlay format:
 
-- top-left: backed Share/Report or title actions (`+ List`, `Like`, `Share`)
+- top-left: backed Share/Report actions
 - top-right: Watch-Party Live only when the source is eligible
-- bottom: duration/progress, Back, fullscreen, and one compact Playback control
-- Playback menu: compact translucent popover with Speed rows and an Auto-only Quality row
+- bottom: duration/progress, Back, fullscreen, and one compact `1x` speed control that cycles speed directly
+- no standalone Playback sheet, no visible `Speed and quality` copy, and no user-facing Quality selector
 - no loose speed pills across the video
 - no giant red Auto quality card
 - no fake quality variants
@@ -44,4 +44,6 @@ Future extraction can split the large route into `PlayerHeader`, `PlayerMetadata
 
 Android proof for the May 29, 2026 burn-down captured normal title mode at `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/06-player-normal-mode.png`.
 
-Android proof for the May 30, 2026 playback regression/menu polish closeout lives at `/tmp/chillywood-standalone-player-playback-menu-fix-20260529/`. Root cause: Android native video/tap-layer ownership after the overlay pass left the video loaded but center tap-to-play did not reliably reach the standalone playback handler. The fixed Player routes native video touches through the overlay gesture target, keeps controls/menu above that target, and normal title Player advanced to `0:03` on the installed release APK. The menu now uses compact Speed rows, Auto-only Quality, and no fake variants. ADB multi-touch/fullscreen visual proof remains partial; focal-point pinch zoom/reset is guarded in code and should be recaptured manually if a later lane needs gesture video proof.
+Android proof for the May 30, 2026 playback regression/menu polish closeout lives at `/tmp/chillywood-standalone-player-playback-menu-fix-20260529/`. Root cause: Android native video/tap-layer ownership after the overlay pass left the video loaded but center tap-to-play did not reliably reach the standalone playback handler. The fixed Player routes native video touches through the overlay gesture target, keeps controls above that target, and normal title Player advanced to `0:03` on the installed release APK. ADB multi-touch/fullscreen visual proof remains partial; focal-point pinch zoom/reset is guarded in code and should be recaptured manually if a later lane needs gesture video proof.
+
+Android proof for the May 30, 2026 follow-up playback-control simplification lives at `/tmp/chillywood-player-playback-control-20260530/`. The normal title Player no longer renders the standalone Playback sheet, visible `Speed and quality` copy, Auto quality row, or tune/settings icon. Quality stays automatic/internal, and the remaining compact `1x` chip cycles playback speed directly.

@@ -36,32 +36,14 @@ const oldRoomGuard = readSource("scripts/guard-old-room-handling.mjs");
 const standaloneTopChrome = sliceBetween(
   player,
   "function StandalonePlayerTopChrome",
-  "type StandalonePlaybackMenuProps",
-  "Standalone Player top chrome",
-);
-const standalonePlaybackMenu = sliceBetween(
-  player,
-  "function StandalonePlaybackMenu",
   "const getLiveFaceFilterPresentation",
-  "Standalone Player playback menu",
-);
-const standalonePlaybackMenuStyles = sliceBetween(
-  player,
-  "standalonePlaybackMenu: {",
-  "partyReactionBurstWrap:",
-  "Standalone Player playback menu styles",
+  "Standalone Player top chrome",
 );
 const standaloneVideoGestureTargetStyle = sliceBetween(
   player,
   "standaloneVideoGestureTarget: {",
   "sharedAndroidVideoTapTarget:",
   "Standalone Player gesture target styles",
-);
-const standalonePlaybackQualityActiveStyle = sliceBetween(
-  player,
-  "standalonePlaybackQualityRowActive: {",
-  "standalonePlaybackQualityLabel:",
-  "Standalone Player quality active style",
 );
 const panResponder = sliceBetween(
   player,
@@ -81,10 +63,10 @@ const panResponder = sliceBetween(
 
 assertIncludes(standaloneTopChrome, "canStartWatchPartyLive", "standalone Watch-Party Live CTA guard");
 assertIncludes(standaloneTopChrome, "Watch-Party Live", "standalone Watch-Party Live CTA");
-assertIncludes(standaloneTopChrome, "+ List", "standalone top-left List action");
-assertIncludes(standaloneTopChrome, "Like", "standalone top-left Like action");
+assertNotIncludes(standaloneTopChrome, "+ List", "standalone top-left actions");
+assertNotIncludes(standaloneTopChrome, "Like", "standalone top-left actions");
 assertIncludes(standaloneTopChrome, "Share", "standalone top-left Share action");
-assertIncludes(standaloneTopChrome, "canShareCreatorVideo", "standalone Share action");
+assertIncludes(standaloneTopChrome, "canShare", "standalone Share action");
 assertIncludes(standaloneTopChrome, "canReport", "standalone Report action");
 assertNotIncludes(standaloneTopChrome, "playbackRate", "standalone top chrome");
 assertNotIncludes(standaloneTopChrome, "onToggleSpeedMenu", "standalone top chrome");
@@ -99,21 +81,17 @@ assertIncludes(standaloneVideoGestureTargetStyle, "bottom: 82", "standalone gest
 assertIncludes(standaloneVideoGestureTargetStyle, "zIndex: 40", "standalone gesture target must sit below control chrome and above the video");
 assertIncludes(player, "zIndex: 46", "standalone top chrome remains above gesture target");
 assertIncludes(player, "zIndex: 47", "standalone bottom chrome remains above gesture target");
-assertIncludes(standalonePlaybackMenuStyles, "zIndex: 48", "standalone Playback menu remains above gesture target");
-assertIncludes(player, "StandalonePlaybackMenu", "standalone playback menu render");
-assertIncludes(standalonePlaybackMenu, "Playback", "Playback menu title");
-assertIncludes(standalonePlaybackMenu, "Speed", "Playback menu Speed section");
-assertIncludes(standalonePlaybackMenu, "Quality", "Playback menu Quality section");
-assertIncludes(standalonePlaybackMenu, "PLAYBACK_QUALITY_AUTO_LABEL", "Playback menu Auto-only quality");
-assertIncludes(standalonePlaybackMenu, "More options appear when available.", "Auto-only quality copy");
-assertIncludes(standalonePlaybackMenuStyles, "position: \"absolute\"", "compact bottom Playback menu");
-assertIncludes(standalonePlaybackMenuStyles, "maxHeight: \"40%\"", "compact bottom Playback menu height cap");
-assertIncludes(standalonePlaybackMenuStyles, "standalonePlaybackSpeedList", "Playback menu Speed rows");
-assertNotIncludes(standalonePlaybackMenuStyles, "standalonePlaybackSpeedGrid", "bulky speed chip grid");
-assertNotIncludes(standalonePlaybackMenu, "Quality options appear when multiple sources are available.", "bulky Auto quality helper copy");
-assertNotIncludes(standalonePlaybackQualityActiveStyle, "220,20,60", "Auto quality row must not be a giant red card");
-assertNotIncludes(standalonePlaybackMenu, "720p", "Playback menu must not fake quality options");
-assertNotIncludes(standalonePlaybackMenu, "1080p", "Playback menu must not fake quality options");
+assertNotIncludes(player, "StandalonePlaybackMenu", "standalone Playback sheet");
+assertNotIncludes(player, "Speed and quality", "standalone Playback sheet visible copy");
+assertNotIncludes(player, "PLAYBACK_QUALITY_AUTO_LABEL", "standalone Auto quality row");
+assertNotIncludes(player, "More options appear when available.", "standalone Auto quality helper copy");
+assertNotIncludes(player, "Quality options appear when multiple sources are available.", "bulky Auto quality helper copy");
+assertNotIncludes(player, "standalonePlaybackSpeedGrid", "bulky speed chip grid");
+assertNotIncludes(player, "standalonePlaybackSpeedList", "Playback menu Speed rows");
+assertNotIncludes(player, "720p", "Playback menu must not fake quality options");
+assertNotIncludes(player, "1080p", "Playback menu must not fake quality options");
+assertIncludes(player, "onCycleStandalonePlaybackRate", "compact direct playback-rate control");
+assertIncludes(player, "formatPlaybackRateLabel(playbackRate)", "compact direct playback-rate label");
 assertNotIncludes(player, "partySpeedOverlay", "loose speed pills across video");
 assertNotIncludes(player, "onToggleSpeedMenu", "loose top speed toggle");
 
@@ -135,7 +113,7 @@ assertIncludes(player, "Reset Zoom", "Reset Zoom control");
 
 assertIncludes(player, "watchPartyAudioMixPanel", "Watch-Party Live shared Audio Mix remains");
 assertIncludes(player, "Audio Mix", "Watch-Party Live shared Audio Mix label remains");
-assertNotIncludes(standalonePlaybackMenu, "Audio Mix", "standalone Playback menu");
+assertNotIncludes(standaloneTopChrome, "Audio Mix", "standalone top chrome");
 assertIncludes(player, "const publishWatchPartyLiveKitAudio = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted", "LiveKit audio publish guard unchanged");
 assertIncludes(watchPartyLiveKitGuard, "Player Watch-Party LiveKit", "Watch-Party LiveKit guard still tracks Player route");
 assertIncludes(oldRoomGuard, "isWatchPartyRoomActive", "old-room handling guard remains present");
