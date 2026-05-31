@@ -4,6 +4,7 @@ import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
+import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import {
   getCachedMonetizationSnapshot,
   isPremiumPurchaseShellAvailable,
@@ -527,7 +528,7 @@ export default function SettingsScreen() {
         setPushRegistration(revoked);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to update notification preferences.";
+      const message = getUserFacingErrorMessage(error, "Unable to update notification preferences.");
       Alert.alert("Notifications", message);
     } finally {
       setNotificationSavingKey(null);
@@ -594,11 +595,12 @@ export default function SettingsScreen() {
       const { error } = await supabase.auth.signOut();
 
       if (error) {
+        const message = getUserFacingErrorMessage(error, "Unable to log out right now.");
         trackEvent("auth_sign_out_failed", {
-          reason: error.message,
+          reason: message,
           source: "settings",
         });
-        Alert.alert("Log Out", error.message);
+        Alert.alert("Log Out", message);
         return;
       }
 
@@ -607,7 +609,7 @@ export default function SettingsScreen() {
       });
       router.replace("/(auth)/login");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to log out right now.";
+      const message = getUserFacingErrorMessage(error, "Unable to log out right now.");
       trackEvent("auth_sign_out_failed", {
         reason: message,
         source: "settings",
@@ -657,7 +659,7 @@ export default function SettingsScreen() {
     } catch (error) {
       Alert.alert(
         "Profile Appearance",
-        error instanceof Error ? error.message : "Unable to choose a Profile image right now.",
+        getUserFacingErrorMessage(error, "Unable to choose a Profile image right now."),
       );
     }
   }, [myProfile?.profileAvatarFitMode, myProfile?.profileBackgroundFitMode, profileAppearanceBusy]);
@@ -679,7 +681,7 @@ export default function SettingsScreen() {
     } catch (error) {
       Alert.alert(
         "Profile Appearance",
-        error instanceof Error ? error.message : "Unable to update Profile appearance right now.",
+        getUserFacingErrorMessage(error, "Unable to update Profile appearance right now."),
       );
     } finally {
       setProfileAppearanceBusy(null);
@@ -711,7 +713,7 @@ export default function SettingsScreen() {
               } catch (error) {
                 Alert.alert(
                   "Profile Appearance",
-                  error instanceof Error ? error.message : "Unable to remove this Profile image right now.",
+                  getUserFacingErrorMessage(error, "Unable to remove this Profile image right now."),
                 );
               } finally {
                 setProfileAppearanceBusy(null);
@@ -735,7 +737,7 @@ export default function SettingsScreen() {
     } catch (error) {
       Alert.alert(
         "Profile Appearance",
-        error instanceof Error ? error.message : "Unable to update this image fit right now.",
+        getUserFacingErrorMessage(error, "Unable to update this image fit right now."),
       );
     } finally {
       setProfileAppearanceBusy(null);
@@ -764,7 +766,7 @@ export default function SettingsScreen() {
       setProfileVisibility(savedVisibility);
       setProfileVisibilityNotice(`Profile privacy set to ${getProfileVisibilityLabel(savedVisibility)}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to update profile privacy right now.";
+      const message = getUserFacingErrorMessage(error, "Unable to update profile privacy right now.");
       setProfileVisibilityNotice(message);
       Alert.alert("Profile Privacy", message);
     } finally {
@@ -793,8 +795,9 @@ export default function SettingsScreen() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) {
-        setPasswordNotice(error.message);
-        Alert.alert("Change Password", error.message);
+        const message = getUserFacingErrorMessage(error, "Unable to update your password right now.");
+        setPasswordNotice(message);
+        Alert.alert("Change Password", message);
         return;
       }
 

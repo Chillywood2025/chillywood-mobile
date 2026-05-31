@@ -52,7 +52,7 @@ assertIncludes(officialAccounts, "Rachi Help is opt-in.", "opt-in Rachi Help cop
 assertIncludes(userData, "profileAvatarUrl ?? normalizeTextValue(officialAccount.avatarUrl)", "official profile image reads backed avatar before fallback");
 
 assertIncludes(chillyCircle, "Official connection", "pinned official Chi'lly Circle section");
-assertIncludes(chillyCircle, "Your first Chi&apos;lly Circle connection", "first official Circle copy");
+assertIncludes(chillyCircle, "Your first Chi'lly Circle connection", "first official Circle copy");
 assertIncludes(chillyCircle, "Rachi does not read your private chats.", "Circle privacy copy");
 
 assertIncludes(migration, 'admin_create_official_rachi_post', "official post RPC");
@@ -97,7 +97,7 @@ assertIncludes(home, "Chi'llwood Originals", "Home Originals rail");
 assertIncludes(home, "Rachi Official Updates", "Home Rachi updates rail");
 assertIncludes(home, "rachiIdentityRow", "Home Rachi identity row");
 assertIncludes(home, "rachiOfficialAvatarUrl", "Home Rachi avatar or official fallback");
-assertIncludes(home, "Official Chi&apos;llwood", "Home Rachi official identity label");
+assertIncludes(home, "Official Chi'llwood", "Home Rachi official identity label");
 assertIncludes(home, "Public Rachi posts appear here after they are published.", "no fake Rachi posts copy");
 assertIncludes(creatorVideoCard, "isOfficialRachiInternalProofFixture", "Rachi public fixture display cleanup");
 assertIncludes(creatorVideoCard, "Official Chi'llwood Original from Rachi.", "Rachi public fixture production copy");
@@ -115,7 +115,7 @@ assertNotIncludes(publicCreatorVideoCardsFunction, "storage_object_key,", "publi
 
 assertIncludes(profile, "Rachi Help is opt-in", "Profile opt-in Rachi Help copy");
 assertIncludes(profile, "Published public-safe Rachi uploads", "Profile Rachi Originals copy");
-assertIncludes(channel, "Official Chi&apos;llwood", "Rachi Platform official badge");
+assertIncludes(channel, "Official Chi'llwood", "Rachi Platform official badge");
 
 for (const forbidden of [
   "Rachi is watching",

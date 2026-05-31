@@ -539,7 +539,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View testID="home-branded-hero" style={styles.homeHeroContent}>
-              <Text style={styles.homeHeroKicker}>CHI&apos;LLWOOD</Text>
+              <Text style={styles.homeHeroKicker}>CHI'LLWOOD</Text>
               <Text style={styles.homeHeroTitle} numberOfLines={2}>Stream the city</Text>
               <Text style={styles.homeHeroMeta} numberOfLines={2}>
                 Official updates, Originals, and live moments appear here when they are ready.
@@ -753,7 +753,7 @@ export default function HomeScreen() {
         <View style={styles.followingHeaderRow}>
           <View style={styles.followingHeaderCopy}>
             <Text style={styles.sectionTitle}>Rachi Official Updates</Text>
-            <Text style={styles.followingSubtitle}>Rachi shares official Chi&apos;llwood tips, announcements, and Originals notes.</Text>
+            <Text style={styles.followingSubtitle}>Rachi shares official Chi'llwood tips, announcements, and Originals notes.</Text>
           </View>
         </View>
 
@@ -783,7 +783,7 @@ export default function HomeScreen() {
                     <View style={styles.rachiNameRow}>
                       <Text style={styles.rachiName}>Rachi</Text>
                       <View style={styles.rachiOfficialBadge}>
-                        <Text style={styles.rachiOfficialBadgeText}>Official Chi&apos;llwood</Text>
+                        <Text style={styles.rachiOfficialBadgeText}>Official Chi'llwood</Text>
                       </View>
                     </View>
                     <Text style={styles.rachiUpdateMeta}>{formatAddedDate(post.createdAt).replace("Added", "Posted")}</Text>
@@ -817,7 +817,7 @@ export default function HomeScreen() {
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.errorTitle}>Home couldn&apos;t refresh</Text>
+          <Text style={styles.errorTitle}>Home couldn't refresh</Text>
           <Text style={styles.errorMsg}>{error}</Text>
 
           <Pressable style={styles.retryBtn} onPress={onRefresh}>

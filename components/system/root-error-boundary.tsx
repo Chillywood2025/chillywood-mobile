@@ -26,7 +26,7 @@ export class RootErrorBoundary extends React.Component<React.PropsWithChildren, 
       componentStack: errorInfo.componentStack,
     });
     trackEvent("fatal_boundary_hit", {
-      message: error.message,
+      errorName: error.name || "Error",
     });
   }
 
@@ -101,21 +101,21 @@ function RootBoundaryFallback({
   return (
     <View style={styles.outer}>
       <View style={styles.card}>
-        <Text style={styles.kicker}>RECOVERABLE APP ERROR</Text>
-        <Text style={styles.title}>Chi&apos;llywood hit a runtime issue.</Text>
+        <Text style={styles.kicker}>APP RECOVERY</Text>
+        <Text style={styles.title}>Chi'llywood needs a quick reset.</Text>
         <Text style={styles.body}>
-          Retry the app shell, or send this issue to support so the team can investigate with route context attached.
+          Try this screen again. If it keeps happening, send a report with the current route attached.
         </Text>
         <TouchableOpacity style={styles.button} activeOpacity={0.86} onPress={onRetry}>
-          <Text style={styles.buttonText}>Retry App Shell</Text>
+          <Text style={styles.buttonText}>Try Again</Text>
         </TouchableOpacity>
         {canSendFeedback ? (
           <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.82} onPress={() => setReportVisible(true)}>
-            <Text style={styles.secondaryButtonText}>Report This Crash</Text>
+            <Text style={styles.secondaryButtonText}>Send Report</Text>
           </TouchableOpacity>
         ) : (
           <Text style={styles.helperText}>
-            Sign in to send crash feedback from inside the app.
+            Sign in to send a report from inside the app.
           </Text>
         )}
       </View>
@@ -128,7 +128,7 @@ function RootBoundaryFallback({
         defaultFeedbackType="bug"
         defaultCategory="other"
         defaultSeverity="major"
-        defaultSummary={`Runtime issue: ${error.message}`}
+        defaultSummary={`App issue on ${pathname || "current screen"}`}
         onSubmit={onSubmitFeedback}
         onClose={() => setReportVisible(false)}
       />

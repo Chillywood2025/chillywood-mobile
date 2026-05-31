@@ -159,7 +159,7 @@ export default function Signup() {
             : "Create an account so you can join rooms, manage your Platform, and send in-app support feedback."}
         </Text>
         <View style={styles.ageGateCard}>
-          <Text style={styles.ageGateTitle}>Chi&apos;llywood is for users 18 and older.</Text>
+          <Text style={styles.ageGateTitle}>Chi'llywood is for users 18 and older.</Text>
           <Pressable
             style={styles.ageGateRow}
             onPress={() => setAgeConfirmed((current) => !current)}
@@ -174,7 +174,7 @@ export default function Signup() {
           </Pressable>
         </View>
         <Text style={styles.legalNotice}>
-          By creating an account, you agree to Chi&apos;llywood&apos;s{" "}
+          By creating an account, you agree to Chi'llywood's{" "}
           <Link href="/terms" style={styles.legalLink}>
             Terms of Service
           </Link>

@@ -280,7 +280,7 @@ export default function ChillyChatInboxScreen() {
 
   const listHeader = useMemo(() => (
     <View style={styles.header}>
-      <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
+      <Text style={styles.kicker}>CHI'LLY CHAT</Text>
       <Text style={styles.title}>Inbox</Text>
       <Text style={styles.body}>
         Direct threads, voice, and video live here.
@@ -461,9 +461,9 @@ export default function ChillyChatInboxScreen() {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Sign in to open Chi&apos;lly Chat</Text>
+          <Text style={styles.emptyTitle}>Sign in to open Chi'lly Chat</Text>
           <Text style={styles.emptyBody}>
-            Chi&apos;lly Chat inbox, direct threads, and official support threads only open on a signed-in Chi&apos;llywood identity.
+            Chi'lly Chat inbox, direct threads, and official support threads only open on a signed-in Chi'llywood identity.
           </Text>
           <TouchableOpacity
             style={[styles.quickActionButton, styles.quickActionAccentButton]}

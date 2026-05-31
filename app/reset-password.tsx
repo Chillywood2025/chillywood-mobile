@@ -313,7 +313,7 @@ export default function ResetPasswordScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
+          <Text style={styles.kicker}>CHI'LLYWOOD</Text>
           <Text style={styles.title}>Reset password</Text>
           <Text style={styles.subtitle}>{statusMessage}</Text>
 

@@ -105,6 +105,7 @@ import {
   type PlatformRoleMembership,
 } from "../_lib/moderation";
 import { LIVE_REPLAY_ACKNOWLEDGEMENT } from "../_lib/legalPolicies";
+import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import {
   createCreatorEvent,
   updateCreatorEvent,
@@ -2812,7 +2813,7 @@ export function ChannelStudioScreen() {
         : await createCreatorEvent(payload);
 
       if ("error" in result) {
-        setEventNotice(result.error.message);
+        setEventNotice(getUserFacingErrorMessage(result.error, "Unable to save creator event right now."));
         return;
       }
 

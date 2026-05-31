@@ -161,7 +161,7 @@ export default function Login() {
           bounces={false}
         >
           <View style={styles.card}>
-            <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
+            <Text style={styles.kicker}>CHI'LLYWOOD</Text>
             <Text style={styles.title}>
               {isClosedBetaEnvironment() ? "Closed Beta Sign In" : "Sign In"}
             </Text>

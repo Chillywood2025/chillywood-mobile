@@ -157,7 +157,7 @@ export default function ChillyCircleScreen() {
   const renderRachiOfficialConnection = () => (
     <View style={styles.sectionCard}>
       <Text style={styles.sectionTitle}>Official connection</Text>
-      <Text style={styles.sectionBody}>Rachi is your first Chi&apos;lly Circle connection for official Chi&apos;llwood updates, tips, and Originals.</Text>
+      <Text style={styles.sectionBody}>Rachi is your first Chi'lly Circle connection for official Chi'llwood updates, tips, and Originals.</Text>
       <View style={styles.personCard}>
         <TouchableOpacity
           style={styles.personMain}
@@ -169,7 +169,7 @@ export default function ChillyCircleScreen() {
           </View>
           <View style={styles.personCopy}>
             <Text style={styles.personName} numberOfLines={1}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
-            <Text style={styles.personMeta} numberOfLines={1}>Official Chi&apos;llwood · Your first Chi&apos;lly Circle connection</Text>
+            <Text style={styles.personMeta} numberOfLines={1}>Official Chi'llwood · Your first Chi'lly Circle connection</Text>
           </View>
           <View style={[styles.statusPill, styles.officialStatusPill]}>
             <Text style={[styles.statusPillText, styles.officialStatusPillText]}>Official</Text>

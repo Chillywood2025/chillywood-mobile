@@ -163,6 +163,9 @@ const serializeRedirectTarget = (pathname: string, params: Record<string, unknow
   const search = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
+    const normalizedKey = key.toLowerCase();
+    if (SENSITIVE_ROUTE_PARAM_NAMES.has(normalizedKey)) return;
+    if (normalizedKey.includes("token") || normalizedKey.includes("password") || normalizedKey.includes("secret")) return;
     if (value == null) return;
     if (Array.isArray(value)) {
       value.forEach((entry) => {

@@ -48,7 +48,7 @@ export function LegalPolicyViewer({ policy }: LegalPolicyViewerProps) {
         showsVerticalScrollIndicator={Platform.OS === "web"}
       >
         <View style={[styles.hero, dark ? styles.heroDark : styles.heroLight]}>
-          <Text style={[styles.eyebrow, dark ? styles.eyebrowDark : styles.eyebrowLight]}>Chi&apos;llwood Legal</Text>
+          <Text style={[styles.eyebrow, dark ? styles.eyebrowDark : styles.eyebrowLight]}>Chi'llwood Legal</Text>
           <Text style={[styles.title, dark ? styles.titleDark : styles.titleLight]}>{policy.title}</Text>
           <Text style={[styles.summary, dark ? styles.summaryDark : styles.summaryLight]}>{policy.summary}</Text>
           <View style={styles.metaGrid}>

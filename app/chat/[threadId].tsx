@@ -936,7 +936,7 @@ export default function ChillyChatThreadScreen() {
   if (!isSignedIn) {
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28 }]}>
-        <Text style={styles.stateText}>Sign in to open Chi&apos;lly Chat.</Text>
+        <Text style={styles.stateText}>Sign in to open Chi'lly Chat.</Text>
         <TouchableOpacity
           style={[styles.secondaryBtn, styles.signInBtn]}
           activeOpacity={0.85}
@@ -998,7 +998,7 @@ export default function ChillyChatThreadScreen() {
           )}
         </TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={styles.kicker}>CHI&apos;LLY CHAT</Text>
+          <Text style={styles.kicker}>CHI'LLY CHAT</Text>
           <Text style={styles.title}>{otherMemberDisplayName}</Text>
           {otherMemberTagline ? <Text style={styles.body}>{otherMemberTagline}</Text> : null}
           <View style={styles.headerMetaRow}>
@@ -1091,7 +1091,7 @@ export default function ChillyChatThreadScreen() {
           {!officialAccount && otherMember?.userId && friendStatusSummary ? (
             <View style={styles.friendshipCard}>
               <View style={styles.friendshipHeader}>
-                <Text style={styles.friendshipKicker}>CHI&apos;LLY CIRCLE</Text>
+                <Text style={styles.friendshipKicker}>CHI'LLY CIRCLE</Text>
                 <View style={styles.friendshipPill}>
                   <Text style={styles.friendshipPillText}>{friendStatusSummary.pill}</Text>
                 </View>
@@ -1258,7 +1258,7 @@ export default function ChillyChatThreadScreen() {
         <View style={styles.callBanner}>
           <Text style={styles.callBannerTitle}>{callTitle}</Text>
           <Text style={styles.callBannerBody}>
-            {otherMemberDisplayName} can join from this same thread. Open Chi&apos;lly Chat to join.
+            {otherMemberDisplayName} can join from this same thread. Open Chi'lly Chat to join.
           </Text>
         </View>
       ) : null}

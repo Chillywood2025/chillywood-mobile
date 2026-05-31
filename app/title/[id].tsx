@@ -585,7 +585,7 @@ export default function TitleDetails() {
     return (
       <View style={styles.screenCenter}>
         <ActivityIndicator color={ACCENT} />
-        <Text style={styles.loadingText}>Loading Chi&apos;llywood title…</Text>
+        <Text style={styles.loadingText}>Loading Chi'llywood title…</Text>
       </View>
     );
   }
@@ -594,7 +594,7 @@ export default function TitleDetails() {
     return (
       <View style={styles.screenCenter}>
         <Text style={styles.h1}>Title unavailable</Text>
-        <Text style={styles.stateText}>This title isn&apos;t available right now.</Text>
+        <Text style={styles.stateText}>This title isn't available right now.</Text>
         <Pressable onPress={() => router.back()} style={styles.btnGhost}>
           <Text style={styles.btnText}>Go back</Text>
         </Pressable>

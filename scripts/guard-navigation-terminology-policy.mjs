@@ -140,7 +140,7 @@ assertNotIncludes(home, "discoveryPulse", "Home dashboard first-card styles");
 assertNotIncludes(home, ["Your night", " at a glance"].join(""), "Home old dashboard first-card copy");
 assertNotIncludes(home, 'testID="home-continue-watching-section"', "Home compact Continue Watching rail");
 assertNotIncludes(home, 'testID="home-continue-watching-card"', "Home compact Continue Watching rail card");
-assertNotIncludes(home, "Loading tonight&apos;s picks", "Home title-picks loading copy");
+assertNotIncludes(home, "Loading tonight's picks", "Home title-picks loading copy");
 assertNotIncludes(home, "readMyListIds", "Home saved/favorites data source");
 assertIncludes(player, "type PlayerSurfaceMode", "Player surface mode type");
 assertIncludes(player, "resolvePlayerSurfaceMode", "Player surface mode resolver");

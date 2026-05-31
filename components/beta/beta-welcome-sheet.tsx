@@ -19,7 +19,7 @@ export function BetaWelcomeSheet({
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Text style={styles.kicker}>WELCOME TO THE CLOSED BETA</Text>
-          <Text style={styles.title}>Help tighten the most important Chi&apos;llywood flows.</Text>
+          <Text style={styles.title}>Help tighten the most important Chi'llywood flows.</Text>
           <Text style={styles.body}>
             Focus on sign-in, title playback, watch-party create/join, communication room entry, reconnect behavior, and feedback capture. This beta is for learning and fixing, not public polish.
           </Text>

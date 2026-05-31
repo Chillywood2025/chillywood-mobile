@@ -22,6 +22,7 @@ import {
   validateDmcaAttachmentFile,
 } from "../_lib/dmca";
 import { LEGAL_SUPPORT_EMAIL } from "../_lib/legalPolicies";
+import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import { LegalMeta, LegalPageShell, LegalParagraph, LegalSection } from "../components/legal/legal-page-shell";
 
 const LAST_UPDATED = "May 22, 2026";
@@ -124,7 +125,7 @@ export default function CopyrightReportPage() {
       });
       setAttachments((current) => [...current, ...nextFiles].slice(0, 6));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to attach that evidence file.";
+      const message = getUserFacingErrorMessage(error, "Unable to attach that evidence file.");
       Alert.alert("Attachments", message);
     }
   };
@@ -181,7 +182,7 @@ export default function CopyrightReportPage() {
         `Case ${result.caseNumber} has been recorded for review.${uploadedCount ? ` ${uploadedCount} evidence file${uploadedCount === 1 ? "" : "s"} uploaded and queued for malware scanning.` : ""}`,
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to submit this copyright report right now.";
+      const message = getUserFacingErrorMessage(error, "Unable to submit this copyright report right now.");
       Alert.alert("Copyright report not submitted", message);
     } finally {
       setBusy(false);

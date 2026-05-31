@@ -480,7 +480,7 @@ export default function PublicChannelScreen() {
               )}
             </View>
             <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Platform"}</Text>
-            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>Official Chi&apos;llwood</Text> : null}
+            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>Official Chi'llwood</Text> : null}
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
             {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}

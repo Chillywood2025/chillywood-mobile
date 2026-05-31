@@ -1,8 +1,34 @@
 # NEXT TASK
 
-## Recommended Lane: Profile Media Viewer And Removal Runtime Closeout
+## Recommended Lane: Whole App One-Device Polish Route Proof
 
-Latest repo-side lane before the next proof lane: Platform Studio Content / Clip Studio featured-video polish. The old direct Content upload form and `Classic Upload` entry are removed from the normal Platform Studio Content surface. Clip Studio is the creator-video upload path. Content now shows `Add Video` / `Open Clip Studio`, Clip Studio video selection says `Choose Full Video`, and the current long-form product target is `2 hr 30 min` while the existing file-size upload cap remains the backed enforcement gate. Owner creator-video cards no longer show technical VOD ladder/pixel/free/Premium quality copy. Public videos can be selected as the public Platform spotlight with `Set Featured` and cleared with `Remove Featured`, backed by `platform_brand_profiles.spotlight_video_id` and the public-safe Platform branding resolver. Public Platform prefers the selected `Featured` video and keeps Latest Uploads chronological. Clip Studio cover controls now show `Choose Cover Image` when empty and `Change Cover` / `Remove Cover` when present.
+Latest repo-side lane before the next proof lane: Whole App Safety / Flow / State / Critical UX Polish Pass. This was a safe production-polish pass, not a redesign. It adds `_lib/userFacingErrors.ts`, wires production-safe error copy into Settings, Profile, Support, Copyright Report, and Platform Studio event-save paths, removes raw exception text from the root error-boundary feedback summary/analytics payload, strips token/password/secret-style params from auth `redirectTo`, and replaces React Native-visible `&apos;` entities across app UI copy. New guard: `npm run guard:critical-ux-polish-policy`. Closeout doc: `docs/WHOLE_APP_PRODUCTION_POLISH_PASS.md`.
+
+Validation passed:
+
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:critical-ux-polish-policy`
+- `npm run guard:navigation-terminology-policy`
+- `npm run guard:rachi-official-policy`
+- `npm run guard:profile-production-policy`
+- `npm run guard:platform-brand-studio-policy`
+- `npm run guard:clip-studio-policy`
+
+Next proof should verify on Android:
+
+- Auth/login/signup copy shows no HTML entities.
+- Home, Explore, Library, Player, Chat, Profile, Platform, Platform Studio, Settings, Support/legal, Admin, and Rachi surfaces still load.
+- Root error boundary recovery copy is production-facing if a safe test boundary can be triggered.
+- Settings/Profile/Support/Copyright failure states show friendly copy without raw RLS/storage/auth/backend text.
+- Owner/admin/moderator surfaces still hide normal-user-restricted actions and do not expose raw debug/proof copy.
+- Permission-denied states for picker/camera/mic/notifications remain clean when testable.
+
+Keep screenshots outside the repo.
+
+## Previous Recommended Lane: Profile Media Viewer And Removal Runtime Closeout
+
+Latest repo-side Platform Content lane: Platform Studio Content / Clip Studio featured-video polish. The old direct Content upload form and `Classic Upload` entry are removed from the normal Platform Studio Content surface. Clip Studio is the creator-video upload path. Content now shows `Add Video` / `Open Clip Studio`, Clip Studio video selection says `Choose Full Video`, and the current long-form product target is `2 hr 30 min` while the existing file-size upload cap remains the backed enforcement gate. Owner creator-video cards no longer show technical VOD ladder/pixel/free/Premium quality copy. Public videos can be selected as the public Platform spotlight with `Set Featured` and cleared with `Remove Featured`, backed by `platform_brand_profiles.spotlight_video_id` and the public-safe Platform branding resolver. Public Platform prefers the selected `Featured` video and keeps Latest Uploads chronological. Clip Studio cover controls now show `Choose Cover Image` when empty and `Change Cover` / `Remove Cover` when present.
 
 Android proof path for the Platform Content lane: `/tmp/chillywood-platform-content-clip-featured-proof-20260531/`. The fresh release APK installed on `R5CR120QCBF`; screenshots/XML capture Content, owner card actions, Clip Studio full-video controls, Set Featured success, and public Platform loading the Featured surface.
 

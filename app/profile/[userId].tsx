@@ -106,6 +106,7 @@ import {
   type SocialAttachmentFile,
 } from "../../_lib/socialAttachments";
 import { pickSocialAttachmentFile } from "../../_lib/socialAttachmentPicker";
+import { getUserFacingErrorMessage } from "../../_lib/userFacingErrors";
 import {
   pickProfileMediaImage,
   removeProfileMedia,
@@ -990,7 +991,7 @@ export default function ProfileScreen() {
       setProfilePostAttachmentFile(file);
     } catch (error) {
       setProfilePostAttachmentFile(null);
-      setProfilePostsNotice(error instanceof Error ? error.message : "Unable to attach that file right now.");
+      setProfilePostsNotice(getUserFacingErrorMessage(error, "Unable to attach that file right now."));
     }
   };
 
@@ -1010,7 +1011,7 @@ export default function ProfileScreen() {
       updateProfilePostUiState(post.id, (current) => ({
         ...current,
         commentAttachmentFile: null,
-        commentNotice: error instanceof Error ? error.message : "Unable to attach that file right now.",
+        commentNotice: getUserFacingErrorMessage(error, "Unable to attach that file right now."),
       }));
     }
   };
@@ -1720,7 +1721,7 @@ export default function ProfileScreen() {
     } catch (error) {
       Alert.alert(
         "Profile Appearance",
-        error instanceof Error ? error.message : "Unable to choose a Profile image right now.",
+        getUserFacingErrorMessage(error, "Unable to choose a Profile image right now."),
       );
     }
   };
@@ -1738,7 +1739,7 @@ export default function ProfileScreen() {
     } catch (error) {
       Alert.alert(
         "Profile Appearance",
-        error instanceof Error ? error.message : "Unable to update Profile appearance right now.",
+        getUserFacingErrorMessage(error, "Unable to update Profile appearance right now."),
       );
     } finally {
       setProfileAppearanceBusy(null);
@@ -1774,7 +1775,7 @@ export default function ProfileScreen() {
               } catch (error) {
                 Alert.alert(
                   "Profile Appearance",
-                  error instanceof Error ? error.message : "Unable to remove this Profile image right now.",
+                  getUserFacingErrorMessage(error, "Unable to remove this Profile image right now."),
                 );
               } finally {
                 setProfileAppearanceBusy(null);
@@ -1797,7 +1798,7 @@ export default function ProfileScreen() {
     } catch (error) {
       Alert.alert(
         "Profile Appearance",
-        error instanceof Error ? error.message : "Unable to update this image fit right now.",
+        getUserFacingErrorMessage(error, "Unable to update this image fit right now."),
       );
     } finally {
       setProfileAppearanceBusy(null);
@@ -1876,7 +1877,7 @@ export default function ProfileScreen() {
               } catch (error) {
                 Alert.alert(
                   "Block User",
-                  error instanceof Error ? error.message : "Unable to block this user right now.",
+                  getUserFacingErrorMessage(error, "Unable to block this user right now."),
                 );
               } finally {
                 setProfileBlockBusy(false);
@@ -1888,7 +1889,7 @@ export default function ProfileScreen() {
     );
   };
   const normalizeChillyCircleActionError = (error: unknown) => {
-    const message = error instanceof Error ? error.message : "Unable to update Chi'lly Circle right now.";
+    const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Circle right now.");
     return message
       .replace(/friendship/gi, "Chi'lly Circle")
       .replace(/friends/gi, "Chi'lly Circle")
