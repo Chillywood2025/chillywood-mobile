@@ -1,6 +1,17 @@
 # Platform Brand Studio
 
-Updated: 2026-05-30
+Updated: 2026-05-31
+
+## May 31, 2026 Public Preview Clarification
+
+The public Platform still renders only Brand Studio assets that are published, moderation-safe, scan-safe, and not deleted. A saved asset marked `Needs review` is not supposed to appear on the visitor-facing Platform yet.
+
+To make that product boundary clear, Platform Studio now separates the two preview actions:
+
+- `Preview Platform` opens the reviewed public view that visitors see. Draft and pending-review assets stay hidden.
+- `Preview Brand Draft` opens an owner-only draft preview route with `preview=brand-draft`. It can show saved Brand Studio media before review to the signed-in owner, but it hides normal owner controls and never changes public viewer access.
+
+Draft preview is for visual checking only. It does not approve media, publish draft creator videos, bypass malware scan blocks, weaken the public RPC, or expose Brand Studio assets to non-owners.
 
 ## May 30, 2026 Modern Asset Manager Upload Fix
 

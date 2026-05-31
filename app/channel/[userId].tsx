@@ -32,7 +32,9 @@ import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/l
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
+  readPlatformBrandStudio,
   readPublicPlatformBranding,
+  type PlatformBrandAsset,
   type PlatformBrandFitMode,
   type PlatformBrandingBundle,
 } from "../../_lib/platformBranding";
@@ -126,10 +128,12 @@ export default function PublicChannelScreen() {
   const params = useLocalSearchParams<{ userId?: string | string[]; preview?: string | string[] }>();
   const routeUserId = normalizeRouteParam(params.userId);
   const publicPreviewMode = normalizeRouteParam(params.preview) === "public";
+  const brandDraftPreviewMode = normalizeRouteParam(params.preview) === "brand-draft";
   const { isLoading: sessionLoading, user } = useSession();
   const viewerUserId = String(user?.id ?? "").trim();
   const isOwner = !!routeUserId && !!viewerUserId && routeUserId === viewerUserId;
-  const showOwnerControls = isOwner && !publicPreviewMode;
+  const showDraftBranding = isOwner && brandDraftPreviewMode;
+  const showOwnerControls = isOwner && !publicPreviewMode && !brandDraftPreviewMode;
 
   const [loadState, setLoadState] = useState<ChannelLoadState>("loading");
   const [channel, setChannel] = useState<UserChannelProfile | null>(null);
@@ -192,11 +196,14 @@ export default function PublicChannelScreen() {
         return;
       }
 
+      const brandPromise = showDraftBranding
+        ? readPlatformBrandStudio(routeUserId).catch(() => null)
+        : readPublicPlatformBranding(routeUserId).catch(() => null);
       const [publicVideos, publicEvents, nextCommerceSurface, nextPlatformBranding] = await Promise.all([
         readCreatorVideos(routeUserId, { includeDrafts: false, limit: 24 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
-        readPublicPlatformBranding(routeUserId).catch(() => null),
+        brandPromise,
       ]);
 
       if (!active) return;
@@ -213,7 +220,7 @@ export default function PublicChannelScreen() {
     return () => {
       active = false;
     };
-  }, [routeUserId, sessionLoading]);
+  }, [routeUserId, sessionLoading, showDraftBranding]);
 
   const featuredVideo = videos[0] ?? null;
   const liveNowEvents = useMemo(() => events.filter((event) => event.isLiveNow), [events]);
@@ -242,10 +249,23 @@ export default function PublicChannelScreen() {
     }
     return cards;
   }, [featuredVideo, followerCount, liveNowEvents.length, upcomingEvents.length, videos.length]);
-  const brandHeroSource = platformBranding?.heroImage?.signedUrl || platformBranding?.heroPoster?.signedUrl || "";
-  const brandBackgroundSource = platformBranding?.backgroundImage?.signedUrl || "";
-  const brandAvatarSource = platformBranding?.avatar?.signedUrl || channel?.avatarUrl || "";
-  const brandLogoSource = platformBranding?.logo?.signedUrl || "";
+  const canShowDraftAsset = (asset?: PlatformBrandAsset | null) => {
+    if (!asset) return null;
+    if (!showDraftBranding) return asset;
+    if (asset.deletedAt) return null;
+    if (["hidden", "removed", "rejected"].includes(asset.moderationStatus)) return null;
+    if (["malware_detected", "scan_failed", "quarantined"].includes(asset.scanStatus)) return null;
+    return asset;
+  };
+  const visibleBrandHeroImage = canShowDraftAsset(platformBranding?.heroImage);
+  const visibleBrandHeroPoster = canShowDraftAsset(platformBranding?.heroPoster);
+  const visibleBrandBackground = canShowDraftAsset(platformBranding?.backgroundImage);
+  const visibleBrandAvatar = canShowDraftAsset(platformBranding?.avatar);
+  const visibleBrandLogo = canShowDraftAsset(platformBranding?.logo);
+  const brandHeroSource = visibleBrandHeroImage?.signedUrl || visibleBrandHeroPoster?.signedUrl || "";
+  const brandBackgroundSource = visibleBrandBackground?.signedUrl || "";
+  const brandAvatarSource = visibleBrandAvatar?.signedUrl || channel?.avatarUrl || "";
+  const brandLogoSource = visibleBrandLogo?.signedUrl || "";
   const heroResizeMode = resolveBrandResizeMode(platformBranding?.profile.heroFitMode);
   const backgroundResizeMode = resolveBrandResizeMode(platformBranding?.profile.backgroundFitMode);
   const heroOverlayColor = buildBrandOverlayColor(platformBranding?.profile.overlayStrength);
@@ -451,6 +471,7 @@ export default function PublicChannelScreen() {
             </View>
             <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Platform"}</Text>
             {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>Official Chi&apos;llwood</Text> : null}
+            {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
             {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
@@ -983,6 +1004,10 @@ const styles = StyleSheet.create({
   officialRolePill: {
     color: "#FFEAF0",
     backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  draftPreviewPill: {
+    color: "#FFE9B7",
+    backgroundColor: "rgba(242,194,91,0.18)",
   },
   statsRow: {
     flexDirection: "row",

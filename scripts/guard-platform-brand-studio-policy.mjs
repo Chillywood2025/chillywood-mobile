@@ -78,6 +78,11 @@ assertIncludes(channelSettings, `title: "Adjust Background"`, "background post-s
 assertIncludes(channelSettings, `thumbnailAsset: platformBranding?.heroImage`, "hero collapsed thumbnail");
 assertIncludes(channelSettings, `These appear on your public Platform, separate from your Profile photo.`, "Profile/Platform media separation copy");
 assertIncludes(channelSettings, `formatPlatformBrandScanStatus`, "Brand Studio scan status readout");
+assertIncludes(channelSettings, `Preview Brand Draft`, "owner-only Brand Studio draft preview action");
+assertIncludes(channelSettings, `preview: "brand-draft"`, "Brand Studio draft preview route");
+assertIncludes(publicChannel, `brandDraftPreviewMode`, "public Platform owner draft preview mode");
+assertIncludes(publicChannel, `showDraftBranding = isOwner && brandDraftPreviewMode`, "draft preview owner guard");
+assertIncludes(publicChannel, `readPlatformBrandStudio(routeUserId)`, "owner draft preview Brand Studio reader");
 assertIncludes(platformBranding, `preparePlatformBrandUploadUri`, "Android content URI staging");
 assertIncludes(platformBranding, `FileSystem.uploadAsync`, "Brand Studio robust Android upload");
 assertIncludes(platformBranding, `assertPlatformBrandUploadReadable`, "Brand Studio upload read-back verification");

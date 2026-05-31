@@ -94,6 +94,10 @@ assertIncludes(profileMedia, `PROFILE_MEDIA_BUCKET = "profile-media"`, "Profile 
 assertIncludes(profileMedia, `ImagePicker.launchImageLibraryAsync`, "Profile media phone gallery picker");
 assertIncludes(profileMedia, `allowsEditing: true`, "Profile media crop/edit support");
 assertIncludes(profileMedia, `defaultTab: "photos"`, "Profile media gallery tab");
+assertIncludes(profileMedia, `legacy: false`, "Profile media modern photo-library picker");
+assertIncludes(profileMedia, `prepareProfileMediaUploadUri`, "Profile media Android content URI staging");
+assertIncludes(profileMedia, `FileSystem.uploadAsync`, "Profile media robust Android upload");
+assertIncludes(profileMedia, `assertProfileMediaUploadReadable`, "Profile media upload read-back verification");
 assertIncludes(profileMedia, `PROFILE_MEDIA_ALLOWED_MIME_TYPES`, "Profile media MIME validation");
 assertIncludes(profileMedia, `deleteOwnedProfileMediaObject`, "Profile media remove cleanup");
 assertIncludes(profileMedia, `profile_avatar_media_status: "active"`, "Profile avatar immediate publish status");

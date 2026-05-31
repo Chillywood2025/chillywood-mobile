@@ -15,11 +15,12 @@ import {
   type ProfileMediaStatus,
   type UserProfile,
 } from "./userData";
-import { supabase } from "./supabase";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "./supabase";
 
 export const PROFILE_MEDIA_BUCKET = "profile-media";
 export const PROFILE_AVATAR_MAX_BYTES = 10 * 1024 * 1024;
 export const PROFILE_BACKGROUND_MAX_BYTES = 20 * 1024 * 1024;
+const PROFILE_MEDIA_UPLOAD_TIMEOUT_MS = 60000;
 
 export type ProfileMediaKind = "avatar" | "background";
 
@@ -72,6 +73,16 @@ const extensionFromMimeType = (mimeType: string) => {
   return "jpg";
 };
 
+const encodeStoragePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
+
+const getFileExtension = (file: ProfileMediaImageFile, mimeType: string) => {
+  const name = toText(file.name).toLowerCase();
+  const extension = name.includes(".") ? name.split(".").pop()?.replace(/[^a-z0-9]/g, "") ?? "" : "";
+  if (extension === "jpeg") return "jpg";
+  if (extension === "jpg" || extension === "png" || extension === "webp") return extension;
+  return extensionFromMimeType(mimeType);
+};
+
 const getFileSize = async (file: ProfileMediaImageFile) => {
   const explicit = Number(file.size);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
@@ -105,6 +116,13 @@ const getSignedInUserId = async () => {
   const userId = toText(data.session?.user?.id);
   if (error || !userId) throw new Error("Sign in before changing Profile appearance.");
   return userId;
+};
+
+const getSignedInAccessToken = async () => {
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = toText(data.session?.access_token);
+  if (error || !accessToken) throw new Error("Sign in before changing Profile appearance.");
+  return accessToken;
 };
 
 const loadImagePicker = async () => {
@@ -154,6 +172,110 @@ const shouldCleanupProfileMediaObject = (status?: ProfileMediaStatus | null) => 
   return normalized === "active" || normalized === "user_removed";
 };
 
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+async function prepareProfileMediaUploadUri(
+  file: ProfileMediaImageFile,
+  kind: ProfileMediaKind,
+  mimeType: string,
+) {
+  const sourceUri = toText(file.uri);
+  if (!sourceUri) throw new Error(`Choose a ${kind === "avatar" ? "photo" : "background"} before saving.`);
+
+  if (!sourceUri.startsWith("content://") || !FileSystem.cacheDirectory) {
+    return { uri: sourceUri, cleanup: async () => undefined };
+  }
+
+  const cacheUri = `${FileSystem.cacheDirectory}profile-media-${kind}-${createClientId()}.${getFileExtension(file, mimeType)}`;
+  await withTimeout(
+    FileSystem.copyAsync({ from: sourceUri, to: cacheUri }),
+    20000,
+    "Profile image took too long to prepare. Try again.",
+  );
+
+  return {
+    uri: cacheUri,
+    cleanup: async () => {
+      await FileSystem.deleteAsync(cacheUri, { idempotent: true }).catch(() => undefined);
+    },
+  };
+}
+
+async function getPreparedProfileMediaFileSize(uri: string, fallback?: number | null) {
+  const parsed = Number(fallback);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  const info = await FileSystem.getInfoAsync(uri).catch(() => null);
+  const size = Number(info && "size" in info ? info.size : 0);
+  return Number.isFinite(size) && size > 0 ? size : 0;
+}
+
+async function uploadProfileMediaFileToStorage(input: {
+  objectKey: string;
+  uri: string;
+  mimeType: string;
+}) {
+  const accessToken = await getSignedInAccessToken();
+  const uploadUrl = `${SUPABASE_URL.replace(/\/+$/g, "")}/storage/v1/object/${PROFILE_MEDIA_BUCKET}/${encodeStoragePath(input.objectKey)}`;
+
+  try {
+    const result = await withTimeout(
+      FileSystem.uploadAsync(uploadUrl, input.uri, {
+        httpMethod: "POST",
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          apikey: SUPABASE_ANON_KEY,
+          "Content-Type": input.mimeType,
+          "x-upsert": "false",
+        },
+      }),
+      PROFILE_MEDIA_UPLOAD_TIMEOUT_MS,
+      "Profile image upload took too long. Try again.",
+    );
+    if (result.status >= 200 && result.status < 300) return;
+  } catch {
+    // Fall back to the SDK path below; some native builds handle Expo File bodies better.
+  }
+
+  const uploadBody = new File(input.uri);
+  const { error } = await supabase.storage
+    .from(PROFILE_MEDIA_BUCKET)
+    .upload(input.objectKey, uploadBody as unknown as Blob, {
+      contentType: input.mimeType,
+      upsert: false,
+    });
+  if (error) throw error;
+}
+
+async function assertProfileMediaUploadReadable(objectKey: string, expectedSize: number) {
+  if (expectedSize <= 0) return;
+  const { data, error } = await supabase.storage
+    .from(PROFILE_MEDIA_BUCKET)
+    .createSignedUrl(objectKey, 60);
+  if (error || !data?.signedUrl) throw new Error("Profile image could not be verified after upload.");
+
+  const response = await withTimeout(
+    fetch(data.signedUrl, { headers: { Range: "bytes=0-0" } }),
+    20000,
+    "Profile image verification took too long. Try again.",
+  );
+  if (!response.ok) throw new Error("Profile image could not be verified after upload.");
+  const body = await response.arrayBuffer();
+  if (body.byteLength <= 0) throw new Error("Profile image could not be verified after upload.");
+}
+
 async function updateProfileAppearance(
   userId: string,
   existingProfile: UserProfile,
@@ -187,11 +309,13 @@ export async function pickProfileMediaImage(kind: ProfileMediaKind): Promise<Pro
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
     allowsEditing: true,
-    aspect: kind === "avatar" ? [1, 1] : [16, 9],
+    aspect: kind === "avatar" ? [1, 1] : [4, 1],
+    shape: kind === "avatar" ? "oval" : "rectangle",
     quality: 0.92,
     exif: false,
     base64: false,
     defaultTab: "photos",
+    legacy: false,
   });
 
   if (result.canceled) return null;
@@ -203,19 +327,25 @@ export async function pickProfileMediaImage(kind: ProfileMediaKind): Promise<Pro
 export async function uploadProfileMedia(kind: ProfileMediaKind, file: ProfileMediaImageFile): Promise<UserProfile> {
   const userId = await getSignedInUserId();
   const existingProfile = await readUserProfile();
-  const { uri, mimeType } = await validateProfileMediaFile(kind, file);
+  const { uri, mimeType, size } = await validateProfileMediaFile(kind, file);
   const objectKey = buildProfileMediaObjectKey(userId, kind, mimeType);
-  const uploadBody = new File(uri);
+  const prepared = await prepareProfileMediaUploadUri({ ...file, uri }, kind, mimeType);
 
-  const { error: uploadError } = await supabase.storage
-    .from(PROFILE_MEDIA_BUCKET)
-    .upload(objectKey, uploadBody as unknown as Blob, {
-      contentType: mimeType,
-      upsert: false,
+  try {
+    const preparedSize = await getPreparedProfileMediaFileSize(prepared.uri, size);
+    await uploadProfileMediaFileToStorage({
+      objectKey,
+      uri: prepared.uri,
+      mimeType,
     });
-
-  if (uploadError) {
-    throw new Error(uploadError.message || `Unable to upload this ${kind === "avatar" ? "photo" : "background"} right now.`);
+    await assertProfileMediaUploadReadable(objectKey, preparedSize);
+  } catch (error) {
+    await supabase.storage.from(PROFILE_MEDIA_BUCKET).remove([objectKey]).catch(() => undefined);
+    throw new Error(error instanceof Error && error.message
+      ? error.message
+      : `Unable to upload this ${kind === "avatar" ? "photo" : "background"} right now.`);
+  } finally {
+    await prepared.cleanup();
   }
 
   const publicUrl = toText(supabase.storage.from(PROFILE_MEDIA_BUCKET).getPublicUrl(objectKey).data.publicUrl);

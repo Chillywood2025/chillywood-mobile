@@ -2038,7 +2038,7 @@ export function ChannelStudioScreen() {
       const savedProfile = await publishPlatformBrandProfile(ownerUserId, draft);
       setBrandDraft(savedProfile);
       await loadPlatformBranding();
-      setBrandNotice("Brand Studio published. Assets still waiting for review stay off the public Platform.");
+      setBrandNotice("Brand Studio saved. Public Platform updates after review; draft preview shows your pending look.");
     } catch {
       setBrandNotice("Unable to publish Brand Studio changes right now.");
     } finally {
@@ -4312,9 +4312,21 @@ export function ChannelStudioScreen() {
         }}
       >
         <Text style={styles.studioActionButtonText}>Preview Platform</Text>
-        <Text style={styles.studioActionButtonCopy}>Open public platform</Text>
+        <Text style={styles.studioActionButtonCopy}>Reviewed public view</Text>
       </TouchableOpacity>
     );
+  };
+
+  const openDraftBrandPreview = () => {
+    const previewUserId = String(user?.id ?? "").trim();
+    if (!previewUserId) {
+      showStudioUnavailable("Draft preview unavailable", "Sign in with a profile before previewing Brand Studio changes.");
+      return;
+    }
+    router.push({
+      pathname: "/channel/[userId]",
+      params: { userId: previewUserId, preview: "brand-draft" },
+    });
   };
 
   const renderStudioHeader = () => (
@@ -5177,6 +5189,13 @@ export function ChannelStudioScreen() {
                 },
               })}
               {renderStudioActionRow({
+                title: "Preview Brand Draft",
+                body: "Owner-only preview with saved Brand Studio media before review.",
+                value: "Draft",
+                tone: brandHasPendingReview ? "warning" : "default",
+                onPress: openDraftBrandPreview,
+              })}
+              {renderStudioActionRow({
                 title: "Profile settings",
                 body: "Profile settings stay separate from Platform settings.",
                 value: "Settings",
@@ -5653,6 +5672,13 @@ export function ChannelStudioScreen() {
                     }
                     router.push({ pathname: "/channel/[userId]", params: { userId: previewUserId, preview: "public" } });
                   },
+                })}
+                {renderStudioActionRow({
+                  title: "Preview Brand Draft",
+                  body: "Owner-only view for saved Brand Studio media before review.",
+                  value: "Draft",
+                  tone: brandHasPendingReview ? "warning" : "default",
+                  onPress: openDraftBrandPreview,
                 })}
                 {renderStudioActionRow({
                   title: "Save Draft",

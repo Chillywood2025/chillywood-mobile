@@ -1700,6 +1700,8 @@ export default function ProfileScreen() {
     }
     if (profileAppearanceBusy) return;
 
+    if (kind === "avatar") setProfilePhotoSheetVisible(false);
+    if (kind === "background") setProfileBackgroundSheetVisible(false);
     setProfileAppearanceBusy(kind);
     try {
       const file = await pickProfileMediaImage(kind);
@@ -1724,6 +1726,8 @@ export default function ProfileScreen() {
     const imageUrl = kind === "avatar" ? visibleProfileAvatarUrl : visibleProfileBackgroundUrl;
     if (!imageUrl || profileAppearanceBusy) return;
 
+    if (kind === "avatar") setProfilePhotoSheetVisible(false);
+    if (kind === "background") setProfileBackgroundSheetVisible(false);
     Alert.alert(
       kind === "avatar" ? "Remove Profile photo?" : "Remove Profile background?",
       kind === "avatar"

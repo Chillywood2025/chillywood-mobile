@@ -1,6 +1,21 @@
 # NEXT TASK
 
-## Recommended Lane: Owner Play Console Submission And Play-Signed Release AAB
+## Recommended Lane: Current Android Runtime Proof For Profile Media And Brand Draft Preview
+
+Latest repo-side lane before the next proof lane: Profile Media Reliability and Brand Draft Preview Fix. Brand Studio pending-review media still does not render on the public Platform; that is intentional. The new owner-only `Preview Brand Draft` route shows saved Brand Studio visuals before review without exposing owner controls or draft creator content to public viewers. Normal `Preview Platform` remains the reviewed public view. Profile Photo/Profile Background upload now uses Android-safe content-URI staging, Supabase Storage REST upload with SDK fallback, signed read-back verification, native photo-library picker with `legacy: false`, oval square avatar crop, and wide 4:1 background crop. Profile and Settings close their bottom sheets before native picker/remove flows.
+
+Next proof should install the current build and verify:
+
+- Brand Studio `Preview Platform` shows reviewed public assets only.
+- Brand Studio `Preview Brand Draft` shows owner-only saved draft/pending visuals.
+- A non-owner/signed-out public Platform cannot use or see draft preview assets.
+- Settings/Profile Appearance can choose a safe app-owned image for Profile Photo, save it, read back active status, show it on Profile/Settings, remove it, and show fallback.
+- Profile Background can choose a safe app-owned image, save it, read back active status, render a readable wide banner, remove it, and show fallback.
+- Viewer/signed-out users cannot edit Profile media.
+
+Do not use private gallery photos. Use app-owned/safe proof assets only, and keep screenshots outside the repo.
+
+## Previous Recommended Lane: Owner Play Console Submission And Play-Signed Release AAB
 
 Latest repo-side lane closed before this external Play lane: Brand Studio Modern Asset Manager Upload Fix. Brand Studio remains Platform branding only; Profile media remains in Profile Appearance. Brand Studio upload root cause was brittle Android document-picker URI handling plus no byte read-back. The fix stages Android content URIs, uploads through Supabase Storage REST with SDK fallback, verifies read-back, and then creates the draft asset row. The Brand tab is now a compact asset manager with collapsible Hero Media, Background, Avatar and Logo, Theme, Scene Presets, and Review and Publishing; fit/overlay/blur/remove controls show only after media exists. Draft/pending/rejected/unsafe media stays off public Platform through existing publish/moderation/scan gates.
 

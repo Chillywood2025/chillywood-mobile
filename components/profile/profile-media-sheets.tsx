@@ -467,6 +467,7 @@ export function ProfileImagePreviewSheet({
   fitMode = "fill",
   onClose,
 }: ProfileImagePreviewSheetProps) {
+  const backgroundPreview = title.toLowerCase().includes("background");
   return (
     <Modal
       visible={visible}
@@ -480,7 +481,7 @@ export function ProfileImagePreviewSheet({
           <View style={styles.handle} />
           <Text style={styles.kicker}>PROFILE PREVIEW</Text>
           <Text style={styles.title}>{title}</Text>
-          <View style={styles.largePreview}>
+          <View style={[styles.largePreview, backgroundPreview && styles.largePreviewWide]}>
             {imageUrl ? (
               <Image
                 source={{ uri: imageUrl }}
@@ -606,8 +607,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   backgroundPreview: {
-    width: 112,
-    height: 66,
+    width: 126,
+    height: 48,
     borderRadius: 14,
     overflow: "hidden",
     alignItems: "center",
@@ -764,5 +765,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
+  },
+  largePreviewWide: {
+    aspectRatio: 4,
+    maxHeight: 180,
   },
 });

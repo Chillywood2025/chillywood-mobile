@@ -636,6 +636,7 @@ export default function SettingsScreen() {
   const onChooseProfileMedia = useCallback(async (kind: ProfileMediaKind) => {
     if (profileAppearanceBusy) return;
 
+    setProfileAppearanceSheetKind(null);
     setProfileAppearanceBusy(kind);
     try {
       const file = await pickProfileMediaImage(kind);
@@ -657,6 +658,7 @@ export default function SettingsScreen() {
     const imageUrl = kind === "avatar" ? activeProfilePhotoUrl : activeProfileBackgroundUrl;
     if (!imageUrl || profileAppearanceBusy) return;
 
+    setProfileAppearanceSheetKind(null);
     Alert.alert(
       kind === "avatar" ? "Remove Profile photo?" : "Remove Profile background?",
       kind === "avatar"
