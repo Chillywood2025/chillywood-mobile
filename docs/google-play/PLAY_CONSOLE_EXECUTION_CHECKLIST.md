@@ -39,7 +39,7 @@ This checklist is for the owner/operator completing Google Play Console. It does
 
 | Item | Status | Play Console location | Exact evidence needed | Current repo evidence | Owner/operator action | Blocks public release |
 | --- | --- | --- | --- | --- | --- | --- |
-| App package | repo_ready | App dashboard / App integrity / Releases | Confirm package `com.chillywood.mobile` matches artifact and listing | `app.json`, Android manifest, prior release APK/AAB proof | Confirm in Play Console before release upload | Yes |
+| App package | repo_ready | App dashboard / App integrity / Releases | Confirm package `com.chillywood.mobile` matches artifact and listing | `app.json`, Android manifest, fresh current-HEAD APK/AAB proof | Confirm in Play Console before release upload | Yes |
 | Privacy Policy | repo_ready, external_required | Policy and programs > App content > Privacy Policy | Accepted privacy URL screenshot | `https://chillywoodstream.com/privacy` returned HTTP 200; Android privacy route captured | Enter final approved URL after legal signoff | Yes |
 | Data Safety | repo_ready, external_required | Policy and programs > App content > Data safety | Completed and accepted Data Safety form screenshot/export | `DATA_SAFETY_EVIDENCE_MAP.md` | Complete form using owner/legal confirmed data categories and SDK disclosures | Yes |
 | Ads declaration | repo_ready, external_required | Policy and programs > App content > Ads | Saved answer screenshot | No AdMob/AD_ID permission found; ads/sponsor systems are scaffolded and default-disabled | Declare "No ads" only if owner confirms no active ad display in release; change if live ads are added | Yes |
@@ -48,7 +48,7 @@ This checklist is for the owner/operator completing Google Play Console. It does
 | Content rating | repo_ready, external_required | Policy and programs > App content > Content rating | IARC ratings receipt | UGC, live, chat, video, report/moderation policies documented | Complete questionnaire with owner/legal review | Yes |
 | Account deletion | repo_ready, external_required | Policy and programs > App content > Data deletion/account deletion | Accepted web URL and in-app path answers | In-app Settings route and `https://chillywoodstream.com/account-deletion` returned HTTP 200 | Enter URL, confirm request-based deletion process and SLA | Yes |
 | Store listing | partial | Grow users > Store presence > Main store listing | Final screenshots, feature graphic, icon, descriptions, contact fields | App icon exists; release screenshots exist outside repo; feature graphic missing as final asset | Upload approved assets and copy | Yes |
-| App bundle/release | partial | Release > Testing/Production | Uploaded AAB, pre-launch report, release notes | Prior current AAB/APK proof exists; no Play upload in this lane | Upload final AAB to intended track and run review | Yes |
+| App bundle/release | partial | Release > Testing/Production | Uploaded AAB, pre-launch report, release notes | Fresh current-HEAD local AAB/APK proof exists at `/tmp/chillywood-current-head-play-upload-proof-20260530/`; local Gradle build is debug-signed | Upload owner-approved Play-signed AAB to intended track and run review | Yes |
 | Data collection declarations | repo_ready, external_required | Data Safety form | Owner/legal confirmed answers | Evidence map created | Confirm analytics/crash/push/billing/live/chat disclosures | Yes |
 | Permissions review | repo_ready, external_required | App bundle review / App content if prompted | No unresolved sensitive permission declaration | Manifest has camera, mic, notifications, storage legacy entries from native generation | Explain camera/mic/live/selected-file upload use; remove any unnecessary native permissions in a separate native config lane if Play flags them | Yes if Play flags |
 | UGC and moderation | repo_ready, external_required | App content / Policy review | Report/block/moderation policy evidence | Report flows, Admin Reports, DMCA, Profile media report/action, scanner proof | Confirm policy answers and moderation owner/SLA | Yes |
@@ -59,7 +59,7 @@ This checklist is for the owner/operator completing Google Play Console. It does
 
 ## Submission Order
 
-1. Confirm final AAB artifact and package `com.chillywood.mobile`.
+1. Confirm final Play-upload-signed AAB artifact and package `com.chillywood.mobile`.
 2. Enter Privacy Policy URL.
 3. Complete Data Safety, including account deletion answers.
 4. Complete app access reviewer instructions.

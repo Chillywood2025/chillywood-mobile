@@ -45,8 +45,9 @@ This checklist records what exists in the repo and what the owner/operator must 
 
 | Field | Current proof value | Status | Owner action |
 | --- | --- | --- | --- |
-| Prior AAB proof path | `android/app/build/outputs/bundle/release/app-release.aab` | evidence only | Rebuild a fresh current-HEAD AAB before Play upload |
-| Prior AAB proof size/hash | 126M; `fbe91629a16e3d0143106296d527b91e86bbb1dad80f3a53b01994d416be2f0a` | evidence only | Do not treat as final upload proof |
+| Fresh current-HEAD AAB proof path | `android/app/build/outputs/bundle/release/app-release.aab` | current local build proof | Use only after owner-approved Play upload signing is confirmed |
+| Fresh current-HEAD AAB proof size/hash | `132125002` bytes / 126M; SHA-256 `57f8f8da17f21959ef7d3f4abb661fad5135757caa277d2b9a03ddec192ad199` | current local build proof | Save Play upload/external proof after signed upload |
+| Signing status | Local Gradle release uses `signingConfigs.debug`; proof shows `CN=Android Debug` | external_required before Play upload | Use EAS production/Play upload signing or corrected local release signing unless owner confirms current cert is accepted |
 | Version name | `1.0.0` | repo_ready | Confirm acceptable for intended track |
 | Version code | `8` | repo_ready | Confirm it is greater than the last Play-uploaded versionCode before upload |
 
