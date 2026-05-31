@@ -504,3 +504,23 @@ Clip Studio Metadata-Only Trim Preview remains a valid later lane: add `trim_sta
 Platform Brand Studio Cropper and Cleanup Automation remains a valid later lane: Level 2 focal-point drag/reposition, service-role/admin-only cleanup execution, and continued Hero Reel/watermark honesty.
 
 Security Request Context follow-ups remain valid: Audit Explorer row-level owner/operator proof for a linked network-proof row, gateway/firewall policy if product wants to block direct Supabase Edge origin bypass, and trusted Edge wrappers for remaining direct SQL/public intake paths.
+
+## Current Copy Proof Follow-Up
+
+The reachable current-build copy gaps are closed on `R5CR120QCBF` with proof at `/tmp/chillywood-copy-gap-closeout-20260531/`.
+
+Closed now:
+
+- Rebuilt release APK installed successfully.
+- Chi'lly Chat inbox visual proof is clean.
+- Settings/account/legal and notification status copy is clean.
+- Signed-in `/login` redirect copy is clean.
+- Admin remains owner/admin-gated; `guard:admin-auth-safety` passed.
+- Chi'lly Chat call-preview fallback no longer references a development/debug build and is now guarded.
+
+Remaining proof-only follow-ups:
+
+- Use a stable clean emulator, second device, or explicit physical app-data reset window for signed-out visual proof.
+- Use a non-owner account for normal-user Admin denial visual proof.
+- Use an active Chi'lly Chat call/thread fixture with camera/microphone denied for permission-denied visual proof.
+- Use a device/runtime that exposes notification denial if notification-denied UI copy needs visual proof.

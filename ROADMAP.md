@@ -222,3 +222,9 @@
 - moderation, abuse handling, and auditability for monetized surfaces
 - country rollout and geography-specific constraints
 - explicit separation between app-store subscription billing, RevenueCat entitlement handling, and creator payout infrastructure
+
+## Current Proof Notes
+
+- May 31, 2026 current-build copy gap closeout rebuilt and installed the release APK on `R5CR120QCBF`, captured Chi'lly Chat/Settings/Login/Admin proof at `/tmp/chillywood-copy-gap-closeout-20260531/`, and fixed the remaining Chi'lly Chat call-preview fallback that referenced a development build.
+- The remaining copy proof gaps are runtime-fixture gaps only: signed-out clean runtime, non-owner Admin denial, and camera/microphone denied call-state proof.
+- Seat limits, LiveKit token issuer, Watch-Party route ownership, Premium gates, money activation, RLS, Platform Studio behavior, Profile media policy, and public Platform routing were not changed by this closeout.

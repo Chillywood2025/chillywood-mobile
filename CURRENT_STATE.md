@@ -596,3 +596,24 @@ Profile Viewer State Runtime Proof Closeout ran on Android device `R5CR120QCBF` 
 - Never stage `artifacts/`.
 - Never stage `supabase/.temp/`.
 - Stage only task-pure files for the active lane.
+
+## Current Build Copy Gap Closeout
+
+May 31, 2026 follow-up proof closed the reachable normal-user copy gaps from the current release build.
+
+- Rebuilt and installed `android/app/build/outputs/apk/release/app-release.apk` on `R5CR120QCBF`.
+- Final APK proof: `205661499` bytes, SHA-256 `8f311d39aded0e643cab1107027b164fd2d06ea9e0f6dc7804f458eea6c1c46b`.
+- Proof folder: `/tmp/chillywood-copy-gap-closeout-20260531/`.
+- Chi'lly Chat inbox was captured from the installed rebuilt APK and showed clean production copy with no banned normal-user technical terms.
+- Settings/account/legal and notification status copy stayed clean.
+- The signed-in `/login` route redirected to Home with clean copy; no public Admin sign-in copy reappeared.
+- Admin owner-session proof confirmed Admin remains owner/admin-gated; `npm run guard:admin-auth-safety` remains the static normal-user denial proof until a non-owner runtime fixture is available.
+- Chi'lly Chat call preview fallback now says `Grant camera access to show your live preview here.` instead of referencing a development build, and `guard:critical-ux-polish-policy` now covers that regression.
+
+Still not claimed:
+
+- Signed-out runtime visual proof was blocked because the emulator became adb-unresponsive during install, and the physical owner session was not wiped.
+- Normal-user Admin denial visual proof still needs a non-owner/signed-out runtime.
+- Camera/microphone denied visual proof still needs an active call/thread fixture.
+- Notification denied UI proof could not be forced reliably on `R5CR120QCBF`; the device did not expose `POST_NOTIFICATIONS` as a runtime permission and appops did not produce a denied UI state.
+- Photo picker permission-denied proof is not applicable to the current Android system photo picker path on this device.

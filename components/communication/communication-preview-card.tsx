@@ -82,7 +82,7 @@ export function CommunicationPreviewCard({
             <Text style={styles.fallbackTitle}>{cameraEnabled ? "Camera preview not ready" : "Camera is off"}</Text>
             <Text style={styles.fallbackBody}>
               {cameraEnabled
-                ? "Grant camera access or use a development build to show your live preview here."
+                ? "Grant camera access to show your live preview here."
                 : "Turn camera on to send video when you join the room."}
             </Text>
           </View>

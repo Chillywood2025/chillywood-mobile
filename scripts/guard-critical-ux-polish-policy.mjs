@@ -39,6 +39,7 @@ const filesToScanForEntities = [
   "app/watch-party/[partyId].tsx",
   "components/ads/NativeAdSlot.tsx",
   "components/communication/in-room-communication-panel.tsx",
+  "components/communication/communication-preview-card.tsx",
   "components/legal/legal-policy-viewer.tsx",
   "components/live/live-effects-sheet.tsx",
   "components/system/root-error-boundary.tsx",
@@ -75,6 +76,7 @@ const player = read("app/player/[id].tsx");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const liveEffectsSheet = read("components/live/live-effects-sheet.tsx");
 const nativeAdSlot = read("components/ads/NativeAdSlot.tsx");
+const communicationPreviewCard = read("components/communication/communication-preview-card.tsx");
 const monetization = read("_lib/monetization.ts");
 const premiumWatchPartyAccess = read("_lib/premiumWatchPartyAccess.ts");
 const spectatorAccess = read("_lib/spectatorAccess.ts");
@@ -116,6 +118,10 @@ const normalUserCopyChecks = [
     "Ad placeholder",
     "Native/feed placement foundation",
     "No real ad is loaded",
+  ]],
+  ["Chi'lly Chat call preview", communicationPreviewCard, [
+    "development build",
+    "debug build",
   ]],
   ["Player", player, [
     "provider proof",
