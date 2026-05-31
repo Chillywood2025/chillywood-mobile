@@ -4,10 +4,37 @@ Updated: 2026-05-25
 
 Clip Studio is the creator-facing video preparation area inside Platform Studio. It lets creators choose a source video, stage a cover image, add title/template metadata, preview the result, and save or publish through the existing creator-video flow. It is not a timeline editor and it does not export a new video file.
 
+## May 31, 2026 Content Upload And Featured Video Polish
+
+Platform Studio Content now treats Clip Studio as the production upload path for Platform videos. The old direct Content upload form and `Classic Upload` entry are removed from the normal Content surface; creators use `Add Video` / `Open Clip Studio` to choose a full video, set cover/title/template metadata, save drafts, and publish.
+
+Current launch upload posture:
+
+- Creator videos target long-form uploads up to `2 hr 30 min`.
+- The existing storage/runtime upload cap remains the backed file-size gate; do not claim duration scanning unless a later metadata-probe lane adds it.
+- Clip Studio accepts MP4, MOV, WebM, and M4V through the existing safe picker/upload flow.
+- Content cards no longer show owner-facing `VOD ladder`, pixel ladder, `Free max`, or `Premium max` technical copy. Background processing remains internal.
+
+Creators can choose the public Platform spotlight from their published videos:
+
+- Owner cards show `Set Featured` for eligible public videos.
+- The active spotlight shows a `Featured` badge and `Remove Featured`.
+- Draft/private videos cannot be featured.
+- Public Platform uses the backed `platform_brand_profiles.spotlight_video_id` only after the public-safe resolver confirms the video is a public owner video with allowed moderation status.
+- Latest Uploads remain chronological and exclude the featured card when there is more than one public upload.
+
+Cover image controls now show the correct state:
+
+- Empty cover state: `Choose Cover Image`.
+- Existing cover state: `Change Cover` and `Remove Cover`.
+- Remove clears the staged/saved cover metadata and requires Save Draft or Publish Clip to persist the update.
+
+Android proof on `R5CR120QCBF` for this pass lives at `/tmp/chillywood-platform-content-clip-featured-proof-20260531/`. It captures the fresh release APK install, Content without direct upload copy, owner card `Set Featured` / `Remove Featured` behavior, Clip Studio `Choose Full Video`, and public Platform loading the Featured surface.
+
 ## Implemented
 
 - Platform Studio `Clip` tab.
-- `Create Clip` entry from Platform Studio header, Home Create and Manage, and Content.
+- `Create Clip` / `Add Video` entry from Platform Studio header, Home Create and Manage, and Content.
 - `Edit Clip` action on owner creator-video cards.
 - Safe document-picker video selection for MP4, MOV, WebM, and M4V.
 - Local selected-video preview using native controls when a selected/saved video URL is available.
@@ -173,6 +200,7 @@ Owner Content Library cards may show:
 - template badge
 - owner-only title/subtitle overlay preview on the card image/placeholder
 - `Clip Studio: Title Card` or `Clip Studio: No Title Card` summary
+- `Featured` state and `Set Featured` / `Remove Featured` owner actions for public Platform spotlight selection
 
 This is owner-only. Public users do not receive draft/private cards and public UI does not read Clip Studio edit rows directly. Published public cards receive only sanitized fields from the safe public resolver.
 

@@ -115,6 +115,7 @@ import {
 } from "../_lib/liveEvents";
 import {
   deleteCreatorVideo,
+  CREATOR_VIDEO_MAX_RUNTIME_LABEL,
   formatCreatorVideoFileSize,
   getCreatorVideoStorageLimitMessage,
   getCreatorVideoTooLargeMessage,
@@ -1533,6 +1534,7 @@ export function ChannelStudioScreen() {
 
   const openClipStudioForNew = () => {
     const transferredFile = selectedVideoFile;
+    setSelectedVideoFile(null);
     setClipEditor({
       ...createEmptyClipStudioEditorState(),
       title: videoEditor.title,
@@ -1791,7 +1793,7 @@ export function ChannelStudioScreen() {
 
       if (result.canceled) {
         logCreatorVideoUploadUi("picker_canceled");
-        setVideoNotice("No video selected. Choose Video File when you're ready to upload.");
+        setVideoNotice("No video selected. Open Clip Studio when you're ready to add a Platform video.");
         setVideoLifecycleState("idle");
         return;
       }
@@ -1839,7 +1841,7 @@ export function ChannelStudioScreen() {
         mimeType: pickedFile.mimeType ?? null,
         size: pickedFile.size ?? null,
       });
-      setVideoNotice(`Selected ${pickedFile.name || "video file"}. Enter a title, then tap Upload Video.`);
+      setVideoNotice(`Selected ${pickedFile.name || "video file"}. Open Clip Studio to finish details and save.`);
       if (!videoEditor.title.trim() && asset.name) {
         updateVideoEditor({ title: asset.name.replace(/\.[^.]+$/, "") });
       }
@@ -1977,6 +1979,18 @@ export function ChannelStudioScreen() {
     }
   };
 
+  const onRemoveClipCoverFile = () => {
+    setSelectedClipCoverFile(null);
+    updateClipEditor({
+      coverStoragePath: null,
+      coverMimeType: null,
+      coverFileSizeBytes: null,
+      coverPreviewUrl: "",
+    });
+    setClipNotice("Cover image removed. Save Draft or Publish Clip to confirm the update.");
+    logClipStudioUi("clip_cover_removed");
+  };
+
   const updateBrandDraft = (patch: Partial<PlatformBrandProfile>) => {
     setBrandDraft((current) => {
       const source = current ?? platformBranding?.profile;
@@ -2041,6 +2055,39 @@ export function ChannelStudioScreen() {
       setBrandNotice("Brand Studio saved. Public Platform updates after review; draft preview shows your pending look.");
     } catch {
       setBrandNotice("Unable to publish Brand Studio changes right now.");
+    } finally {
+      setBrandSaving(false);
+    }
+  };
+
+  const publishSpotlightVideo = async (video: CreatorVideo | null) => {
+    const ownerUserId = String(user?.id ?? "").trim();
+    if (!ownerUserId) {
+      setVideoNotice("Sign in before changing your featured Platform video.");
+      return;
+    }
+    if (video && video.visibility !== "public") {
+      setVideoNotice("Publish this video before featuring it on your public Platform.");
+      return;
+    }
+
+    setBrandSaving(true);
+    setVideoNotice(video ? "Updating featured video..." : "Removing featured video...");
+    try {
+      const bundle = platformBranding ?? await loadPlatformBranding();
+      const currentProfile = brandDraft ?? bundle?.profile;
+      if (!currentProfile) {
+        throw new Error("Platform brand profile unavailable.");
+      }
+
+      await publishPlatformBrandProfile(ownerUserId, {
+        ...currentProfile,
+        spotlightVideoId: video?.id ?? null,
+      });
+      await loadPlatformBranding();
+      setVideoNotice(video ? `"${video.title}" is now featured on your public Platform.` : "Featured video removed from your public Platform.");
+    } catch (error) {
+      setVideoNotice(formatCreatorVideoUiError(error, "Unable to update the featured video right now."));
     } finally {
       setBrandSaving(false);
     }
@@ -2813,12 +2860,12 @@ export function ChannelStudioScreen() {
         {
           title: "Creator Content",
           status: "current",
-          body: "Upload and manage creator videos.",
+          body: "Create and manage Platform videos through Clip Studio.",
         },
         {
-          title: "Featured Video / Trailer",
-          status: "near_term",
-          body: "Coming soon once featured/trailer backing is added.",
+          title: "Featured Video",
+          status: "current",
+          body: "Choose a published upload as the public Platform spotlight.",
         },
         {
           title: "Playlists / Shelves",
@@ -3482,7 +3529,7 @@ export function ChannelStudioScreen() {
       ? "No published videos yet. Publish a draft when it is ready."
       : contentStatusFilter === "drafts"
         ? "No drafts right now."
-        : "No platform videos yet. Upload your first video.";
+        : "No platform videos yet. Use Clip Studio to add your first video.";
 
     return (
     <View style={[styles.panel, styles.creatorContentPanel]}>
@@ -3493,7 +3540,7 @@ export function ChannelStudioScreen() {
         </View>
       </View>
       <Text style={styles.permissionCopy}>
-        Upload playable videos to your public platform. Drafts stay visible only to you; public videos can appear on your Profile/Platform and open in Player.
+        Add and publish Platform videos through Clip Studio. Drafts stay visible only to you; public videos can appear as Featured and Latest Uploads.
       </Text>
 
       <View style={styles.studioHeaderActions}>
@@ -3502,16 +3549,8 @@ export function ChannelStudioScreen() {
           activeOpacity={0.88}
           onPress={openClipStudioForNew}
         >
-          <Text style={styles.studioActionButtonText}>Create Clip</Text>
-          <Text style={styles.studioActionButtonCopy}>Open Clip Studio</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.studioActionButton}
-          activeOpacity={0.88}
-          onPress={() => openStudioTab("content", { filter: "all", focus: "upload" })}
-        >
-          <Text style={styles.studioActionButtonText}>Classic Upload</Text>
-          <Text style={styles.studioActionButtonCopy}>Existing flow</Text>
+          <Text style={styles.studioActionButtonText}>Add Video</Text>
+          <Text style={styles.studioActionButtonCopy}>Clip Studio · up to {CREATOR_VIDEO_MAX_RUNTIME_LABEL}</Text>
         </TouchableOpacity>
       </View>
 
@@ -3613,10 +3652,17 @@ export function ChannelStudioScreen() {
               video={video}
               mode="owner"
               clipEdit={creatorVideoClipEdits[video.id] ?? null}
-              busy={videoSaving}
+              featured={activeBrandProfile?.spotlightVideoId === video.id}
+              busy={videoSaving || brandSaving}
               onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
               onEdit={() => onEditVideo(video)}
               onEditClip={() => openClipStudioForVideo(video)}
+              onSetFeatured={() => {
+                void publishSpotlightVideo(video);
+              }}
+              onClearFeatured={() => {
+                void publishSpotlightVideo(null);
+              }}
               onToggleVisibility={() => onToggleVideoVisibility(video)}
               onDelete={() => onDeleteVideo(video)}
             />
@@ -3631,126 +3677,121 @@ export function ChannelStudioScreen() {
         <View style={styles.eventEmptyCard}>
           <Text style={styles.eventEmptyTitle}>No platform videos yet</Text>
           <Text style={styles.eventEmptyBody}>
-            {"No platform videos yet. Use the Video Upload form below when you're ready."}
+            Use Clip Studio to add your first Platform video.
           </Text>
         </View>
       )}
 
-      <Text style={styles.sectionLabel}>
-        {videoEditor.editingVideoId ? "Edit Video" : "Video Upload"}
-      </Text>
-      <View
-        style={[
-          styles.uploadLifecycleInline,
-          videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleInlineReady,
-          videoLifecycleCopy.tone === "active" && styles.uploadLifecycleInlineActive,
-          videoLifecycleCopy.tone === "success" && styles.uploadLifecycleInlineSuccess,
-          videoLifecycleCopy.tone === "error" && styles.uploadLifecycleInlineError,
-        ]}
-      >
-        <View style={styles.uploadLifecycleHeader}>
-          <Text style={styles.uploadLifecycleLabel}>Upload Status</Text>
-          <Text
+      {videoEditor.editingVideoId ? (
+        <>
+          <Text style={styles.sectionLabel}>Edit Video</Text>
+          <View
             style={[
-              styles.uploadLifecycleStatus,
-              videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleStatusReady,
-              videoLifecycleCopy.tone === "active" && styles.uploadLifecycleStatusActive,
-              videoLifecycleCopy.tone === "success" && styles.uploadLifecycleStatusSuccess,
-              videoLifecycleCopy.tone === "error" && styles.uploadLifecycleStatusError,
+              styles.uploadLifecycleInline,
+              videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleInlineReady,
+              videoLifecycleCopy.tone === "active" && styles.uploadLifecycleInlineActive,
+              videoLifecycleCopy.tone === "success" && styles.uploadLifecycleInlineSuccess,
+              videoLifecycleCopy.tone === "error" && styles.uploadLifecycleInlineError,
             ]}
           >
-            {videoLifecycleCopy.label}
-          </Text>
-        </View>
-        <Text style={styles.uploadLifecycleBody}>{videoLifecycleCopy.body}</Text>
-      </View>
-      {!videoEditor.editingVideoId ? (
-        <TouchableOpacity
-          style={styles.eventSecondaryButton}
-          activeOpacity={0.86}
-          onPress={onPickVideoFile}
-          disabled={videoSaving}
-        >
-          <Text style={styles.eventSecondaryButtonText} numberOfLines={2}>
-            {selectedVideoFile?.name ? selectedVideoFile.name : "Choose Video File"}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-      {selectedVideoFile && !videoEditor.editingVideoId ? (
-        <Text style={styles.videoSelectedFileText} numberOfLines={2}>
-          Selected: {selectedVideoFile.name || "video file"}
-        </Text>
-      ) : null}
-      <TextInput
-        style={styles.input}
-        placeholder="Video title"
-        placeholderTextColor="#8d8d8d"
-        value={videoEditor.title}
-        onChangeText={(text) => updateVideoEditor({ title: text })}
-      />
-      <TextInput
-        style={[styles.input, styles.textArea]}
-        placeholder="Description"
-        placeholderTextColor="#8d8d8d"
-        value={videoEditor.description}
-        onChangeText={(text) => updateVideoEditor({ description: text })}
-        multiline
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Thumbnail URL (optional)"
-        placeholderTextColor="#8d8d8d"
-        value={videoEditor.thumbUrl}
-        onChangeText={(text) => updateVideoEditor({ thumbUrl: text })}
-        autoCapitalize="none"
-      />
-      <Text style={styles.sectionLabel}>Visibility</Text>
-      <View style={styles.chipRow}>
-        {(["draft", "public"] as const).map((value) => (
-          <TouchableOpacity
-            key={value}
-            style={[styles.chip, videoEditor.visibility === value && styles.chipActive]}
-            onPress={() => updateVideoEditor({ visibility: value })}
-            disabled={videoSaving}
-          >
-            <Text style={[styles.chipText, videoEditor.visibility === value && styles.chipTextActive]}>
-              {value.toUpperCase()}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {videoSubmitRequirement ? (
-        <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
-      ) : null}
-      <View style={styles.eventActionRow}>
-        <TouchableOpacity
-          style={[styles.eventPrimaryButton, isVideoSubmitDisabled && styles.eventPrimaryButtonDisabled]}
-          onPress={onSaveVideo}
-          activeOpacity={0.88}
-          disabled={isVideoSubmitDisabled}
-        >
-          {videoSaving ? (
-            <View style={styles.eventPrimaryButtonBusyRow}>
-              <ActivityIndicator color="#fff" />
-              <Text style={styles.eventPrimaryButtonText}>
-                {videoEditor.editingVideoId ? "Saving..." : "Uploading..."}
+            <View style={styles.uploadLifecycleHeader}>
+              <Text style={styles.uploadLifecycleLabel}>Edit Status</Text>
+              <Text
+                style={[
+                  styles.uploadLifecycleStatus,
+                  videoLifecycleCopy.tone === "ready" && styles.uploadLifecycleStatusReady,
+                  videoLifecycleCopy.tone === "active" && styles.uploadLifecycleStatusActive,
+                  videoLifecycleCopy.tone === "success" && styles.uploadLifecycleStatusSuccess,
+                  videoLifecycleCopy.tone === "error" && styles.uploadLifecycleStatusError,
+                ]}
+              >
+                {videoLifecycleCopy.label}
               </Text>
             </View>
-          ) : (
-            <Text style={styles.eventPrimaryButtonText}>
-              {videoEditor.editingVideoId ? "Update Video" : "Upload Video"}
-            </Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.eventSecondaryButton}
-          onPress={() => resetVideoEditor()}
-          activeOpacity={0.88}
-          disabled={videoSaving}
-        >
-          <Text style={styles.eventSecondaryButtonText}>Clear</Text>
-        </TouchableOpacity>
-      </View>
+            <Text style={styles.uploadLifecycleBody}>{videoLifecycleCopy.body}</Text>
+          </View>
+          <TextInput
+            style={styles.input}
+            placeholder="Video title"
+            placeholderTextColor="#8d8d8d"
+            value={videoEditor.title}
+            onChangeText={(text) => updateVideoEditor({ title: text })}
+          />
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Description"
+            placeholderTextColor="#8d8d8d"
+            value={videoEditor.description}
+            onChangeText={(text) => updateVideoEditor({ description: text })}
+            multiline
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Thumbnail URL (optional)"
+            placeholderTextColor="#8d8d8d"
+            value={videoEditor.thumbUrl}
+            onChangeText={(text) => updateVideoEditor({ thumbUrl: text })}
+            autoCapitalize="none"
+          />
+          <Text style={styles.sectionLabel}>Visibility</Text>
+          <View style={styles.chipRow}>
+            {(["draft", "public"] as const).map((value) => (
+              <TouchableOpacity
+                key={value}
+                style={[styles.chip, videoEditor.visibility === value && styles.chipActive]}
+                onPress={() => updateVideoEditor({ visibility: value })}
+                disabled={videoSaving}
+              >
+                <Text style={[styles.chipText, videoEditor.visibility === value && styles.chipTextActive]}>
+                  {value.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {videoSubmitRequirement ? (
+            <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
+          ) : null}
+          <View style={styles.eventActionRow}>
+            <TouchableOpacity
+              style={[styles.eventPrimaryButton, isVideoSubmitDisabled && styles.eventPrimaryButtonDisabled]}
+              onPress={onSaveVideo}
+              activeOpacity={0.88}
+              disabled={isVideoSubmitDisabled}
+            >
+              {videoSaving ? (
+                <View style={styles.eventPrimaryButtonBusyRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.eventPrimaryButtonText}>Saving...</Text>
+                </View>
+              ) : (
+                <Text style={styles.eventPrimaryButtonText}>Update Video</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eventSecondaryButton}
+              onPress={() => resetVideoEditor()}
+              activeOpacity={0.88}
+              disabled={videoSaving}
+            >
+              <Text style={styles.eventSecondaryButtonText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <View style={[styles.eventEmptyCard, styles.panelSubtle]}>
+          <Text style={styles.eventEmptyTitle}>Add videos in Clip Studio</Text>
+          <Text style={styles.eventEmptyBody}>
+            Clip Studio is the upload path for Platform videos, covers, title cards, drafts, and publishing. Current long-form target: {CREATOR_VIDEO_MAX_RUNTIME_LABEL}.
+          </Text>
+          <TouchableOpacity
+            style={styles.eventPrimaryButton}
+            activeOpacity={0.88}
+            onPress={openClipStudioForNew}
+          >
+            <Text style={styles.eventPrimaryButtonText}>Open Clip Studio</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
     );
   };
@@ -3948,8 +3989,8 @@ export function ChannelStudioScreen() {
         <View style={styles.studioAccordionStack}>
           {renderClipAccordion({
             id: "media",
-            title: "Media",
-            summary: "Choose or replace the video source.",
+            title: "Video",
+            summary: "Choose or replace the full video source.",
             status: selectedClipVideoFile ? "Selected" : hasSavedVideo ? "Saved" : "Needed",
             statusTone: hasWorkingVideo ? "default" : "muted",
             children: (
@@ -3961,8 +4002,8 @@ export function ChannelStudioScreen() {
                     onPress={onPickClipVideoFile}
                     disabled={clipSaving}
                   >
-                    <Text style={styles.studioActionButtonText}>{selectedClipVideoFile || hasSavedVideo ? "Replace Video" : "Choose Video"}</Text>
-                    <Text style={styles.studioActionButtonCopy}>Open picker</Text>
+                    <Text style={styles.studioActionButtonText}>{selectedClipVideoFile || hasSavedVideo ? "Replace Video" : "Choose Full Video"}</Text>
+                    <Text style={styles.studioActionButtonCopy}>Up to {CREATOR_VIDEO_MAX_RUNTIME_LABEL}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.studioActionButton}
@@ -3975,7 +4016,7 @@ export function ChannelStudioScreen() {
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.brandPreviewMeta}>
-                  {selectedClipVideoFile?.name || (hasSavedVideo ? "Using the saved creator video." : "Choose a video to start a draft.")}
+                  {selectedClipVideoFile?.name || (hasSavedVideo ? "Using the saved creator video." : "Choose an MP4, MOV, WebM, or M4V video to start a draft.")}
                 </Text>
               </>
             ),
@@ -3989,22 +4030,44 @@ export function ChannelStudioScreen() {
             statusTone: coverPreviewUri ? "default" : "muted",
             children: (
               <>
-                <TouchableOpacity
-                  style={[styles.eventSecondaryButton, clipSaving && styles.eventPrimaryButtonDisabled]}
-                  activeOpacity={0.86}
-                  onPress={onPickClipCoverFile}
-                  disabled={clipSaving}
-                >
-                  <Text style={styles.eventSecondaryButtonText}>{coverPreviewUri ? "Replace Cover Image" : "Choose Cover Image"}</Text>
-                </TouchableOpacity>
                 {coverPreviewUri ? (
-                  <Image source={{ uri: coverPreviewUri }} style={styles.clipCoverPreview} resizeMode="cover" />
+                  <>
+                    <View style={styles.studioHeaderActions}>
+                      <TouchableOpacity
+                        style={[styles.studioActionButton, styles.studioActionButtonPrimary, clipSaving && styles.studioActionButtonDisabled]}
+                        activeOpacity={0.86}
+                        onPress={onPickClipCoverFile}
+                        disabled={clipSaving}
+                      >
+                        <Text style={styles.studioActionButtonText}>Change Cover</Text>
+                        <Text style={styles.studioActionButtonCopy}>Open image picker</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.studioActionButton, styles.studioActionButtonDanger, clipSaving && styles.studioActionButtonDisabled]}
+                        activeOpacity={0.86}
+                        onPress={onRemoveClipCoverFile}
+                        disabled={clipSaving}
+                      >
+                        <Text style={styles.studioActionButtonText}>Remove Cover</Text>
+                        <Text style={styles.studioActionButtonCopy}>Use fallback art</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Image source={{ uri: coverPreviewUri }} style={styles.clipCoverPreview} resizeMode="cover" />
+                  </>
                 ) : (
                   <View style={styles.eventEmptyCard}>
                     <Text style={styles.eventEmptyTitle}>No cover selected</Text>
                     <Text style={styles.eventEmptyBody}>
                       Upload a JPG, PNG, or WebP image. Frame picking from video is deferred until real extraction support exists.
                     </Text>
+                    <TouchableOpacity
+                      style={styles.eventSecondaryButton}
+                      activeOpacity={0.86}
+                      onPress={onPickClipCoverFile}
+                      disabled={clipSaving}
+                    >
+                      <Text style={styles.eventSecondaryButtonText}>Choose Cover Image</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </>
@@ -7684,6 +7747,10 @@ const styles = StyleSheet.create({
   studioActionButtonPrimary: {
     borderColor: "rgba(220,20,60,0.45)",
     backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  studioActionButtonDanger: {
+    borderColor: "rgba(255,75,104,0.42)",
+    backgroundColor: "rgba(220,20,60,0.14)",
   },
   studioActionButtonDisabled: {
     borderColor: "rgba(255,255,255,0.12)",

@@ -22,6 +22,8 @@ const clipDocs = read("docs/CLIP_STUDIO.md");
 const requiredStudioCopy = [
   "Clip Studio",
   "Prepare your video before publishing.",
+  "Add videos in Clip Studio",
+  "Choose Full Video",
   "type ClipStudioSaveState",
   "readCreatorVideoForOwner",
   "clipSaveInFlightRef",
@@ -97,6 +99,31 @@ for (const forbidden of [
   const userFacingRightsSurface = studio;
   if (userFacingRightsSurface.includes(forbidden)) {
     throw new Error(`Clip Studio guard failed: unsafe rights copy is present: "${forbidden}".`);
+  }
+}
+
+for (const forbidden of [
+  "Classic Upload",
+  "Video Upload",
+  "VOD ladder:",
+  "Free max",
+  "Premium max",
+]) {
+  const productSurface = `${studio}\n${creatorVideoCard}`;
+  if (productSurface.includes(forbidden)) {
+    throw new Error(`Clip Studio guard failed: old creator-video upload/quality copy must stay removed: "${forbidden}".`);
+  }
+}
+
+for (const needle of ["Set Featured", "Remove Featured"]) {
+  if (!creatorVideoCard.includes(needle)) {
+    throw new Error(`Clip Studio guard failed: Content Library featured action is missing "${needle}".`);
+  }
+}
+
+for (const needle of ["Choose Cover Image", "Change Cover", "Remove Cover"]) {
+  if (!studio.includes(needle)) {
+    throw new Error(`Clip Studio guard failed: Cover image state action is missing "${needle}".`);
   }
 }
 

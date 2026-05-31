@@ -15,7 +15,6 @@ import {
   type ClipStudioEdit,
   type ClipStudioTemplatePreset,
 } from "../../_lib/clipStudio";
-import { formatVodRenditionStatusSummary, getVodQualityPolicyCopy } from "../../_lib/vodQuality";
 
 type CreatorVideoCardMode = "owner" | "public";
 
@@ -23,10 +22,13 @@ type CreatorVideoCardProps = {
   video: CreatorVideo;
   mode: CreatorVideoCardMode;
   clipEdit?: ClipStudioEdit | null;
+  featured?: boolean;
   busy?: boolean;
   onOpen: () => void;
   onEdit?: () => void;
   onEditClip?: () => void;
+  onSetFeatured?: () => void;
+  onClearFeatured?: () => void;
   onToggleVisibility?: () => void;
   onDelete?: () => void;
   onShare?: () => void;
@@ -67,6 +69,17 @@ const formatDate = (value: string) => {
 };
 
 const hasPlayableSource = (video: CreatorVideo) => !!(video.playbackUrl || video.storagePath);
+
+const formatOwnerPlaybackStatus = (video: CreatorVideo) => {
+  if (!video.renditionStatuses.length) {
+    return "Playback is ready. Background processing can finish automatically when available.";
+  }
+  const hasFailed = video.renditionStatuses.some((item) => item.status === "failed");
+  const hasWorking = video.renditionStatuses.some((item) => item.status === "queued" || item.status === "processing");
+  if (hasFailed) return "Playback is available. One background version needs attention.";
+  if (hasWorking) return "Playback is available. Background versions are still finishing.";
+  return "Playback is ready for viewers.";
+};
 
 const FILE_EXTENSION_REGEX = /\.[a-z0-9]{2,5}$/i;
 const TIMESTAMP_TITLE_REGEXES = [
@@ -113,10 +126,13 @@ export function CreatorVideoCard({
   video,
   mode,
   clipEdit,
+  featured = false,
   busy = false,
   onOpen,
   onEdit,
   onEditClip,
+  onSetFeatured,
+  onClearFeatured,
   onToggleVisibility,
   onDelete,
   onShare,
@@ -136,10 +152,7 @@ export function CreatorVideoCard({
   const meta = [
     fileSize,
     updatedDate ? `Updated ${updatedDate}` : null,
-    video.mimeType || null,
   ].filter(Boolean);
-  const renditionStatusSummary = ownerMode ? formatVodRenditionStatusSummary(video.renditionStatuses) : "";
-  const qualityPolicyCopy = ownerMode ? getVodQualityPolicyCopy() : null;
   const titleOverlayText = ownerClipEdit?.titleOverlayText.trim() ?? "";
   const titleOverlaySubtitle = ownerClipEdit?.titleOverlaySubtitle.trim() ?? "";
   const hasOwnerTitleOverlay = !!(titleOverlayText || titleOverlaySubtitle);
@@ -191,6 +204,11 @@ export function CreatorVideoCard({
           {ownerClipEdit ? (
             <View style={[styles.badge, styles.badgeTemplate]}>
               <Text style={styles.badgeText}>{ownerTemplateLabel}</Text>
+            </View>
+          ) : null}
+          {ownerMode && featured ? (
+            <View style={[styles.badge, styles.badgeFeatured]}>
+              <Text style={styles.badgeText}>Featured</Text>
             </View>
           ) : null}
           {publicTemplateLabel ? (
@@ -262,7 +280,7 @@ export function CreatorVideoCard({
         ) : null}
         {ownerMode ? (
           <Text style={styles.ownerGuidance}>
-            {`VOD ladder: ${renditionStatusSummary}. Free max ${qualityPolicyCopy?.freeMax}; Premium max ${qualityPolicyCopy?.premiumMax} when renditions exist.`}
+            {formatOwnerPlaybackStatus(video)}
           </Text>
         ) : null}
         {ownerClipEdit ? (
@@ -284,6 +302,20 @@ export function CreatorVideoCard({
             {onEditClip ? (
               <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={onEditClip}>
                 <Text style={styles.secondaryActionText}>Edit Clip</Text>
+              </TouchableOpacity>
+            ) : null}
+            {onSetFeatured || onClearFeatured ? (
+              <TouchableOpacity
+                style={[
+                  styles.secondaryAction,
+                  featured && styles.featuredAction,
+                  (busy || moderationBlocked || (!featured && video.visibility !== "public")) && styles.actionDisabled,
+                ]}
+                activeOpacity={0.86}
+                onPress={featured ? onClearFeatured : onSetFeatured}
+                disabled={busy || moderationBlocked || (!featured && video.visibility !== "public")}
+              >
+                <Text style={styles.secondaryActionText}>{featured ? "Remove Featured" : "Set Featured"}</Text>
               </TouchableOpacity>
             ) : null}
             {onToggleVisibility ? (
@@ -419,6 +451,10 @@ const styles = StyleSheet.create({
   },
   badgeTemplate: {
     borderColor: "rgba(126,215,255,0.46)",
+  },
+  badgeFeatured: {
+    borderColor: "rgba(242,194,91,0.58)",
+    backgroundColor: "rgba(242,194,91,0.16)",
   },
   badgeText: {
     color: "#F8FAFF",
@@ -577,6 +613,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.06)",
     paddingHorizontal: 13,
     paddingVertical: 9,
+  },
+  featuredAction: {
+    borderColor: "rgba(242,194,91,0.42)",
+    backgroundColor: "rgba(242,194,91,0.12)",
   },
   secondaryActionText: {
     color: "#D9E0EF",

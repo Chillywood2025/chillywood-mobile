@@ -200,7 +200,7 @@ export default function PublicChannelScreen() {
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
       const [publicVideos, publicEvents, nextCommerceSurface, nextPlatformBranding] = await Promise.all([
-        readCreatorVideos(routeUserId, { includeDrafts: false, limit: 24 }).catch(() => []),
+        readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         brandPromise,
@@ -222,7 +222,17 @@ export default function PublicChannelScreen() {
     };
   }, [routeUserId, sessionLoading, showDraftBranding]);
 
-  const featuredVideo = videos[0] ?? null;
+  const spotlightVideoId = platformBranding?.profile.spotlightVideoId ?? null;
+  const featuredVideo = useMemo(() => (
+    (spotlightVideoId ? videos.find((video) => video.id === spotlightVideoId) ?? null : null)
+    ?? videos[0]
+    ?? null
+  ), [spotlightVideoId, videos]);
+  const latestUploadVideos = useMemo(() => {
+    if (!featuredVideo) return videos;
+    const withoutFeatured = videos.filter((video) => video.id !== featuredVideo.id);
+    return withoutFeatured.length ? withoutFeatured : videos;
+  }, [featuredVideo, videos]);
   const liveNowEvents = useMemo(() => events.filter((event) => event.isLiveNow), [events]);
   const upcomingEvents = useMemo(() => events.filter((event) => event.isUpcoming), [events]);
   const isOfficialChannel = channel?.identityKind === "official_platform";
@@ -244,11 +254,11 @@ export default function PublicChannelScreen() {
     if (featuredVideo) {
       cards.push({
         label: formatDate(featuredVideo.createdAt) || "Published",
-        value: "Latest Upload",
+        value: spotlightVideoId ? "Featured" : "Latest Upload",
       });
     }
     return cards;
-  }, [featuredVideo, followerCount, liveNowEvents.length, upcomingEvents.length, videos.length]);
+  }, [featuredVideo, followerCount, liveNowEvents.length, spotlightVideoId, upcomingEvents.length, videos.length]);
   const canShowDraftAsset = (asset?: PlatformBrandAsset | null) => {
     if (!asset) return null;
     if (!showDraftBranding) return asset;
@@ -668,14 +678,14 @@ export default function PublicChannelScreen() {
   const renderLatestUploads = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Latest Uploads</Text>
-      {videos.length ? (
+      {latestUploadVideos.length ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.shelfScroll}
           contentContainerStyle={styles.shelfRow}
         >
-          {videos.map((video) => renderLatestUploadCard(video))}
+          {latestUploadVideos.map((video) => renderLatestUploadCard(video))}
         </ScrollView>
       ) : (
         <View style={styles.emptyCard}>

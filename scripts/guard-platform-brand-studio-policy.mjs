@@ -50,10 +50,13 @@ assertIncludes(reviewMigration, `asset."moderation_status" in ('clean', 'reporte
 assertIncludes(reviewMigration, `asset."deleted_at" is null`, "public-safe deleted check");
 assertIncludes(reviewMigration, `where profile."owner_user_id" = nullif`, "public profile owner filter");
 assertIncludes(reviewMigration, `and profile."published_at" is not null`, "public profile published filter");
+assertIncludes(reviewMigration, `video."id"::text = profile."spotlight_video_id"`, "public profile spotlight video public-safe check");
 assertIncludes(platformBranding, `.eq("asset_state", "published")`, "client public asset state filter");
 assertIncludes(platformBranding, `.in("moderation_status", ["clean", "reported"])`, "client public moderation filter");
 assertIncludes(platformBranding, `.is("deleted_at", null)`, "client public deleted filter");
+assertIncludes(platformBranding, `spotlight_video_id: patch.spotlightVideoId === undefined ? undefined : patch.spotlightVideoId`, "Brand Studio spotlight clear support");
 assertIncludes(publicChannel, `readCreatorVideos(routeUserId, { includeDrafts: false`, "public Platform draft exclusion");
+assertIncludes(publicChannel, `spotlightVideoId ? videos.find`, "public Platform preferred Spotlight video");
 assertIncludes(publicChannel, `const showOwnerControls = isOwner && !publicPreviewMode`, "public preview owner-control hide");
 
 assertIncludes(reviewMigration, `raise exception 'brand_review_forbidden'`, "review forbidden guard");

@@ -29,6 +29,7 @@ import {
 export const CREATOR_VIDEO_BUCKET = "creator-videos";
 export const CREATOR_VIDEO_SIGNED_URL_SECONDS = 60 * 60;
 export const CREATOR_VIDEO_CHANNEL_MOVIE_UPLOAD_LIMIT_BYTES = 5 * 1024 * 1024 * 1024;
+export const CREATOR_VIDEO_MAX_RUNTIME_LABEL = "2 hr 30 min";
 
 export type CreatorVideoVisibility = "draft" | "public";
 export type CreatorVideoModerationStatus =
@@ -163,8 +164,8 @@ export const getCreatorVideoTooLargeMessage = (size?: number | null, maxUploadSi
   const fileSize = formatCreatorVideoFileSize(size);
   const limit = getCreatorVideoRuntimeUploadLimitLabel(maxUploadSizeMb);
   return fileSize
-    ? `This video is ${fileSize}. Channel uploads support movies up to ${limit}.`
-    : `Channel uploads support movies up to ${limit}.`;
+    ? `This video is ${fileSize}. Platform videos support full movies up to ${CREATOR_VIDEO_MAX_RUNTIME_LABEL}; the current upload limit is ${limit}.`
+    : `Platform videos support full movies up to ${CREATOR_VIDEO_MAX_RUNTIME_LABEL}; the current upload limit is ${limit}.`;
 };
 
 export const getCreatorVideoStorageLimitMessage = (size?: number | null) => {

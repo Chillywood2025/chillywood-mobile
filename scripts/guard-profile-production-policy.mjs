@@ -147,7 +147,7 @@ assertNotIncludes(profileMediaStatusMigration, `pending_review`, "Profile media 
 assertIncludes(profile, `isSelfProfile ? onPressPreviewPlatform : onPressViewChannel`, "Platform stat/empty-state owner preview split");
 assertIncludes(publicPlatform, `const showOwnerControls = isOwner && !publicPreviewMode`, "public Platform owner-control preview guard");
 assertIncludes(publicPlatform, `if (nextAudienceState?.isViewerBlocked)`, "public Platform blocked-viewer guard");
-assertIncludes(publicPlatform, `readCreatorVideos(routeUserId, { includeDrafts: false, limit: 24 })`, "public Platform draft exclusion");
+assertIncludes(publicPlatform, `readCreatorVideos(routeUserId, { includeDrafts: false, limit:`, "public Platform draft exclusion");
 assertIncludes(platformStudio, `router.push({ pathname: "/channel/[userId]", params: { userId: previewUserId, preview: "public" } })`, "Platform Studio public preview route");
 assertIncludes(socialAttachments, `export type SocialAttachmentPickerScope = "images" | "files"`, "shared attachment picker scope");
 assertIncludes(socialAttachments, `getSocialAttachmentPickerTypes`, "shared attachment picker type helper");

@@ -13,6 +13,23 @@ To make that product boundary clear, Platform Studio now separates the two previ
 
 Draft preview is for visual checking only. It does not approve media, publish draft creator videos, bypass malware scan blocks, weaken the public RPC, or expose Brand Studio assets to non-owners.
 
+## May 31, 2026 Featured Platform Video Selection
+
+Creators can now choose which published Platform video appears as the public Platform spotlight. This is not a new upload path and it does not expose drafts.
+
+Implementation truth:
+
+- Platform Studio Content owner cards show `Set Featured` and `Remove Featured` for public videos.
+- The selected video id is stored on the Brand Studio profile as `spotlight_video_id`.
+- `publishPlatformBrandProfile` can now intentionally clear `spotlight_video_id` with `null`; `undefined` still means leave the field unchanged.
+- Public Platform prefers the selected spotlight video for the `Featured` surface and keeps Latest Uploads chronological.
+- The public RPC validates the spotlight video against the same owner, public visibility, and moderation-safe rules before returning it.
+- Draft/private/unsafe creator videos do not become public through the spotlight field.
+
+This spotlight choice is Platform presentation metadata. It does not modify Profile media, Brand Studio hero/background/avatar/logo review policy, Clip Studio editing metadata, Player playback rules, Premium gates, Money, or LiveKit.
+
+Android proof for the spotlight selection pass lives at `/tmp/chillywood-platform-content-clip-featured-proof-20260531/`. It uses a fresh release APK on `R5CR120QCBF`, proves `Set Featured` changes the owner card to `Featured` / `Remove Featured`, and proves reviewed public Platform loads the Featured surface without exposing owner controls.
+
 ## May 30, 2026 Modern Asset Manager Upload Fix
 
 Brand Studio is now treated as the Platform branding workspace, not Profile media editing. Profile photo/background remain in Profile Appearance and continue to use the separate `profile-media` bucket and Profile Appearance sheets.
