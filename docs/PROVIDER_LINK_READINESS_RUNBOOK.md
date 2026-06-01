@@ -2,6 +2,8 @@
 
 Last updated: June 1, 2026
 
+June 1, 2026 Premium reviewer readiness update: no new provider event was fired and the Premium shell stayed closed. Device proof confirms `R5CR120QCBF` is Play-installed versionCode `13`; `npm run validate:runtime` reports `revenueCatAndroidPublicKeyConfigured:true`; Supabase lists `revenuecat-webhook` ACTIVE version `7`; and EAS production branch readback for runtime `1.0.0` shows the current newest update is the closed-shell group `5668cdaa-cd5b-4553-bd91-7b786323fd22`. The outside-repo Google Play service-account file authenticated, but read-only Android Publisher track/product readback returned `403`, so current tester-list/product status could not be freshly verified through CLI. The prior licensed-tester sandbox purchase/restore/webhook/backend entitlement/Platform Studio unlock proof remains the governing proof. A fresh reviewer purchase run requires owner-entered reviewer credentials and explicit bounded shell-opening approval.
+
 June 1, 2026 owner-session closeout: after the Premium sandbox proof, the attached proof phone was restored/confirmed in the normal owner/admin operating state without reopening billing. `R5CR120QCBF` reports `installer=com.android.vending`, versionCode `13`, versionName `1.0.0`, and the current session opens Admin Command Center. `/subscribe` shows purchase status `Temporarily unavailable`, and source remains closed with `PREMIUM_PURCHASE_SHELL_ON_HOLD = true` and `premiumPurchaseEnabled: false`. No purchase, provider event, Play track mutation, or EAS shell-opening update was run in this closeout lane; a closed-shell Restore Purchases check returned `Restore complete. Premium is not active.`
 
 June 1, 2026 fresh active sandbox event closeout: the remaining active-event blocker is closed for the licensed sandbox tester. On Play-installed internal-test v12, the bounded Premium purchase shell was opened only for proof, a fresh Google Play sandbox purchase succeeded, Restore Purchases completed active, and RevenueCat delivered real event `0bd7...60d7` as an `INITIAL_PURCHASE` to the Supabase webhook. The webhook response was HTTP 200 with `webhookProcessed:true`, `premiumGranted:true`, `entitlementStatus:"active"`, and `liveMoneyAction:false`. Sanitized backend readback then found one Premium `user_entitlements` row for the test user with `source='revenuecat'`, sandbox Play Store metadata, and no raw provider payload storage; a later sandbox `RENEWAL` refreshed the active window. Platform Studio opened during that backend-active window and showed creator actions instead of Premium-required denial. The purchase shell was closed again with EAS update group `5668cdaa-cd5b-4553-bd91-7b786323fd22`, and current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true` plus `premiumPurchaseEnabled: false`. This is sandbox/test proof only; production Premium and all live-money features remain off.
@@ -113,7 +115,7 @@ Current default switch posture:
 | RevenueCat | Premium entitlement id | configured in code/dashboard as `premium`; real sandbox event proved webhook sync into backend `user_entitlements` | false |
 | RevenueCat | Offering | configured in code/dashboard as `premium`; purchase/restore, backend row, and Platform Studio sandbox unlock proof passed | false |
 | Google Play | Package | configured in app as `com.chillywood.mobile` | false |
-| Google Play | Subscription product | setup_needed until dashboard/licensed tester proof | false |
+| Google Play | Subscription product | sandbox proof passed for the licensed tester path; current reviewer/tester readback through Play API is blocked by `403` | false |
 | Stripe | Webhook signature | sandbox_ready | false |
 | Stripe Connect | Account setup | setup_needed | false |
 | Stripe Connect | Payout setup | setup_needed | false |
@@ -158,7 +160,7 @@ Current provider-link statuses after the June 1 guard-restore reconciliation:
 | RevenueCat | Premium entitlement id | configured in code/dashboard as `premium`; real sandbox event proved webhook sync into backend `user_entitlements` | false | false |
 | RevenueCat | Offering | configured in code/dashboard as `premium`; purchase/restore, backend row, and Platform Studio sandbox unlock proof passed | false | false |
 | Google Play | Package | configured in app as `com.chillywood.mobile` | false | false |
-| Google Play | Subscription product | setup_needed until dashboard/licensed tester proof | false | false |
+| Google Play | Subscription product | sandbox proof passed for the licensed tester path; current reviewer/tester readback through Play API is blocked by `403` | false | false |
 | Stripe Connect | Account setup | setup_needed | false | false |
 | Stripe Connect | Payout setup | setup_needed | false | false |
 | Stripe Connect | Payout release | disabled | false | false |

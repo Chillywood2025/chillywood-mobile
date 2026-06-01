@@ -39,6 +39,7 @@ const appConfig = read("app.config.ts");
 const runtimeConfig = read("_lib/runtimeConfig.ts");
 const revenueCat = read("_lib/revenuecat.ts");
 const monetization = read("_lib/monetization.ts");
+const featureFlags = read("_lib/featureFlags.ts");
 const premiumWatchPartyAccess = read("_lib/premiumWatchPartyAccess.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
 const entitlementMigration = read("supabase/migrations/202604260001_billing_entitlement_foundation.sql");
@@ -64,6 +65,8 @@ assertIncludes(revenueCat, "apiKey: runtime.revenueCat.androidPublicSdkKey", "Re
 assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = true", "Premium purchase shell hold");
 assertIncludes(monetization, "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.", "Premium setup-needed purchase copy");
 assertIncludes(monetization, "helperKicker: \"SETUP NEEDED\"", "Premium setup-needed helper label");
+assertIncludes(featureFlags, "premiumPurchaseEnabled: false", "default Premium purchase runtime flag");
+assertNotIncludes(featureFlags, "premiumPurchaseEnabled: true", "default Premium purchase runtime flag");
 assertIncludes(monetization, "Premium access must be granted by billing or an operator-backed entitlement.", "fake Premium rejection");
 assertIncludes(monetization, "ownerPlatformAccessCanSatisfyGate = ownerPlatformAccess && !options.strictEntitlementRequired", "owner setup strict gate exclusion");
 assertIncludes(monetization, "snapshot.targets.premium_subscription.hasEntitlement", "RevenueCat Premium entitlement path");

@@ -66,6 +66,7 @@ Support/legal:
 
 ## Notes For Review
 
+- Current reviewer readiness proof is ready-but-closed: the Play-installed v13 app and RevenueCat/backend path are proved, but no fresh reviewer purchase was run because safe reviewer Chi'llywood credentials were not available in-repo/session and read-only Play API tester/product readback returned `403`.
 - If the reviewer must test Premium, add the reviewer account as a Play license tester and provide the exact Google Play/RevenueCat Premium test flow in Play Console only.
 - Do not ask reviewers to test Premium purchase/restore from a build where `validate:runtime` reports `revenueCatAndroidPublicKeyConfigured: false`, the Premium purchase shell is still on hold for that submitted build, or Play/RevenueCat sandbox tester/product setup is not confirmed.
 - If no licensed Play tester path is provided, reviewers should expect Premium-only flows to deny access with Premium required/setup-needed copy.
