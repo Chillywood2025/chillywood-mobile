@@ -32,7 +32,7 @@ Suggested review path:
 10. Admin tools are owner/admin-only and are not visible to normal users. Reviewers should not need admin access for normal app review.
 
 Disabled/setup-only features:
-- Premium purchases/restores: setup-only unless the owner provides a Play license tester path in Play Console and the uploaded build has the Android RevenueCat public SDK key configured through approved public config. Current repo proof still has the production Android public key missing, so Premium purchase/restore is not claimed.
+- Premium purchases/restores: setup-only unless the owner provides a Play license tester path in Play Console and the uploaded build has the Android RevenueCat public SDK key configured through approved public config. Current repo proof has the Android production public key configured locally and `validate:runtime` passing, but the Premium purchase shell remains on hold and no sandbox purchase/restore is claimed.
 - Platform Studio, Brand Studio, Clip Studio, and creator video uploads: Premium required for normal creator accounts. Owner/operator accounts may see setup-only owner tools, but that is not Premium entitlement and does not activate paid access.
 - Premium-only live/watch-party access: non-Premium accounts are intentionally denied before full room/session/token/connect access.
 - Live money is off.
@@ -41,7 +41,7 @@ Disabled/setup-only features:
 - Paid creator content checkout/access is off.
 - Watch-Party tickets/seats are off unless a real Google Play/RevenueCat entitlement path is separately provided.
 - Ads are not active in the current app build unless the owner changes the release configuration later.
-- RevenueCat/Google provider proof is setup/sandbox-only until owner adds the Android public SDK key, links provider secrets/server permissions where needed, and proves signed sandbox purchase/restore/events.
+- RevenueCat/Google provider proof is setup/sandbox-only until owner confirms the uploaded build's public key, links provider secrets/server permissions where needed, confirms Play licensed tester/product readiness, intentionally opens the Premium purchase shell for proof, and proves signed sandbox purchase/restore/events.
 - Stripe Connect, where visible, is payout readiness/setup only. Stripe must not be used for Android in-app digital goods, Premium, paid creator content, Watch-Party tickets/seats, or any digital access unlock.
 - iOS is deferred.
 
@@ -67,7 +67,7 @@ Support/legal:
 ## Notes For Review
 
 - If the reviewer must test Premium, add the reviewer account as a Play license tester and provide the exact Google Play/RevenueCat Premium test flow in Play Console only.
-- Do not ask reviewers to test Premium purchase/restore from a build where `validate:runtime` still reports `revenueCatAndroidPublicKeyConfigured: false`.
+- Do not ask reviewers to test Premium purchase/restore from a build where `validate:runtime` reports `revenueCatAndroidPublicKeyConfigured: false`, the Premium purchase shell is still on hold, or Play/RevenueCat sandbox tester/product setup is not confirmed.
 - If no licensed Play tester path is provided, reviewers should expect Premium-only flows to deny access with Premium required/setup-needed copy.
 - Do not provide real owner/admin credentials in Play Console unless a separate legal/admin review is required and the owner explicitly approves a limited account.
 - If Google flags login failure, update this document with the rejection reason and provide a new safe test account. Do not work around review by hiding real gates or adding fake bypass features.

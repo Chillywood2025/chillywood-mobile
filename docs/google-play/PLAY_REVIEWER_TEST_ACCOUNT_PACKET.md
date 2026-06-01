@@ -78,7 +78,7 @@ The test account should not expose private personal photos, real user reports, r
 | Feature | Reviewer note |
 | --- | --- |
 | Live money / payouts | Off. No cash-out, transfers, tips, paid creator content, ad revenue, sponsor checkout, or creator payout execution is live. |
-| Premium / purchases | Only test if owner provides a Google Play license tester path backed by RevenueCat/Google entitlement proof. As of the current repo proof, the Android production RevenueCat public SDK key is missing from the approved public config path, so reviewers should expect Premium-locked tools unless a later uploaded build includes matching provider proof. Production Premium is not live unless provider proof matches the uploaded build. |
+| Premium / purchases | Only test if owner provides a Google Play license tester path backed by RevenueCat/Google entitlement proof. Current repo proof has the Android production RevenueCat public SDK key configured locally and `validate:runtime` passing, but the Premium purchase shell remains on hold and no sandbox purchase/restore is claimed. Reviewers should expect Premium-locked/setup-only tools unless the uploaded build includes matching provider proof and an intentionally enabled sandbox purchase path. Production Premium is not live unless provider proof matches the uploaded build. |
 | Platform Studio / creator uploads | Premium required for normal creator accounts. Owner/operator accounts may see setup-only owner tools, but that is not Premium entitlement and does not activate paid access. |
 | Watch-Party tickets/seats | Off/setup-only for Watch-Party Live and Live Watch-Party / Live Stage unless a real Google Play/RevenueCat entitlement path is separately provided. Paid seats do not bypass Premium gates or speaker approval, and no buy button should appear without provider backing. |
 | Tips | Off. No tip checkout, tip totals, tip balances, badges, perks, rankings, or digital unlocks are active. |
@@ -97,6 +97,6 @@ The test account should not expose private personal photos, real user reports, r
 - Confirm account is not owner/admin/staff.
 - Confirm account can reach representative signed-in flows.
 - If Premium sandbox testing is requested, confirm the account is an approved Google Play license tester and the uploaded build has the matching RevenueCat/Google sandbox configuration.
-- Confirm the uploaded build has the Android RevenueCat public SDK key in approved public config before asking reviewers to test Premium purchase/restore.
+- Confirm the uploaded build has the Android RevenueCat public SDK key in approved public config, a freshly generated release bundle, a licensed tester/product path, and the Premium purchase shell intentionally enabled before asking reviewers to test Premium purchase/restore.
 - Confirm no private user data appears in the reviewer account.
 - Save Play Console App access proof outside the repo.

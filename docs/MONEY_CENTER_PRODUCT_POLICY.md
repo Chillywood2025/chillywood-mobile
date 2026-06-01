@@ -131,9 +131,9 @@ Sandbox and setup rules:
 June 1, 2026 Premium sandbox regression note:
 
 - Premium guards are restored, and Money Center does not override them.
-- The local Android debug RevenueCat public SDK key is present, but the production Android public SDK key is empty. `validate:runtime` reports `revenueCatAndroidPublicKeyConfigured: false` because it checks the production key path. The follow-up production-key lane confirmed the approved wiring exists and the missing value is the blocker; no secret or private key was committed.
-- A debug/internal sandbox build may configure RevenueCat with `runtime.revenueCat.androidDebugPublicSdkKey`; a release build needs `runtime.revenueCat.androidPublicSdkKey` before purchase/restore can be claimed.
-- Premium sandbox purchase proof is blocked until the Android RevenueCat public SDK key is added to approved public build config, a safe Play licensed tester path exists, RevenueCat/Google dashboard product proof exists, and matching build config is rebuilt. Do not mark production Premium active from debug-only config.
+- The local Android debug and production RevenueCat public SDK keys are present in ignored local config. `validate:runtime` now reports `revenueCatAndroidPublicKeyConfigured: true`, and the regenerated release bundle contains the public key through the approved client-safe path without printing or committing the value.
+- A debug/internal sandbox build may configure RevenueCat with `runtime.revenueCat.androidDebugPublicSdkKey`; a release build needs `runtime.revenueCat.androidPublicSdkKey` plus a freshly generated JS bundle before purchase/restore can be claimed.
+- Premium sandbox purchase proof is still unclaimed because the Premium purchase shell remains intentionally on hold and the safe Play licensed tester path plus RevenueCat/Google dashboard product proof still need owner confirmation. Do not mark production Premium active from local config or setup-only screenshots.
 - Backend `user_entitlements` active rows can unlock Premium where RLS-visible and trusted, but docs and UI must not label owner setup access, fake rows, or proof-hold state as Premium.
 - Watch-Party Live and Live Watch-Party / Live Stage Premium gates remain access gates only. Ticket/seat monetization for both room types is off/setup-only until a real Google Play/RevenueCat-backed product and entitlement path exists; no buy button should appear unless it is truly backed.
 - `live_money_enabled`, tips, paid content, payouts, and Stripe checkout for Android digital goods remain off.

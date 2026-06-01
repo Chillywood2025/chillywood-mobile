@@ -1,27 +1,28 @@
 # NEXT TASK
 
-## Recommended Lane: RevenueCat / Google Sandbox Premium Provider Proof Closeout
+## Recommended Lane: RevenueCat / Google Sandbox Premium Purchase Proof Closeout
 
-Latest follow-up result: RevenueCat Android Production Key and Sandbox Premium Purchase Proof could not complete purchase/restore because no Android production RevenueCat public SDK key value was available in the approved public config path. The current source build installed on `R5CR120QCBF` and proof lives at `/tmp/chillywood-premium-sandbox-proof-20260601/`; Subscribe shows Premium not active and purchase setup unavailable, and Money Center stays setup/not-active. `npm run validate:runtime` still reports `revenueCatAndroidPublicKeyConfigured: false`. New guard `npm run guard:premium-sandbox-policy` now locks no Premium bypass, no owner setup access as strict Premium entitlement, backend entitlement behavior, money-off posture, and no Stripe Android digital checkout.
+Latest follow-up result: RevenueCat Android Production Key and Sandbox Premium Purchase Proof resolved the local Android production RevenueCat public SDK key configuration without committing the key. The key is present only in ignored local config, the release bundle was force-regenerated after Gradle initially reused a stale JS bundle, and `npm run validate:runtime` now reports `revenueCatAndroidPublicKeyConfigured: true`. Current source built and installed on `R5CR120QCBF`; proof lives at `/tmp/chillywood-premium-sandbox-key-proof-20260601/`. Subscribe still shows Premium not active and purchase setup temporarily unavailable because the Premium purchase shell remains intentionally on hold; Money Center stays setup/not-active, digital sales remain sandbox/setup only, and no payable balance appears. No sandbox purchase, restore, RevenueCat active entitlement, or Google Play product proof is claimed. `npm run guard:premium-sandbox-policy` locks no Premium bypass, no owner setup access as strict Premium entitlement, backend entitlement behavior, money-off posture, and no Stripe Android digital checkout.
 
 Latest repo-side lane before the next proof lane: Premium Sandbox Regression Proof After Guard Restore. Premium guards are restored and the old shippable `PREMIUM_LIVE_GATE_PROOF_HOLD` bypass is removed. Creator upload, Platform Studio, Brand Studio, Clip Studio, Watch-Party Live start, and Live Watch-Party host paths are gated again with clean Premium-required/setup-needed copy. Backend enforcement now includes Premium/owner-operator creator-tool checks in RLS/storage/function paths; strict Premium gates require trusted entitlement proof and do not treat owner setup access as a Premium entitlement.
 
 Current Premium config truth:
 
 - Local Android debug RevenueCat public SDK key is present.
-- Local Android production RevenueCat public SDK key is empty.
+- Local Android production RevenueCat public SDK key is present in ignored local config and was proved in the regenerated release bundle without printing or committing the value.
 - Local iOS RevenueCat public SDK key is empty.
-- Runtime validator reports `revenueCatAndroidPublicKeyConfigured: false` because it checks the production `runtime.revenueCat.androidPublicSdkKey`, not the debug-only `androidDebugPublicSdkKey`.
+- Runtime validator reports `revenueCatAndroidPublicKeyConfigured: true`.
 - The configured Premium target in code uses entitlement id `premium` and offering id `premium`.
 - Google package is `com.chillywood.mobile`; current Play product proof still needs external Play/RevenueCat dashboard confirmation.
 - The Premium purchase shell remains on hold, so this lane did not fake or re-run a sandbox purchase.
 
 Next proof should verify with owner-provided external setup:
 
-- Add the Android RevenueCat public SDK key to the approved public build env/config path: `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`.
+- Put the Android RevenueCat public SDK key into the approved production/EAS public build env/config path for the uploaded build; keep local `.env.local` ignored and never commit secret/server keys.
 - Provide a safe Google Play licensed tester account only through Play Console/App access, not committed docs.
-- Confirm the submitted build has the correct production Android RevenueCat public SDK key if purchase/restore is expected in a release build.
+- Confirm the submitted build has the correct production Android RevenueCat public SDK key and a freshly generated JS bundle if purchase/restore is expected in a release build.
 - Confirm RevenueCat entitlement `premium`, offering `premium`, package/product mapping, and Google Play subscription product/base plan in the provider dashboards.
+- Decide when to take the Premium purchase shell off hold for a bounded sandbox purchase proof; do not expose a buy button until Play/RevenueCat tester/product readiness is confirmed.
 - Run sandbox purchase or restore on Android, verify RevenueCat active entitlement, verify backend `user_entitlements` active row/update, restart the app, and prove Premium-gated creator tools unlock without any bypass.
 - Prove a non-Premium account is still denied on Platform Studio, Brand Studio, Clip Studio, creator upload, Watch-Party Live creation, and Live Watch-Party hosting.
 - Keep `live_money_enabled`, tickets/seats, tips, paid content, payouts, and Stripe checkout for Android digital goods off.
