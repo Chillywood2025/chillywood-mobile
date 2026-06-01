@@ -297,6 +297,37 @@ Deno.serve(async (req) => {
     }
 
     const event = extractRevenueCatEvent(rawBody);
+    if (normalizeEventType(event.type) === "TEST") {
+      await writeProviderReadinessAudit(adminConfig.client, {
+        provider: "revenuecat",
+        capability: "premium_entitlement",
+        action: "revenuecat_webhook_test_received",
+        statusAfter: "configured",
+        reason: "RevenueCat dashboard test webhook reached the verified endpoint. Test events do not grant Premium.",
+        proofSource: FUNCTION_NAME,
+        metadata: {
+          revenuecat_event_hash: await hashText(rawBody),
+          revenuecat_event_id_hash: await hashText(await resolveEventId(event, rawBody)),
+          revenuecat_event_type: "TEST",
+          environment: toText(event.environment) || null,
+          raw_provider_payload_stored: false,
+          premium_granted: false,
+          live_money_action: false,
+        },
+      });
+
+      return jsonResponse(200, {
+        status: "test_received",
+        provider: "revenuecat",
+        capability: "premium_entitlement",
+        signatureVerified: true,
+        webhookProcessed: true,
+        premiumGranted: false,
+        liveMoneyAction: false,
+        message: "RevenueCat dashboard test webhook received. No Premium entitlement was granted.",
+      });
+    }
+
     const entitlementWrite = await writePremiumEntitlementFromRevenueCatEvent(adminConfig.client, event, rawBody);
 
     if (adminConfig.configured) {

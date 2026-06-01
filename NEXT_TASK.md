@@ -1,22 +1,22 @@
 # NEXT TASK
 
-## Recommended Lane: RevenueCat Webhook Secret And Backend Premium Unlock Proof
+## Recommended Lane: Fresh RevenueCat Sandbox Purchase Event And Backend Unlock Proof
 
-Latest backend-sync result: RevenueCat Backend Entitlement Sync Proof implemented and deployed `revenuecat-webhook` ACTIVE version 4 as the backend bridge, but did not claim real provider closure. The function now requires `REVENUECAT_WEBHOOK_SECRET`, rejects missing/invalid secrets, maps verified RevenueCat Premium events for entitlement `premium` / product `premium_subscription` into `user_entitlements.source='revenuecat'`, writes duplicate-safe `billing_events`, records sanitized provider-readiness audit, and fails closed if Supabase writes fail. Proof path: `/tmp/chillywood-revenuecat-backend-entitlement-sync-proof-20260601/`.
+Latest backend-sync result: RevenueCat Backend Entitlement Sync Proof implemented/deployed `revenuecat-webhook` ACTIVE version 4, then configured the RevenueCat webhook secret path. The function now requires `REVENUECAT_WEBHOOK_SECRET`, rejects missing/invalid secrets, maps verified RevenueCat Premium events for entitlement `premium` / product `premium_subscription` into `user_entitlements.source='revenuecat'`, writes duplicate-safe `billing_events`, records sanitized provider-readiness audit, fails closed if Supabase writes fail, and treats RevenueCat dashboard `TEST` events as delivery proof without granting Premium. Proof path: `/tmp/chillywood-revenuecat-backend-entitlement-sync-proof-20260601/`.
 
 Current exact blocker:
 
-- Names-only Supabase secret inventory still shows no `REVENUECAT_WEBHOOK_SECRET`; the deployed missing-secret smoke returns `setup_required`, `webhookProcessed:false`, `premiumGranted:false`, and `liveMoneyAction:false`.
+- Names-only Supabase secret inventory now shows `REVENUECAT_WEBHOOK_SECRET`.
+- RevenueCat webhook integration `whintgr38699522f7` is configured for the deployed Supabase function with the matching Authorization header.
+- RevenueCat dashboard `TEST` delivery returned HTTP 200. No-secret smoke returns 401, and valid shared-secret test returns `test_received`, `webhookProcessed:true`, `premiumGranted:false`, and `liveMoneyAction:false`.
 - Sanitized backend readback found zero Premium entitlement rows: `premiumRowCount: 0`, `activePremiumRowCount: 0`, `revenueCatPremiumRowCount: 0`.
-- Android proof still shows `/subscribe` as `Premium is active` from RevenueCat, but Platform Studio still denies with clean `Premium required` copy because creator tools trust backend `user_entitlements`, not RevenueCat UI state.
-- No real RevenueCat dashboard/test webhook event has been processed yet; no manual entitlement row was inserted; no Premium creator-tool unlock is claimed.
+- After webhook setup, Android `/subscribe` showed `Premium is not active`; Restore completed with `Restore complete. Premium is not active.` No real active RevenueCat Premium event was available to sync.
+- No manual entitlement row was inserted; no Premium creator-tool unlock is claimed.
 - Production Premium is not live. Live money, tickets/seats, tips, paid content, balances, payouts, and Stripe Android digital checkout remain off.
 
 Next action:
 
-- Add `REVENUECAT_WEBHOOK_SECRET` server-side in Supabase only; do not print or commit it.
-- Configure RevenueCat dashboard webhook for the deployed Supabase function with the same shared secret/header.
-- Send a real sandbox/test RevenueCat event for the purchased tester account, or run a restore/purchase path that triggers the real webhook.
+- Run a fresh sandbox purchase, renewal, or restore with an active entitlement on the Play-installed tester account so RevenueCat emits a real Premium event.
 - Sanitize-read `user_entitlements` for the test user and prove an active `premium` row with `source='revenuecat'`.
 - Reopen the Play-installed app, refresh/restart if needed, and prove Platform Studio/creator tools unlock from the backend row.
 - Reprove non-Premium denial from source/RLS or runtime account and keep all money/tickets/tips/paid-content/payout features off.
