@@ -27,6 +27,7 @@
     "guard:stripe-connect-policy": "node ./scripts/guard-stripe-connect-policy.mjs",
     "guard:provider-readiness-policy": "node ./scripts/guard-provider-readiness-policy.mjs",
     "guard:premium-sandbox-policy": "node ./scripts/guard-premium-sandbox-policy.mjs",
+    "guard:android-launcher-icon-policy": "node ./scripts/guard-android-launcher-icon-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",
     "guard:owner-security-center": "node ./scripts/guard-owner-security-center.mjs",
     "guard:malware-scanning-policy": "node ./scripts/guard-malware-scanning-policy.mjs",
@@ -50,7 +51,7 @@
     "guard:live-stage-contract": "node ./scripts/guard-live-stage-contract.mjs",
     "guard:live-stage-approved-seats": "node ./scripts/guard-live-stage-approved-seats.mjs",
     "guard:old-room-handling": "node ./scripts/guard-old-room-handling.mjs",
-    "typecheck": "tsc --noEmit && npm run guard:watch-party-livekit && npm run guard:old-room-handling"
+    "typecheck": "tsc --noEmit && npm run guard:android-launcher-icon-policy && npm run guard:watch-party-livekit && npm run guard:old-room-handling"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
