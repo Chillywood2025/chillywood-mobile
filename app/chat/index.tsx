@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,15 +14,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
-import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
-import { getOrCreateDirectThread, listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../../_lib/chat";
+import { listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../../_lib/chat";
 import { readActiveFriendUserIds } from "../../_lib/friendGraph";
-import { getOfficialPlatformAccount, RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
+import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { useSession } from "../../_lib/session";
 
 type InboxErrorState = {
   message: string;
-  source: "load" | "official-thread";
 };
 
 function buildPreview(thread: ChatThreadSummary) {
@@ -47,7 +45,7 @@ function getIdentityLabel(thread: ChatThreadSummary) {
 }
 
 function getThreadKindLabel(thread: ChatThreadSummary) {
-  return getOfficialPlatformAccount(thread.otherMember?.userId) ? "Rachi Help" : "Direct thread";
+  return getOfficialPlatformAccount(thread.otherMember?.userId) ? "Official" : "Direct thread";
 }
 
 function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
@@ -74,25 +72,7 @@ export default function ChillyChatInboxScreen() {
   const [error, setError] = useState<InboxErrorState | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [quickActionThreadId, setQuickActionThreadId] = useState("");
-  const [starterBusy, setStarterBusy] = useState(false);
   const [activeFriendUserIds, setActiveFriendUserIds] = useState<string[]>([]);
-  const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
-
-  useEffect(() => {
-    let active = true;
-
-    readAppConfig()
-      .then((config) => {
-        if (active) setAppConfig(config);
-      })
-      .catch(() => {
-        if (active) setAppConfig(DEFAULT_APP_CONFIG);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const loadThreads = useCallback(async (refresh = false) => {
     if (!isSignedIn) {
@@ -112,7 +92,7 @@ export default function ChillyChatInboxScreen() {
 
     try {
       const nextThreads = await listChatThreads();
-      setThreads(nextThreads);
+      setThreads(nextThreads.filter((thread) => !getOfficialPlatformAccount(thread.otherMember?.userId)));
       setError(null);
       void readActiveFriendUserIds()
         .then((nextUserIds) => {
@@ -124,7 +104,6 @@ export default function ChillyChatInboxScreen() {
     } catch (loadError: any) {
       setError({
         message: loadError?.message ?? "Unable to load Chi'lly Chat right now.",
-        source: "load",
       });
       setActiveFriendUserIds([]);
     } finally {
@@ -224,60 +203,6 @@ export default function ChillyChatInboxScreen() {
     });
   }, [router]);
 
-  const openOfficialProfile = useCallback(() => {
-    trackEvent("chat_official_profile_open_requested", {
-      surface: "chat-inbox",
-      targetUserId: RACHI_OFFICIAL_ACCOUNT.userId,
-    });
-    router.push({
-      pathname: "/profile/[userId]",
-      params: {
-        userId: RACHI_OFFICIAL_ACCOUNT.userId,
-        displayName: RACHI_OFFICIAL_ACCOUNT.displayName,
-        tagline: RACHI_OFFICIAL_ACCOUNT.tagline,
-      },
-    });
-  }, [router]);
-
-  const openOfficialThread = useCallback(async () => {
-    if (!appConfig.runtimeControls.chat_enabled) {
-      setError({
-        message: "Chi'lly Chat is temporarily paused. You can still read existing threads.",
-        source: "official-thread",
-      });
-      return;
-    }
-
-    setStarterBusy(true);
-    setError(null);
-
-    try {
-      const thread = await getOrCreateDirectThread({
-        userId: RACHI_OFFICIAL_ACCOUNT.userId,
-        displayName: RACHI_OFFICIAL_ACCOUNT.displayName,
-        tagline: RACHI_OFFICIAL_ACCOUNT.tagline,
-      });
-      trackEvent("chat_official_thread_open_requested", {
-        surface: "chat-inbox",
-        threadId: thread.threadId,
-        targetUserId: RACHI_OFFICIAL_ACCOUNT.userId,
-      });
-      router.push({
-        pathname: "/chat/[threadId]",
-        params: {
-          threadId: thread.threadId,
-        },
-      });
-    } catch (threadError: any) {
-      setError({
-        message: threadError?.message ?? "Unable to open the official Chi'lly Chat thread right now.",
-        source: "official-thread",
-      });
-    } finally {
-      setStarterBusy(false);
-    }
-  }, [appConfig.runtimeControls.chat_enabled, router]);
-
   const listHeader = useMemo(() => (
     <View style={styles.header}>
       <Text style={styles.kicker}>CHI'LLY CHAT</Text>
@@ -296,67 +221,20 @@ export default function ChillyChatInboxScreen() {
           <Text style={styles.headerPillText}>{liveCallCount} live call{liveCallCount === 1 ? "" : "s"}</Text>
         </View>
       </View>
-      <View style={styles.officialStarterCard}>
-        <View style={styles.officialStarterBadgeRow}>
-          <View style={styles.officialStarterBadge}>
-            <Text style={styles.officialStarterBadgeText}>{RACHI_OFFICIAL_ACCOUNT.officialBadgeLabel}</Text>
-          </View>
-          <View style={styles.officialStarterMetaPill}>
-            <Text style={styles.officialStarterMetaText}>{RACHI_OFFICIAL_ACCOUNT.platformOwnershipLabel}</Text>
-          </View>
-        </View>
-        <Text style={styles.officialStarterTitle}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
-        <Text style={styles.officialStarterHeadline}>{RACHI_OFFICIAL_ACCOUNT.conciergeHeadline}</Text>
-        <Text style={styles.officialStarterBody}>{RACHI_OFFICIAL_ACCOUNT.trustSummary}</Text>
-        <View style={styles.officialStarterTopicRow}>
-          {RACHI_OFFICIAL_ACCOUNT.guidanceTopics.map((topic) => (
-            <View key={topic} style={styles.officialStarterTopicPill}>
-              <Text style={styles.officialStarterTopicText}>{topic}</Text>
-            </View>
-          ))}
-        </View>
-        <View style={styles.quickActionRow}>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            activeOpacity={0.86}
-            onPress={() => {
-              void openOfficialThread();
-            }}
-            disabled={starterBusy}
-          >
-            <Text style={styles.quickActionButtonText}>{starterBusy ? "Opening..." : "Ask Rachi"}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.quickActionButton, styles.quickActionAccentButton]}
-            activeOpacity={0.86}
-            onPress={openOfficialProfile}
-          >
-            <Text style={styles.quickActionAccentButtonText}>Open Profile</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
       {error ? (
         <View style={styles.headerErrorCard}>
           <View style={styles.headerErrorCopy}>
-            <Text style={styles.headerErrorTitle}>
-              {error.source === "official-thread" ? "Rachi Help needs another try" : "Inbox needs another try"}
-            </Text>
+            <Text style={styles.headerErrorTitle}>Inbox needs another try</Text>
             <Text style={styles.headerErrorBody}>{error.message}</Text>
           </View>
           <TouchableOpacity
             style={styles.headerErrorAction}
             activeOpacity={0.86}
             onPress={() => {
-              if (error.source === "official-thread") {
-                void openOfficialThread();
-                return;
-              }
               void loadThreads(true);
             }}
           >
-            <Text style={styles.headerErrorActionText}>
-              {error.source === "official-thread" ? "Open Thread" : "Refresh Inbox"}
-            </Text>
+            <Text style={styles.headerErrorActionText}>Refresh Inbox</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -437,13 +315,10 @@ export default function ChillyChatInboxScreen() {
     error,
     liveCallCount,
     loadThreads,
-    openOfficialProfile,
-    openOfficialThread,
     openProfile,
     openThread,
     quickActionThread,
     searchQuery,
-    starterBusy,
     threads.length,
     unreadThreadCount,
   ]);
@@ -463,7 +338,7 @@ export default function ChillyChatInboxScreen() {
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Sign in to open Chi'lly Chat</Text>
           <Text style={styles.emptyBody}>
-            Chi'lly Chat inbox, direct threads, and official support threads only open on a signed-in Chi'llywood identity.
+            Chi'lly Chat inbox, direct threads, voice, and video only open on a signed-in Chi'llywood identity.
           </Text>
           <TouchableOpacity
             style={[styles.quickActionButton, styles.quickActionAccentButton]}
@@ -505,9 +380,7 @@ export default function ChillyChatInboxScreen() {
           const officialAccount = getOfficialPlatformAccount(other?.userId);
           const avatarUrl = officialAccount ? undefined : other?.avatarUrl;
           const unreadCount = item.currentMember?.unreadCount ?? 0;
-          const preview = officialAccount && !item.lastMessagePreview && !item.activeCommunicationRoomId
-            ? officialAccount.starterWelcomeBody
-            : buildPreview(item);
+          const preview = buildPreview(item);
           const identityLabel = getIdentityLabel(item);
           const threadKindLabel = getThreadKindLabel(item);
           const displayName = officialAccount?.displayName ?? other?.displayName ?? "Chi'lly Chat Thread";
@@ -730,82 +603,6 @@ const styles = StyleSheet.create({
   },
   inboxGuidePillTextOfficial: {
     color: "#FFE6A6",
-  },
-  officialStarterCard: {
-    gap: 10,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(242,194,91,0.3)",
-    backgroundColor: "rgba(96,72,20,0.26)",
-    padding: 16,
-  },
-  officialStarterBadgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  officialStarterBadge: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(242,194,91,0.38)",
-    backgroundColor: "rgba(242,194,91,0.12)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  officialStarterBadgeText: {
-    color: "#FFE6A6",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.9,
-  },
-  officialStarterMetaPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  officialStarterMetaText: {
-    color: "#F8F2DD",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-  },
-  officialStarterTitle: {
-    color: "#FFF9E8",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  officialStarterHeadline: {
-    color: "#FFF4D6",
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "800",
-  },
-  officialStarterBody: {
-    color: "#F0E5C5",
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontWeight: "600",
-  },
-  officialStarterTopicRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  officialStarterTopicPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(242,194,91,0.32)",
-    backgroundColor: "rgba(32,24,10,0.32)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  officialStarterTopicText: {
-    color: "#FFE6A6",
-    fontSize: 10.5,
-    fontWeight: "900",
   },
   searchShell: {
     flexDirection: "row",

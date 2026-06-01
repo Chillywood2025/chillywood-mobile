@@ -5726,9 +5726,9 @@ export default function AdminStudioScreen() {
       body: "Rachi appears as the first official Chi'lly Circle connection without becoming a normal mutual request row.",
     },
     {
-      label: "Rachi Help",
-      value: "Opt-In",
-      body: "Rachi Help only sees messages sent directly in that help conversation.",
+      label: "Chat Placement",
+      value: "Removed",
+      body: "Rachi no longer appears as a Chi'lly Chat starter; Rachi stays first in Chi'lly Circle.",
     },
   ], []);
 
@@ -12448,8 +12448,8 @@ export default function AdminStudioScreen() {
                 >
                   <Text style={styles.actionText}>Open Platform</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/chat")}>
-                  <Text style={styles.actionText}>Open Rachi Help</Text>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/chilly-circle")}>
+                  <Text style={styles.actionText}>Open Chi'lly Circle</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionBtn, styles.configSaveBtnDisabled]} disabled>
                   <Text style={styles.actionText}>Upload Original</Text>

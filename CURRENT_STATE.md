@@ -617,3 +617,19 @@ Still not claimed:
 - Camera/microphone denied visual proof still needs an active call/thread fixture.
 - Notification denied UI proof could not be forced reliably on `R5CR120QCBF`; the device did not expose `POST_NOTIFICATIONS` as a runtime permission and appops did not produce a denied UI state.
 - Photo picker permission-denied proof is not applicable to the current Android system photo picker path on this device.
+
+## Rachi Chat Placement Correction
+
+May 31, 2026 current product truth keeps Rachi out of Chi'lly Chat. Rachi remains Chi'llywood's official account, public Profile/Platform/Home presence, official Originals source, and first pinned Chi'lly Circle connection.
+
+Closed repo-side:
+
+- `/chat` filters official/Rachi threads out of the normal inbox and no longer renders the Rachi starter card or `Ask Rachi` action.
+- Legacy/direct `/chat/[threadId]` access to an official Rachi thread now shows a clean handoff that points users to Chi'lly Circle instead of rendering a Rachi Chat surface.
+- Rachi Profile no longer shows a `Rachi Help` / Chi'lly Chat CTA for official-profile viewers.
+- Admin Rachi copy now says Rachi is removed from Chat placement and stays first in Chi'lly Circle.
+- `npm run guard:rachi-official-policy` now blocks Rachi Chat starter/helper regressions.
+
+Current remaining proof need:
+
+- Rebuild/install current Android and visually confirm `/chat` has no Rachi card/thread, Rachi Profile has no Rachi Chat CTA, and `/chilly-circle` still shows Rachi first.

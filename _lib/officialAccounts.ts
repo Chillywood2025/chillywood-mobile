@@ -11,8 +11,6 @@ export type OfficialPlatformAccount = {
   auditOwnerKey: string;
   conciergeHeadline: string;
   trustSummary: string;
-  starterWelcomeBody: string;
-  starterPrompts: readonly string[];
   guidanceTopics: readonly string[];
 };
 
@@ -31,13 +29,6 @@ export const RACHI_OFFICIAL_ACCOUNT: OfficialPlatformAccount = {
   conciergeHeadline: "Official Chi'llywood guide and Originals publisher.",
   trustSummary:
     "Rachi shares Chi'llywood updates, tips, and Chi'llwood Originals. Rachi does not read your private chats.",
-  starterWelcomeBody:
-    "Rachi Help is opt-in. Rachi only sees what you send in this help conversation.",
-  starterPrompts: [
-    "Hi Rachi, help me get started.",
-    "Show me where to start in Chi'llywood.",
-    "I need official help with my account.",
-  ],
   guidanceTopics: [
     "Getting started",
     "Account help",

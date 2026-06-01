@@ -78,7 +78,7 @@ Current direct-thread truth does not mean:
 Rachi already exists as:
 - Chi'llywood's protected official platform account
 - the first pinned Chi'lly Circle official connection
-- an official guide/contact presence on canonical Profile, public Platform, Home, and opt-in Rachi Help surfaces
+- an official guide/contact presence on canonical Profile, public Platform, Home, and the first Chi'lly Circle placement
 - a distinct `official_platform` moderation actor with an audit owner key
 
 Rachi is not yet:
@@ -226,7 +226,7 @@ Rachi remains outside the normal native friend graph in current truth.
 
 Current doctrine:
 - Rachi is the first pinned Chi'lly Circle official connection
-- Rachi stays discoverable through canonical Profile, public Platform, Home, and opt-in Rachi Help routes
+- Rachi stays discoverable through canonical Profile, public Platform, Home, and the first Chi'lly Circle placement
 - Rachi is not auto-accepted into every user's friend list
 - Rachi is not the proof that a native friend graph already ships
 

@@ -1549,6 +1549,21 @@ export default function ProfileScreen() {
       return;
     }
 
+    if (isOfficialProfile) {
+      trackEvent("communication_profile_entry_blocked", {
+        entryPath: "profile",
+        profileIsSelf: "false",
+        reason: "official_account_chilly_circle_only",
+        targetUserId: userId,
+        entryMode,
+      });
+      Alert.alert(
+        "Rachi is in Chi'lly Circle",
+        "Rachi is your first official Chi'lly Circle connection. Chi'lly Chat is for direct threads with people.",
+      );
+      return;
+    }
+
     if (!appConfig.runtimeControls.chat_enabled) {
       trackEvent("communication_profile_entry_blocked", {
         entryPath: "profile",
@@ -2556,7 +2571,7 @@ export default function ProfileScreen() {
     ? {
         kicker: "PLATFORM FLOW",
         title: "Official updates start here",
-        body: "Use Rachi Profile for updates and Originals, or open Rachi Help when you choose to message directly.",
+        body: "Use Rachi Profile for updates and Originals. Rachi stays pinned first in Chi'lly Circle.",
       }
     : isSelfProfile
       ? {
@@ -2612,7 +2627,6 @@ export default function ProfileScreen() {
       ]
     : isOfficialProfile
       ? [
-          { label: "Rachi Help", onPress: () => { void onPressCommunication("message"); } },
           ...(canReportProfile ? [{ label: "Report", onPress: onPressReportProfile }] : []),
         ]
       : [
@@ -2831,11 +2845,11 @@ export default function ProfileScreen() {
     }] : []),
     {
       title: "Conversation",
-      kicker: "CHI'LLY CHAT",
+      kicker: isOfficialProfile ? "OFFICIAL CONNECTION" : "CHI'LLY CHAT",
       body: isSelfProfile
         ? "Keep direct follow-up in Chi'lly Chat so this route can stay public-facing."
         : isOfficialProfile
-          ? "Rachi Help is opt-in and only sees what you send in that help conversation."
+          ? "Rachi appears first in your Chi'lly Circle as an official connection, not a private chat thread."
           : "Direct follow-up from this Platform should move into Chi'lly Chat, not hide inside the profile.",
     },
     {
@@ -2862,12 +2876,12 @@ export default function ProfileScreen() {
         {
           title: "Platform Read",
           kicker: "ABOUT",
-          body: "Verified access, trusted follow-up, and official Platform posture stay clear on this canonical route.",
+          body: "Verified access, official updates, and public Platform posture stay clear on this canonical route.",
         },
         {
-          title: "Rachi Help",
-          kicker: "OPTIONAL HELP",
-          body: "Open Rachi Help only when you want to send Rachi a message. Rachi does not read private Chi'lly Chat messages.",
+          title: "Chi'lly Circle",
+          kicker: "OFFICIAL CONNECTION",
+          body: "Rachi stays pinned first in Chi'lly Circle. Direct Chi'lly Chat threads stay for people you message.",
         },
       ]
     : [
@@ -3036,9 +3050,9 @@ export default function ProfileScreen() {
       body: "official platform-owned identity",
     },
     {
-      label: "Rachi Help",
-      value: "Opt-in",
-      body: "Rachi only sees what you send in that help conversation",
+      label: "Chi'lly Circle",
+      value: "Pinned first",
+      body: "Rachi is your first official Chi'lly Circle connection",
     },
   ] : [
     {
@@ -4042,43 +4056,45 @@ export default function ProfileScreen() {
               </>
             ) : (
               <>
-                <View style={styles.primaryActionRow}>
-                  {canShowFollowAction ? (
-                    <TouchableOpacity
-                      style={[
-                        styles.actionBtn,
-                        viewerFollowState === "following" ? styles.actionBtnSecondary : styles.actionBtnConnected,
-                        (followActionBusy || viewerFollowState === "loading") && styles.actionBtnPlaceholder,
-                      ]}
-                      activeOpacity={0.86}
-                      disabled={followActionBusy || viewerFollowState === "loading"}
-                      onPress={onToggleFollowChannel}
-                    >
-                      <Text
+                {canShowFollowAction || !isOfficialProfile ? (
+                  <View style={styles.primaryActionRow}>
+                    {canShowFollowAction ? (
+                      <TouchableOpacity
                         style={[
-                          styles.actionBtnText,
-                          viewerFollowState === "following" ? styles.actionBtnText : styles.actionBtnTextConnected,
-                          (followActionBusy || viewerFollowState === "loading") && styles.actionBtnTextPlaceholder,
+                          styles.actionBtn,
+                          viewerFollowState === "following" ? styles.actionBtnSecondary : styles.actionBtnConnected,
+                          (followActionBusy || viewerFollowState === "loading") && styles.actionBtnPlaceholder,
                         ]}
+                        activeOpacity={0.86}
+                        disabled={followActionBusy || viewerFollowState === "loading"}
+                        onPress={onToggleFollowChannel}
                       >
-                        {followActionLabel}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  <TouchableOpacity
-                    testID="profile-chilly-chat-button"
-                    accessibilityLabel={isOfficialProfile ? "Open Rachi Help" : "Open Chi'lly Chat"}
-                    style={[styles.actionBtn, styles.actionBtnConnected]}
-                    activeOpacity={0.86}
-                    onPress={() => {
-                      void onPressCommunication("message");
-                    }}
-                  >
-                    <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>
-                      {isOfficialProfile ? "Rachi Help" : "Chi'lly Chat"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                        <Text
+                          style={[
+                            styles.actionBtnText,
+                            viewerFollowState === "following" ? styles.actionBtnText : styles.actionBtnTextConnected,
+                            (followActionBusy || viewerFollowState === "loading") && styles.actionBtnTextPlaceholder,
+                          ]}
+                        >
+                          {followActionLabel}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {!isOfficialProfile ? (
+                      <TouchableOpacity
+                        testID="profile-chilly-chat-button"
+                        accessibilityLabel="Open Chi'lly Chat"
+                        style={[styles.actionBtn, styles.actionBtnConnected]}
+                        activeOpacity={0.86}
+                        onPress={() => {
+                          void onPressCommunication("message");
+                        }}
+                      >
+                        <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>{"Chi'lly Chat"}</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : null}
                 <View style={styles.secondaryActionRow}>
                   {!isOfficialProfile || officialAccount ? (
                     <TouchableOpacity

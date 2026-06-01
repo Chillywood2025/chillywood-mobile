@@ -75,7 +75,7 @@ Do not mix `Watch-Party Live` and `Live Watch-Party`.
 - `/channel-studio` is the owner Platform Studio; `/channel-settings` is compatibility.
 - `/chat` and `/chat/[threadId]` remain the only canonical standalone Chi'lly Chat routes.
 - `app/communication/index.tsx` and `app/communication/[roomId].tsx` remain compatibility-only, not new user-facing route truth.
-- Rachi remains on canonical `/profile/[userId]` and canonical Chi'lly Chat routes.
+- Rachi remains on canonical `/profile/[userId]`, public Platform, Home, and first Chi'lly Circle placement; Rachi is not a Chi'lly Chat starter/helper thread.
 
 ## 3. Public Profile And Platform Surfaces
 ### 3.1 Route Ownership

@@ -21,12 +21,12 @@ Rachi is not:
 User-facing privacy copy should stay short:
 
 - `Rachi does not read your private chats.`
-- `Rachi Help only sees what you send in that help conversation.`
+- `Rachi is your first official Chi'lly Circle connection.`
 
 ## Surfaces
 
 - Chi'lly Circle shows Rachi first as a pinned official Chi'llywood connection.
-- Rachi Profile shows official identity, recent public Rachi posts, public-safe Rachi uploads, Rachi Platform, and Rachi Help.
+- Rachi Profile shows official identity, recent public Rachi posts, public-safe Rachi uploads, Rachi Platform, and the Chi'lly Circle placement.
 - Rachi public Platform shows official branding and public-safe published Rachi content only.
 - Home shows real public Rachi posts in `Rachi Official Updates`.
 - Home shows real public-safe Rachi-owned creator videos in `Chi'llwood Originals`.
@@ -35,7 +35,7 @@ User-facing privacy copy should stay short:
 - Explore People search and typeahead can show Rachi only as the explicit public official result after internal/proof account filtering: `Rachi`, `Official Chi'llwood`, official avatar/fallback, View Profile, and View Platform.
 - Explore Originals typeahead can show Rachi-owned Chi'llwood Originals only when the underlying public-safe Rachi creator-video row is backed.
 - Admin Search can find Rachi posts/Originals only inside the owner/admin `/admin` gate. Those searches now write masked Admin Search audit events; Rachi must still never appear publicly as admin authority, a bot, a chat monitor, or fake private activity.
-- Chi'lly Chat keeps Rachi Help opt-in and does not imply Rachi reads other chats.
+- Chi'lly Chat does not show Rachi as a starter/helper thread; Rachi stays discoverable as the first official Chi'lly Circle connection.
 - Admin Rachi tab is owner/admin-only and manages official Rachi posts plus official-content visibility.
 
 ## Admin Posting
@@ -121,7 +121,7 @@ Rules:
 - Result actions are View Profile and View Platform where backed.
 - Do not show admin/operator/system role labels.
 - Do not show email, private support metadata, fake engagement, fake followers, fake uploads, or private-chat surveillance copy.
-- Rachi Help remains opt-in and only sees what a user sends in that help conversation.
+- Do not route Rachi into Chi'lly Chat as a starter/helper thread.
 - Owner/Admin search may surface Rachi posts/Originals only inside `/admin`, behind Admin permissions, and must not expose provider secrets or private-chat surveillance copy.
 
 ## Validation
@@ -149,7 +149,7 @@ Captured on `R5CR120QCBF`:
 - Chi'lly Circle with pinned Rachi official connection
 - Rachi Profile
 - Rachi Platform
-- Rachi Help opt-in privacy copy
+- no Rachi starter/helper entry in Chi'lly Chat
 - normal user cannot access Rachi admin/studio controls
 - owner/operator Admin Rachi tab Overview
 - Admin Rachi Profile Picture section with `Choose from Gallery` and `Clear Picture`

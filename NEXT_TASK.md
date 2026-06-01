@@ -278,7 +278,7 @@ Closed truth:
 
 - Rachi copy now frames Rachi as `Official Chi'llywood`, not as a private chat monitor or normal user.
 - Rachi is pinned as the first official Chi'lly Circle connection without normal friendship/request rows.
-- Rachi Help is opt-in and says Rachi only sees messages sent in that help conversation.
+- Rachi is excluded from Chi'lly Chat starter/helper flows and remains first in Chi'lly Circle.
 - Home reads real public Rachi posts for `Rachi Official Updates`.
 - Home reads real public-safe Rachi-owned creator videos for `Chi'llwood Originals`.
 - Empty Rachi update/original states stay honest and do not fake posts, videos, comments, likes, followers, or engagement.
@@ -297,7 +297,7 @@ Closed truth:
 - Profile and public Platform preserve public-safe/draft-hidden behavior.
 - No LiveKit, Watch-Party, Premium, provider readiness, creator upload/delete, or normal Chi'lly Chat behavior changed.
 - `npm run guard:rachi-official-policy` pins the official-account, privacy, Circle, Home, Admin, Rachi Originals, no-surveillance, no-fake-stats, no raw public video paths, and no-Mini-Platform boundaries.
-- Android proof screenshots live at `/tmp/chillywood-rachi-official-proof-20260526/`; they capture pinned Rachi in Chi'lly Circle, Rachi Profile, Rachi Help privacy copy, Rachi public Platform, owner/operator Admin Rachi tab, gallery-based Profile Picture controls, a real Admin-created Rachi post, Home `Rachi Official Updates`, and Home `Chi'llwood Originals` honest empty state.
+- Android proof screenshots live at `/tmp/chillywood-rachi-official-proof-20260526/`; they capture pinned Rachi in Chi'lly Circle, Rachi Profile, Rachi public Platform, owner/operator Admin Rachi tab, gallery-based Profile Picture controls, a real Admin-created Rachi post, Home `Rachi Official Updates`, and Home `Chi'llwood Originals` honest empty state. A later current-build proof should confirm Rachi no longer appears in Chi'lly Chat.
 - Rachi Originals proof screenshots live at `/tmp/chillywood-rachi-originals-proof-20260526/`; they capture Home `Rachi Official Updates`, Home `Chi'llwood Originals` with the fixture, Rachi public Platform with the fixture, and Player route/title open.
 
 Remaining limitation:
@@ -474,7 +474,7 @@ Closed truth:
 - Signed-out public Profile opens after app-data clear with no Platform Studio, Preview Platform, Settings, delete controls, owner draft/reported badges, composer, or Attach controls.
 - Signed-out Follow shows the sign-in-required `Follow Platform` handoff, and signed-out Chi'lly Chat shows the sign-in-required Chi'lly Chat handoff without creating a fake thread.
 - Signed-out View Platform opens the public Platform route, not Studio, and public Platform hides owner controls/drafts.
-- Signed-in non-owner proof used the available authenticated account viewing Rachi's official Profile: no owner controls, no delete controls, no draft/reported badges, no composer/Attach; Chi'lly Chat opened the backed official thread; View Platform opened public Platform.
+- Signed-in non-owner proof used the available authenticated account viewing Rachi's official Profile: no owner controls, no delete controls, no draft/reported badges, no composer/Attach; View Platform opened public Platform. Current product truth now keeps Rachi out of Chi'lly Chat and pinned first in Chi'lly Circle.
 - Owner regression after viewer tests confirmed Platform Studio, Preview Platform, Chi'lly Chat, Chi'lly Circle, Settings, composer, Attach, owner delete, owner draft badge, Platform Studio route, public Preview Platform, and owner Chat inbox still work.
 - `npm run guard:profile-production-policy` now statically covers signed-out follow/chat handoffs, Profile privacy gates, owner/viewer action split, owner-only delete/draft/reported controls, blocked Chi'lly Circle guard, public Platform blocked-viewer guard, and public Platform draft exclusion.
 - Android screenshots/UI dumps live outside the repo at `/tmp/chillywood-profile-viewer-state-proof-20260525/`.

@@ -32,7 +32,7 @@ This document does not:
 ### 3.1 What Is Already Real
 Current repo truth already supports:
 - Rachi as the protected official platform account in `_lib/officialAccounts.ts`
-- Rachi on canonical Profile, public Platform, Chi'lly Circle, Home, Admin, and opt-in Rachi Help surfaces
+- Rachi on canonical Profile, public Platform, Chi'lly Circle, Home, and Admin surfaces
 - Rachi as the first pinned Chi'lly Circle official connection without normal friendship/request rows
 - Rachi as an official update and Chi'llywood Originals source when backed public-safe content exists
 - Rachi as a distinct `official_platform` moderation actor with an audit owner key
@@ -116,7 +116,7 @@ Publicly, Rachi currently means:
 - official Chi'llywood guide
 - first pinned Chi'lly Circle official connection
 - trusted getting-started, account-help, update, and Chi'llywood Originals presence
-- canonical official Profile, Platform, Home, and opt-in Rachi Help continuity
+- canonical official Profile, Platform, Home, and first Chi'lly Circle continuity
 - no private-chat surveillance
 
 Publicly, the current social graph currently means:

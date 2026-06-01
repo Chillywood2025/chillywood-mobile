@@ -48,12 +48,20 @@ const userFacingSource = [
 
 assertIncludes(officialAccounts, "Rachi shares Chi'llywood updates, tips, and Chi'llwood Originals.", "official Rachi positioning");
 assertIncludes(officialAccounts, "Rachi does not read your private chats.", "privacy trust copy");
-assertIncludes(officialAccounts, "Rachi Help is opt-in.", "opt-in Rachi Help copy");
 assertIncludes(userData, "profileAvatarUrl ?? normalizeTextValue(officialAccount.avatarUrl)", "official profile image reads backed avatar before fallback");
 
 assertIncludes(chillyCircle, "Official connection", "pinned official Chi'lly Circle section");
 assertIncludes(chillyCircle, "Your first Chi'lly Circle connection", "first official Circle copy");
 assertIncludes(chillyCircle, "Rachi does not read your private chats.", "Circle privacy copy");
+assertIncludes(chatInbox, "setThreads(nextThreads.filter((thread) => !getOfficialPlatformAccount(thread.otherMember?.userId)))", "Chat inbox hides official/Rachi threads");
+assertIncludes(profile, "official_account_chilly_circle_only", "Profile blocks Rachi-to-chat handoff");
+assertIncludes(profile, "Rachi stays pinned first in Chi'lly Circle.", "Profile points Rachi to Chi'lly Circle");
+assertIncludes(chatThread, "Rachi now lives in Chi'lly Circle.", "Legacy Rachi chat thread redirects to Circle");
+assertNotIncludes(chatInbox, "RACHI_OFFICIAL_ACCOUNT", "Rachi starter card in Chat inbox");
+assertNotIncludes(chatInbox, "Ask Rachi", "Ask Rachi Chat inbox action");
+assertNotIncludes(chatInbox, "Rachi Help", "Rachi Help Chat inbox copy");
+assertNotIncludes(profile, "Rachi Help", "Rachi Help Profile copy");
+assertNotIncludes(chatThread, "Rachi Help", "Rachi Help Chat thread copy");
 
 assertIncludes(migration, 'admin_create_official_rachi_post', "official post RPC");
 assertIncludes(migration, 'public."admin_content_assert_operator"()', "owner/operator assertion");
@@ -113,7 +121,6 @@ assertNotIncludes(publicCreatorVideoCardsFunction, "playback_url,", "public card
 assertNotIncludes(publicCreatorVideoCardsFunction, "storage_path,", "public card resolver does not select raw storage path");
 assertNotIncludes(publicCreatorVideoCardsFunction, "storage_object_key,", "public card resolver does not select raw storage object key");
 
-assertIncludes(profile, "Rachi Help is opt-in", "Profile opt-in Rachi Help copy");
 assertIncludes(profile, "Published public-safe Rachi uploads", "Profile Rachi Originals copy");
 assertIncludes(channel, "Official Chi'llwood", "Rachi Platform official badge");
 

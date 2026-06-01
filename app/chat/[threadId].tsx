@@ -81,30 +81,25 @@ const formatStamp = (value: string) => {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 };
 
-const getThreadStatusLabel = (thread: ChatThreadSummary | null, platformOwned = false) => {
+const getThreadStatusLabel = (thread: ChatThreadSummary | null) => {
   if (thread?.activeCommunicationRoomId && thread.activeCallType) {
     return thread.activeCallType === "video" ? "Video call live" : "Voice call live";
   }
   if ((thread?.currentMember?.unreadCount ?? 0) > 0) {
     return "Unread activity";
   }
-  return platformOwned ? "Rachi Help" : "Direct thread";
+  return "Direct thread";
 };
 
-const getThreadKindLabel = (platformOwned: boolean) => {
-  return platformOwned ? "Rachi Help" : "Direct thread";
+const getThreadKindLabel = () => {
+  return "Direct thread";
 };
 
 const getThreadGuideTitle = ({
-  platformOwned,
   activeCallType,
 }: {
-  platformOwned: boolean;
   activeCallType?: ChatCallType;
 }) => {
-  if (platformOwned) {
-    return "Rachi Help";
-  }
   if (activeCallType) {
     return "Call ready here";
   }
@@ -112,18 +107,10 @@ const getThreadGuideTitle = ({
 };
 
 const getThreadGuideBody = ({
-  platformOwned,
   activeCallType,
 }: {
-  platformOwned: boolean;
   activeCallType?: ChatCallType;
 }) => {
-  if (platformOwned) {
-    return activeCallType
-      ? "Rachi Help and call rejoin stay in this opt-in conversation."
-      : "Rachi only sees what you send in this help conversation.";
-  }
-
   return activeCallType
     ? "Both people can rejoin the active call from this thread."
     : "Message here first, then start voice or video from the same thread.";
@@ -406,15 +393,10 @@ export default function ChillyChatThreadScreen() {
   const otherMemberAvatarUrl = officialAccount ? undefined : otherMember?.avatarUrl;
   const otherMemberDisplayName = officialAccount?.displayName ?? otherMember?.displayName ?? "Direct Thread";
   const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;
-  const officialGuidanceTopics = officialAccount?.guidanceTopics ?? [];
   const callTitle = thread?.activeCallType === "video" ? "Video call active" : "Voice call active";
-  const callBody = officialAccount
-    ? thread?.activeCallType === "video"
-      ? "Rachi Help video stays inside this opt-in conversation so call state never splits apart."
-      : "Rachi Help voice stays inside this opt-in conversation so call state never splits apart."
-    : thread?.activeCallType === "video"
-      ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
-      : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
+  const callBody = thread?.activeCallType === "video"
+    ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
+    : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
   const callActionLabel = callBusy
     ? "Connecting..."
     : !activeCallRoomId
@@ -434,13 +416,11 @@ export default function ChillyChatThreadScreen() {
     [currentUserId, messages, thread?.members],
   );
 
-  const threadKindLabel = getThreadKindLabel(!!officialAccount);
+  const threadKindLabel = getThreadKindLabel();
   const threadGuideTitle = getThreadGuideTitle({
-    platformOwned: !!officialAccount,
     activeCallType: thread?.activeCallType,
   });
   const threadGuideBody = getThreadGuideBody({
-    platformOwned: !!officialAccount,
     activeCallType: thread?.activeCallType,
   });
   const friendStatusSummary = useMemo(() => {
@@ -513,9 +493,7 @@ export default function ChillyChatThreadScreen() {
 
   const latestThreadHint = useMemo(() => {
     if (renderedMessages.length === 0) {
-      return officialAccount
-        ? `${otherMemberDisplayName} is ready for official follow-up here.`
-        : "Start with a message or a call.";
+      return "Start with a message or a call.";
     }
 
     const latestMessage = renderedMessages[renderedMessages.length - 1];
@@ -525,18 +503,14 @@ export default function ChillyChatThreadScreen() {
       : latestMessage.body;
 
     return `Latest: ${author} · ${preview}`;
-  }, [officialAccount, otherMemberDisplayName, renderedMessages]);
+  }, [renderedMessages]);
 
   const emptyThreadPrompts = useMemo(() => {
-    if (officialAccount) {
-      return officialAccount.starterPrompts;
-    }
-
     return buildSmartReplySuggestions({
       activeCallType: thread?.activeCallType,
       otherMemberName: otherMemberDisplayName,
     });
-  }, [officialAccount, otherMemberDisplayName, thread?.activeCallType]);
+  }, [otherMemberDisplayName, thread?.activeCallType]);
 
   useEffect(() => {
     let active = true;
@@ -646,7 +620,7 @@ export default function ChillyChatThreadScreen() {
       callBusy,
       activeCommunicationRoomId: activeCallRoomId,
     });
-    if (!threadId || callBusy || !!activeCallRoomId) return;
+    if (!threadId || callBusy || !!activeCallRoomId || officialAccount) return;
     if (!appConfig.runtimeControls.chat_enabled) {
       setError("Chi'lly Chat calls are temporarily paused. You can still read existing messages.");
       return;
@@ -683,7 +657,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setCallBusy(false);
     }
-  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, callBusy, threadId]);
+  }, [activeCallRoomId, appConfig.runtimeControls.chat_enabled, callBusy, officialAccount, threadId]);
 
   useEffect(() => {
     const nextMode: ChatCallType | null = requestedCallMode === "voice"
@@ -693,7 +667,7 @@ export default function ChillyChatThreadScreen() {
         : null;
     const requestKey = nextMode ? `${threadId}:${nextMode}` : "";
 
-    if (!nextMode || !threadId || loading || !thread || callBusy || !!activeCallRoomId) {
+    if (!nextMode || !threadId || loading || !thread || callBusy || !!activeCallRoomId || officialAccount) {
       if (!nextMode) autoStartCallRef.current = "";
       return;
     }
@@ -701,7 +675,7 @@ export default function ChillyChatThreadScreen() {
     if (autoStartCallRef.current === requestKey) return;
     autoStartCallRef.current = requestKey;
     void handleStartCall(nextMode);
-  }, [activeCallRoomId, callBusy, handleStartCall, loading, requestedCallMode, thread, threadId]);
+  }, [activeCallRoomId, callBusy, handleStartCall, loading, officialAccount, requestedCallMode, thread, threadId]);
 
   const handleJoinOrCloseCall = useCallback(async () => {
     logChatCall("handle_join_or_close", {
@@ -710,7 +684,7 @@ export default function ChillyChatThreadScreen() {
       callPanelOpen,
       activeCallType: thread?.activeCallType ?? "",
     });
-    if (!threadId) return;
+    if (!threadId || officialAccount) return;
 
     if (!activeCallRoomId) {
       logChatCall("handle_join_or_close_decision", {
@@ -779,12 +753,12 @@ export default function ChillyChatThreadScreen() {
         role: isHost ? "host" : "viewer",
       });
     }
-  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, leaveRoom, loadThreadState, thread?.activeCallType, threadId]);
+  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, leaveRoom, loadThreadState, officialAccount, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";
 
-    if (!requestedOpenCall || !threadId || loading || callBusy || callPanelOpen || !activeCallRoomId) {
+    if (!requestedOpenCall || !threadId || loading || callBusy || callPanelOpen || !activeCallRoomId || officialAccount) {
       if (!requestedOpenCall) autoOpenCallRef.current = "";
       return;
     }
@@ -792,7 +766,7 @@ export default function ChillyChatThreadScreen() {
     if (autoOpenCallRef.current === requestKey) return;
     autoOpenCallRef.current = requestKey;
     void handleJoinOrCloseCall();
-  }, [activeCallRoomId, callBusy, callPanelOpen, handleJoinOrCloseCall, loading, requestedOpenCall, threadId]);
+  }, [activeCallRoomId, callBusy, callPanelOpen, handleJoinOrCloseCall, loading, officialAccount, requestedOpenCall, threadId]);
 
   useEffect(() => {
     logChatCall("panel_state_changed", {
@@ -967,6 +941,29 @@ export default function ChillyChatThreadScreen() {
     );
   }
 
+  if (officialAccount) {
+    return (
+      <View style={[styles.screen, styles.centered, { paddingTop: safeAreaInsets.top + 28, paddingHorizontal: 24 }]}>
+        <Text style={styles.stateText}>Rachi now lives in Chi'lly Circle.</Text>
+        <Text style={[styles.stateText, styles.centeredStateBody]}>
+          Rachi is your first official Chi'lly Circle connection. Chi'lly Chat is for direct threads with people.
+        </Text>
+        <TouchableOpacity
+          style={[styles.secondaryBtn, styles.signInBtn]}
+          activeOpacity={0.85}
+          onPress={() => {
+            router.replace("/chilly-circle" as Parameters<typeof router.replace>[0]);
+          }}
+        >
+          <Text style={styles.secondaryBtnText}>Open Chi'lly Circle</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85} onPress={() => router.back()}>
+          <Text style={styles.secondaryBtnText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { paddingTop: safeAreaInsets.top + 8 }]}
@@ -1002,14 +999,9 @@ export default function ChillyChatThreadScreen() {
           <Text style={styles.title}>{otherMemberDisplayName}</Text>
           {otherMemberTagline ? <Text style={styles.body}>{otherMemberTagline}</Text> : null}
           <View style={styles.headerMetaRow}>
-            {officialAccount ? (
-              <View style={[styles.headerPill, styles.headerPillOfficial]}>
-                <Text style={[styles.headerPillText, styles.headerPillTextOfficial]}>{officialAccount.officialBadgeLabel}</Text>
-              </View>
-            ) : null}
             <View style={styles.headerPill}>
               <View style={[styles.headerPillDot, activeCallRoomId && styles.headerPillDotAlert]} />
-              <Text style={styles.headerPillText}>{getThreadStatusLabel(thread, !!officialAccount)}</Text>
+              <Text style={styles.headerPillText}>{getThreadStatusLabel(thread)}</Text>
             </View>
             {thread?.currentMember?.lastReadAt ? (
               <Text style={styles.headerMetaText}>Read up to date.</Text>
@@ -1018,9 +1010,7 @@ export default function ChillyChatThreadScreen() {
             )}
           </View>
           <Text style={styles.headerHint}>
-            {officialAccount
-              ? "Tap the avatar for profile, report, and call actions."
-              : "Tap the avatar for profile, Chi'lly Circle, report, and call actions."}
+            Tap the avatar for profile, Chi'lly Circle, report, and call actions.
           </Text>
         </View>
       </View>
@@ -1032,9 +1022,7 @@ export default function ChillyChatThreadScreen() {
             {otherMemberDisplayName}
           </Text>
           <Text style={styles.headerQuickActionBody}>
-            {officialAccount
-              ? "Open Rachi Profile or keep voice/video entry in this same opt-in help conversation."
-              : "Open the profile, manage Chi'lly Circle, or keep voice/video entry in this same thread."}
+            Open the profile, manage Chi'lly Circle, or keep voice/video entry in this same thread.
           </Text>
           <View style={styles.headerQuickActionRow}>
             <TouchableOpacity
@@ -1088,7 +1076,7 @@ export default function ChillyChatThreadScreen() {
               </>
             )}
           </View>
-          {!officialAccount && otherMember?.userId && friendStatusSummary ? (
+          {otherMember?.userId && friendStatusSummary ? (
             <View style={styles.friendshipCard}>
               <View style={styles.friendshipHeader}>
                 <Text style={styles.friendshipKicker}>CHI'LLY CIRCLE</Text>
@@ -1208,11 +1196,11 @@ export default function ChillyChatThreadScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.threadGuideCard, officialAccount && styles.threadGuideCardOfficial]}>
+      <View style={styles.threadGuideCard}>
         <View style={styles.threadGuideHeader}>
           <Text style={styles.threadGuideKicker}>THREAD STATUS</Text>
-          <View style={[styles.threadGuideKindPill, officialAccount && styles.threadGuideKindPillOfficial]}>
-            <Text style={[styles.threadGuideKindPillText, officialAccount && styles.threadGuideKindPillTextOfficial]}>
+          <View style={styles.threadGuideKindPill}>
+            <Text style={styles.threadGuideKindPillText}>
               {threadKindLabel}
             </Text>
           </View>
@@ -1230,7 +1218,7 @@ export default function ChillyChatThreadScreen() {
               {thread.currentMember?.lastReadAt ? "Read up to date" : "Read on open"}
             </Text>
           </View>
-          {!officialAccount && friendStatusSummary ? (
+          {friendStatusSummary ? (
             <View style={styles.threadGuideMetaPill}>
               <Text style={styles.threadGuideMetaPillText}>{friendStatusSummary.pill}</Text>
             </View>
@@ -1238,21 +1226,6 @@ export default function ChillyChatThreadScreen() {
         </View>
         <Text style={styles.threadGuideHint}>{latestThreadHint}</Text>
       </View>
-
-      {officialAccount ? (
-        <View style={styles.officialPresenceCard}>
-          <Text style={styles.officialPresenceKicker}>{officialAccount.platformOwnershipLabel}</Text>
-          <Text style={styles.officialPresenceTitle}>{officialAccount.conciergeHeadline}</Text>
-          <Text style={styles.officialPresenceBody}>{officialAccount.trustSummary}</Text>
-          <View style={styles.officialPresenceTopicRow}>
-            {officialGuidanceTopics.map((topic) => (
-              <View key={topic} style={styles.officialPresenceTopicPill}>
-                <Text style={styles.officialPresenceTopicText}>{topic}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      ) : null}
 
       {activeCallRoomId && !callPanelOpen ? (
         <View style={styles.callBanner}>
@@ -1295,15 +1268,13 @@ export default function ChillyChatThreadScreen() {
         ))}
       {renderedMessages.length === 0 ? (
           <View
-            style={[styles.emptyCard, officialAccount && styles.emptyCardOfficial]}
+            style={styles.emptyCard}
             testID="chat-thread-empty-state"
             accessibilityLabel="Chi'lly Chat empty thread"
           >
-            <Text style={styles.emptyTitle}>{officialAccount ? `${officialAccount.displayName} is ready` : "Start the conversation"}</Text>
+            <Text style={styles.emptyTitle}>Start the conversation</Text>
             <Text style={styles.emptyBody}>
-            {officialAccount
-                ? officialAccount.starterWelcomeBody
-                : "Send the first message here, or start a voice or video handoff from the same thread."}
+              Send the first message here, or start a voice or video handoff from the same thread.
             </Text>
             <View style={styles.starterPromptRow}>
               {emptyThreadPrompts.map((prompt) => (
@@ -1427,10 +1398,8 @@ export default function ChillyChatThreadScreen() {
 
       <ReportSheet
         visible={reportVisible}
-        title={officialAccount ? "Report official thread concern" : "Report participant"}
-        description={officialAccount
-          ? `Send a safety report if this official ${otherMemberDisplayName} thread feels unsafe, misleading, or compromised.`
-          : `Send a safety report for ${otherMemberDisplayName} if this direct thread feels abusive, unsafe, or impersonated.`}
+        title="Report participant"
+        description={`Send a safety report for ${otherMemberDisplayName} if this direct thread feels abusive, unsafe, or impersonated.`}
         busy={reportBusy}
         onSubmit={handleSubmitReport}
         onClose={() => setReportVisible(false)}
@@ -2136,6 +2105,9 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: "700",
     textAlign: "center",
+  },
+  centeredStateBody: {
+    maxWidth: 320,
   },
   errorText: {
     color: "#FFB6C7",
