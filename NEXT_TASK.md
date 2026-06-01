@@ -2,6 +2,14 @@
 
 ## Recommended Lane: Bounded Premium Purchase Shell v13 And Sandbox Restore Proof
 
+Latest purchase-shell result: The Play-installed v12 app on `R5CR120QCBF` is signed in and the Premium sandbox purchase/restore path was proved through an owner-approved bounded EAS update. Temporary update group `b678522a-8734-49a1-a582-f2bc6743c756` opened only the Premium shell; Google Play showed the sandbox `Chi'llywood Premium` subscription with the always-approves test payment method; purchase completed; `/subscribe` showed `Premium is active`; restore completed with `Purchases restored. Premium is active.` The shell was then closed again with update group `82f7e7fd-d213-4f50-9c5d-6e6a328884db`; current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true`. Proof path: `/tmp/chillywood-play-installed-premium-sandbox-purchase-proof-20260601/`.
+
+Immediate blocker:
+
+- Backend entitlement sync/readback is still the remaining gap. Platform Studio still denied with clean `Premium required` copy after the RevenueCat purchase because creator-tool access reads backend `user_entitlements`, not owner setup access and not a local fake Premium flag.
+- Supabase connector access required reauthentication, `psql` is not installed locally, and the attempted Deno SQL read could not authenticate with the local pooler URL. Do not claim backend row proof until a sanitized DB readback or webhook sync is proved.
+- Keep live money, tickets/seats, tips, paid content, payouts, balances, and Stripe Android digital checkout off.
+
 Latest Play-installed result: Play-Installed VersionCode 12 Premium Sandbox Proof advanced the strongest required prerequisite. On `R5CR120QCBF`, the old sideloaded install was removed with owner approval, the internal-test invite was accepted, and Google Play installed `com.chillywood.mobile` from internal testing. Device proof reports `installer=com.android.vending`, `versionCode=12`, `versionName=1.0.0`, and install time `2026-06-01 10:19:10`. Proof lives at `/tmp/chillywood-play-installed-v12-premium-proof-20260601/`. Play Console read-only proof shows internal testing active on release `1.0.0` / versionCode `12` with tester list `Chi'llywood Internal Testers`; no track/release/tester mutation was made.
 
 RevenueCat mapping is now confirmed from the logged-in dashboard without exposing secrets: project `c5629a24`, Android app `appd24db94dd8`, package `com.chillywood.mobile`, Play Store product `premium_subscription:monthly`, subscription id `premium_subscription`, base plan `monthly`, entitlement `premium`, and offering `premium`.

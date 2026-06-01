@@ -2,6 +2,8 @@
 
 Last updated: June 1, 2026
 
+June 1, 2026 Play-installed Premium sandbox purchase-shell follow-up: the Play-installed blocker is resolved on `R5CR120QCBF` with `installer=com.android.vending`, versionCode `12`, and versionName `1.0.0`; the app is signed in and `/subscribe` opens. RevenueCat mapping remains dashboard-proved from the prior lane. Owner-approved bounded EAS update group `b678522a-8734-49a1-a582-f2bc6743c756` opened only the Premium purchase shell, Google Play displayed the sandbox `Chi'llywood Premium` subscription for `com.chillywood.mobile (unreviewed)` with the always-approves test payment method and no-charge test-subscription copy, purchase completed, `/subscribe` showed `Premium is active`, and restore completed with `Purchases restored. Premium is active.` The shell was closed again with EAS update group `82f7e7fd-d213-4f50-9c5d-6e6a328884db`; current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true`. Backend entitlement sync/readback remains open because Supabase connector access required reauthentication and local SQL tooling could not complete a sanitized row read; Platform Studio stayed denied with `Premium required`, proving no fake creator-tool unlock. No live money, tickets/seats, tips, paid content, payouts, or production Premium is active.
+
 This runbook records the provider-link readiness scaffold for Premium, RevenueCat, Google Play Billing, Stripe, Stripe Connect, payouts, revenue imports, tips, paid content, Watch-Party seats, ads, and future commerce.
 
 No implementation in this lane activates purchases, payouts, balances, withdrawals, transfers, checkout, tips, paid content, revenue imports, or live money movement.
