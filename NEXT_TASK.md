@@ -1,34 +1,32 @@
 # NEXT TASK
 
-## Recommended Lane: Fresh RevenueCat Sandbox Purchase Event And Backend Unlock Proof
+## Recommended Lane: Post-Proof Premium Reviewer Packet And Non-Premium Runtime Denial
 
-Latest backend-sync result: RevenueCat Backend Entitlement Sync Proof implemented/deployed `revenuecat-webhook` ACTIVE version 4, then configured the RevenueCat webhook secret path. The function now requires `REVENUECAT_WEBHOOK_SECRET`, rejects missing/invalid secrets, maps verified RevenueCat Premium events for entitlement `premium` / product `premium_subscription` into `user_entitlements.source='revenuecat'`, writes duplicate-safe `billing_events`, records sanitized provider-readiness audit, fails closed if Supabase writes fail, and treats RevenueCat dashboard `TEST` events as delivery proof without granting Premium. Proof path: `/tmp/chillywood-revenuecat-backend-entitlement-sync-proof-20260601/`.
+Latest proof result: Fresh RevenueCat Sandbox Purchase Event Backend Entitlement Proof closed the Play-installed sandbox purchase -> RevenueCat webhook -> backend `user_entitlements` -> Platform Studio unlock chain. Proof path: `/tmp/chillywood-fresh-revenuecat-sandbox-entitlement-proof-20260601/`.
 
-Current exact blocker:
+Closed in the latest lane:
 
-- Names-only Supabase secret inventory now shows `REVENUECAT_WEBHOOK_SECRET`.
-- RevenueCat webhook integration `whintgr38699522f7` is configured for the deployed Supabase function with the matching Authorization header.
-- RevenueCat dashboard `TEST` delivery returned HTTP 200. No-secret smoke returns 401, and valid shared-secret test returns `test_received`, `webhookProcessed:true`, `premiumGranted:false`, and `liveMoneyAction:false`.
-- Sanitized backend readback found zero Premium entitlement rows: `premiumRowCount: 0`, `activePremiumRowCount: 0`, `revenueCatPremiumRowCount: 0`.
-- After webhook setup, Android `/subscribe` showed `Premium is not active`; Restore completed with `Restore complete. Premium is not active.` No real active RevenueCat Premium event was available to sync.
-- No manual entitlement row was inserted; no Premium creator-tool unlock is claimed.
+- Play-installed app stayed valid on `R5CR120QCBF`: `installer=com.android.vending`, versionCode `12`, versionName `1.0.0`.
+- Bounded Premium purchase shell was opened only for proof, then closed again. Final close update group: `5668cdaa-cd5b-4553-bd91-7b786323fd22`; current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true` and `premiumPurchaseEnabled: false`.
+- Fresh Google Play sandbox purchase succeeded; Restore Purchases completed active.
+- Real RevenueCat webhook event `0bd7...60d7` reached the deployed Supabase function and returned HTTP 200 with `webhookProcessed:true`, `premiumGranted:true`, and `liveMoneyAction:false`.
+- Sanitized backend readback found one backend-active `premium` row for the test user with `source='revenuecat'`, sandbox Play Store metadata, and no raw provider payload storage. A later sandbox renewal refreshed the active window.
+- Platform Studio opened during the backend-active window and showed creator actions instead of Premium-required denial, proving unlock from backend entitlement.
 - Production Premium is not live. Live money, tickets/seats, tips, paid content, balances, payouts, and Stripe Android digital checkout remain off.
 
-Next action:
+Remaining honest gap:
 
-- Run a fresh sandbox purchase, renewal, or restore with an active entitlement on the Play-installed tester account so RevenueCat emits a real Premium event.
-- Sanitize-read `user_entitlements` for the test user and prove an active `premium` row with `source='revenuecat'`.
-- Reopen the Play-installed app, refresh/restart if needed, and prove Platform Studio/creator tools unlock from the backend row.
-- Reprove non-Premium denial from source/RLS or runtime account and keep all money/tickets/tips/paid-content/payout features off.
+- Non-Premium runtime denial still needs a separate safe signed-in non-Premium account if the owner wants device proof. Source/RLS/guard proof currently covers denial: normal users cannot write entitlement rows, expired/revoked/inactive rows do not unlock, and owner/operator setup access is not Premium.
+- If Google reviewers should test Premium, the reviewer/test account must be a licensed tester and credentials must be entered only in Play Console App access. Do not commit a password.
+- Keep the purchase shell closed unless the owner intentionally opens it for reviewer sandbox testing.
 
 ## Previous Recommended Lane: Bounded Premium Purchase Shell v13 And Sandbox Restore Proof
 
 Latest purchase-shell result: The Play-installed v12 app on `R5CR120QCBF` is signed in and the Premium sandbox purchase/restore path was proved through an owner-approved bounded EAS update. Temporary update group `b678522a-8734-49a1-a582-f2bc6743c756` opened only the Premium shell; Google Play showed the sandbox `Chi'llywood Premium` subscription with the always-approves test payment method; purchase completed; `/subscribe` showed `Premium is active`; restore completed with `Purchases restored. Premium is active.` The shell was then closed again with update group `82f7e7fd-d213-4f50-9c5d-6e6a328884db`; current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true`. Proof path: `/tmp/chillywood-play-installed-premium-sandbox-purchase-proof-20260601/`.
 
-Immediate blocker:
+Superseded blocker from that lane:
 
-- Backend entitlement sync/readback is still the remaining gap. Platform Studio still denied with clean `Premium required` copy after the RevenueCat purchase because creator-tool access reads backend `user_entitlements`, not owner setup access and not a local fake Premium flag.
-- Supabase connector access required reauthentication, `psql` is not installed locally, and the attempted Deno SQL read could not authenticate with the local pooler URL. Do not claim backend row proof until a sanitized DB readback or webhook sync is proved.
+- Backend entitlement sync/readback was the remaining gap for that older lane. It is now superseded by `/tmp/chillywood-fresh-revenuecat-sandbox-entitlement-proof-20260601/`, where a real RevenueCat event wrote/refreshed a backend Premium row and Platform Studio unlocked during the backend-active window.
 - Keep live money, tickets/seats, tips, paid content, payouts, balances, and Stripe Android digital checkout off.
 
 Latest Play-installed result: Play-Installed VersionCode 12 Premium Sandbox Proof advanced the strongest required prerequisite. On `R5CR120QCBF`, the old sideloaded install was removed with owner approval, the internal-test invite was accepted, and Google Play installed `com.chillywood.mobile` from internal testing. Device proof reports `installer=com.android.vending`, `versionCode=12`, `versionName=1.0.0`, and install time `2026-06-01 10:19:10`. Proof lives at `/tmp/chillywood-play-installed-v12-premium-proof-20260601/`. Play Console read-only proof shows internal testing active on release `1.0.0` / versionCode `12` with tester list `Chi'llywood Internal Testers`; no track/release/tester mutation was made.
