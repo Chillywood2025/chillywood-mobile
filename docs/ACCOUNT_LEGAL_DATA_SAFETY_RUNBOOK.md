@@ -45,6 +45,9 @@ The owner/operator Play Console execution package is now repo-side complete:
 - `docs/google-play/ACCOUNT_DELETION_URL_CONTENT.md`
 - `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`
 - `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md`
+- `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md`
+
+June 1, 2026 update: the external acceptance tracker maps the remaining Play Console P0 field by field. Data Safety, Content Rating, account deletion URL acceptance, App access credentials, Store listing assets, AAB upload, and Play review acceptance remain external until the owner/operator saves/submits them in Play Console and captures non-secret proof.
 
 Proof folder: `/tmp/chillywood-google-play-acceptance-closeout-20260530/`.
 

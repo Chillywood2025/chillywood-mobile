@@ -5,6 +5,8 @@ Status: field-ready checklist prepared; final Play listing assets still external
 
 This checklist records what exists in the repo and what the owner/operator must upload or approve in Play Console. It does not claim store listing completion.
 
+June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records Store listing as partial/external. The feature graphic remains missing, phone screenshots must be selected as store-ready assets outside the repo or uploaded directly, and final copy/category/tags require owner/legal approval. No Play listing asset upload or acceptance is claimed in this lane.
+
 ## App Identity
 
 | Field | Current value | Status | Owner action |

@@ -6,6 +6,8 @@ Status: operator packet prepared; Play Console submission remains external
 
 This document tells the owner/operator what to enter in Google Play Console based on current repo evidence. It does not claim Play Console submission, Data Safety completion, content-rating completion, account-deletion acceptance, legal approval, DKIM verification, support staffing, or store listing acceptance.
 
+June 1, 2026 external acceptance tracker update: the field answers remain prepared, and `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` now records final per-section status and proof requirements. No Play Console field was submitted or accepted in that lane. Current device proof is Play-installed versionCode `13`; current local repo AAB remains debug-signed and must not be uploaded; Premium remains ready-but-closed with purchase shell closed by default; and live money/tickets/tips/paid content/payouts remain off.
+
 ## Official References
 
 - Data Safety form: https://support.google.com/googleplay/android-developer/answer/10787469
@@ -27,13 +29,14 @@ This document tells the owner/operator what to enter in Google Play Console base
 | Account deletion URL packet | `docs/google-play/ACCOUNT_DELETION_URL_CONTENT.md` |
 | Reviewer instructions source | `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md` |
 | Store listing asset source | `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md` |
+| External acceptance tracker | `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` |
 | Public URL proof | `/tmp/chillywood-google-play-acceptance-closeout-20260530/public-url-check.tsv` |
 | Android legal/account proof | `/tmp/chillywood-google-play-acceptance-closeout-20260530/android/` |
 | Malware scanner production proof | `/tmp/chillywood-malware-scanner-production-proof-20260530/` |
 | DNS/email proof | `/tmp/chillywood-google-play-acceptance-closeout-20260530/dns-email-check.txt` |
 | App package | `com.chillywood.mobile` from `app.json` and `android/app/build.gradle` |
 | Runtime version | `1.0.0` from `app.json` and runtime validation |
-| Android versionCode/versionName | `versionCode 8`, `versionName "1.0.0"` from `android/app/build.gradle` |
+| Android versionCode/versionName | repo Gradle value is `versionCode 8`, `versionName "1.0.0"`; Play-installed proof on `R5CR120QCBF` is versionCode `13`, versionName `1.0.0` |
 
 ## Console Field Answers
 
@@ -71,13 +74,13 @@ This document tells the owner/operator what to enter in Google Play Console base
 | Account deletion | Deletion type | Request-based deletion/de-identification with identity verification and legal/safety/billing/moderation retention exceptions | Account deletion packet | High | Do not claim instant/automatic deletion | Console screenshot | Yes | Yes |
 | UGC / moderation | Does the app have UGC? | Yes: profiles, posts, comments, replies, creator videos, attachments, chat, live/rooms, reports | Legal runbook and app routes | High | Answer UGC questions accurately | App content screenshot | Yes | Yes |
 | UGC / moderation | Report/block/moderation | Report flows, Admin Reports, Profile media report/actions, DMCA intake, malware scanner, and block/profile actions exist where backed | Moderation workflow docs | High | Confirm ops owner/SLA; do not claim impossible automated review | Evidence screenshot | Yes | Yes |
-| Financial / purchases | In-app purchases | Yes if Premium/RevenueCat/Google Play purchase flow ships enabled; otherwise do not promote paid digital goods | RevenueCat/Google docs, runtime validation shows Android public key not currently configured in local runtime | Medium | Owner confirms final build/provider state before declaring | Console billing proof | Yes if monetized | Yes if monetized |
+| Financial / purchases | In-app purchases | Yes if Premium/RevenueCat/Google Play purchase flow ships enabled; otherwise do not promote paid digital goods | RevenueCat/Google docs, `validate:runtime` now reports Android public key configured, prior sandbox purchase/restore/backend entitlement proof passed, current shell remains closed by default | Medium | Owner confirms final submitted build/provider/shell state before declaring | Console billing proof | Yes if monetized | Yes if monetized |
 | Financial / payouts | Creator payouts/live money | Not active. Do not claim payouts, earnings, cash-out, tips, seats, ads revenue, or paid creator sales are live. | Money Center policy and guards | High | Keep live money off | Money guard proof | Yes | Yes if claims appear |
 | Permissions | Camera | Used for live/camera room participation where user grants access | `app.json`, Android manifest, LiveKit routes | High | Explain camera use if Play prompts | Permissions declaration proof | No | Yes if prompted |
 | Permissions | Microphone | Used for live/audio room participation where user grants access | `app.json`, Android manifest, LiveKit routes | High | Explain microphone use if Play prompts | Permissions declaration proof | No | Yes if prompted |
 | Permissions | Notifications | Used for push notifications/reminders where user grants permission | `app.json`, Android manifest, notification helpers | High | Explain notification purpose if Play prompts | Permissions declaration proof | No | Yes if prompted |
 | Permissions | Storage/media access | Current native manifest has legacy read/write storage permissions from generated Android project; selected media/files are used for uploads/attachments | Android manifest, picker packages | Medium | Be ready to explain selected-file upload; consider separate native permission cleanup if Play flags legacy permissions | Play warning screenshot if any | No | Yes if Play blocks |
-| Release | App bundle upload | Fresh current-HEAD local AAB proof exists, but the local Gradle release is debug-signed. Use owner-approved Play upload signing or corrected release signing before upload. | `android/app/build/outputs/bundle/release/app-release.aab`, `/tmp/chillywood-current-head-play-upload-proof-20260530/`, release checklist | High | Confirm Play upload signing path, then upload signed AAB to closed testing first | AAB upload/pre-launch proof | No | Yes |
+| Release | App bundle upload | Fresh current-HEAD local AAB proof exists, but the local Gradle release is debug-signed. Play-installed v13 exists on the proof phone. Use owner-approved Play upload signing or corrected release signing before any new upload. | `android/app/build/outputs/bundle/release/app-release.aab`, `/tmp/chillywood-current-head-play-upload-proof-20260530/`, `/tmp/chillywood-google-play-external-acceptance-20260601/`, release checklist | High | Confirm Play upload signing path, then upload signed non-debug AAB to closed/internal testing first | AAB upload/pre-launch proof | No | Yes |
 | Closed testing | Track | Closed testing recommended before broader public track | Public V1 blocker map | High | Upload AAB to closed testing, add testers, run pre-launch report | Track screenshot | No | Yes before public |
 | Reviewer instructions | Review notes | Use `PLAY_REVIEWER_TEST_ACCOUNT_PACKET.md` and note live money/payouts/ads are off/setup-only | Reviewer packet | High | Paste into App Access and release notes where relevant | Console screenshot | No | Yes |
 

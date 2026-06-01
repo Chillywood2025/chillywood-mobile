@@ -5,6 +5,8 @@ Status: copy package prepared; credentials must be entered only in Play Console
 
 Do not commit real reviewer passwords, recovery codes, service accounts, or admin credentials. Put live test credentials only in Play Console App access.
 
+June 1 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` is now the source of truth for whether App access/reviewer instructions have actually been entered in Play Console. In this repo lane they remain prepared only; no password was entered, saved, screenshotted, or committed.
+
 ## Play Console App Access Copy
 
 ```text

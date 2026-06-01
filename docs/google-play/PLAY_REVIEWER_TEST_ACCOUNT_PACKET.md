@@ -5,6 +5,8 @@ Status: field-ready copy; credentials must be entered only in Play Console
 
 Do not commit real reviewer passwords, recovery codes, OTP seeds, service accounts, owner/admin credentials, Play Console credentials, or provider secrets. Put the live test credential values only in Google Play Console App access.
 
+June 1 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records App access as packet-ready but not externally completed in this repo lane. No reviewer username/password was entered, saved, screenshotted, or committed here. Owner/operator must enter safe non-admin credentials only in Play Console App access.
+
 ## Play Console App Access Fields
 
 | Field | Value to enter |

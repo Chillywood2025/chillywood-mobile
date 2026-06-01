@@ -7,6 +7,8 @@ Current public URL candidate:
 
 `https://chillywoodstream.com/account-deletion`
 
+June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records account deletion as URL/content ready but not accepted by Play Console in this repo lane. Owner/legal still must enter the URL and request-based deletion wording in Play Console, confirm support/account deletion SLA, and save accepted/saved proof outside the repo.
+
 Current proof:
 
 - HTTP 200 after redirect in `/tmp/chillywood-google-play-acceptance-closeout-20260530/public-url-check.tsv`

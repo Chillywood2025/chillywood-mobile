@@ -6,6 +6,8 @@ Status: repo-ready execution package; external Play Console submission still req
 
 This checklist is for the owner/operator completing Google Play Console. It does not claim Google Play acceptance, Data Safety completion, content rating completion, legal approval, DKIM verification, account deletion fulfillment, or support staffing.
 
+June 1, 2026 external acceptance tracker update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` is now the field-level execution tracker for App details, Store listing, Contact details, Privacy Policy, App access, Ads, Content Rating, Target audience, News declaration, Data Safety, Account deletion, UGC/moderation, financial features, permissions, app bundle upload, testing, reviewer instructions, and release notes. Proof for the tracker lane lives at `/tmp/chillywood-google-play-external-acceptance-20260601/`. No Play Console entry was submitted or accepted in that lane; owner/operator must still complete the fields in Play Console and save non-secret proof. Current local repo AAB remains debug-signed and must not be uploaded.
+
 ## Official References
 
 - Data Safety form: https://support.google.com/googleplay/android-developer/answer/10787469
@@ -34,6 +36,7 @@ This checklist is for the owner/operator completing Google Play Console. It does
 | Content rating prep | `docs/google-play/CONTENT_RATING_QUESTIONNAIRE_PREP.md` |
 | Release upload checklist | `docs/google-play/RELEASE_UPLOAD_CHECKLIST.md` |
 | Store listing asset checklist | `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md` |
+| External acceptance tracker | `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` |
 
 ## Console Checklist
 

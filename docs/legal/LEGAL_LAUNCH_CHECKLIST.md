@@ -45,6 +45,8 @@ The repo-side Play Console package is complete and does not claim external accep
 - `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`
 - `docs/google-play/STORE_LISTING_ASSET_CHECKLIST.md`
 
+June 1, 2026 update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` is now the field-level tracker for the remaining Play Console P0. It documents that App Content, Data Safety, Content Rating, Account deletion, App access, Store listing assets, and AAB/upload readiness remain external unless Play Console proof is supplied. No Play submission, account deletion acceptance, content rating receipt, Data Safety submission, store listing acceptance, production release, or legal approval is claimed from repo evidence.
+
 Proof folder: `/tmp/chillywood-google-play-acceptance-closeout-20260530/`.
 
 Current URL proof returns HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Moderation Policy, Community Guidelines, and Creator Rules. Android proof captures Settings Legal and Support, Privacy, Terms, Account Deletion, Copyright Report, and Moderation Policy. Direct Support deep-link proof did not resolve in this run, so the May 29 release proof remains the current Support visual proof until the next route smoke.

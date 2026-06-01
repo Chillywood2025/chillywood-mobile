@@ -5,6 +5,8 @@ Status: preparation only; Google Play/IARC rating completion remains external
 
 This document prepares likely questionnaire areas. It does not complete the rating, assign a rating, or replace owner/legal review. Answer only based on the app behavior and content that will ship in the uploaded artifact.
 
+June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records Content Rating as prepared but not completed/accepted in this repo lane. Owner/legal must still complete the Play Console/IARC questionnaire and save the result/receipt outside the repo before this blocker can close.
+
 ## Product Facts To Carry Into The Questionnaire
 
 | Area | Current repo truth | Suggested posture | Owner/legal confirmation |

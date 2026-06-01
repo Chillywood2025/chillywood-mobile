@@ -1,11 +1,12 @@
 # NEXT TASK
 
-## Recommended Lane: Play Reviewer Credentials Entry And Bounded Premium Shell Approval
+## Recommended Lane: Google Play Console External Entry And Acceptance Proof
 
-Latest readiness result: Premium Reviewer Test Purchase Readiness completed as a closed-shell audit, not a fresh purchase run. Proof path: `/tmp/chillywood-premium-reviewer-test-readiness-20260601/`.
+Latest readiness result: Google Play External Acceptance Execution Closeout created the field-level external tracker without claiming Play Console acceptance. Proof path: `/tmp/chillywood-google-play-external-acceptance-20260601/`.
 
 Closed now:
 
+- `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` maps App details, Store listing, Contact details, Privacy Policy, App access, Ads, Content Rating, Target audience, News declaration, Data Safety, Account deletion, UGC/moderation, financial features, permissions, AAB upload, testing, reviewer instructions, and release notes.
 - Play-installed app stayed valid on `R5CR120QCBF`: `installer=com.android.vending`, versionCode `13`, versionName `1.0.0`, launcher activity present, and the app opens Home.
 - The current session opens Admin Command Center, so the phone is no longer left in the disposable non-Premium proof account.
 - Bounded Premium purchase shell was opened only for earlier proof, then closed again. Final close update group: `5668cdaa-cd5b-4553-bd91-7b786323fd22`; EAS production branch readback for runtime `1.0.0` shows that group is still the newest production update. Current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true` and `premiumPurchaseEnabled: false`, and `/subscribe` shows purchase status `Temporarily unavailable`.
@@ -15,13 +16,19 @@ Closed now:
 - Platform Studio opened during the backend-active window and showed creator actions instead of Premium-required denial, proving unlock from backend entitlement.
 - Non-Premium runtime denial is device-proved at `/tmp/chillywood-non-premium-denial-proof-20260601/`. The disposable proof account has zero Premium rows, zero active Premium rows, zero active platform roles, and normal-user entitlement insert was denied with `42501`.
 - `revenuecat-webhook` remains deployed ACTIVE version `7`; source proof still requires the shared secret, handles dashboard `TEST` with no Premium grant, writes backend Premium rows only for real mapped provider events, and returns `liveMoneyAction:false`.
+- Current local repo AAB remains debug-signed and must not be uploaded. Prior non-debug signed candidate `artifacts/google-play-proof/chillywood-v12.aab` exists outside tracked source, while the attached phone is already Play-installed v13.
 - Production Premium is not live. Live money, tickets/seats, tips, paid content, balances, payouts, and Stripe Android digital checkout remain off.
 
-Current blocker before another reviewer purchase run:
+Current external blockers:
 
+- Complete/save Play Console App content fields using the tracker.
+- Submit/save Data Safety with owner/legal-confirmed SDK/data answers.
+- Complete Content Rating and Target Audience accurately for UGC/live/chat/video.
+- Enter account deletion URL/path and request-based deletion wording; capture acceptance.
 - Enter a safe non-admin reviewer account only in Play Console App access; do not commit passwords.
 - Confirm the reviewer Google account is licensed/internal-test eligible; current CLI Play API readback with the outside-repo service account returned `403`, so tester/product readback could not be freshly re-proved from CLI.
 - If Google reviewers should test Premium, the owner must explicitly approve a bounded Premium purchase-shell opening for that submitted build/test window.
+- Upload only an owner-approved signed non-debug AAB to the intended test track; do not upload the current debug-signed repo AAB.
 - Keep the purchase shell closed unless the owner intentionally opens it for reviewer sandbox testing.
 - Keep production Premium unclaimed and keep live money, tickets/seats, tips, paid content, payouts, fake balances, and Stripe Android digital checkout off.
 
