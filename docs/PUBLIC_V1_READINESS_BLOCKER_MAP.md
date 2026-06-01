@@ -70,6 +70,8 @@ June 1, 2026 signed-in purchase-shell proof at `/tmp/chillywood-play-installed-p
 
 June 1, 2026 fresh RevenueCat sandbox entitlement proof at `/tmp/chillywood-fresh-revenuecat-sandbox-entitlement-proof-20260601/` closes the active sandbox provider bridge for the licensed tester. Play-installed internal-test v12 stayed installed from Google Play, bounded EAS updates opened only the Premium purchase path, Google Play sandbox purchase succeeded, Restore Purchases completed active, and real RevenueCat event `0bd7...60d7` reached the Supabase webhook as an `INITIAL_PURCHASE` with HTTP 200, `webhookProcessed:true`, `premiumGranted:true`, and `liveMoneyAction:false`. A later sandbox renewal refreshed the backend row. Sanitized backend readback found one backend-active `premium` row with `source='revenuecat'`, sandbox Play Store metadata, and no raw provider payload storage. Platform Studio opened during the active entitlement window and showed creator actions instead of Premium-required denial. The shell was closed again with EAS update group `5668cdaa-cd5b-4553-bd91-7b786323fd22`; current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true` and `premiumPurchaseEnabled: false`. The follow-up non-Premium proof at `/tmp/chillywood-non-premium-denial-proof-20260601/` created a disposable non-Premium account, verified zero Premium rows and zero active platform roles, proved normal-user entitlement insert denial with `42501`, and captured `Premium required` denial on Platform Studio / Brand Studio / Clip Studio entry after latest OTA restart. Production Premium, live money, tickets/seats, tips, paid content, payouts, fake balances, and Stripe Android digital checkout remain off.
 
+June 1, 2026 owner-session and Premium closeout at `/tmp/chillywood-owner-session-premium-closeout-20260601/` confirms the attached proof phone is back in a normal owner/admin operating state after the disposable non-Premium proof. `R5CR120QCBF` is Play-installed from Google Play internal testing at versionCode `13`, versionName `1.0.0`, installer `com.android.vending`, with launcher activity present. The app opens Home and Admin Command Center opens in the current session. `/subscribe` shows `Premium is not active` and purchase status `Temporarily unavailable`, so the purchase shell is closed again. No purchase, fake row, provider event, Play track mutation, billing-opening EAS update, or monetization activation was run in this closeout lane; a closed-shell Restore Purchases check returned `Restore complete. Premium is not active.`
+
 Command proof:
 
 - Fresh current-HEAD release proof folder: `/tmp/chillywood-current-head-play-upload-proof-20260530/`
@@ -116,7 +118,7 @@ Proof folder: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`
 3. **P1 - Second-account, blocked, and private runtime fixtures remain incomplete.** API/static proof exists, but full runtime fixture proof must not be faked.
 4. **P1 - Watch-Party Live two-device speech/reconnect proof remains incomplete.** Single-device/current route proof exists; true remote speech ducking needs two joined devices/accounts.
 5. **P1 - Spectator Live Watch-Party / Reaction needs a true compatible source fixture.** Ineligible unavailable state is captured; VOD/replay must not be relabeled as live.
-6. **P1 - Provider setup remains sandbox/setup-only.** RevenueCat/Google signed webhook proof and external provider permissions/secrets remain incomplete for broad monetized launch.
+6. **P1 - Provider setup remains sandbox/setup-only.** RevenueCat/Google sandbox purchase, restore, signed webhook processing, backend entitlement row, and Premium unlock are proved for the licensed tester path; production Premium and live monetization remain incomplete for broad monetized launch.
 7. **P1 - Moderation/legal ops still need external acceptance.** Repo-side report lifecycle actions, Profile media moderation, malware scanner runtime proof, production scanner deployment, and Admin scanner review are backed; attorney review, Play/legal acceptance, support/account-deletion SLA, outbound email/DKIM, and optional disposable-fixture visual proof remain.
 8. **P1 - Release diagnostics/logging proof remains pending.** Firebase Crashlytics/Performance, production log redaction, Android vitals/pre-launch report, and release log audit must be run on the release candidate.
 9. **P1 - Full signed-out/signed-in release route sweep remains pending.** The current release build opened core authenticated routes, but fixture-backed account-state proof is still incomplete.
@@ -164,7 +166,7 @@ Proof folder: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`
 - Profile media save/read-back/remove/fallback and public masking runtime proof remains open.
 - Safe second-account, blocked, and private runtime fixtures are not complete.
 - Release diagnostics/logging, Firebase Crashlytics/Performance receipt, and Android vitals/pre-launch proof remain pending.
-- RevenueCat/Google provider webhook proof and production monetization setup remain incomplete; live money must stay off.
+- RevenueCat/Google sandbox provider proof is complete for the licensed tester path, but production monetization setup/release approval remains incomplete; live money must stay off.
 - Live/Watch-Party two-device and Spectator live-reaction fixture proof remain incomplete.
 
 ## Android-Only Release Readiness
@@ -210,12 +212,12 @@ Evidence:
 
 Blockers:
 
-- RevenueCat/Google signed webhook and provider permission proof remains incomplete.
+- RevenueCat/Google sandbox purchase, restore, signed webhook, backend entitlement row, and Premium unlock are proved for the licensed tester path only. Production Premium still needs final release/provider approval posture before it can be claimed broadly live.
 - Production payouts, live checkout, real ad delivery, and creator earnings must stay deferred.
 
 Recommended next lane:
 
-- RevenueCat/Google Provider Webhook Linking And Signed Sandbox Proof, only after server-side credentials are intentionally linked.
+- Play reviewer packet final external entry and release review, keeping the Premium purchase shell closed unless the owner intentionally opens it for bounded reviewer sandbox testing.
 
 ## Privacy And Security Summary
 

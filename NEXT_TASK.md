@@ -1,24 +1,27 @@
 # NEXT TASK
 
-## Recommended Lane: Post-Proof Premium Reviewer Packet And Non-Premium Runtime Denial
+## Recommended Lane: Play Reviewer Packet Final External Entry And Release Review
 
-Latest proof result: Fresh RevenueCat Sandbox Purchase Event Backend Entitlement Proof closed the Play-installed sandbox purchase -> RevenueCat webhook -> backend `user_entitlements` -> Platform Studio unlock chain. Proof path: `/tmp/chillywood-fresh-revenuecat-sandbox-entitlement-proof-20260601/`.
+Latest closeout result: Owner Session and Premium Proof Closeout restored/confirmed `R5CR120QCBF` to the normal owner/admin operating state after the Premium sandbox proof. Proof path: `/tmp/chillywood-owner-session-premium-closeout-20260601/`.
 
-Closed in the latest lane:
+Closed now:
 
-- Play-installed app stayed valid on `R5CR120QCBF`: `installer=com.android.vending`, versionCode `12`, versionName `1.0.0`.
-- Bounded Premium purchase shell was opened only for proof, then closed again. Final close update group: `5668cdaa-cd5b-4553-bd91-7b786323fd22`; current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true` and `premiumPurchaseEnabled: false`.
+- Play-installed app stayed valid on `R5CR120QCBF`: `installer=com.android.vending`, versionCode `13`, versionName `1.0.0`, launcher activity present, and the app opens Home.
+- The current session opens Admin Command Center, so the phone is no longer left in the disposable non-Premium proof account.
+- Bounded Premium purchase shell was opened only for earlier proof, then closed again. Final close update group: `5668cdaa-cd5b-4553-bd91-7b786323fd22`; current source keeps `PREMIUM_PURCHASE_SHELL_ON_HOLD = true` and `premiumPurchaseEnabled: false`, and `/subscribe` shows purchase status `Temporarily unavailable`. A closed-shell Restore Purchases check during closeout returned `Restore complete. Premium is not active.`
 - Fresh Google Play sandbox purchase succeeded; Restore Purchases completed active.
 - Real RevenueCat webhook event `0bd7...60d7` reached the deployed Supabase function and returned HTTP 200 with `webhookProcessed:true`, `premiumGranted:true`, and `liveMoneyAction:false`.
 - Sanitized backend readback found one backend-active `premium` row for the test user with `source='revenuecat'`, sandbox Play Store metadata, and no raw provider payload storage. A later sandbox renewal refreshed the active window.
 - Platform Studio opened during the backend-active window and showed creator actions instead of Premium-required denial, proving unlock from backend entitlement.
+- Non-Premium runtime denial is device-proved at `/tmp/chillywood-non-premium-denial-proof-20260601/`. The disposable proof account has zero Premium rows, zero active Premium rows, zero active platform roles, and normal-user entitlement insert was denied with `42501`.
 - Production Premium is not live. Live money, tickets/seats, tips, paid content, balances, payouts, and Stripe Android digital checkout remain off.
 
-Remaining honest gap is now closed:
+Next external task:
 
-- Non-Premium runtime denial is now device-proved at `/tmp/chillywood-non-premium-denial-proof-20260601/`. A disposable non-Premium proof account has zero Premium rows, zero active Premium rows, zero active platform roles, and normal-user entitlement insert was denied with `42501`. On `R5CR120QCBF`, after latest OTA restart, Platform Studio / Brand Studio / Clip Studio entry showed clean `Premium required` copy.
-- If Google reviewers should test Premium, the reviewer/test account must be a licensed tester and credentials must be entered only in Play Console App access. Do not commit a password.
+- Enter a safe non-admin reviewer account only in Play Console App access; do not commit passwords.
+- If Google reviewers should test Premium, the reviewer/test account must be a licensed tester and the owner must intentionally open the bounded Premium purchase shell for that submitted build/test window.
 - Keep the purchase shell closed unless the owner intentionally opens it for reviewer sandbox testing.
+- Keep production Premium unclaimed and keep live money, tickets/seats, tips, paid content, payouts, fake balances, and Stripe Android digital checkout off.
 
 ## Previous Recommended Lane: Bounded Premium Purchase Shell v13 And Sandbox Restore Proof
 
