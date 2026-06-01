@@ -7,6 +7,8 @@ This document maps Chi'llywood repo truth to likely Google Play Data Safety answ
 
 June 1, 2026 Premium sandbox update: Android RevenueCat production public SDK key configuration is proved locally and `validate:runtime` reports true, but sandbox purchase is not proved. Restore was attempted on `R5CR120QCBF` and returned `Premium is not active`; no active RevenueCat entitlement, backend entitlement update, live money, tickets/seats, tips, paid content, payout, or checkout was created. If the uploaded review build enables purchase or restore for a licensed tester, Data Safety must treat Google Play/RevenueCat purchase history and identifiers as collected/shared with service providers for that flow. Production Premium is not claimed live from current repo proof.
 
+The Play-installed follow-up found the current device install is not from Play (`installer=null`) and the local APK is debug-signed, so no Google Play Billing sandbox purchase was initiated. Data Safety should not represent current repo proof as production Premium or successful purchase proof; it should only disclose purchase/subscription data once the submitted tester build actually enables Play/RevenueCat purchase or restore.
+
 ## Data Type Map
 
 | Data type | Collected | Shared | Required/optional | Purpose | Retention/deletion note | Repo evidence | Confirmation needed |

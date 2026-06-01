@@ -62,6 +62,8 @@ assertIncludes(revenueCat, "mode: \"android-release\"", "RevenueCat Android rele
 assertIncludes(revenueCat, "apiKey: runtime.revenueCat.androidPublicSdkKey", "RevenueCat release public key use");
 
 assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = true", "Premium purchase shell hold");
+assertIncludes(monetization, "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.", "Premium setup-needed purchase copy");
+assertIncludes(monetization, "helperKicker: \"SETUP NEEDED\"", "Premium setup-needed helper label");
 assertIncludes(monetization, "Premium access must be granted by billing or an operator-backed entitlement.", "fake Premium rejection");
 assertIncludes(monetization, "ownerPlatformAccessCanSatisfyGate = ownerPlatformAccess && !options.strictEntitlementRequired", "owner setup strict gate exclusion");
 assertIncludes(monetization, "snapshot.targets.premium_subscription.hasEntitlement", "RevenueCat Premium entitlement path");

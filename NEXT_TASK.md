@@ -2,6 +2,8 @@
 
 ## Recommended Lane: Play-Installed RevenueCat Sandbox Purchase Proof
 
+Latest lane result: Premium Sandbox Play Installed Proof End To End closed before purchase because the Play-installed prerequisite is not met. On `R5CR120QCBF`, `adb shell cmd package list packages -i com.chillywood.mobile` returned `installer=null`, and local APK signing proof shows `CN=Android Debug`. The local AAB remains a debug-signed build-proof artifact, not a Play-upload-ready proof unless the owner confirms the certificate/upload path is accepted. No Play Console upload, internal/closed-test release availability, licensed tester, or RevenueCat dashboard mapping proof was available to this session, so the Premium purchase shell correctly stayed on hold. Do not enable purchase until a Play-installed tester build is confirmed.
+
 Latest follow-up result: RevenueCat Google Play Sandbox Purchase Restore Proof closed the current repo/device lane without claiming a purchase. `validate:runtime` still reports `revenueCatAndroidPublicKeyConfigured: true`, the production Android RevenueCat public SDK key remains only in ignored local config, and no secret value was printed or committed. Android proof on `R5CR120QCBF` lives at `/tmp/chillywood-revenuecat-google-sandbox-premium-proof-20260601/`. Subscribe showed Premium inactive, purchase temporarily unavailable, and Restore purchases completed with `Premium is not active`. Money Center showed setup/readiness, no payable balance, and no active money. Watch-Party entry showed Premium required. The visible Watch-Party setup label was cleaned from proof-hold wording to setup-needed wording and the Premium sandbox guard now rejects `PROOF HOLD` in shippable user-facing code.
 
 Current exact blocker:

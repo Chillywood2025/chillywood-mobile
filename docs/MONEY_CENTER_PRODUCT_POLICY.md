@@ -8,6 +8,8 @@ This is a readiness, consolidation, and Owner/Admin control layer only. It does 
 
 June 1, 2026 RevenueCat/Google sandbox purchase proof update: Android proof at `/tmp/chillywood-revenuecat-google-sandbox-premium-proof-20260601/` confirms Money Center stayed setup/readiness-only while Premium purchase proof remained blocked. Subscribe showed Premium inactive; Restore purchases completed with `Premium is not active`; no backend entitlement update, purchase, payout, balance, ticket, seat, tip, paid-content unlock, or checkout was created. Watch-Party Live and Live Watch-Party / Live Stage keep Premium access gates, but ticket/seat monetization remains `watch_party_seats_enabled=off` and setup-only with no buy button unless a future Play/RevenueCat-backed product is proved.
 
+The Play-installed follow-up on June 1, 2026 found the current device install is not Play-installed (`installer=null`) and the local APK is debug-signed. Money Center remains unchanged: readiness/sandbox status can be inspected, but no switch or provider row may be treated as active money until a later explicit live-money lane proves provider readiness, policy approval, and owner approval.
+
 ## Payment Rules
 
 - Android digital access inside the app uses Google Play Billing and RevenueCat where required by policy. Google Play's Payments policy says Play-distributed apps charging for in-app features, services, digital content, or digital goods must use Google Play billing unless an eligible policy path applies: https://support.google.com/googleplay/android-developer/answer/9858738

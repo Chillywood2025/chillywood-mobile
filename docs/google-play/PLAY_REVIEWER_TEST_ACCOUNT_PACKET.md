@@ -77,6 +77,8 @@ The test account should not expose private personal photos, real user reports, r
 
 June 1, 2026 reviewer posture: current repo/device proof has the Android RevenueCat production public SDK key configured and `validate:runtime` passing, but sandbox purchase is not proved. Restore was attempted on `R5CR120QCBF` and completed with `Premium is not active`. Reviewers should see Premium-required or setup-needed copy for Premium creator tools unless the owner separately provides a Play licensed tester account, Play-installed matching build, active RevenueCat/Google product mapping, and an intentionally enabled sandbox purchase path inside Play Console/App access. Do not include a reviewer password in this repo.
 
+June 1 Play-installed check: the attached device package reports `installer=null`, so it is not currently installed from Google Play internal/closed testing. Do not ask reviewers to test Premium purchase/restore until the uploaded build is installed from Play by a licensed tester and RevenueCat/Google product mapping is confirmed.
+
 | Feature | Reviewer note |
 | --- | --- |
 | Live money / payouts | Off. No cash-out, transfers, tips, paid creator content, ad revenue, sponsor checkout, or creator payout execution is live. |
