@@ -258,7 +258,7 @@ const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
 
 export const PREMIUM_PURCHASE_SHELL_ON_HOLD = true;
 export const PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
-  "Premium purchase is temporarily unavailable while Google Play and RevenueCat access is checked.";
+  "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.";
 
 export const isPremiumPurchaseShellAvailable = () => {
   const runtime = getAppMonetizationRuntimeFeatures();
@@ -1162,7 +1162,7 @@ export async function readMonetizationAccessSheetState(options: {
       primaryAction: "retry",
       primaryLabel: "Premium Unavailable",
       primaryDisabled: true,
-      helperKicker: "PROOF HOLD",
+      helperKicker: "SETUP NEEDED",
       helperBody: PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE,
       helperTone: "warning",
       offer: null,

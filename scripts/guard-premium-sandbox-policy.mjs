@@ -27,6 +27,7 @@ const shippableFiles = listFiles("_lib", "app", "components", "hooks", "supabase
 const shippableText = shippableFiles.map((file) => `${file}\n${read(file)}`).join("\n");
 
 assertNotIncludes(shippableText, "PREMIUM_LIVE_GATE_PROOF_HOLD", "shippable Premium proof-hold bypass");
+assertNotIncludes(shippableText, "PROOF HOLD", "user-facing Premium setup copy");
 if (/premium[-_ ]?live[-_ ]?gate[-_ ]?proof[-_ ]?hold/iu.test(shippableText)) {
   fail("shippable code still contains Premium live proof-hold wording");
 }

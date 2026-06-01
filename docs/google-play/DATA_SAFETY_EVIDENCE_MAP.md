@@ -5,6 +5,8 @@ Status: repo evidence prepared; owner/legal confirmation required before Play su
 
 This document maps Chi'llywood repo truth to likely Google Play Data Safety answers. It is not a submitted form and does not claim Google Play acceptance. When uncertain, the owner must confirm behavior and third-party SDK disclosures before submission.
 
+June 1, 2026 Premium sandbox update: Android RevenueCat production public SDK key configuration is proved locally and `validate:runtime` reports true, but sandbox purchase is not proved. Restore was attempted on `R5CR120QCBF` and returned `Premium is not active`; no active RevenueCat entitlement, backend entitlement update, live money, tickets/seats, tips, paid content, payout, or checkout was created. If the uploaded review build enables purchase or restore for a licensed tester, Data Safety must treat Google Play/RevenueCat purchase history and identifiers as collected/shared with service providers for that flow. Production Premium is not claimed live from current repo proof.
+
 ## Data Type Map
 
 | Data type | Collected | Shared | Required/optional | Purpose | Retention/deletion note | Repo evidence | Confirmation needed |
