@@ -56,7 +56,6 @@ import {
     isRuntimeControlBlockedAccess,
     LIVE_FIRST_PREMIUM_UPSELL_COPY,
     LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY,
-    PREMIUM_LIVE_GATE_PROOF_HOLD,
     requireLiveFirstPremium,
     requireLiveWatchPartyPremium,
     type PremiumWatchPartyFeatureAccessDecision,
@@ -1254,26 +1253,9 @@ export default function WatchPartyLiveStageScreen({
         }
 
         if (!access.isAllowed) {
-          const premiumProofHoldRouteAccessAllowed = PREMIUM_LIVE_GATE_PROOF_HOLD
-            && (access.reason === "premium_required" || access.reason === "party_pass_required")
-            && (await requireLiveStagePremium(
-              snapshot.room.roomType === "live" ? "live_first" : "live_watch_party",
-              "route",
-            ));
-
-          if (cancelled) return;
-
-          if (premiumProofHoldRouteAccessAllowed) {
-            debugLiveStage("premium proof hold opened live-stage route access", {
-              partyId,
-              reason: access.reason,
-              roomType: snapshot.room.roomType,
-            });
-          } else {
-            setBlockedRoomAccess(access);
-            setLoading(false);
-            return;
-          }
+          setBlockedRoomAccess(access);
+          setLoading(false);
+          return;
         }
 
         syncStageSnapshot(snapshot, trackedUserId);

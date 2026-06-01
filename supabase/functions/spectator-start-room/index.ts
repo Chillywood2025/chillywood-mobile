@@ -136,7 +136,6 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60_000;
 const RATE_LIMIT_MAX_ATTEMPTS = 6;
 const SOURCE_WINDOW_MS = 60 * 60_000;
 const SOURCE_MAX_CHILD_ROOMS = 25;
-const PREMIUM_LIVE_GATE_PROOF_HOLD = true;
 
 const jsonResponse = (status: number, payload: JsonObject) =>
   new Response(JSON.stringify(payload), {
@@ -516,8 +515,6 @@ const runtimeControlEnabled = (config: AppConfigRow | null, key: "live_watch_par
 };
 
 const userHasPremiumAccess = async (adminClient: SupabaseClientLike, userId: string, keys: string[]) => {
-  if (PREMIUM_LIVE_GATE_PROOF_HOLD) return true;
-
   const { data, error } = await adminClient
     .from("user_entitlements")
     .select("entitlement_key,status,expires_at,revoked_at")

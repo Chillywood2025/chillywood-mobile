@@ -1,6 +1,6 @@
 # Provider-Link Readiness Runbook
 
-Last updated: May 29, 2026
+Last updated: June 1, 2026
 
 This runbook records the provider-link readiness scaffold for Premium, RevenueCat, Google Play Billing, Stripe, Stripe Connect, payouts, revenue imports, tips, paid content, Watch-Party seats, ads, and future commerce.
 
@@ -13,6 +13,10 @@ Money Center also has inspection drilldowns. Creator Platform Studio rows open s
 May 29, 2026 Admin Search audit closeout: Owner/Admin `Search Admin` can search provider readiness and money audit rows only inside `/admin`, and those searches now write masked immutable audit events through `write_admin_search_audit`. The audit metadata records scope, query type, masked preview, status, and result count, but never provider secrets, raw payloads, webhook secret values, service-role values, authorization headers, or plaintext email search text. This is an audit/readiness hardening only; it does not change provider readiness state or enable live money.
 
 May 29, 2026 Public V1 eight-blocker burn-down provider refresh: proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`. Names-only Supabase secret inventory still found no `REVENUECAT_WEBHOOK_SECRET` or `GOOGLE_PLAY_WEBHOOK_SECRET`. Unsigned RevenueCat and Google Play webhook smoke returned setup-required/fail-closed responses with no Premium grant, no subscription grant, and no live-money action. Stripe Connect unsigned smoke still rejected invalid signatures. Android Money Center proof showed provider/money state as not active. This keeps RevenueCat/Google as setup/sandbox-only blockers for monetized launch and does not activate Premium, checkout, payouts, balances, paid content, tips, ads, or live money.
+
+June 1, 2026 Premium sandbox guard-restore reconciliation: the local repo has the Android RevenueCat debug public SDK key present and the Android production public SDK key empty. `npm run validate:runtime` reports `revenueCatAndroidPublicKeyConfigured: false` because it reads `runtime.revenueCat.androidPublicSdkKey`, not the debug-only `runtime.revenueCat.androidDebugPublicSdkKey`. A previous sandbox success can therefore be consistent with a debug/internal build while the release validation path is still missing production config. No sandbox purchase/restore is claimed in this runbook until the owner provides a licensed Play tester path, confirms RevenueCat/Google product state in dashboards, and supplies matching build config without committing secrets.
+
+June 1, 2026 production-key follow-up: the approved client-safe path for Android release is `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY` -> `app.config.ts` -> `runtime.revenueCat.androidPublicSdkKey` -> `_lib/revenuecat.ts` Android release mode. Safe local inventory found that value empty, with only the debug public key present. The current-source Android proof at `/tmp/chillywood-premium-sandbox-proof-20260601/` therefore proves setup state only: build/install works, Subscribe shows Premium inactive/setup unavailable, and Money Center remains setup/not-active. Sandbox purchase/restore, active RevenueCat entitlement, backend entitlement write/update from provider, and production Premium remain unproved until the owner adds the public key and provides Play/RevenueCat tester/product proof.
 
 ## Readiness Source Of Truth
 
@@ -92,10 +96,12 @@ Current default switch posture:
 
 | Provider | Capability | Current Status | Live Money |
 | --- | --- | --- | --- |
-| RevenueCat | Premium entitlement | configured | false |
-| RevenueCat | Offering | configured | false |
-| RevenueCat | Entitlement | configured | false |
-| Google Play | Subscription product | configured | false |
+| RevenueCat | Android debug public SDK key | configured for debug/internal sandbox only | false |
+| RevenueCat | Android production public SDK key | missing in local validation env | false |
+| RevenueCat | Premium entitlement id | configured in code as `premium`; dashboard proof still required | false |
+| RevenueCat | Offering | configured in code as `premium`; dashboard proof still required | false |
+| Google Play | Package | configured in app as `com.chillywood.mobile` | false |
+| Google Play | Subscription product | setup_needed until dashboard/licensed tester proof | false |
 | Stripe | Webhook signature | sandbox_ready | false |
 | Stripe Connect | Account setup | setup_needed | false |
 | Stripe Connect | Payout setup | setup_needed | false |
@@ -130,15 +136,17 @@ May 27, 2026 provider CLI refresh:
 - Google CLI confirms Android Publisher and Pub/Sub APIs are enabled on `chillywood-app`, but no Pub/Sub topics exist. Direct Android Publisher subscription read proof returned `403` for both the active user account and the local Google Play service account JSON, so Google signed webhook/product CLI proof remains blocked on provider permission/topic/secret setup.
 - RevenueCat and Google Play webhook shells remain fail-closed/readiness-only until their server webhook secrets and provider permissions are linked.
 
-Current provider-link statuses after the sandbox proof:
+Current provider-link statuses after the June 1 guard-restore reconciliation:
 
 | Provider | Capability | Current Status | Production Active | Live Money |
 | --- | --- | --- | --- | --- |
 | Stripe | Webhook signature | sandbox_ready | false | false |
-| RevenueCat | Premium entitlement | configured | false | false |
-| RevenueCat | Offering | configured | false | false |
-| RevenueCat | Entitlement | configured | false | false |
-| Google Play | Subscription product | configured | false | false |
+| RevenueCat | Android debug public SDK key | configured for debug/internal sandbox only | false | false |
+| RevenueCat | Android production public SDK key | missing in local validation env | false | false |
+| RevenueCat | Premium entitlement id | configured in code as `premium`; dashboard proof still required | false | false |
+| RevenueCat | Offering | configured in code as `premium`; dashboard proof still required | false | false |
+| Google Play | Package | configured in app as `com.chillywood.mobile` | false | false |
+| Google Play | Subscription product | setup_needed until dashboard/licensed tester proof | false | false |
 | Stripe Connect | Account setup | setup_needed | false | false |
 | Stripe Connect | Payout setup | setup_needed | false | false |
 | Stripe Connect | Payout release | disabled | false | false |
@@ -162,7 +170,8 @@ RevenueCat:
 
 - `REVENUECAT_SECRET_API_KEY`
 - `REVENUECAT_WEBHOOK_SECRET`
-- `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY`
+- `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`
+- `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV`
 - `REVENUECAT_ENTITLEMENT_ID`
 - `REVENUECAT_OFFERING_ID`
 - `REVENUECAT_PRODUCT_ID`
@@ -230,7 +239,7 @@ Old Admin params such as `tab=premium`, `tab=kill-switches`, `tab=ads`, `tab=spo
 RevenueCat:
 
 1. Confirm Chi'llywood project and app.
-2. Confirm Android public SDK key and server API key are stored only in approved provider/server env locations.
+2. Add the Android production public SDK key to approved public build env/config as `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`; keep secret/server RevenueCat keys out of the app.
 3. Confirm entitlement id `premium`.
 4. Confirm offering id `premium`.
 5. Confirm product id `premium_subscription:monthly` or current approved equivalent.

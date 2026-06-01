@@ -1596,7 +1596,8 @@ export async function resolveMonetizationAccess(options: {
     backendEntitledTargetIds,
   );
   const ownerPlatformAccess = await readOwnerPlatformAccessEnabled();
-  const monetization: MonetizationGateResolution = ownerPlatformAccess
+  const ownerPlatformAccessCanSatisfyGate = ownerPlatformAccess && !options.strictEntitlementRequired;
+  const monetization: MonetizationGateResolution = ownerPlatformAccessCanSatisfyGate
     ? {
       ...entitlementBackedGate,
       ownerPlatformAccess: true,
@@ -1612,7 +1613,7 @@ export async function resolveMonetizationAccess(options: {
       updatedAt: Date.now(),
       accessSource: "entitlement",
     }
-    : ownerPlatformAccess
+    : ownerPlatformAccessCanSatisfyGate
       ? {
         tier: "premium",
         adFree: true,
@@ -1635,7 +1636,7 @@ export async function resolveMonetizationAccess(options: {
         !FEATURE_FLAGS.monetization.subscriptions
         || !runtime.premiumEnabled
       ))
-      || ownerPlatformAccess
+      || ownerPlatformAccessCanSatisfyGate
       || hasTrustedEntitlement
     ) {
       return {
@@ -1668,7 +1669,7 @@ export async function resolveMonetizationAccess(options: {
         !FEATURE_FLAGS.monetization.partyPass
         || !runtime.partyPassEnabled
       ))
-      || ownerPlatformAccess
+      || ownerPlatformAccessCanSatisfyGate
       || hasTrustedEntitlement
     ) {
       return {

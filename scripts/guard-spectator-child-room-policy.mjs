@@ -72,11 +72,11 @@ const launchHelper = read("_lib/spectatorChildRooms.ts");
   "isPublicSafeBroadcastSession",
   "allow_watch_party_from_spectator",
   "allow_live_reaction_rooms",
-  "PREMIUM_LIVE_GATE_PROOF_HOLD",
   "spectator_child_room_sources",
   "spectator_child_room_audit_log",
 ].forEach((needle) => assertIncludes("server-side eligibility", startRoomFunction, needle));
 
+assertNotIncludes("Premium proof-hold bypass", startRoomFunction, "PREMIUM_LIVE_GATE_PROOF_HOLD");
 assertIncludes("no full original token response", startRoomFunction, "fullRoomTokenForSpectators: false");
 assertIncludes("no original room token response", startRoomFunction, "originalRoomTokenReturned: false");
 assertIncludes("no original publish response", startRoomFunction, "originalRoomPublishPermission: false");

@@ -26,6 +26,7 @@
     "guard:money-center-policy": "node ./scripts/guard-money-center-policy.mjs",
     "guard:stripe-connect-policy": "node ./scripts/guard-stripe-connect-policy.mjs",
     "guard:provider-readiness-policy": "node ./scripts/guard-provider-readiness-policy.mjs",
+    "guard:premium-sandbox-policy": "node ./scripts/guard-premium-sandbox-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",
     "guard:owner-security-center": "node ./scripts/guard-owner-security-center.mjs",
     "guard:malware-scanning-policy": "node ./scripts/guard-malware-scanning-policy.mjs",

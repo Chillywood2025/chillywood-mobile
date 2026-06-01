@@ -471,6 +471,64 @@ const validateUpload = (input: {
   return { ok: true };
 };
 
+const userHasPlatformRole = async (
+  adminClient: SupabaseClient,
+  user: AuthenticatedMediaUser,
+  roles: string[],
+) => {
+  const userQuery = await adminClient
+    .from("platform_role_memberships")
+    .select("id,role")
+    .eq("status", "active")
+    .in("role", roles)
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (userQuery.data?.id) return true;
+  if (!user.email) return false;
+
+  const emailQuery = await adminClient
+    .from("platform_role_memberships")
+    .select("id")
+    .eq("status", "active")
+    .in("role", roles)
+    .ilike("email", user.email)
+    .limit(1)
+    .maybeSingle();
+
+  return !!emailQuery.data?.id;
+};
+
+const userHasActivePremiumEntitlement = async (
+  adminClient: SupabaseClient,
+  userId: string,
+) => {
+  const { data, error } = await adminClient
+    .from("user_entitlements")
+    .select("entitlement_key,status,expires_at,revoked_at")
+    .eq("user_id", userId)
+    .eq("entitlement_key", "premium")
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return false;
+  const status = toText(data.status);
+  const expiresAt = toText(data.expires_at);
+  const revokedAt = toText(data.revoked_at);
+  const isActiveStatus = status === "active" || status === "trialing" || status === "grace_period";
+  const isExpired = expiresAt ? Date.parse(expiresAt) <= Date.now() : false;
+  return isActiveStatus && !revokedAt && !isExpired;
+};
+
+const userCanUsePremiumCreatorTools = async (
+  adminClient: SupabaseClient,
+  user: AuthenticatedMediaUser,
+) => {
+  if (await userHasActivePremiumEntitlement(adminClient, user.id)) return true;
+  return userHasPlatformRole(adminClient, user, ["owner", "operator"]);
+};
+
 const readCreatorVideoForObject = async (
   adminClient: SupabaseClient,
   recordId: string,
@@ -883,6 +941,12 @@ Deno.serve(async (req): Promise<Response> => {
     if (action === "create_upload_url") {
       const mimeType = toText(payload.mimeType).toLowerCase() || "application/octet-stream";
       const sizeBytes = parseSizeBytes(payload.sizeBytes);
+      if (surfaceType === "creator_video" && !(await userCanUsePremiumCreatorTools(adminClient, user))) {
+        return json(403, {
+          error: "premium_required",
+          message: "Premium required. Creator video uploads require active Premium entitlement or owner/operator setup access.",
+        });
+      }
       const uploadValidation = validateUpload({
         surfaceType,
         objectKey,

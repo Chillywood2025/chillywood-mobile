@@ -1,6 +1,6 @@
 # Google Play Reviewer Test Account Packet
 
-Date: 2026-05-30
+Date: 2026-06-01
 Status: field-ready copy; credentials must be entered only in Play Console
 
 Do not commit real reviewer passwords, recovery codes, OTP seeds, service accounts, owner/admin credentials, Play Console credentials, or provider secrets. Put the live test credential values only in Google Play Console App access.
@@ -36,8 +36,9 @@ Suggested review path:
 5. Open Profile and public Platform surfaces where visible.
 6. Open a Player item from public or test content.
 7. Use report actions where visible. Do not submit harmful or false reports unless the owner provides a clearly harmless disposable test target.
-8. Premium/money features are gated or setup-only unless a licensed Play tester purchase path is provided. Live money, payouts, tips, paid creator content, sponsor checkout, merch checkout, ad revenue, and cash-out are off.
+8. Premium-only features are gated unless a licensed Play tester purchase path backed by RevenueCat/Google entitlement proof is provided. Non-Premium accounts should see Premium required or setup-needed copy.
 9. Chi'lly Chat, Watch-Party, Live, comments, likes, follows, and uploads depend on account state, permissions, and current test fixtures.
+10. Money features, tickets/seats, tips, paid creator content, and payouts are not active in the submitted test scope unless the owner separately provides provider-backed proof.
 
 Legal/support links:
 - Privacy Policy: https://chillywoodstream.com/privacy
@@ -77,7 +78,13 @@ The test account should not expose private personal photos, real user reports, r
 | Feature | Reviewer note |
 | --- | --- |
 | Live money / payouts | Off. No cash-out, transfers, tips, paid creator content, ad revenue, sponsor checkout, or creator payout execution is live. |
-| Premium / purchases | Only test if owner provides a Play license tester path. Do not claim Premium is live unless provider proof matches the uploaded build. |
+| Premium / purchases | Only test if owner provides a Google Play license tester path backed by RevenueCat/Google entitlement proof. As of the current repo proof, the Android production RevenueCat public SDK key is missing from the approved public config path, so reviewers should expect Premium-locked tools unless a later uploaded build includes matching provider proof. Production Premium is not live unless provider proof matches the uploaded build. |
+| Platform Studio / creator uploads | Premium required for normal creator accounts. Owner/operator accounts may see setup-only owner tools, but that is not Premium entitlement and does not activate paid access. |
+| Watch-Party tickets/seats | Off/setup-only for Watch-Party Live and Live Watch-Party / Live Stage unless a real Google Play/RevenueCat entitlement path is separately provided. Paid seats do not bypass Premium gates or speaker approval, and no buy button should appear without provider backing. |
+| Tips | Off. No tip checkout, tip totals, tip balances, badges, perks, rankings, or digital unlocks are active. |
+| Paid creator content | Off. No paid digital content checkout or fake paid-access records are active. Android digital access must use Google Play/RevenueCat or another approved Play-compliant path, not Stripe checkout. |
+| Money Center | Readiness/setup only. It may show provider status and setup copy, but no live money, fake earnings, fake balances, fake checkout, fake payout, or cash-out action is active. |
+| Stripe / payouts | Stripe Connect is payout readiness/setup only. Stripe checkout must not be used for Android in-app digital goods, Premium, paid creator content, Watch-Party tickets/seats, or digital access unlocks. |
 | Ads | Not active in current repo evidence. Owner must confirm the submitted build has no ad SDK/ad delivery/paid placements before declaring "No ads." |
 | Admin | Owner/admin-only. Normal reviewer account should not see Admin tools. |
 | iOS | Deferred. Android Public V1 only. |
@@ -89,5 +96,7 @@ The test account should not expose private personal photos, real user reports, r
 - Confirm password does not expire and no OTP/2FA blocks review.
 - Confirm account is not owner/admin/staff.
 - Confirm account can reach representative signed-in flows.
+- If Premium sandbox testing is requested, confirm the account is an approved Google Play license tester and the uploaded build has the matching RevenueCat/Google sandbox configuration.
+- Confirm the uploaded build has the Android RevenueCat public SDK key in approved public config before asking reviewers to test Premium purchase/restore.
 - Confirm no private user data appears in the reviewer account.
 - Save Play Console App access proof outside the repo.

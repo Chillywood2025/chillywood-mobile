@@ -1,6 +1,6 @@
 # Money Center Product Policy
 
-Last updated: May 27, 2026
+Last updated: June 1, 2026
 
 Money Center is the creator-facing source of truth for money readiness in Platform Studio. It consolidates the old Monetize, Revenue, Payouts, provider-readiness, Premium, Stripe, RevenueCat, Google Play, tips, paid content, Watch-Party seats, merch, creator balance, tax/legal, and payout-readiness surfaces into one collapsible readiness area.
 
@@ -127,6 +127,16 @@ Sandbox and setup rules:
 - Sandbox rows do not enable withdraw, cash-out, payout release, transfer, checkout, unlock, or payable obligations.
 - Setup/foundation rows are creator-facing as `Setup only`, `Readiness row`, `Planning record`, or `No verified ledger rows yet`, not confusing raw foundation wording.
 - If raw source rows are not safely readable, the UI may show a source-labeled count/detail event, but it must still say the row is not payable and why.
+
+June 1, 2026 Premium sandbox regression note:
+
+- Premium guards are restored, and Money Center does not override them.
+- The local Android debug RevenueCat public SDK key is present, but the production Android public SDK key is empty. `validate:runtime` reports `revenueCatAndroidPublicKeyConfigured: false` because it checks the production key path. The follow-up production-key lane confirmed the approved wiring exists and the missing value is the blocker; no secret or private key was committed.
+- A debug/internal sandbox build may configure RevenueCat with `runtime.revenueCat.androidDebugPublicSdkKey`; a release build needs `runtime.revenueCat.androidPublicSdkKey` before purchase/restore can be claimed.
+- Premium sandbox purchase proof is blocked until the Android RevenueCat public SDK key is added to approved public build config, a safe Play licensed tester path exists, RevenueCat/Google dashboard product proof exists, and matching build config is rebuilt. Do not mark production Premium active from debug-only config.
+- Backend `user_entitlements` active rows can unlock Premium where RLS-visible and trusted, but docs and UI must not label owner setup access, fake rows, or proof-hold state as Premium.
+- Watch-Party Live and Live Watch-Party / Live Stage Premium gates remain access gates only. Ticket/seat monetization for both room types is off/setup-only until a real Google Play/RevenueCat-backed product and entitlement path exists; no buy button should appear unless it is truly backed.
+- `live_money_enabled`, tips, paid content, payouts, and Stripe checkout for Android digital goods remain off.
 
 `_lib/moneyAuditEvents.ts` is the shared normalization layer for these surfaces. It reads safe source rows where RLS allows and builds source-labeled events from existing read models otherwise. It filters secret-like fields and marks every sandbox/setup event as non-payable.
 

@@ -62,12 +62,6 @@ const partyRoomWatchTogether = sliceBetween(
   "const onPickPartyRoomCommentAttachment = useCallback(async (scope: SocialAttachmentPickerScope) => {",
   "Party Room Watch Together handler boundary",
 );
-const premiumLiveProofHoldBranch = sliceBetween(
-  premiumWatchPartyAccess,
-  "if (PREMIUM_LIVE_GATE_PROOF_HOLD) {",
-  "return premiumAccess;",
-  "Premium live proof hold branch boundary",
-);
 const playerFallbackHandler = sliceBetween(
   player,
   "const onWatchPartyLiveKitFallback = useCallback(",
@@ -273,52 +267,24 @@ const liveWatchPartyCreateHandler = sliceBetween(
   "Live Watch-Party create-room handler boundary",
 );
 
-assertIncludes(
+[
   premiumWatchPartyAccess,
-  "export const PREMIUM_LIVE_GATE_PROOF_HOLD = true;",
-  "Premium live proof hold flag",
-);
-assertIncludes(
-  premiumWatchPartyAccess,
-  "This does not grant Premium.",
-  "Premium live proof hold no-grant copy",
-);
-assertBefore(
-  premiumWatchPartyAccess,
-  "if (!enabled) {",
-  "if (PREMIUM_LIVE_GATE_PROOF_HOLD) {",
-  "Runtime controls must still block before the Premium live proof hold opens entry.",
-);
-assertIncludes(
-  premiumLiveProofHoldBranch,
-  "allowed: true",
-  "Premium live proof hold allowed proof entry",
-);
-assertIncludes(
-  premiumLiveProofHoldBranch,
-  'reason: "allowed"',
-  "Premium live proof hold non-gated reason",
-);
-assertIncludes(
-  premiumLiveProofHoldBranch,
-  "requiresPremium: false",
-  "Premium live proof hold must not show the Premium gate during media proof",
-);
-assertIncludes(
-  premiumLiveProofHoldBranch,
-  "requiresPartyPass: false",
-  "Premium live proof hold must not require a party pass during media proof",
-);
-assertIncludes(
-  premiumLiveProofHoldBranch,
-  "canPurchase: false",
-  "Premium live proof hold must not expose a purchase action",
-);
-assertIncludes(
-  premiumLiveProofHoldBranch,
-  "PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE",
-  "Premium live proof hold issue copy",
-);
+  liveStage,
+  partyRoom,
+  watchPartyIndex,
+  player,
+].forEach((source) => {
+  assertNotIncludes(
+    source,
+    "PREMIUM_LIVE_GATE_PROOF_HOLD",
+    "Premium live proof hold bypass",
+  );
+  assertNotIncludes(
+    source,
+    "premium proof hold opened",
+    "Premium live proof hold logging",
+  );
+});
 
 assertNotIncludes(
   livekitSurface,
@@ -471,103 +437,9 @@ assertIncludes(
   "Live Stage must allow legacy camera RTC fallback when native LiveKit is not actively rendering",
 );
 assertIncludes(
-  liveStage,
-  "PREMIUM_LIVE_GATE_PROOF_HOLD",
-  "Live Stage route must import the Premium live proof hold flag",
-);
-assertIncludes(
-  liveStageRouteAccessCheck,
-  "PREMIUM_LIVE_GATE_PROOF_HOLD",
-  "Live Stage route access must not let the Premium room-access gate block internal LiveKit proof",
-);
-assertIncludes(
-  liveStageRouteAccessCheck,
-  "requireLiveStagePremium(",
-  "Live Stage route access must re-check the runtime-controlled Premium proof helper before opening proof entry",
-);
-assertIncludes(
-  liveStageRouteAccessCheck,
-  "premium proof hold opened live-stage route access",
-  "Live Stage route access must log proof-hold entry instead of treating a Premium gate as media proof",
-);
-assertBefore(
-  liveStageRouteAccessCheck,
-  "PREMIUM_LIVE_GATE_PROOF_HOLD",
+  partyRoomRouteAccessCheck,
   "setBlockedRoomAccess(access);",
-  "Live Stage route access must evaluate proof hold before setting a Premium blocked-room gate.",
-);
-assertIncludes(
-  partyRoomRouteAccessCheck,
-  "proofHoldRoomAccessAllowed",
-  "Party Room route access must not let the Premium room-access gate block Watch-Party Live internal proof",
-);
-assertIncludes(
-  partyRoomRouteAccessCheck,
-  'premiumAccessSource === "watch_party_live"',
-  "Party Room proof hold must be scoped to Watch-Party Live rooms",
-);
-assertIncludes(
-  partyRoomRouteAccessCheck,
-  'access?.reason === "premium_required"',
-  "Party Room proof hold must only bypass Premium-required room gates",
-);
-assertIncludes(
-  partyRoomRouteAccessCheck,
-  "premium proof hold opened watch-party-live room access",
-  "Party Room proof hold must log that it opened Watch-Party Live access",
-);
-assertBefore(
-  partyRoomRouteAccessCheck,
-  "proofHoldRoomAccessAllowed",
-  "setBlockedRoomAccess(access);",
-  "Party Room route access must evaluate proof hold before setting a blocked-room gate.",
-);
-assertIncludes(
-  lobbyJoinAccessCheck,
-  "proofHoldRoomAccessAllowed",
-  "Watch-Party lobby must not let the Premium room-access gate block internal proof",
-);
-assertIncludes(
-  lobbyJoinAccessCheck,
-  'access?.reason === "premium_required"',
-  "Watch-Party lobby proof hold must only bypass Premium-required room gates",
-);
-assertIncludes(
-  lobbyJoinAccessCheck,
-  "premium proof hold opened watch-party lobby room access",
-  "Watch-Party lobby proof hold must log that it opened room access",
-);
-assertBefore(
-  lobbyJoinAccessCheck,
-  "proofHoldRoomAccessAllowed",
-  "setAccessSheetVisible(true);",
-  "Watch-Party lobby must evaluate proof hold before showing a Premium access sheet.",
-);
-assertIncludes(
-  playerWatchPartyEntryAccessCheck,
-  "proofHoldRoomAccessAllowed",
-  "Player Watch-Party entry must not let the Premium room-access gate block internal proof",
-);
-assertIncludes(
-  playerWatchPartyEntryAccessCheck,
-  'access?.reason === "premium_required"',
-  "Player Watch-Party entry proof hold must only bypass Premium-required room gates",
-);
-assertIncludes(
-  playerWatchPartyEntryAccessCheck,
-  "premium proof hold opened watch-party-live player access",
-  "Player Watch-Party entry proof hold must log that it opened player access",
-);
-assertIncludes(
-  playerWatchPartyEntryAccessCheck,
-  'reason: "allowed"',
-  "Player Watch-Party entry proof hold must convert the room access result to allowed for media proof",
-);
-assertBefore(
-  playerWatchPartyEntryAccessCheck,
-  "proofHoldRoomAccessAllowed",
-  "setWatchPartyEntryError(\"Unable to confirm watch-party access right now.\");",
-  "Player Watch-Party entry must evaluate proof hold inside the access check.",
+  "Party Room route access must set a blocked-room gate when room access is denied.",
 );
 
 assertIncludes(

@@ -1,6 +1,49 @@
 # NEXT TASK
 
-## Recommended Lane: Profile Media Viewer And Removal Runtime Closeout
+## Recommended Lane: RevenueCat / Google Sandbox Premium Provider Proof Closeout
+
+Latest follow-up result: RevenueCat Android Production Key and Sandbox Premium Purchase Proof could not complete purchase/restore because no Android production RevenueCat public SDK key value was available in the approved public config path. The current source build installed on `R5CR120QCBF` and proof lives at `/tmp/chillywood-premium-sandbox-proof-20260601/`; Subscribe shows Premium not active and purchase setup unavailable, and Money Center stays setup/not-active. `npm run validate:runtime` still reports `revenueCatAndroidPublicKeyConfigured: false`. New guard `npm run guard:premium-sandbox-policy` now locks no Premium bypass, no owner setup access as strict Premium entitlement, backend entitlement behavior, money-off posture, and no Stripe Android digital checkout.
+
+Latest repo-side lane before the next proof lane: Premium Sandbox Regression Proof After Guard Restore. Premium guards are restored and the old shippable `PREMIUM_LIVE_GATE_PROOF_HOLD` bypass is removed. Creator upload, Platform Studio, Brand Studio, Clip Studio, Watch-Party Live start, and Live Watch-Party host paths are gated again with clean Premium-required/setup-needed copy. Backend enforcement now includes Premium/owner-operator creator-tool checks in RLS/storage/function paths; strict Premium gates require trusted entitlement proof and do not treat owner setup access as a Premium entitlement.
+
+Current Premium config truth:
+
+- Local Android debug RevenueCat public SDK key is present.
+- Local Android production RevenueCat public SDK key is empty.
+- Local iOS RevenueCat public SDK key is empty.
+- Runtime validator reports `revenueCatAndroidPublicKeyConfigured: false` because it checks the production `runtime.revenueCat.androidPublicSdkKey`, not the debug-only `androidDebugPublicSdkKey`.
+- The configured Premium target in code uses entitlement id `premium` and offering id `premium`.
+- Google package is `com.chillywood.mobile`; current Play product proof still needs external Play/RevenueCat dashboard confirmation.
+- The Premium purchase shell remains on hold, so this lane did not fake or re-run a sandbox purchase.
+
+Next proof should verify with owner-provided external setup:
+
+- Add the Android RevenueCat public SDK key to the approved public build env/config path: `EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY`.
+- Provide a safe Google Play licensed tester account only through Play Console/App access, not committed docs.
+- Confirm the submitted build has the correct production Android RevenueCat public SDK key if purchase/restore is expected in a release build.
+- Confirm RevenueCat entitlement `premium`, offering `premium`, package/product mapping, and Google Play subscription product/base plan in the provider dashboards.
+- Run sandbox purchase or restore on Android, verify RevenueCat active entitlement, verify backend `user_entitlements` active row/update, restart the app, and prove Premium-gated creator tools unlock without any bypass.
+- Prove a non-Premium account is still denied on Platform Studio, Brand Studio, Clip Studio, creator upload, Watch-Party Live creation, and Live Watch-Party hosting.
+- Keep `live_money_enabled`, tickets/seats, tips, paid content, payouts, and Stripe checkout for Android digital goods off.
+- Keep screenshots and command logs outside the repo, preferably under `/tmp`.
+
+Validation to rerun after provider setup:
+
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:payment-rail-policy`
+- `npm run guard:creator-monetization-policy`
+- `npm run guard:provider-readiness-policy`
+- `npm run guard:money-center-policy`
+- `npm run guard:stripe-connect-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `npm run guard:platform-brand-studio-policy`
+- `npm run guard:clip-studio-policy`
+- `npm run guard:spectator-child-room-policy`
+- targeted proof for no Premium bypass, no fake Premium, `live_money_enabled` off, no fake tickets/seats, and no Stripe Android digital checkout.
+
+## Previous Recommended Lane: Profile Media Viewer And Removal Runtime Closeout
 
 Latest repo-side lane before the next proof lane: Current Build User-Facing Copy Visual Smoke. The current release APK was rebuilt, release JS bundle was force-refreshed, installed on `R5CR120QCBF`, and opened past splash into Home. Proof path: `/tmp/chillywood-current-build-copy-visual-smoke-20260531/`. Final APK: `android/app/build/outputs/apk/release/app-release.apk`, `205661499` bytes, SHA-256 `6fe62ce802d0c382c3e02ca720f59e6800a2cfd22e0542d8c8f1d0202c7804c6`.
 

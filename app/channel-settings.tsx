@@ -82,6 +82,10 @@ import {
 } from "../_lib/moneyAuditEvents";
 import { getRevenueCatProductionReadiness } from "../_lib/revenuecat";
 import {
+  readCurrentUserEntitlement,
+  type PremiumEntitlementDecision,
+} from "../_lib/premiumEntitlements";
+import {
   approveChannelAudienceRequest,
   blockChannelAudienceMember,
   cancelChannelAudienceRequest,
@@ -1039,6 +1043,7 @@ export function ChannelStudioScreen() {
   const [brandReviewQueueAssets, setBrandReviewQueueAssets] = useState<PlatformBrandAsset[]>([]);
   const [brandReviewQueueLoading, setBrandReviewQueueLoading] = useState(false);
   const [platformRoleMemberships, setPlatformRoleMemberships] = useState<PlatformRoleMembership[]>([]);
+  const [premiumEntitlement, setPremiumEntitlement] = useState<PremiumEntitlementDecision | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1127,6 +1132,11 @@ export function ChannelStudioScreen() {
     () => __DEV__ || hasPlatformRoleMembership(platformRoleMemberships, ["owner", "operator"]),
     [platformRoleMemberships],
   );
+  const hasOwnerOperatorStudioAccess = useMemo(
+    () => hasPlatformRoleMembership(platformRoleMemberships, ["owner", "operator"]),
+    [platformRoleMemberships],
+  );
+  const hasPremiumCreatorToolAccess = premiumEntitlement?.isActive === true || hasOwnerOperatorStudioAccess;
   const revenueCatReadiness = useMemo(() => getRevenueCatProductionReadiness(), []);
   const creatorMoneyAuditEvents = useMemo(() => buildCreatorMoneyAuditEvents({
     summary: creatorMonetizationSummary,
@@ -1215,6 +1225,7 @@ export function ChannelStudioScreen() {
       setPlatformBranding(null);
       setBrandDraft(null);
       setPlatformRoleMemberships([]);
+      setPremiumEntitlement(null);
       setBrandReviewQueueAssets([]);
       setCreatorVideoClipEdits({});
       setLoading(false);
@@ -1236,6 +1247,7 @@ export function ChannelStudioScreen() {
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
       readMyPlatformRoleMemberships().catch(() => []),
+      readCurrentUserEntitlement("premium").catch(() => null),
     ])
       .then(([
         resolvedProfile,
@@ -1251,6 +1263,7 @@ export function ChannelStudioScreen() {
         resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
         resolvedPlatformRoleMemberships,
+        resolvedPremiumEntitlement,
       ]) => {
         if (!active) return;
         setProfile(normalizeUserProfile(resolvedProfile));
@@ -1271,6 +1284,7 @@ export function ChannelStudioScreen() {
         setPlatformBranding(resolvedPlatformBranding);
         setBrandDraft(resolvedPlatformBranding?.profile ?? null);
         setPlatformRoleMemberships(resolvedPlatformRoleMemberships);
+        setPremiumEntitlement(resolvedPremiumEntitlement);
         setLoading(false);
       })
       .catch(() => {
@@ -1289,6 +1303,7 @@ export function ChannelStudioScreen() {
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
         setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
         setPlatformRoleMemberships([]);
+        setPremiumEntitlement(null);
         setBrandReviewQueueAssets([]);
         setLoading(false);
       });
@@ -6865,6 +6880,15 @@ export function ChannelStudioScreen() {
         title={blockedBetaCopy.title}
         body={blockedBetaCopy.body}
         accessState={accessState.status === "loading" || accessState.status === "signed_out" || accessState.status === "active" ? null : accessState.status}
+      />
+    );
+  }
+
+  if (!hasPremiumCreatorToolAccess) {
+    return (
+      <BetaAccessScreen
+        title="Premium required"
+        body="Platform Studio, Brand Studio, Clip Studio, and creator uploads require active Premium entitlement. Open Premium setup when RevenueCat/Google Play access is available, or use an owner/operator account for setup-only review."
       />
     );
   }

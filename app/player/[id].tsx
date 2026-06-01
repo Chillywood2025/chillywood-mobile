@@ -58,8 +58,6 @@ import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import {
     getRuntimeControlBlockedCopy,
     isRuntimeControlBlockedAccess,
-    PREMIUM_LIVE_GATE_PROOF_HOLD,
-    PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE,
     WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY,
     requireWatchPartyLivePremium,
     type PremiumWatchPartyFeatureAccessDecision,
@@ -1757,10 +1755,6 @@ export default function PlayerScreen() {
         membership,
         ...(trackedUserId ? { userId: trackedUserId } : {}),
       }).catch(() => null);
-      const proofHoldRoomAccessAllowed = PREMIUM_LIVE_GATE_PROOF_HOLD
-        && premiumAccess?.allowed
-        && access?.reason === "premium_required";
-
       if (!active) return;
 
       if (!access) {
@@ -1769,23 +1763,7 @@ export default function PlayerScreen() {
         return;
       }
 
-      if (proofHoldRoomAccessAllowed) {
-        debugLog("livekit", "premium proof hold opened watch-party-live player access", {
-          roomId: snapshot.room.partyId,
-          sourceId: roomSourceId ?? snapshot.room.titleId ?? null,
-          message: PREMIUM_LIVE_GATE_PROOF_HOLD_MESSAGE,
-        });
-        setWatchPartyAccess({
-          ...access,
-          renderState: "accessible",
-          isAllowed: true,
-          reason: "allowed",
-          isBlocked: false,
-          blockSource: "none",
-        });
-      } else {
-        setWatchPartyAccess(access);
-      }
+      setWatchPartyAccess(access);
       setWatchPartyEntryLoading(false);
     })();
 
