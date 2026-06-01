@@ -14,9 +14,9 @@ Closed in the latest lane:
 - Platform Studio opened during the backend-active window and showed creator actions instead of Premium-required denial, proving unlock from backend entitlement.
 - Production Premium is not live. Live money, tickets/seats, tips, paid content, balances, payouts, and Stripe Android digital checkout remain off.
 
-Remaining honest gap:
+Remaining honest gap is now closed:
 
-- Non-Premium runtime denial still needs a separate safe signed-in non-Premium account if the owner wants device proof. Source/RLS/guard proof currently covers denial: normal users cannot write entitlement rows, expired/revoked/inactive rows do not unlock, and owner/operator setup access is not Premium.
+- Non-Premium runtime denial is now device-proved at `/tmp/chillywood-non-premium-denial-proof-20260601/`. A disposable non-Premium proof account has zero Premium rows, zero active Premium rows, zero active platform roles, and normal-user entitlement insert was denied with `42501`. On `R5CR120QCBF`, after latest OTA restart, Platform Studio / Brand Studio / Clip Studio entry showed clean `Premium required` copy.
 - If Google reviewers should test Premium, the reviewer/test account must be a licensed tester and credentials must be entered only in Play Console App access. Do not commit a password.
 - Keep the purchase shell closed unless the owner intentionally opens it for reviewer sandbox testing.
 
