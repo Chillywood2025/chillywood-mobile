@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 type JsonObject = Record<string, unknown>;
-export type SupabaseClientLike = ReturnType<typeof createClient>;
+export type SupabaseClientLike = ReturnType<typeof createClient<any, "public", any>>;
 
 export type ProviderReadinessStatus =
   | "missing"

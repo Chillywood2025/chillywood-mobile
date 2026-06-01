@@ -72,7 +72,11 @@ assertIncludes(edgeReadiness, "readProviderReadinessRows", "readiness sanitized 
 assertIncludes(edgeReadiness, "liveMoneyAction: false", "readiness no live money");
 
 assertIncludes(revenueCatWebhook, "REVENUECAT_WEBHOOK_SECRET", "RevenueCat webhook secret env");
-assertIncludes(revenueCatWebhook, "premiumGranted: false", "RevenueCat no fake premium");
+assertIncludes(revenueCatWebhook, "writePremiumEntitlementFromRevenueCatEvent", "RevenueCat backend entitlement sync");
+assertIncludes(revenueCatWebhook, ".upsert({", "RevenueCat entitlement upsert");
+assertIncludes(revenueCatWebhook, "source: \"revenuecat\"", "RevenueCat entitlement source");
+assertIncludes(revenueCatWebhook, "metadata->>revenuecat_event_id", "RevenueCat duplicate event check");
+assertIncludes(revenueCatWebhook, "premiumGranted: entitlementWrite.entitlementActive", "RevenueCat no fake premium");
 assertIncludes(revenueCatWebhook, "verifySharedWebhookSecret", "RevenueCat signature requirement");
 assertIncludes(revenueCatWebhook, "revenuecat_webhook_setup_required", "RevenueCat missing-secret audit");
 assertIncludes(googlePlayWebhook, "GOOGLE_PLAY_WEBHOOK_SECRET", "Google Play webhook secret env");
