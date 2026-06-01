@@ -7,6 +7,8 @@ This checklist prepares the owner/operator for Google Play upload. It does not u
 
 ## Current Artifact Evidence
 
+June 1, 2026 Google Play API upload readiness check: do not upload the current repo-built AAB because `jarsigner` confirms it is signed with `CN=Android Debug`. A broader local search found a prior signed candidate at `artifacts/google-play-proof/chillywood-v12.aab` with SHA-256 `e256d62de976fbf1b930e5c81cda921f2798ce55f0e4b421139f624e5d2956c1`; its signer is non-debug SHA256withRSA with blank DN. The service-account JSON is outside the repo at `/Users/loverslane/secrets/chillywood/revenuecat-google-play-service-account.json`, and no secret contents were printed. Using legacy gcloud ADC for `chillywood-revenuecat-play@chillywood-app.iam.gserviceaccount.com`, Android Publisher edit create/read/delete works, and internal track currently reports completed release `1.0.0` with versionCode `12`. No bundle was uploaded, no edit was committed, and no track/tester state changed. Owner must decide whether to use/install the existing internal v12 build from Play or explicitly approve an API upload/update of a specific signed AAB.
+
 | Artifact | Path | Size / hash | Status |
 | --- | --- | --- | --- |
 | Fresh current-HEAD proof AAB | `android/app/build/outputs/bundle/release/app-release.aab` | `132125002` bytes / 126M; SHA-256 `57f8f8da17f21959ef7d3f4abb661fad5135757caa277d2b9a03ddec192ad199` | Current local build proof from HEAD `12c97e56de6bb0a5f435f1c9aa81742f700af4dc`. Signing boundary below applies before Play upload. |

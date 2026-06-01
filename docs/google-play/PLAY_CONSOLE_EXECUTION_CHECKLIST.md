@@ -71,4 +71,6 @@ This checklist is for the owner/operator completing Google Play Console. It does
 
 ## Current Blocker Status
 
+June 1, 2026 API readiness check: Google Play API edit/read access is available through the external service-account credential at `/Users/loverslane/secrets/chillywood/revenuecat-google-play-service-account.json` and legacy ADC for `chillywood-revenuecat-play@chillywood-app.iam.gserviceaccount.com`; no credential values were printed or committed. The active user gcloud token still lacks Android Publisher scope, but the service-account path can create/read/delete edits. Internal track currently reports completed release `1.0.0` with versionCode `12`. Do not upload the current repo-built AAB because it is debug-signed; a prior non-debug signed candidate exists at `artifacts/google-play-proof/chillywood-v12.aab`. No upload, edit commit, track change, or tester change was performed. Do not commit service account JSON, OAuth tokens, keystores, or tester passwords.
+
 P0 remains **external Play/Data Safety/account-deletion/legal acceptance** until Play Console accepts the entries and legal owner approves the claims. The repo-side execution package is ready.
