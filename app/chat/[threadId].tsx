@@ -191,6 +191,7 @@ export default function ChillyChatThreadScreen() {
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
   const [friendLoading, setFriendLoading] = useState(true);
   const [friendBusy, setFriendBusy] = useState<"request" | "accept" | "decline" | "cancel" | "remove" | null>(null);
+  const [composerFocused, setComposerFocused] = useState(false);
   const autoStartCallRef = useRef("");
   const autoOpenCallRef = useRef("");
   const lastReadReceiptWriteAtRef = useRef(0);
@@ -969,7 +970,7 @@ export default function ChillyChatThreadScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { paddingTop: safeAreaInsets.top + 8 }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       testID="chat-thread-screen"
       accessibilityLabel="Chi'lly Chat direct thread screen"
     >
@@ -1305,7 +1306,15 @@ export default function ChillyChatThreadScreen() {
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <View
-        style={styles.composer}
+        style={[
+          styles.composer,
+          Platform.OS === "android" && composerFocused ? styles.composerKeyboardDocked : null,
+          {
+            paddingBottom: Platform.OS === "ios"
+              ? Math.max(safeAreaInsets.bottom + 18, 28)
+              : Math.max(safeAreaInsets.bottom + 12, 20),
+          },
+        ]}
         testID="chat-thread-composer"
         accessibilityLabel="Chi'lly Chat composer"
       >
@@ -1357,6 +1366,8 @@ export default function ChillyChatThreadScreen() {
             placeholderTextColor="#7F8AA1"
             value={draft}
             onChangeText={setDraft}
+            onFocus={() => setComposerFocused(true)}
+            onBlur={() => setComposerFocused(false)}
             multiline
           />
           <TouchableOpacity
@@ -1980,6 +1991,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(6,10,18,0.96)",
+  },
+  composerKeyboardDocked: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   composerAffordanceRow: {
     flexDirection: "row",
