@@ -9,6 +9,8 @@ June 1, 2026 store listing upload closeout: Play Console contact details/categor
 
 June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records Store listing as saved in Play Console. Feature graphic, listing icon, and phone/tablet screenshots were uploaded through the authenticated Play Console session. Review acceptance remains pending.
 
+June 2, 2026 icon repair update: after the Google Play Billing sandbox sheet showed a generic placeholder icon, the current branded 512x512 listing icon was re-uploaded and committed through the Android Publisher API for `com.chillywood.mobile` / `en-US`. Readback shows one listing icon, image id `9058525658997174018`, SHA-256 `b350be77fe32353503f0b514ea2cd01f3d7d52cfe6e0d8cb45bb4bd2d966c438`. Billing UI may still need Play Store cache propagation before it reflects the replacement.
+
 ## App Identity
 
 | Field | Current value | Status | Owner action |
@@ -27,7 +29,7 @@ June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_T
 
 | Asset | Current repo evidence | Play requirement / note | Status | Owner action |
 | --- | --- | --- | --- | --- |
-| App icon | Generated `/tmp/chillywood-google-play-release-v14-20260601/store-assets/play-listing-icon-512.png` | Play listing icon must be 512x512 PNG with alpha and max 1024KB per Google guidance | saved | Replace only if owner wants a different approved brand asset |
+| App icon | Generated `/tmp/chillywood-google-play-release-v14-20260601/store-assets/play-listing-icon-512.png`; Android Publisher readback id `9058525658997174018`, SHA-256 `b350be77fe32353503f0b514ea2cd01f3d7d52cfe6e0d8cb45bb4bd2d966c438` | Play listing icon must be 512x512 PNG with alpha and max 1024KB per Google guidance | saved / API readback passed | Wait for Play cache propagation if Billing sheet still shows the placeholder |
 | Launcher adaptive icon | `assets/images/android-icon-foreground.png`, `android-icon-background.png`, `android-icon-monochrome.png` | Runtime launcher asset, not the listing icon by itself | repo_ready | Confirm launcher proof in release/pre-launch |
 | Splash | `assets/images/splash-icon.png` | Runtime proof exists from release lanes | repo_ready | No Play upload unless used in screenshots |
 | Feature graphic | Generated `/tmp/chillywood-google-play-release-v14-20260601/store-assets/feature-graphic-1024x500.png` | 1024x500 JPEG or 24-bit PNG, no alpha | saved | Replace only if owner wants a different approved graphic |
