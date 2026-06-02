@@ -144,10 +144,13 @@ Validation commands run:
 Android proof:
 
 - Follow-up proof path: `/tmp/chillywood-username-android-runtime-proof-20260601/`.
-- `R5CR120QCBF` is attached and remains Play-installed as `com.chillywood.mobile` versionCode `13`, versionName `1.0.0`, installer `com.android.vending`.
+- Local attached-device proof path: `/tmp/chillywood-username-local-device-proof-20260601/`.
 - Current-source `./gradlew assembleRelease` succeeded and produced APK SHA-256 `ed6fbe0f079d9bce11b1374d9a6cce4528551d2e790bee7681ae8d5a816e2c2a`.
-- In-place install failed with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the local APK signature does not match the Play-installed app. No uninstall/reinstall was performed because that would destroy or replace the owner/admin Play session without approval.
-- The installed Play v13 app launches Home and Settings, but Settings > Account does not contain the new Username editor. Fresh Android screenshot proof for signup username entry, Settings username change, Profile/Platform handle display, Explore People username search, Chi'lly Chat handle display, and Admin username detail is therefore still not claimed.
+- Initial in-place install failed with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the local APK signature did not match the Play-installed app.
+- After owner direction to use the attached device locally, Play v13 was uninstalled and the local release APK installed successfully on `R5CR120QCBF` as versionCode `8`, versionName `1.0.0`.
+- The local signed-out app launches and signup username UI is captured: initial `Too short`, invalid `bad/name` -> `Use letters, numbers, underscores, or dots`, reserved `admin` -> `This username is reserved`, available `cwlocal231039` -> `Available`, and taken `test` -> `Already taken`.
+- No account was created and `cwlocal231039` was not claimed.
+- Fresh signed-in Android screenshot proof for Settings username change, Profile/Platform handle display, Explore People username search, Chi'lly Chat handle display, and Admin username detail is still not claimed because automated login was unreliable and no disposable account was created.
 - `eas.json` workspace truth: no current uncommitted diff. The recent `closed` EAS submit profile targeting Play `alpha` with `releaseStatus:"draft"` is already committed in `950b49b` as intentional Play release-lane setup and was not edited for username proof.
 
 Follow-up backend re-proof:
