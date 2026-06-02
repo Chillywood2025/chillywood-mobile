@@ -671,3 +671,16 @@ Closed repo-side:
 Current remaining proof need:
 
 - Rebuild/install current Android and visually confirm `/chat` has no Rachi card/thread, Rachi Profile has no Rachi Chat CTA, and `/chilly-circle` still shows Rachi first.
+
+## Premium Sandbox Play-Installed Repair
+
+June 2, 2026 Premium sandbox repair is closed through the Play-installed path on `R5CR120QCBF`.
+
+- Commit `492cca3` (`Reopen Premium sandbox purchase shell`) is pushed to `origin/main`.
+- EAS production Android update group `6d9b515e-c595-4173-8f88-ce7abb7adfb1` publishes the reopened Premium shell for runtime `1.0.0`.
+- The earlier Google Play `The item you were attempting to purchase could not be found.` error was reproduced only on the local sideloaded versionCode `8` install.
+- The sideloaded app was removed and Google Play internal testing installed `com.chillywood.mobile` with `installer=com.android.vending`, versionCode `13`, versionName `1.0.0`.
+- Signed-in Settings > Manage Premium shows `Premium is not active`, `Purchase status` = `Available`, and `Subscribe to Premium`.
+- Tapping the actual Subscribe button opens the Google Play sandbox subscription sheet for `Chi'llywood Premium`, `com.chillywood.mobile (unreviewed)`, `premium_subscription`, `$9.99/5 min + tax`, with `Test card, always approves` and test/no-charge copy.
+- The final Google Play Subscribe confirmation was not pressed in this repair pass, so no new purchase, entitlement, backend Premium row, unlock, or restore state is claimed.
+- Proof artifacts live outside the repo at `/tmp/chillywood-premium-play-signed-repair-proof-20260602/`.
