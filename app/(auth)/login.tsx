@@ -22,6 +22,23 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "../../_lib/supabase";
 const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 const PASSWORD_RESET_REDIRECT_URL = "chillywoodmobile://reset-password";
 
+function getPasswordResetErrorMessage(error: unknown) {
+  const raw = String(
+    (error as { message?: unknown; code?: unknown; name?: unknown } | null)?.message
+    ?? (error as { code?: unknown } | null)?.code
+    ?? (error as { name?: unknown } | null)?.name
+    ?? "",
+  ).toLowerCase();
+
+  if (raw.includes("email rate") || raw.includes("over_email_send_rate_limit") || raw.includes("rate limit")) {
+    return "Too many reset emails were requested. Wait a few minutes, then try again.";
+  }
+  if (raw.includes("invalid") && raw.includes("email")) {
+    return "Enter a valid email address.";
+  }
+  return "Unable to send a reset link right now.";
+}
+
 async function requestPasswordResetEmail(email: string) {
   const recoverUrl = new URL(`${SUPABASE_URL.replace(/\/+$/g, "")}/auth/v1/recover`);
   recoverUrl.searchParams.set("redirect_to", PASSWORD_RESET_REDIRECT_URL);
@@ -139,7 +156,7 @@ export default function Login() {
       });
       Alert.alert(
         "Reset password",
-        error instanceof Error && error.message ? error.message : "Unable to send a reset link right now.",
+        getPasswordResetErrorMessage(error),
       );
     } finally {
       setResetPasswordLoading(false);

@@ -40,6 +40,23 @@ const RECOVERY_PARAM_KEYS = [
   "refresh_token",
 ] as const;
 
+function getPasswordUpdateErrorMessage(error: unknown) {
+  const raw = String(
+    (error as { message?: unknown; code?: unknown; name?: unknown } | null)?.message
+    ?? (error as { code?: unknown } | null)?.code
+    ?? (error as { name?: unknown } | null)?.name
+    ?? "",
+  ).toLowerCase();
+
+  if (raw.includes("weak") || raw.includes("password")) {
+    return "Use a stronger password.";
+  }
+  if (raw.includes("expired") || raw.includes("invalid") || raw.includes("token")) {
+    return "This reset link expired. Request a fresh link.";
+  }
+  return "Unable to update your password right now.";
+}
+
 const readParam = (params: URLSearchParams, key: string) => {
   const value = params.get(key);
   return value ? value.trim() : null;
@@ -266,9 +283,9 @@ export default function ResetPasswordScreen() {
 
       if (error) {
         trackEvent("auth_password_recovery_update_failed", {
-          reason: error.message,
+          reason: error.name ?? "auth_error",
         });
-        Alert.alert("Reset password", error.message);
+        Alert.alert("Reset password", getPasswordUpdateErrorMessage(error));
         return;
       }
 
