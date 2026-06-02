@@ -421,7 +421,11 @@ export default function ChillyChatInboxScreen() {
                 <View style={styles.threadTitleRow}>
                   <View style={styles.threadTitleWrap}>
                     <Text style={styles.threadTitle}>{displayName}</Text>
-                    {memberHandle ? <Text style={styles.threadHandle}>{memberHandle}</Text> : null}
+                    {memberHandle ? (
+                      <Text style={styles.threadHandle} testID="chat-inbox-thread-handle">
+                        {memberHandle}
+                      </Text>
+                    ) : null}
                     {officialAccount ? (
                       <View style={styles.threadOfficialPill}>
                         <Text style={styles.threadOfficialPillText}>{officialAccount.officialBadgeLabel}</Text>

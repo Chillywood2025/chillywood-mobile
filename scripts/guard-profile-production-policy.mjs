@@ -27,6 +27,7 @@ const profileMediaSheets = read("components/profile/profile-media-sheets.tsx");
 const socialAttachments = read("_lib/socialAttachments.ts");
 const socialAttachmentPicker = read("_lib/socialAttachmentPicker.ts");
 const socialAttachmentSheet = read("components/social/social-attachment-action-sheet.tsx");
+const chatInbox = read("app/chat/index.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
 const player = read("app/player/[id].tsx");
 const watchParty = read("app/watch-party/[partyId].tsx");
@@ -153,6 +154,8 @@ assertIncludes(profileMediaStatusMigration, `v_next_profile_media_status := 'adm
 assertNotIncludes(profileMediaStatusMigration, `pending_review`, "Profile media owner-controlled status policy");
 assertIncludes(profile, `isSelfProfile ? onPressPreviewPlatform : onPressViewChannel`, "Platform stat/empty-state owner preview split");
 assertIncludes(publicPlatform, `const showOwnerControls = isOwner && !publicPreviewMode`, "public Platform owner-control preview guard");
+assertIncludes(publicPlatform, `testID="platform-public-handle"`, "public Platform handle render");
+assertIncludes(publicPlatform, `{channel.handle}`, "public Platform canonical handle value");
 assertIncludes(publicPlatform, `if (nextAudienceState?.isViewerBlocked)`, "public Platform blocked-viewer guard");
 assertIncludes(publicPlatform, `readCreatorVideos(routeUserId, { includeDrafts: false, limit:`, "public Platform draft exclusion");
 assertIncludes(platformStudio, `router.push({ pathname: "/channel/[userId]", params: { userId: previewUserId, preview: "public" } })`, "Platform Studio public preview route");
@@ -177,6 +180,10 @@ assertIncludes(userData, `const generatedUsername = normalizeUsernameHandle(\`us
 assertNotIncludes(userData, `split("@")`, "Profile fallback must not derive username from email");
 assertIncludes(usernameHelper, `RESERVED_USERNAMES`, "shared reserved username list");
 assertIncludes(usernameHelper, `checkUsernameAvailability`, "shared username availability helper");
+assertIncludes(chatInbox, `formatUsernameHandle(other?.username)`, "Chi'lly Chat inbox canonical @username formatter");
+assertIncludes(chatInbox, `testID="chat-inbox-thread-handle"`, "Chi'lly Chat inbox handle render");
+assertIncludes(chatThread, `formatUsernameHandle(otherMember?.username)`, "Chi'lly Chat thread canonical @username formatter");
+assertIncludes(chatThread, `testID="chat-thread-header-handle"`, "Chi'lly Chat thread header handle render");
 assertIncludes(chatThread, `SocialAttachmentActionSheet`, "Chi'lly Chat shared attachment sheet");
 assertIncludes(player, `SocialAttachmentActionSheet`, "creator-video comments shared attachment sheet");
 assertIncludes(watchParty, `SocialAttachmentActionSheet`, "Watch-Party room comments shared attachment sheet");

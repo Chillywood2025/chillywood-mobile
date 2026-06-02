@@ -999,7 +999,11 @@ export default function ChillyChatThreadScreen() {
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>CHI'LLY CHAT</Text>
           <Text style={styles.title}>{otherMemberDisplayName}</Text>
-          {otherMemberHandle ? <Text style={styles.handleText}>{otherMemberHandle}</Text> : null}
+          {otherMemberHandle ? (
+            <Text style={styles.handleText} testID="chat-thread-header-handle">
+              {otherMemberHandle}
+            </Text>
+          ) : null}
           {otherMemberTagline ? <Text style={styles.body}>{otherMemberTagline}</Text> : null}
           <View style={styles.headerMetaRow}>
             <View style={styles.headerPill}>

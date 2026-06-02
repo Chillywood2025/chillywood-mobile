@@ -480,7 +480,11 @@ export default function PublicChannelScreen() {
               )}
             </View>
             <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Platform"}</Text>
-            {channel.handle ? <Text style={styles.channelHandle} numberOfLines={1}>{channel.handle}</Text> : null}
+            {channel.handle ? (
+              <Text style={styles.channelHandle} numberOfLines={1} testID="platform-public-handle">
+                {channel.handle}
+              </Text>
+            ) : null}
             {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>Official Chi'llwood</Text> : null}
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
             {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
