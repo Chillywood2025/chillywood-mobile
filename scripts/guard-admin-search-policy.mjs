@@ -27,6 +27,8 @@ const adminTabsAuditDoc = read("docs/ADMIN_MAIN_TABS_UI_UX_AUDIT.md");
 const adminIaDoc = read("docs/ADMIN_IA_CONSOLIDATION.md");
 const adminSearchAudit = read("_lib/adminSearchAudit.ts");
 const adminSearchAuditMigration = read("supabase/migrations/202605290004_admin_search_query_audit.sql");
+const usernameMigration = read("supabase/migrations/20260602032030_modern_username_handle_system.sql");
+const adminReadModelMigration = read("supabase/migrations/20260530173834_admin_read_model_drilldowns.sql");
 
 assertIncludes(packageJson, "guard:admin-search-policy", "package guard script");
 
@@ -49,6 +51,8 @@ assertIncludes(admin, "adminSearchCanUseScope", "Admin search permission scope g
 assertIncludes(admin, "availableAdminSearchScopes", "Admin search visible scope gate");
 assertIncludes(admin, "platformRoleRoster", "Admin user lookup source");
 assertIncludes(admin, "maskOperatorIdentity(entry.email)", "Admin user email masking");
+assertIncludes(admin, "{ label: \"Username\", value: entry.username ?? \"not returned\" }", "Admin username detail row");
+assertIncludes(admin, "{ label: \"Display\", value: entry.displayName ?? \"not returned\" }", "Admin display name detail row");
 assertIncludes(admin, "safetyReports", "Admin reports search source");
 assertIncludes(admin, "adminMoneyAuditEvents", "Admin money search source");
 assertIncludes(admin, "providerReadinessRows", "Admin provider search source");
@@ -87,6 +91,12 @@ assertIncludes(adminSearchAuditMigration, "'admin_search_result_opened'", "Admin
 assertIncludes(adminSearchAuditMigration, "'email_plaintext_stored', false", "Admin email plaintext audit blocker");
 assertIncludes(adminSearchAuditMigration, "'raw_query_stored', false", "Admin raw query audit blocker");
 assertIncludes(adminSearchAuditMigration, "grant execute on function public.\"write_admin_search_audit\"", "Admin search audit authenticated grant");
+assertIncludes(adminReadModelMigration, "base.username", "Admin users read model searches username");
+assertIncludes(adminReadModelMigration, "base.display_name", "Admin users read model searches display name");
+assertIncludes(adminReadModelMigration, "base.email", "Admin users read model admin-only email search");
+assertIncludes(usernameMigration, "admin_force_update_username", "Admin force username change RPC");
+assertIncludes(usernameMigration, "public.has_platform_role(array['owner'::text, 'operator'::text])", "Admin username management role gate");
+assertIncludes(usernameMigration, "admin_forced_username_change", "Admin username force-change audit");
 
 assertNotIncludes(explore, "Email lookup is admin-only.", "Explore admin email copy");
 assertNotIncludes(explore, "Search by email", "Explore email search copy");

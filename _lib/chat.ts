@@ -39,6 +39,7 @@ export type ChatUserSearchResult = ChatTargetIdentity & {
 export type ChatThreadMember = {
   threadId: string;
   userId: string;
+  username?: string;
   displayName: string;
   avatarUrl?: string;
   tagline?: string;
@@ -264,6 +265,38 @@ function parseChatMessage(
   };
 }
 
+async function enrichChatThreadsWithUsernames(threads: ChatThreadSummary[]) {
+  const userIds = Array.from(new Set(threads.flatMap((thread) => thread.members.map((member) => member.userId)).filter(Boolean)));
+  if (!userIds.length) return threads;
+
+  const { data, error } = await supabase
+    .from(CHAT_USER_PROFILES_TABLE)
+    .select(CHAT_USER_SEARCH_SELECT)
+    .in("user_id", userIds)
+    .returns<ChatUserProfileRow[]>();
+
+  if (error || !data) return threads;
+
+  const profileByUserId = new Map(data.map((row) => [toText(row.user_id), row]));
+  return threads.map((thread) => {
+    const members = thread.members.map((member) => {
+      const profile = profileByUserId.get(member.userId);
+      const username = toText(profile?.username);
+      if (!username) return member;
+      return {
+        ...member,
+        username,
+        displayName: toText(profile?.display_name) || member.displayName,
+        avatarUrl: toText(profile?.avatar_url) || member.avatarUrl,
+        tagline: toText(profile?.tagline) || member.tagline,
+      };
+    });
+    const currentMember = members.find((member) => member.userId === thread.currentMember?.userId) ?? thread.currentMember;
+    const otherMember = members.find((member) => member.userId === thread.otherMember?.userId) ?? thread.otherMember;
+    return { ...thread, members, currentMember, otherMember };
+  });
+}
+
 function escapeIlikeValue(value: string) {
   return value.replace(/[%_,()]/g, "").trim();
 }
@@ -292,9 +325,10 @@ export async function listChatThreads(): Promise<ChatThreadSummary[]> {
 
   if (error || !data) return [];
 
-  return data
+  const threads = data
     .map((row) => parseChatThread(row, currentUserId))
     .filter(isDefined);
+  return enrichChatThreadsWithUsernames(threads);
 }
 
 export async function getChatThread(threadId: string): Promise<ChatThreadSummary | null> {
@@ -310,7 +344,9 @@ export async function getChatThread(threadId: string): Promise<ChatThreadSummary
     .maybeSingle();
 
   if (error || !data) return null;
-  return parseChatThread(data, currentUserId);
+  const thread = parseChatThread(data, currentUserId);
+  if (!thread) return null;
+  return (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
 }
 
 export async function getChatThreadByActiveCommunicationRoomId(roomId: string): Promise<ChatThreadSummary | null> {
@@ -327,10 +363,12 @@ export async function getChatThreadByActiveCommunicationRoomId(roomId: string): 
     .returns<ChatThreadRow[]>();
 
   if (error || !data) return null;
-  return data
+  const thread = data
     .map((row) => parseChatThread(row, currentUserId))
     .filter(isDefined)
     .find((thread) => toText(thread.activeCommunicationRoomId).toUpperCase() === normalizedRoomId) ?? null;
+  if (!thread) return null;
+  return (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
 }
 
 export async function listChatMessages(threadId: string): Promise<ChatMessage[]> {

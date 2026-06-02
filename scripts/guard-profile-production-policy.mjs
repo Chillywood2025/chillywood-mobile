@@ -36,6 +36,8 @@ const platformStudio = read("app/channel-settings.tsx");
 const packageJson = read("package.json");
 const profileAppearanceMigration = read("supabase/migrations/202605260001_profile_appearance_media.sql");
 const profileMediaStatusMigration = read("supabase/migrations/202605260002_profile_media_status_policy.sql");
+const userData = read("_lib/userData.ts");
+const usernameHelper = read("_lib/usernameHandles.ts");
 
 assertIncludes(profile, `label: "Platform"`, "Profile tab labels");
 assertIncludes(profile, `profile-preview-platform-button`, "owner public Platform action");
@@ -89,6 +91,11 @@ assertIncludes(profile, `targetType: "profile_media"`, "Profile media safety rep
 assertIncludes(profile, `profileMediaKind: mediaTarget`, "Profile media report kind context");
 assertIncludes(profile, `profileMediaPublicState: isProfileMediaActive(mediaStatus) ? "active" : "hidden"`, "Profile media report public-state context");
 assertIncludes(settings, `title="Profile Appearance"`, "Settings Profile Appearance section");
+assertIncludes(settings, `title="Username"`, "Settings username section");
+assertIncludes(settings, `This is how people find you.`, "Settings username helper copy");
+assertIncludes(settings, `checkUsernameAvailability`, "Settings username availability check");
+assertIncludes(settings, `updateMyUsername`, "Settings username update RPC helper");
+assertIncludes(settings, `formatUsernameHandle`, "Settings public handle formatter");
 assertIncludes(settings, `title="Profile Photo"`, "Settings Profile Photo control");
 assertIncludes(settings, `title="Profile Background"`, "Settings Profile Background control");
 assertIncludes(settings, `ProfileMediaReviewSheet`, "Settings Profile media review sheet");
@@ -165,6 +172,11 @@ assertNotIncludes(profileMedia, `platform_brand_assets`, "Profile media helper m
 assertNotIncludes(profileMedia, `platform-brand-assets`, "Profile media helper must stay separate from Brand Studio storage");
 assertNotIncludes(profileMediaSheets, `storage_path`, "Profile media sheets must not render raw storage paths");
 assertNotIncludes(profileMediaSheets, `objectKey`, "Profile media sheets must not render raw object keys");
+assertIncludes(userData, `handle: officialAccount?.handle ?? formatUsernameHandle(options.username ?? profile?.username)`, "Profile/Platform backed @username handle");
+assertIncludes(userData, `const generatedUsername = normalizeUsernameHandle(\`user`, "Profile fallback does not use email local-part");
+assertNotIncludes(userData, `split("@")`, "Profile fallback must not derive username from email");
+assertIncludes(usernameHelper, `RESERVED_USERNAMES`, "shared reserved username list");
+assertIncludes(usernameHelper, `checkUsernameAvailability`, "shared username availability helper");
 assertIncludes(chatThread, `SocialAttachmentActionSheet`, "Chi'lly Chat shared attachment sheet");
 assertIncludes(player, `SocialAttachmentActionSheet`, "creator-video comments shared attachment sheet");
 assertIncludes(watchParty, `SocialAttachmentActionSheet`, "Watch-Party room comments shared attachment sheet");

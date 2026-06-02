@@ -85,6 +85,7 @@ const creatorVideos = read("_lib/creatorVideos.ts");
 const liveKitTokenContract = read("_lib/livekit/token-contract.ts");
 const legalPolicies = read("legal/policies.mjs");
 const legalSiteBuild = read("public-site/legal-site/build.mjs");
+const usernameHelper = read("_lib/usernameHandles.ts");
 
 for (const [label, source] of [
   ["Settings", settings],
@@ -100,6 +101,11 @@ assertNotIncludes(settings, "Alert.alert(\"Log Out\", error.message)", "Settings
 assertNotIncludes(settings, "setPasswordNotice(error.message)", "Settings password raw error notice");
 assertNotIncludes(support, "error instanceof Error ? error.message : \"Try again in a moment.\"", "Support raw feedback error");
 assertNotIncludes(copyrightReport, "error instanceof Error ? error.message : \"Unable to submit this copyright report right now.\"", "Copyright raw submit error");
+assertIncludes(usernameHelper, "getUsernameErrorMessage", "username safe error mapper");
+assertIncludes(usernameHelper, "Couldn't update username. Try again.", "username safe fallback copy");
+assertNotIncludes(usernameHelper, "RLS", "username helper raw RLS copy");
+assertNotIncludes(usernameHelper, "unique constraint", "username helper raw unique constraint copy");
+assertNotIncludes(usernameHelper, "duplicate key value", "username helper raw duplicate key copy");
 
 const normalUserCopyChecks = [
   ["Live effects sheet", liveEffectsSheet, [

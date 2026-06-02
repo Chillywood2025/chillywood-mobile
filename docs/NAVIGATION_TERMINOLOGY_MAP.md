@@ -5,6 +5,7 @@ This map records the current Chi'llywood app navigation and product language aft
 
 ## Final Terminology
 - Profile = the user's social identity hub.
+- Username/handle = public user handle displayed as `@username`; it is separate from email and supports public discovery.
 - Platform = the public creator surface for uploads, videos, events, live context, and backed shelves.
 - Platform Studio = the signed-in owner creator control center.
 - Chi'lly Circle = mutual personal connection layer. Do not replace it with generic `friends` copy.
@@ -91,6 +92,7 @@ Android proof:
 ## Explore Status
 Current implementation:
 - Explore owns public people discovery. Profile remains the current user's identity and social feed surface, not global user search.
+- Public identity rows use display name plus `@username` where backed.
 - Search scopes are All, Content, People, Platforms, Originals, Live, and Events.
 - Search input uses debounced typeahead/autocomplete after two characters, grouped by backed public scope with compact suggestion rows and a clear search action.
 - Searches and filters `titles`.
@@ -103,6 +105,8 @@ Current implementation:
 - Uses backed hero/title imagery when present and falls back to the Chi'llwood branded background when no backed hero image is available.
 - Does not invent trending rows, creator rows, Platform rows, live state, replays, events, Rachi content, counts, or protected/private content.
 - Public People search supports username, display name, and the current public Platform name source. It does not support email, phone, private account identifiers, private roles, or staff/security/system metadata.
+- Username search is backed by canonical lowercase `user_profiles.username`; handles are displayed with `@` but stored without it.
+- The Modern Username Handle System migration `20260602032030_modern_username_handle_system.sql` enforces unique case-insensitive usernames, safe format, reserved names, blocked-word protection, and username audit. See `docs/USERNAME_HANDLE_SYSTEM.md`.
 - Remote-applied migration `202605290003_public_people_search_operator_proof_hardening.sql` keeps the public `search_public_people` RPC returning only public-safe fields: user id, display name, username, active avatar URL, official flag/label, public Platform flag/id, and short public bio.
 - Public People search reuses `can_view_profile_content`, so private Profiles and blocked relationships stay hidden according to the existing profile policy.
 - Owner/operator/moderator/security/support/system/proof/service accounts and proof/operator display markers are excluded from public People search unless they are an explicitly public official account. Rachi is the allowed explicit official result and appears as `Official Chi'llwood`.
@@ -111,6 +115,7 @@ Current implementation:
 
 Owner/Admin search:
 - Owner/Admin search is permission-gated inside `/admin` and never appears in public Explore or Profile.
+- Admin user search can inspect username, display name, user id, and email only inside `/admin` where already allowed.
 - Admin `Search Admin` typeahead searches already-loaded Admin sources only: staff/user role roster, safety reports, DMCA cases, Money Audit events, kill switches, provider readiness, Rachi posts/Originals, Live Cost Guard/Live Ops, legal requests, and immutable audit rows.
 - Email lookup stays Owner/Admin-only. Admin result rows mask email identity, and public Explore never accepts email lookup or displays email.
 - Admin search opens existing Admin tabs/details where backed; it does not add a new public RPC, bypass RLS, expose provider secrets/raw payloads, activate money, or change LiveKit/Watch-Party/Premium behavior.

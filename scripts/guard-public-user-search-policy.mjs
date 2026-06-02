@@ -20,7 +20,9 @@ const assertNotIncludes = (source, needle, label) => {
 };
 
 const migration = read("supabase/migrations/202605290003_public_people_search_operator_proof_hardening.sql");
+const usernameMigration = read("supabase/migrations/20260602032030_modern_username_handle_system.sql");
 const helper = read("_lib/publicPeopleSearch.ts");
+const usernameHelper = read("_lib/usernameHandles.ts");
 const explore = read("app/(tabs)/explore.tsx");
 const packageJson = read("package.json");
 const navDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
@@ -58,6 +60,19 @@ assertNotIncludes(migration, "auth.users", "public people search auth user table
 assertNotIncludes(migration, "profile.\"email\"", "public people search profile email field");
 assertNotIncludes(migration, "select *", "public people search broad select");
 
+assertIncludes(usernameMigration, "create unique index \"user_profiles_username_unique_ci_idx\"", "case-insensitive username unique index");
+assertIncludes(usernameMigration, "check_username_availability", "public-safe username availability RPC");
+assertIncludes(usernameMigration, "update_my_username", "self-service username update RPC");
+assertIncludes(usernameMigration, "username_reserved_names", "reserved username table");
+assertIncludes(usernameMigration, "username_change_audit", "username audit table");
+assertIncludes(usernameMigration, "'rachi'", "Rachi reserved username");
+assertIncludes(usernameMigration, "'chillywood.rachi'", "Rachi official reserved handle");
+assertIncludes(usernameMigration, "not public.is_username_reserved(input.username)", "normal users cannot claim reserved names");
+assertIncludes(usernameMigration, "profile.\"user_id\" <> coalesce(auth.uid()::text, '')", "availability check does not mark current user's handle taken");
+assertNotIncludes(usernameMigration, "auth.users", "username availability must not expose auth users");
+assertNotIncludes(usernameMigration, "split('@')", "username migration must not derive handles from email local-parts");
+assertNotIncludes(usernameMigration, "split_part", "username migration must not derive handles from email local-parts");
+
 assertIncludes(helper, "searchPublicPeople", "client search helper");
 assertIncludes(helper, "queryWithoutHandlePrefix.includes(\"@\")", "client email query block");
 assertIncludes(helper, "PublicPeopleSearchResult", "public-safe result type");
@@ -67,6 +82,17 @@ assertIncludes(helper, "\\badmin proof\\b", "client proof/admin display filter")
 assertIncludes(helper, "\\bmoderator proof\\b", "client moderator display filter");
 assertIncludes(helper, "platform_rachi_official", "client explicit Rachi public exception");
 assertNotIncludes(helper, "email", "client public people helper email handling");
+
+assertIncludes(usernameHelper, "normalizeUsernameHandle", "shared username normalization");
+assertIncludes(usernameHelper, "formatUsernameHandle", "shared @ handle formatter");
+assertIncludes(usernameHelper, "RESERVED_USERNAMES", "client reserved username list");
+assertIncludes(usernameHelper, "checkUsernameAvailability", "client username availability helper");
+assertIncludes(usernameHelper, "updateMyUsername", "client username update helper");
+assertIncludes(usernameHelper, "Use letters, numbers, underscores, or dots", "safe username invalid copy");
+assertIncludes(usernameHelper, "This username is reserved", "safe reserved username copy");
+assertIncludes(usernameHelper, "Already taken", "safe taken username copy");
+assertNotIncludes(usernameHelper, "duplicate key", "no raw uniqueness copy");
+assertNotIncludes(usernameHelper, "RLS", "no raw RLS copy");
 
 assertIncludes(explore, "EXPLORE_SEARCH_SCOPES", "Explore search scopes");
 assertIncludes(explore, 'label: "People"', "Explore People scope");

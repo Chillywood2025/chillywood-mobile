@@ -1,5 +1,5 @@
 import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -18,6 +18,16 @@ import { readAppConfig } from "../../_lib/appConfig";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { supabase } from "../../_lib/supabase";
+import {
+  buildUsernameSuggestions,
+  checkUsernameAvailability,
+  formatUsernameHandle,
+  getUsernameErrorMessage,
+  normalizeUsernameHandle,
+  updateMyUsername,
+  validateUsernameHandle,
+  type UsernameAvailability,
+} from "../../_lib/usernameHandles";
 
 const COMMUNITY_GUIDELINES_HREF = "/community-guidelines" as Href;
 
@@ -26,12 +36,56 @@ export default function Signup() {
   const params = useLocalSearchParams<{ redirectTo?: string }>();
   const insets = useSafeAreaInsets();
   const redirectTo = String(params.redirectTo ?? "").trim() || "/(tabs)";
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameAvailability, setUsernameAvailability] = useState<UsernameAvailability>({
+    username: "",
+    available: false,
+    status: "idle",
+    message: "Choose your username",
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const usernameSuggestions = useMemo(() => buildUsernameSuggestions(displayName), [displayName]);
+
+  useEffect(() => {
+    const local = validateUsernameHandle(username);
+    setUsernameAvailability(local);
+    if (!local.available) return;
+
+    setUsernameAvailability({ ...local, status: "checking", available: false, message: "Checking..." });
+    const timeout = setTimeout(() => {
+      void checkUsernameAvailability(local.username)
+        .then(setUsernameAvailability)
+        .catch(() => {
+          setUsernameAvailability({
+            username: local.username,
+            available: false,
+            status: "not_allowed",
+            message: "Not available",
+          });
+        });
+    }, 400);
+
+    return () => clearTimeout(timeout);
+  }, [username]);
 
   const signUp = async () => {
+    const normalizedDisplayName = displayName.trim();
+    const normalizedUsername = normalizeUsernameHandle(username);
+
+    if (!normalizedDisplayName) {
+      Alert.alert("Choose your display name", "Add the name people should see on your Profile.");
+      return;
+    }
+
+    if (!usernameAvailability.available || usernameAvailability.username !== normalizedUsername) {
+      Alert.alert("Choose your username", usernameAvailability.message || "Choose an available username.");
+      return;
+    }
+
     if (!email || !password) {
       Alert.alert("Error", "Enter email and password");
       return;
@@ -64,6 +118,11 @@ export default function Signup() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            display_name: normalizedDisplayName,
+          },
+        },
       });
 
       if (error) {
@@ -79,6 +138,20 @@ export default function Signup() {
       });
 
       if (data.session?.user?.id) {
+        try {
+          await updateMyUsername(normalizedUsername);
+          await supabase
+            .from("user_profiles")
+            .update({
+              display_name: normalizedDisplayName,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", data.session.user.id);
+        } catch (usernameError) {
+          Alert.alert("Choose your username", getUsernameErrorMessage(usernameError));
+          return;
+        }
+
         const acceptanceResult = await recordAccountLegalAcceptance(
           supabase,
           data.session.user.id,
@@ -120,7 +193,7 @@ export default function Signup() {
         "Success",
         isClosedBetaEnvironment()
           ? "Check your email to confirm signup. Closed-beta access only activates if this email is on the invite list."
-          : "Check your email to confirm signup before signing in.",
+          : "Check your email to confirm signup before signing in. You can finish claiming your username after your first sign-in.",
       );
     } catch (error) {
       reportRuntimeError("auth-signup", error, {
@@ -188,6 +261,63 @@ export default function Signup() {
           </Link>
           {"."}
         </Text>
+        <View style={styles.usernameCard}>
+          <Text style={styles.usernameTitle}>Choose your username</Text>
+          <Text style={styles.usernameHelper}>This is how people find you.</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Display name"
+            autoCapitalize="words"
+            autoCorrect
+            returnKeyType="next"
+            value={displayName}
+            onChangeText={setDisplayName}
+          />
+          <View style={styles.usernameInputWrap}>
+            <Text style={styles.atPrefix}>@</Text>
+            <TextInput
+              style={styles.usernameInput}
+              placeholder="creatorname"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="next"
+              value={username}
+              onChangeText={(value) => setUsername(normalizeUsernameHandle(value))}
+            />
+          </View>
+          <View style={styles.usernameStatusRow}>
+            <View style={[
+              styles.usernameStatusPill,
+              usernameAvailability.available && styles.usernameStatusPillAvailable,
+              (usernameAvailability.status === "taken" || usernameAvailability.status === "reserved" || usernameAvailability.status === "not_allowed") && styles.usernameStatusPillBlocked,
+            ]}>
+              <Text style={[
+                styles.usernameStatusText,
+                usernameAvailability.available && styles.usernameStatusTextAvailable,
+                (usernameAvailability.status === "taken" || usernameAvailability.status === "reserved" || usernameAvailability.status === "not_allowed") && styles.usernameStatusTextBlocked,
+              ]}>
+                {usernameAvailability.message}
+              </Text>
+            </View>
+            {usernameAvailability.username ? (
+              <Text style={styles.usernamePreview}>{formatUsernameHandle(usernameAvailability.username)}</Text>
+            ) : null}
+          </View>
+          {usernameSuggestions.length ? (
+            <View style={styles.suggestionRow}>
+              {usernameSuggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion}
+                  style={styles.suggestionChip}
+                  onPress={() => setUsername(suggestion)}
+                  disabled={loading}
+                >
+                  <Text style={styles.suggestionChipText}>@{suggestion}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </View>
 
         <TextInput
           style={styles.input}
@@ -312,6 +442,104 @@ const styles = StyleSheet.create({
     color: "#FF5A76",
     fontWeight: "800",
     textDecorationLine: "underline",
+  },
+  usernameCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 14,
+    marginBottom: 16,
+  },
+  usernameTitle: {
+    color: "#F8FAFF",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  usernameHelper: {
+    color: "#A9B3C8",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  usernameInputWrap: {
+    minHeight: 48,
+    borderRadius: 10,
+    backgroundColor: "#1A1A22",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  atPrefix: {
+    color: "#FF5A76",
+    fontSize: 16,
+    fontWeight: "900",
+    marginRight: 2,
+  },
+  usernameInput: {
+    flex: 1,
+    color: "white",
+    paddingVertical: 12,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  usernameStatusRow: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  usernameStatusPill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(148,163,184,0.16)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  usernameStatusPillAvailable: {
+    backgroundColor: "rgba(34,197,94,0.18)",
+  },
+  usernameStatusPillBlocked: {
+    backgroundColor: "rgba(248,113,113,0.16)",
+  },
+  usernameStatusText: {
+    color: "#B8C2D6",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  usernameStatusTextAvailable: {
+    color: "#7EF0A1",
+  },
+  usernameStatusTextBlocked: {
+    color: "#FF9AA8",
+  },
+  usernamePreview: {
+    color: "#DDE6F8",
+    fontSize: 12,
+    fontWeight: "800",
+    flexShrink: 1,
+  },
+  suggestionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  suggestionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  suggestionChipText: {
+    color: "#F4F7FC",
+    fontSize: 12,
+    fontWeight: "800",
   },
   input: {
     backgroundColor: "#1A1A22",

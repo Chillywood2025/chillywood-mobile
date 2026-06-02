@@ -18,6 +18,7 @@ import { listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../..
 import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { useSession } from "../../_lib/session";
+import { formatUsernameHandle } from "../../_lib/usernameHandles";
 
 type InboxErrorState = {
   message: string;
@@ -54,6 +55,7 @@ function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
 
   const searchFields = [
     thread.otherMember?.displayName,
+    thread.otherMember?.username,
     thread.otherMember?.tagline,
     thread.lastMessagePreview,
     thread.activeCallType,
@@ -384,6 +386,7 @@ export default function ChillyChatInboxScreen() {
           const identityLabel = getIdentityLabel(item);
           const threadKindLabel = getThreadKindLabel(item);
           const displayName = officialAccount?.displayName ?? other?.displayName ?? "Chi'lly Chat Thread";
+          const memberHandle = officialAccount?.handle ?? formatUsernameHandle(other?.username);
           const tagline = officialAccount?.tagline ?? other?.tagline;
           const isActiveFriend = !officialAccount && !!other?.userId && activeFriendUserIdSet.has(String(other.userId).trim());
 
@@ -418,6 +421,7 @@ export default function ChillyChatInboxScreen() {
                 <View style={styles.threadTitleRow}>
                   <View style={styles.threadTitleWrap}>
                     <Text style={styles.threadTitle}>{displayName}</Text>
+                    {memberHandle ? <Text style={styles.threadHandle}>{memberHandle}</Text> : null}
                     {officialAccount ? (
                       <View style={styles.threadOfficialPill}>
                         <Text style={styles.threadOfficialPillText}>{officialAccount.officialBadgeLabel}</Text>
@@ -713,6 +717,12 @@ const styles = StyleSheet.create({
     color: "#F7FBFF",
     fontSize: 16,
     fontWeight: "900",
+  },
+  threadHandle: {
+    color: "#9FB0CA",
+    fontSize: 12,
+    fontWeight: "800",
+    flexShrink: 1,
   },
   threadOfficialPill: {
     borderRadius: 999,

@@ -38,6 +38,15 @@ import {
 } from "../_lib/profileVisibility";
 import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
+import {
+  checkUsernameAvailability,
+  formatUsernameHandle,
+  getUsernameErrorMessage,
+  normalizeUsernameHandle,
+  updateMyUsername,
+  validateUsernameHandle,
+  type UsernameAvailability,
+} from "../_lib/usernameHandles";
 import { useSession } from "../_lib/session";
 import {
   isProfileMediaActive,
@@ -367,6 +376,15 @@ export default function SettingsScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameNotice, setUsernameNotice] = useState<string | null>(null);
+  const [usernameAvailability, setUsernameAvailability] = useState<UsernameAvailability>({
+    username: "",
+    available: false,
+    status: "idle",
+    message: "Choose your username",
+  });
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const legalConfig = useMemo(() => getRuntimeLegalConfig(), []);
   const moderationAccess = useMemo(() => getModerationAccess({
@@ -473,6 +491,7 @@ export default function SettingsScreen() {
     void readUserProfile()
       .then((profile) => {
         if (active) setMyProfile(profile);
+        if (active) setUsernameDraft(normalizeUsernameHandle(profile.username));
       })
       .catch(() => {
         if (active) setMyProfile(null);
@@ -482,6 +501,28 @@ export default function SettingsScreen() {
       active = false;
     };
   }, [isLoading, isSignedIn]);
+
+  useEffect(() => {
+    const local = validateUsernameHandle(usernameDraft);
+    setUsernameAvailability(local);
+    if (!local.available || local.username === normalizeUsernameHandle(myProfile?.username)) return;
+
+    setUsernameAvailability({ ...local, status: "checking", available: false, message: "Checking..." });
+    const timeout = setTimeout(() => {
+      void checkUsernameAvailability(local.username)
+        .then(setUsernameAvailability)
+        .catch(() => {
+          setUsernameAvailability({
+            username: local.username,
+            available: false,
+            status: "not_allowed",
+            message: "Not available",
+          });
+        });
+    }, 400);
+
+    return () => clearTimeout(timeout);
+  }, [myProfile?.username, usernameDraft]);
 
   const refreshNotifications = useCallback(async () => {
     if (!isSignedIn) return;
@@ -814,6 +855,40 @@ export default function SettingsScreen() {
     }
   }, [confirmPassword, newPassword, passwordSaving]);
 
+  const onPressSaveUsername = useCallback(async () => {
+    if (usernameSaving) return;
+
+    const normalizedUsername = normalizeUsernameHandle(usernameDraft);
+    const currentUsername = normalizeUsernameHandle(myProfile?.username);
+    if (normalizedUsername === currentUsername) {
+      setUsernameNotice("Username updated");
+      return;
+    }
+
+    if (!usernameAvailability.available || usernameAvailability.username !== normalizedUsername) {
+      const message = usernameAvailability.message || "Choose an available username.";
+      setUsernameNotice(message);
+      Alert.alert("Choose your username", message);
+      return;
+    }
+
+    setUsernameSaving(true);
+    setUsernameNotice(null);
+    try {
+      const result = await updateMyUsername(normalizedUsername);
+      setMyProfile((current) => current ? { ...current, username: result.username } : current);
+      setUsernameDraft(result.username);
+      setUsernameNotice("Username updated");
+      Alert.alert("Username", "Username updated");
+    } catch (error) {
+      const message = getUsernameErrorMessage(error);
+      setUsernameNotice(message);
+      Alert.alert("Username", message);
+    } finally {
+      setUsernameSaving(false);
+    }
+  }, [myProfile?.username, usernameAvailability.available, usernameAvailability.message, usernameAvailability.username, usernameDraft, usernameSaving]);
+
   const openExternalDestination = useCallback(async (url: string, label: string) => {
     try {
       const supported = await Linking.canOpenURL(url);
@@ -1144,6 +1219,59 @@ export default function SettingsScreen() {
         expandedSections={expandedSections}
         onToggle={toggleSection}
       >
+        <InlineAccordion
+          id="account-username"
+          title="Username"
+          summary={`Current handle: ${formatUsernameHandle(myProfile?.username) || "Not set"}`}
+          expandedSections={expandedSections}
+          onToggle={toggleSection}
+        >
+          <Text style={styles.statusNote}>This is how people find you.</Text>
+          <View style={styles.usernameEditorCard}>
+            <View style={styles.usernameInputWrap}>
+              <Text style={styles.usernameAtPrefix}>@</Text>
+              <TextInput
+                style={styles.usernameInput}
+                value={usernameDraft}
+                onChangeText={(value) => setUsernameDraft(normalizeUsernameHandle(value))}
+                placeholder="creatorname"
+                placeholderTextColor="#788196"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <View style={styles.usernameStatusRow}>
+              <View style={[
+                styles.usernameStatusPill,
+                usernameAvailability.available && styles.usernameStatusPillAvailable,
+                (usernameAvailability.status === "taken" || usernameAvailability.status === "reserved" || usernameAvailability.status === "not_allowed") && styles.usernameStatusPillBlocked,
+              ]}>
+                <Text style={[
+                  styles.usernameStatusText,
+                  usernameAvailability.available && styles.usernameStatusTextAvailable,
+                  (usernameAvailability.status === "taken" || usernameAvailability.status === "reserved" || usernameAvailability.status === "not_allowed") && styles.usernameStatusTextBlocked,
+                ]}>
+                  {normalizeUsernameHandle(myProfile?.username) === normalizeUsernameHandle(usernameDraft)
+                    ? "Current username"
+                    : usernameAvailability.message}
+                </Text>
+              </View>
+              <Text style={styles.usernamePreview}>{formatUsernameHandle(usernameDraft)}</Text>
+            </View>
+            {usernameNotice ? <Text style={styles.inlineNotice}>{usernameNotice}</Text> : null}
+            <TouchableOpacity
+              style={[
+                styles.inlinePrimaryButton,
+                (usernameSaving || normalizeUsernameHandle(myProfile?.username) === normalizeUsernameHandle(usernameDraft) || !usernameAvailability.available) && styles.inlinePrimaryButtonDisabled,
+              ]}
+              activeOpacity={0.86}
+              disabled={usernameSaving || normalizeUsernameHandle(myProfile?.username) === normalizeUsernameHandle(usernameDraft) || !usernameAvailability.available}
+              onPress={onPressSaveUsername}
+            >
+              <Text style={styles.inlinePrimaryButtonText}>{usernameSaving ? "Saving..." : "Save Username"}</Text>
+            </TouchableOpacity>
+          </View>
+        </InlineAccordion>
         <InlineAccordion
           id="account-privacy"
           title="Profile visibility"
@@ -1651,6 +1779,94 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "700",
+  },
+  usernameEditorCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    gap: 10,
+  },
+  usernameInputWrap: {
+    minHeight: 46,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(0,0,0,0.18)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+  },
+  usernameAtPrefix: {
+    color: "#FF5A76",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  usernameInput: {
+    flex: 1,
+    color: "#F8FAFF",
+    fontSize: 14,
+    fontWeight: "800",
+    paddingVertical: 10,
+  },
+  usernameStatusRow: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  usernameStatusPill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(148,163,184,0.16)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  usernameStatusPillAvailable: {
+    backgroundColor: "rgba(34,197,94,0.18)",
+  },
+  usernameStatusPillBlocked: {
+    backgroundColor: "rgba(248,113,113,0.16)",
+  },
+  usernameStatusText: {
+    color: "#B8C2D6",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  usernameStatusTextAvailable: {
+    color: "#7EF0A1",
+  },
+  usernameStatusTextBlocked: {
+    color: "#FF9AA8",
+  },
+  usernamePreview: {
+    color: "#DDE6F8",
+    fontSize: 12,
+    fontWeight: "800",
+    flexShrink: 1,
+  },
+  inlineNotice: {
+    color: "#C4CEE2",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  inlinePrimaryButton: {
+    minHeight: 42,
+    borderRadius: 10,
+    backgroundColor: "#DC143C",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  inlinePrimaryButtonDisabled: {
+    opacity: 0.48,
+  },
+  inlinePrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
   },
   legalStatusCard: {
     borderRadius: 16,

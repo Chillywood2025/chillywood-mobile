@@ -16,6 +16,7 @@ import {
   type ProfileVisibility,
 } from "./profileVisibility";
 import { supabase } from "./supabase";
+import { formatUsernameHandle, normalizeUsernameHandle } from "./usernameHandles";
 
 export const WATCH_PROGRESS_KEY = "@chillywood/watch-progress";
 export const MY_LIST_KEY = "@chillywood/my-list";
@@ -427,7 +428,7 @@ export const buildUserChannelProfile = (options: {
     platformOwnershipLabel: officialAccount?.platformOwnershipLabel,
     platformRoleLabel: officialAccount?.platformRoleLabel,
     isProtectedFromClaim: !!officialAccount,
-    handle: officialAccount?.handle,
+    handle: officialAccount?.handle ?? formatUsernameHandle(options.username ?? profile?.username),
     auditOwnerKey: officialAccount?.auditOwnerKey,
   };
 };
@@ -492,12 +493,6 @@ async function readPublicChannelProfile(userId: string): Promise<UserProfile | n
     return null;
   }
 }
-
-const buildFallbackUsernameFromEmail = (email?: string) => {
-  const localPart = String(email ?? "").split("@")[0]?.trim().toLowerCase() ?? "";
-  const normalized = localPart.replace(/[^a-z0-9._-]/g, "");
-  return normalized || undefined;
-};
 
 async function readRemoteUserProfile(userId: string): Promise<UserProfile | null> {
   const normalizedUserId = toIdString(userId);
@@ -1022,11 +1017,10 @@ export async function readUserProfile(): Promise<UserProfile> {
     return remoteProfile;
   }
 
-  // Generate if missing
-  const emailDerivedUsername = buildFallbackUsernameFromEmail(signedInUser.email);
+  // Generate a non-email local identity if the remote profile is not available yet.
+  const generatedUsername = normalizeUsernameHandle(`user${Math.floor(100000 + Math.random() * 900000)}`);
   const generated = normalizeUserProfile({
-    username: emailDerivedUsername
-      ?? `Studio Guest ${Math.floor(1000 + Math.random() * 9000)}`,
+    username: generatedUsername,
     avatarIndex: Math.floor(Math.random() * AVATARS.length),
     displayName: signedInUser.displayName,
   });
@@ -1034,7 +1028,6 @@ export async function readUserProfile(): Promise<UserProfile> {
     userId: signedInUser.userId ?? "none",
     username: generated.username,
     displayName: generated.displayName ?? "",
-    emailDerivedUsername: emailDerivedUsername ?? "",
   });
   await saveUserProfile(generated);
   return generated;

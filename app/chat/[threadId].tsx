@@ -48,6 +48,7 @@ import {
   READ_RECEIPT_THROTTLE_MS,
 } from "../../_lib/performancePolicy";
 import { useSession } from "../../_lib/session";
+import { formatUsernameHandle } from "../../_lib/usernameHandles";
 import {
   SOCIAL_ATTACHMENT_TOO_LARGE_MESSAGE,
   type SocialAttachmentPickerScope,
@@ -392,6 +393,7 @@ export default function ChillyChatThreadScreen() {
   const officialAccount = getOfficialPlatformAccount(otherMember?.userId);
   const otherMemberAvatarUrl = officialAccount ? undefined : otherMember?.avatarUrl;
   const otherMemberDisplayName = officialAccount?.displayName ?? otherMember?.displayName ?? "Direct Thread";
+  const otherMemberHandle = officialAccount?.handle ?? formatUsernameHandle(otherMember?.username);
   const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;
   const callTitle = thread?.activeCallType === "video" ? "Video call active" : "Voice call active";
   const callBody = thread?.activeCallType === "video"
@@ -997,6 +999,7 @@ export default function ChillyChatThreadScreen() {
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>CHI'LLY CHAT</Text>
           <Text style={styles.title}>{otherMemberDisplayName}</Text>
+          {otherMemberHandle ? <Text style={styles.handleText}>{otherMemberHandle}</Text> : null}
           {otherMemberTagline ? <Text style={styles.body}>{otherMemberTagline}</Text> : null}
           <View style={styles.headerMetaRow}>
             <View style={styles.headerPill}>
@@ -1477,6 +1480,12 @@ const styles = StyleSheet.create({
     color: "#F8FBFF",
     fontSize: 24,
     fontWeight: "900",
+  },
+  handleText: {
+    color: "#9FB0CA",
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "800",
   },
   body: {
     color: "#B9C5D9",

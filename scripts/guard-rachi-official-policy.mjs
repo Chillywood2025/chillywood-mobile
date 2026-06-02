@@ -33,6 +33,7 @@ const profileMediaStorageMigration = read("supabase/migrations/202605260010_rach
 const originalsMigration = read("supabase/migrations/202605260011_rachi_originals_public_video_fixture.sql");
 const originalsPlaybackMigration = read("supabase/migrations/202605260012_rachi_originals_fixture_playback_mp4.sql");
 const originalsSelectHardeningMigration = read("supabase/migrations/202605260013_rachi_originals_public_link_select_hardening.sql");
+const usernameMigration = read("supabase/migrations/20260602032030_modern_username_handle_system.sql");
 const publicCreatorVideoCardsFunction = read("supabase/functions/public-creator-video-cards/index.ts");
 
 const userFacingSource = [
@@ -48,7 +49,13 @@ const userFacingSource = [
 
 assertIncludes(officialAccounts, "Rachi shares Chi'llywood updates, tips, and Chi'llwood Originals.", "official Rachi positioning");
 assertIncludes(officialAccounts, "Rachi does not read your private chats.", "privacy trust copy");
+assertIncludes(officialAccounts, 'handle: "@chillywood.rachi"', "official Rachi protected handle");
 assertIncludes(userData, "profileAvatarUrl ?? normalizeTextValue(officialAccount.avatarUrl)", "official profile image reads backed avatar before fallback");
+assertIncludes(usernameMigration, "('rachi', 'rachi_official_reserved', true)", "Rachi reserved username");
+assertIncludes(usernameMigration, "('chillywood.rachi', 'rachi_official_reserved', true)", "Rachi official reserved handle");
+assertIncludes(usernameMigration, "new.\"user_id\" = 'platform_rachi_official'", "Rachi official assignment exception");
+assertIncludes(usernameMigration, "normalized_username = 'chillywood.rachi'", "Rachi official handle assignment exception");
+assertIncludes(usernameMigration, "not public.is_username_reserved(input.username)", "normal users cannot claim Rachi reserved handles");
 
 assertIncludes(chillyCircle, "Official connection", "pinned official Chi'lly Circle section");
 assertIncludes(chillyCircle, "Your first Chi'lly Circle connection", "first official Circle copy");

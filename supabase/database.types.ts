@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       admin_canary_runs: {
@@ -8508,6 +8533,63 @@ export type Database = {
         }
         Relationships: []
       }
+      username_change_audit: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          new_username: string | null
+          old_username: string | null
+          reason: string | null
+          target_user_id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          new_username?: string | null
+          old_username?: string | null
+          reason?: string | null
+          target_user_id: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          new_username?: string | null
+          old_username?: string | null
+          reason?: string | null
+          target_user_id?: string
+        }
+        Relationships: []
+      }
+      username_reserved_names: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          is_official_only: boolean
+          reason: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          is_official_only?: boolean
+          reason?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          is_official_only?: boolean
+          reason?: string
+          username?: string
+        }
+        Relationships: []
+      }
       video_renditions: {
         Row: {
           access_tier: string
@@ -9325,6 +9407,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_force_update_username: {
+        Args: {
+          p_reason?: string
+          p_target_user_id: string
+          p_username: string
+        }
+        Returns: Json
+      }
       admin_grant_platform_role_by_email: {
         Args: { p_reason?: string; p_role: string; p_target_email: string }
         Returns: Json
@@ -9451,6 +9541,10 @@ export type Database = {
         Args: { p_key: string; p_require_live_money?: boolean }
         Returns: undefined
       }
+      build_safe_username_seed: {
+        Args: { p_user_id: string; p_username: string }
+        Returns: string
+      }
       calculate_creator_instant_cashout_fee: {
         Args: { p_amount_cents: number }
         Returns: number
@@ -9474,6 +9568,10 @@ export type Database = {
       chat_thread_has_platform_owner: {
         Args: { target_thread_id: string }
         Returns: boolean
+      }
+      check_username_availability: {
+        Args: { p_username: string }
+        Returns: Json
       }
       claim_media_scan_jobs: {
         Args: { p_max_jobs?: number; p_worker_id?: string }
@@ -9646,6 +9744,10 @@ export type Database = {
         Returns: Json
       }
       has_active_beta_access: { Args: never; Returns: boolean }
+      has_active_premium_creator_tool_access: {
+        Args: { target_user_id?: string }
+        Returns: boolean
+      }
       has_platform_permission: {
         Args: { p_permission_key: string }
         Returns: boolean
@@ -9663,6 +9765,23 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: boolean
       }
+      is_username_available_for_user: {
+        Args: { p_user_id?: string; p_username: string }
+        Returns: boolean
+      }
+      is_username_blocked_word: {
+        Args: { p_username: string }
+        Returns: boolean
+      }
+      is_username_format_valid: {
+        Args: { p_username: string }
+        Returns: boolean
+      }
+      is_username_handle_format_valid: {
+        Args: { p_username: string }
+        Returns: boolean
+      }
+      is_username_reserved: { Args: { p_username: string }; Returns: boolean }
       list_admin_content_audit_events: {
         Args: { p_limit?: number }
         Returns: {
@@ -9827,6 +9946,10 @@ export type Database = {
       }
       money_kill_switch_state_label: {
         Args: { p_state: string }
+        Returns: string
+      }
+      normalize_username_handle: {
+        Args: { p_username: string }
         Returns: string
       }
       owner_security_center_table_status: { Args: never; Returns: Json }
@@ -10225,6 +10348,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_my_username: { Args: { p_username: string }; Returns: Json }
       user_has_active_entitlement: {
         Args: { required_entitlement_keys: string[]; target_user_id: string }
         Returns: boolean
@@ -10370,6 +10494,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

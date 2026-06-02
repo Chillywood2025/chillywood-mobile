@@ -2,6 +2,15 @@
 
 ## Recommended Lane: Google Play Publishing Overview And Release Asset Closeout
 
+Newest repo/backend lane closed: Modern Username Handle System on June 2, 2026. Migration `20260602032030_modern_username_handle_system.sql` is remote-applied and types regenerated. Backend proof shows canonical lowercase username enforcement, 0 duplicate groups ignoring case, 0 invalid usernames, 0 reserved conflicts, duplicate/reserved/invalid insert rejection, public People search no email lookup, Rachi public `chillywood.rachi` protection, and RLS preventing a normal authenticated claim from updating another user's username. Signup and Settings now include compact username UI with debounced availability; Profile/Platform identity, Explore People, Chi'lly Circle, Chi'lly Chat, and Admin user rows have handle support where backed. Dedicated doc: `docs/USERNAME_HANDLE_SYSTEM.md`.
+
+Remaining username follow-up:
+
+- Capture fresh Android runtime screenshots for signup username entry, Settings username change, Profile `@username`, Explore People username search, Chi'lly Chat handle display, and Admin username detail after a bounded build/install proof path is approved.
+- Username-based `/profile/@handle` or `/u/[username]` routing is deferred; existing `/profile/[userId]` and `/channel/[userId]` remain canonical.
+- Username change frequency limits and old-handle grace holds are deferred.
+- Owner/Admin reserved-name management UI is deferred; backend table/RPC controls and audit exist.
+
 Latest readiness result: Play Console App Content entry is now saved/actioned, but not yet sent through Google review. Proof path: `/tmp/chillywood-google-play-external-acceptance-20260601/play-console-proof/`.
 
 Closed now:

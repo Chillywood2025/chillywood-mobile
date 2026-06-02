@@ -7,6 +7,7 @@ Status: repo-side implemented; Android runtime proof lives at `/tmp/chillywood-r
 Rachi is Chi'llywood's official account:
 
 - official Chi'llywood guide
+- protected public handle: `@chillywood.rachi`
 - first pinned Chi'lly Circle official connection
 - official updates voice
 - Chi'llwood Originals publisher when real public-safe Rachi content exists
@@ -90,6 +91,13 @@ Chi'llwood Originals uses real Rachi-owned creator videos only:
 Do not create placeholder Originals or fake production claims.
 
 ## Safety
+
+Username/handle safety:
+
+- `rachi`, `rachi_official`, and `chillywood.rachi` are reserved in `username_reserved_names`.
+- Normal users cannot claim Rachi handles.
+- Public People search may return explicit official Rachi as `username='chillywood.rachi'`, `Rachi`, and `Official Chi'llwood`.
+- Rachi must never appear publicly as owner/admin/operator authority.
 
 Rachi does not replace:
 

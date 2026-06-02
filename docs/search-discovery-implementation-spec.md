@@ -19,7 +19,7 @@ This spec does not:
 - add schema directly
 - create separate discovery-route sprawl beyond current doctrine
 
-2026-05-29 current search truth: Explore owns public discovery search with typeahead over backed public content, People, Platforms, Originals, Live, and Events. Public People search uses `search_public_people`, searches username/display name/public Platform name only, blocks email-shaped queries, hides owner/admin/security/system/proof/service accounts, respects privacy/block policy, and returns no email or private identifiers. Owner/Admin `Search Admin` lives only inside `/admin`; it may search operational sources, including masked email lookup, and now writes masked immutable audit events through `write_admin_search_audit`. Profile is not global user search.
+2026-06-02 current search truth: Explore owns public discovery search with typeahead over backed public content, People, Platforms, Originals, Live, and Events. Public People search uses `search_public_people`, searches canonical username/display name/public Platform name only, blocks email-shaped queries, hides owner/admin/security/system/proof/service accounts, respects privacy/block policy, and returns no email or private identifiers. Usernames are public handles displayed as `@username`, unique case-insensitively, reserved-name protected, blocked-word protected, and separate from email; backend details live in `docs/USERNAME_HANDLE_SYSTEM.md`. Owner/Admin `Search Admin` lives only inside `/admin`; it may search operational sources, including masked email lookup, and writes masked immutable audit events through `write_admin_search_audit`. Profile is not global user search.
 
 ## 2. Current Doctrine That Must Be Preserved
 

@@ -20,6 +20,8 @@ Profile is Chi'llywood's personal and social identity surface.
 
 It should make the user feel human: avatar, display name, handle, bio/tagline, backed official or creator badges, backed social relationships, direct Chi'lly Chat entry, public activity when backed, and honest empty states when personal activity is not backed.
 
+As of June 2, 2026, the handle is the canonical public username from `user_profiles.username`, displayed as `@username`, stored lowercase without `@`, unique case-insensitively, reserved-name protected, blocked-word protected, and separate from email. Profile and Platform identity may show display name plus `@username`; they must not expose user email or derive a handle from email. Existing `/profile/[userId]` and `/channel/[userId]` routes remain canonical until a separate username-route lane is approved.
+
 Profile must not become a generic creator feed, a management console, or a place where creator uploads pretend to be normal personal status posts.
 
 ## 2. Platform Purpose
