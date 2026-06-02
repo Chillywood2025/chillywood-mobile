@@ -143,8 +143,46 @@ Validation commands run:
 
 Android proof:
 
-- `R5CR120QCBF` is attached and available.
-- Fresh Android screenshot proof for the new signup/settings username UI is not yet captured in this lane until a bounded build/install path is approved. Do not claim runtime screenshots for the new UI until captured.
+- Follow-up proof path: `/tmp/chillywood-username-android-runtime-proof-20260601/`.
+- `R5CR120QCBF` is attached and remains Play-installed as `com.chillywood.mobile` versionCode `13`, versionName `1.0.0`, installer `com.android.vending`.
+- Current-source `./gradlew assembleRelease` succeeded and produced APK SHA-256 `ed6fbe0f079d9bce11b1374d9a6cce4528551d2e790bee7681ae8d5a816e2c2a`.
+- In-place install failed with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` because the local APK signature does not match the Play-installed app. No uninstall/reinstall was performed because that would destroy or replace the owner/admin Play session without approval.
+- The installed Play v13 app launches Home and Settings, but Settings > Account does not contain the new Username editor. Fresh Android screenshot proof for signup username entry, Settings username change, Profile/Platform handle display, Explore People username search, Chi'lly Chat handle display, and Admin username detail is therefore still not claimed.
+- `eas.json` workspace truth: no current uncommitted diff. The recent `closed` EAS submit profile targeting Play `alpha` with `releaseStatus:"draft"` is already committed in `950b49b` as intentional Play release-lane setup and was not edited for username proof.
+
+Follow-up backend re-proof:
+
+- total profiles: `28`
+- blank usernames: `0`
+- invalid usernames: `0`
+- duplicate username groups ignoring case: `0`
+- reserved conflicts: `0`
+- duplicate case-insensitive username insert rejected
+- reserved username insert rejected
+- invalid username insert rejected
+- authenticated normal-user update of another profile updated `0` rows inside rollback
+- email-shaped public People search returned `0`
+- Rachi public search returned one official result with `username='chillywood.rachi'`
+- admin-like public search returned `0`
+
+Follow-up validation:
+
+- `npm run typecheck`
+- `npm run validate:runtime`
+- `npm run guard:profile-production-policy`
+- `npm run guard:public-user-search-policy`
+- `npm run guard:admin-search-policy`
+- `npm run guard:rachi-official-policy`
+- `npm run guard:navigation-terminology-policy`
+- `npm run guard:critical-ux-polish-policy`
+- `npm run guard:money-center-policy`
+- `npm run guard:watch-party-livekit`
+- `npm run guard:old-room-handling`
+- `supabase migration list`
+- `supabase db lint --linked --schema public --fail-on error`
+- `supabase db push --dry-run`
+- `git diff --check`
+- `git diff --cached --check`
 
 ## Remaining Limitations
 
