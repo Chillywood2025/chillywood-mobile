@@ -48,6 +48,9 @@ function getSignupErrorMessage(error: unknown) {
   if (raw.includes("invalid") && raw.includes("email")) {
     return "Enter a valid email address.";
   }
+  if (raw.includes("network") || raw.includes("fetch") || raw.includes("offline") || raw.includes("timeout")) {
+    return "Couldn't reach signup. Check your connection and try again.";
+  }
   if (raw.includes("password")) {
     return "Use a stronger password.";
   }
@@ -120,6 +123,7 @@ export default function Signup() {
   const signUp = async () => {
     const normalizedDisplayName = displayName.trim();
     const normalizedUsername = normalizeUsernameHandle(username);
+    let signupCreatedUser = false;
 
     if (!normalizedDisplayName) {
       Alert.alert("Choose your display name", "Add the name people should see on your Profile.");
@@ -179,6 +183,7 @@ export default function Signup() {
         return;
       }
 
+      signupCreatedUser = !!data.user?.id;
       trackEvent("auth_sign_up_success", {
         hasSession: !!data.session,
       });
@@ -244,7 +249,16 @@ export default function Signup() {
       trackEvent("auth_sign_up_failure", {
         reason: "runtime_error",
       });
-      Alert.alert("Signup Error", "Unable to sign up right now.");
+      if (signupCreatedUser) {
+        Alert.alert(
+          "Success",
+          isClosedBetaEnvironment()
+            ? "Check your email to confirm signup. Closed-beta access only activates if this email is on the invite list."
+            : "Check your email to confirm signup before signing in.",
+        );
+        return;
+      }
+      Alert.alert("Signup Error", getSignupErrorMessage(error));
     } finally {
       setLoading(false);
     }
