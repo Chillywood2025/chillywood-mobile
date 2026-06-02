@@ -1,5 +1,5 @@
 import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -57,6 +57,7 @@ export default function Signup() {
   const router = useRouter();
   const params = useLocalSearchParams<{ redirectTo?: string }>();
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView | null>(null);
   const redirectTo = String(params.redirectTo ?? "").trim() || "/(tabs)";
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -71,6 +72,9 @@ export default function Signup() {
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
   const usernameSuggestions = useMemo(() => buildUsernameSuggestions(displayName), [displayName]);
+  const scrollSignupFieldsIntoView = () => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+  };
 
   useEffect(() => {
     const local = validateUsernameHandle(username);
@@ -230,17 +234,19 @@ export default function Signup() {
   return (
     <KeyboardAvoidingView
       style={styles.keyboardShell}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           styles.container,
           {
             paddingTop: Math.max(insets.top + 32, 72),
-            paddingBottom: Math.max(insets.bottom + 24, 24),
+            paddingBottom: Math.max(insets.bottom + 120, 144),
           },
         ]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
@@ -291,6 +297,7 @@ export default function Signup() {
             returnKeyType="next"
             value={displayName}
             onChangeText={setDisplayName}
+            onFocus={scrollSignupFieldsIntoView}
           />
           <View style={styles.usernameInputWrap}>
             <Text style={styles.atPrefix}>@</Text>
@@ -302,6 +309,7 @@ export default function Signup() {
               returnKeyType="next"
               value={username}
               onChangeText={(value) => setUsername(normalizeUsernameHandle(value))}
+              onFocus={scrollSignupFieldsIntoView}
             />
           </View>
           <View style={styles.usernameStatusRow}>
@@ -347,6 +355,7 @@ export default function Signup() {
           returnKeyType="next"
           value={email}
           onChangeText={setEmail}
+          onFocus={scrollSignupFieldsIntoView}
         />
 
         <TextInput
@@ -356,6 +365,7 @@ export default function Signup() {
           returnKeyType="done"
           value={password}
           onChangeText={setPassword}
+          onFocus={scrollSignupFieldsIntoView}
           onSubmitEditing={() => {
             void signUp();
           }}
