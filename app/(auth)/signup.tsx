@@ -74,9 +74,12 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const usernameSuggestions = useMemo(() => buildUsernameSuggestions(displayName), [displayName]);
-  const scrollSignupFieldsIntoView = () => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 180);
+  const scrollSignupTo = (y: number) => {
+    setTimeout(() => scrollRef.current?.scrollTo({ y, animated: true }), 160);
   };
+  const scrollSignupIdentityIntoView = () => scrollSignupTo(180);
+  const scrollSignupEmailIntoView = () => scrollSignupTo(360);
+  const scrollSignupPasswordIntoView = () => scrollSignupTo(460);
 
   useEffect(() => {
     const local = validateUsernameHandle(username);
@@ -103,7 +106,6 @@ export default function Signup() {
   useEffect(() => {
     const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
       setKeyboardVisible(true);
-      scrollSignupFieldsIntoView();
     });
     const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
       setKeyboardVisible(false);
@@ -259,7 +261,7 @@ export default function Signup() {
           styles.container,
           {
             paddingTop: Math.max(insets.top + 32, 72),
-            paddingBottom: Math.max(insets.bottom + (keyboardVisible ? 260 : 128), keyboardVisible ? 280 : 152),
+            paddingBottom: Math.max(insets.bottom + (keyboardVisible ? 188 : 128), keyboardVisible ? 208 : 152),
           },
         ]}
         keyboardShouldPersistTaps="handled"
@@ -314,7 +316,7 @@ export default function Signup() {
             returnKeyType="next"
             value={displayName}
             onChangeText={setDisplayName}
-            onFocus={scrollSignupFieldsIntoView}
+            onFocus={scrollSignupIdentityIntoView}
           />
           <View style={styles.usernameInputWrap}>
             <Text style={styles.atPrefix}>@</Text>
@@ -326,7 +328,7 @@ export default function Signup() {
               returnKeyType="next"
               value={username}
               onChangeText={(value) => setUsername(normalizeUsernameHandle(value))}
-              onFocus={scrollSignupFieldsIntoView}
+              onFocus={scrollSignupIdentityIntoView}
             />
           </View>
           <View style={styles.usernameStatusRow}>
@@ -372,7 +374,7 @@ export default function Signup() {
           returnKeyType="next"
           value={email}
           onChangeText={setEmail}
-          onFocus={scrollSignupFieldsIntoView}
+          onFocus={scrollSignupEmailIntoView}
         />
 
         <TextInput
@@ -382,7 +384,7 @@ export default function Signup() {
           returnKeyType="done"
           value={password}
           onChangeText={setPassword}
-          onFocus={scrollSignupFieldsIntoView}
+          onFocus={scrollSignupPasswordIntoView}
           onSubmitEditing={() => {
             void signUp();
           }}
