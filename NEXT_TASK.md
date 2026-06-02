@@ -1,11 +1,16 @@
 # NEXT TASK
 
-## Recommended Lane: Google Play Console External Entry And Acceptance Proof
+## Recommended Lane: Google Play Publishing Overview And Release Asset Closeout
 
-Latest readiness result: Google Play External Acceptance Execution Closeout created the field-level external tracker without claiming Play Console acceptance. Proof path: `/tmp/chillywood-google-play-external-acceptance-20260601/`.
+Latest readiness result: Play Console App Content entry is now saved/actioned, but not yet sent through Google review. Proof path: `/tmp/chillywood-google-play-external-acceptance-20260601/play-console-proof/`.
 
 Closed now:
 
+- Play Console App Content Need attention tab shows "You're all caught up"; Actioned tab shows `10 actioned declarations`.
+- Data Safety was completed/saved with no third-party data sharing, account/deletion URLs entered, and current collection categories documented for account/profile identifiers, purchase history, UGC/media/messages/files/audio, app activity, diagnostics/performance, and device IDs.
+- Content Rating was completed/saved with IARC/region ratings and UGC/chat/live/social/purchase answers.
+- App Access was saved with reviewer credentials entered only in Play Console from ignored local env values; no password is committed or screenshotted.
+- Privacy Policy, Ads, Advertising ID, Government apps, Health apps, Financial features, and Target audience/content declarations are saved/actioned.
 - `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` maps App details, Store listing, Contact details, Privacy Policy, App access, Ads, Content Rating, Target audience, News declaration, Data Safety, Account deletion, UGC/moderation, financial features, permissions, AAB upload, testing, reviewer instructions, and release notes.
 - Play-installed app stayed valid on `R5CR120QCBF`: `installer=com.android.vending`, versionCode `13`, versionName `1.0.0`, launcher activity present, and the app opens Home.
 - The current session opens Admin Command Center, so the phone is no longer left in the disposable non-Premium proof account.
@@ -21,14 +26,11 @@ Closed now:
 
 Current external blockers:
 
-- Complete/save Play Console App content fields using the tracker.
-- Submit/save Data Safety with owner/legal-confirmed SDK/data answers.
-- Complete Content Rating and Target Audience accurately for UGC/live/chat/video.
-- Enter account deletion URL/path and request-based deletion wording; capture acceptance.
-- Enter a safe non-admin reviewer account only in Play Console App access; do not commit passwords.
-- Confirm the reviewer Google account is licensed/internal-test eligible; current CLI Play API readback with the outside-repo service account returned `403`, so tester/product readback could not be freshly re-proved from CLI.
-- If Google reviewers should test Premium, the owner must explicitly approve a bounded Premium purchase-shell opening for that submitted build/test window.
-- Upload only an owner-approved signed non-debug AAB to the intended test track; do not upload the current debug-signed repo AAB.
+- Publishing overview still needs owner review/approval before sending the saved App Content changes to Google review. Do not claim Google acceptance until Play confirms it.
+- Finalize/upload store listing feature graphic and selected sanitized screenshots if the Main store listing still requires them.
+- Upload only an owner-approved signed non-debug AAB to the intended test/release track; do not upload the current debug-signed repo AAB.
+- Confirm the reviewer Google account is licensed/internal-test eligible if reviewers should test Premium; current CLI Play API readback with the outside-repo service account returned `403`, so tester/product readback could not be freshly re-proved from CLI.
+- If Google reviewers should test Premium purchase, the owner must explicitly approve a bounded Premium purchase-shell opening for that submitted build/test window.
 - Keep the purchase shell closed unless the owner intentionally opens it for reviewer sandbox testing.
 - Keep production Premium unclaimed and keep live money, tickets/seats, tips, paid content, payouts, fake balances, and Stripe Android digital checkout off.
 

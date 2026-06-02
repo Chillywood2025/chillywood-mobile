@@ -2,11 +2,11 @@
 
 Date: 2026-05-30
 Lane: Google Play Data Safety Account Deletion Acceptance Closeout
-Status: repo-ready execution package; external Play Console submission still required
+Status: App Content saved/actioned in Play Console; Google review submission and release upload still require owner approval
 
-This checklist is for the owner/operator completing Google Play Console. It does not claim Google Play acceptance, Data Safety completion, content rating completion, legal approval, DKIM verification, account deletion fulfillment, or support staffing.
+This checklist is for the owner/operator completing Google Play Console. It records that App Content declarations were saved/actioned in Play Console on June 1, 2026. It does not claim Google Play review acceptance, production release approval, legal approval, DKIM verification, account deletion fulfillment, or support staffing.
 
-June 1, 2026 external acceptance tracker update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` is now the field-level execution tracker for App details, Store listing, Contact details, Privacy Policy, App access, Ads, Content Rating, Target audience, News declaration, Data Safety, Account deletion, UGC/moderation, financial features, permissions, app bundle upload, testing, reviewer instructions, and release notes. Proof for the tracker lane lives at `/tmp/chillywood-google-play-external-acceptance-20260601/`. No Play Console entry was submitted or accepted in that lane; owner/operator must still complete the fields in Play Console and save non-secret proof. Current local repo AAB remains debug-signed and must not be uploaded.
+June 1, 2026 external acceptance tracker update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` is the field-level execution tracker for App details, Store listing, Contact details, Privacy Policy, App access, Ads, Content Rating, Target audience, News declaration, Data Safety, Account deletion, UGC/moderation, financial features, permissions, app bundle upload, testing, reviewer instructions, and release notes. Proof lives at `/tmp/chillywood-google-play-external-acceptance-20260601/`, with Play Console screenshots in `/tmp/chillywood-google-play-external-acceptance-20260601/play-console-proof/`. Play Console App Content now shows no Need attention items and `10 actioned declarations`; saved/actioned sections include Data Safety, Content Rating, Target audience, App Access, Financial features, Health apps, Government apps, Advertising ID, Ads, and Privacy Policy. Changes still need owner-approved Publishing overview send-for-review/Google acceptance. Current local repo AAB remains debug-signed and must not be uploaded.
 
 ## Official References
 
@@ -43,13 +43,13 @@ June 1, 2026 external acceptance tracker update: `docs/google-play/EXTERNAL_ACCE
 | Item | Status | Play Console location | Exact evidence needed | Current repo evidence | Owner/operator action | Blocks public release |
 | --- | --- | --- | --- | --- | --- | --- |
 | App package | repo_ready | App dashboard / App integrity / Releases | Confirm package `com.chillywood.mobile` matches artifact and listing | `app.json`, Android manifest, fresh current-HEAD APK/AAB proof | Confirm in Play Console before release upload | Yes |
-| Privacy Policy | repo_ready, external_required | Policy and programs > App content > Privacy Policy | Accepted privacy URL screenshot | `https://chillywoodstream.com/privacy` returned HTTP 200; Android privacy route captured | Enter final approved URL after legal signoff | Yes |
-| Data Safety | repo_ready, external_required | Policy and programs > App content > Data safety | Completed and accepted Data Safety form screenshot/export | `DATA_SAFETY_EVIDENCE_MAP.md` | Complete form using owner/legal confirmed data categories and SDK disclosures | Yes |
-| Ads declaration | repo_ready, external_required | Policy and programs > App content > Ads | Saved answer screenshot | No AdMob/AD_ID permission found; ads/sponsor systems are scaffolded and default-disabled | Declare "No ads" only if owner confirms no active ad display in release; change if live ads are added | Yes |
-| App access | repo_ready, external_required | Policy and programs > App content > App access | Reviewer instructions saved, test account entered only in Play Console | `REVIEWER_ACCESS_INSTRUCTIONS.md` | Provide safe non-admin test credentials in Play Console only | Yes |
-| Target audience and content | repo_ready, external_required | Policy and programs > App content > Target audience and content | Saved questionnaire screenshot | App is adult-oriented social streaming with UGC/live/chat; signup has 18+ confirmation | Complete accurately; do not target children unless product/legal changes | Yes |
-| Content rating | repo_ready, external_required | Policy and programs > App content > Content rating | IARC ratings receipt | UGC, live, chat, video, report/moderation policies documented | Complete questionnaire with owner/legal review | Yes |
-| Account deletion | repo_ready, external_required | Policy and programs > App content > Data deletion/account deletion | Accepted web URL and in-app path answers | In-app Settings route and `https://chillywoodstream.com/account-deletion` returned HTTP 200 | Enter URL, confirm request-based deletion process and SLA | Yes |
+| Privacy Policy | saved_actioned, review_pending | Policy and programs > App content > Privacy Policy | Saved privacy URL screenshot | `https://chillywoodstream.com/privacy` returned HTTP 200; proof `play-console-proof/02-privacy-policy-saved.png` | Keep URL current; send changes for review only with owner approval | Yes |
+| Data Safety | saved_actioned, review_pending | Policy and programs > App content > Data safety | Saved Data Safety screenshot/export | `DATA_SAFETY_EVIDENCE_MAP.md`; proof `play-console-proof/11-data-safety-saved.png` | Keep SDK/data answers current; send changes for review only with owner approval | Yes |
+| Ads declaration | saved_actioned, review_pending | Policy and programs > App content > Ads | Saved answer screenshot | No active ad delivery; proof `play-console-proof/03-ads-saved.png` | Revisit if ads/paid placements are added | Yes |
+| App access | saved_actioned, review_pending | Policy and programs > App content > App access | Reviewer instructions saved, test account entered only in Play Console | `REVIEWER_ACCESS_INSTRUCTIONS.md`; proof `play-console-proof/08-app-access-saved.png` | Keep credentials only in Play Console; never commit password | Yes |
+| Target audience and content | saved_actioned, review_pending | Policy and programs > App content > Target audience and content | Saved questionnaire screenshot | Adult-oriented social streaming with UGC/live/chat; proof `play-console-proof/09-target-audience-saved.png` | Keep 18+ posture accurate | Yes |
+| Content rating | saved_actioned, review_pending | Policy and programs > App content > Content rating | IARC ratings receipt | UGC/live/chat/video/report/purchase answers saved; proof `play-console-proof/10-content-rating-saved.png` | Revisit if content/payment posture changes | Yes |
+| Account deletion | saved_actioned_via_data_safety, review_pending | Policy and programs > App content > Data deletion/account deletion | Saved web URL/data deletion proof | In-app Settings route and `https://chillywoodstream.com/account-deletion`; proof `play-console-proof/11-data-safety-saved.png` | Keep request-based process active; do not claim instant deletion | Yes |
 | Store listing | partial | Grow users > Store presence > Main store listing | Final screenshots, feature graphic, icon, descriptions, contact fields | App icon exists; release screenshots exist outside repo; feature graphic missing as final asset | Upload approved assets and copy | Yes |
 | App bundle/release | partial | Release > Testing/Production | Uploaded AAB, pre-launch report, release notes | Fresh current-HEAD local AAB/APK proof exists at `/tmp/chillywood-current-head-play-upload-proof-20260530/`; local Gradle build is debug-signed | Upload owner-approved Play-signed AAB to intended track and run review | Yes |
 | Data collection declarations | repo_ready, external_required | Data Safety form | Owner/legal confirmed answers | Evidence map created | Confirm analytics/crash/push/billing/live/chat disclosures | Yes |
@@ -64,16 +64,14 @@ June 1, 2026 external acceptance tracker update: `docs/google-play/EXTERNAL_ACCE
 
 1. Confirm final Play-upload-signed AAB artifact and package `com.chillywood.mobile`.
 2. Enter Privacy Policy URL.
-3. Complete Data Safety, including account deletion answers.
-4. Complete app access reviewer instructions.
-5. Complete ads, target audience, and content rating declarations.
-6. Upload store listing assets and descriptions.
-7. Upload AAB to closed testing or intended track.
-8. Run pre-launch report and fix only actual blockers.
-9. Save all external proof outside repo; update docs only with non-secret status.
+3. Review saved Data Safety/App Content changes in Publishing overview and send for review only with owner approval.
+4. Upload store listing assets and descriptions if still missing.
+5. Upload only an owner-approved signed non-debug AAB to closed testing or the intended track.
+6. Run pre-launch report and fix only actual blockers.
+7. Save all external proof outside repo; update docs only with non-secret status.
 
 ## Current Blocker Status
 
 June 1, 2026 API readiness check: Google Play API edit/read access is available through the external service-account credential at `/Users/loverslane/secrets/chillywood/revenuecat-google-play-service-account.json` and legacy ADC for `chillywood-revenuecat-play@chillywood-app.iam.gserviceaccount.com`; no credential values were printed or committed. The active user gcloud token still lacks Android Publisher scope, but the service-account path can create/read/delete edits. Internal track currently reports completed release `1.0.0` with versionCode `12`. Do not upload the current repo-built AAB because it is debug-signed; a prior non-debug signed candidate exists at `artifacts/google-play-proof/chillywood-v12.aab`. No upload, edit commit, track change, or tester change was performed. Do not commit service account JSON, OAuth tokens, keystores, or tester passwords.
 
-P0 remains **external Play/Data Safety/account-deletion/legal acceptance** until Play Console accepts the entries and legal owner approves the claims. The repo-side execution package is ready.
+P0 remains **Publishing overview / Google review acceptance / store assets / signed release upload / legal acceptance**. App Content/Data Safety/account-deletion URL/App Access/Content Rating are saved/actioned in Play Console, but not yet accepted by Google review. The repo-side execution package is ready.
