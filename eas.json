@@ -37,6 +37,12 @@
       "android": {
         "track": "internal"
       }
+    },
+    "closed": {
+      "android": {
+        "track": "alpha",
+        "releaseStatus": "draft"
+      }
     }
   }
 }

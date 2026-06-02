@@ -1,11 +1,13 @@
 # Google Play Store Listing Asset Checklist
 
 Date: 2026-05-30
-Status: field-ready checklist prepared; final Play listing assets still external
+Status: Play default store listing saved with generated assets/screenshots; Google review acceptance pending
 
-This checklist records what exists in the repo and what the owner/operator must upload or approve in Play Console. It does not claim store listing completion.
+This checklist records what exists in the repo and what the owner/operator uploaded or approved in Play Console. It does not claim Google review acceptance.
 
-June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records Store listing as partial/external. The feature graphic remains missing, phone screenshots must be selected as store-ready assets outside the repo or uploaded directly, and final copy/category/tags require owner/legal approval. No Play listing asset upload or acceptance is claimed in this lane.
+June 1, 2026 store listing upload closeout: Play Console contact details/category were saved/published. The default store listing was saved with short description `Upload, watch together, go live, and build your creator Platform.`, the current full description, generated 512x512 listing icon, generated 1024x500 feature graphic, four sanitized phone screenshots, and the same sanitized screenshot set uploaded for 7-inch and 10-inch tablet sections. The accidental YouTube/XR field value was cleared before save. Store assets/proof live outside the repo under `/tmp/chillywood-google-play-release-v14-20260601/store-assets/`. Publishing overview/production review is still blocked by closed-testing production-access requirements; do not claim Google review acceptance.
+
+June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records Store listing as saved in Play Console. Feature graphic, listing icon, and phone/tablet screenshots were uploaded through the authenticated Play Console session. Review acceptance remains pending.
 
 ## App Identity
 
@@ -25,21 +27,21 @@ June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_T
 
 | Asset | Current repo evidence | Play requirement / note | Status | Owner action |
 | --- | --- | --- | --- | --- |
-| App icon | `assets/images/icon.png`, 1024x1024 RGB PNG | Play listing icon must be 512x512 PNG with alpha and max 1024KB per Google guidance | partial | Export/verify Play-specific 512x512 icon |
+| App icon | Generated `/tmp/chillywood-google-play-release-v14-20260601/store-assets/play-listing-icon-512.png` | Play listing icon must be 512x512 PNG with alpha and max 1024KB per Google guidance | saved | Replace only if owner wants a different approved brand asset |
 | Launcher adaptive icon | `assets/images/android-icon-foreground.png`, `android-icon-background.png`, `android-icon-monochrome.png` | Runtime launcher asset, not the listing icon by itself | repo_ready | Confirm launcher proof in release/pre-launch |
 | Splash | `assets/images/splash-icon.png` | Runtime proof exists from release lanes | repo_ready | No Play upload unless used in screenshots |
-| Feature graphic | No final Play feature graphic found | 1024x500 JPEG or 24-bit PNG, no alpha | missing | Create final approved graphic |
-| Phone screenshots | Existing proof screenshots in `/tmp` | Use final release screenshots without private account data, tokens, admin secrets, or unapproved content | partial | Select/crop/store outside repo or upload directly |
-| Tablet screenshots | Not prepared | Optional unless targeting tablets; iOS/tablet not Public V1 priority | deferred | Decide if Android tablet assets are needed |
+| Feature graphic | Generated `/tmp/chillywood-google-play-release-v14-20260601/store-assets/feature-graphic-1024x500.png` | 1024x500 JPEG or 24-bit PNG, no alpha | saved | Replace only if owner wants a different approved graphic |
+| Phone screenshots | `/tmp/chillywood-google-play-release-v14-20260601/store-assets/screenshots/phone/` | Use final release screenshots without private account data, tokens, admin secrets, or unapproved content | saved | Recapture only if app UI materially changes |
+| Tablet screenshots | Same sanitized screenshot set uploaded for 7-inch and 10-inch tablet sections | Optional unless targeting tablets | saved | Replace later with tablet-specific captures if product scope requires |
 | Preview video | Not prepared | Optional | deferred | Do not add unless approved and policy-safe |
 
 ## Listing Copy
 
 | Field | Draft / rule | Status |
 | --- | --- | --- |
-| Short description | Draft: `Upload, watch together, go live, and build your creator Platform.` | owner/legal approval required |
+| Short description | `Upload, watch together, go live, and build your creator Platform.` | saved in Play Console |
 | Alternate short description | Draft: `A premium social streaming home for creators, Platforms, and watch parties.` | owner/legal approval required |
-| Full description | Use `docs/PLAY_STORE_LISTING_CONTENT_RATING_RUNBOOK.md` as source, but keep user-facing creator-surface wording as "Platform" before submission and remove any unproved/future claim | needs copy review |
+| Full description | Current Play Console description saved with free/public flows, Premium-gated creator tools, account/support/report/legal paths, and money-off posture | saved in Play Console |
 | Release notes | State only actual current-build changes | external_required |
 | Tags | streaming, video, creators, social, entertainment, live, chat, watch party if Play supports them | owner approval required |
 
@@ -75,4 +77,4 @@ Release upload details now live in `docs/google-play/RELEASE_UPLOAD_CHECKLIST.md
 
 ## Remaining Store Listing Blocker
 
-Store listing is **partial** until the owner uploads final approved assets/copy in Play Console and saves external proof. This is part of the remaining external P0 bundle. The repo now has field-ready operator docs, but Google Play listing completion is still not claimed.
+Store listing assets/copy are saved, but Google review acceptance is not claimed. The remaining Play blocker is production access/review: closed testing must satisfy Play's current requirements, including at least 12 opted-in testers and the required 14-day closed test.

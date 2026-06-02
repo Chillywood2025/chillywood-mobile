@@ -2,6 +2,22 @@
 
 ## Recommended Lane: Google Play Publishing Overview And Release Asset Closeout
 
+Latest release-upload result: owner-approved signed EAS upload work is complete as far as Play currently allows. Proof path: `/tmp/chillywood-google-play-release-v14-20260601/`. EAS production build v14 (`aa288961-1466-4f2f-8e45-b722f3be9cc8`) produced a signed non-debug AAB, SHA-256 `1d66a51ff289d7e7f9cdbe9cca2ab331aac843205360ed824d9756d33d23`, versionCode `14`, and submitted successfully to Google Play internal testing via EAS submission `5ff5a508-b283-42ac-819f-7049681c126c`. Closed-track submit of v14 failed because that versionCode had already been submitted. EAS production build v15 (`217dcbb2-e50e-49fb-bdf6-753e2d9b6489`) produced a signed non-debug AAB, SHA-256 `722cff66465c1ae233c79841303e8c1956cf3be35f609261500f6f52dea509dc`, versionCode `15`, and submitted successfully to the closed `alpha` track as a draft release via EAS submission `aa048c3c-054d-46fc-9e2c-2887543ac7ce`.
+
+Store listing result: Play Console contact details/category were saved/published, and the default store listing was saved with short/full descriptions, generated Play listing icon, generated feature graphic, and sanitized phone/tablet screenshots. The accidental YouTube/XR field value was cleared before saving. The S Pen overlay was removed from the phone before final screenshot recapture.
+
+Current exact blocker:
+
+- Google production review cannot be sent yet because Play Console still requires closed testing completion: closed test release availability plus at least 12 opted-in testers and a 14-day closed test before production access/review can proceed.
+- The v15 closed-track upload is draft because Google rejected a completed closed-track release while required metadata/minimum release readiness was still incomplete.
+- Do not claim Google review submission, production access, or production acceptance until Play Console allows and confirms it.
+- Premium purchase shell remains closed by default. Production Premium is not overclaimed. Live money, tickets/seats, tips, paid content, payouts, fake balances, cash-out, and Stripe Android digital checkout remain off.
+
+Next owner/operator action:
+
+- Add/confirm at least 12 closed-test opted-in testers, keep the closed test running for the required 14 days, then return to Publishing overview/Production access and send the app for Google review when Play enables the action.
+- If Play requires converting the v15 closed release from draft to completed after remaining metadata/tester setup is accepted, do that in Play Console or through an owner-approved submit lane.
+
 Newest repo/backend lane closed: Modern Username Handle System on June 2, 2026. Migration `20260602032030_modern_username_handle_system.sql` is remote-applied and types regenerated. Backend proof shows canonical lowercase username enforcement, 0 duplicate groups ignoring case, 0 invalid usernames, 0 reserved conflicts, duplicate/reserved/invalid insert rejection, public People search no email lookup, Rachi public `chillywood.rachi` protection, and RLS preventing a normal authenticated claim from updating another user's username. Signup and Settings now include compact username UI with debounced availability; Profile/Platform identity, Explore People, Chi'lly Circle, Chi'lly Chat, and Admin user rows have handle support where backed. Dedicated doc: `docs/USERNAME_HANDLE_SYSTEM.md`.
 
 Remaining username follow-up:

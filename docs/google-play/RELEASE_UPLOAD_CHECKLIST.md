@@ -1,13 +1,15 @@
 # Google Play Release Upload Checklist
 
 Date: 2026-05-30
-Status: release-upload prep; no Play upload claimed
+Status: signed EAS internal upload complete; closed alpha draft upload complete; production review blocked by closed-testing requirements
 
-This checklist prepares the owner/operator for Google Play upload. It does not upload an AAB, submit for review, or claim Google Play acceptance.
+This checklist records the owner-approved Google Play upload path. It does not claim production review submission or Google Play acceptance.
 
-June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records upload status as not performed in this repo lane. `R5CR120QCBF` is Play-installed versionCode `13`, but the current local repo AAB remains debug-signed with `CN=Android Debug` and must not be uploaded. Use only an owner-approved signed non-debug AAB or Play/EAS upload-signing path, and do not submit production without explicit owner approval.
+June 1, 2026 signed EAS upload closeout: the local Gradle AAB remains debug-signed and must not be uploaded. EAS production build v14 `aa288961-1466-4f2f-8e45-b722f3be9cc8` produced versionCode `14`, versionName `1.0.0`, signed non-debug AAB `/tmp/chillywood-google-play-release-v14-20260601/chillywood-v14-eas-production.aab`, SHA-256 `1d66a51ff289d7e7f9cdbe9cca2ab331aac843205360ed824d9756d33d23`, and submitted successfully to Google Play internal testing through EAS submission `5ff5a508-b283-42ac-819f-7049681c126c`. A closed-track submit of v14 failed because Google Play had already received that versionCode. EAS production build v15 `217dcbb2-e50e-49fb-bdf6-753e2d9b6489` produced versionCode `15`, versionName `1.0.0`, signed non-debug AAB `/tmp/chillywood-google-play-release-v14-20260601/chillywood-v15-eas-production.aab`, SHA-256 `722cff66465c1ae233c79841303e8c1956cf3be35f609261500f6f52dea509dc`, and submitted successfully to the closed `alpha` track as a draft release through EAS submission `aa048c3c-054d-46fc-9e2c-2887543ac7ce`. A completed closed-track submit for v15 failed first because Google Play still reported required metadata/minimum release readiness missing. Draft release status was used to upload the closed-track artifact without falsely completing the release. Production review is still blocked by Play closed-testing requirements: at least 12 opted-in testers and the required 14-day closed test must be completed before production access/review can proceed. No production release was submitted and no monetization behavior was enabled.
 
-June 1 artifact proof for the external acceptance tracker: current local repo AAB `android/app/build/outputs/bundle/release/app-release.aab` has SHA-256 `57f8f8da17f21959ef7d3f4abb661fad5135757caa277d2b9a03ddec192ad199` and jarsigner shows `CN=Android Debug`; current local repo APK has SHA-256 `f56a393e541f8deef91a4adab8651f52efa38d35ceaae5522305b950313ec62c`; prior signed candidate `artifacts/google-play-proof/chillywood-v12.aab` has SHA-256 `e256d62de976fbf1b930e5c81cda921f2798ce55f0e4b421139f624e5d2956c1` and remains outside tracked source. No upload was performed.
+June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` now records v14 internal upload and v15 closed alpha draft upload. `R5CR120QCBF` is Play-installed versionCode `13`, but the current local repo AAB remains debug-signed with `CN=Android Debug` and must not be uploaded. Use only owner-approved EAS/Play signed artifacts for future upload work, and do not submit production without explicit owner approval.
+
+June 1 artifact proof for the external acceptance tracker: current local repo AAB `android/app/build/outputs/bundle/release/app-release.aab` has SHA-256 `57f8f8da17f21959ef7d3f4abb661fad5135757caa277d2b9a03ddec192ad199` and jarsigner shows `CN=Android Debug`; current local repo APK has SHA-256 `f56a393e541f8deef91a4adab8651f52efa38d35ceaae5522305b950313ec62c`; prior signed candidate `artifacts/google-play-proof/chillywood-v12.aab` has SHA-256 `e256d62de976fbf1b930e5c81cda921f2798ce55f0e4b421139f624e5d2956c1` and remains outside tracked source. Later owner-approved EAS uploads used signed non-debug v14/v15 artifacts, not the debug-signed local repo AAB.
 
 ## Current Artifact Evidence
 
@@ -15,6 +17,8 @@ June 1, 2026 Google Play API upload readiness check: do not upload the current r
 
 | Artifact | Path | Size / hash | Status |
 | --- | --- | --- | --- |
+| EAS production v15 AAB | `/tmp/chillywood-google-play-release-v14-20260601/chillywood-v15-eas-production.aab` | 126M; SHA-256 `722cff66465c1ae233c79841303e8c1956cf3be35f609261500f6f52dea509dc` | Signed non-debug EAS artifact, versionCode `15`; submitted to closed `alpha` as draft. |
+| EAS production v14 AAB | `/tmp/chillywood-google-play-release-v14-20260601/chillywood-v14-eas-production.aab` | 126M; SHA-256 `1d66a51ff289d7e7f9cdbe9cca2ab331aac843205360ed824d9756d33d23ed5b` | Signed non-debug EAS artifact, versionCode `14`; submitted to internal testing. |
 | Fresh current-HEAD proof AAB | `android/app/build/outputs/bundle/release/app-release.aab` | `132125002` bytes / 126M; SHA-256 `57f8f8da17f21959ef7d3f4abb661fad5135757caa277d2b9a03ddec192ad199` | Current local build proof from HEAD `12c97e56de6bb0a5f435f1c9aa81742f700af4dc`. Signing boundary below applies before Play upload. |
 | Fresh current-HEAD proof APK | `android/app/build/outputs/apk/release/app-release.apk` | `205639147` bytes / 196M; SHA-256 `abc67ba63c4679ca005d9b3fcb9dc2a5286dd74c48525f1580c7d1ea94f5ed33` | Installed/opened on `R5CR120QCBF` and used for route-smoke proof. Do not upload APK to Play unless release strategy explicitly requires APK. |
 

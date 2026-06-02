@@ -11,6 +11,8 @@ Current status: **partial**.
 
 Chi'llywood is safe enough for continued controlled Android testing when live money remains off, claims stay honest, and testers understand that several fixture/release proof gaps remain. It is **not ready for broad public launch** until release-build proof, store/legal acceptance, final account deletion process ownership, and selected runtime fixture gaps are closed.
 
+June 1, 2026 signed Google Play upload/store listing update: App Content, Data Safety, Content Rating, App Access, account-deletion URL fields, contact details/category, default store listing copy, listing icon, feature graphic, and phone/tablet screenshots are saved in Play Console. EAS signed non-debug v14 was submitted to internal testing, and EAS signed non-debug v15 was submitted to closed `alpha` as a draft release. The current remaining P0 is Play production-access/review acceptance: Play still requires closed testing with at least 12 opted-in testers and the required 14-day closed test before production review can proceed. Do not claim production review submission or Google acceptance until Play confirms it.
+
 No P0 code/security failure was found in this audit. The current hard launch blockers are release/store/legal proof blockers rather than newly discovered app-code regressions.
 
 Counts after the May 30, 2026 media malware-scanning production closeout:
@@ -117,7 +119,7 @@ Proof folder: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`
 
 ## Top 10 Launch Blockers
 
-1. **P0 - Store/legal/account-deletion acceptance is not complete.** The repo-side Google Play execution package is ready in `docs/google-play/`, but attorney/legal approval, Play Data Safety, account deletion URL acceptance, listing/content rating, and final support/account-deletion ownership remain external blockers.
+1. **P0 - Google Play production access/review acceptance is not complete.** App Content, Data Safety, account deletion URL fields, Content Rating, App Access, store listing assets/copy, internal v14 upload, and closed alpha v15 draft upload are complete/saved where Play allowed. Production review remains blocked by Play's closed-testing requirement: at least 12 opted-in testers and the required 14-day closed test, followed by Publishing overview/Production access review when Play enables it.
 2. **P1 - Profile media runtime closure is incomplete.** Owner avatar/settings entry and safe assets are proved, but save/read-back/remove/fallback/public masking still need manual safe-asset proof.
 3. **P1 - Second-account, blocked, and private runtime fixtures remain incomplete.** API/static proof exists, but full runtime fixture proof must not be faked.
 4. **P1 - Watch-Party Live two-device speech/reconnect proof remains incomplete.** Single-device/current route proof exists; true remote speech ducking needs two joined devices/accounts.
@@ -164,7 +166,7 @@ Proof folder: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`
 ## Not Ready For Broad Public Launch
 
 - Fresh release-candidate APK/AAB build, install, open, Home/bottom-nav smoke, and several core authenticated routes were captured, but full signed-out/signed-in route sweep and release diagnostics remain incomplete.
-- Play Console listing, content rating, Data Safety, account deletion acceptance, and final store assets are not complete.
+- Play Console listing, content rating, Data Safety, account deletion fields, and final store assets are saved, but Google production review acceptance is still blocked by closed-testing production-access requirements.
 - Attorney/legal approval remains required for launch policy text and support/account-deletion process.
 - Moderation tooling is repo-backed for reports, target actions, DMCA, and Profile media, but support/moderation operations ownership and external legal acceptance are not complete.
 - Profile media save/read-back/remove/fallback and public masking runtime proof remains open.

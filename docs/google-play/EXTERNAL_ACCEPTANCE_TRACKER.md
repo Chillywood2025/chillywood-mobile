@@ -2,12 +2,13 @@
 
 Date: 2026-06-01
 Lane: Google Play External Acceptance Execution Closeout
-Status: Play Console App Content saved/actioned; Google review acceptance and release upload remain external
+Status: Play Console App Content/listing saved; signed internal/closed draft uploads complete; Google review acceptance blocked by closed-testing requirements
 
-This tracker is the current owner/operator checklist for Google Play acceptance. It now records Play Console saved/actioned proof for App Content, Data Safety, Content Rating, App Access, Privacy Policy, Ads, Advertising ID, Target audience, Health apps, Government apps, and Financial features. It does not claim Google review acceptance, production release approval, production Premium, or production monetization.
+This tracker is the current owner/operator checklist for Google Play acceptance. It now records Play Console saved/actioned proof for App Content, Data Safety, Content Rating, App Access, Privacy Policy, Ads, Advertising ID, Target audience, Health apps, Government apps, and Financial features, plus owner-approved signed AAB upload proof for internal testing and closed-track draft testing. It does not claim Google review acceptance, production release approval, production Premium, or production monetization.
 
 Proof folder: `/tmp/chillywood-google-play-external-acceptance-20260601/`
 Play Console proof folder: `/tmp/chillywood-google-play-external-acceptance-20260601/play-console-proof/`
+Release/upload proof folder: `/tmp/chillywood-google-play-release-v14-20260601/`
 
 Current repo proof:
 
@@ -21,6 +22,16 @@ Current repo proof:
   - Actioned tab shows `10 actioned declarations`: `play-console-proof/13-app-content-actioned-after-data-safety.png` and `play-console-proof/14-app-content-actioned-lower.png`.
   - Data Safety saved and Play prompted that changes are ready for Publishing overview review: `play-console-proof/11-data-safety-saved.png`.
   - Earlier saved proofs in the same folder cover Privacy Policy, Ads, Advertising ID, Government apps, Health apps, Financial features, App Access, Target audience, and Content Rating.
+- Store listing/contact proof from June 1, 2026:
+  - Contact details/category were saved/published in Play Console.
+  - Default store listing was saved with short/full descriptions, generated 512x512 listing icon, generated 1024x500 feature graphic, and sanitized phone/tablet screenshots after the S Pen overlay was removed.
+  - Store listing assets live outside the repo under `/tmp/chillywood-google-play-release-v14-20260601/store-assets/`.
+- Signed upload proof from June 1, 2026:
+  - EAS production build v14 `aa288961-1466-4f2f-8e45-b722f3be9cc8`, versionCode `14`, signed non-debug AAB SHA-256 `1d66a51ff289d7e7f9cdbe9cca2ab331aac843205360ed824d9756d33d23`, submitted successfully to Google Play internal testing through EAS submission `5ff5a508-b283-42ac-819f-7049681c126c`.
+  - EAS production build v15 `217dcbb2-e50e-49fb-bdf6-753e2d9b6489`, versionCode `15`, signed non-debug AAB SHA-256 `722cff66465c1ae233c79841303e8c1956cf3be35f609261500f6f52dea509dc`, submitted successfully to closed `alpha` as a draft release through EAS submission `aa048c3c-054d-46fc-9e2c-2887543ac7ce`.
+  - A completed closed-track submit for v15 failed first because Google Play still reported required metadata/minimum release readiness missing; draft status was used to upload without falsely completing the release.
+- Publishing overview/production access status:
+  - Production review is still blocked by Play closed-testing requirements: at least 12 opted-in testers and a 14-day closed test are required before production access/review can proceed.
 
 ## Acceptance Matrix
 
@@ -28,12 +39,12 @@ Current repo proof:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | App details | App name | Repo-ready | `app.json`, `STORE_LISTING_ASSET_CHECKLIST.md` | Confirm spelling `Chi'llywood` | Dashboard / Store presence | Saved app details screenshot | Yes if unset | Yes | External owner action required |
 | App details | Package | Repo-ready / Play-installed v13 proved | `app.json`, `android/app/build.gradle`, device proof in `/tmp` | Confirm package `com.chillywood.mobile` matches Play app | App dashboard / App integrity / Release artifact | Package/version proof | Yes | Yes | Repo proof captured; Console confirmation external |
-| Store listing | Short/full description | Draft ready | `PLAY_CONSOLE_FIELD_BY_FIELD_ANSWERS.md`, `STORE_LISTING_ASSET_CHECKLIST.md` | Approve final copy and remove unproved claims | Store presence > Main store listing | Store listing screenshot | Yes | Yes | External owner/legal action required |
-| Store listing | App icon | Partial | `assets/images/icon.png`, icon guard proof | Export/upload Play listing icon at required dimensions | Store presence > Main store listing | Asset upload proof | Yes | Yes | External asset action required |
-| Store listing | Feature graphic | Missing | `STORE_LISTING_ASSET_CHECKLIST.md` | Create/upload approved 1024x500 graphic | Store presence > Main store listing | Asset upload proof | Yes | Yes | External asset action required |
-| Store listing | Phone screenshots | Partial | Existing `/tmp` proof screenshots | Select sanitized store-ready screenshots | Store presence > Main store listing | Uploaded screenshots proof | Yes | Yes | External asset action required |
-| Store listing | Tablet screenshots | Deferred unless targeting requires | `STORE_LISTING_ASSET_CHECKLIST.md` | Decide tablet targeting/assets | Store presence > Main store listing | Console proof or deferral note | No unless required | Possibly | External owner action required |
-| Contact details | Email/support/website | Repo-ready, SLA external | Runtime config, public URL proof, DNS baseline docs | Confirm inbox owner/SLA and enter final fields | Store settings / Main store listing | Contact details screenshot | Yes if Play requires | Yes | External owner action required |
+| Store listing | Short/full description | Saved in Play Console | Play listing proof in `/tmp/chillywood-google-play-release-v14-20260601/` | Keep copy honest; revise only with owner/legal approval | Store presence > Main store listing | Saved listing proof | Yes | Yes | Saved; review acceptance pending |
+| Store listing | App icon | Uploaded/saved | Generated 512x512 listing icon in `/tmp/chillywood-google-play-release-v14-20260601/store-assets/` | Replace only if owner wants a different approved brand asset | Store presence > Main store listing | Asset upload proof | Yes | Yes | Saved; review acceptance pending |
+| Store listing | Feature graphic | Uploaded/saved | Generated 1024x500 feature graphic in `/tmp/chillywood-google-play-release-v14-20260601/store-assets/` | Replace only if owner wants a different approved graphic | Store presence > Main store listing | Asset upload proof | Yes | Yes | Saved; review acceptance pending |
+| Store listing | Phone screenshots | Uploaded/saved | Sanitized screenshots in `/tmp/chillywood-google-play-release-v14-20260601/store-assets/screenshots/phone/` | Recapture only if app UI materially changes | Store presence > Main store listing | Uploaded screenshots proof | Yes | Yes | Saved; review acceptance pending |
+| Store listing | Tablet screenshots | Uploaded/saved using sanitized app screenshots | Store asset proof in `/tmp/chillywood-google-play-release-v14-20260601/store-assets/` | Replace with tablet-specific captures later if Play/product requires | Store presence > Main store listing | Uploaded screenshots proof | No unless required | Possibly | Saved; review acceptance pending |
+| Contact details | Email/support/website | Saved/published in Play Console | Play Console contact proof in `/tmp/chillywood-google-play-release-v14-20260601/` | Maintain `support@chillywoodstream.com` and public URLs | Store settings / Main store listing | Contact details proof | Yes if Play requires | Yes | Saved/published |
 | Privacy Policy | Privacy URL | Saved/actioned in Play Console | `DATA_SAFETY_EVIDENCE_MAP.md`, URL proof from May 30, `play-console-proof/02-privacy-policy-saved.png` | Keep URL current and send changes for review from Publishing overview when owner approves | Policy and programs > App content > Privacy Policy | Saved URL screenshot | Yes | Yes | Saved/actioned; Google review acceptance pending |
 | App access | Reviewer credentials/instructions | Saved/actioned in Play Console; password not in repo | `PLAY_REVIEWER_TEST_ACCOUNT_PACKET.md`, `REVIEWER_ACCESS_INSTRUCTIONS.md`, `play-console-proof/08-app-access-saved.png` | Maintain safe non-admin credentials in Play Console only; do not commit password | Policy and programs > App content > App access | Saved instructions screenshot, password redacted if exported | Yes | Yes | Saved/actioned; Google review acceptance pending |
 | Ads declaration | Contains ads | Saved/actioned as no ads | No active ad SDK/ad delivery by repo evidence; `play-console-proof/03-ads-saved.png` | Revisit only if ad SDK/ad delivery/paid placements are added | App content > Ads | Saved declaration screenshot | Yes | Yes | Saved/actioned; Google review acceptance pending |
@@ -46,8 +57,8 @@ Current repo proof:
 | Financial features | In-app purchases | Sandbox Premium proof passed; production Premium not claimed; shell closed by default | Premium proof docs, Money Center policy, runtime validation | Declare purchases only if submitted artifact intentionally exposes Premium purchase/restore; otherwise keep reviewer copy locked/setup-only | Monetize / Products / App content / Payments policy prompts | Billing/product/shell proof | Yes if purchases exposed | Yes for monetized launch | Ready-but-closed; external approval required |
 | Financial features | Tickets/seats/tips/paid content/payouts | Off/setup-only | Money Center policy and guards | Do not declare active. Keep off unless a later approved lane proves provider-backed launch | App content / Store listing / App UI claims | Money-off proof | No if not claimed | Yes if claimed | Closed/off |
 | Permissions | Camera/mic/notifications/media | Prepared | `app.json`, native manifest, field answers doc | Explain live/camera/mic and user-selected media if Play prompts | App content / Release review prompts | Prompt response proof | Yes if prompted | Yes if prompted | External if Play prompts |
-| App bundle upload | Signed AAB | Current local repo AAB is debug-signed; prior `artifacts/google-play-proof/chillywood-v12.aab` is non-debug-signed; Play-installed v13 already exists | `RELEASE_UPLOAD_CHECKLIST.md`, artifact hash/signing proof in `/tmp` | Do not upload debug-signed repo AAB. Use owner-approved Play/EAS signing or a specific signed AAB with explicit upload approval. | Release > Testing or Production | AAB upload accepted screenshot | Yes for new track/release | Yes | Upload not performed; external approval required |
-| Closed/internal testing | Track/testers | Play-installed v13 proved on device; fresh API readback not completed here | Device proof and prior Play proof docs | Confirm tester list and install link in Play Console | Release > Testing > Internal/Closed testing | Track/tester proof | Yes for reviewer purchase tests | Yes for production rollout | External confirmation required |
+| App bundle upload | Signed AAB | Internal v14 submitted; closed alpha v15 draft submitted | `RELEASE_UPLOAD_CHECKLIST.md`, EAS build/submission proof in `/tmp/chillywood-google-play-release-v14-20260601/` | Do not upload debug-signed repo AAB. Use EAS signed artifacts for future uploads. | Release > Testing | AAB upload accepted proof | Yes for new track/release | Yes | Internal submitted; closed alpha draft submitted; production not submitted |
+| Closed/internal testing | Track/testers | Internal v14 submitted; closed alpha v15 draft submitted; tester-duration gate remains | Device proof, EAS submission proof, Publishing overview blocker | Add/confirm at least 12 opted-in closed-test testers and run the required 14-day closed test | Release > Testing > Closed testing / Production access | Tester opt-in and 14-day proof | Yes for production access | Yes | Closed draft uploaded; production access blocked by tester/14-day requirement |
 | Reviewer instructions | Release/App access notes | Ready | Reviewer packet/instructions docs | Paste field-ready instructions; do not include passwords in repo | App access / Release notes | Saved notes proof | Yes | Yes | External owner action required |
 | Release notes | Track notes | Template ready | `RELEASE_UPLOAD_CHECKLIST.md` | Enter accurate notes for submitted build only | Release > Track release | Release notes screenshot | Yes for release | Yes | External owner action required |
 
@@ -84,8 +95,8 @@ Do not claim instant or automatic deletion until staffing and backend process pr
 - Prior signed candidate: `artifacts/google-play-proof/chillywood-v12.aab`, SHA-256 `e256d62de976fbf1b930e5c81cda921f2798ce55f0e4b421139f624e5d2956c1`, non-debug signer summary captured in the proof folder. This file is under untracked `artifacts/` and was not touched or committed.
 - Device proof: `R5CR120QCBF` currently has Play-installed versionCode `13`.
 
-No upload, Play edit commit, track mutation, production release submission, or tester mutation was performed in this lane.
+Owner-approved upload occurred after this tracker was first created: v14 was submitted to internal testing and v15 was submitted to closed alpha as a draft release through EAS. No production release submission or tester mutation is claimed.
 
 ## Final Status
 
-Play Console App Content P0 is saved/actioned, and the Need attention tab is clear. P0 remains open for Publishing overview send-for-review/Google acceptance, final store listing assets, owner-approved signed AAB/release handling, and legal approval. Do not claim Google acceptance or production release approval until Play confirms it.
+Play Console App Content P0 is saved/actioned, the Need attention tab is clear, store listing assets/copy are saved, and signed internal/closed draft uploads are complete. P0 remains open for closed-testing production-access requirements: at least 12 opted-in testers and the required 14-day closed test, followed by Publishing overview send-for-review/Google acceptance when Play enables it. Do not claim Google acceptance or production release approval until Play confirms it.
