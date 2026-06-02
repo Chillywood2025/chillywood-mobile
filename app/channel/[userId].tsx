@@ -480,6 +480,7 @@ export default function PublicChannelScreen() {
               )}
             </View>
             <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Platform"}</Text>
+            {channel.handle ? <Text style={styles.channelHandle} numberOfLines={1}>{channel.handle}</Text> : null}
             {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>Official Chi'llwood</Text> : null}
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
             {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
@@ -991,6 +992,12 @@ const styles = StyleSheet.create({
     color: "#F8FAFF",
     fontSize: 37,
     lineHeight: 42,
+    fontWeight: "900",
+  },
+  channelHandle: {
+    color: "#B9C8DE",
+    fontSize: 16,
+    lineHeight: 21,
     fontWeight: "900",
   },
   channelTagline: {
