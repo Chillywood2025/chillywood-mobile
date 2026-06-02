@@ -18,18 +18,40 @@ import { readAppConfig } from "../../_lib/appConfig";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { supabase } from "../../_lib/supabase";
+import { completePendingSignupProfile } from "../../_lib/signupProfileCompletion";
 import {
   buildUsernameSuggestions,
   checkUsernameAvailability,
   formatUsernameHandle,
-  getUsernameErrorMessage,
   normalizeUsernameHandle,
-  updateMyUsername,
   validateUsernameHandle,
   type UsernameAvailability,
 } from "../../_lib/usernameHandles";
 
 const COMMUNITY_GUIDELINES_HREF = "/community-guidelines" as Href;
+
+function getSignupErrorMessage(error: unknown) {
+  const raw = String(
+    (error as { message?: unknown; code?: unknown; name?: unknown } | null)?.message
+    ?? (error as { code?: unknown } | null)?.code
+    ?? (error as { name?: unknown } | null)?.name
+    ?? "",
+  ).toLowerCase();
+
+  if (raw.includes("email rate") || raw.includes("over_email_send_rate_limit") || raw.includes("rate limit")) {
+    return "Too many signup attempts. Try again later.";
+  }
+  if (raw.includes("already registered") || raw.includes("already exists")) {
+    return "An account already exists for this email. Sign in instead.";
+  }
+  if (raw.includes("invalid") && raw.includes("email")) {
+    return "Enter a valid email address.";
+  }
+  if (raw.includes("password")) {
+    return "Use a stronger password.";
+  }
+  return "Unable to sign up right now.";
+}
 
 export default function Signup() {
   const router = useRouter();
@@ -121,15 +143,16 @@ export default function Signup() {
         options: {
           data: {
             display_name: normalizedDisplayName,
+            username: normalizedUsername,
           },
         },
       });
 
       if (error) {
         trackEvent("auth_sign_up_failure", {
-          reason: error.message,
+          reason: error.code ?? error.name ?? "auth_error",
         });
-        Alert.alert("Signup Error", error.message);
+        Alert.alert("Signup Error", getSignupErrorMessage(error));
         return;
       }
 
@@ -138,17 +161,13 @@ export default function Signup() {
       });
 
       if (data.session?.user?.id) {
-        try {
-          await updateMyUsername(normalizedUsername);
-          await supabase
-            .from("user_profiles")
-            .update({
-              display_name: normalizedDisplayName,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("user_id", data.session.user.id);
-        } catch (usernameError) {
-          Alert.alert("Choose your username", getUsernameErrorMessage(usernameError));
+        const profileResult = await completePendingSignupProfile({
+          user: data.session.user,
+          username: normalizedUsername,
+          displayName: normalizedDisplayName,
+        });
+        if (!profileResult.ok) {
+          Alert.alert("Choose your username", profileResult.message);
           return;
         }
 
@@ -193,7 +212,7 @@ export default function Signup() {
         "Success",
         isClosedBetaEnvironment()
           ? "Check your email to confirm signup. Closed-beta access only activates if this email is on the invite list."
-          : "Check your email to confirm signup before signing in. You can finish claiming your username after your first sign-in.",
+          : "Check your email to confirm signup before signing in.",
       );
     } catch (error) {
       reportRuntimeError("auth-signup", error, {

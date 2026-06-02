@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
+import { completePendingSignupProfile } from "../../_lib/signupProfileCompletion";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "../../_lib/supabase";
 
 const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
@@ -76,7 +77,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -92,6 +93,13 @@ export default function Login() {
       trackEvent("auth_sign_in_success", {
         redirectTo,
       });
+
+      const profileResult = await completePendingSignupProfile({
+        user: data.user,
+      });
+      if (!profileResult.ok) {
+        Alert.alert("Finish account setup", profileResult.message);
+      }
     } catch (error) {
       reportRuntimeError("auth-login", error, {
         redirectTo,
