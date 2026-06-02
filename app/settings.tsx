@@ -4,6 +4,10 @@ import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
+import {
+  getAccountDeletionRequestErrorMessage,
+  submitAccountDeletionRequest,
+} from "../_lib/accountDeletionRequests";
 import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import {
   getCachedMonetizationSnapshot,
@@ -347,6 +351,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { isLoading, isSignedIn, user } = useSession();
   const [signingOut, setSigningOut] = useState(false);
+  const [deletionRequestSaving, setDeletionRequestSaving] = useState(false);
+  const [deletionRequestNotice, setDeletionRequestNotice] = useState<string | null>(null);
   const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
   const [monetizationLoading, setMonetizationLoading] = useState(false);
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>("everyone");
@@ -947,6 +953,45 @@ export default function SettingsScreen() {
     openLocalLegalRoute("/account-deletion");
   }, [legalConfig.accountDeletionUrl, openLocalLegalRoute]);
 
+  const onPressSubmitAccountDeletionRequest = useCallback(() => {
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in before requesting account deletion.");
+      return;
+    }
+
+    Alert.alert(
+      "Request account deletion",
+      "This sends a deletion request for your signed-in Chi'llywood account. Support will review identity, subscriptions, safety, legal, and billing records before processing.",
+      [
+        { text: "Not now", style: "cancel" },
+        {
+          text: "Submit Request",
+          style: "destructive",
+          onPress: () => {
+            setDeletionRequestSaving(true);
+            setDeletionRequestNotice(null);
+            void submitAccountDeletionRequest({
+              reason: "User requested account deletion from Settings.",
+            })
+              .then((result) => {
+                const message = result.alreadyExists
+                  ? "Deletion request already submitted."
+                  : "Deletion request submitted.";
+                setDeletionRequestNotice(message);
+                Alert.alert("Account deletion", message);
+              })
+              .catch((error) => {
+                const message = getAccountDeletionRequestErrorMessage(error);
+                setDeletionRequestNotice(message);
+                Alert.alert("Account deletion", message);
+              })
+              .finally(() => setDeletionRequestSaving(false));
+          },
+        },
+      ],
+    );
+  }, [isSignedIn]);
+
   const onPressCommunityGuidelines = useCallback(() => {
     trackEvent("settings_legal_opened", {
       source: "settings",
@@ -1390,7 +1435,30 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </SettingsRow>
-        <SettingsRow title="Account actions" subtitle="Log out of this device when you are finished." tone="danger">
+        <SettingsRow title="Account actions" subtitle="Log out, or request account deletion from this signed-in account." tone="danger">
+          <TouchableOpacity
+            style={[styles.utilityButton, styles.fullWidthButton, deletionRequestSaving && styles.utilityButtonDisabled]}
+            activeOpacity={0.86}
+            onPress={onPressSubmitAccountDeletionRequest}
+            disabled={deletionRequestSaving}
+            accessibilityRole="button"
+            accessibilityLabel="Request account deletion"
+            testID="settings-request-account-deletion-button"
+          >
+            {deletionRequestSaving
+              ? <ActivityIndicator color="#E5ECF8" size="small" />
+              : <Text style={styles.utilityButtonText}>Request Account Deletion</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryActionButton}
+            activeOpacity={0.86}
+            onPress={onPressAccountDeletion}
+            accessibilityRole="button"
+            accessibilityLabel="Open account deletion policy"
+          >
+            <Text style={styles.secondaryActionButtonText}>Read Deletion Policy</Text>
+          </TouchableOpacity>
+          {deletionRequestNotice ? <Text style={styles.metaText}>{deletionRequestNotice}</Text> : null}
           <TouchableOpacity
             style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]}
             activeOpacity={0.86}
