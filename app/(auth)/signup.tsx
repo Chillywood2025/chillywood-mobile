@@ -2,6 +2,7 @@ import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -71,9 +72,10 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const usernameSuggestions = useMemo(() => buildUsernameSuggestions(displayName), [displayName]);
   const scrollSignupFieldsIntoView = () => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 180);
   };
 
   useEffect(() => {
@@ -97,6 +99,21 @@ export default function Signup() {
 
     return () => clearTimeout(timeout);
   }, [username]);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      setKeyboardVisible(true);
+      scrollSignupFieldsIntoView();
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const signUp = async () => {
     const normalizedDisplayName = displayName.trim();
@@ -242,7 +259,7 @@ export default function Signup() {
           styles.container,
           {
             paddingTop: Math.max(insets.top + 32, 72),
-            paddingBottom: Math.max(insets.bottom + 120, 144),
+            paddingBottom: Math.max(insets.bottom + (keyboardVisible ? 260 : 128), keyboardVisible ? 280 : 152),
           },
         ]}
         keyboardShouldPersistTaps="handled"
@@ -397,7 +414,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: "#0B0B0F",
     padding: 24,
-    justifyContent: "center",
+    justifyContent: "flex-start",
   },
   title: {
     color: "#DC143C",
