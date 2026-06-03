@@ -71,6 +71,7 @@ Brand Studio is the creator-facing Stage Design area inside Platform Studio. It 
 - Public Platform fallback to the Chi'llwood city look when no published brand media exists.
 - Public Platform rendering through `readPublicPlatformBranding`, which only resolves published moderation-safe assets.
 - Owner/operator/moderation review RPC for approve, reject, and archive actions.
+- Creator-owned Brand Studio publish repair: `Publish Changes` now approves the currently selected owned Brand Studio assets before publishing them, so creator uploads no longer stay stuck in `Needs review` after the creator publishes. A creator can review only assets they own; non-owners still receive `brand_review_forbidden`.
 - Reviewer-only Brand Studio queue access for pending/rejected assets without exposing review controls to normal creators.
 - Public profile RPC now nulls any asset id that is not currently published and moderation-safe.
 
@@ -85,6 +86,7 @@ Remote-applied migrations:
 - `202605240005_platform_brand_asset_cleanup_candidates.sql`: service-role-only cleanup candidate helper for archived, terminal moderation, deleted, and old orphaned draft assets. It lists candidates only and never returns published or still-referenced assets.
 - `202605240006_platform_brand_cleanup_service_role_guard.sql`: hardens the cleanup helper with an explicit runtime service-role check so normal authenticated clients cannot call it.
 - `202605240007_platform_brand_review_rpc_trigger_context.sql`: lets the authorized `review_platform_brand_asset` RPC pass the safety-field trigger through a transaction-local review context while normal authenticated clients remain blocked from changing moderation fields directly.
+- `20260603033000_platform_brand_owner_publish_review_repair.sql`: updates `review_platform_brand_asset` so creators may approve/reject/archive only their own Brand Studio assets, while Owner/Operator/moderation reviewers keep queue review access. Owner self-approval is blocked for malware-detected, scan-failed, or quarantined assets, and audit metadata marks self-review explicitly.
 
 Uploads start as `draft` assets with `pending_review` moderation. Public reads require published state, moderation-safe status, and not-deleted assets.
 
@@ -139,6 +141,8 @@ Proof summary was written outside the repo at `/tmp/chillywood-brand-review-happ
 Backed/source-checked friendly states:
 
 - Permission denied: review RPC returns `brand_review_forbidden`; normal UI hides review controls when the account lacks owner/operator/moderation access.
+- Wrong-account asset review: a signed-in user who does not own the asset and does not hold Owner/Operator/moderation permission still receives `brand_review_forbidden`.
+- Owner publish repair: `Publish Changes` first approves the selected owned assets, then publishes the profile and selected safe assets. If an asset is scan-blocked or the update cannot complete, the app shows safe retry copy and does not claim publish success.
 - Unsupported file type: Brand Studio file validation accepts JPG, PNG, and WebP for images and returns creator-facing copy for unsupported files.
 - Oversize image/file: image uploads are capped at 20 MB and Hero Reel helper validation is capped at 250 MB, but Hero Reel remains unavailable in normal UI.
 - Upload failure/no network/storage failure: UI shows "Unable to choose or save that Platform media right now."

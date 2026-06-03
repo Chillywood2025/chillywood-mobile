@@ -704,6 +704,12 @@ export async function publishPlatformBrandProfile(
   ].filter(Boolean))) as string[];
 
   if (assetIds.length) {
+    await Promise.all(assetIds.map((assetId) => reviewPlatformBrandAsset(
+      assetId,
+      "approve",
+      "Approved by the creator during Brand Studio publish.",
+    )));
+
     await supabase
       .from("platform_brand_assets")
       .update({ asset_state: "published" } satisfies PlatformBrandAssetUpdate)

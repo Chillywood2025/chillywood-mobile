@@ -23,6 +23,7 @@ const brandAssetsMigration = read("supabase/migrations/202605240001_platform_bra
 const reviewMigration = read("supabase/migrations/202605240002_platform_brand_studio_review_workflow.sql");
 const reviewQueueMigration = read("supabase/migrations/202605240004_platform_brand_studio_review_queue_access.sql");
 const reviewContextMigration = read("supabase/migrations/202605240007_platform_brand_review_rpc_trigger_context.sql");
+const ownerPublishReviewRepairMigration = read("supabase/migrations/20260603033000_platform_brand_owner_publish_review_repair.sql");
 const cleanupMigration = [
   read("supabase/migrations/202605240005_platform_brand_asset_cleanup_candidates.sql"),
   read("supabase/migrations/202605240006_platform_brand_cleanup_service_role_guard.sql"),
@@ -66,6 +67,12 @@ assertIncludes(reviewMigration, `insert into public."platform_admin_audit_logs"`
 assertIncludes(reviewMigration, `'fake_approval', false`, "no fake approval audit marker");
 assertIncludes(reviewContextMigration, `set_config('app.platform_brand_review_context', 'review_platform_brand_asset', true)`, "review RPC trigger context set");
 assertIncludes(reviewContextMigration, `v_review_context <> 'review_platform_brand_asset'`, "asset trigger context gate");
+assertIncludes(ownerPublishReviewRepairMigration, `v_is_asset_owner := v_before."owner_user_id" = v_actor_user_id`, "owner-owned Brand Studio review gate");
+assertIncludes(ownerPublishReviewRepairMigration, `if not (v_has_reviewer_access or v_is_asset_owner) then`, "owner-or-reviewer Brand Studio review authorization");
+assertIncludes(ownerPublishReviewRepairMigration, `raise exception 'brand_review_forbidden'`, "wrong-account Brand Studio review denial");
+assertIncludes(ownerPublishReviewRepairMigration, `v_before."scan_status" in ('malware_detected', 'scan_failed', 'quarantined')`, "scan-blocked owner approval denial");
+assertIncludes(ownerPublishReviewRepairMigration, `'self_review', v_is_asset_owner`, "Brand Studio self-review audit marker");
+assertIncludes(platformBranding, `Approved by the creator during Brand Studio publish.`, "creator publish approves selected owned assets");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('reports_review')`, "review queue reports access");
 assertIncludes(channelSettings, `canReviewPlatformBrandAssets ? (`, "review queue role gate");

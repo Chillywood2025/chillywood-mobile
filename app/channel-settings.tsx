@@ -2068,9 +2068,10 @@ export function ChannelStudioScreen() {
       const savedProfile = await publishPlatformBrandProfile(ownerUserId, draft);
       setBrandDraft(savedProfile);
       await loadPlatformBranding();
-      setBrandNotice("Brand Studio saved. Public Platform updates after review; draft preview shows your pending look.");
+      await loadPlatformBrandReviewQueue();
+      setBrandNotice("Brand Studio published. Selected approved media can now appear on your public Platform.");
     } catch {
-      setBrandNotice("Unable to publish Brand Studio changes right now.");
+      setBrandNotice("Unable to publish Brand Studio changes right now. Check the selected media and try again.");
     } finally {
       setBrandSaving(false);
     }
