@@ -95,6 +95,39 @@ export default function Signup() {
   const scrollSignupIdentityIntoView = () => scrollSignupTo(180);
   const scrollSignupEmailIntoView = () => scrollSignupTo(360);
   const scrollSignupPasswordIntoView = () => scrollSignupTo(460);
+  const resetSignupForm = () => {
+    setDisplayName("");
+    setUsername("");
+    setEmail("");
+    setPassword("");
+    setAgeConfirmed(false);
+    setUsernameAvailability({
+      username: "",
+      available: false,
+      status: "idle",
+      message: "Choose your username",
+    });
+  };
+  const showSignupConfirmationSuccess = () => {
+    Alert.alert(
+      "Success",
+      isClosedBetaEnvironment()
+        ? "Check your email to confirm signup. Closed-beta access only activates if this email is on the invite list."
+        : "Check your email to confirm signup before signing in.",
+      [
+        {
+          text: "Go to login",
+          onPress: () => {
+            resetSignupForm();
+            router.replace({
+              pathname: "/(auth)/login",
+              params: { redirectTo },
+            });
+          },
+        },
+      ],
+    );
+  };
 
   useEffect(() => {
     const local = validateUsernameHandle(username);
@@ -257,12 +290,7 @@ export default function Signup() {
         return;
       }
 
-      Alert.alert(
-        "Success",
-        isClosedBetaEnvironment()
-          ? "Check your email to confirm signup. Closed-beta access only activates if this email is on the invite list."
-          : "Check your email to confirm signup before signing in.",
-      );
+      showSignupConfirmationSuccess();
     } catch (error) {
       reportRuntimeError("auth-signup", error, {
         redirectTo,
@@ -271,12 +299,7 @@ export default function Signup() {
         reason: "runtime_error",
       });
       if (signupCreatedUser) {
-        Alert.alert(
-          "Success",
-          isClosedBetaEnvironment()
-            ? "Check your email to confirm signup. Closed-beta access only activates if this email is on the invite list."
-            : "Check your email to confirm signup before signing in.",
-        );
+        showSignupConfirmationSuccess();
         return;
       }
       Alert.alert("Signup Error", getSignupErrorMessage(error));
