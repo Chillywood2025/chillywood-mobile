@@ -686,3 +686,7 @@ Remaining proof-only follow-ups:
 - Use a non-owner account for normal-user Admin denial visual proof.
 - Use an active Chi'lly Chat call/thread fixture with camera/microphone denied for permission-denied visual proof.
 - Use a device/runtime that exposes notification denial if notification-denied UI copy needs visual proof.
+
+## Signup Follow-Up
+
+Signup is no longer blocked on the Play-installed Android build. Commit `ea4b545` imports `react-native-get-random-values` before Supabase auth initialization, and EAS production update group `4679bd00-d966-4950-b7eb-570e120b3e4d` proved a fresh Android signup on `R5CR120QCBF` with success copy. Keep using fresh emails for signup smoke because proof emails created during debugging now exist in Supabase auth. The remaining signup follow-up is operational: confirm real user confirmation-email delivery with the configured SMTP/provider and keep reset-email rate limits managed through Supabase Auth email settings, not app UI changes.
