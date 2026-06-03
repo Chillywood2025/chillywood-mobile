@@ -3,6 +3,8 @@
 Date: 2026-06-01
 Status: field-ready copy; credentials must be entered only in Play Console
 
+June 3, 2026 money-access readiness note: the app has a repo-backed shared product catalog/access grant architecture for future digital access, but only Premium has sandbox purchase/webhook/entitlement proof. The Premium shell is closed by default. Paid content, Watch-Party tickets, Live Watch-Party access/seat passes, tips, event passes, merch checkout, payouts, cash-out, fake balances, fake payable ledger rows, and Stripe Android digital checkout are not active.
+
 Do not commit real reviewer passwords, recovery codes, OTP seeds, service accounts, owner/admin credentials, Play Console credentials, or provider secrets. Put the live test credential values only in Google Play Console App access.
 
 June 1 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records App access as packet-ready but not externally completed in this repo lane. No reviewer username/password was entered, saved, screenshotted, or committed here. Owner/operator must enter safe non-admin credentials only in Play Console App access.

@@ -3,6 +3,8 @@
 Date: 2026-05-29
 Lane: Public V1 Readiness Blocker Map
 Starting HEAD: `5ed7db5` (`Consolidate Admin IA and drilldowns`)
+
+June 3, 2026 money-access blocker update: the shared catalog/access-grants architecture is now repo-backed but remains setup/readiness-only. Premium is still the only sandbox-proved digital product path and remains backed by RevenueCat/Google Play plus `user_entitlements`; the purchase shell is closed by default. Paid content, Watch-Party tickets, Live Watch-Party access/seat passes, tips, event passes, merch checkout, payouts, and production payable ledgers remain blockers until provider mappings, policy proof, kill-switch approval, refund/revoke handling, Android proof, and payout readiness are separately closed.
 Branch at audit start: `main...origin/main`
 
 ## Summary

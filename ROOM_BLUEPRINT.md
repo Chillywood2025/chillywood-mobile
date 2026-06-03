@@ -1,5 +1,7 @@
 # ROOM BLUEPRINT
 
+June 3, 2026 money-access note: shared ticket/access/seat grant readiness is allowed only as a resolver layer for viewing or entry. It does not change Watch-Party Live route ownership, Live Watch-Party / Live Stage route ownership, Party Room behavior, old-room handling, host approval, speaker authority, or the LiveKit token issuer. Payment records never grant publish permission, host/mod/admin power, or safety/privacy bypass.
+
 ## Purpose
 `ROOM_BLUEPRINT.md` is Chi'llywood's durable master room-feature and AI doctrine.
 

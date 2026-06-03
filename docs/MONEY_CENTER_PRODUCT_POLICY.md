@@ -1,6 +1,8 @@
 # Money Center Product Policy
 
-Last updated: June 1, 2026
+Last updated: June 3, 2026
+
+June 3, 2026 money-access catalog update: Chi'llwood now has an additive shared product catalog/access grant/readiness ledger architecture for future Premium-adjacent digital access, paid content, Watch-Party Live tickets, Live Watch-Party access/seat passes, tips, event passes, and merch separation. `monetization_products`, `provider_events`, shared `access_grants`, `money_access_ledger_events`, `merch_products`, and `merch_orders` are readiness/control-plane tables only. Setup and sandbox ledger rows are `Not payable`; merch cannot create digital access; Android digital products remain RevenueCat/Google Play; Stripe remains payout/physical-goods readiness only. Payment records never grant LiveKit publish, host/mod/admin, payout, speaker, privacy, moderation, or Premium bypass authority. Owner/Admin Money Center can inspect safe counts; Creator Money Center remains setup/readiness-only with no fake money.
 
 Money Center is the creator-facing source of truth for money readiness in Platform Studio. It consolidates the old Monetize, Revenue, Payouts, provider-readiness, Premium, Stripe, RevenueCat, Google Play, tips, paid content, Watch-Party seats, merch, creator balance, tax/legal, and payout-readiness surfaces into one collapsible readiness area.
 

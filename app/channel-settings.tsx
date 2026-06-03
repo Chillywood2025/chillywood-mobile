@@ -5990,7 +5990,10 @@ export function ChannelStudioScreen() {
           : "Not active";
     const topStatus = moneyCenterStatus;
     const tipsFlag = moneyFlag("tips_enabled");
+    const watchPartyTicketsFlag = moneyFlag("watch_party_tickets_enabled");
     const watchPartySeatsFlag = moneyFlag("watch_party_seats_enabled");
+    const liveWatchPartyAccessFlag = moneyFlag("live_watch_party_access_enabled");
+    const liveWatchPartySeatsFlag = moneyFlag("live_watch_party_seats_enabled");
     const paidContentFlag = moneyFlag("paid_content_enabled");
     const merchFlag = moneyFlag("merch_enabled");
     const creatorBalanceFlag = moneyFlag("creator_balance_visible");
@@ -6005,6 +6008,9 @@ export function ChannelStudioScreen() {
     const tipsStatus = sectionStatus("tips_enabled", tipsReadiness, "Planned");
     const paidContentStatus = sectionStatus("paid_content_enabled", paidContentReadiness, "Setup needed");
     const watchPartySeatsStatus = sectionStatus("watch_party_seats_enabled", googlePlayProductReadiness, "Planned");
+    const watchPartyTicketsStatus = sectionStatus("watch_party_tickets_enabled", googlePlayProductReadiness, "Planned");
+    const liveWatchPartyAccessStatus = sectionStatus("live_watch_party_access_enabled", googlePlayProductReadiness, "Planned");
+    const liveWatchPartySeatsStatus = sectionStatus("live_watch_party_seats_enabled", googlePlayProductReadiness, "Planned");
     const merchStatus = sectionStatus("merch_enabled", commerceReadiness, "Planned");
     const balanceStatus = creatorBalanceFlag.state === "locked" ? "Blocked" : creatorBalanceFlag.state === "off" || creatorBalanceFlag.state === "maintenance" ? "Disabled" : "Not active";
     const payoutsStatus = sectionStatus("payouts_enabled", payoutSetupReadiness ?? payoutReleaseReadiness, "Setup needed");
@@ -6063,6 +6069,12 @@ export function ChannelStudioScreen() {
     ];
     const watchPartySeatCards: readonly SummaryMetricCard[] = [
       {
+        label: "Entry tickets",
+        value: watchPartyTicketsStatus,
+        body: `${watchPartyTicketsFlag.state === "off" ? "Watch-Party Live tickets are not active yet." : switchSetupBody("watch_party_tickets_enabled", "Paid tickets need verified store setup first.")} Tickets grant viewing entry only when room policy allows.`,
+        tone: "unavailable",
+      },
+      {
         label: "Seat sales",
         value: watchPartySeatsStatus,
         body: `${watchPartySeatsFlag.state === "off" ? "Watch-Party seats are not active yet." : switchSetupBody("watch_party_seats_enabled", "Paid seats need verified store setup first.")} Viewer, VIP, speaker, event pass, and creator-room access products need verified store setup first.`,
@@ -6072,6 +6084,18 @@ export function ChannelStudioScreen() {
         label: "Room authority",
         value: "Unchanged",
         body: "A paid seat cannot grant original host controls or bypass required speaker approval.",
+        tone: "unavailable",
+      },
+      {
+        label: "Live access passes",
+        value: liveWatchPartyAccessStatus,
+        body: `${liveWatchPartyAccessFlag.state === "off" ? "Live Watch-Party access passes are not active yet." : switchSetupBody("live_watch_party_access_enabled", "Live access passes need verified store setup first.")} Access passes do not grant host, cohost, moderator, or speaker authority.`,
+        tone: "unavailable",
+      },
+      {
+        label: "Live seat passes",
+        value: liveWatchPartySeatsStatus,
+        body: `${liveWatchPartySeatsFlag.state === "off" ? "Live Watch-Party seat passes are not active yet." : switchSetupBody("live_watch_party_seats_enabled", "Seat passes need host-approval proof first.")} Seat passes create eligibility only; host approval and LiveKit token rules still decide publish access.`,
         tone: "unavailable",
       },
       {

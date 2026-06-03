@@ -6,7 +6,10 @@ export type MoneyFeatureFlagKey =
   | "money_center_visible"
   | "digital_sales_enabled"
   | "tips_enabled"
+  | "watch_party_tickets_enabled"
   | "watch_party_seats_enabled"
+  | "live_watch_party_access_enabled"
+  | "live_watch_party_seats_enabled"
   | "paid_content_enabled"
   | "merch_enabled"
   | "creator_balance_visible"
@@ -102,7 +105,10 @@ export const MONEY_FEATURE_FLAG_KEYS: readonly MoneyFeatureFlagKey[] = [
   "money_center_visible",
   "digital_sales_enabled",
   "tips_enabled",
+  "watch_party_tickets_enabled",
   "watch_party_seats_enabled",
+  "live_watch_party_access_enabled",
+  "live_watch_party_seats_enabled",
   "paid_content_enabled",
   "merch_enabled",
   "creator_balance_visible",
@@ -122,7 +128,10 @@ export const MONEY_FEATURE_FLAG_DEFAULT_STATES: Record<MoneyFeatureFlagKey, Mone
   money_center_visible: "on",
   digital_sales_enabled: "off",
   tips_enabled: "off",
+  watch_party_tickets_enabled: "off",
   watch_party_seats_enabled: "off",
+  live_watch_party_access_enabled: "off",
+  live_watch_party_seats_enabled: "off",
   paid_content_enabled: "off",
   merch_enabled: "off",
   creator_balance_visible: "on",
@@ -142,7 +151,10 @@ const MONEY_FEATURE_FLAG_LABELS: Record<MoneyFeatureFlagKey, string> = {
   money_center_visible: "Money Center visible",
   digital_sales_enabled: "Digital sales",
   tips_enabled: "Tips",
+  watch_party_tickets_enabled: "Watch-Party tickets",
   watch_party_seats_enabled: "Watch-Party seats",
+  live_watch_party_access_enabled: "Live Watch-Party access",
+  live_watch_party_seats_enabled: "Live Watch-Party seats",
   paid_content_enabled: "Paid content",
   merch_enabled: "Merch",
   creator_balance_visible: "Creator balance visible",
@@ -162,7 +174,10 @@ const MONEY_FEATURE_FLAG_DESCRIPTIONS: Record<MoneyFeatureFlagKey, string> = {
   money_center_visible: "Controls whether creators can see the consolidated Money Center surface.",
   digital_sales_enabled: "Controls paid digital access claims and sale controls.",
   tips_enabled: "Controls creator-support tip products and tip checkout claims.",
+  watch_party_tickets_enabled: "Controls paid Watch-Party Live entry ticket claims and sale controls.",
   watch_party_seats_enabled: "Controls paid Watch-Party seat access claims and sale controls.",
+  live_watch_party_access_enabled: "Controls paid Live Watch-Party / Live Stage entry access pass claims and sale controls.",
+  live_watch_party_seats_enabled: "Controls paid Live Watch-Party / Live Stage seat eligibility claims and sale controls.",
   paid_content_enabled: "Controls paid videos, posts, collections, and digital content access claims.",
   merch_enabled: "Controls physical merch checkout and merch-order claims.",
   creator_balance_visible: "Controls the read-only creator balance section.",

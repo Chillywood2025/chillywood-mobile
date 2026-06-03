@@ -979,6 +979,14 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   creatorPayoutRequestCount: null,
   monetizationWebhookEventCount: null,
   monetizationAuditLogCount: null,
+  monetizationProductCount: null,
+  providerEventCount: null,
+  accessGrantCount: null,
+  moneyAccessLedgerEventCount: null,
+  moneyAccessLedgerSandboxNotPayableCount: null,
+  moneyAccessLedgerSetupNotPayableCount: null,
+  merchProductReadinessCount: null,
+  merchOrderReadinessCount: null,
   networkBillingAccountCount: null,
   networkInvoiceRecordCount: null,
   networkInvoiceDraftCount: null,
@@ -10254,6 +10262,8 @@ export default function AdminStudioScreen() {
             <OwnerDetailGrid
               rows={[
                 { label: "Digital rail", value: "Google Play / RevenueCat for Android digital purchases" },
+                { label: "Product catalog", value: formatAdminFinanceCount(adminFinanceReadModel.monetizationProductCount, adminFinanceReadModel.loading, "catalog product", "catalog products") },
+                { label: "Shared access grants", value: formatAdminFinanceCount(adminFinanceReadModel.accessGrantCount, adminFinanceReadModel.loading, "access grant", "access grants") },
                 { label: "Payout rail", value: "Stripe Connect for creator payouts only" },
                 { label: "Merch rail", value: "Physical goods stay separate from digital access" },
                 { label: "Ledger model", value: "Internal ledger remains source of truth for earnings and payout math" },
@@ -10355,10 +10365,20 @@ export default function AdminStudioScreen() {
         children: (
           <View style={{ gap: 10 }}>
             <View style={styles.ownerMetricGrid}>
-              <OwnerMetricTile label="Prices" value={formatHomeCount(adminFinanceReadModel.creatorContentPriceCount, adminFinanceReadModel.loading)} tone="locked" />
-              <OwnerMetricTile label="Purchases" value={formatHomeCount(adminFinanceReadModel.paidContentPurchaseCount, adminFinanceReadModel.loading)} tone="locked" />
-              <OwnerMetricTile label="Access Grants" value={formatHomeCount(adminFinanceReadModel.contentAccessGrantCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Product Catalog" value={formatHomeCount(adminFinanceReadModel.monetizationProductCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Provider Events" value={formatHomeCount(adminFinanceReadModel.providerEventCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Access Grants" value={formatHomeCount(adminFinanceReadModel.accessGrantCount, adminFinanceReadModel.loading)} tone="locked" />
+              <OwnerMetricTile label="Ledger Events" value={formatHomeCount(adminFinanceReadModel.moneyAccessLedgerEventCount, adminFinanceReadModel.loading)} tone="locked" />
             </View>
+            <OwnerDetailGrid
+              rows={[
+                { label: "Legacy content prices", value: formatAdminFinanceCount(adminFinanceReadModel.creatorContentPriceCount, adminFinanceReadModel.loading, "price row", "price rows") },
+                { label: "Legacy paid purchases", value: formatAdminFinanceCount(adminFinanceReadModel.paidContentPurchaseCount, adminFinanceReadModel.loading, "purchase row", "purchase rows") },
+                { label: "Legacy content grants", value: formatAdminFinanceCount(adminFinanceReadModel.contentAccessGrantCount, adminFinanceReadModel.loading, "content grant", "content grants") },
+                { label: "Sandbox ledger", value: formatAdminFinanceCount(adminFinanceReadModel.moneyAccessLedgerSandboxNotPayableCount, adminFinanceReadModel.loading, "sandbox not-payable row", "sandbox not-payable rows") },
+                { label: "Setup ledger", value: formatAdminFinanceCount(adminFinanceReadModel.moneyAccessLedgerSetupNotPayableCount, adminFinanceReadModel.loading, "setup not-payable row", "setup not-payable rows") },
+              ]}
+            />
             {renderProviderReadinessLine("revenuecat", "paid_content", "Paid content provider readiness")}
             <OwnerDisabledReason reason="No Stripe checkout for Android digital goods. No sale toggle appears until both provider readiness and backend switches allow it." />
             {renderAdminMoneyAuditEventRows(digitalAuditEvents, "No digital sales rows returned", "Paid content, tips, access grants, and merch setup rows appear here only if backed rows are readable.", 4)}
@@ -10377,7 +10397,10 @@ export default function AdminStudioScreen() {
             <OwnerDetailGrid
               rows={[
                 { label: "Tips", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "tips_enabled").state) },
+                { label: "Watch-Party tickets", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_tickets_enabled").state) },
                 { label: "Watch-Party seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_seats_enabled").state) },
+                { label: "Live Watch-Party access", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "live_watch_party_access_enabled").state) },
+                { label: "Live Watch-Party seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "live_watch_party_seats_enabled").state) },
                 { label: "Paid content", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "paid_content_enabled").state) },
                 { label: "Tip rows", value: formatAdminFinanceCount(adminFinanceReadModel.creatorTipTransactionCount, adminFinanceReadModel.loading, "setup tip row", "setup tip rows") },
               ]}
@@ -10398,8 +10421,10 @@ export default function AdminStudioScreen() {
           <View style={{ gap: 10 }}>
             <OwnerDetailGrid
               rows={[
-                { label: "Products", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductCount, adminFinanceReadModel.loading, "setup product", "setup products") },
-                { label: "Orders", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductOrderCount, adminFinanceReadModel.loading, "setup order", "setup orders") },
+                { label: "Catalog merch", value: formatAdminFinanceCount(adminFinanceReadModel.merchProductReadinessCount, adminFinanceReadModel.loading, "readiness product", "readiness products") },
+                { label: "Merch orders", value: formatAdminFinanceCount(adminFinanceReadModel.merchOrderReadinessCount, adminFinanceReadModel.loading, "readiness order", "readiness orders") },
+                { label: "Legacy creator products", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductCount, adminFinanceReadModel.loading, "setup product", "setup products") },
+                { label: "Legacy creator orders", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductOrderCount, adminFinanceReadModel.loading, "setup order", "setup orders") },
                 { label: "Payment rail", value: "Physical merch later uses Stripe, Shopify, or approved merch provider" },
               ]}
             />
@@ -10420,6 +10445,7 @@ export default function AdminStudioScreen() {
             <OwnerDetailGrid
               rows={[
                 { label: "Finance events", value: formatAdminFinanceCount(adminFinanceReadModel.financeLedgerEventCount, adminFinanceReadModel.loading, "setup event", "setup events") },
+                { label: "Access ledger", value: formatAdminFinanceCount(adminFinanceReadModel.moneyAccessLedgerEventCount, adminFinanceReadModel.loading, "ledger event", "ledger events") },
                 { label: "Revenue imports", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueSourceImportRecordCount, adminFinanceReadModel.loading, "readiness row", "readiness rows") },
                 { label: "Earnings ledger", value: formatAdminFinanceCount(adminFinanceReadModel.creatorEarningsLedgerCount, adminFinanceReadModel.loading, "ledger row", "ledger rows") },
                 { label: "Share ledger", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueShareLedgerEntryCount, adminFinanceReadModel.loading, "setup row", "setup rows") },

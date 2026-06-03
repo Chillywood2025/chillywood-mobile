@@ -54,6 +54,12 @@ export const CREATOR_EARNINGS_LEDGER_TABLE = "creator_earnings_ledger";
 export const CREATOR_PAYOUT_REQUESTS_TABLE = "creator_payout_requests";
 export const MONETIZATION_WEBHOOK_EVENTS_TABLE = "monetization_webhook_events";
 export const MONETIZATION_AUDIT_LOG_TABLE = "monetization_audit_log";
+export const MONETIZATION_PRODUCTS_TABLE = "monetization_products";
+export const PROVIDER_EVENTS_TABLE = "provider_events";
+export const ACCESS_GRANTS_TABLE = "access_grants";
+export const MONEY_ACCESS_LEDGER_EVENTS_TABLE = "money_access_ledger_events";
+export const MERCH_PRODUCTS_TABLE = "merch_products";
+export const MERCH_ORDERS_TABLE = "merch_orders";
 
 export type AdminFinanceReadModel = {
   financeLedgerEventCount: number | null;
@@ -100,6 +106,14 @@ export type AdminFinanceReadModel = {
   creatorPayoutRequestCount: number | null;
   monetizationWebhookEventCount: number | null;
   monetizationAuditLogCount: number | null;
+  monetizationProductCount: number | null;
+  providerEventCount: number | null;
+  accessGrantCount: number | null;
+  moneyAccessLedgerEventCount: number | null;
+  moneyAccessLedgerSandboxNotPayableCount: number | null;
+  moneyAccessLedgerSetupNotPayableCount: number | null;
+  merchProductReadinessCount: number | null;
+  merchOrderReadinessCount: number | null;
   networkBillingAccountCount: number | null;
   networkInvoiceRecordCount: number | null;
   networkInvoiceDraftCount: number | null;
@@ -243,6 +257,14 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutRequestCount,
     monetizationWebhookEventCount,
     monetizationAuditLogCount,
+    monetizationProductCount,
+    providerEventCount,
+    accessGrantCount,
+    moneyAccessLedgerEventCount,
+    moneyAccessLedgerSandboxNotPayableCount,
+    moneyAccessLedgerSetupNotPayableCount,
+    merchProductReadinessCount,
+    merchOrderReadinessCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
     networkInvoiceDraftCount,
@@ -334,6 +356,14 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(CREATOR_PAYOUT_REQUESTS_TABLE)),
     safeRead(() => readTableCount(MONETIZATION_WEBHOOK_EVENTS_TABLE)),
     safeRead(() => readTableCount(MONETIZATION_AUDIT_LOG_TABLE)),
+    safeRead(() => readTableCount(MONETIZATION_PRODUCTS_TABLE)),
+    safeRead(() => readTableCount(PROVIDER_EVENTS_TABLE)),
+    safeRead(() => readTableCount(ACCESS_GRANTS_TABLE)),
+    safeRead(() => readTableCount(MONEY_ACCESS_LEDGER_EVENTS_TABLE)),
+    safeRead(() => readTableCountWhereEq(MONEY_ACCESS_LEDGER_EVENTS_TABLE, "environment", "sandbox")),
+    safeRead(() => readTableCountWhereEq(MONEY_ACCESS_LEDGER_EVENTS_TABLE, "environment", "setup")),
+    safeRead(() => readTableCount(MERCH_PRODUCTS_TABLE)),
+    safeRead(() => readTableCount(MERCH_ORDERS_TABLE)),
     safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
     safeRead(() => readTableCount(NETWORK_INVOICE_RECORDS_TABLE)),
     safeRead(() => readTableCountWhereEq(NETWORK_INVOICE_RECORDS_TABLE, "status", "draft")),
@@ -427,6 +457,14 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     creatorPayoutRequestCount,
     monetizationWebhookEventCount,
     monetizationAuditLogCount,
+    monetizationProductCount,
+    providerEventCount,
+    accessGrantCount,
+    moneyAccessLedgerEventCount,
+    moneyAccessLedgerSandboxNotPayableCount,
+    moneyAccessLedgerSetupNotPayableCount,
+    merchProductReadinessCount,
+    merchOrderReadinessCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
     networkInvoiceDraftCount,

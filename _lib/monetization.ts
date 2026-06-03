@@ -256,7 +256,7 @@ const LIVE_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_live_access", "
 const WATCH_PARTY_ACCESS_TARGET_IDS: MonetizationTargetId[] = ["premium_watch_party_access", "premium_subscription"];
 const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
 
-export const PREMIUM_PURCHASE_SHELL_ON_HOLD = false;
+export const PREMIUM_PURCHASE_SHELL_ON_HOLD = true;
 export const PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
   "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.";
 

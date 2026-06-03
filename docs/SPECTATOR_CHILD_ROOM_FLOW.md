@@ -1,5 +1,7 @@
 # Spectator Child Room Flow
 
+June 3, 2026 money-access note: ticket/access/seat grant readiness does not change Spectator child-room behavior. Access grants may later allow viewing/entry only when policy allows; they never expose original LiveKit tokens, speaker credentials, host controls, raw HLS/storage paths, or publish authority.
+
 ## Purpose
 Spectator is the public-safe watch-only discovery surface. It can show approved public playback and metadata, then let a signed-in viewer start their own child room around that source.
 

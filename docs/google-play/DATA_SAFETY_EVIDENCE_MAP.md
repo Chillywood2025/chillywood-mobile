@@ -3,6 +3,8 @@
 Date: 2026-06-01
 Status: repo evidence prepared; owner/legal confirmation required before Play submission
 
+June 3, 2026 money-access note: paid content, tips, Watch-Party tickets, Live Watch-Party access/seat passes, digital event passes, merch checkout, and payouts remain inactive/setup-only. Android digital goods are documented for RevenueCat/Google Play only; Stripe is not used for Android digital checkout. Data Safety must be revisited before activating tips, paid content, tickets, seats, event passes, merch checkout, provider order fulfillment, tax/KYC, payout setup beyond readiness, or live money.
+
 This document maps Chi'llywood repo truth to likely Google Play Data Safety answers. It is not a submitted form and does not claim Google Play acceptance. When uncertain, the owner must confirm behavior and third-party SDK disclosures before submission.
 
 June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records Data Safety as prepared but not submitted/accepted in this repo lane. Owner/legal still must confirm Firebase collection state, RevenueCat/Google purchase-shell state for the submitted build, search history posture, support/account deletion retention/SLA, and provider disclosure wording before saving Play Console Data Safety. No Play Console Data Safety submission proof exists in this repo closeout.

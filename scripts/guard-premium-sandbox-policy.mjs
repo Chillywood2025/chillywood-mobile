@@ -62,7 +62,7 @@ assertIncludes(revenueCat, "androidProductionPublicKeyConfigured = !!runtime.rev
 assertIncludes(revenueCat, "mode: \"android-release\"", "RevenueCat Android release mode");
 assertIncludes(revenueCat, "apiKey: runtime.revenueCat.androidPublicSdkKey", "RevenueCat release public key use");
 
-assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = false", "Premium purchase shell open");
+assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = true", "Premium purchase shell closed by default");
 assertIncludes(monetization, "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.", "Premium setup-needed fallback copy");
 assertIncludes(monetization, "snapshot.targets.premium_subscription.hasEntitlement", "RevenueCat entitlement still required");
 assertIncludes(featureFlags, "premiumPurchaseEnabled: false", "default Premium purchase runtime flag");

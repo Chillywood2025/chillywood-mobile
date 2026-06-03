@@ -1,6 +1,8 @@
 # Provider-Link Readiness Runbook
 
-Last updated: June 1, 2026
+Last updated: June 3, 2026
+
+June 3, 2026 money-access catalog readiness update: future provider events now have a shared sanitized destination in `provider_events`, product mapping in `monetization_products`, user access records in `access_grants`, and not-payable setup/sandbox accounting in `money_access_ledger_events`. RevenueCat/Google Play remains the Android digital rail for Premium, paid content, tips, tickets, seats, and event passes. Provider events must be idempotent and sanitized; raw payloads and secrets stay out of normal client/admin readouts. This update does not activate live money, provider checkout, paid content, tickets, seats, tips, merch checkout, payouts, or payable creator balances.
 
 June 1, 2026 Premium reviewer readiness update: no new provider event was fired and the Premium shell stayed closed. Device proof confirms `R5CR120QCBF` is Play-installed versionCode `13`; `npm run validate:runtime` reports `revenueCatAndroidPublicKeyConfigured:true`; Supabase lists `revenuecat-webhook` ACTIVE version `7`; and EAS production branch readback for runtime `1.0.0` shows the current newest update is the closed-shell group `5668cdaa-cd5b-4553-bd91-7b786323fd22`. The outside-repo Google Play service-account file authenticated, but read-only Android Publisher track/product readback returned `403`, so current tester-list/product status could not be freshly verified through CLI. The prior licensed-tester sandbox purchase/restore/webhook/backend entitlement/Platform Studio unlock proof remains the governing proof. A fresh reviewer purchase run requires owner-entered reviewer credentials and explicit bounded shell-opening approval.
 
