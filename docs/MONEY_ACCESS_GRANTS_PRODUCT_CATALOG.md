@@ -15,7 +15,7 @@ Remote proof status on June 3, 2026:
 - `supabase db push` applied the migration, and a post-apply dry-run reported the remote database up to date.
 - `supabase gen types typescript --linked > supabase/database.types.ts` refreshed generated types.
 - `supabase migration list` remains unavailable in this shell because the linked CLI login role hits the known SASL authentication failure; no password or secret was printed.
-- Android proof path is `/tmp/chillywood-money-access-grants-remote-proof-20260603/`. `R5CR120QCBF` had a Play/EAS-signed `com.chillywood.mobile` versionCode `21`; replacing it with the local current-source APK failed with signature mismatch, and the session was signed out, so signed-in Money Center/Admin screenshots remain a follow-up.
+- Android remote proof path is `/tmp/chillywood-money-access-grants-remote-proof-20260603/`. Signed-in proof path is `/tmp/chillywood-money-center-signed-in-proof-20260603/`. `R5CR120QCBF` has a Play/EAS-signed `com.chillywood.mobile` versionCode `21`; replacing it with the local current-source APK failed with signature mismatch. A temporary audited operator upgrade on the proof account captured Creator Money Center readiness and not-payable states, then the grant was revoked and post-revoke Admin denial was captured. Android EAS update group `5008f2c5-e002-40bd-8f6e-fcd1fa95e633` was published from current `main`, but this installed v21 client still did not pick up the current Admin Money Center JS, so Owner/Admin Product Catalog / Provider Events / Access Grants / Ledger screenshots remain a follow-up until a fresh Play/EAS-signed build or explicit local replacement path is available.
 
 ## Product Catalog
 
@@ -111,5 +111,6 @@ Closeout validation also includes runtime, Premium, payment rail, creator moneti
 - No live provider activation for paid content, tickets, seats, tips, event passes, or merch checkout.
 - No production payable ledger proof.
 - No payout activation.
-- Fresh signed-in Android Money Center/Admin screenshot proof still needs an owner-approved signed-in Play/EAS build path or a local install path that does not destroy the proof session.
+- Fresh signed-in Owner/Admin Product Catalog / Provider Events / Access Grants / Ledger screenshot proof still needs a fresh Play/EAS-signed build carrying current `main` or an explicit local replacement path.
+- The next sales lane must use real RevenueCat / Google Play sandbox purchase events for tickets/seats; do not insert fake sales, fake provider events, or fake ledger rows.
 - Remote migration apply and typegen are complete; `supabase migration list` remains the only unavailable Supabase readback command in this shell.
