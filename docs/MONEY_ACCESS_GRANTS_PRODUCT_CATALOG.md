@@ -16,6 +16,7 @@ Remote proof status on June 3, 2026:
 - `supabase gen types typescript --linked > supabase/database.types.ts` refreshed generated types.
 - `supabase migration list` remains unavailable in this shell because the linked CLI login role hits the known SASL authentication failure; no password or secret was printed.
 - Android remote proof path is `/tmp/chillywood-money-access-grants-remote-proof-20260603/`. Signed-in proof path is `/tmp/chillywood-money-center-signed-in-proof-20260603/`. `R5CR120QCBF` has a Play/EAS-signed `com.chillywood.mobile` versionCode `21`; replacing it with the local current-source APK failed with signature mismatch. A temporary audited operator upgrade on the proof account captured Creator Money Center readiness and not-payable states, then the grant was revoked and post-revoke Admin denial was captured. Android EAS update group `5008f2c5-e002-40bd-8f6e-fcd1fa95e633` was published from current `main`, but this installed v21 client still did not pick up the current Admin Money Center JS, so Owner/Admin Product Catalog / Provider Events / Access Grants / Ledger screenshots remain a follow-up until a fresh Play/EAS-signed build or explicit local replacement path is available.
+- Real sandbox digital-sales preflight path is `/tmp/chillywood-real-sandbox-digital-sales-proof-20260603/`. `revenuecat-webhook` is deployed ACTIVE version `8` from commit `4c3633e` and now mirrors real RevenueCat Premium events into `provider_events`, `access_grants`, and `money_access_ledger_events` with sanitized metadata, idempotency, and not-payable sandbox/setup states. No fake provider event, access grant, or ledger row was inserted. Android EAS Update `c0bb32bb-3c7e-406e-a619-2e3e0eb536ed` did not make installed Play/EAS v21 load current Admin money visuals. EAS internal APK build `cc88ce26-6e94-4adb-9768-d0483c12505a` for versionCode `22`, versionName `1.0.0`, runtime `1.0.0`, commit `4c3633e`, remained `IN_PROGRESS` with no artifact during proof, so current-main Admin Product Catalog / Provider Events / Access Grants / Ledger screenshots remain blocked on a fresh signed install.
 
 ## Product Catalog
 
@@ -39,6 +40,19 @@ Seeded catalog status:
 - Creator tip: `setup`, no active tip button, not payable.
 - Merch physical good: `setup`, physical goods only, no digital entitlement.
 - Event pass: `setup`, future digital event access placeholder.
+
+Current sandbox proof matrix:
+
+| Product type | Product key | Provider mapping | Switch state | Sandbox proof status | Blocker |
+| --- | --- | --- | --- | --- | --- |
+| `premium_subscription` | `premium_subscription_monthly` | RevenueCat/Google Play `premium_subscription`, base plan `monthly`, entitlement `premium` | RevenueCat/provider readiness `sandbox_only`; Premium shell closed by source default | Prior real Premium sandbox purchase/webhook/user_entitlements proof stands. Webhook v8 can mirror the next real Premium provider event into product/access/ledger rows. | Needs a fresh real RevenueCat/Google Play sandbox event after webhook v8 for full shared-table proof. |
+| `paid_content_access` | `paid_content_access_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no buy button remains honest. | Create RevenueCat/Google Play product, map catalog row, add Player purchase UI only under sandbox guard. |
+| `watch_party_live_ticket` | `watch_party_live_ticket_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no buy button remains honest. | Create RevenueCat/Google Play ticket product and webhook mapping; prove entry-only resolver. |
+| `live_watch_party_access_pass` | `live_watch_party_access_pass_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no buy button remains honest. | Create RevenueCat/Google Play access-pass product and resolver proof. |
+| `live_watch_party_seat_pass` | `live_watch_party_seat_pass_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no buy button remains honest. | Create RevenueCat/Google Play seat-pass product; prove host approval and LiveKit publish still win. |
+| `creator_tip` | `creator_tip_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no tip button remains honest. | Create RevenueCat/Google Play tip product; prove sandbox ledger stays not payable and no payout appears. |
+| `event_pass` | `event_pass_setup` | Missing `provider_product_id` and entitlement/offering mapping | no active UI | Not testable. Setup-only placeholder. | Define event-pass policy and provider mapping before sale proof. |
+| `merch_physical_good` | `merch_physical_good_setup` | Physical merch provider later; no Android digital mapping | `off` | Not in Android digital sale scope. | Add physical merch provider later; pure merch must not create digital access. |
 
 ## Access Grants
 
