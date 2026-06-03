@@ -2,11 +2,13 @@ import * as Application from "expo-application";
 import { Linking, Platform } from "react-native";
 import Purchases, {
   LOG_LEVEL,
+  PRODUCT_CATEGORY,
   type CustomerInfo,
   type LogInResult,
   type MakePurchaseResult,
   type PurchasesOfferings,
   type PurchasesPackage,
+  type PurchasesStoreProduct,
 } from "react-native-purchases";
 
 import { debugLog, reportRuntimeError } from "./logger";
@@ -397,6 +399,40 @@ export async function purchaseRevenueCatPackage(pkg: PurchasesPackage): Promise<
   }
 
   const result = await Purchases.purchasePackage(pkg);
+  latestCustomerInfo = result.customerInfo;
+  configuredAppUserId = await getRevenueCatAppUserId() || configuredAppUserId;
+  return result;
+}
+
+export async function readRevenueCatNonSubscriptionProducts(productIdentifiers: string[]) {
+  const state = configureRevenueCatOnce();
+  if (!state.shouldConfigure) return [] as PurchasesStoreProduct[];
+
+  const safeIdentifiers = Array.from(new Set(
+    productIdentifiers
+      .map((entry) => normalizeText(entry))
+      .filter(Boolean),
+  ));
+  if (!safeIdentifiers.length) return [] as PurchasesStoreProduct[];
+
+  try {
+    return await Purchases.getProducts(safeIdentifiers, PRODUCT_CATEGORY.NON_SUBSCRIPTION);
+  } catch (error) {
+    reportRuntimeError("revenuecat-non-subscription-products", error, {
+      mode: state.mode,
+      productCount: safeIdentifiers.length,
+    });
+    return [] as PurchasesStoreProduct[];
+  }
+}
+
+export async function purchaseRevenueCatStoreProduct(product: PurchasesStoreProduct): Promise<MakePurchaseResult> {
+  const state = configureRevenueCatOnce();
+  if (!state.shouldConfigure) {
+    throw new Error(state.reason ?? "RevenueCat is not configured.");
+  }
+
+  const result = await Purchases.purchaseStoreProduct(product);
   latestCustomerInfo = result.customerInfo;
   configuredAppUserId = await getRevenueCatAppUserId() || configuredAppUserId;
   return result;

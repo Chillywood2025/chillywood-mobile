@@ -9,6 +9,8 @@ Real sandbox sales preflight note: the deployed RevenueCat webhook can now mirro
 
 Sandbox product mapping note: the backend now has purchase intents for future non-Premium sandbox tests, but reviewer instructions must not claim paid content, tickets, seats, tips, or event passes are purchasable until the owner creates the Google Play/RevenueCat products and provides a licensed tester path. Proposed test IDs are documented in `docs/REVENUECAT_GOOGLE_PLAY_SANDBOX_PRODUCT_SETUP.md`. Do not give reviewers fake checkout instructions or any Stripe/external payment link for Android digital goods.
 
+Sandbox provider product follow-up: Google Play and RevenueCat now contain the six non-Premium sandbox products, and the backend catalog has sandbox-only mappings. Reviewer instructions still must not claim paid content, tickets, seats, tips, or event passes are available unless the submitted build exposes an owner-approved tester path and a licensed tester can complete a real sandbox purchase. The current route for proof is `/admin-money-sandbox-purchases`, which is owner/operator-only and not a public reviewer checkout.
+
 Do not commit real reviewer passwords, recovery codes, OTP seeds, service accounts, owner/admin credentials, Play Console credentials, or provider secrets. Put the live test credential values only in Google Play Console App access.
 
 June 1 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records App access as packet-ready but not externally completed in this repo lane. No reviewer username/password was entered, saved, screenshotted, or committed here. Owner/operator must enter safe non-admin credentials only in Play Console App access.
