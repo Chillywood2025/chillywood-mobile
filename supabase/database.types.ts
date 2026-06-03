@@ -10216,6 +10216,10 @@ export type Database = {
         Args: { p_content_id: string; p_content_type: string }
         Returns: Json
       }
+      resolve_signup_profile_username: {
+        Args: { p_metadata: Json; p_user_id: string }
+        Returns: string
+      }
       resolve_video_playback: {
         Args: { target_video_id: string }
         Returns: Json

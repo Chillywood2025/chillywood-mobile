@@ -2,6 +2,8 @@
 
 Status: implemented and remote-applied on June 2, 2026 in migration `20260602032030_modern_username_handle_system.sql`.
 
+June 3, 2026 signup backstop update: migration `20260603133500_auth_signup_profile_username_backstop.sql` is also remote-applied. It adds an `auth.users` after-insert trigger so email-confirmation signups create a public-safe `user_profiles` row immediately from signup metadata, or a deterministic safe fallback handle when metadata is missing/invalid/reserved/taken.
+
 ## Product Rules
 
 - Public identity is display name plus handle: `Creator Name` and `@creatorname`.
@@ -38,6 +40,7 @@ Owner/operator accounts can manage reserved names through table policy. Admin fo
 - `update_my_username(username)` lets an authenticated user update only their own username.
 - `admin_force_update_username(target_user_id, username, reason)` is owner/operator-gated and audited.
 - `username_change_audit` records canonical backfill, user changes, and admin forced changes.
+- `ensure_user_profile_after_auth_signup_trigger` creates a profile/username from Auth signup metadata before the user confirms email or signs in. This protects stale clients and email-confirmation signups from leaving auth users without a profile row.
 - Existing `user_profiles` RLS remains: users can update only their own profile; owner/operator/moderator read policy is unchanged.
 
 ## Migration And Backfill
@@ -167,6 +170,15 @@ Follow-up backend re-proof:
 - email-shaped public People search returned `0`
 - Rachi public search returned one official result with `username='chillywood.rachi'`
 - admin-like public search returned `0`
+
+June 3 signup failure re-proof:
+
+- live Auth logs for the owner screenshot window showed `/signup` returning HTTP `200` with `user_confirmation_requested`
+- controlled current-repo signup payload with display name plus username returned `error:null`, `session:false`, and preserved username metadata
+- after `20260603133500_auth_signup_profile_username_backstop.sql`, the same controlled signup immediately produced a matching `user_profiles.username` and display name
+- recent missing-profile audit returned `missing_profiles_last_24h=0`
+- controlled proof signup accounts were permanently removed; remaining controlled proof-user count was `0`
+- exact release truth: Google Play internal build `20` was built from commit `bd5c69a`, before later signup fixes `ea4b545` and `d035636`; production OTA includes those fixes, but Play-installed devices have shown unreliable newest-OTA pickup, so a new Play internal build/install proof is still required before claiming tester devices are fixed
 
 Follow-up validation:
 
