@@ -179,6 +179,7 @@ June 3 signup failure re-proof:
 - recent missing-profile audit returned `missing_profiles_last_24h=0`
 - controlled proof signup accounts were permanently removed; remaining controlled proof-user count was `0`
 - exact release truth: Google Play internal build `20` was built from commit `bd5c69a`, before later signup fixes `ea4b545` and `d035636`; production OTA includes those fixes, but Play-installed devices have shown unreliable newest-OTA pickup, so a new Play internal build/install proof is still required before claiming tester devices are fixed
+- June 3 runtime update hardening now adds explicit Expo Updates pickup on launch/resume for clients that contain the new root `RuntimeUpdateGate`, with `updates.checkAutomatically` set to `ON_LOAD`; this improves future OTA pickup but does not eliminate the need for a fresh Play internal build when testers are already stuck on stale embedded code
 
 Follow-up validation:
 

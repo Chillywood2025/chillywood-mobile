@@ -24,6 +24,7 @@ import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import { configureNotificationRuntime, subscribeToNotificationResponses } from "../_lib/notifications";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
+import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
 import { BetaWelcomeSheet } from "../components/beta/beta-welcome-sheet";
 import DevDebugOverlay from "../components/dev/dev-debug-overlay";
@@ -429,6 +430,7 @@ export default function RootLayout() {
 
   return (
     <SessionProvider>
+      <RuntimeUpdateGate />
       <FirebaseRuntimeBridge />
       <RevenueCatBootstrap />
       <BetaProgramProvider>

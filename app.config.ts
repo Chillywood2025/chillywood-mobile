@@ -100,6 +100,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   return {
     ...base,
+    updates: {
+      ...base.updates,
+      checkAutomatically: "ON_LOAD",
+      fallbackToCacheTimeout: 0,
+    },
     android: {
       ...base.android,
       ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),

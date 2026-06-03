@@ -33,6 +33,7 @@ This runbook is not proof that the current `main` commit has a passing release b
 | Android package id | `com.chillywood.mobile` |
 | URL scheme | `chillywoodmobile` |
 | Production update channel | `production` through the `production` EAS profile |
+| Runtime update pickup | Native Expo Updates startup checking is explicit `ON_LOAD`; current source also checks/fetches compatible updates on launch and foreground resume through `_lib/runtimeUpdates.tsx` |
 | EAS CLI observed | `eas-cli/18.8.1` through `npx eas-cli --version` |
 | Expo CLI observed | `54.0.23` through `npx expo --version` |
 | Node/npm observed | Node `v22.15.0`, npm `11.12.1` |
@@ -64,6 +65,22 @@ This proof does not close production release readiness. A production AAB was bui
 - Expo submit to Google Play: `https://docs.expo.dev/submit/android/`
 
 Current Expo docs say EAS Build is the hosted service that creates Android/iOS binaries, can handle app signing credentials, and supports build profiles. Expo signing docs say store-distributed Android apps must be signed and that private keystores must not be checked into the repository. Expo environment docs say local `.env` files do not automatically exist on EAS Build workers and production values should be configured through EAS environments or dashboard-managed variables.
+
+## Runtime Update Pickup
+
+Current source hardens EAS Update pickup for testers:
+
+- `app.config.ts` sets `updates.checkAutomatically` to `ON_LOAD`.
+- `app/_layout.tsx` mounts `RuntimeUpdateGate` from `_lib/runtimeUpdates.tsx`.
+- `RuntimeUpdateGate` checks shortly after app launch and when the app returns to the foreground.
+- If a compatible production-channel update is available, the app fetches it and reloads once per fetched update after UI interactions settle.
+- Resume checks are throttled to avoid polling or battery/network churn.
+
+Release implication:
+
+- This improves OTA pickup only after the installed app already contains this gate.
+- If testers are stuck on a stale embedded Play internal build, the reliable path is a fresh Play internal build from current `main`.
+- OTA can update JavaScript/assets only within the same runtime version; native dependency/config changes still require a new build.
 
 ## EAS Config Status
 
