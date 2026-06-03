@@ -18,7 +18,7 @@ Chi'llywood may collect:
 - camera and microphone permission state and real-time media transport data when you use live, call, or room features;
 - device, app, runtime, network, crash, performance, analytics, log, and security data;
 - payment, Premium, subscription, entitlement, restore, cancellation, refund, or chargeback status from Google Play, Apple, RevenueCat, Supabase, or another approved provider where active;
-- reports, moderation records, admin review context, copyright records, safety records, fraud records, support communications, and account deletion requests;
+- reports, moderation records, admin review context, copyright records, safety records, fraud records, support communications, and account deletion schedule/restore records;
 - approximate location or region if collected through app stores, payment providers, logs, network data, fraud prevention, analytics, or SDK behavior;
 - push notification tokens, notification preferences, delivery attempts, and activity records if notifications are enabled.
 
@@ -31,7 +31,7 @@ Chi'llywood uses information to:
 - operate creator uploads, Player, Watch-Party, Live Stage, LiveKit/HLS, Chi'lly Chat, support, notifications, and account settings;
 - deliver messages, calls, room membership, playback sync, live media, alerts, and service notices;
 - process Premium/subscription status, restore access, entitlement checks, cancellations, refunds, chargebacks, and billing support where active;
-- review reports, abuse, copyright notices, counter-notices, fraud, safety issues, support requests, and account deletion requests;
+- review reports, abuse, copyright notices, counter-notices, fraud, safety issues, support requests, and account deletion schedule/restore records;
 - detect and prevent illegal content, harassment, impersonation, copyright infringement, scams, spam, malware, account compromise, fake engagement, payout abuse, sponsorship fraud, and platform manipulation;
 - provide customer support and troubleshoot bugs;
 - run analytics, crash reporting, performance monitoring, security monitoring, abuse prevention, and service improvement;
@@ -63,7 +63,7 @@ Depending on the implemented feature, you may be able to:
 - manage notification preferences;
 - report content, users, comments, rooms, chat behavior, safety issues, or copyright concerns;
 - block or restrict interactions where implemented;
-- request account deletion or data review through the account deletion process;
+- delete an account, restore it during the 30-day restore window, or request data review through the account deletion process;
 - request access, correction, deletion, or opt-out rights where applicable law gives you those rights.
 
 Some controls may depend on account status, region, release phase, backend support, legal review, or operational readiness.
@@ -72,10 +72,10 @@ Some controls may depend on account status, region, release phase, backend suppo
 
 The current app has an in-app Settings path for account deletion information and a public account deletion URL fallback:
 
-- In-app path: Settings -> Legal & Support -> Request Account Deletion
+- In-app path: Settings -> Account -> Account actions -> Delete Account
 - Public web deletion URL: `https://live.chillywoodstream.com/account-deletion` unless replaced by [PUBLIC_ACCOUNT_DELETION_URL]
 
-The account deletion flow is request-based unless a self-serve deletion portal is separately built and proved. Some information may be retained where needed for legal compliance, safety, fraud prevention, chargebacks, refunds, tax, accounting, copyright, moderation, abuse prevention, dispute resolution, security, logs, or backups.
+The account deletion flow schedules deletion with a 30-day restore window. Some information may be retained where needed for legal compliance, safety, fraud prevention, chargebacks, refunds, tax, accounting, copyright, moderation, abuse prevention, dispute resolution, security, logs, or backups. Permanent purge/de-identification after the restore window is a backend/legal operations process.
 
 Google Play account deletion compliance must not be marked complete until both the in-app deletion path and public web deletion link are verified in the release build and accepted in Play Console.
 

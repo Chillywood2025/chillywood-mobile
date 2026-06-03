@@ -7,7 +7,7 @@ Current public URL candidate:
 
 `https://chillywoodstream.com/account-deletion`
 
-June 1, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records account deletion as URL/content ready but not accepted by Play Console in this repo lane. Owner/legal still must enter the URL and request-based deletion wording in Play Console, confirm support/account deletion SLA, and save accepted/saved proof outside the repo.
+June 3, 2026 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records account deletion as URL/content ready but not accepted by Play Console in this repo lane. Owner/legal still must enter/keep the URL and current deletion wording in Play Console, confirm permanent purge/de-identification ownership after the 30-day restore window, and save accepted/saved proof outside the repo.
 
 Current proof:
 
@@ -43,7 +43,7 @@ How to request deletion:
 
 1. In the app, open Settings > Legal and Support > Account Deletion and Data Deletion Policy.
 2. Use the Support path or email support@chillywoodstream.com from the email address associated with your account.
-3. If you cannot access the app, email support@chillywoodstream.com with the subject "Account deletion request" and include the username or email address associated with the Chi'llywood account.
+3. If you cannot access the app, email support@chillywoodstream.com with the subject "Account deletion help" and include the username or email address associated with the Chi'llywood account.
 
 What Chi'llywood deletes or de-identifies:
 
@@ -59,7 +59,7 @@ Chi'llywood may retain records needed for security, fraud prevention, abuse prev
 
 Timing:
 
-Chi'llywood will acknowledge account deletion requests after the support owner verifies the request path. The final public SLA must be set by the owner/legal operator before launch. Do not claim a faster or automated deletion timeline unless the process is staffed and proved.
+Chi'llywood schedules in-app account deletion immediately and gives users 30 days to restore the account. The final public SLA for permanent purge/de-identification after the restore window must be set by the owner/legal operator before launch. Do not claim permanent purge completion unless the process is staffed and proved.
 
 Subscriptions:
 
@@ -77,7 +77,7 @@ Chi'llywood may require proof that the requester controls the account before del
 | Settings path | Reachable | Android proof `01-settings.png` through `05-account-support-links.png` |
 | Account deletion policy route | Reachable | Android proof `08-account-deletion.png` |
 | Support path | Route exists; current direct deep link did not open support during this proof and prior release proof remains the visual support reference | `components/system/support-screen.tsx`; earlier screenshot path `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/` |
-| Destructive deletion | Not claimed | Current flow is request-based |
+| Permanent destructive purge | Not claimed | Current flow schedules deletion with a 30-day restore window; backend purge/de-identification remains separate |
 | Admin/support processing | Manual/ops mapped | `docs/legal/STORE_LEGAL_ACCOUNT_DELETION_ACCEPTANCE_CLOSEOUT.md` |
 
 ## Play Console Entry

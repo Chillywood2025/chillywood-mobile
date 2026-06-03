@@ -24,7 +24,7 @@ Repo-side legal/support/account-deletion reachability is current:
 
 - public legal URLs returned HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms;
 - Android release proof still covers Settings, Support, Account Deletion, Copyright Report, Moderation Policy, Admin Reports, Privacy, and Terms;
-- account deletion remains an honest request-based flow and does not claim destructive deletion completion;
+- account deletion is an honest self-service scheduled deletion flow with a 30-day restore window and does not claim permanent destructive purge completion until the backend job/runbook is proved;
 - support/moderation/account deletion operational roles and SLA targets are mapped, but staffing/owner acceptance remains external;
 - outbound email/DKIM is not complete. Cloudflare MX, SPF, and DMARC baseline exist, but no DKIM record was found for common selectors and no provider delivery proof is claimed;
 - repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable;

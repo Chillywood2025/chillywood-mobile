@@ -31,7 +31,7 @@
 10. Open `/settings` on Android and confirm:
     - `Privacy Policy` opens the configured policy destination
     - `Terms of Use` opens the configured terms destination
-    - `Request Account Deletion` reaches the configured deletion destination or the canonical support fallback path
+    - `Delete Account` schedules deletion with a 30-day restore window, and `Read Deletion Policy` reaches the configured deletion destination or canonical policy fallback
 11. Open Login, Signup, Settings, and Support on Android and confirm top spacing/safe-area treatment looks consistent and the auth forms remain usable with the keyboard open.
 12. Open a title detail route on Android and confirm no literal ad placeholder copy appears.
 13. Confirm Android-facing premium lock surfaces use neutral availability language rather than tester/placeholder wording.

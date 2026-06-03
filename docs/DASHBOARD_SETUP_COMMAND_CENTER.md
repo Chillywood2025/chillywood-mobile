@@ -486,7 +486,7 @@ Dashboard / owner system:
 - Attorney/legal review process.
 - Support inbox/ticketing.
 - DMCA/contact process.
-- Account deletion request workflow.
+- Account deletion schedule/restore workflow.
 - Status: `External Setup Pending`
 
 Purpose:
@@ -498,7 +498,7 @@ Repo support:
 - Expanded Terms, Privacy, Community Guidelines, Copyright/DMCA, Account Deletion, and Support pages exist.
 - Signup acceptance copy links to Terms, Privacy, and Guidelines.
 - Support screen includes account, billing, creator upload, safety, copyright, deletion, and emergency caveat copy.
-- Account deletion is honest and request-based.
+- Account deletion is honest scheduled deletion with a 30-day restore window.
 
 Manual steps:
 
@@ -508,7 +508,7 @@ Manual steps:
 4. Finalize Community Guidelines URL.
 5. Finalize Copyright/DMCA URL and contact.
 6. Decide whether to register a designated DMCA agent with the U.S. Copyright Office.
-7. Finalize account deletion request intake, verification, retention, and SLA.
+7. Finalize permanent account deletion/de-identification processing, retention, and SLA after the 30-day restore window.
 8. Assign support inbox owner and response expectations.
 9. Assign moderation escalation owner.
 10. Fill Play Console legal/Data Safety/account deletion fields.
@@ -525,7 +525,7 @@ Proof required:
 
 - Public URLs open without login.
 - Support inbox receives test request.
-- Account deletion request reaches correct owner.
+- Account deletion schedule/restore records reach the correct owner/admin/legal review surface where needed.
 - Play Console accepts legal/account deletion entries.
 - Legal owner approves final wording.
 

@@ -3628,7 +3628,7 @@ export default function AdminStudioScreen() {
             { label: "Email confirmed", value: broaderUser.emailConfirmedAt ? formatModerationTimestamp(broaderUser.emailConfirmedAt) : "Not returned" },
             { label: "Avatar media", value: formatModerationToken(broaderUser.profileAvatarMediaStatus) },
             { label: "Background media", value: formatModerationToken(broaderUser.profileBackgroundMediaStatus) },
-            { label: "Deletion requests", value: formatAdminReadModelNumber(broaderUser.counts.accountDeletionRequests) },
+            { label: "Deletion records", value: formatAdminReadModelNumber(broaderUser.counts.accountDeletionRequests) },
           ],
         } satisfies AdminDrilldownSection] : []),
         {
@@ -12656,7 +12656,7 @@ export default function AdminStudioScreen() {
                           { label: "Auth status", value: formatModerationToken(entry.authStatus) },
                           { label: "Profile visibility", value: formatModerationToken(entry.profileVisibility) },
                           { label: "Premium", value: entry.premium?.status ? formatModerationToken(entry.premium.status) : "No active row returned" },
-                          { label: "Deletion requests", value: formatAdminReadModelNumber(entry.counts.accountDeletionRequests) },
+                          { label: "Deletion records", value: formatAdminReadModelNumber(entry.counts.accountDeletionRequests) },
                         ],
                         sections: [
                           {

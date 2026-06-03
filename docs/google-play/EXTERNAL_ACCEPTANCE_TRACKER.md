@@ -52,7 +52,7 @@ Current repo proof:
 | Target audience | Audience/content | Saved/actioned as 18+ | `PLAY_CONSOLE_FIELD_BY_FIELD_ANSWERS.md`, legal docs, `play-console-proof/09-target-audience-saved.png` | Keep adult/general posture; do not target children unless product/legal changes | App content > Target audience and content | Saved questionnaire proof | Yes | Yes | Saved/actioned; Google review acceptance pending |
 | News declaration | News app | Prepared answer: no unless owner changes positioning | Field answers doc | Save accurate non-news answer | App content > News apps if shown | Saved answer screenshot | Yes if field appears | Yes | External owner action required |
 | Data Safety | Data collection/share form | Completed/saved in Play Console | `DATA_SAFETY_EVIDENCE_MAP.md`, field answers doc, `play-console-proof/11-data-safety-saved.png` | Send saved changes for review from Publishing overview when owner approves; update if SDK/data posture changes | App content > Data safety | Saved Data Safety proof | Yes | Yes | Saved/actioned; Google review acceptance pending |
-| Account deletion | Public URL and in-app path | Entered through Data Safety data deletion fields | `ACCOUNT_DELETION_URL_CONTENT.md`, May 30 URL/device proof, `play-console-proof/11-data-safety-saved.png` | Keep request-based deletion URL/process active; do not claim instant deletion | App content > Data deletion / Account deletion | Saved account deletion/data deletion proof | Yes | Yes | Saved/actioned inside Data Safety; Google review acceptance pending |
+| Account deletion | Public URL and in-app path | Entered through Data Safety data deletion fields | `ACCOUNT_DELETION_URL_CONTENT.md`, May 30 URL/device proof, June 3 Delete Account proof, `play-console-proof/11-data-safety-saved.png` | Keep Delete Account active with 30-day restore wording; do not claim permanent purge completion before backend processing is proved | App content > Data deletion / Account deletion | Saved account deletion/data deletion proof | Yes | Yes | Saved/actioned inside Data Safety; Google review acceptance pending |
 | UGC/moderation | UGC/report/block/moderation disclosure | Saved in Content Rating/Data Safety where prompted | Moderation docs, scanner proof, report/admin proof, content rating proof | Keep support/moderation SLA accurate | App content / Policy review prompts | Saved answers/proof | Yes | Yes | Saved/actioned where prompted; Google review acceptance pending |
 | Financial features | In-app purchases | Sandbox Premium proof passed; production Premium not claimed; shell closed by default | Premium proof docs, Money Center policy, runtime validation | Declare purchases only if submitted artifact intentionally exposes Premium purchase/restore; otherwise keep reviewer copy locked/setup-only | Monetize / Products / App content / Payments policy prompts | Billing/product/shell proof | Yes if purchases exposed | Yes for monetized launch | Ready-but-closed; external approval required |
 | Financial features | Tickets/seats/tips/paid content/payouts | Off/setup-only | Money Center policy and guards | Do not declare active. Keep off unless a later approved lane proves provider-backed launch | App content / Store listing / App UI claims | Money-off proof | No if not claimed | Yes if claimed | Closed/off |
@@ -64,7 +64,7 @@ Current repo proof:
 
 ## Data Safety Execution Summary
 
-The Data Safety form must not say "No data collected." Current repo evidence supports yes/conditional collection for account info, user ids, profile data, UGC, media uploads, chat/messaging if used, camera/microphone live participation, playback/activity data, reports/moderation data, support/account deletion requests, push/device identifiers where notifications are enabled, diagnostics/analytics where Firebase collection is enabled, security/IP context through providers, and purchase/subscription data if Premium purchase/restore is exposed to testers or users.
+The Data Safety form must not say "No data collected." Current repo evidence supports yes/conditional collection for account info, user ids, profile data, UGC, media uploads, chat/messaging if used, camera/microphone live participation, playback/activity data, reports/moderation data, support/account deletion schedule records, push/device identifiers where notifications are enabled, diagnostics/analytics where Firebase collection is enabled, security/IP context through providers, and purchase/subscription data if Premium purchase/restore is exposed to testers or users.
 
 Final owner/legal confirmations still required:
 
@@ -84,7 +84,7 @@ Use:
 
 - URL: `https://chillywoodstream.com/account-deletion`
 - In-app path: Settings > Legal and Support > Account and Support > Account Deletion and Data Deletion Policy
-- Wording: request-based deletion/de-identification with identity verification, support processing, and legal/safety/billing/moderation/copyright retention exceptions.
+- Wording: self-service Delete Account schedules deletion with a 30-day restore window; permanent deletion/de-identification after the deadline remains subject to legal/safety/billing/moderation/copyright retention exceptions.
 
 Do not claim instant or automatic deletion until staffing and backend process proof exist.
 

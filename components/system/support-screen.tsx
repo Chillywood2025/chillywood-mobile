@@ -38,7 +38,7 @@ const CLOSED_BETA_FLOWS = [
 ];
 
 const SUPPORT_CATEGORIES = [
-  "Account help: sign-in, logout, account access, Settings, legal links, and account deletion requests.",
+  "Account help: sign-in, logout, account access, Settings, legal links, Delete Account, and restore help.",
   "Billing and Premium help: subscription status, restore purchase, Premium gating, and store-managed cancellation questions.",
   "Creator upload help: Platform Studio upload, draft/public visibility, creator-video playback, and upload errors.",
   "Report abuse and safety: creator videos, Profiles/Platforms, rooms, live behavior, chat/message issues, harassment, impersonation, and unsafe content.",
@@ -70,8 +70,8 @@ export function SupportScreen() {
   const legalBody = useMemo(() => {
     if (topic === "account-deletion") {
       return legalConfig.accountDeletionUrl
-        ? "Open the account deletion request in your browser, or use support from this signed-in account if you need help completing it."
-        : "Use this support surface to request permanent account deletion from the signed-in Chi'llywood account. The support team reviews and confirms manual deletion requests until a dedicated deletion portal is published.";
+        ? "Open the account deletion policy in your browser, or use Settings > Account actions > Delete Account in the app."
+        : "Use Settings > Account actions > Delete Account to schedule deletion for this signed-in account. You have 30 days to sign back in and restore it before permanent deletion processing.";
     }
 
     if (topic === "community-guidelines") {
@@ -98,7 +98,7 @@ export function SupportScreen() {
         : "Use this support surface if you need the current Terms of Use while the public legal URL is not configured in this build.";
     }
 
-    return "Open the current Privacy Policy, review the Terms of Use, check community, creator, and copyright policies, or request account deletion from the same support surface that already owns signed-in feedback and launch help. Support response timing can vary by issue type, safety priority, and account verification needs.";
+    return "Open the current Privacy Policy, review the Terms of Use, check community, creator, and copyright policies, or use Settings to delete and restore an account. Support response timing can vary by issue type, safety priority, and account verification needs.";
   }, [legalConfig.accountDeletionUrl, legalConfig.privacyPolicyUrl, legalConfig.termsOfServiceUrl, topic]);
 
   const legalCardTitle = useMemo(() => {

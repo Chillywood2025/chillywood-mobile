@@ -53,7 +53,7 @@ Production malware scanning is now closed: `chillywood-prod-01` runs the ClamAV 
 | Support contact | `EXPO_PUBLIC_SUPPORT_EMAIL` fallback is `support@chillywoodstream.com`; `app/support.tsx`; Support screen. | `https://chillywoodstream.com/support` returned HTTP 200; Support route screenshot exists; DNS MX/SPF/DMARC baseline present. | Assign support owner, response SLA, inbox monitoring, and outbound receipt process. | Partial | P1 | `dns-email-check.txt`; screenshot `18-support-legal-route.png` |
 | DMCA / copyright | `app/copyright.tsx`, `app/copyright-report.tsx`, `_lib/dmca.ts`, Admin Legal/DMCA tooling. | Copyright Report URL returned HTTP 200; screenshot exists. | Attorney review; maintain designated agent registration/contact; define outbound notice process. | Partial | P0/P1 | `docs/legal/LEGAL_LAUNCH_CHECKLIST.md`; screenshot `44-copyright-report-route.png` |
 | Account deletion instructions | `app/account-deletion.tsx`, public legal site, Settings/support handoff. | `https://chillywoodstream.com/account-deletion` returned HTTP 200; Android route screenshot exists. | Enter URL in Play Console, confirm it satisfies account-deletion policy, and define manual deletion/de-identification process. | Partial | P0 | `public-legal-url-check.tsv`; screenshot `19-account-deletion-route.png` |
-| In-app account deletion path | Settings and Support route link to account deletion/support path. | Existing Settings/Support/Account Deletion screenshots prove reachability. | Prove support queue receipt for deletion requests and assign SLA owner. | Partial | P0/P1 | `app/settings.tsx`; `components/system/support-screen.tsx` |
+| In-app account deletion path | Settings > Account actions exposes Delete Account and Restore Account when scheduled. | June 3 device/backend proof shows scheduled deletion, public-search hiding, restore, and active-state return. | Prove permanent purge/de-identification job/runbook and assign SLA owner after restore deadline. | Partial | P0/P1 | `app/settings.tsx`; `_lib/accountDeletionRequests.ts`; `20260603014500_self_service_account_deletion_30_day_restore.sql` |
 | Data collection / Data Safety answers | `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md` maps data types, third-party SDKs, and provider disclosures to repo evidence. | No Play Console acceptance claimed. | Release owner completes Play Data Safety form using current SDK/provider truth and saves external proof. | Blocked external | P0 | `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md` |
 | Content rating readiness | UGC, live, chat, copyright, moderation, and support policy text exists. | No Play Console content-rating receipt claimed. | Complete Play content rating questionnaire with final policy/legal owner. | Blocked external | P0/P1 | `legal/policies.mjs`; `docs/legal/LEGAL_LAUNCH_CHECKLIST.md` |
 | App access / test account readiness | Current Android proof used an owner session; public/signed-out routes are available. | Full Play review test-account proof is not captured in this lane. | Use `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md`; enter test credentials only in Play Console. | Partial | P1 | `docs/google-play/REVIEWER_ACCESS_INSTRUCTIONS.md` |
@@ -69,7 +69,7 @@ Production malware scanning is now closed: `chillywood-prod-01` runs the ClamAV 
 Current behavior:
 
 - Users can start at Settings or the public web route.
-- `app/account-deletion.tsx` is public and describes the request-based deletion path.
+- `app/account-deletion.tsx` is public and describes the Delete Account path, 30-day restore window, retention exceptions, and support fallback.
 - Settings prefers configured external URLs and otherwise falls back to bundled app routes.
 - `components/system/support-screen.tsx` supports `topic=account-deletion`; signed-out users are routed to sign in before sending account-specific support feedback.
 - No destructive account deletion is performed by this route.
@@ -87,7 +87,7 @@ Required operating process before public launch:
 | Completion notice | Outbound email automation is not configured. | Support operator | After manual completion | Support email/ticket record | DKIM/outbound email pending; manual email is current fallback. |
 | Escalation | Severe legal/safety/copyright cases require owner/legal review. | Owner/Admin, Legal/DMCA operator, external counsel if retained | Same day for urgent safety; 2 business days for legal triage | Admin audit/ticket | External counsel/staffing not confirmed. |
 
-Launch classification: account deletion is **P0 external/ops** for public store release until Play Console account deletion URL acceptance, final SLA ownership, legal approval, and the manual deletion/de-identification process are confirmed. It is acceptable for controlled Android testing if testers are told the process is request-based and no fake deletion completion is claimed.
+Launch classification: account deletion is **P0 external/ops** for public store release until Play Console account deletion URL acceptance, final SLA ownership, legal approval, and the permanent backend deletion/de-identification process are confirmed. It is acceptable for controlled Android testing if testers are told Delete Account schedules deletion with a 30-day restore window and no fake permanent purge completion is claimed.
 
 ## Operational Ownership And SLA Map
 

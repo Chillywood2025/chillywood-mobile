@@ -286,8 +286,8 @@ External lane scope:
 - Use the fresh current-HEAD build proof as current artifact evidence, then produce/confirm a Play-upload-signed AAB before Play upload. The May 30 Firebase Test Lab smoke proof can be used as supporting evidence, but it is not Play Console acceptance.
 - Use `docs/android/FIREBASE_TEST_LAB_RUNBOOK.md` for future small Robo smoke runs and only expand to physical Test Lab devices after owner quota/cost approval.
 - Get attorney/legal approval for Terms, Privacy, DMCA/copyright, support, account deletion, moderation, Premium terms, and data safety claims.
-- Confirm support/account-deletion operational ownership, inbox routing, response SLA, and deletion request workflow.
-- Confirm the human moderation/support owner and operational playbook for general reports, profile-media reports, DMCA, appeals, and account deletion.
+- Confirm support/account-deletion operational ownership, inbox routing, response SLA, restore-window support, and permanent purge/de-identification workflow after `delete_after`.
+- Confirm the human moderation/support owner and operational playbook for general reports, profile-media reports, DMCA, appeals, account restore help, and permanent account deletion processing.
 - Select and verify outbound email provider/DKIM if automated support/legal receipts will be claimed.
 - Keep monitoring the production scanner service as part of normal ops. The scanner blocker itself is closed; future scanner work should be alert thresholds/SLO polish or signed-delivery hardening, not foundation.
 - Keep live money off and do not fake Premium, payouts, ads, earnings, or provider readiness.

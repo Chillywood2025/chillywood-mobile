@@ -98,7 +98,7 @@ Recommendation: keep the fixes, run the next route smoke on Android, and keep th
 | Settings links | Settings | Open Profile, Channel, Premium, Support, Legal, Deletion | Links exist | Real / proof pending |
 | Support links | Support/Settings | Open support categories and auth handoff | Existing route; copy fixed | Real / proof pending |
 | Legal links | Settings/Signup/Support | Open bundled policy pages | Links exist | Real / legal review pending |
-| Account deletion request | Account deletion/Support | Request-based support path | Honest request flow; no destructive delete | Real / external setup pending |
+| Account deletion | Settings Account actions | Backend-backed scheduled deletion | Delete Account schedules deletion with a 30-day restore window; permanent purge remains backend/legal ops | Permanent purge job/runbook pending |
 | Admin title actions | Admin | Admin-gated create/edit/publish where present | Admin route gates role and writes through helpers | Real / proof pending |
 | Admin moderation actions | Admin | Hide/remove/restore creator videos | Hidden unless backend platform role is present; non-operator denial proof passed | Real / positive admin proof pending |
 | Home cards | Home | Route platform titles/player/live entry correctly | Title/player/live handoffs exist | Real / proof pending |
@@ -204,7 +204,7 @@ Proof pending: Android route smoke for Settings links/logout and store/RevenueCa
 
 Status: Implemented / External Setup Pending.
 
-Terms, Privacy, Community Guidelines, Copyright/DMCA, Account Deletion, and Support are serious mobile-readable draft pages. Account deletion is request-based and does not claim destructive automated deletion. Support copy is honest and points users to sign in where account-specific support is needed.
+Terms, Privacy, Community Guidelines, Copyright/DMCA, Account Deletion, and Support are serious mobile-readable draft pages. Account deletion is backend-backed scheduled deletion with a 30-day restore window and does not claim permanent destructive purge completion. Support copy is honest and points users to Settings where account-specific deletion is needed.
 
 Fix made: cleaned a literal apostrophe entity in Support signed-out copy.
 
@@ -253,7 +253,7 @@ No destructive SQL, migration push, storage mutation, or production backend comm
 | Public `/channel/[id]` alias | Later | Post-v1 | Profile currently owns public channel truth without route drift. |
 | Report/safety center | Later | Post-v1 | Contextual report sheets plus Admin moderation are enough for v1 proof. |
 | Admin reports route | Later | Post-v1 | `/admin` already owns operator queue foundation. |
-| Account deletion request form | Later/external setup | V1 external process first | Current route is honest request-based info; backend/legal process must be approved before automation. |
+| Account deletion permanent purge job | Later/backend ops | V1 schedules deletion first | Current app schedules deletion and restore; backend/legal process must be approved before permanent purge/de-identification. |
 | Support ticket/contact route | Later | Post-v1 | Existing Support route and feedback handoff are enough for v1. |
 | Search route | Later | Post-v1 | Explore handles platform browse; global search needs source design. |
 | Notification center | Later | Post-v1 | Helpers/tables exist, but no push/inbox proof. |

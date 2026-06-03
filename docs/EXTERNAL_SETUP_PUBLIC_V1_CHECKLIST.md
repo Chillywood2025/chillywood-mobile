@@ -236,10 +236,10 @@ Repo-ready facts:
 
 - Public legal routes exist for `/privacy`, `/terms`, `/account-deletion`, `/community-guidelines`, `/creator-rules`, `/copyright`, and `/copyright-report`.
 - `app/_layout.tsx` allows those legal routes to render publicly without requiring sign-in or full runtime config.
-- Settings links to Privacy, Terms, Community Guidelines, Creator Rules, Copyright/DMCA, Support, and Request Account Deletion.
+- Settings links to Privacy, Terms, Community Guidelines, Creator Rules, Copyright/DMCA, Support, Delete Account, Restore Account where scheduled, and Read Deletion Policy.
 - Support links to the same policy/account-help surfaces and can collect signed-in feedback.
 - Configured fallback URLs for Privacy, Terms, and Account Deletion returned HTTP 200 in this audit.
-- Account deletion is request-based and honest; it does not pretend destructive deletion has completed.
+- Account deletion is self-service scheduled deletion with a 30-day restore window and honest retention limits; it does not pretend permanent destructive purge has completed.
 - The account deletion route now explicitly documents impact/retention posture for Profile, Channel, uploaded videos, chat, rooms, billing/subscription records, and moderation/report records.
 - A Play Data Safety preparation matrix now exists in `docs/ACCOUNT_LEGAL_DATA_SAFETY_RUNBOOK.md`.
 - `docs/legal/LEGAL_LAUNCH_CHECKLIST.md` records the current May 21 production policy bundle from `legal/policies.mjs`, including word counts, legal-readiness canary proof, creator license/acknowledgement checks, DMCA agent checklist, and remaining attorney/Play acceptance work.
@@ -261,7 +261,7 @@ Proof required:
 
 - Android release build opens Settings legal/support/deletion links correctly.
 - External Privacy, Terms, Creator Rules, Community Guidelines, Copyright/DMCA, Copyright Report, Support, Account Deletion, Premium Terms, Live Rules, Law Enforcement, Moderation/Appeals, and Creator Monetization URLs open from a non-authenticated browser where used.
-- Support/account deletion request lands in the expected support queue.
+- Delete Account schedules deletion, hides public discovery where backed, and Restore Account cancels within 30 days.
 - Creator-video report/admin moderation proof passes for user-generated-content safety readiness.
 - Play Console accepts Data Safety and account deletion entries.
 - DMCA agent details are publicly posted and Copyright Office registration `DMCA-1072720` is confirmed; backed/Admin DMCA tooling has live proof. Keep the registration current and complete attorney review before making broader legal-compliance claims.

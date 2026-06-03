@@ -68,7 +68,7 @@ Reviewers can test with the non-admin account:
 
 - Profile and account settings;
 - public Platform/Player browsing;
-- legal/support/account deletion request path;
+- legal/support/Delete Account path with 30-day restore window;
 - report flow entry points where visible;
 - comments/likes/follows/chat only where policy and fixtures allow;
 - notification permission prompts if they appear.
