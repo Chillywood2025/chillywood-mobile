@@ -23,6 +23,7 @@ const migration = read("supabase/migrations/20260603165000_money_access_grants_p
 const moneyAccess = read("_lib/moneyAccessGrants.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const monetization = read("_lib/monetization.ts");
+const revenueCatWebhook = read("supabase/functions/revenuecat-webhook/index.ts");
 const packageJson = read("package.json");
 
 [
@@ -120,6 +121,18 @@ assertIncludes(moneyAccess, "hostPowerGrantedByPayment: false", "host power proo
 assertIncludes(moneyAccess, "payoutAccessGrantedByPayment: false", "payout access proof");
 assertIncludes(moneyAccess, "sandboxLedgerPayable: false", "sandbox not payable proof");
 assertIncludes(moneyAccess, "setupLedgerPayable: false", "setup not payable proof");
+
+assertIncludes(revenueCatWebhook, "mirrorRevenueCatPremiumMoneyAccess", "RevenueCat money access mirror");
+assertIncludes(revenueCatWebhook, ".from(\"provider_events\")", "RevenueCat provider event mirror");
+assertIncludes(revenueCatWebhook, ".from(\"access_grants\")", "RevenueCat access grant mirror");
+assertIncludes(revenueCatWebhook, ".from(\"money_access_ledger_events\")", "RevenueCat money access ledger mirror");
+assertIncludes(revenueCatWebhook, "provider_payload_stored: false", "RevenueCat mirror stores no raw provider payload");
+assertIncludes(revenueCatWebhook, "payableState: \"not_payable\"", "RevenueCat mirror keeps sandbox not payable");
+assertIncludes(revenueCatWebhook, "moneyAccessMirrored: true", "RevenueCat webhook response mirrors money access");
+assertIncludes(revenueCatWebhook, "liveMoneyAction: false", "RevenueCat webhook live money false");
+assertNotIncludes(revenueCatWebhook, "checkout_session", "RevenueCat webhook must not create checkout sessions");
+assertNotIncludes(revenueCatWebhook, "payout_created", "RevenueCat webhook must not create payouts");
+assertNotIncludes(revenueCatWebhook, "transfer_created", "RevenueCat webhook must not create transfers");
 
 assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = true", "Premium purchase shell closed by default");
 assertIncludes(packageJson, "\"guard:money-access-grants-policy\"", "npm guard script");
