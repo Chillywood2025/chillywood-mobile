@@ -71,7 +71,7 @@ Brand Studio is the creator-facing Stage Design area inside Platform Studio. It 
 - Public Platform fallback to the Chi'llwood city look when no published brand media exists.
 - Public Platform rendering through `readPublicPlatformBranding`, which only resolves published moderation-safe assets.
 - Owner/operator/moderation review RPC for approve, reject, and archive actions.
-- Creator-owned Brand Studio publish repair: `Publish Changes` now approves the currently selected owned Brand Studio assets before publishing them, so creator uploads no longer stay stuck in `Needs review` after the creator publishes. A creator can review only assets they own; non-owners still receive `brand_review_forbidden`.
+- Creator-owned Brand Studio publish repair: `Publish Changes` now approves the creator's owned safe waiting Brand Studio assets before publishing selected profile assets, so creator uploads no longer stay stuck in `Needs review` after the creator publishes. A creator can review only assets they own; non-owners still receive `brand_review_forbidden`.
 - Reviewer-only Brand Studio queue access for pending/rejected assets without exposing review controls to normal creators.
 - Public profile RPC now nulls any asset id that is not currently published and moderation-safe.
 
@@ -142,7 +142,7 @@ Backed/source-checked friendly states:
 
 - Permission denied: review RPC returns `brand_review_forbidden`; normal UI hides review controls when the account lacks owner/operator/moderation access.
 - Wrong-account asset review: a signed-in user who does not own the asset and does not hold Owner/Operator/moderation permission still receives `brand_review_forbidden`.
-- Owner publish repair: `Publish Changes` first approves the selected owned assets, then publishes the profile and selected safe assets. If an asset is scan-blocked or the update cannot complete, the app shows safe retry copy and does not claim publish success.
+- Owner publish repair: `Publish Changes` first approves owned waiting assets that are not scan-blocked, then publishes the profile and selected safe assets. Older draft assets can leave `Needs review` without all becoming public. If an asset is scan-blocked or the update cannot complete, the app shows safe retry copy and does not claim publish success.
 - Unsupported file type: Brand Studio file validation accepts JPG, PNG, and WebP for images and returns creator-facing copy for unsupported files.
 - Oversize image/file: image uploads are capped at 20 MB and Hero Reel helper validation is capped at 250 MB, but Hero Reel remains unavailable in normal UI.
 - Upload failure/no network/storage failure: UI shows "Unable to choose or save that Platform media right now."
