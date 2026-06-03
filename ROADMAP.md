@@ -241,6 +241,7 @@
 
 ## Current Proof Notes
 
+- June 3, 2026 account deletion is now self-service scheduled deletion, not support-request-only. Settings > Account actions uses `Delete Account`, confirms impact, schedules deletion with a 30-day restore window, hides scheduled accounts from public Profile/People search surfaces, and supports `Restore Account` during the window. Permanent purge/de-identification after `delete_after` remains a backend/legal operations lane.
 - May 31, 2026 current-build copy gap closeout rebuilt and installed the release APK on `R5CR120QCBF`, captured Chi'lly Chat/Settings/Login/Admin proof at `/tmp/chillywood-copy-gap-closeout-20260531/`, and fixed the remaining Chi'lly Chat call-preview fallback that referenced a development build.
 - The remaining copy proof gaps are runtime-fixture gaps only: signed-out clean runtime, non-owner Admin denial, and camera/microphone denied call-state proof.
 - Seat limits, LiveKit token issuer, Watch-Party route ownership, Premium gates, money activation, RLS, Platform Studio behavior, Profile media policy, and public Platform routing were not changed by this closeout.

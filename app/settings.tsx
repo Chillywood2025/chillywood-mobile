@@ -5,8 +5,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import {
+  readMyAccountDeletionStatus,
+  restoreScheduledAccountDeletion,
+  scheduleAccountDeletion,
   getAccountDeletionRequestErrorMessage,
-  submitAccountDeletionRequest,
+  type AccountDeletionRequestResult,
 } from "../_lib/accountDeletionRequests";
 import { getUserFacingErrorMessage } from "../_lib/userFacingErrors";
 import {
@@ -353,6 +356,8 @@ export default function SettingsScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [deletionRequestSaving, setDeletionRequestSaving] = useState(false);
   const [deletionRequestNotice, setDeletionRequestNotice] = useState<string | null>(null);
+  const [accountDeletionStatus, setAccountDeletionStatus] = useState<AccountDeletionRequestResult | null>(null);
+  const [accountDeletionStatusLoading, setAccountDeletionStatusLoading] = useState(false);
   const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
   const [monetizationLoading, setMonetizationLoading] = useState(false);
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>("everyone");
@@ -509,6 +514,36 @@ export default function SettingsScreen() {
   }, [isLoading, isSignedIn]);
 
   useEffect(() => {
+    let active = true;
+
+    if (isLoading || !isSignedIn) {
+      setAccountDeletionStatus(null);
+      setDeletionRequestNotice(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    setAccountDeletionStatusLoading(true);
+    void readMyAccountDeletionStatus()
+      .then((status) => {
+        if (!active) return;
+        setAccountDeletionStatus(status);
+        setDeletionRequestNotice(status.scheduled ? status.message : null);
+      })
+      .catch(() => {
+        if (active) setAccountDeletionStatus(null);
+      })
+      .finally(() => {
+        if (active) setAccountDeletionStatusLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isLoading, isSignedIn]);
+
+  useEffect(() => {
     const local = validateUsernameHandle(usernameDraft);
     setUsernameAvailability(local);
     if (!local.available || local.username === normalizeUsernameHandle(myProfile?.username)) return;
@@ -625,6 +660,20 @@ export default function SettingsScreen() {
   }, [pushRegistration?.permissionState, pushRegistration?.status]);
 
   const profileVisibilityLabel = profileVisibilityLoading ? "Loading" : getProfileVisibilityLabel(profileVisibility);
+  const accountDeletionScheduled = accountDeletionStatus?.scheduled === true;
+  const accountDeletionRestoreDate = useMemo(() => {
+    const rawDate = accountDeletionStatus?.restoreDeadline || accountDeletionStatus?.deleteAfter;
+    if (!rawDate) return "";
+
+    const parsed = new Date(rawDate);
+    if (Number.isNaN(parsed.getTime())) return "";
+
+    return parsed.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [accountDeletionStatus?.deleteAfter, accountDeletionStatus?.restoreDeadline]);
 
   const legalPolicyBySlug = useMemo(() => (
     new Map(LEGAL_POLICY_ROUTES.map((policy) => [policy.slug, policy]))
@@ -955,30 +1004,73 @@ export default function SettingsScreen() {
 
   const onPressSubmitAccountDeletionRequest = useCallback(() => {
     if (!isSignedIn) {
-      Alert.alert("Sign in required", "Sign in before requesting account deletion.");
+      Alert.alert("Sign in required", "Sign in before deleting your account.");
       return;
     }
 
     Alert.alert(
-      "Request account deletion",
-      "This sends a deletion request for your signed-in Chi'llywood account. Support will review identity, subscriptions, safety, legal, and billing records before processing.",
+      "Delete account?",
+      "Your account will be scheduled for deletion now. You have 30 days to sign back in and restore it before permanent deletion processing.",
       [
         { text: "Not now", style: "cancel" },
         {
-          text: "Submit Request",
+          text: "Delete Account",
           style: "destructive",
           onPress: () => {
             setDeletionRequestSaving(true);
             setDeletionRequestNotice(null);
-            void submitAccountDeletionRequest({
-              reason: "User requested account deletion from Settings.",
+            void scheduleAccountDeletion({
+              reason: "User scheduled account deletion from Settings.",
             })
               .then((result) => {
+                setAccountDeletionStatus(result);
                 const message = result.alreadyExists
-                  ? "Deletion request already submitted."
-                  : "Deletion request submitted.";
+                  ? "Account deletion is already scheduled."
+                  : "Account deletion scheduled. You have 30 days to restore your account.";
+                setDeletionRequestNotice(message);
+                Alert.alert("Account deletion", `${message} You will be signed out now.`, [
+                  {
+                    text: "OK",
+                    onPress: () => {
+                      void supabase.auth.signOut().finally(() => {
+                        router.replace("/(auth)/login");
+                      });
+                    },
+                  },
+                ]);
+              })
+              .catch((error) => {
+                const message = getAccountDeletionRequestErrorMessage(error);
                 setDeletionRequestNotice(message);
                 Alert.alert("Account deletion", message);
+              })
+              .finally(() => setDeletionRequestSaving(false));
+          },
+        },
+      ],
+    );
+  }, [isSignedIn, router]);
+
+  const onPressRestoreAccountDeletion = useCallback(() => {
+    if (!isSignedIn) {
+      Alert.alert("Sign in required", "Sign in before restoring your account.");
+      return;
+    }
+
+    Alert.alert(
+      "Restore account?",
+      "This cancels the scheduled deletion and keeps your Chi'llywood account active.",
+      [
+        { text: "Not now", style: "cancel" },
+        {
+          text: "Restore Account",
+          onPress: () => {
+            setDeletionRequestSaving(true);
+            void restoreScheduledAccountDeletion()
+              .then((result) => {
+                setAccountDeletionStatus({ ...result, scheduled: false });
+                setDeletionRequestNotice("Account deletion canceled.");
+                Alert.alert("Account restored", "Account deletion canceled.");
               })
               .catch((error) => {
                 const message = getAccountDeletionRequestErrorMessage(error);
@@ -1435,41 +1527,63 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </SettingsRow>
-        <SettingsRow title="Account actions" subtitle="Log out, review the deletion policy, or request deletion for this signed-in account." tone="danger">
+        <SettingsRow title="Account actions" subtitle="Log out, review the deletion policy, or delete this signed-in account." tone="danger">
           <View style={styles.accountDeletionPanel}>
             <View style={styles.accountDeletionPanelHeader}>
               <View style={styles.accountDeletionCopy}>
-                <Text style={styles.accountDeletionTitle}>Account deletion request</Text>
+                <Text style={styles.accountDeletionTitle}>Delete account</Text>
                 <Text style={styles.accountDeletionBody}>
-                  Sends a review request to support. Your account is not deleted instantly.
+                  {accountDeletionScheduled
+                    ? `Deletion is scheduled. Restore by ${accountDeletionRestoreDate || "the restore deadline"} to keep this account.`
+                    : "Schedules account deletion immediately with a 30-day restore window."}
                 </Text>
               </View>
               <StatusPill
-                label={deletionRequestNotice ? "Requested" : "Manual review"}
-                tone={deletionRequestNotice ? "default" : "warning"}
+                label={accountDeletionStatusLoading ? "Checking" : accountDeletionScheduled ? "Scheduled" : "30-day restore"}
+                tone={accountDeletionScheduled ? "danger" : "warning"}
               />
             </View>
             {deletionRequestNotice ? (
               <Text style={styles.accountDeletionNotice}>{deletionRequestNotice}</Text>
             ) : null}
           </View>
-          <TouchableOpacity
-            style={[
-              styles.dangerOutlineButton,
-              styles.fullWidthButton,
-              deletionRequestSaving && styles.utilityButtonDisabled,
-            ]}
-            activeOpacity={0.86}
-            onPress={onPressSubmitAccountDeletionRequest}
-            disabled={deletionRequestSaving}
-            accessibilityRole="button"
-            accessibilityLabel="Request account deletion"
-            testID="settings-request-account-deletion-button"
-          >
-            {deletionRequestSaving
-              ? <ActivityIndicator color="#FFD4DD" size="small" />
-              : <Text style={styles.dangerOutlineButtonText}>Request Account Deletion</Text>}
-          </TouchableOpacity>
+          {accountDeletionScheduled ? (
+            <TouchableOpacity
+              style={[
+                styles.restoreAccountButton,
+                styles.fullWidthButton,
+                deletionRequestSaving && styles.utilityButtonDisabled,
+              ]}
+              activeOpacity={0.86}
+              onPress={onPressRestoreAccountDeletion}
+              disabled={deletionRequestSaving}
+              accessibilityRole="button"
+              accessibilityLabel="Restore account"
+              testID="settings-restore-account-button"
+            >
+              {deletionRequestSaving
+                ? <ActivityIndicator color="#CFF7E3" size="small" />
+                : <Text style={styles.restoreAccountButtonText}>Restore Account</Text>}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.dangerOutlineButton,
+                styles.fullWidthButton,
+                deletionRequestSaving && styles.utilityButtonDisabled,
+              ]}
+              activeOpacity={0.86}
+              onPress={onPressSubmitAccountDeletionRequest}
+              disabled={deletionRequestSaving || accountDeletionStatusLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Delete account"
+              testID="settings-delete-account-button"
+            >
+              {deletionRequestSaving
+                ? <ActivityIndicator color="#FFD4DD" size="small" />
+                : <Text style={styles.dangerOutlineButtonText}>Delete Account</Text>}
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.secondaryActionButton}
             activeOpacity={0.86}
@@ -2474,6 +2588,21 @@ const styles = StyleSheet.create({
   },
   dangerOutlineButtonText: {
     color: "#FFD4DD",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  restoreAccountButton: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(112,211,166,0.38)",
+    backgroundColor: "rgba(112,211,166,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  restoreAccountButtonText: {
+    color: "#CFF7E3",
     fontSize: 13,
     fontWeight: "900",
   },

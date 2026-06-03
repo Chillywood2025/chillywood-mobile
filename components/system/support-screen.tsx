@@ -183,11 +183,11 @@ export function SupportScreen() {
     }
 
     Alert.alert(
-      "Request Account Deletion",
-      "Use Send Feedback from this screen to request permanent account deletion from your signed-in Chi'llywood account. The support team verifies and processes manual deletion requests.",
+      "Delete Account",
+      "Open Settings to delete this signed-in account. You will have 30 days to sign back in and restore it before permanent deletion processing.",
       [
         { text: "Not now", style: "cancel" },
-        { text: "Continue", onPress: () => setFeedbackVisible(true) },
+        { text: "Open Settings", onPress: () => router.push("/settings" as Parameters<typeof router.push>[0]) },
       ],
     );
   };
@@ -355,7 +355,7 @@ export function SupportScreen() {
               onPress={onPressAccountDeletion}
             >
               <Text style={primaryLegalAction === "account-deletion" ? styles.primaryButtonText : styles.secondaryButtonText}>
-                Request Account Deletion
+                Delete Account
               </Text>
             </TouchableOpacity>
             <TouchableOpacity

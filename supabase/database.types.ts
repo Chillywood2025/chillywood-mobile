@@ -39,6 +39,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_deletion_requests: {
+        Row: {
+          delete_after: string | null
+          details: string | null
+          id: string
+          metadata: Json
+          processed_at: string | null
+          reason: string | null
+          requested_at: string
+          requester_email: string | null
+          restore_deadline: string | null
+          restored_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          delete_after?: string | null
+          details?: string | null
+          id?: string
+          metadata?: Json
+          processed_at?: string | null
+          reason?: string | null
+          requested_at?: string
+          requester_email?: string | null
+          restore_deadline?: string | null
+          restored_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          delete_after?: string | null
+          details?: string | null
+          id?: string
+          metadata?: Json
+          processed_at?: string | null
+          reason?: string | null
+          requested_at?: string
+          requester_email?: string | null
+          restore_deadline?: string | null
+          restored_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       admin_canary_runs: {
         Row: {
           created_at: string
@@ -9709,6 +9757,7 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_my_account_deletion_status: { Args: never; Returns: Json }
       get_platform_money_kill_switches: {
         Args: never
         Returns: {
@@ -9754,6 +9803,10 @@ export type Database = {
       }
       has_platform_role: {
         Args: { required_roles: string[] }
+        Returns: boolean
+      }
+      is_account_deletion_scheduled: {
+        Args: { p_user_id: string }
         Returns: boolean
       }
       is_current_platform_owner: { Args: never; Returns: boolean }
@@ -10186,6 +10239,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      restore_scheduled_account_deletion: { Args: never; Returns: Json }
       review_platform_brand_asset: {
         Args: { p_action: string; p_asset_id: string; p_reason?: string }
         Returns: Json
@@ -10204,6 +10258,10 @@ export type Database = {
       }
       save_admin_creator_grants: {
         Args: { p_grants: Json; p_reason: string; p_target_user_id: string }
+        Returns: Json
+      }
+      schedule_account_deletion: {
+        Args: { p_details?: string; p_reason?: string }
         Returns: Json
       }
       search_public_people: {
@@ -10242,6 +10300,10 @@ export type Database = {
           p_reason: string
           p_state: string
         }
+        Returns: Json
+      }
+      submit_account_deletion_request: {
+        Args: { p_details?: string; p_reason?: string }
         Returns: Json
       }
       submit_dmca_attachment_metadata: {

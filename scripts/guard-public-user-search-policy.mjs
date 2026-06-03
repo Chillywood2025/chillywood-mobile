@@ -21,6 +21,7 @@ const assertNotIncludes = (source, needle, label) => {
 
 const migration = read("supabase/migrations/202605290003_public_people_search_operator_proof_hardening.sql");
 const usernameMigration = read("supabase/migrations/20260602032030_modern_username_handle_system.sql");
+const accountDeletionMigration = read("supabase/migrations/20260603014500_self_service_account_deletion_30_day_restore.sql");
 const helper = read("_lib/publicPeopleSearch.ts");
 const usernameHelper = read("_lib/usernameHandles.ts");
 const explore = read("app/(tabs)/explore.tsx");
@@ -72,6 +73,13 @@ assertIncludes(usernameMigration, "profile.\"user_id\" <> coalesce(auth.uid()::t
 assertNotIncludes(usernameMigration, "auth.users", "username availability must not expose auth users");
 assertNotIncludes(usernameMigration, "split('@')", "username migration must not derive handles from email local-parts");
 assertNotIncludes(usernameMigration, "split_part", "username migration must not derive handles from email local-parts");
+
+assertIncludes(accountDeletionMigration, "schedule_account_deletion", "self-service account deletion schedule RPC");
+assertIncludes(accountDeletionMigration, "restore_scheduled_account_deletion", "30-day account deletion restore RPC");
+assertIncludes(accountDeletionMigration, "interval '30 days'", "30-day restore window");
+assertIncludes(accountDeletionMigration, "is_account_deletion_scheduled", "scheduled deletion helper");
+assertIncludes(accountDeletionMigration, "not public.is_account_deletion_scheduled(profile.\"user_id\")", "public people search hides scheduled-deletion accounts");
+assertIncludes(accountDeletionMigration, "if public.is_account_deletion_scheduled(owner_user_id) then", "profile visibility hides scheduled-deletion accounts");
 
 assertIncludes(helper, "searchPublicPeople", "client search helper");
 assertIncludes(helper, "queryWithoutHandlePrefix.includes(\"@\")", "client email query block");

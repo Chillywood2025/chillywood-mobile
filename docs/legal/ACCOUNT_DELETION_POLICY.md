@@ -1,21 +1,21 @@
 # Account Deletion Policy
 
-Last updated: May 13, 2026
+Last updated: June 3, 2026
 
 > Repo launch note: Attorney review required before public launch. Google Play account deletion compliance must not be marked complete until the release build verifies both in-app deletion access and the public web deletion link.
 
-## How To Request Deletion
+## How To Delete An Account
 
 Current in-app path:
 
-- Settings -> Legal & Support -> Request Account Deletion
+- Settings -> Account -> Account actions -> Delete Account
 
 Current public web deletion link:
 
 - `https://live.chillywoodstream.com/account-deletion`
 - Final public URL placeholder: [PUBLIC_ACCOUNT_DELETION_URL]
 
-Current process: request-based. The current app page does not instantly delete accounts and does not run destructive backend deletion.
+Current app process: self-service scheduling. Pressing Delete Account schedules the signed-in account for deletion immediately, hides the account from public profile/search discovery, signs the user out, and starts a 30-day restore window. During that window, the user can sign back in and choose Restore Account. Permanent purge/de-identification is a backend processing step after the restore deadline and must preserve legal, safety, billing, audit, copyright, fraud, chargeback, tax, and backup obligations.
 
 ## Identity Verification
 
@@ -56,9 +56,9 @@ Public comments, replies, chat messages, Watch-Party records, Live Stage records
 
 ## Timeline
 
-[LEGAL / SUPPORT / BACKEND OWNER TO CONFIRM DELETION TIMELINE]
+Self-service deletion uses a 30-day restore window. Permanent processing starts after the restore deadline where legally and operationally allowed.
 
-Timing may depend on identity verification, support queue, legal review, safety review, copyright holds, billing status, fraud holds, backup cycles, and backend processing.
+Timing may still depend on legal review, safety review, copyright holds, billing status, fraud holds, backup cycles, and backend processing.
 
 ## Subscription Caveat
 
@@ -66,8 +66,8 @@ Deleting a Chi'llywood account may not cancel a subscription managed by Google P
 
 ## Launch Blockers
 
-- In-app deletion path exists, but release-build proof is still required.
+- In-app Delete Account path exists and is backend-backed with a 30-day restore window, but release-build proof is still required after each relevant release build.
 - Public web deletion link exists as a hosted fallback, but final URL/process/SLA and Play Console acceptance remain external setup.
-- Backend deletion/de-identification runbook remains pending.
+- Permanent backend purge/de-identification job/runbook remains pending.
 
 Support: support@chillywoodstream.com
