@@ -180,6 +180,7 @@ June 3 signup failure re-proof:
 - controlled proof signup accounts were permanently removed; remaining controlled proof-user count was `0`
 - exact release truth: Google Play internal build `20` was built from commit `bd5c69a`, before later signup fixes `ea4b545` and `d035636`; production OTA includes those fixes, but Play-installed devices have shown unreliable newest-OTA pickup, so a new Play internal build/install proof is still required before claiming tester devices are fixed
 - June 3 runtime update hardening now adds explicit Expo Updates pickup on launch/resume for clients that contain the new root `RuntimeUpdateGate`, with `updates.checkAutomatically` set to `ON_LOAD`; Android production EAS update group `02cbd580-7408-453e-ab79-d60b6a9365c1` published it for runtime `1.0.0`; this improves future OTA pickup but does not eliminate the need for a fresh Play internal build when testers are already stuck on stale embedded code
+- June 3 fresh Play internal build result: EAS production Android build `e673e68e-a9c3-4839-8e50-e95ccd88cfc4` finished from commit `d08e8842a7fef4b4aa4c8f14fb69b4f0b730a7e5`, runtime `1.0.0`, production channel, versionCode `21`; auto-submit scheduled Google Play internal submission `cf08d9e9-96ac-481d-afbd-349d8389ffd6`; retrying the same finished build was rejected as already submitted, proving v21 reached Play; remaining proof is Play-installed device signup after Google Play offers v21 to testers
 
 Follow-up validation:
 

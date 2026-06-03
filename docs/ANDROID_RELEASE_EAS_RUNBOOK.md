@@ -83,6 +83,16 @@ Release implication:
 - If testers are stuck on a stale embedded Play internal build, the reliable path is a fresh Play internal build from current `main`.
 - OTA can update JavaScript/assets only within the same runtime version; native dependency/config changes still require a new build.
 
+June 3, 2026 Play internal v21 result:
+
+- EAS production Android build `e673e68e-a9c3-4839-8e50-e95ccd88cfc4` finished successfully.
+- Build source: commit `d08e8842a7fef4b4aa4c8f14fb69b4f0b730a7e5`, runtime `1.0.0`, production channel.
+- App version: versionName `1.0.0`, versionCode `21`.
+- AAB: `https://expo.dev/artifacts/eas/uswj4PW1gA45iegpMGACJ1.aab`.
+- Auto-submit scheduled Google Play internal submission `cf08d9e9-96ac-481d-afbd-349d8389ffd6`, then the local wait lost its Expo GraphQL connection.
+- Retrying the same finished build scheduled `51ea9b1d-f00a-4e7b-94f5-f4c665c4f6ae` and Google Play rejected it with `You've already submitted this version of the app`, proving versionCode `21` had already reached Play.
+- Next proof is external/device: wait for Play internal processing/cache propagation, install/update v21 from the tester link, then prove signup and Brand Studio on the Play-delivered artifact.
+
 ## EAS Config Status
 
 `eas.json` exists and defines three build profiles plus one submit profile. It now sets `cli.appVersionSource` to `remote`, which is the safer strategy for this repo because Google Play requires every uploaded Android artifact to use a strictly higher `versionCode`. The app-facing version name remains in repo config as Expo `version: 1.0.0`, while Android build numbers are managed by EAS server-side state.
