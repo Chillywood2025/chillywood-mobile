@@ -4951,6 +4951,89 @@ export type Database = {
           },
         ]
       }
+      money_purchase_intents: {
+        Row: {
+          amount_minor: number | null
+          consumed_at: string | null
+          created_at: string
+          creator_id: string | null
+          currency: string | null
+          environment: string
+          expires_at: string
+          id: string
+          idempotency_key: string
+          metadata: Json
+          platform_id: string | null
+          product_id: string
+          product_key: string
+          product_type: string
+          provider: string
+          provider_product_id: string
+          revoked_at: string | null
+          source_id: string | null
+          source_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_minor?: number | null
+          consumed_at?: string | null
+          created_at?: string
+          creator_id?: string | null
+          currency?: string | null
+          environment?: string
+          expires_at: string
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          platform_id?: string | null
+          product_id: string
+          product_key: string
+          product_type: string
+          provider: string
+          provider_product_id: string
+          revoked_at?: string | null
+          source_id?: string | null
+          source_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_minor?: number | null
+          consumed_at?: string | null
+          created_at?: string
+          creator_id?: string | null
+          currency?: string | null
+          environment?: string
+          expires_at?: string
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          platform_id?: string | null
+          product_id?: string
+          product_key?: string
+          product_type?: string
+          provider?: string
+          provider_product_id?: string
+          revoked_at?: string | null
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_purchase_intents_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "monetization_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       network_account_plan_assignments: {
         Row: {
           created_at: string
@@ -9847,6 +9930,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_get_money_purchase_intent: {
+        Args: { p_intent_id: string }
+        Returns: Json
+      }
       admin_grant_platform_role_by_email: {
         Args: { p_reason?: string; p_role: string; p_target_email: string }
         Returns: Json
@@ -9859,6 +9946,24 @@ export type Database = {
           p_target_email: string
         }
         Returns: Json
+      }
+      admin_list_money_purchase_intents: {
+        Args: never
+        Returns: {
+          consumed_at: string
+          created_at: string
+          environment: string
+          expires_at: string
+          id: string
+          product_key: string
+          product_type: string
+          provider: string
+          provider_product_id: string
+          source_id: string
+          source_type: string
+          status: string
+          user_id: string
+        }[]
       }
       admin_read_model_jsonb_object_key_count: {
         Args: { p_value: Json }
@@ -10049,6 +10154,15 @@ export type Database = {
         }
         Returns: Json
       }
+      create_money_purchase_intent: {
+        Args: {
+          p_metadata?: Json
+          p_product_key: string
+          p_source_id?: string
+          p_source_type: string
+        }
+        Returns: Json
+      }
       creator_monetization_checkout_preflight: {
         Args: {
           p_amount_cents?: number
@@ -10111,6 +10225,7 @@ export type Database = {
         }
         Returns: string
       }
+      expire_money_purchase_intents: { Args: never; Returns: number }
       get_admin_content_config: { Args: never; Returns: Json }
       get_admin_media_scan_read_model: {
         Args: { p_limit?: number; p_status?: string }
@@ -10143,6 +10258,10 @@ export type Database = {
         }[]
       }
       get_my_account_deletion_status: { Args: never; Returns: Json }
+      get_my_money_purchase_intent: {
+        Args: { p_intent_id: string }
+        Returns: Json
+      }
       get_platform_money_kill_switches: {
         Args: never
         Returns: {
@@ -10406,6 +10525,12 @@ export type Database = {
       money_kill_switch_state_label: {
         Args: { p_state: string }
         Returns: string
+      }
+      money_purchase_intent_safe_row: {
+        Args: {
+          intent_row: Database["public"]["Tables"]["money_purchase_intents"]["Row"]
+        }
+        Returns: Json
       }
       normalize_username_handle: {
         Args: { p_username: string }

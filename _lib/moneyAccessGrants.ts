@@ -4,6 +4,7 @@ export const MONETIZATION_PRODUCTS_TABLE = "monetization_products";
 export const PROVIDER_EVENTS_TABLE = "provider_events";
 export const ACCESS_GRANTS_TABLE = "access_grants";
 export const MONEY_ACCESS_LEDGER_EVENTS_TABLE = "money_access_ledger_events";
+export const MONEY_PURCHASE_INTENTS_TABLE = "money_purchase_intents";
 export const MERCH_PRODUCTS_TABLE = "merch_products";
 export const MERCH_ORDERS_TABLE = "merch_orders";
 
@@ -28,12 +29,16 @@ export type LedgerPayableState =
   | "refunded"
   | "reversed"
   | "chargeback";
+export type MoneyPurchaseIntentStatus = "pending" | "consumed" | "expired" | "cancelled" | "failed" | "revoked";
 
 export type MoneyAccessReadout = {
   productCatalogCount: number;
   accessGrantCount: number;
   providerEventCount: number;
   ledgerEventCount: number;
+  purchaseIntentCount: number;
+  pendingPurchaseIntentCount: number;
+  consumedPurchaseIntentCount: number;
   merchProductCount: number;
   merchOrderCount: number;
   sandboxNotPayableLedgerCount: number;
@@ -58,6 +63,9 @@ export const normalizeMoneyAccessReadout = (row: MoneyAccessReadoutDb | null | u
   accessGrantCount: toCount(row?.accessGrantCount),
   providerEventCount: toCount(row?.providerEventCount),
   ledgerEventCount: toCount(row?.ledgerEventCount),
+  purchaseIntentCount: toCount(row?.purchaseIntentCount),
+  pendingPurchaseIntentCount: toCount(row?.pendingPurchaseIntentCount),
+  consumedPurchaseIntentCount: toCount(row?.consumedPurchaseIntentCount),
   merchProductCount: toCount(row?.merchProductCount),
   merchOrderCount: toCount(row?.merchOrderCount),
   sandboxNotPayableLedgerCount: toCount(row?.sandboxNotPayableLedgerCount),
@@ -82,4 +90,8 @@ export const MONEY_ACCESS_POLICY_PROOF = {
   payoutAccessGrantedByPayment: false,
   sandboxLedgerPayable: false,
   setupLedgerPayable: false,
+  dynamicPurchaseIntentsSandboxOnly: true,
+  missingPurchaseIntentGrantsAccess: false,
+  expiredPurchaseIntentGrantsAccess: false,
+  consumedPurchaseIntentCanBeReused: false,
 } as const;

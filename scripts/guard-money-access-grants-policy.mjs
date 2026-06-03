@@ -20,6 +20,7 @@ const assertNotIncludes = (source, needle, label) => {
 };
 
 const migration = read("supabase/migrations/20260603165000_money_access_grants_product_catalog.sql");
+const purchaseIntentMigration = read("supabase/migrations/20260603190000_money_purchase_intents.sql");
 const moneyAccess = read("_lib/moneyAccessGrants.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const monetization = read("_lib/monetization.ts");
@@ -41,6 +42,22 @@ const packageJson = read("package.json");
   'create or replace function public."resolve_money_access_room_entry"',
   'create or replace function public."get_admin_money_access_readout"',
 ].forEach((needle) => assertIncludes(migration, needle, "money access migration"));
+
+[
+  'create table if not exists public."money_purchase_intents"',
+  'create or replace function public."create_money_purchase_intent"',
+  'create or replace function public."get_my_money_purchase_intent"',
+  'create or replace function public."admin_list_money_purchase_intents"',
+  'create or replace function public."admin_get_money_purchase_intent"',
+  'create or replace function public."expire_money_purchase_intents"',
+  '"money_purchase_intents_sandbox_only_check"',
+  '"money_purchase_intents_no_merch_digital_check"',
+  'sandbox_provider_mapping_required',
+  'provider_product_id_required',
+  'sandbox_purchase_intents_not_enabled',
+  'merch_is_physical_goods_only',
+  'premium_uses_existing_revenuecat_shell',
+].forEach((needle) => assertIncludes(purchaseIntentMigration, needle, "money purchase intent migration"));
 
 [
   "premium_subscription",
@@ -121,11 +138,22 @@ assertIncludes(moneyAccess, "hostPowerGrantedByPayment: false", "host power proo
 assertIncludes(moneyAccess, "payoutAccessGrantedByPayment: false", "payout access proof");
 assertIncludes(moneyAccess, "sandboxLedgerPayable: false", "sandbox not payable proof");
 assertIncludes(moneyAccess, "setupLedgerPayable: false", "setup not payable proof");
+assertIncludes(moneyAccess, "MONEY_PURCHASE_INTENTS_TABLE", "purchase intent table constant");
+assertIncludes(moneyAccess, "dynamicPurchaseIntentsSandboxOnly: true", "purchase intents sandbox only proof");
+assertIncludes(moneyAccess, "missingPurchaseIntentGrantsAccess: false", "missing intent cannot grant access proof");
+assertIncludes(moneyAccess, "expiredPurchaseIntentGrantsAccess: false", "expired intent cannot grant access proof");
+assertIncludes(moneyAccess, "consumedPurchaseIntentCanBeReused: false", "consumed intent cannot be reused proof");
 
 assertIncludes(revenueCatWebhook, "mirrorRevenueCatPremiumMoneyAccess", "RevenueCat money access mirror");
+assertIncludes(revenueCatWebhook, "mirrorRevenueCatDynamicMoneyAccess", "RevenueCat dynamic money access mirror");
 assertIncludes(revenueCatWebhook, ".from(\"provider_events\")", "RevenueCat provider event mirror");
 assertIncludes(revenueCatWebhook, ".from(\"access_grants\")", "RevenueCat access grant mirror");
 assertIncludes(revenueCatWebhook, ".from(\"money_access_ledger_events\")", "RevenueCat money access ledger mirror");
+assertIncludes(revenueCatWebhook, ".from(\"money_purchase_intents\")", "RevenueCat purchase intent matching");
+assertIncludes(revenueCatWebhook, "purchase_intent_missing_or_expired", "RevenueCat missing intent blocks access");
+assertIncludes(revenueCatWebhook, "duplicate_provider_event", "RevenueCat duplicate event idempotency");
+assertIncludes(revenueCatWebhook, "product_not_sandbox_enabled", "RevenueCat dynamic products sandbox-only");
+assertIncludes(revenueCatWebhook, "production_or_setup_event_blocked", "RevenueCat production/setup dynamic events blocked");
 assertIncludes(revenueCatWebhook, "provider_payload_stored: false", "RevenueCat mirror stores no raw provider payload");
 assertIncludes(revenueCatWebhook, "payableState: \"not_payable\"", "RevenueCat mirror keeps sandbox not payable");
 assertIncludes(revenueCatWebhook, "moneyAccessMirrored: true", "RevenueCat webhook response mirrors money access");
