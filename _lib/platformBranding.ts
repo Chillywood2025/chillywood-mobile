@@ -721,11 +721,13 @@ export async function publishPlatformBrandProfile(
   ]));
 
   if (reviewAssetIds.length) {
-    await Promise.all(reviewAssetIds.map((assetId) => reviewPlatformBrandAsset(
-      assetId,
-      "approve",
-      "Approved by the creator during Brand Studio publish.",
-    )));
+    for (const assetId of reviewAssetIds) {
+      await reviewPlatformBrandAsset(
+        assetId,
+        "approve",
+        "Approved by the creator during Brand Studio publish.",
+      );
+    }
   }
 
   if (assetIds.length) {
