@@ -1435,9 +1435,30 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </SettingsRow>
-        <SettingsRow title="Account actions" subtitle="Log out, or request account deletion from this signed-in account." tone="danger">
+        <SettingsRow title="Account actions" subtitle="Log out, review the deletion policy, or request deletion for this signed-in account." tone="danger">
+          <View style={styles.accountDeletionPanel}>
+            <View style={styles.accountDeletionPanelHeader}>
+              <View style={styles.accountDeletionCopy}>
+                <Text style={styles.accountDeletionTitle}>Account deletion request</Text>
+                <Text style={styles.accountDeletionBody}>
+                  Sends a review request to support. Your account is not deleted instantly.
+                </Text>
+              </View>
+              <StatusPill
+                label={deletionRequestNotice ? "Requested" : "Manual review"}
+                tone={deletionRequestNotice ? "default" : "warning"}
+              />
+            </View>
+            {deletionRequestNotice ? (
+              <Text style={styles.accountDeletionNotice}>{deletionRequestNotice}</Text>
+            ) : null}
+          </View>
           <TouchableOpacity
-            style={[styles.utilityButton, styles.fullWidthButton, deletionRequestSaving && styles.utilityButtonDisabled]}
+            style={[
+              styles.dangerOutlineButton,
+              styles.fullWidthButton,
+              deletionRequestSaving && styles.utilityButtonDisabled,
+            ]}
             activeOpacity={0.86}
             onPress={onPressSubmitAccountDeletionRequest}
             disabled={deletionRequestSaving}
@@ -1446,8 +1467,8 @@ export default function SettingsScreen() {
             testID="settings-request-account-deletion-button"
           >
             {deletionRequestSaving
-              ? <ActivityIndicator color="#E5ECF8" size="small" />
-              : <Text style={styles.utilityButtonText}>Request Account Deletion</Text>}
+              ? <ActivityIndicator color="#FFD4DD" size="small" />
+              : <Text style={styles.dangerOutlineButtonText}>Request Account Deletion</Text>}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryActionButton}
@@ -1458,7 +1479,6 @@ export default function SettingsScreen() {
           >
             <Text style={styles.secondaryActionButtonText}>Read Deletion Policy</Text>
           </TouchableOpacity>
-          {deletionRequestNotice ? <Text style={styles.metaText}>{deletionRequestNotice}</Text> : null}
           <TouchableOpacity
             style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]}
             activeOpacity={0.86}
@@ -2406,18 +2426,69 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: "600",
   },
+  accountDeletionPanel: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(244,181,84,0.2)",
+    backgroundColor: "rgba(244,181,84,0.08)",
+    padding: 12,
+    gap: 10,
+  },
+  accountDeletionPanelHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  accountDeletionCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  accountDeletionTitle: {
+    color: "#F8FAFF",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  accountDeletionBody: {
+    color: "#B8C1D6",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  accountDeletionNotice: {
+    color: "#CFF7E3",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+  },
+  dangerOutlineButton: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,90,118,0.5)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  dangerOutlineButtonText: {
+    color: "#FFD4DD",
+    fontSize: 13,
+    fontWeight: "900",
+  },
   secondaryActionButton: {
     minHeight: 46,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(220,20,60,0.34)",
-    backgroundColor: "rgba(220,20,60,0.14)",
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.045)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
   },
   secondaryActionButtonText: {
-    color: "#FFE4EA",
+    color: "#EAF0FF",
     fontSize: 13,
     fontWeight: "900",
   },
