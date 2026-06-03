@@ -75,6 +75,7 @@ Current source hardens EAS Update pickup for testers:
 - `RuntimeUpdateGate` checks shortly after app launch and when the app returns to the foreground.
 - If a compatible production-channel update is available, the app fetches it and reloads once per fetched update after UI interactions settle.
 - Resume checks are throttled to avoid polling or battery/network churn.
+- June 3, 2026 Android production update group `02cbd580-7408-453e-ab79-d60b6a9365c1` published this gate for runtime `1.0.0` from commit `dd0f7f0`; Android update id `019e8dcd-c189-720d-a94e-eda03547e3ef`.
 
 Release implication:
 
