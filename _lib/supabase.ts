@@ -1,4 +1,5 @@
 // _lib/supabase.ts
+import "react-native-get-random-values";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
