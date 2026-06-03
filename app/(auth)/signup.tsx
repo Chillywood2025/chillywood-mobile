@@ -42,17 +42,29 @@ function getSignupErrorMessage(error: unknown) {
   if (raw.includes("email rate") || raw.includes("over_email_send_rate_limit") || raw.includes("rate limit")) {
     return "Too many signup attempts. Try again later.";
   }
-  if (raw.includes("already registered") || raw.includes("already exists")) {
+  if (raw.includes("already registered") || raw.includes("already exists") || raw.includes("user_already_exists")) {
     return "An account already exists for this email. Sign in instead.";
   }
   if (raw.includes("invalid") && raw.includes("email")) {
     return "Enter a valid email address.";
   }
+  if (raw.includes("signup") && raw.includes("disabled")) {
+    return "Account creation is temporarily unavailable. Try again later.";
+  }
+  if (raw.includes("security purposes") || raw.includes("too many requests")) {
+    return "Too many signup attempts. Try again later.";
+  }
+  if (raw.includes("email provider") || raw.includes("smtp") || raw.includes("mail")) {
+    return "Signup email could not be sent right now. Try again later.";
+  }
+  if (raw.includes("database") || raw.includes("saving new user")) {
+    return "Account setup is temporarily unavailable. Try again later.";
+  }
   if (raw.includes("network") || raw.includes("fetch") || raw.includes("offline") || raw.includes("timeout")) {
     return "Couldn't reach signup. Check your connection and try again.";
   }
-  if (raw.includes("password")) {
-    return "Use a stronger password.";
+  if (raw.includes("password") || raw.includes("weak_password")) {
+    return "Use at least 6 characters for your password.";
   }
   return "Unable to sign up right now.";
 }
@@ -123,6 +135,7 @@ export default function Signup() {
   const signUp = async () => {
     const normalizedDisplayName = displayName.trim();
     const normalizedUsername = normalizeUsernameHandle(username);
+    const normalizedEmail = email.trim().toLowerCase();
     let signupCreatedUser = false;
 
     if (!normalizedDisplayName) {
@@ -135,8 +148,13 @@ export default function Signup() {
       return;
     }
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       Alert.alert("Error", "Enter email and password");
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert("Signup Error", "Use at least 6 characters for your password.");
       return;
     }
 
@@ -165,7 +183,7 @@ export default function Signup() {
       }
 
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: {
           data: {
@@ -176,6 +194,9 @@ export default function Signup() {
       });
 
       if (error) {
+        reportRuntimeError("auth-signup-submit", error, {
+          code: error.code ?? error.name ?? "auth_error",
+        });
         trackEvent("auth_sign_up_failure", {
           reason: error.code ?? error.name ?? "auth_error",
         });
