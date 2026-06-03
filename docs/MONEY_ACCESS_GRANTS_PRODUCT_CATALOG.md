@@ -8,6 +8,15 @@ RevenueCat / Google Play event -> `provider_events` -> `monetization_products` -
 
 This is not live-money activation. `live_money_enabled`, payouts, tips, paid content, Watch-Party tickets, Live Watch-Party access passes, Live Watch-Party seat passes, and merch checkout remain off/setup-only.
 
+Remote proof status on June 3, 2026:
+
+- `supabase db lint --local` passed with no schema errors.
+- `supabase db push --dry-run` showed only `20260603165000_money_access_grants_product_catalog.sql` pending before apply.
+- `supabase db push` applied the migration, and a post-apply dry-run reported the remote database up to date.
+- `supabase gen types typescript --linked > supabase/database.types.ts` refreshed generated types.
+- `supabase migration list` remains unavailable in this shell because the linked CLI login role hits the known SASL authentication failure; no password or secret was printed.
+- Android proof path is `/tmp/chillywood-money-access-grants-remote-proof-20260603/`. `R5CR120QCBF` had a Play/EAS-signed `com.chillywood.mobile` versionCode `21`; replacing it with the local current-source APK failed with signature mismatch, and the session was signed out, so signed-in Money Center/Admin screenshots remain a follow-up.
+
 ## Product Catalog
 
 `monetization_products` is the shared sellable product map. It supports:
@@ -102,5 +111,5 @@ Closeout validation also includes runtime, Premium, payment rail, creator moneti
 - No live provider activation for paid content, tickets, seats, tips, event passes, or merch checkout.
 - No production payable ledger proof.
 - No payout activation.
-- No Android screenshot proof was captured in this lane unless separately recorded.
-- Supabase migration apply/typegen must be run against the linked environment before remote schema truth can be claimed.
+- Fresh signed-in Android Money Center/Admin screenshot proof still needs an owner-approved signed-in Play/EAS build path or a local install path that does not destroy the proof session.
+- Remote migration apply and typegen are complete; `supabase migration list` remains the only unavailable Supabase readback command in this shell.

@@ -39,6 +39,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_grants: {
+        Row: {
+          audit_id: string | null
+          created_at: string
+          environment: string
+          expires_at: string | null
+          grant_type: string
+          id: string
+          metadata: Json
+          product_id: string | null
+          provider: string | null
+          provider_event_id: string | null
+          refunded_at: string | null
+          revoke_reason: string | null
+          revoked_at: string | null
+          source_id: string | null
+          source_type: string
+          starts_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          audit_id?: string | null
+          created_at?: string
+          environment?: string
+          expires_at?: string | null
+          grant_type: string
+          id?: string
+          metadata?: Json
+          product_id?: string | null
+          provider?: string | null
+          provider_event_id?: string | null
+          refunded_at?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          source_id?: string | null
+          source_type: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          audit_id?: string | null
+          created_at?: string
+          environment?: string
+          expires_at?: string | null
+          grant_type?: string
+          id?: string
+          metadata?: Json
+          product_id?: string | null
+          provider?: string | null
+          provider_event_id?: string | null
+          refunded_at?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          source_id?: string | null
+          source_type?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_grants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "monetization_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_grants_provider_event_id_fkey"
+            columns: ["provider_event_id"]
+            isOneToOne: false
+            referencedRelation: "provider_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       account_deletion_requests: {
         Row: {
           delete_after: string | null
@@ -4494,6 +4575,109 @@ export type Database = {
           },
         ]
       }
+      merch_orders: {
+        Row: {
+          buyer_id: string | null
+          created_at: string
+          creator_id: string | null
+          digital_access_grant_id: string | null
+          environment: string
+          fulfillment_status: string
+          id: string
+          metadata: Json
+          order_status: string
+          product_id: string | null
+          provider: string
+          provider_order_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          buyer_id?: string | null
+          created_at?: string
+          creator_id?: string | null
+          digital_access_grant_id?: string | null
+          environment?: string
+          fulfillment_status?: string
+          id?: string
+          metadata?: Json
+          order_status?: string
+          product_id?: string | null
+          provider?: string
+          provider_order_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          buyer_id?: string | null
+          created_at?: string
+          creator_id?: string | null
+          digital_access_grant_id?: string | null
+          environment?: string
+          fulfillment_status?: string
+          id?: string
+          metadata?: Json
+          order_status?: string
+          product_id?: string | null
+          provider?: string
+          provider_order_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merch_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "merch_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merch_products: {
+        Row: {
+          created_at: string
+          creator_id: string | null
+          display_name: string
+          fulfillment_model: string
+          id: string
+          metadata: Json
+          product_id: string | null
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id?: string | null
+          display_name: string
+          fulfillment_model?: string
+          id?: string
+          metadata?: Json
+          product_id?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string | null
+          display_name?: string
+          fulfillment_model?: string
+          id?: string
+          metadata?: Json
+          product_id?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merch_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "monetization_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monetization_audit_log: {
         Row: {
           action: string
@@ -4521,6 +4705,72 @@ export type Database = {
           metadata?: Json
           target_id?: string | null
           target_type?: string
+        }
+        Relationships: []
+      }
+      monetization_products: {
+        Row: {
+          applies_to_id: string | null
+          applies_to_type: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          display_name: string
+          environment: string
+          id: string
+          is_android_digital: boolean
+          is_physical_good: boolean
+          metadata: Json
+          product_key: string
+          product_type: string
+          provider: string
+          provider_base_plan_id: string | null
+          provider_product_id: string | null
+          revenuecat_entitlement: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          applies_to_id?: string | null
+          applies_to_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          display_name: string
+          environment?: string
+          id?: string
+          is_android_digital?: boolean
+          is_physical_good?: boolean
+          metadata?: Json
+          product_key: string
+          product_type: string
+          provider: string
+          provider_base_plan_id?: string | null
+          provider_product_id?: string | null
+          revenuecat_entitlement?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          applies_to_id?: string | null
+          applies_to_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          display_name?: string
+          environment?: string
+          id?: string
+          is_android_digital?: boolean
+          is_physical_good?: boolean
+          metadata?: Json
+          product_key?: string
+          product_type?: string
+          provider?: string
+          provider_base_plan_id?: string | null
+          provider_product_id?: string | null
+          revenuecat_entitlement?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -4628,6 +4878,78 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      money_access_ledger_events: {
+        Row: {
+          amount_minor: number
+          created_at: string
+          creator_id: string | null
+          currency: string
+          environment: string
+          event_type: string
+          id: string
+          metadata: Json
+          payable_state: string
+          platform_id: string | null
+          product_id: string | null
+          provider_event_id: string | null
+          source_id: string | null
+          source_type: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          amount_minor?: number
+          created_at?: string
+          creator_id?: string | null
+          currency?: string
+          environment?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          payable_state?: string
+          platform_id?: string | null
+          product_id?: string | null
+          provider_event_id?: string | null
+          source_id?: string | null
+          source_type?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount_minor?: number
+          created_at?: string
+          creator_id?: string | null
+          currency?: string
+          environment?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          payable_state?: string
+          platform_id?: string | null
+          product_id?: string | null
+          provider_event_id?: string | null
+          source_id?: string | null
+          source_type?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_access_ledger_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "monetization_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_access_ledger_events_provider_event_id_fkey"
+            columns: ["provider_event_id"]
+            isOneToOne: false
+            referencedRelation: "provider_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       network_account_plan_assignments: {
         Row: {
@@ -6594,6 +6916,68 @@ export type Database = {
             columns: ["provider_account_id"]
             isOneToOne: false
             referencedRelation: "provider_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_events: {
+        Row: {
+          app_user_id: string | null
+          created_at: string
+          environment: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          metadata: Json
+          occurred_at: string
+          product_id: string | null
+          product_key: string | null
+          provider: string
+          provider_event_id: string
+          raw_payload_hash: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          app_user_id?: string | null
+          created_at?: string
+          environment?: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          occurred_at?: string
+          product_id?: string | null
+          product_key?: string | null
+          provider: string
+          provider_event_id: string
+          raw_payload_hash?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          app_user_id?: string | null
+          created_at?: string
+          environment?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          occurred_at?: string
+          product_id?: string | null
+          product_key?: string | null
+          provider?: string
+          provider_event_id?: string
+          raw_payload_hash?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "monetization_products"
             referencedColumns: ["id"]
           },
         ]
@@ -9732,6 +10116,7 @@ export type Database = {
         Args: { p_limit?: number; p_status?: string }
         Returns: Json
       }
+      get_admin_money_access_readout: { Args: never; Returns: Json }
       get_admin_report_detail: { Args: { p_report_id: number }; Returns: Json }
       get_admin_reports_overview: { Args: never; Returns: Json }
       get_admin_system_history_read_model: {
@@ -9792,10 +10177,26 @@ export type Database = {
         Args: { p_context_id: string }
         Returns: Json
       }
+      has_access_grant: {
+        Args: { p_grant_type: string; p_source_id: string; p_user_id?: string }
+        Returns: Json
+      }
       has_active_beta_access: { Args: never; Returns: boolean }
       has_active_premium_creator_tool_access: {
         Args: { target_user_id?: string }
         Returns: boolean
+      }
+      has_live_watch_party_access: {
+        Args: { p_party_id: string; p_user_id: string }
+        Returns: Json
+      }
+      has_live_watch_party_seat_eligibility: {
+        Args: { p_party_id: string; p_user_id: string }
+        Returns: Json
+      }
+      has_paid_content_access: {
+        Args: { p_content_id: string; p_user_id: string }
+        Returns: Json
       }
       has_platform_permission: {
         Args: { p_permission_key: string }
@@ -9804,6 +10205,11 @@ export type Database = {
       has_platform_role: {
         Args: { required_roles: string[] }
         Returns: boolean
+      }
+      has_premium_access: { Args: { p_user_id?: string }; Returns: boolean }
+      has_watch_party_live_ticket: {
+        Args: { p_party_id: string; p_user_id: string }
+        Returns: Json
       }
       is_account_deletion_scheduled: {
         Args: { p_user_id: string }
@@ -10214,6 +10620,14 @@ export type Database = {
       }
       resolve_creator_content_access: {
         Args: { p_content_id: string; p_content_type: string }
+        Returns: Json
+      }
+      resolve_money_access_room_entry: {
+        Args: {
+          p_party_id: string
+          p_required_grant_type?: string
+          p_user_id: string
+        }
         Returns: Json
       }
       resolve_signup_profile_username: {
