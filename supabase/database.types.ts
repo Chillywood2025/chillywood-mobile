@@ -10001,6 +10001,10 @@ export type Database = {
         }
         Returns: string
       }
+      admin_revoke_money_access_grant_for_proof: {
+        Args: { p_grant_id: string; p_reason?: string }
+        Returns: Json
+      }
       admin_revoke_platform_role_by_email: {
         Args: { p_reason?: string; p_role: string; p_target_email: string }
         Returns: Json
@@ -10304,6 +10308,10 @@ export type Database = {
       has_active_premium_creator_tool_access: {
         Args: { target_user_id?: string }
         Returns: boolean
+      }
+      has_event_pass_access: {
+        Args: { p_event_id: string; p_user_id: string }
+        Returns: Json
       }
       has_live_watch_party_access: {
         Args: { p_party_id: string; p_user_id: string }

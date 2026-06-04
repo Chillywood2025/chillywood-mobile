@@ -21,6 +21,7 @@ const assertNotIncludes = (source, needle, label) => {
 
 const migration = read("supabase/migrations/20260603165000_money_access_grants_product_catalog.sql");
 const purchaseIntentMigration = read("supabase/migrations/20260603190000_money_purchase_intents.sql");
+const failurePathsMigration = read("supabase/migrations/20260604015548_money_failure_paths_event_pass.sql");
 const moneyAccess = read("_lib/moneyAccessGrants.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const monetization = read("_lib/monetization.ts");
@@ -58,6 +59,18 @@ const packageJson = read("package.json");
   'merch_is_physical_goods_only',
   'premium_uses_existing_revenuecat_shell',
 ].forEach((needle) => assertIncludes(purchaseIntentMigration, needle, "money purchase intent migration"));
+
+[
+  'create unique index if not exists "access_grants_provider_event_grant_unique"',
+  'create unique index if not exists "money_access_ledger_provider_event_unique"',
+  'create or replace function public."admin_revoke_money_access_grant_for_proof"',
+  'provider_refund_claimed\', false',
+  'create or replace function public."has_event_pass_access"',
+  "'event_state_blocks_access'",
+  "'event_pass_required'",
+  "'canPublish', false",
+  "'approvalRequired', true",
+].forEach((needle) => assertIncludes(failurePathsMigration, needle, "money failure/event-pass migration"));
 
 [
   "premium_subscription",
@@ -143,6 +156,17 @@ assertIncludes(moneyAccess, "dynamicPurchaseIntentsSandboxOnly: true", "purchase
 assertIncludes(moneyAccess, "missingPurchaseIntentGrantsAccess: false", "missing intent cannot grant access proof");
 assertIncludes(moneyAccess, "expiredPurchaseIntentGrantsAccess: false", "expired intent cannot grant access proof");
 assertIncludes(moneyAccess, "consumedPurchaseIntentCanBeReused: false", "consumed intent cannot be reused proof");
+assertIncludes(failurePathsMigration, '"provider_event_id", "user_id", "grant_type"', "duplicate provider event cannot duplicate grants");
+assertIncludes(failurePathsMigration, 'on public."money_access_ledger_events" ("provider_event_id")', "duplicate provider event cannot duplicate ledger rows");
+assertIncludes(failurePathsMigration, '"status" = \'revoked\'', "admin revoke marks access revoked");
+assertIncludes(failurePathsMigration, '"event_type",\n    "amount_minor"', "admin revoke appends sanitized ledger event");
+assertIncludes(failurePathsMigration, "'ADMIN_REVOKE'", "admin revoke ledger is explicit");
+assertIncludes(failurePathsMigration, "'production_money', false", "admin revoke does not create production money");
+assertIncludes(failurePathsMigration, "'payout_readiness_proved', false", "admin revoke does not create payout readiness");
+assertIncludes(failurePathsMigration, "'live_money_enabled_at_verification', false", "admin revoke live money remains off");
+assertIncludes(failurePathsMigration, "v_event.\"status\" in ('draft', 'ended', 'expired', 'canceled')", "event pass blocked event states deny");
+assertIncludes(failurePathsMigration, "'canPublish', false", "event pass never grants LiveKit publish");
+assertIncludes(failurePathsMigration, "'host_or_admin_preview_route_policy_still_applies'", "event host/admin preview does not grant route authority");
 
 assertIncludes(revenueCatWebhook, "mirrorRevenueCatPremiumMoneyAccess", "RevenueCat money access mirror");
 assertIncludes(revenueCatWebhook, "mirrorRevenueCatDynamicMoneyAccess", "RevenueCat dynamic money access mirror");

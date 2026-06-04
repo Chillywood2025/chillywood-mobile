@@ -64,6 +64,7 @@ const SANDBOX_PRODUCTS: SandboxProduct[] = [
 ];
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SANDBOX_EVENT_PASS_PROOF_SOURCE_ID = "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -107,6 +108,12 @@ export default function AdminMoneySandboxPurchasesScreen() {
       setSourceId((current) => current || userId);
     }
   }, [selectedProduct.sourceType, userId]);
+
+  useEffect(() => {
+    if (selectedProduct.sourceType === "event") {
+      setSourceId(SANDBOX_EVENT_PASS_PROOF_SOURCE_ID);
+    }
+  }, [selectedProduct.sourceType]);
 
   const runSandboxPurchase = useCallback(async () => {
     if (!allowed || busy) return;
