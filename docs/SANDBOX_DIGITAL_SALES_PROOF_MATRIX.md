@@ -18,7 +18,9 @@ This matrix records the current real sandbox proof state. Real sandbox sales are
 | Stripe Android digital checkout | Absent |
 | Fake sales | None inserted |
 | EAS update | Production update group `9757451f-7817-488e-9b10-fff68372fefd` published `/admin-money-sandbox-purchases` for runtime `1.0.0` |
-| Android route proof | `R5CR120QCBF` loaded the route, denied non-operator access, exposed the launcher only during a temporary operator role, and post-revoke denial was captured |
+| Android route proof | `R5CR120QCBF` loaded the route from Play-installed versionCode `23`, denied non-operator access after proof-role revoke, and exposed the launcher only during a temporary operator role |
+| Play item availability | Fixed for the proof device by accepting the exact internal-test opt-in link, uninstalling the EAS/internal install with `installer=null`, installing from Google Play, then updating from Play to versionCode `23` with `installer=com.android.vending` |
+| Real non-Premium sandbox purchase | Creator tip `cw_creator_tip_sandbox_099` completed through Google Play test card / RevenueCat sandbox and webhook processing |
 
 ## Product Proof Matrix
 
@@ -29,7 +31,7 @@ This matrix records the current real sandbox proof state. Real sandbox sales are
 | `watch_party_live_ticket` | `watch_party_live_ticket_sandbox_099` | `cw_watch_party_live_ticket_sandbox_099` | Ready; sandbox intent row requires a real Watch-Party Live room UUID | Not run | Not created | Not created | Not created | Setup needed / not active until proof | Provider row visible in Admin after refresh | Real purchase proof; entry only, no publish/speaker authority |
 | `live_watch_party_access_pass` | `live_watch_party_access_pass_sandbox_099` | `cw_live_watch_party_access_sandbox_099` | Ready; sandbox intent row requires a real Live Watch-Party room UUID | Not run | Not created | Not created | Not created | Setup needed / not active until proof | Provider row visible in Admin after refresh | Real purchase proof; viewer/listener access only |
 | `live_watch_party_seat_pass` | `live_watch_party_seat_pass_sandbox_099` | `cw_live_watch_party_seat_sandbox_099` | Ready; sandbox intent row requires a real room UUID | Not run | Not created | Not created | Not created | Setup needed / not active until proof | Provider row visible in Admin after refresh | Real purchase proof; host approval still wins |
-| `creator_tip` | `creator_tip_sandbox_099` | `cw_creator_tip_sandbox_099` | One real sandbox intent created, then marked `failed` and unconsumed after Google Play item-not-found | Attempted; Google Play returned item-not-found before purchase completion | Not created | No durable access grant created | Not created | Setup needed / no verified earnings | Launcher proof captured; no provider/ledger drilldown because no event arrived | Resolve Google Play item availability for signed/tester install, then prove sandbox ledger stays `not_payable` and no payout appears |
+| `creator_tip` | `creator_tip_sandbox_099` | `cw_creator_tip_sandbox_099` | Passed: latest intent `befbf4ac-f951-4070-86c8-5361eeff99db` was consumed | Passed: Google Play test card purchase completed for `Creator tip sandbox` | Passed: RevenueCat/Google Play event `BCAEB887-0B07-4F85-82F9-D40EC59999F6` stored as `processed` / `sandbox` | Correctly none; creator tips do not grant durable content/room access | Passed: one `money_access_ledger_events` row, `environment=sandbox`, `payable_state=not_payable`, `status=sandbox_only`, amount `99` / `usd` | Sandbox only / not payable proof captured; no payable balance or cash-out | Sanitized provider/intent/ledger readback captured | Ticket/seat/content/event resolver purchase proofs still remain |
 | `event_pass` | `event_pass_sandbox_099` | `cw_event_pass_sandbox_099` | Ready if a real backed event UUID exists | Not run | Not created | Not created | Not created | Setup needed | Provider row visible in Admin after refresh | Event model/resolver proof still needed |
 | `merch_physical_good` | `merch_physical_good_setup` | None | Not part of Android digital intents | Not applicable | Not applicable | None | None | Physical goods separate / planned | Merch readiness only | Future physical merch provider lane |
 
@@ -45,11 +47,12 @@ This matrix records the current real sandbox proof state. Real sandbox sales are
 - Duplicate provider events do not reuse consumed intents.
 - Sandbox ledger rows are `not_payable`.
 - Payment/access records do not grant LiveKit publish, host, speaker, mod/admin, payout, or safety bypass authority.
-- Final readback after the Creator tip attempt showed pending intents `0`, provider_events `0`, access_grants `0`, money_access_ledger_events `0`, payable/paid money-access rows `0`, and active proof roles `0`.
+- Final readback after the successful Creator tip sandbox purchase showed purchase intents `2`, pending intents `0`, failed intents `1` from the earlier item-not-found attempt, consumed intents `1`, provider_events `1`, access_grants `0`, money_access_ledger_events `1`, payable/paid money-access rows `0`, and active proof roles `0`.
 
 ## Proof Paths
 
 - Current-main Admin visual proof: `/tmp/chillywood-real-sandbox-digital-sales-proof-20260603/`
 - Current product proof path: `/tmp/chillywood-revenuecat-googleplay-sandbox-product-proof-20260603/`
+- Google Play item availability and real purchase proof: `/tmp/chillywood-googleplay-item-availability-real-purchase-proof-20260603/`
 
 No screenshots from this lane were committed.
