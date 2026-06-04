@@ -9,7 +9,8 @@ This focused pass fixes the standalone Player visual issue where top and bottom 
 - Removed the large standalone top control block from the media flow.
 - Removed the large standalone bottom Back / `1x` control block from the media flow.
 - Made video fill the standalone media card.
-- Moved Share, Report, playback speed, and Watch-Party Live into compact top overlay chips.
+- Moved Share, Report, playback speed, and Watch-Party Live into compact top overlay text controls.
+- Tightened the top overlay controls so Share, Report, `1x`, and Watch-Party Live read as small shadowed controls instead of oversized pills.
 - Kept progress, time, and fullscreen as compact bottom overlays.
 - Moved Back below the media card so it remains reachable without covering the video.
 - Fullscreen now uses aspect-preserving contain sizing instead of an aggressive crop.
@@ -37,7 +38,8 @@ All standalone Player surfaces now mirror the same layout when the route is not 
 - below media card: Back
 - below Player: Discussion/comments
 
-The `1x` control remains a compact top chip because it is a playback setting, not a bottom navigation action. Back sits outside the player card because it is a route/navigation action.
+The `1x` control remains a compact top overlay control because it is a playback setting, not a bottom navigation action. Back sits outside the player card because it is a route/navigation action.
+Watch-Party Live remains visible on standalone title/creator Player chrome unless the standalone access gate is active or Spectator owns the source; existing start/sign-in/source checks still run when pressed.
 
 ## Fullscreen
 
@@ -76,7 +78,7 @@ The local generated `android/` project was used only for attached-device proof a
 
 Screenshots captured:
 
-- `01-player-overlay-card.png`: standalone Player with full-card video, top overlay chips, bottom progress/fullscreen overlay, Back below the card, and Discussion below.
+- `01-player-overlay-card.png`: standalone Player with full-card video, top overlay controls, bottom progress/fullscreen overlay, Back below the card, and Discussion below.
 - `03-player-fullscreen-visible-controls.png`: fullscreen with aspect-preserved video, overlay controls, no Discussion, and no giant control bars.
 - `04-player-fullscreen-back-exit.png`: Android hardware Back exited fullscreen and restored the standalone card layout.
 - `05-local-v24-launch.png`: local v24 proof APK launch after native install.

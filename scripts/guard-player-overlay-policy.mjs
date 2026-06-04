@@ -75,6 +75,7 @@ assertNotIncludes(player, "Mark Shared", "standalone Player Share label");
 
 assertIncludes(player, "canStartStandaloneWatchPartyLive = isStandalonePlayer", "standalone Watch-Party Live eligibility");
 assertIncludes(player, "&& !isSpectatorPlayback", "Spectator playback Watch-Party Live CTA exclusion");
+assertNotIncludes(player, "&& !isCreatorVideoPlaybackUnavailable\n    && !isPlatformVideoUnavailable", "standalone Watch-Party Live CTA source-availability gating");
 assertIncludes(player, "playbackSource && !standalonePlaybackSourceFailed", "standalone video source render");
 assertNotIncludes(player, "&& !controlsVisible ? (\n              <View\n                collapsable={false}\n                pointerEvents=\"auto\"\n                style={styles.standaloneVideoGestureTarget}", "standalone gesture target must remain available for visible-control play/pause taps");
 assertIncludes(standaloneVideoGestureTargetStyle, "top: 126", "standalone gesture target must avoid top controls");

@@ -6398,9 +6398,7 @@ export default function PlayerScreen() {
   const canShareStandaloneCreatorVideo = isStandalonePlayer && isCreatorVideoPubliclyShareable(creatorVideo);
   const canStartStandaloneWatchPartyLive = isStandalonePlayer
     && !isSpectatorPlayback
-    && !standalonePlaybackGateActive
-    && !isCreatorVideoPlaybackUnavailable
-    && !isPlatformVideoUnavailable;
+    && !standalonePlaybackGateActive;
   useEffect(() => {
     if (!isStandalonePlayer || !isCreatorVideoPlayback) {
       setCreatorVideoComments([]);
@@ -9336,7 +9334,7 @@ const styles = StyleSheet.create({
   },
   standaloneOverlayActions: {
     width: "100%",
-    minHeight: 70,
+    minHeight: 52,
     alignItems: "stretch",
     gap: 7,
   },
@@ -9350,8 +9348,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-    gap: 6,
-    maxWidth: "62%",
+    gap: 5,
+    maxWidth: "58%",
   },
   standaloneTopSpacer: {
     width: 1,
@@ -9360,29 +9358,27 @@ const styles = StyleSheet.create({
   standaloneTopRightActions: {
     alignItems: "flex-end",
     gap: 6,
-    maxWidth: "38%",
+    maxWidth: "42%",
   },
   partyOverlayChip: {
-    minHeight: 44,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(0,0,0,0.34)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: 36,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",
   },
   partyOverlayChipWatchPartyTitle: {
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(0,0,0,0.28)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
   },
   partyOverlayChipText: {
     color: "#F1F3F8",
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "800",
+    textShadowColor: "rgba(0,0,0,0.72)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
   },
   partyReactionBurstWrap: {
     position: "absolute",
@@ -9809,28 +9805,27 @@ const styles = StyleSheet.create({
     elevation: 47,
   },
   compactChip: {
-    minHeight: 44,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 36,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",
   },
   compactChipAccent: {
-    borderColor: "rgba(220,20,60,0.52)",
-    backgroundColor: "rgba(220,20,60,0.2)",
+    paddingHorizontal: 7,
   },
   compactSpeedChip: {
-    minWidth: 54,
-    paddingHorizontal: 12,
+    minWidth: 34,
+    paddingHorizontal: 6,
   },
   compactChipText: {
     color: "#EEF1F8",
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: "800",
+    textShadowColor: "rgba(0,0,0,0.72)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
   },
   compactChipTextAccent: {
     color: "#fff",
