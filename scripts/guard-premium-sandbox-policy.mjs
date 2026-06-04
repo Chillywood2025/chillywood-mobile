@@ -64,6 +64,17 @@ assertIncludes(revenueCat, "apiKey: runtime.revenueCat.androidPublicSdkKey", "Re
 
 assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = true", "Premium purchase shell closed by default");
 assertIncludes(monetization, "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.", "Premium setup-needed fallback copy");
+assertIncludes(monetization, "INTERNAL_TESTER_SANDBOX_PURCHASE_MODE", "bounded internal tester sandbox mode");
+assertIncludes(monetization, "isPremiumPurchaseShellAvailableForMode", "mode-specific Premium purchase availability");
+assertIncludes(monetization, "mode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE", "internal tester sandbox override is explicit");
+assertIncludes(monetization, "&& !runtime.liveMoneyEnabled", "internal tester sandbox blocks live money");
+assertIncludes(monetization, "&& !runtime.payoutsEnabled", "internal tester sandbox blocks payouts");
+assertIncludes(monetization, "&& !runtime.cashoutEnabled", "internal tester sandbox blocks cash-out");
+assertIncludes(monetization, "resolveInternalTesterSandboxPurchaseMode", "approved tester resolver");
+assertIncludes(monetization, "hasPlatformRoleMembership(memberships, [\"owner\", \"operator\"])", "owner/operator sandbox approval");
+assertIncludes(monetization, "isBetaOperatorIdentity", "runtime allowlisted tester approval");
+assertIncludes(monetization, "betaAccessActive === true", "active internal tester approval");
+assertIncludes(monetization, "Rows remain sandbox/test/not payable", "sandbox not-payable copy");
 assertIncludes(monetization, "snapshot.targets.premium_subscription.hasEntitlement", "RevenueCat entitlement still required");
 assertIncludes(featureFlags, "premiumPurchaseEnabled: false", "default Premium purchase runtime flag");
 assertNotIncludes(featureFlags, "premiumPurchaseEnabled: true", "default Premium purchase runtime flag");

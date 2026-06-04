@@ -187,6 +187,13 @@ assertNotIncludes(revenueCatWebhook, "payout_created", "RevenueCat webhook must 
 assertNotIncludes(revenueCatWebhook, "transfer_created", "RevenueCat webhook must not create transfers");
 
 assertIncludes(monetization, "PREMIUM_PURCHASE_SHELL_ON_HOLD = true", "Premium purchase shell closed by default");
+assertIncludes(monetization, "INTERNAL_TESTER_SANDBOX_PURCHASE_MODE", "internal tester sandbox purchase mode");
+assertIncludes(monetization, "INTERNAL_TESTER_SANDBOX_PURCHASE_COPY", "internal tester sandbox not-payable copy");
+assertIncludes(monetization, "isPremiumPurchaseShellAvailableForMode", "bounded Premium purchase mode helper");
+assertIncludes(monetization, "resolveInternalTesterSandboxPurchaseMode", "approved tester sandbox resolver");
+assertIncludes(monetization, "&& !runtime.liveMoneyEnabled", "sandbox tester mode blocks live money");
+assertIncludes(monetization, "&& !runtime.payoutsEnabled", "sandbox tester mode blocks payouts");
+assertIncludes(monetization, "&& !runtime.cashoutEnabled", "sandbox tester mode blocks cash-out");
 assertIncludes(packageJson, "\"guard:money-access-grants-policy\"", "npm guard script");
 
 assertNotIncludes(migration, "checkout_session", "no checkout session in money access migration");

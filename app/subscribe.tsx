@@ -6,14 +6,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../_lib/analytics";
 import {
   getCachedMonetizationSnapshot,
-  isPremiumPurchaseShellAvailable,
+  INTERNAL_TESTER_SANDBOX_PURCHASE_COPY,
+  INTERNAL_TESTER_SANDBOX_PURCHASE_MODE,
+  isPremiumPurchaseShellAvailableForMode,
   openManageSubscriptionFlow,
   purchaseMonetizationTarget,
   readMonetizationSnapshot,
+  resolveInternalTesterSandboxPurchaseMode,
   restoreMonetizationAccess,
   subscribeToMonetizationSnapshot,
+  type InternalTesterSandboxPurchaseModeState,
   type MonetizationSnapshot,
+  type MonetizationPurchaseMode,
 } from "../_lib/monetization";
+import { useOptionalBetaProgram } from "../_lib/betaProgram";
 import { useSession } from "../_lib/session";
 
 const FRIENDLY_UNAVAILABLE_MESSAGE =
@@ -28,9 +34,9 @@ const PREMIUM_UNLOCKS = [
   "Premium creator tools",
 ];
 
-const buildPurchaseReady = (snapshot: MonetizationSnapshot) => {
+const buildPurchaseReady = (snapshot: MonetizationSnapshot, purchaseMode: MonetizationPurchaseMode) => {
   const target = snapshot.targets.premium_subscription;
-  return isPremiumPurchaseShellAvailable()
+  return isPremiumPurchaseShellAvailableForMode(purchaseMode)
     && snapshot.configuration.shouldConfigure
     && snapshot.canMakePayments
     && target.offeringAvailable
@@ -118,7 +124,17 @@ export default function SubscribeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isLoading: sessionLoading, isSignedIn, user } = useSession();
+  const betaProgram = useOptionalBetaProgram();
   const [snapshot, setSnapshot] = useState(() => getCachedMonetizationSnapshot());
+  const [sandboxMode, setSandboxMode] = useState<InternalTesterSandboxPurchaseModeState>({
+    enabled: false,
+    mode: "public",
+    label: "Internal tester sandbox purchases",
+    reason: "Checking tester access.",
+    allowedRoles: [],
+    liveMoneyEnabled: false,
+    payoutsEnabled: false,
+  });
   const [loading, setLoading] = useState(false);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
@@ -133,11 +149,14 @@ export default function SubscribeScreen() {
     return unsubscribe;
   }, []);
 
-  const refreshSnapshot = useCallback(async (forceRefresh = true) => {
+  const activePurchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : "public";
+
+  const refreshSnapshot = useCallback(async (forceRefresh = true, mode: MonetizationPurchaseMode = activePurchaseMode) => {
     setLoading(true);
     try {
       const nextSnapshot = await readMonetizationSnapshot({
         forceRefresh,
+        purchaseMode: mode,
         userId: user?.id ?? null,
       });
       setSnapshot(nextSnapshot);
@@ -145,12 +164,55 @@ export default function SubscribeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [activePurchaseMode, user?.id]);
+
+  useEffect(() => {
+    if (sessionLoading || !isSignedIn) {
+      setSandboxMode((current) => current.enabled ? {
+        enabled: false,
+        mode: "public",
+        label: current.label,
+        reason: "Sign in with an approved internal tester account to use sandbox purchases.",
+        allowedRoles: [],
+        liveMoneyEnabled: false,
+        payoutsEnabled: false,
+      } : current);
+      return;
+    }
+
+    let active = true;
+    resolveInternalTesterSandboxPurchaseMode({
+      userId: user?.id ?? null,
+      email: user?.email ?? null,
+      betaAccessActive: betaProgram?.isActive === true,
+    })
+      .then((state) => {
+        if (!active) return;
+        setSandboxMode(state);
+        void refreshSnapshot(false, state.mode);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSandboxMode({
+          enabled: false,
+          mode: "public",
+          label: "Internal tester sandbox purchases",
+          reason: "Unable to confirm internal tester sandbox access right now.",
+          allowedRoles: [],
+          liveMoneyEnabled: false,
+          payoutsEnabled: false,
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [betaProgram?.isActive, isSignedIn, refreshSnapshot, sessionLoading, user?.email, user?.id]);
 
   useEffect(() => {
     if (sessionLoading) return;
-    void refreshSnapshot(false);
-  }, [refreshSnapshot, sessionLoading]);
+    void refreshSnapshot(false, activePurchaseMode);
+  }, [activePurchaseMode, refreshSnapshot, sessionLoading]);
 
   const toggleAccordion = useCallback((id: string) => {
     setExpanded((current) => ({ ...current, [id]: !current[id] }));
@@ -158,16 +220,20 @@ export default function SubscribeScreen() {
 
   const premiumTarget = snapshot.targets.premium_subscription;
   const hasPremium = !!premiumTarget.hasEntitlement;
-  const purchaseReady = buildPurchaseReady(snapshot);
+  const purchaseReady = buildPurchaseReady(snapshot, activePurchaseMode);
   const canPurchase = isSignedIn && purchaseReady && !hasPremium;
   const canRestore = isSignedIn && snapshot.configuration.shouldConfigure;
   const canManage = isSignedIn && snapshot.configuration.shouldConfigure;
   const busy = loading || purchaseBusy || restoreBusy || manageBusy;
   const statusSummary = useMemo(() => buildStatusSummary(snapshot), [snapshot]);
-  const purchaseStatusLabel = purchaseReady || hasPremium ? "Available" : "Temporarily unavailable";
+  const purchaseStatusLabel = sandboxMode.enabled && !hasPremium
+    ? purchaseReady ? "Sandbox test available" : "Sandbox setup unavailable"
+    : purchaseReady || hasPremium ? "Available" : "Temporarily unavailable";
   const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
   const availabilitySummary = purchaseReady
-    ? "A verified store subscription is ready for this account."
+    ? sandboxMode.enabled
+      ? "Approved tester mode can open a Google Play sandbox Premium purchase. No production money is active."
+      : "A verified store subscription is ready for this account."
     : FRIENDLY_UNAVAILABLE_MESSAGE;
 
   const onSignIn = useCallback(() => {
@@ -197,6 +263,7 @@ export default function SubscribeScreen() {
       const result = await purchaseMonetizationTarget("premium_subscription", {
         userId: user?.id ?? null,
         packageId: premiumTarget.recommendedPackageId,
+        purchaseMode: activePurchaseMode,
       });
       setNotice(result.ok ? result.message : FRIENDLY_UNAVAILABLE_MESSAGE);
       setSnapshot(result.snapshot);
@@ -205,7 +272,7 @@ export default function SubscribeScreen() {
     } finally {
       setPurchaseBusy(false);
     }
-  }, [canPurchase, isSignedIn, onSignIn, premiumTarget.recommendedPackageId, snapshot.status, user?.id]);
+  }, [activePurchaseMode, canPurchase, isSignedIn, onSignIn, premiumTarget.recommendedPackageId, snapshot.status, user?.id]);
 
   const onRestore = useCallback(async () => {
     if (!isSignedIn) {
@@ -226,7 +293,7 @@ export default function SubscribeScreen() {
     });
 
     try {
-      const result = await restoreMonetizationAccess({ userId: user?.id ?? null });
+      const result = await restoreMonetizationAccess({ purchaseMode: activePurchaseMode, userId: user?.id ?? null });
       const restoredPremium = !!result.snapshot.targets.premium_subscription.hasEntitlement;
       setNotice(restoredPremium ? "Purchases restored. Premium is active." : "Restore complete. Premium is not active.");
       setSnapshot(result.snapshot);
@@ -235,7 +302,7 @@ export default function SubscribeScreen() {
     } finally {
       setRestoreBusy(false);
     }
-  }, [canRestore, isSignedIn, onSignIn, snapshot.status, user?.id]);
+  }, [activePurchaseMode, canRestore, isSignedIn, onSignIn, snapshot.status, user?.id]);
 
   const onManage = useCallback(async () => {
     if (!isSignedIn) {
@@ -305,6 +372,15 @@ export default function SubscribeScreen() {
         <>
           <View style={styles.card}>
             <Text style={styles.cardKicker}>ACCOUNT STATUS</Text>
+            {sandboxMode.enabled ? (
+              <View style={styles.sandboxNotice}>
+                <Text style={styles.sandboxKicker}>INTERNAL TESTER SANDBOX MODE</Text>
+                <Text style={styles.sandboxTitle}>Sandbox Premium test is available for this account.</Text>
+                <Text style={styles.sandboxBody}>
+                  {INTERNAL_TESTER_SANDBOX_PURCHASE_COPY} Test purchases may appear in Google Play and RevenueCat sandbox dashboards.
+                </Text>
+              </View>
+            ) : null}
             <StatusLine
               label="Premium status"
               value={hasPremium ? "Active" : "Not active"}
@@ -346,7 +422,13 @@ export default function SubscribeScreen() {
                 disabled={busy}
                 onPress={onPurchase}
               >
-                {purchaseBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Subscribe to Premium</Text>}
+                {purchaseBusy ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {sandboxMode.enabled ? "Start Sandbox Premium Test" : "Subscribe to Premium"}
+                  </Text>
+                )}
               </TouchableOpacity>
             ) : null}
 
@@ -386,13 +468,15 @@ export default function SubscribeScreen() {
           {!hasPremium && !purchaseReady ? (
             <PremiumAccordion
               id="premium-unavailable"
-              title="Why can't I subscribe yet?"
-              summary="Premium setup is still being finalized"
+              title={sandboxMode.enabled ? "Why isn't the sandbox button active?" : "Why can't I subscribe yet?"}
+              summary={sandboxMode.enabled ? "Google Play or RevenueCat sandbox setup is unavailable on this account/device" : "Premium setup is still being finalized"}
               expanded={expanded}
               onToggle={toggleAccordion}
             >
               <Text style={styles.body}>
-                Premium setup is still being finalized. Access stays locked until a real store product and entitlement are verified.
+                {sandboxMode.enabled
+                  ? "This account is approved for sandbox testing, but the device/account still needs Google Play test billing and RevenueCat offerings available before the sandbox purchase dialog can open."
+                  : "Premium setup is still being finalized. Access stays locked until a real store product and entitlement are verified."}
               </Text>
             </PremiumAccordion>
           ) : null}
@@ -480,6 +564,32 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.2,
+  },
+  sandboxNotice: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(112,211,166,0.28)",
+    backgroundColor: "rgba(25,69,49,0.32)",
+    padding: 13,
+    gap: 5,
+  },
+  sandboxKicker: {
+    color: "#CFF7E3",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  sandboxTitle: {
+    color: "#F6FFF9",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  sandboxBody: {
+    color: "#CFEADA",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   cardTitle: {
     color: "#F4F7FC",

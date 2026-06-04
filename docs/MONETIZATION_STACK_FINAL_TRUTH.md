@@ -6,11 +6,14 @@ This document is the canonical repo truth for Chi'llwood monetization readiness 
 
 Owner/Admin UI follow-up: `docs/OWNER_ADMIN_TABS_UI_UX_POLISH.md` modernizes Admin tab interactions without changing this money truth, provider rail policy, production money status, payout status, or admin authority.
 
+Internal tester update: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md` opens a bounded `internal_tester_sandbox` purchase mode for approved testers only. Public/default Premium purchase remains closed by source (`PREMIUM_PURCHASE_SHELL_ON_HOLD = true`, `premiumPurchaseEnabled=false`), while approved testers can run clearly labeled Google Play / RevenueCat sandbox purchases. This does not activate production money, payouts, cash-out, payable balances, public buy buttons, fake purchases, or Stripe Android digital checkout.
+
 ## Executive Summary
 
 Chi'llwood has complete sandbox monetization readiness across Android digital goods, physical merch, and creator payout readiness:
 
 - Android digital goods use Google Play / RevenueCat.
+- Approved internal testers may use a clearly labeled sandbox-only mode to test Google Play / RevenueCat purchases.
 - Physical merch uses Stripe sandbox checkout for physical goods only.
 - Creator payout readiness uses Stripe Connect sandbox.
 - Production live money remains off.

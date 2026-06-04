@@ -12,6 +12,8 @@ Money Center UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
 
 Public V1 money-proof RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`.
 
+Internal tester sandbox mode: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`. Approved testers can now use bounded sandbox purchase surfaces; public/default users still cannot see production-like digital buy buttons.
+
 ## Backend Status
 
 | Area | Status |
@@ -33,6 +35,7 @@ Public V1 money-proof RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`.
 | Android route proof | `R5CR120QCBF` loaded the route from Play-installed versionCode `23`, denied non-operator access after proof-role revoke, and exposed the launcher only during a temporary operator role |
 | Play item availability | Fixed for the proof device by accepting the exact internal-test opt-in link, uninstalling the EAS/internal install with `installer=null`, installing from Google Play, then updating from Play to versionCode `23` with `installer=com.android.vending` |
 | Real non-Premium sandbox purchases | Creator tip, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, paid content access, and event pass completed through Google Play test card / RevenueCat sandbox and webhook processing |
+| Internal tester sandbox mode | Added for approved testers only; normal users remain closed/default and all rows stay sandbox/not-payable |
 
 ## Product Proof Matrix
 

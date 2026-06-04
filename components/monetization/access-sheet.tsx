@@ -11,15 +11,21 @@ import {
 
 import { trackEvent } from "../../_lib/analytics";
 import {
+  INTERNAL_TESTER_SANDBOX_PURCHASE_MODE,
   openManageSubscriptionFlow,
   purchaseBlockedAccess,
   readMonetizationAccessSheetState,
+  resolveInternalTesterSandboxPurchaseMode,
   restoreMonetizationAccess,
+  type InternalTesterSandboxPurchaseModeState,
   type MonetizationAccessPurchaseOutcome,
   type MonetizationAccessSheetState,
   type MonetizationGateResolution,
+  type MonetizationPurchaseMode,
   type MonetizationRestoreOutcome,
 } from "../../_lib/monetization";
+import { useOptionalBetaProgram } from "../../_lib/betaProgram";
+import { useSession } from "../../_lib/session";
 
 export type AccessSheetReason = "premium_required" | "party_pass_required";
 export type AccessSheetStatusTone = "neutral" | "success" | "error";
@@ -109,17 +115,41 @@ export function AccessSheet({
   const [manageBusy, setManageBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [statusTone, setStatusTone] = useState<AccessSheetStatusTone>("neutral");
+  const { user } = useSession();
+  const betaProgram = useOptionalBetaProgram();
+  const [sandboxMode, setSandboxMode] = useState<InternalTesterSandboxPurchaseModeState>({
+    enabled: false,
+    mode: "public",
+    label: "Internal tester sandbox purchases",
+    reason: "Checking tester access.",
+    allowedRoles: [],
+    liveMoneyEnabled: false,
+    payoutsEnabled: false,
+  });
+
+  const resolvePurchaseMode = useCallback(async (): Promise<MonetizationPurchaseMode> => {
+    const state = await resolveInternalTesterSandboxPurchaseMode({
+      userId: user?.id ?? null,
+      email: user?.email ?? null,
+      betaAccessActive: betaProgram?.isActive === true,
+    });
+    setSandboxMode(state);
+    return state.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : "public";
+  }, [betaProgram?.isActive, user?.email, user?.id]);
 
   const loadSheetState = useCallback(async () => {
+    const purchaseMode = await resolvePurchaseMode();
     const nextState = await readMonetizationAccessSheetState({
       gate,
+      purchaseMode,
+      userId: user?.id ?? null,
       appDisplayName,
       premiumUpsellTitle,
       premiumUpsellBody,
     });
     setSheetState(nextState);
     return nextState;
-  }, [appDisplayName, gate, premiumUpsellBody, premiumUpsellTitle]);
+  }, [appDisplayName, gate, premiumUpsellBody, premiumUpsellTitle, resolvePurchaseMode, user?.id]);
 
   useEffect(() => {
     if (!visible) return;
@@ -257,7 +287,8 @@ export function AccessSheet({
     setPurchaseBusy(true);
     trackEvent("monetization_purchase_started", analyticsPayload);
     try {
-      const result = await purchaseBlockedAccess({ gate });
+      const purchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : await resolvePurchaseMode();
+      const result = await purchaseBlockedAccess({ gate, purchaseMode, userId: user?.id ?? null });
       trackEvent(result.ok ? "monetization_purchase_success" : "monetization_purchase_failed", {
         ...analyticsPayload,
         message: result.message,
@@ -293,7 +324,19 @@ export function AccessSheet({
     } finally {
       setPurchaseBusy(false);
     }
-  }, [deferredMonetization, gate, loadSheetState, onCloseTracked, onPurchaseResult, sheetState?.primaryAction, sheetState?.primaryDisabled]);
+  }, [
+    analyticsPayload,
+    deferredMonetization,
+    gate,
+    loadSheetState,
+    onCloseTracked,
+    onPurchaseResult,
+    resolvePurchaseMode,
+    sandboxMode.enabled,
+    sheetState?.primaryAction,
+    sheetState?.primaryDisabled,
+    user?.id,
+  ]);
 
   const onRestorePress = useCallback(async () => {
     setRestoreBusy(true);
@@ -302,7 +345,8 @@ export function AccessSheet({
     trackEvent("monetization_restore_started", analyticsPayload);
 
     try {
-      const result = await restoreMonetizationAccess();
+      const purchaseMode = sandboxMode.enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : await resolvePurchaseMode();
+      const result = await restoreMonetizationAccess({ purchaseMode, userId: user?.id ?? null });
       trackEvent("monetization_restore_result", {
         ...analyticsPayload,
         ok: result.ok,
@@ -338,7 +382,7 @@ export function AccessSheet({
     } finally {
       setRestoreBusy(false);
     }
-  }, [loadSheetState, onRestoreResult]);
+  }, [analyticsPayload, loadSheetState, onRestoreResult, resolvePurchaseMode, sandboxMode.enabled, user?.id]);
 
   const onManagePress = useCallback(async () => {
     setManageBusy(true);
@@ -376,6 +420,15 @@ export function AccessSheet({
           <Text style={styles.kicker}>{copy.kicker}</Text>
           <Text style={styles.title}>{copy.title}</Text>
           <Text style={styles.body}>{copy.body}</Text>
+
+          {!deferredMonetization && sandboxMode.enabled ? (
+            <View style={styles.sandboxCard}>
+              <Text style={styles.sandboxKicker}>INTERNAL TESTER SANDBOX MODE</Text>
+              <Text style={styles.sandboxText}>
+                Google Play / RevenueCat sandbox test only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.
+              </Text>
+            </View>
+          ) : null}
 
           {!deferredMonetization && sheetState?.offer ? (
             <View style={styles.offerCard}>
@@ -534,6 +587,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 12,
     gap: 4,
+  },
+  sandboxCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(112,211,166,0.26)",
+    backgroundColor: "rgba(25,69,49,0.3)",
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  sandboxKicker: {
+    color: "#CFF7E3",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  sandboxText: {
+    color: "#DDF7E8",
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   helperCardNeutral: {
     borderColor: "rgba(92,116,168,0.2)",

@@ -23,6 +23,7 @@ import {
   type PremiumEntitlementKey,
 } from "./premiumEntitlements";
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "./moderation";
+import { isBetaOperatorIdentity } from "./runtimeConfig";
 import { supabase } from "./supabase";
 
 export type PlanTier = "free" | "premium";
@@ -177,6 +178,18 @@ export type MonetizationAccessSheetState = {
   canManage: boolean;
 };
 
+export type MonetizationPurchaseMode = "public" | "internal_tester_sandbox";
+
+export type InternalTesterSandboxPurchaseModeState = {
+  enabled: boolean;
+  mode: MonetizationPurchaseMode;
+  label: string;
+  reason: string;
+  allowedRoles: string[];
+  liveMoneyEnabled: boolean;
+  payoutsEnabled: boolean;
+};
+
 export type MonetizationAccessPurchaseOutcome = {
   ok: boolean;
   targetId?: MonetizationTargetId;
@@ -259,6 +272,10 @@ const INVALID_IDENTITY_LITERALS = new Set(["null", "undefined"]);
 export const PREMIUM_PURCHASE_SHELL_ON_HOLD = true;
 export const PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE =
   "Premium purchase is temporarily unavailable while Google Play and RevenueCat setup is verified.";
+export const INTERNAL_TESTER_SANDBOX_PURCHASE_MODE = "internal_tester_sandbox" satisfies MonetizationPurchaseMode;
+export const INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL = "Internal tester sandbox purchases";
+export const INTERNAL_TESTER_SANDBOX_PURCHASE_COPY =
+  "Sandbox test purchase through Google Play / RevenueCat. No production money, payouts, cash-out, withdrawal, transfer, or payable balance is enabled.";
 
 export const isPremiumPurchaseShellAvailable = () => {
   const runtime = getAppMonetizationRuntimeFeatures();
@@ -266,6 +283,84 @@ export const isPremiumPurchaseShellAvailable = () => {
     && runtime.premiumEnabled
     && !PREMIUM_PURCHASE_SHELL_ON_HOLD;
 };
+
+export const isPremiumPurchaseShellAvailableForMode = (
+  mode: MonetizationPurchaseMode = "public",
+) => {
+  if (isPremiumPurchaseShellAvailable()) return true;
+  const runtime = getAppMonetizationRuntimeFeatures();
+  return mode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
+    && FEATURE_FLAGS.monetization.subscriptions
+    && runtime.premiumEnabled
+    && !runtime.liveMoneyEnabled
+    && !runtime.payoutsEnabled
+    && !runtime.cashoutEnabled;
+};
+
+const getPurchaseModeFromOption = (mode?: MonetizationPurchaseMode | null): MonetizationPurchaseMode => (
+  mode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : "public"
+);
+
+export async function resolveInternalTesterSandboxPurchaseMode(options?: {
+  userId?: string | null;
+  email?: string | null;
+  betaAccessActive?: boolean;
+}): Promise<InternalTesterSandboxPurchaseModeState> {
+  const runtime = getAppMonetizationRuntimeFeatures();
+  const liveMoneyEnabled = runtime.liveMoneyEnabled === true;
+  const payoutsEnabled = runtime.payoutsEnabled === true;
+  const roles: string[] = [];
+
+  if (!FEATURE_FLAGS.monetization.subscriptions || !runtime.premiumEnabled) {
+    return {
+      enabled: false,
+      mode: "public",
+      label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
+      reason: "Premium sandbox purchases are unavailable because Premium runtime support is disabled.",
+      allowedRoles: roles,
+      liveMoneyEnabled,
+      payoutsEnabled,
+    };
+  }
+
+  if (liveMoneyEnabled || payoutsEnabled || runtime.cashoutEnabled) {
+    return {
+      enabled: false,
+      mode: "public",
+      label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
+      reason: "Sandbox purchase mode is blocked while live money, payouts, or cash-out is enabled.",
+      allowedRoles: roles,
+      liveMoneyEnabled,
+      payoutsEnabled,
+    };
+  }
+
+  const memberships = await readMyPlatformRoleMemberships().catch(() => []);
+  const ownerOperator = hasPlatformRoleMembership(memberships, ["owner", "operator"]);
+  if (ownerOperator) roles.push("owner_or_operator");
+
+  if (isBetaOperatorIdentity({ userId: options?.userId, email: options?.email })) {
+    roles.push("runtime_allowlisted_tester");
+  }
+
+  if (options?.betaAccessActive === true) {
+    roles.push("active_internal_tester");
+  }
+
+  const enabled = roles.length > 0;
+
+  return {
+    enabled,
+    mode: enabled ? INTERNAL_TESTER_SANDBOX_PURCHASE_MODE : "public",
+    label: INTERNAL_TESTER_SANDBOX_PURCHASE_MODE_LABEL,
+    reason: enabled
+      ? "Approved internal tester sandbox mode is active. Rows remain sandbox/test/not payable and production money stays off."
+      : "This account is not approved for internal tester sandbox purchases.",
+    allowedRoles: roles,
+    liveMoneyEnabled,
+    payoutsEnabled,
+  };
+}
 
 export const createEmptyMonetizationGateResolution = (
   snapshotStatus: MonetizationGateResolution["snapshotStatus"] = "disabled",
@@ -830,13 +925,15 @@ export function subscribeToMonetizationSnapshot(listener: () => void) {
 export async function readMonetizationSnapshot(options?: {
   forceRefresh?: boolean;
   userId?: string | null;
+  purchaseMode?: MonetizationPurchaseMode | null;
 }): Promise<MonetizationSnapshot> {
   const requestedUserId = normalizeOptionalIdentity(options?.userId);
   const signedInUserId = requestedUserId ? "" : normalizeOptionalIdentity(await getSignedInUserId());
   const userId = requestedUserId || signedInUserId || null;
   const configuration = configureRevenueCatOnce();
   const baseSnapshot = createEmptyMonetizationSnapshot(configuration, userId);
-  const purchaseShellAvailable = isPremiumPurchaseShellAvailable();
+  const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
+  const purchaseShellAvailable = isPremiumPurchaseShellAvailableForMode(purchaseMode);
 
   if (!configuration.shouldConfigure) {
     const snapshot = setCachedMonetizationSnapshot(baseSnapshot);
@@ -855,7 +952,11 @@ export async function readMonetizationSnapshot(options?: {
     const issues = [...baseSnapshot.issues];
     if (!purchaseShellAvailable) {
       issues.push(PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE);
-    } else if (!canMakePayments) {
+    }
+    if (purchaseShellAvailable && purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE) {
+      issues.push(INTERNAL_TESTER_SANDBOX_PURCHASE_COPY);
+    }
+    if (purchaseShellAvailable && !canMakePayments) {
       issues.push("Billing is not currently available on this device/account.");
     }
     if (!customerInfo) {
@@ -926,16 +1027,18 @@ export async function bootstrapMonetizationFoundation(userId?: string | null) {
 
 export async function purchaseMonetizationTarget(
   targetId: MonetizationTargetId,
-  options?: { packageId?: string | null; userId?: string | null },
+  options?: { packageId?: string | null; userId?: string | null; purchaseMode?: MonetizationPurchaseMode | null },
 ): Promise<MonetizationPurchaseOutcome> {
   const target = MONETIZATION_TARGETS[targetId];
+  const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
+    purchaseMode,
     userId: options?.userId,
   });
   const targetState = snapshot.targets[targetId];
 
-  if (!isPremiumPurchaseShellAvailable()) {
+  if (!isPremiumPurchaseShellAvailableForMode(purchaseMode)) {
     return {
       ok: false,
       target: targetId,
@@ -996,6 +1099,7 @@ export async function purchaseMonetizationTarget(
     const result = await purchaseRevenueCatPackage(selectedPackage);
     const refreshedSnapshot = await readMonetizationSnapshot({
       forceRefresh: true,
+      purchaseMode,
       userId: options?.userId,
     });
 
@@ -1017,7 +1121,7 @@ export async function purchaseMonetizationTarget(
     return {
       ok: false,
       target: targetId,
-      snapshot: await readMonetizationSnapshot({ userId: options?.userId }),
+      snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
       customerInfo: null,
       message: `${target.label} purchase could not be completed.`,
       packageId: String(selectedPackage.identifier ?? "").trim() || undefined,
@@ -1025,9 +1129,14 @@ export async function purchaseMonetizationTarget(
   }
 }
 
-export async function restoreMonetizationAccess(options?: { userId?: string | null }): Promise<MonetizationRestoreOutcome> {
+export async function restoreMonetizationAccess(options?: {
+  userId?: string | null;
+  purchaseMode?: MonetizationPurchaseMode | null;
+}): Promise<MonetizationRestoreOutcome> {
+  const purchaseMode = getPurchaseModeFromOption(options?.purchaseMode);
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
+    purchaseMode,
     userId: options?.userId,
   });
 
@@ -1044,6 +1153,7 @@ export async function restoreMonetizationAccess(options?: { userId?: string | nu
     const customerInfo = await restoreRevenueCatPurchases();
     const refreshedSnapshot = await readMonetizationSnapshot({
       forceRefresh: true,
+      purchaseMode,
       userId: options?.userId,
     });
 
@@ -1060,7 +1170,7 @@ export async function restoreMonetizationAccess(options?: { userId?: string | nu
 
     return {
       ok: false,
-      snapshot: await readMonetizationSnapshot({ userId: options?.userId }),
+      snapshot: await readMonetizationSnapshot({ purchaseMode, userId: options?.userId }),
       customerInfo: null,
       message: "Unable to restore purchases right now.",
     };
@@ -1120,12 +1230,15 @@ export function getMonetizationAccessSheetPresentation(options: {
 export async function readMonetizationAccessSheetState(options: {
   gate: GateLike | null | undefined;
   userId?: string | null;
+  purchaseMode?: MonetizationPurchaseMode | null;
   appDisplayName?: string;
   premiumUpsellTitle?: string;
   premiumUpsellBody?: string;
 }): Promise<MonetizationAccessSheetState> {
+  const purchaseMode = getPurchaseModeFromOption(options.purchaseMode);
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
+    purchaseMode,
     userId: options.userId,
   });
   const presentation = getMonetizationAccessSheetPresentation({
@@ -1138,7 +1251,7 @@ export async function readMonetizationAccessSheetState(options: {
   const primaryTargetId = options.gate?.monetization?.primaryTargetId;
   const targetId = purchaseTargetId ?? primaryTargetId;
   const targetState = targetId ? snapshot.targets[targetId] : null;
-  const purchaseShellAvailable = isPremiumPurchaseShellAvailable();
+  const purchaseShellAvailable = isPremiumPurchaseShellAvailableForMode(purchaseMode);
   const offerings = snapshot.offeringsLoaded && purchaseShellAvailable ? await readRevenueCatOfferings() : null;
   const offer = targetId && targetState
     ? buildMonetizationAccessSheetOffer({
@@ -1240,10 +1353,14 @@ export async function readMonetizationAccessSheetState(options: {
     snapshot,
     presentation,
     primaryAction: "purchase",
-    primaryLabel: presentation.actionLabel,
+    primaryLabel: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
+      ? "Start sandbox test"
+      : presentation.actionLabel,
     primaryDisabled: false,
-    helperKicker: "LIVE OFFER",
-    helperBody: "This pricing is coming from the current configured offer for this build.",
+    helperKicker: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE ? "SANDBOX TEST" : "LIVE OFFER",
+    helperBody: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
+      ? "This approved tester path opens Google Play sandbox billing only. It is not production money and does not create payable balances."
+      : "This pricing is coming from the current configured offer for this build.",
     helperTone: "neutral",
     offer,
     canRestore: true,
@@ -1254,9 +1371,12 @@ export async function readMonetizationAccessSheetState(options: {
 export async function purchaseBlockedAccess(options: {
   gate: GateLike | null | undefined;
   userId?: string | null;
+  purchaseMode?: MonetizationPurchaseMode | null;
 }): Promise<MonetizationAccessPurchaseOutcome> {
+  const purchaseMode = getPurchaseModeFromOption(options.purchaseMode);
   const snapshot = await readMonetizationSnapshot({
     forceRefresh: true,
+    purchaseMode,
     userId: options.userId,
   });
   const gateReason = String(options.gate?.reason ?? "").trim().toLowerCase();
@@ -1284,6 +1404,7 @@ export async function purchaseBlockedAccess(options: {
 
   const result = await purchaseMonetizationTarget(purchaseTargetId, {
     packageId: recommendedPackageId,
+    purchaseMode,
     userId: options.userId,
   });
 

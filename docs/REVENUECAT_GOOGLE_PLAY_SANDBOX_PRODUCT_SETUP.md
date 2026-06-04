@@ -8,6 +8,8 @@ Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms the sandbo
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`. This document covers the Android digital rail only. Stripe physical merch sandbox checkout and Stripe Connect payout readiness are proved separately and do not create RevenueCat products, Premium entitlements, or Android digital access.
 
+Internal tester update: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md` opens approved tester-only sandbox purchase surfaces. Public/default users still see Premium and digital purchases closed; approved testers can load Google Play / RevenueCat sandbox purchase surfaces when they are signed in, Play-installed/internal-track eligible, and provider products are available. This does not make any digital product production-live or payable.
+
 ## Current Outcome
 
 Backend readiness is in place:
@@ -33,7 +35,7 @@ The June 4 failure-path lane added event-pass backing through `creator_events` a
 
 | Product type | Proposed provider product id | Google Play product exists | Google Play product type | Google Play status | RevenueCat product imported | Offering/package exists | Entitlement attached | Webhook configured | Sandbox testable today | Blocker | Owner action required |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `premium_subscription` | Existing `premium_subscription` / base plan `monthly` | Yes, previously dashboard-proved | Subscription | Sandbox-proved for licensed tester path | Yes | Existing Premium offering | `premium` | Yes | Already proved; re-proof optional | Purchase shell remains closed by default | Keep existing mapping; do not rename |
+| `premium_subscription` | Existing `premium_subscription` / base plan `monthly` | Yes, previously dashboard-proved | Subscription | Sandbox-proved for licensed tester path | Yes | Existing Premium offering | `premium` | Yes | Already proved; approved tester sandbox mode can re-proof | Public purchase shell remains closed by default | Keep existing mapping; do not rename |
 | `paid_content_access` | `cw_paid_content_access_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None; access comes from Chi'llwood intent/grant | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Player UI polish remains future; RPC resolver proof passed | Keep sandbox-only; no production buy button |
 | `watch_party_live_ticket` | `cw_watch_party_live_ticket_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None; ticket comes from Chi'llwood intent/grant | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Route UI entry polish remains future; RPC resolver proof passed | Keep entry/viewing only and host approval unchanged |
 | `live_watch_party_access_pass` | `cw_live_watch_party_access_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Route UI entry polish remains future; RPC resolver proof passed | Keep viewer/listener only; no host/speaker/mod/admin grant |

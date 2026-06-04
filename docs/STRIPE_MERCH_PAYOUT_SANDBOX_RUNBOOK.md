@@ -6,6 +6,8 @@ This runbook covers Stripe sandbox readiness for physical merch and Stripe Conne
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
+Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) does not change Stripe policy. Stripe remains physical merch sandbox checkout and Stripe Connect payout-readiness only; Android digital goods stay on Google Play / RevenueCat.
+
 ## Current Status
 
 - Stripe secret names are configured in Supabase Edge Functions by digest only: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and dedicated merch webhook secret `STRIPE_MERCH_WEBHOOK_SECRET`.

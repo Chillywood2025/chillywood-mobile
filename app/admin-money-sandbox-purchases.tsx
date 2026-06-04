@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "../_lib/moderation";
+import { resolveInternalTesterSandboxPurchaseMode } from "../_lib/monetization";
 import {
   purchaseRevenueCatStoreProduct,
   readRevenueCatNonSubscriptionProducts,
@@ -71,6 +72,7 @@ const normalizeText = (value: unknown) => String(value ?? "").trim();
 export default function AdminMoneySandboxPurchasesScreen() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
+  const [accessSummary, setAccessSummary] = useState("Checking internal tester sandbox access...");
   const [userId, setUserId] = useState("");
   const [selectedKey, setSelectedKey] = useState<SandboxProductKey>("watch_party_live_ticket_sandbox_099");
   const [sourceId, setSourceId] = useState("");
@@ -92,8 +94,19 @@ export default function AdminMoneySandboxPurchasesScreen() {
       ]);
       if (!mounted) return;
       const currentUserId = normalizeText(userData.user?.id);
+      const sandboxMode = await resolveInternalTesterSandboxPurchaseMode({
+        userId: currentUserId,
+        email: userData.user?.email ?? null,
+      });
+      if (!mounted) return;
       setUserId(currentUserId);
-      setAllowed(hasPlatformRoleMembership(memberships, ["owner", "operator"]));
+      const ownerOperator = hasPlatformRoleMembership(memberships, ["owner", "operator"]);
+      setAllowed(ownerOperator || sandboxMode.enabled);
+      setAccessSummary(ownerOperator
+        ? "Owner/operator sandbox proof mode is active."
+        : sandboxMode.enabled
+          ? "Approved internal tester sandbox mode is active."
+          : sandboxMode.reason);
       setLoading(false);
     };
 
@@ -184,7 +197,10 @@ export default function AdminMoneySandboxPurchasesScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.title}>Owner/Admin required</Text>
-        <Text style={styles.body}>This sandbox purchase proof surface is limited to active owner/operator accounts.</Text>
+        <Text style={styles.body}>
+          This sandbox purchase proof surface is limited to active owner/operator accounts or approved internal tester sandbox accounts.
+        </Text>
+        <Text style={styles.body}>{accessSummary}</Text>
       </View>
     );
   }
@@ -197,6 +213,11 @@ export default function AdminMoneySandboxPurchasesScreen() {
         Creates a short-lived purchase intent, then starts a real RevenueCat / Google Play sandbox purchase for the selected
         product. It does not enable live money, public buy buttons, payouts, cash-out, or LiveKit publish authority.
       </Text>
+      <View style={styles.statusBox}>
+        <Text style={styles.statusText}>
+          {accessSummary} Sandbox rows stay not payable. Production money and payouts stay off.
+        </Text>
+      </View>
 
       <View style={styles.section}>
         <Text style={styles.label}>Product</Text>
