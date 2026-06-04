@@ -4,6 +4,8 @@ Updated June 4, 2026.
 
 This packet summarizes Chi'llywood's sandbox monetization proof for Google Play review prep, owner/operator review, and investor-readiness discussions. It does not activate production money.
 
+Canonical final truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
 Latest RC regression sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`. Android proof path: `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
 
 Stripe merch/payout readiness addendum: `docs/STRIPE_MERCH_PAYOUT_SANDBOX_RUNBOOK.md`, `docs/MERCH_PHYSICAL_GOODS_POLICY.md`, and `docs/STRIPE_CONNECT_PAYOUT_READINESS.md` document the sandbox-only Stripe physical-merch and Connect readiness posture. Stripe remains forbidden for Android digital goods; merch creates no access grants or RevenueCat entitlements; payout readiness creates no cash-out, withdrawal, transfer, or payable creator balance.
@@ -33,7 +35,7 @@ Latest Stripe Connect payout-readiness proof: `docs/STRIPE_CONNECT_SANDBOX_PAYOU
 | Live Watch-Party seat pass | Google Play / RevenueCat | Proved | `live_watch_party_seat_pass` | Sandbox only / Not payable | Seat eligibility only, host approval required | Not production-active |
 | Paid content access | Google Play / RevenueCat | Proved | `paid_content_access` | Sandbox only / Not payable | Content safety/private/draft/deleted/malware states still win | Not production-active |
 | Event pass | Google Play / RevenueCat | Proved | `event_pass` | Sandbox only / Not payable | Viewing/entry only; canceled event denied even with grant | Not production-active |
-| Merch physical good | Future physical provider | Not applicable | None | None | No Android digital entitlement | Planned only |
+| Merch physical good | Stripe sandbox physical goods | Real test-mode Checkout proved | None | Order/readiness only, not payable | No Android digital entitlement, no RevenueCat/Premium entitlement | Production not active |
 
 ## Backend Proof
 

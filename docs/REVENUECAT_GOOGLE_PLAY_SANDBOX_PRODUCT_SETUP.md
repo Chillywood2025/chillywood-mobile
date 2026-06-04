@@ -6,6 +6,8 @@ This is the external setup checklist for Chi'llwood Android digital sandbox prod
 
 Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms the sandbox product setup stayed review-ready with no production money, no public buy buttons, no payable sandbox/setup rows, and no active proof roles.
 
+Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`. This document covers the Android digital rail only. Stripe physical merch sandbox checkout and Stripe Connect payout readiness are proved separately and do not create RevenueCat products, Premium entitlements, or Android digital access.
+
 ## Current Outcome
 
 Backend readiness is in place:
@@ -38,7 +40,7 @@ The June 4 failure-path lane added event-pass backing through `creator_events` a
 | `live_watch_party_seat_pass` | `cw_live_watch_party_seat_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Route UI seat request polish remains future; RPC resolver proof passed | Keep seat eligibility only and host approval required |
 | `creator_tip` | `cw_creator_tip_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store consumable | Not needed for the new direct product proof route | None; ledger only unless a `creator_tip_record` readout is intentionally added | Webhook endpoint exists | Passed on Play-installed versionCode `23` | None for first creator-tip proof; repeat/idempotency/refund remain follow-up | Keep no entitlement; prove additional products separately |
 | `event_pass` | `cw_event_pass_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the new direct product proof route | None | Webhook endpoint exists | Passed on Play-installed versionCode `23` after route OTA update | Provider refund/revoke and delayed pending proof remain tooling follow-up | Use only a real backed event UUID; no production event-pass activation |
-| `merch_physical_good` | None for Android digital | Not applicable | Physical goods are outside Play Billing digital access | Planned only | Not applicable | Not applicable | None | Not applicable | No | Physical merch provider lane later | Keep merch separate; do not grant Android digital access from merch |
+| `merch_physical_good` | None for Android digital | Not applicable | Physical goods are outside Play Billing digital access | Stripe sandbox checkout proved separately | Not applicable | Not applicable | None | Not applicable | Not an Android digital product | Production merch approval/fulfillment/refund/support/Data Safety remain future | Keep merch separate; do not grant Android digital access from merch |
 
 ## Google Play Steps
 

@@ -6,6 +6,8 @@ Proof path: `/tmp/chillywood-money-failure-and-event-pass-proof-20260604/`
 
 Launch review packet: `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md`.
 
+Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
 Money Center UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
 
 Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms these failure-path guarantees still hold in the release-candidate money sweep, with final payable/paid rows `0` and active proof roles `0`.

@@ -6,6 +6,8 @@ This release-candidate sweep verifies that the completed Money Center and sandbo
 
 This sweep does not activate production money, payouts, cash-out, withdrawal, transfer, public production buy buttons, Stripe Android digital checkout, fake balances, fake sales, or LiveKit authority changes.
 
+Canonical final money truth after the later merch and payout-readiness proof lanes: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
 ## Starting State
 
 - Starting HEAD: `965ee72` (`Polish money center and review packet`).

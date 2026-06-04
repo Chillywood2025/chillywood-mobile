@@ -6,6 +6,8 @@ Event pass is now backed for sandbox proof through the existing `creator_events`
 
 Launch review packet: `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md`.
 
+Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
 Money Center UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
 
 Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms event-pass safety remained intact: event access is viewing/entry only, `canPublish:false`, canceled/ended/removed/disabled states still deny, and no production event pass buy button or payout path was introduced.

@@ -4,6 +4,8 @@ Updated June 4, 2026.
 
 This file records the repo-side UI polish state for Money Center launch readiness. It is a review-readiness and proof-index lane, not a production-money lane.
 
+Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
 Latest Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`, with Android screenshots under `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
 
 ## Creator Money Center
@@ -27,7 +29,8 @@ The overview also shows product readiness cards for:
 - Seats
 - Tips
 - Event Passes
-- Merch
+- Merch physical goods: sandbox checkout proved, production not active
+- Stripe Connect payout readiness: sandbox proved, payouts not active
 - Not payable
 
 Forbidden creator-facing actions remain absent:

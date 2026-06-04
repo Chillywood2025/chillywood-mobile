@@ -6,7 +6,9 @@ Chi'llwood now has an additive money-access readiness architecture:
 
 RevenueCat / Google Play event -> `provider_events` -> `monetization_products` -> `access_grants` -> content/room resolver RPCs -> `money_access_ledger_events` -> Money Center readout.
 
-This is not live-money activation. `live_money_enabled`, payouts, tips, paid content, Watch-Party tickets, Live Watch-Party access passes, Live Watch-Party seat passes, and merch checkout remain off/setup-only.
+Final consolidated money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
+This is not live-money activation. Production `live_money_enabled`, production payouts, production tips, production paid content, production Watch-Party tickets, production Live Watch-Party access passes, production Live Watch-Party seat passes, and production merch checkout remain off. The first-pass sandbox proof stack is now complete across Google Play / RevenueCat digital goods, Stripe physical merch checkout, and Stripe Connect payout readiness; sandbox/setup records are not payable.
 
 Launch review packet: `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md`.
 
@@ -14,7 +16,7 @@ UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
 
 Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms the money-access architecture did not regress Premium/Studio gates, Player/content safety, Watch-Party Live, Live Watch-Party / Live Stage, event pass, spectator safety, Admin/Owner safety, Play review posture, or Data Safety posture. Android proof path: `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
 
-Stripe physical merch readiness: migration `20260604043000_stripe_merch_payout_sandbox_readiness.sql` adds a sandbox-only physical merch product (`cw_merch_test_tee_sandbox`), merch order items, and sanitized idempotent Stripe merch webhook events. Physical merch remains outside Android digital access: it cannot create `access_grants`, RevenueCat/Premium entitlements, or money-access digital ledger rows, and sandbox merch rows are not payable creator earnings. Stripe Connect remains payout readiness only; app-level payouts remain off.
+Stripe physical merch readiness: migration `20260604043000_stripe_merch_payout_sandbox_readiness.sql` adds a sandbox-only physical merch product (`cw_merch_test_tee_sandbox`), merch order items, and sanitized idempotent Stripe merch webhook events. A real Stripe test-mode Checkout and signed merch webhook are proved for that physical product. Physical merch remains outside Android digital access: it cannot create `access_grants`, RevenueCat/Premium entitlements, or money-access digital ledger rows, and sandbox merch rows are not payable creator earnings. Stripe Connect sandbox payout readiness is proved, but app-level payouts remain off.
 
 Remote proof status on June 3, 2026:
 
@@ -41,15 +43,15 @@ Remote proof status on June 3, 2026:
 
 Android digital products must use RevenueCat / Google Play. Physical merch uses `merch_provider_later`, Shopify, or Stripe physical-goods readiness later and cannot create digital access grants.
 
-Seeded catalog status:
+Current catalog/proof status:
 
 - Premium: `sandbox`, RevenueCat/Google Play, `premium_subscription`, entitlement `premium`, sandbox proved, purchase shell closed by default.
-- Paid content: `setup`, no active buy button.
-- Watch-Party Live ticket: `setup`, viewing entry only, no speaker/publish authority.
-- Live Watch-Party access pass: `setup`, viewer entry only.
-- Live Watch-Party seat pass: `setup`, seat eligibility only; host approval and LiveKit token rules still win.
-- Creator tip: `setup`, no active tip button, not payable.
-- Merch physical good: `setup`, physical goods only, no digital entitlement.
+- Paid content: `sandbox`, RevenueCat/Google Play, real sandbox purchase/grant/ledger/resolver proof passed; no production buy button.
+- Watch-Party Live ticket: `sandbox`, RevenueCat/Google Play, real sandbox purchase/grant/ledger/resolver proof passed; viewing entry only, no speaker/publish authority.
+- Live Watch-Party access pass: `sandbox`, RevenueCat/Google Play, real sandbox purchase/grant/ledger/resolver proof passed; viewer entry only.
+- Live Watch-Party seat pass: `sandbox`, RevenueCat/Google Play, real sandbox purchase/grant/ledger/resolver proof passed; seat eligibility only; host approval and LiveKit token rules still win.
+- Creator tip: `sandbox`, RevenueCat/Google Play, real sandbox purchase/ledger proof passed; no durable access grant, not payable.
+- Merch physical good: `sandbox`, Stripe physical-goods checkout proof passed for `cw_merch_test_tee_sandbox`; no digital entitlement.
 - Event pass: `sandbox`, RevenueCat/Google Play, backed for sandbox proof through `creator_events`; still no production event-pass activation.
 
 Current sandbox proof matrix:
@@ -63,7 +65,7 @@ Current sandbox proof matrix:
 | `live_watch_party_seat_pass` | `live_watch_party_seat_pass_sandbox_099` | `cw_live_watch_party_seat_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and seat-eligibility/approval-required RPC resolver proof passed. | Production seat passes remain off. |
 | `creator_tip` | `creator_tip_sandbox_099` | `cw_creator_tip_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase and ledger-only/not-payable proof passed; no access grant created. | Production tips remain off. |
 | `event_pass` | `event_pass_sandbox_099` | `cw_event_pass_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and `has_event_pass_access` proof passed; canceled event still denied. | Production event passes remain off. |
-| `merch_physical_good` | `cw_merch_test_tee_sandbox` | Stripe physical goods sandbox; no Android digital mapping | `off` for production; sandbox/operator proof only | Repo-side Stripe sandbox checkout/webhook readiness added for physical merch only. | Real Stripe sandbox checkout completion remains a provider/runtime proof follow-up if not captured in this lane; pure merch must not create digital access. |
+| `merch_physical_good` | `cw_merch_test_tee_sandbox` | Stripe physical goods sandbox; no Android digital mapping | `off` for production; sandbox/operator proof only | Real Stripe test-mode Checkout and signed webhook proof passed for physical merch only. | Production merch approval, fulfillment, refund/return, support, and Data Safety review remain future. |
 
 ## Purchase Intents
 
@@ -116,8 +118,8 @@ Room entry results are viewer-only for paid access grants and return `canPublish
 Creator Money Center remains compact and honest:
 
 - Premium: sandbox proved / test-ready, production not overclaimed
-- Digital Sales, Paid Content, Tips, Watch-Party tickets/seats: setup needed / not active
-- Merch: physical goods separate / planned
+- Digital Sales, Paid Content, Tips, Watch-Party tickets/seats, and Event Passes: sandbox proved / not production-active / not payable
+- Merch: physical goods separate / sandbox checkout proved / production not active
 - Creator Balance: no verified earnings yet
 - Payouts and Tax & Legal: setup needed
 

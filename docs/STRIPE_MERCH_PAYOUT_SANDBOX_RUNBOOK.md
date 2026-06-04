@@ -4,6 +4,8 @@ Updated: June 4, 2026
 
 This runbook covers Stripe sandbox readiness for physical merch and Stripe Connect payout readiness. It does not activate production money.
 
+Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
 ## Current Status
 
 - Stripe secret names are configured in Supabase Edge Functions by digest only: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and dedicated merch webhook secret `STRIPE_MERCH_WEBHOOK_SECRET`.

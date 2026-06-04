@@ -4,6 +4,8 @@ Updated: June 4, 2026
 
 Stripe Connect is the payout readiness rail. It is not an Android digital checkout rail.
 
+Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
 ## Current Readiness
 
 - `stripe-connect-account` can create or reuse a Stripe test-mode connected account.
