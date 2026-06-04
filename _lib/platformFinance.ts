@@ -58,6 +58,7 @@ export const MONETIZATION_PRODUCTS_TABLE = "monetization_products";
 export const PROVIDER_EVENTS_TABLE = "provider_events";
 export const ACCESS_GRANTS_TABLE = "access_grants";
 export const MONEY_ACCESS_LEDGER_EVENTS_TABLE = "money_access_ledger_events";
+export const MONEY_PURCHASE_INTENTS_TABLE = "money_purchase_intents";
 export const MERCH_PRODUCTS_TABLE = "merch_products";
 export const MERCH_ORDERS_TABLE = "merch_orders";
 
@@ -109,9 +110,11 @@ export type AdminFinanceReadModel = {
   monetizationProductCount: number | null;
   providerEventCount: number | null;
   accessGrantCount: number | null;
+  moneyPurchaseIntentCount: number | null;
   moneyAccessLedgerEventCount: number | null;
   moneyAccessLedgerSandboxNotPayableCount: number | null;
   moneyAccessLedgerSetupNotPayableCount: number | null;
+  moneyAccessLedgerPayableCount: number | null;
   merchProductReadinessCount: number | null;
   merchOrderReadinessCount: number | null;
   networkBillingAccountCount: number | null;
@@ -260,9 +263,11 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     monetizationProductCount,
     providerEventCount,
     accessGrantCount,
+    moneyPurchaseIntentCount,
     moneyAccessLedgerEventCount,
     moneyAccessLedgerSandboxNotPayableCount,
     moneyAccessLedgerSetupNotPayableCount,
+    moneyAccessLedgerPayableCount,
     merchProductReadinessCount,
     merchOrderReadinessCount,
     networkBillingAccountCount,
@@ -359,9 +364,14 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     safeRead(() => readTableCount(MONETIZATION_PRODUCTS_TABLE)),
     safeRead(() => readTableCount(PROVIDER_EVENTS_TABLE)),
     safeRead(() => readTableCount(ACCESS_GRANTS_TABLE)),
+    safeRead(() => readTableCount(MONEY_PURCHASE_INTENTS_TABLE)),
     safeRead(() => readTableCount(MONEY_ACCESS_LEDGER_EVENTS_TABLE)),
     safeRead(() => readTableCountWhereEq(MONEY_ACCESS_LEDGER_EVENTS_TABLE, "environment", "sandbox")),
     safeRead(() => readTableCountWhereEq(MONEY_ACCESS_LEDGER_EVENTS_TABLE, "environment", "setup")),
+    safeRead(async () => (
+      await readTableCountWhereEq(MONEY_ACCESS_LEDGER_EVENTS_TABLE, "payable_state", "payable")
+      + await readTableCountWhereEq(MONEY_ACCESS_LEDGER_EVENTS_TABLE, "payable_state", "paid")
+    )),
     safeRead(() => readTableCount(MERCH_PRODUCTS_TABLE)),
     safeRead(() => readTableCount(MERCH_ORDERS_TABLE)),
     safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
@@ -460,9 +470,11 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     monetizationProductCount,
     providerEventCount,
     accessGrantCount,
+    moneyPurchaseIntentCount,
     moneyAccessLedgerEventCount,
     moneyAccessLedgerSandboxNotPayableCount,
     moneyAccessLedgerSetupNotPayableCount,
+    moneyAccessLedgerPayableCount,
     merchProductReadinessCount,
     merchOrderReadinessCount,
     networkBillingAccountCount,

@@ -4,6 +4,10 @@ Updated June 4, 2026.
 
 Event pass is now backed for sandbox proof through the existing `creator_events` table and the new `has_event_pass_access(user_id, event_id)` resolver.
 
+Launch review packet: `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md`.
+
+Money Center UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
+
 ## Product
 
 - product key: `event_pass_sandbox_099`

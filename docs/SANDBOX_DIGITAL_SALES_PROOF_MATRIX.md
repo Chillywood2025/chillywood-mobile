@@ -4,6 +4,10 @@ Updated June 4, 2026.
 
 This matrix records the current real sandbox proof state. Real sandbox sales are allowed only when produced by Google Play Billing / RevenueCat sandbox and processed through the webhook. Fake sale insertion is forbidden.
 
+Launch review packet: `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md`.
+
+Money Center UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
+
 ## Backend Status
 
 | Area | Status |
@@ -19,6 +23,7 @@ This matrix records the current real sandbox proof state. Real sandbox sales are
 | Payouts | Off |
 | Stripe Android digital checkout | Absent |
 | Fake sales | None inserted |
+| Money Center launch polish | Creator and Owner/Admin surfaces now show review-ready sandbox-only / not-payable proof summaries without production money |
 | EAS update | Production update group `9757451f-7817-488e-9b10-fff68372fefd` published `/admin-money-sandbox-purchases` for runtime `1.0.0` |
 | Android route proof | `R5CR120QCBF` loaded the route from Play-installed versionCode `23`, denied non-operator access after proof-role revoke, and exposed the launcher only during a temporary operator role |
 | Play item availability | Fixed for the proof device by accepting the exact internal-test opt-in link, uninstalling the EAS/internal install with `installer=null`, installing from Google Play, then updating from Play to versionCode `23` with `installer=com.android.vending` |

@@ -51,7 +51,8 @@ assertIncludes(packageJson, "guard:money-center-policy", "package guard script")
   assertIncludes(channelSettings, section, `Money Center section ${section}`);
 });
 
-assertIncludes(channelSettings, "Digital sales are not active yet.", "no active digital sales copy");
+assertIncludes(channelSettings, "Digital Sales", "digital sales readiness section");
+assertIncludes(channelSettings, "Sandbox proved", "sandbox-proved digital sales copy");
 assertIncludes(channelSettings, "Your balance will appear after verified sales.", "ledger-first balance copy");
 assertIncludes(channelSettings, "No verified earnings yet", "no fake earnings copy");
 assertIncludes(channelSettings, "Tips will unlock after store products and payout rules are verified.", "tips readiness copy");
@@ -74,6 +75,11 @@ assertIncludes(channelSettings, "renderCreatorMoneyEventRows", "creator Money Ce
 assertIncludes(channelSettings, "Money Event Detail", "creator Money event detail sheet");
 assertIncludes(channelSettings, "Not payable", "creator non-payable labeling");
 assertIncludes(channelSettings, "Sandbox only", "creator sandbox labeling");
+assertIncludes(channelSettings, "Sandbox testing is complete for digital access. Live money is not active.", "creator launch summary copy");
+assertIncludes(channelSettings, "Sandbox activity is inspection-only and not payable.", "creator sandbox-only not-payable copy");
+assertIncludes(channelSettings, "Real provider refund/revoke and delayed-payment pending proof still need provider/device support.", "creator provider-tooling gap copy");
+assertIncludes(channelSettings, "Tips, paid content, tickets, seats, and event passes have real Google Play / RevenueCat sandbox proof.", "creator sandbox proof product copy");
+assertIncludes(channelSettings, "Setup and sandbox money rows cannot become payable earnings.", "creator setup/sandbox not-payable proof copy");
 assertIncludes(channelSettings, "money_center_visible", "Money Center visibility switch");
 assertIncludes(channelSettings, "digital_sales_enabled", "Digital sales switch");
 assertIncludes(channelSettings, "payouts_enabled", "Payouts switch");
@@ -97,6 +103,18 @@ assertIncludes(admin, "HIGH_RISK_MONEY_SWITCHES", "high-risk Money switch confir
 assertIncludes(admin, "setPlatformMoneyKillSwitchState", "backend Money switch write");
 assertIncludes(admin, "Backend RPC writes the switch and immutable audit", "Money switch confirmation audit copy");
 assertIncludes(admin, "No provider secrets, checkout, transfer, withdrawal, payout, balance, or live-money movement is created.", "Money switch no-money-movement copy");
+assertIncludes(admin, "Launch review state: sandbox digital access proof is complete, live money and payouts are off, sandbox/setup rows are not payable, and no cash-out or withdrawal action exists.", "Owner/Admin launch review summary");
+assertIncludes(admin, "Product Catalog", "Owner/Admin Product Catalog launch metric");
+assertIncludes(admin, "Provider Events", "Owner/Admin Provider Events launch metric");
+assertIncludes(admin, "Purchase Intents", "Owner/Admin Purchase Intents launch metric");
+assertIncludes(admin, "Access Grants", "Owner/Admin Access Grants launch metric");
+assertIncludes(admin, "Ledger Events", "Owner/Admin Ledger Events launch metric");
+assertIncludes(admin, "Payable sandbox/setup rows", "Owner/Admin payable rows launch metric");
+assertIncludes(admin, "Duplicate webhook idempotency", "Owner/Admin idempotency proof row");
+assertIncludes(admin, "Admin revoke", "Owner/Admin admin revoke proof row");
+assertIncludes(admin, "Failed/expired intent", "Owner/Admin failed expired intent proof row");
+assertIncludes(admin, "Event pass safety", "Owner/Admin event pass safety proof row");
+assertIncludes(admin, "Stripe Android digital checkout", "Owner/Admin Stripe Android digital checkout absence row");
 assertIncludes(moneyAuditEvents, "readAdminMoneyAuditSourceRows", "admin safe money source row reader");
 assertIncludes(moneyAuditEvents, "readCreatorMoneyAuditSourceRows", "creator scoped money source row reader");
 assertIncludes(moneyAuditEvents, "buildAdminMoneyAuditEvents", "admin normalized money event builder");

@@ -8,6 +8,10 @@ RevenueCat / Google Play event -> `provider_events` -> `monetization_products` -
 
 This is not live-money activation. `live_money_enabled`, payouts, tips, paid content, Watch-Party tickets, Live Watch-Party access passes, Live Watch-Party seat passes, and merch checkout remain off/setup-only.
 
+Launch review packet: `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md`.
+
+UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
+
 Remote proof status on June 3, 2026:
 
 - `supabase db lint --local` passed with no schema errors.
@@ -49,12 +53,12 @@ Current sandbox proof matrix:
 | Product type | Product key | Provider mapping | Switch state | Sandbox proof status | Blocker |
 | --- | --- | --- | --- | --- | --- |
 | `premium_subscription` | `premium_subscription_monthly` | RevenueCat/Google Play `premium_subscription`, base plan `monthly`, entitlement `premium` | RevenueCat/provider readiness `sandbox_only`; Premium shell closed by source default | Prior real Premium sandbox purchase/webhook/user_entitlements proof stands. Webhook v8 can mirror the next real Premium provider event into product/access/ledger rows. | Needs a fresh real RevenueCat/Google Play sandbox event after webhook v8 for full shared-table proof. |
-| `paid_content_access` | `paid_content_access_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no buy button remains honest. | Create RevenueCat/Google Play product, map catalog row, add Player purchase UI only under sandbox guard. |
-| `watch_party_live_ticket` | `watch_party_live_ticket_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no buy button remains honest. | Create RevenueCat/Google Play ticket product and webhook mapping; prove entry-only resolver. |
-| `live_watch_party_access_pass` | `live_watch_party_access_pass_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no buy button remains honest. | Create RevenueCat/Google Play access-pass product and resolver proof. |
-| `live_watch_party_seat_pass` | `live_watch_party_seat_pass_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no buy button remains honest. | Create RevenueCat/Google Play seat-pass product; prove host approval and LiveKit publish still win. |
-| `creator_tip` | `creator_tip_setup` | Missing `provider_product_id` and entitlement/offering mapping | `off` | Not testable. Setup-only/no tip button remains honest. | Create RevenueCat/Google Play tip product; prove sandbox ledger stays not payable and no payout appears. |
-| `event_pass` | `event_pass_setup` | Missing `provider_product_id` and entitlement/offering mapping | no active UI | Not testable. Setup-only placeholder. | Define event-pass policy and provider mapping before sale proof. |
+| `paid_content_access` | `paid_content_access_sandbox_099` | `cw_paid_content_access_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and RPC resolver proof passed. | Player UI purchase polish remains future; production buy button remains off. |
+| `watch_party_live_ticket` | `watch_party_live_ticket_sandbox_099` | `cw_watch_party_live_ticket_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and viewer-only RPC resolver proof passed. | Route UI entry polish remains future; production tickets remain off. |
+| `live_watch_party_access_pass` | `live_watch_party_access_pass_sandbox_099` | `cw_live_watch_party_access_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and viewer/listener-only RPC resolver proof passed. | Production access passes remain off. |
+| `live_watch_party_seat_pass` | `live_watch_party_seat_pass_sandbox_099` | `cw_live_watch_party_seat_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and seat-eligibility/approval-required RPC resolver proof passed. | Production seat passes remain off. |
+| `creator_tip` | `creator_tip_sandbox_099` | `cw_creator_tip_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase and ledger-only/not-payable proof passed; no access grant created. | Production tips remain off. |
+| `event_pass` | `event_pass_sandbox_099` | `cw_event_pass_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and `has_event_pass_access` proof passed; canceled event still denied. | Production event passes remain off. |
 | `merch_physical_good` | `merch_physical_good_setup` | Physical merch provider later; no Android digital mapping | `off` | Not in Android digital sale scope. | Add physical merch provider later; pure merch must not create digital access. |
 
 ## Purchase Intents
@@ -133,9 +137,9 @@ Closeout validation also includes runtime, Premium, payment rail, creator moneti
 
 ## Remaining Gaps
 
-- No live provider activation for paid content, tickets, seats, tips, event passes, or merch checkout.
+- No production provider activation for paid content, tickets, seats, tips, event passes, or merch checkout.
 - No production payable ledger proof.
 - No payout activation.
-- Fresh signed-in Owner/Admin Product Catalog / Provider Events / Access Grants / Ledger screenshot proof is captured on EAS v22 at `/tmp/chillywood-real-sandbox-digital-sales-proof-20260603/`. Real Google Play / RevenueCat sandbox proof is now complete for creator tip plus Watch-Party ticket, Live Watch-Party access, Live Watch-Party seat, and paid content through `/tmp/chillywood-real-sandbox-access-products-proof-20260603/`. Remaining gaps are event-pass resolver backing plus refund/revoke, pending purchase, and supported duplicate webhook replay proof.
-- The next sales lane must use real RevenueCat / Google Play sandbox purchase events for tickets/seats; do not insert fake sales, fake provider events, or fake ledger rows.
+- Fresh signed-in Owner/Admin Product Catalog / Provider Events / Access Grants / Ledger screenshot proof is captured on EAS v22 at `/tmp/chillywood-real-sandbox-digital-sales-proof-20260603/`. Real Google Play / RevenueCat sandbox proof is complete for creator tip, Watch-Party ticket, Live Watch-Party access, Live Watch-Party seat, paid content, and event pass. Failure-path proof is documented in `docs/MONEY_FAILURE_PATHS_PROOF.md`.
+- Remaining provider-tooling gaps are real provider refund/revoke and delayed-payment pending proof if Google Play/RevenueCat expose those test actions. Do not fake them.
 - Remote migration apply and typegen are complete; `supabase migration list` remains the only unavailable Supabase readback command in this shell.

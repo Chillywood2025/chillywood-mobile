@@ -982,9 +982,11 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   monetizationProductCount: null,
   providerEventCount: null,
   accessGrantCount: null,
+  moneyPurchaseIntentCount: null,
   moneyAccessLedgerEventCount: null,
   moneyAccessLedgerSandboxNotPayableCount: null,
   moneyAccessLedgerSetupNotPayableCount: null,
+  moneyAccessLedgerPayableCount: null,
   merchProductReadinessCount: null,
   merchOrderReadinessCount: null,
   networkBillingAccountCount: null,
@@ -10241,6 +10243,28 @@ export default function AdminStudioScreen() {
     const ledgerAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "ledger" || event.category === "revenue_imports");
     const payoutAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "payouts");
     const webhookAuditEvents = adminMoneyAuditEvents.filter((event) => event.category === "webhooks" || event.category === "provider_readiness");
+    const sandboxAuditEventCount = adminMoneyAuditEvents.filter((event) => event.environment === "sandbox").length;
+    const notPayableAuditEventCount = adminMoneyAuditEvents.filter((event) => !event.payable).length;
+    const adminLaunchReadinessRows = [
+      { label: "Product Catalog", value: formatHomeCount(adminFinanceReadModel.monetizationProductCount, adminFinanceReadModel.loading) },
+      { label: "Provider Events", value: formatHomeCount(adminFinanceReadModel.providerEventCount, adminFinanceReadModel.loading) },
+      { label: "Purchase Intents", value: formatHomeCount(adminFinanceReadModel.moneyPurchaseIntentCount, adminFinanceReadModel.loading) },
+      { label: "Access Grants", value: formatHomeCount(adminFinanceReadModel.accessGrantCount, adminFinanceReadModel.loading) },
+      { label: "Ledger Events", value: formatHomeCount(adminFinanceReadModel.moneyAccessLedgerEventCount, adminFinanceReadModel.loading) },
+      { label: "Payable sandbox/setup rows", value: formatHomeCount(adminFinanceReadModel.moneyAccessLedgerPayableCount, adminFinanceReadModel.loading) },
+      { label: "Sandbox audit rows", value: String(sandboxAuditEventCount) },
+      { label: "Not payable audit rows", value: String(notPayableAuditEventCount) },
+    ];
+    const adminFailureProofRows = [
+      { label: "Duplicate webhook idempotency", value: "Proved by unique protections and remote readback" },
+      { label: "Admin revoke", value: "Proved; revoked grant denied resolver access" },
+      { label: "Failed/expired intent", value: "Proved; no provider event, grant, ledger, or payable money" },
+      { label: "Provider refund/revoke", value: "Provider-tooling gap; safety equivalent covered by admin revoke" },
+      { label: "Delayed-payment pending", value: "Provider/device gap; failed and expired intent safety proved" },
+      { label: "Event pass safety", value: "Proved; canceled event denied access even with grant" },
+      { label: "LiveKit authority", value: "Unchanged; access grants do not grant publish, host, speaker, mod, or admin power" },
+      { label: "Stripe Android digital checkout", value: "Absent" },
+    ];
 
     const sections: AdminMoneyCenterSectionConfig[] = [
       {
@@ -10258,7 +10282,7 @@ export default function AdminStudioScreen() {
               <OwnerMetricTile label="Provider Rows" value={providerReadinessLoading ? "Loading" : providerReadinessRows.length} tone={providerReadinessRows.length ? "info" : "locked"} />
               <OwnerMetricTile label="High Risk On" value={highRiskOnCount} tone={highRiskOnCount ? "danger" : "success"} />
             </View>
-            <OwnerDisabledReason reason="Next required action: keep live money off, finish provider proof, and use audited backend switches only after provider readiness is real." />
+            <OwnerDisabledReason reason="Launch review state: sandbox digital access proof is complete, live money and payouts are off, sandbox/setup rows are not payable, and no cash-out or withdrawal action exists." />
             <OwnerDetailGrid
               rows={[
                 { label: "Digital rail", value: "Google Play / RevenueCat for Android digital purchases" },
@@ -10269,6 +10293,8 @@ export default function AdminStudioScreen() {
                 { label: "Ledger model", value: "Internal ledger remains source of truth for earnings and payout math" },
               ]}
             />
+            <OwnerDetailGrid rows={adminLaunchReadinessRows} />
+            <OwnerDetailGrid rows={adminFailureProofRows} />
           </View>
         ),
       },

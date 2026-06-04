@@ -4,6 +4,10 @@ Updated June 4, 2026.
 
 Proof path: `/tmp/chillywood-money-failure-and-event-pass-proof-20260604/`
 
+Launch review packet: `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md`.
+
+Money Center UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
+
 ## Scope
 
 This lane proved sandbox money failure paths without activating live money:

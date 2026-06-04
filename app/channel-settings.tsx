@@ -6332,6 +6332,53 @@ export function ChannelStudioScreen() {
     const balanceEvents = creatorMoneyAuditEvents.filter((event) => event.category === "ledger" || event.category === "revenue_imports");
     const payoutEvents = creatorMoneyAuditEvents.filter((event) => event.category === "payouts");
     const providerEvents = creatorMoneyAuditEvents.filter((event) => event.category === "provider_readiness" || event.category === "webhooks");
+    const sandboxActivityCount = creatorMoneyAuditEvents.filter((event) => event.environment === "sandbox").length;
+    const nonPayableActivityCount = creatorMoneyAuditEvents.filter((event) => !event.payable).length;
+    const launchReadinessCards: readonly SummaryMetricCard[] = [
+      {
+        label: "Premium",
+        value: "Proved",
+        body: "Premium remains on the existing entitlement path; the purchase shell stays closed unless approved.",
+      },
+      {
+        label: "Digital Sales",
+        value: "Sandbox proved",
+        body: "Tips, paid content, tickets, seats, and event passes have real Google Play / RevenueCat sandbox proof.",
+      },
+      {
+        label: "Sandbox Activity",
+        value: sandboxActivityCount ? `${sandboxActivityCount} visible` : "Sandbox proved",
+        body: "Sandbox rows are inspection records only and stay not payable.",
+      },
+      {
+        label: "Creator Balance",
+        value: "No verified earnings yet",
+        body: "No payable creator balance is shown from sandbox or setup activity.",
+        tone: "unavailable",
+      },
+      {
+        label: "Payouts",
+        value: "Not active",
+        body: "Payouts are not active. No withdrawal, transfer, cash-out, or payout release action is available.",
+        tone: "unavailable",
+      },
+      {
+        label: "Remaining checks",
+        value: "Provider-tooling gaps",
+        body: "Real provider refund/revoke and delayed-payment pending proof still need provider/device support.",
+        tone: "unavailable",
+      },
+    ];
+    const productReadinessCards: readonly SummaryMetricCard[] = [
+      { label: "Paid Content", value: "Sandbox proved", body: "Access grants allow playback only when content policy allows." },
+      { label: "Watch-Party Tickets", value: "Sandbox proved", body: "Tickets grant entry/viewing only; host approval still wins." },
+      { label: "Live Access", value: "Sandbox proved", body: "Access passes allow viewer/listener entry only." },
+      { label: "Seats", value: "Sandbox proved", body: "Seat passes create eligibility only and keep canPublish false." },
+      { label: "Tips", value: "Sandbox proved", body: "Tips are ledger-only and do not create durable room/content access." },
+      { label: "Event Passes", value: "Sandbox proved", body: "Canceled, ended, removed, or unsafe event states still deny access." },
+      { label: "Merch", value: "Planned", body: "Physical goods stay separate from Android digital access.", tone: "unavailable" },
+      { label: "Not payable", value: nonPayableActivityCount ? `${nonPayableActivityCount} rows` : "Enforced", body: "Setup and sandbox money rows cannot become payable earnings.", tone: "unavailable" },
+    ];
 
     if (moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "locked" || moneyCenterFeatureFlag.state === "maintenance") {
       const unavailableStatus = moneyCenterFeatureFlag.state === "locked" ? "Blocked" : "Disabled";
@@ -6362,15 +6409,16 @@ export function ChannelStudioScreen() {
           <View style={styles.panelHeader}>
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>Money Center</Text>
-              <Text style={styles.panelSubtitle}>One place for sales readiness, creator balance, payouts, and provider checks.</Text>
+              <Text style={styles.panelSubtitle}>Sandbox testing is complete for digital access. Live money is not active.</Text>
             </View>
             {renderStudioStatusPill(topStatus, sectionTone(topStatus))}
           </View>
           <Text style={styles.permissionCopy}>
             {monetizationActive
               ? "Money tools are active. Keep store, payment, refund, tax, safety, and payout checks reviewed before adding new tools."
-              : "Digital sales are not active yet. Payments stay locked until provider checks pass."}
+              : "Sandbox activity is inspection-only and not payable. No verified payable earnings, payout, cash-out, withdrawal, or transfer action is available."}
           </Text>
+          {renderSummaryMetricCards(launchReadinessCards)}
           <View style={styles.summaryGrid}>
             {[
               { label: "Active", value: monetizationActive ? "Money tools" : "None" },
@@ -6418,6 +6466,7 @@ export function ChannelStudioScreen() {
             statusTone: sectionTone(topStatus),
             children: (
               <>
+                {renderSummaryMetricCards(productReadinessCards)}
                 {renderSummaryMetricCards([
                   { label: "Digital sales", value: digitalSalesStatus === "Disabled" ? "Not active" : digitalSalesStatus, body: "Store setup needed before paid digital access can open.", tone: sectionTone(digitalSalesStatus) === "default" ? "default" : "unavailable" },
                   { label: "Creator balance", value: "No verified earnings yet", body: "Your balance will appear after verified sales.", tone: "unavailable" },
