@@ -89,7 +89,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - Chi'llywood should not take a direct percentage cut from the tip amount
 - any Chi'llywood service fee, platform fee, cash-out fee, instant payout fee, or provider fee must be shown separately where allowed
 - tips must not unlock badges, VIP access, paid content, rankings, emojis, digital perks, or digital goods
-- tips may use Stripe only when they unlock no digital access, no paid content, no VIP treatment, no badges, no rankings, no emojis, and no other digital goods/perks.
+- Android creator tips use Google Play Billing plus RevenueCat. Stripe must not be used for Android tips, even when tips unlock no digital access.
 - if a user tips `$10`, the creator tip amount remains `$10`; any allowed Chi'llywood or provider fee must be separate and disclosed where allowed
 - Chi'llywood's main creator-commerce platform percentage should come from paid content and other marketplace/commerce sales, not hidden cuts from 100%-to-creator tip copy
 - merch, products, clothing, and other allowed creator sales belong on the future creator Platform and are managed from Platform Studio command-center surfaces
@@ -130,7 +130,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - balances must account for refunds, chargebacks, taxes, provider fees, holds, fraud, DMCA, suspension, and adjustments
 - do not call money `available` until it is actually payable
 - creator payout infrastructure should assume Stripe Connect or an equivalent marketplace payout layer
-- Stripe Connect is preferred for creator payout onboarding, KYC/tax readiness, provider account tracking, transfers, payout rails, 1099/tax tooling, tips, sponsor payments, marketplace/network money, paid content payouts, and merch/product payouts
+- Stripe Connect is preferred for creator payout onboarding, KYC/tax readiness, provider account tracking, transfers, payout rails, 1099/tax tooling, sponsor payments, marketplace/network money, paid content payouts, and merch/product payouts. Android tips remain Google Play/RevenueCat, not Stripe.
 - Stripe Connect is the only planned payout/cash-out rail; RevenueCat and Google Play must not execute creator payouts or cash-out.
 - Google Play plus RevenueCat is for Premium subscription entitlement; Stripe must not be used as the Premium entitlement source of truth
 - creator payouts must remain separate from app-store billing and separate from RevenueCat

@@ -40,6 +40,12 @@ verify_jwt = false
 [functions.stripe-connect-webhook]
 verify_jwt = false
 
+[functions.stripe-merch-checkout]
+verify_jwt = false
+
+[functions.stripe-merch-webhook]
+verify_jwt = false
+
 [functions.stripe-connect-transfer-sync]
 verify_jwt = false
 

@@ -24,7 +24,7 @@ Repo-side rail policy is explicit in `_lib/paymentRailPolicy.ts` for app/readout
 
 - Premium subscription: Google Play plus RevenueCat only. Stripe must not sell or grant Premium.
 - Android digital paid creator content: Google Play Billing or an explicitly approved Play billing/external-offers path is required before checkout can open. Stripe is default-blocked for Android in-app digital access.
-- Creator-support tips: Stripe/checkout may be used only if tips unlock nothing: no paid access, VIP treatment, badges, rankings, emojis, special content, or other digital goods/perks.
+- Creator-support tips: Android tips use Google Play plus RevenueCat. Tips still unlock no paid access, VIP treatment, badges, rankings, emojis, special content, or other digital goods/perks.
 - Physical merch/products/clothing: Stripe or another commerce provider can be used later when provider, tax, shipping, refund, dispute, and legal readiness are proved.
 - Creator payout/cash-out: Stripe Connect is the planned rail, but payouts and cash-out remain disabled until Connect, KYC/tax, webhook, legal/accounting, and Owner-approved payout proof pass.
 

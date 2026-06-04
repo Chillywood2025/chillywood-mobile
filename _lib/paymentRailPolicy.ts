@@ -41,6 +41,7 @@ export const PAYMENT_RAIL_POLICY_VERSION = "2026-05-15";
 export const PREMIUM_PAYMENT_RAIL = "google_play_revenuecat";
 export const ANDROID_DIGITAL_CREATOR_CONTENT_STRIPE_ENABLED = false;
 export const TIPS_MUST_NOT_UNLOCK_DIGITAL_BENEFITS = true;
+export const CREATOR_TIP_PAYMENT_RAIL = "google_play_revenuecat";
 export const PHYSICAL_PRODUCT_PAYMENT_RAIL = "stripe_checkout";
 export const CREATOR_PAYOUT_PAYMENT_RAIL = "stripe_connect";
 
@@ -103,10 +104,10 @@ export function resolvePaymentRailPolicy(input: PaymentRailPolicyInput): Payment
       });
     }
 
-    return blocked("stripe_checkout", "tips_checkout_disabled_until_provider_proof", {
+    return blocked("google_play_revenuecat", "creator_tips_use_revenuecat_google_play_sandbox_only", {
       allowed: providerReady(input),
       requiresProviderProof: !providerReady(input),
-      stripeAllowed: providerReady(input),
+      revenueCatAllowed: true,
       unlocksDigitalAccess: false,
     });
   }

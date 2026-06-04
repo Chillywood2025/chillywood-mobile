@@ -6,6 +6,8 @@ This packet summarizes Chi'llywood's sandbox monetization proof for Google Play 
 
 Latest RC regression sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`. Android proof path: `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
 
+Stripe merch/payout readiness addendum: `docs/STRIPE_MERCH_PAYOUT_SANDBOX_RUNBOOK.md`, `docs/MERCH_PHYSICAL_GOODS_POLICY.md`, and `docs/STRIPE_CONNECT_PAYOUT_READINESS.md` document the sandbox-only Stripe physical-merch and Connect readiness posture. Stripe remains forbidden for Android digital goods; merch creates no access grants or RevenueCat entitlements; payout readiness creates no cash-out, withdrawal, transfer, or payable creator balance.
+
 ## Current Truth
 
 - Production live money: off.
@@ -14,7 +16,7 @@ Latest RC regression sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`. Android pr
 - Sandbox and setup ledger rows: not payable.
 - Creator balance: no verified payable earnings yet.
 - Premium, creator tips, Watch-Party Live tickets, Live Watch-Party access passes, Live Watch-Party seat passes, paid content access, and event passes have real Google Play / RevenueCat sandbox proof.
-- Merch is physical goods separate/planned and does not create Android digital access.
+- Merch is physical goods separate; sandbox Stripe readiness is physical-only and does not create Android digital access.
 - Payment creates access records only. Access records do not grant LiveKit publish permission, host power, speaker authority, moderator/admin power, payout access, or safety bypass.
 
 ## Product Proof Summary

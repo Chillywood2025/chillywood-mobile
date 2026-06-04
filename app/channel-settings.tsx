@@ -6129,7 +6129,7 @@ export function ChannelStudioScreen() {
       {
         label: "Physical merch",
         value: merchStatus,
-        body: `${merchFlag.state === "off" ? "Merch is not active yet." : switchSetupBody("merch_enabled", "Physical merch can use a separate approved checkout when provider, tax, fulfillment, and refund checks are ready.")} Physical merch can use a separate approved checkout when provider, tax, fulfillment, and refund checks are ready.`,
+        body: `${merchFlag.state === "off" ? "Merch is not active yet." : switchSetupBody("merch_enabled", "Physical merch can use sandbox Stripe checkout only when provider, tax, fulfillment, and refund checks are ready.")} Physical merch stays separate from Android digital access and can never unlock Premium, tickets, seats, tips, paid content, event passes, or LiveKit authority.`,
         tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable",
       },
       {
@@ -6141,7 +6141,7 @@ export function ChannelStudioScreen() {
       {
         label: "Orders",
         value: "Planned",
-        body: "No merch store, shipping status, inventory, or order history is active yet.",
+        body: "Sandbox merch readiness can show physical order and fulfillment status; production merch checkout is not active.",
         tone: "unavailable",
       },
     ];
@@ -6476,7 +6476,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Payment rules</Text>
                   <Text style={styles.eventEmptyBody}>
-                    Digital sales inside Android use Google Play Billing where required. Creator payouts are handled separately through Stripe Connect when available. Physical merch can use an approved merch checkout. No payout is available until setup and verification are complete.
+                    Digital sales inside Android use Google Play Billing where required. Creator payouts are handled separately through Stripe Connect readiness. Physical merch can use Stripe only for physical goods. No payout is available until setup and verification are complete.
                   </Text>
                 </View>
                 {renderCreatorMoneyEventRows(

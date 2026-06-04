@@ -61,6 +61,8 @@ export const MONEY_ACCESS_LEDGER_EVENTS_TABLE = "money_access_ledger_events";
 export const MONEY_PURCHASE_INTENTS_TABLE = "money_purchase_intents";
 export const MERCH_PRODUCTS_TABLE = "merch_products";
 export const MERCH_ORDERS_TABLE = "merch_orders";
+export const MERCH_ORDER_ITEMS_TABLE = "merch_order_items";
+export const STRIPE_MERCH_EVENTS_TABLE = "stripe_merch_events";
 
 export type AdminFinanceReadModel = {
   financeLedgerEventCount: number | null;
@@ -117,6 +119,9 @@ export type AdminFinanceReadModel = {
   moneyAccessLedgerPayableCount: number | null;
   merchProductReadinessCount: number | null;
   merchOrderReadinessCount: number | null;
+  merchOrderItemCount: number | null;
+  stripeMerchEventCount: number | null;
+  stripeMerchEventProcessedCount: number | null;
   networkBillingAccountCount: number | null;
   networkInvoiceRecordCount: number | null;
   networkInvoiceDraftCount: number | null;
@@ -270,6 +275,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     moneyAccessLedgerPayableCount,
     merchProductReadinessCount,
     merchOrderReadinessCount,
+    merchOrderItemCount,
+    stripeMerchEventCount,
+    stripeMerchEventProcessedCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
     networkInvoiceDraftCount,
@@ -374,6 +382,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     )),
     safeRead(() => readTableCount(MERCH_PRODUCTS_TABLE)),
     safeRead(() => readTableCount(MERCH_ORDERS_TABLE)),
+    safeRead(() => readTableCount(MERCH_ORDER_ITEMS_TABLE)),
+    safeRead(() => readTableCount(STRIPE_MERCH_EVENTS_TABLE)),
+    safeRead(() => readTableCountWhereEq(STRIPE_MERCH_EVENTS_TABLE, "status", "processed")),
     safeRead(() => readTableCount(NETWORK_BILLING_ACCOUNTS_TABLE)),
     safeRead(() => readTableCount(NETWORK_INVOICE_RECORDS_TABLE)),
     safeRead(() => readTableCountWhereEq(NETWORK_INVOICE_RECORDS_TABLE, "status", "draft")),
@@ -477,6 +488,9 @@ export async function readAdminFinanceReadModel(): Promise<AdminFinanceReadModel
     moneyAccessLedgerPayableCount,
     merchProductReadinessCount,
     merchOrderReadinessCount,
+    merchOrderItemCount,
+    stripeMerchEventCount,
+    stripeMerchEventProcessedCount,
     networkBillingAccountCount,
     networkInvoiceRecordCount,
     networkInvoiceDraftCount,

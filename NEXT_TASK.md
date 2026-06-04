@@ -1,5 +1,11 @@
 # NEXT TASK
 
+## Recommended Lane: Stripe Sandbox Merch Checkout Runtime Proof
+
+Latest Stripe merch/payout readiness result: repo-side sandbox readiness is now added for Stripe physical merch and Connect payout status. The new migration `20260604043000_stripe_merch_payout_sandbox_readiness.sql` adds `cw_merch_test_tee_sandbox`, merch order items, and sanitized Stripe merch events. New functions `stripe-merch-checkout` and `stripe-merch-webhook` are server-side/test-mode only and cannot create access grants, RevenueCat/Premium entitlements, digital ledger rows, payout, cash-out, withdrawal, transfer, payable balance, or LiveKit authority. Stripe Connect remains sandbox payout readiness; payout execution remains blocked.
+
+Next proof should deploy/apply through the approved Supabase workflow, then run one real Stripe test-card physical-merch checkout only if the operator session and webhook endpoint are available. Do not fake a paid order. If checkout cannot complete, document the exact Stripe/dashboard/webhook blocker and keep merch as sandbox readiness only. Android digital goods, including tips, remain Google Play/RevenueCat only.
+
 ## Recommended Lane: Google Play Publishing Overview And Release Asset Closeout
 
 Latest Public V1 money-proof RC sweep: completed on June 4, 2026 from `965ee72`. Android proof path is `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`; device was Play-installed `R5CR120QCBF` (`com.chillywood.mobile`, versionCode `23`, installer `com.android.vending`). Remote counts stayed provider_events `6`, purchase_intents `8`, access_grants `5`, ledger_events `7`, payable/paid rows `0`, active temporary proof roles `0`. New doc `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` records the regression matrix for Premium, Platform Studio, Player/content, Watch-Party Live, Live Watch-Party / Live Stage, event pass, spectator safety, Admin/Owner safety, Play review, and Data Safety. Remaining money gaps are still only provider-tooling proof for real refund/revoke and delayed-payment pending, plus future explicit production-money/payout/tax/legal/public-buy-button lanes.

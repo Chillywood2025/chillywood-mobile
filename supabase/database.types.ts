@@ -4575,50 +4575,131 @@ export type Database = {
           },
         ]
       }
+      merch_order_items: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          order_id: string
+          product_id: string | null
+          quantity: number
+          unit_amount_minor: number
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          id?: string
+          order_id: string
+          product_id?: string | null
+          quantity: number
+          unit_amount_minor: number
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          order_id?: string
+          product_id?: string | null
+          quantity?: number
+          unit_amount_minor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merch_order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "merch_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merch_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "merch_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       merch_orders: {
         Row: {
+          amount_subtotal_minor: number | null
+          amount_total_minor: number | null
           buyer_id: string | null
+          canceled_at: string | null
           created_at: string
           creator_id: string | null
+          currency: string | null
           digital_access_grant_id: string | null
           environment: string
           fulfillment_status: string
           id: string
           metadata: Json
           order_status: string
+          paid_at: string | null
+          payment_status: string
           product_id: string | null
           provider: string
           provider_order_id: string | null
+          refunded_at: string | null
+          shipping_address: Json | null
+          shipping_name: string | null
+          shipping_required: boolean
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
           updated_at: string
         }
         Insert: {
+          amount_subtotal_minor?: number | null
+          amount_total_minor?: number | null
           buyer_id?: string | null
+          canceled_at?: string | null
           created_at?: string
           creator_id?: string | null
+          currency?: string | null
           digital_access_grant_id?: string | null
           environment?: string
           fulfillment_status?: string
           id?: string
           metadata?: Json
           order_status?: string
+          paid_at?: string | null
+          payment_status?: string
           product_id?: string | null
           provider?: string
           provider_order_id?: string | null
+          refunded_at?: string | null
+          shipping_address?: Json | null
+          shipping_name?: string | null
+          shipping_required?: boolean
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           updated_at?: string
         }
         Update: {
+          amount_subtotal_minor?: number | null
+          amount_total_minor?: number | null
           buyer_id?: string | null
+          canceled_at?: string | null
           created_at?: string
           creator_id?: string | null
+          currency?: string | null
           digital_access_grant_id?: string | null
           environment?: string
           fulfillment_status?: string
           id?: string
           metadata?: Json
           order_status?: string
+          paid_at?: string | null
+          payment_status?: string
           product_id?: string | null
           provider?: string
           provider_order_id?: string | null
+          refunded_at?: string | null
+          shipping_address?: Json | null
+          shipping_name?: string | null
+          shipping_required?: boolean
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -4634,38 +4715,74 @@ export type Database = {
       merch_products: {
         Row: {
           created_at: string
+          creates_digital_access: boolean
           creator_id: string | null
+          currency: string
+          description: string | null
           display_name: string
+          environment: string
           fulfillment_model: string
           id: string
+          image_url: string | null
+          inventory_status: string
+          is_physical_good: boolean
           metadata: Json
+          price_minor: number | null
           product_id: string | null
+          product_key: string | null
           provider: string
           status: string
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          title: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
+          creates_digital_access?: boolean
           creator_id?: string | null
+          currency?: string
+          description?: string | null
           display_name: string
+          environment?: string
           fulfillment_model?: string
           id?: string
+          image_url?: string | null
+          inventory_status?: string
+          is_physical_good?: boolean
           metadata?: Json
+          price_minor?: number | null
           product_id?: string | null
+          product_key?: string | null
           provider?: string
           status?: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          title?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
+          creates_digital_access?: boolean
           creator_id?: string | null
+          currency?: string
+          description?: string | null
           display_name?: string
+          environment?: string
           fulfillment_model?: string
           id?: string
+          image_url?: string | null
+          inventory_status?: string
+          is_physical_good?: boolean
           metadata?: Json
+          price_minor?: number | null
           product_id?: string | null
+          product_key?: string | null
           provider?: string
           status?: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          title?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -8442,6 +8559,59 @@ export type Database = {
             columns: ["sponsor_deal_id"]
             isOneToOne: false
             referencedRelation: "sponsor_deal_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stripe_merch_events: {
+        Row: {
+          created_at: string
+          environment: string
+          event_type: string
+          id: string
+          linked_order_id: string | null
+          metadata: Json
+          object_id: string | null
+          processed_at: string | null
+          provider: string
+          status: string
+          stripe_event_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          environment?: string
+          event_type: string
+          id?: string
+          linked_order_id?: string | null
+          metadata?: Json
+          object_id?: string | null
+          processed_at?: string | null
+          provider?: string
+          status?: string
+          stripe_event_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          environment?: string
+          event_type?: string
+          id?: string
+          linked_order_id?: string | null
+          metadata?: Json
+          object_id?: string | null
+          processed_at?: string | null
+          provider?: string
+          status?: string
+          stripe_event_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_merch_events_linked_order_id_fkey"
+            columns: ["linked_order_id"]
+            isOneToOne: false
+            referencedRelation: "merch_orders"
             referencedColumns: ["id"]
           },
         ]

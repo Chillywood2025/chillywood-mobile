@@ -14,6 +14,8 @@ UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
 
 Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms the money-access architecture did not regress Premium/Studio gates, Player/content safety, Watch-Party Live, Live Watch-Party / Live Stage, event pass, spectator safety, Admin/Owner safety, Play review posture, or Data Safety posture. Android proof path: `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
 
+Stripe physical merch readiness: migration `20260604043000_stripe_merch_payout_sandbox_readiness.sql` adds a sandbox-only physical merch product (`cw_merch_test_tee_sandbox`), merch order items, and sanitized idempotent Stripe merch webhook events. Physical merch remains outside Android digital access: it cannot create `access_grants`, RevenueCat/Premium entitlements, or money-access digital ledger rows, and sandbox merch rows are not payable creator earnings. Stripe Connect remains payout readiness only; app-level payouts remain off.
+
 Remote proof status on June 3, 2026:
 
 - `supabase db lint --local` passed with no schema errors.
@@ -61,7 +63,7 @@ Current sandbox proof matrix:
 | `live_watch_party_seat_pass` | `live_watch_party_seat_pass_sandbox_099` | `cw_live_watch_party_seat_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and seat-eligibility/approval-required RPC resolver proof passed. | Production seat passes remain off. |
 | `creator_tip` | `creator_tip_sandbox_099` | `cw_creator_tip_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase and ledger-only/not-payable proof passed; no access grant created. | Production tips remain off. |
 | `event_pass` | `event_pass_sandbox_099` | `cw_event_pass_sandbox_099` | `off` for production; sandbox proof route only | Real sandbox purchase, access grant, ledger, and `has_event_pass_access` proof passed; canceled event still denied. | Production event passes remain off. |
-| `merch_physical_good` | `merch_physical_good_setup` | Physical merch provider later; no Android digital mapping | `off` | Not in Android digital sale scope. | Add physical merch provider later; pure merch must not create digital access. |
+| `merch_physical_good` | `cw_merch_test_tee_sandbox` | Stripe physical goods sandbox; no Android digital mapping | `off` for production; sandbox/operator proof only | Repo-side Stripe sandbox checkout/webhook readiness added for physical merch only. | Real Stripe sandbox checkout completion remains a provider/runtime proof follow-up if not captured in this lane; pure merch must not create digital access. |
 
 ## Purchase Intents
 

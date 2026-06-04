@@ -59,7 +59,7 @@ assertIncludes(channelSettings, "Tips will unlock after store products and payou
 assertIncludes(channelSettings, "No tip totals, tip balance, or tip checkout is available here.", "no fake tips copy");
 assertIncludes(channelSettings, "Stripe is not used to charge Android users for in-app digital access.", "Android digital Stripe block");
 assertIncludes(channelSettings, "Stripe Connect is for creator payouts only.", "Stripe Connect payout boundary");
-assertIncludes(channelSettings, "Physical merch can use a separate approved checkout", "merch separation copy");
+assertIncludes(channelSettings, "Physical merch stays separate from Android digital access", "merch separation copy");
 assertIncludes(channelSettings, "Digital app access stays separate from merch", "digital merch separation");
 assertIncludes(channelSettings, "Provider checks are the source of readiness truth.", "provider readiness visible source");
 assertIncludes(channelSettings, "readProviderReadinessSummary", "provider readiness integration");

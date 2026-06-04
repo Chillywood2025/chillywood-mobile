@@ -34,6 +34,7 @@ const foundationDoc = read("docs/CREATOR_MONETIZATION_SYSTEMS_FOUNDATION.md");
   assertIncludes(policy, "PREMIUM_PAYMENT_RAIL = \"google_play_revenuecat\"", label);
   assertIncludes(policy, "ANDROID_DIGITAL_CREATOR_CONTENT_STRIPE_ENABLED = false", label);
   assertIncludes(policy, "TIPS_MUST_NOT_UNLOCK_DIGITAL_BENEFITS = true", label);
+  assertIncludes(policy, "CREATOR_TIP_PAYMENT_RAIL = \"google_play_revenuecat\"", label);
   assertIncludes(policy, "PHYSICAL_PRODUCT_PAYMENT_RAIL = \"stripe_checkout\"", label);
   assertIncludes(policy, "CREATOR_PAYOUT_PAYMENT_RAIL = \"stripe_connect\"", label);
   assertIncludes(policy, "resolvePaymentRailPolicy", label);
@@ -45,6 +46,7 @@ const foundationDoc = read("docs/CREATOR_MONETIZATION_SYSTEMS_FOUNDATION.md");
   assertIncludes(policy, "approved_external_billing_not_live", label);
   assertIncludes(policy, "creator_tip_support", label);
   assertIncludes(policy, "tips_cannot_unlock_digital_access", label);
+  assertIncludes(policy, "creator_tips_use_revenuecat_google_play_sandbox_only", label);
   assertIncludes(policy, "creator_physical_product", label);
   assertIncludes(policy, "merch_checkout_disabled_until_provider_proof", label);
   assertIncludes(policy, "creator_payout_cashout", label);
@@ -55,13 +57,13 @@ const foundationDoc = read("docs/CREATOR_MONETIZATION_SYSTEMS_FOUNDATION.md");
 
 assertIncludes(packageJson, "guard:payment-rail-policy", "package guard script");
 assertIncludes(doctrine, "Android in-app digital creator paid content must use Google Play Billing", "doctrine Play Billing rail");
-assertIncludes(doctrine, "tips may use Stripe only when they unlock no digital access", "doctrine tip rail");
+assertIncludes(doctrine, "Android creator tips use Google Play Billing plus RevenueCat", "doctrine tip rail");
 assertIncludes(doctrine, "Physical merch/products/clothing may use Stripe", "doctrine product rail");
 assertIncludes(doctrine, "Stripe Connect is the only planned payout/cash-out rail", "doctrine payout rail");
 assertIncludes(foundationDoc, "Payment Rail Policy Foundation", "foundation payment rail section");
 assertIncludes(foundationDoc, "Premium subscription: Google Play plus RevenueCat only", "foundation Premium rail");
 assertIncludes(foundationDoc, "Android digital paid creator content: Google Play Billing", "foundation Android digital rail");
-assertIncludes(foundationDoc, "Creator-support tips: Stripe/checkout may be used only if tips unlock nothing", "foundation tip rail");
+assertIncludes(foundationDoc, "Creator-support tips: Android tips use Google Play plus RevenueCat", "foundation tip rail");
 
 if (process.exitCode) {
   process.exit();

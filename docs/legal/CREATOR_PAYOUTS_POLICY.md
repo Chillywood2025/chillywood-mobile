@@ -46,7 +46,7 @@ These are planning rules, not active payout promises.
 
 ## Provider Direction And Permissions
 
-Stripe Connect or an equivalent marketplace payout provider is the preferred direction for creator payout onboarding, KYC/tax readiness, connected-account tracking, transfers, payout rails, 1099/tax tooling, tips, sponsor payments, marketplace/network money, paid content payouts, and merch/product payouts. Google Play plus RevenueCat remains the Premium subscription entitlement path and must not become the creator payout system.
+Stripe Connect or an equivalent marketplace payout provider is the preferred direction for creator payout onboarding, KYC/tax readiness, connected-account tracking, transfers, payout rails, 1099/tax tooling, sponsor payments, marketplace/network money, paid content payouts, and merch/product payouts. Android creator tips remain Google Play/RevenueCat, not Stripe. Google Play plus RevenueCat remains the Premium subscription entitlement path and must not become the creator payout system.
 
 Current Stripe Connect status is test-mode/sandbox readiness only. A creator may be able to start backend-created Stripe setup from Platform Studio Money Center when `stripe_connect_enabled` allows readiness review, but Chi'llywood must not call money available until provider readiness, KYC, tax/1099 readiness, hold clearance, minimum payout, legal/accounting review, Owner-approved workflow, `payouts_enabled`, and `live_money_enabled` all pass. Owner/Admin Money Center readouts and switches are review/status/control-plane only and cannot release money.
 

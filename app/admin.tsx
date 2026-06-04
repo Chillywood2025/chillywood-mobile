@@ -989,6 +989,9 @@ const EMPTY_ADMIN_FINANCE_READ_MODEL: AdminFinanceReadModelWithLoading = {
   moneyAccessLedgerPayableCount: null,
   merchProductReadinessCount: null,
   merchOrderReadinessCount: null,
+  merchOrderItemCount: null,
+  stripeMerchEventCount: null,
+  stripeMerchEventProcessedCount: null,
   networkBillingAccountCount: null,
   networkInvoiceRecordCount: null,
   networkInvoiceDraftCount: null,
@@ -10439,7 +10442,7 @@ export default function AdminStudioScreen() {
       {
         id: "merch",
         title: "Merch",
-        summary: "Physical goods are separate from Android digital access and can use an approved merch provider later.",
+        summary: "Physical goods are separate from Android digital access and can use Stripe sandbox checkout only where explicitly proved.",
         meta: `Merch is ${formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "merch_enabled").state)}.`,
         statusLabel: "Planned",
         tone: "locked",
@@ -10449,9 +10452,12 @@ export default function AdminStudioScreen() {
               rows={[
                 { label: "Catalog merch", value: formatAdminFinanceCount(adminFinanceReadModel.merchProductReadinessCount, adminFinanceReadModel.loading, "readiness product", "readiness products") },
                 { label: "Merch orders", value: formatAdminFinanceCount(adminFinanceReadModel.merchOrderReadinessCount, adminFinanceReadModel.loading, "readiness order", "readiness orders") },
+                { label: "Merch items", value: formatAdminFinanceCount(adminFinanceReadModel.merchOrderItemCount, adminFinanceReadModel.loading, "order item", "order items") },
+                { label: "Stripe merch events", value: formatAdminFinanceCount(adminFinanceReadModel.stripeMerchEventCount, adminFinanceReadModel.loading, "sandbox event", "sandbox events") },
+                { label: "Processed merch events", value: formatAdminFinanceCount(adminFinanceReadModel.stripeMerchEventProcessedCount, adminFinanceReadModel.loading, "processed event", "processed events") },
                 { label: "Legacy creator products", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductCount, adminFinanceReadModel.loading, "setup product", "setup products") },
                 { label: "Legacy creator orders", value: formatAdminFinanceCount(adminFinanceReadModel.creatorProductOrderCount, adminFinanceReadModel.loading, "setup order", "setup orders") },
-                { label: "Payment rail", value: "Physical merch later uses Stripe, Shopify, or approved merch provider" },
+                { label: "Payment rail", value: "Stripe is physical merch only; Android digital goods stay Google Play / RevenueCat" },
               ]}
             />
             {renderAdminMoneyAuditEventRows(digitalAuditEvents.filter((event) => event.category === "merch"), "No merch rows returned", "Physical merch setup rows appear here only if safe records are readable.", 4)}
