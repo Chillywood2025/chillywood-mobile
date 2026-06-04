@@ -9158,8 +9158,8 @@ const styles = StyleSheet.create({
   },
   standaloneVideoGestureTarget: {
     ...StyleSheet.absoluteFillObject,
-    top: 126,
-    bottom: 214,
+    top: 58,
+    bottom: 76,
     zIndex: 40,
     elevation: 40,
     backgroundColor: "transparent",

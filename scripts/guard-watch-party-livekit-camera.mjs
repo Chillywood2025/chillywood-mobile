@@ -940,13 +940,13 @@ assertIncludes(
 );
 assertIncludes(
   player,
-  "top: 126",
-  "Player standalone gesture target must stay below top standalone controls",
+  "top: 58",
+  "Player standalone gesture target must match compact top overlay controls",
 );
 assertIncludes(
   player,
-  "bottom: 214",
-  "Player standalone gesture target must stay above bottom standalone controls",
+  "bottom: 76",
+  "Player standalone gesture target must match compact bottom overlay controls",
 );
 assertIncludes(
   player,

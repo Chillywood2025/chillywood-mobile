@@ -78,8 +78,8 @@ assertIncludes(player, "&& !isSpectatorPlayback", "Spectator playback Watch-Part
 assertNotIncludes(player, "&& !isCreatorVideoPlaybackUnavailable\n    && !isPlatformVideoUnavailable", "standalone Watch-Party Live CTA source-availability gating");
 assertIncludes(player, "playbackSource && !standalonePlaybackSourceFailed", "standalone video source render");
 assertNotIncludes(player, "&& !controlsVisible ? (\n              <View\n                collapsable={false}\n                pointerEvents=\"auto\"\n                style={styles.standaloneVideoGestureTarget}", "standalone gesture target must remain available for visible-control play/pause taps");
-assertIncludes(standaloneVideoGestureTargetStyle, "top: 126", "standalone gesture target must avoid top controls");
-assertIncludes(standaloneVideoGestureTargetStyle, "bottom: 214", "standalone gesture target must avoid bottom controls");
+assertIncludes(standaloneVideoGestureTargetStyle, "top: 58", "standalone gesture target must match compact top overlay controls");
+assertIncludes(standaloneVideoGestureTargetStyle, "bottom: 76", "standalone gesture target must match compact bottom overlay controls");
 assertIncludes(standaloneVideoGestureTargetStyle, "zIndex: 40", "standalone gesture target must sit below control chrome and above the video");
 assertIncludes(player, "zIndex: 46", "standalone top chrome remains above gesture target");
 assertIncludes(player, "zIndex: 90", "standalone bottom chrome remains above gesture target");

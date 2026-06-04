@@ -13,6 +13,7 @@ This focused pass fixes the standalone Player visual issue where top and bottom 
 - Tightened the top overlay controls so Share, Report, `1x`, and Watch-Party Live read as small shadowed controls instead of oversized pills.
 - Kept progress, time, and fullscreen as compact bottom overlays.
 - Moved Back below the media card so it remains reachable without covering the video.
+- Corrected the compact-overlay tap target so tapping the standalone video area still reaches the existing play/pause handler.
 - Fullscreen now uses aspect-preserving contain sizing instead of an aggressive crop.
 - Fullscreen hides Discussion/comments and keeps controls as overlays.
 - Fullscreen suppresses the normal Player framework/depth overlays so the bottom of the screen is not blurry.
