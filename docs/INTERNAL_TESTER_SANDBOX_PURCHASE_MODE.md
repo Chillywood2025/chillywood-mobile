@@ -2,7 +2,7 @@
 
 Updated: June 4, 2026
 
-This document explains the bounded purchase mode for approved internal testers. It does not activate production money.
+This document explains the bounded purchase mode for approved internal testers and the Owner/Admin controls around it. It does not activate production money.
 
 ## Why Premium Looked Unavailable
 
@@ -23,7 +23,7 @@ Approved internal testers can use `internal_tester_sandbox` mode to test sandbox
 - Premium through Google Play / RevenueCat sandbox
 - Existing sandbox digital products through the sandbox purchase launcher
 - Stripe physical merch sandbox checkout where already backed
-- Stripe Connect payout-readiness status where already backed
+- Stripe Connect payout-readiness status as read-only status only
 
 Every opened surface must be labeled as:
 
@@ -32,6 +32,20 @@ Every opened surface must be labeled as:
 - Not payable
 - No production money
 - Payouts off
+
+## Owner/Admin Controls
+
+Owner/Admin Money Center includes an `Internal Sandbox Testing` section that summarizes:
+
+- internal tester sandbox mode status
+- live money off
+- payouts off
+- payable sandbox/setup rows
+- Premium, digital access, physical merch, and payout-readiness boundaries
+- each sandbox product's safety rule
+- the route to `Sandbox Purchase Testing`
+
+These controls are inspection and routing controls. They cannot grant admin/operator/mod/host power, create provider events, mark sandbox rows payable, enable production purchases, enable payouts, or create cash-out/withdraw/transfer actions.
 
 ## Who Can Access It
 
@@ -42,6 +56,8 @@ The current app-side gate allows only approved test identities:
 - active internal beta/tester account
 
 Normal signed-in users and signed-out users remain on public/default mode.
+
+Stripe physical merch checkout also enforces server-side tester access. The `stripe-merch-checkout` Edge Function accepts active Owner/Operator accounts or active `beta_access_memberships` tester rows, then still requires a sandbox physical merch product with `creates_digital_access=false`.
 
 ## What Stays Closed
 
@@ -61,6 +77,8 @@ This mode does not enable:
 - fake balances
 
 Android digital goods remain Google Play / RevenueCat only. Stripe remains physical merch and payout readiness only.
+
+Payout readiness remains read-only. Internal testers cannot request, trigger, simulate, cash out, withdraw, transfer, or activate payouts from this mode.
 
 ## Premium Behavior
 
@@ -100,6 +118,18 @@ Tester mode does not bypass content or room safety:
 - host approval still controls mic/camera/publish
 - payment does not grant LiveKit publish, host, speaker, mod/admin, payout, or safety-bypass authority
 
+## Tester Tools
+
+`/admin-money-sandbox-purchases` is now rendered as `Sandbox Purchase Testing` for approved users. It includes:
+
+- sandbox mode status
+- Premium sandbox test guidance
+- digital access sandbox products
+- physical merch sandbox checkout for `cw_merch_test_tee_sandbox`
+- payout-readiness read-only copy
+
+The screen has no payout execution button and no production purchase button.
+
 ## Proof Path
 
 Expected runtime proof path:
@@ -110,7 +140,7 @@ Proof should use a Play-installed internal/closed test build when testing Google
 
 ## Remaining Gaps
 
-- Device/runtime proof after this code reaches internal testers.
+- Device/runtime proof after this code reaches internal testers with Owner/Admin controls.
 - Optional fresh Premium sandbox purchase/restore proof on the Play-installed tester build.
 - Optional fresh non-Premium sandbox product purchase proof if a valid source fixture is available.
 - Real provider refund/revoke and delayed-payment pending remain provider-tooling gaps.

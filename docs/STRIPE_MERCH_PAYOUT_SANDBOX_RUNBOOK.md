@@ -6,7 +6,7 @@ This runbook covers Stripe sandbox readiness for physical merch and Stripe Conne
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
-Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) does not change Stripe policy. Stripe remains physical merch sandbox checkout and Stripe Connect payout-readiness only; Android digital goods stay on Google Play / RevenueCat.
+Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) does not change Stripe policy. Stripe remains physical merch sandbox checkout and Stripe Connect payout-readiness only; Android digital goods stay on Google Play / RevenueCat. Approved testers can use Stripe physical merch sandbox checkout through the sandbox tester route; `stripe-merch-checkout` still requires a sandbox physical merch product with `creates_digital_access=false`. Stripe Connect payout readiness remains read-only with no payout request, simulation, cash-out, withdrawal, transfer, payable balance, or payout activation.
 
 ## Current Status
 

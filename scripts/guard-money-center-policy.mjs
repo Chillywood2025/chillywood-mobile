@@ -95,6 +95,10 @@ assertIncludes(operatorTabsBlock, "{ key: \"money-center\", label: \"Money Cente
 assertIncludes(admin, "ADMIN_MONEY_LEGACY_TAB_SECTIONS", "legacy Admin money tab mapping");
 assertIncludes(admin, "useLocalSearchParams", "Admin Money Center deep-link query mapping");
 assertIncludes(admin, "Premium / RevenueCat / Google Play", "Admin Premium provider consolidation");
+assertIncludes(admin, "Internal Sandbox Testing", "Admin internal sandbox testing controls");
+assertIncludes(admin, "Open Sandbox Tester Tools", "Admin sandbox tester tools link");
+assertIncludes(admin, "Payout readiness", "Admin sandbox payout readiness boundary");
+assertIncludes(admin, "Payout execution remains blocked", "Admin sandbox payout execution blocked");
 assertIncludes(admin, "Sponsors / Ads", "Admin sponsor and ads consolidation");
 assertIncludes(admin, "Fraud & Risk", "Admin fraud and risk consolidation");
 assertIncludes(admin, "Provider Webhooks", "Admin provider webhook consolidation");

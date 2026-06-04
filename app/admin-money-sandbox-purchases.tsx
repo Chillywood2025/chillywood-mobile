@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships } from "../_lib/moderation";
 import { resolveInternalTesterSandboxPurchaseMode } from "../_lib/monetization";
@@ -66,6 +66,7 @@ const SANDBOX_PRODUCTS: SandboxProduct[] = [
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SANDBOX_EVENT_PASS_PROOF_SOURCE_ID = "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004";
+const SANDBOX_MERCH_PRODUCT_KEY = "cw_merch_test_tee_sandbox";
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -77,7 +78,9 @@ export default function AdminMoneySandboxPurchasesScreen() {
   const [selectedKey, setSelectedKey] = useState<SandboxProductKey>("watch_party_live_ticket_sandbox_099");
   const [sourceId, setSourceId] = useState("");
   const [status, setStatus] = useState("Sandbox purchase proof is idle.");
+  const [merchStatus, setMerchStatus] = useState("Stripe physical merch sandbox checkout is idle.");
   const [busy, setBusy] = useState(false);
+  const [merchBusy, setMerchBusy] = useState(false);
 
   const selectedProduct = useMemo(
     () => SANDBOX_PRODUCTS.find((entry) => entry.key === selectedKey) ?? SANDBOX_PRODUCTS[0],
@@ -185,6 +188,42 @@ export default function AdminMoneySandboxPurchasesScreen() {
     }
   }, [allowed, busy, selectedProduct, sourceId, userId]);
 
+  const runMerchSandboxCheckout = useCallback(async () => {
+    if (!allowed || merchBusy) return;
+    setMerchBusy(true);
+    setMerchStatus("Creating Stripe sandbox Checkout session for physical merch...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke("stripe-merch-checkout", {
+        body: {
+          product_key: SANDBOX_MERCH_PRODUCT_KEY,
+          quantity: 1,
+        },
+      });
+      if (error) throw error;
+      const payload = data as { message?: string; url?: string; orderId?: string; checkoutCreated?: boolean; physicalMerchOnly?: boolean } | null;
+      const checkoutUrl = normalizeText(payload?.url);
+      if (!payload?.checkoutCreated || !checkoutUrl) {
+        throw new Error(payload?.message || "Stripe sandbox checkout did not return a checkout URL.");
+      }
+
+      setMerchStatus(
+        [
+          "Stripe sandbox Checkout session created.",
+          `Order: ${normalizeText(payload.orderId) || "created"}`,
+          "Physical merch only. No digital access, RevenueCat entitlement, Premium entitlement, payout, cash-out, withdrawal, transfer, or payable balance was created.",
+        ].join("\n"),
+      );
+      await Linking.openURL(checkoutUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Stripe merch sandbox checkout could not be created.";
+      setMerchStatus(message);
+      Alert.alert("Merch sandbox checkout stopped", message);
+    } finally {
+      setMerchBusy(false);
+    }
+  }, [allowed, merchBusy]);
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -196,7 +235,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
   if (!allowed) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.title}>Owner/Admin required</Text>
+        <Text style={styles.title}>Sandbox tester access required</Text>
         <Text style={styles.body}>
           This sandbox purchase proof surface is limited to active owner/operator accounts or approved internal tester sandbox accounts.
         </Text>
@@ -207,11 +246,12 @@ export default function AdminMoneySandboxPurchasesScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.kicker}>Sandbox only / Not payable</Text>
-      <Text style={styles.title}>Money Access Sandbox Purchase Proof</Text>
+      <Text style={styles.kicker}>Internal test mode / Sandbox only / Not payable</Text>
+      <Text style={styles.title}>Sandbox Purchase Testing</Text>
       <Text style={styles.body}>
-        Creates a short-lived purchase intent, then starts a real RevenueCat / Google Play sandbox purchase for the selected
-        product. It does not enable live money, public buy buttons, payouts, cash-out, or LiveKit publish authority.
+        Approved testers can start real sandbox purchases for digital access and physical merch. This screen cannot activate
+        production money, payout execution, cash-out, withdrawal, transfer, payable balances, LiveKit publish authority, host
+        power, speaker authority, moderator power, or admin power.
       </Text>
       <View style={styles.statusBox}>
         <Text style={styles.statusText}>
@@ -220,6 +260,34 @@ export default function AdminMoneySandboxPurchasesScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Sandbox mode status</Text>
+        <View style={styles.controlGrid}>
+          {[
+            ["Internal tester sandbox mode", "Active for this account"],
+            ["Live money", "Off"],
+            ["Payouts", "Off"],
+            ["Production money", "Off"],
+            ["Payable sandbox rows", "0 expected"],
+            ["Stripe Android digital checkout", "Absent"],
+          ].map(([label, value]) => (
+            <View key={label} style={styles.controlRow}>
+              <Text style={styles.controlLabel}>{label}</Text>
+              <Text style={styles.controlValue}>{value}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Premium</Text>
+        <Text style={styles.body}>
+          Use the Premium screen for the Google Play / RevenueCat sandbox subscription test and restore path. Public/default
+          accounts still see Premium unavailable while the purchase shell is on hold.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Digital access products</Text>
         <Text style={styles.label}>Product</Text>
         <View style={styles.productGrid}>
           {SANDBOX_PRODUCTS.map((product) => {
@@ -278,6 +346,55 @@ export default function AdminMoneySandboxPurchasesScreen() {
       <View style={styles.statusBox}>
         <Text style={styles.statusText}>{status}</Text>
       </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Physical merch</Text>
+        <Text style={styles.body}>
+          Stripe sandbox checkout is physical merch only. It does not create app access, RevenueCat entitlement, Premium
+          entitlement, creator payout eligibility, or real fulfillment.
+        </Text>
+        <View style={styles.statusBox}>
+          <Text style={styles.statusText}>
+            Product: {SANDBOX_MERCH_PRODUCT_KEY}{"\n"}
+            Mode: Stripe test/sandbox{"\n"}
+            Payable state: Not payable
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          disabled={merchBusy}
+          onPress={runMerchSandboxCheckout}
+          style={[styles.primaryButton, merchBusy ? styles.primaryButtonDisabled : null]}
+        >
+          <Text style={styles.primaryButtonText}>{merchBusy ? "Creating Stripe sandbox session..." : "Start physical merch sandbox checkout"}</Text>
+        </Pressable>
+        <View style={styles.statusBox}>
+          <Text style={styles.statusText}>{merchStatus}</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Payout readiness</Text>
+        <Text style={styles.body}>
+          Stripe Connect payout readiness is read-only here. Internal testers cannot request, trigger, simulate, cash out,
+          withdraw, transfer, or activate payouts. KYC/tax/provider status can be inspected in Money Center only as readiness.
+        </Text>
+        <View style={styles.controlGrid}>
+          {[
+            ["Stripe Connect", "Readiness only"],
+            ["Payout execution", "Blocked"],
+            ["Cash-out", "Absent"],
+            ["Withdrawal", "Absent"],
+            ["Transfer", "Absent"],
+            ["Payable balance", "Not shown"],
+          ].map(([label, value]) => (
+            <View key={label} style={styles.controlRow}>
+              <Text style={styles.controlLabel}>{label}</Text>
+              <Text style={styles.controlValue}>{value}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -307,6 +424,36 @@ const styles = StyleSheet.create({
     minHeight: "100%",
     padding: 20,
     paddingBottom: 48,
+  },
+  controlGrid: {
+    gap: 8,
+  },
+  controlLabel: {
+    color: "#9aa3af",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  controlRow: {
+    alignItems: "center",
+    backgroundColor: "#171c26",
+    borderColor: "#303746",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  controlValue: {
+    color: "#f2f5f9",
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "right",
   },
   hint: {
     color: "#9aa3af",
@@ -374,7 +521,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   section: {
-    gap: 4,
+    gap: 8,
+  },
+  sectionTitle: {
+    color: "#f8fafc",
+    fontSize: 16,
+    fontWeight: "800",
   },
   statusBox: {
     backgroundColor: "#171c26",

@@ -153,6 +153,30 @@ const assertPhysicalSandboxMerchProduct = (product: MerchProductRow) => {
   if (!/^[a-z]{3}$/.test(product.currency ?? "")) throw new Error("Merch product currency is invalid.");
 };
 
+const userHasActiveSandboxTesterAccess = async (
+  adminClient: SupabaseClientLike,
+  currentUser: AuthenticatedUser,
+) => {
+  const email = toText(currentUser.email).toLowerCase();
+  const byUser = await adminClient
+    .from("beta_access_memberships")
+    .select("id")
+    .eq("user_id", currentUser.id)
+    .eq("access_status", "active")
+    .maybeSingle();
+  if (!byUser.error && byUser.data) return true;
+
+  if (!email) return false;
+  const byEmail = await adminClient
+    .from("beta_access_memberships")
+    .select("id")
+    .eq("access_status", "active")
+    .ilike("email", email)
+    .maybeSingle();
+
+  return !byEmail.error && !!byEmail.data;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return optionsResponse();
   if (req.method !== "POST") {
@@ -181,11 +205,14 @@ Deno.serve(async (req) => {
     }
     adminClient = adminConfig.client;
 
-    const isOperator = await userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]);
-    if (!isOperator) {
+    const [isOperator, isSandboxTester] = await Promise.all([
+      userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]),
+      userHasActiveSandboxTesterAccess(adminClient, currentUser),
+    ]);
+    if (!isOperator && !isSandboxTester) {
       return jsonResponse(403, {
-        error: "operator_required",
-        message: "Sandbox physical merch checkout is owner/operator-only in this proof lane.",
+        error: "sandbox_tester_required",
+        message: "Sandbox physical merch checkout is limited to owner/operator accounts or approved internal tester sandbox accounts.",
         liveMoneyAction: false,
         checkoutCreated: false,
       });

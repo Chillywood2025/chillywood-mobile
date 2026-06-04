@@ -102,7 +102,10 @@ assertIncludes(merchMigration, "not_payable", "merch not payable metadata");
 
 assertIncludes(merchCheckout, "readStripeTestSecret", "merch checkout test secret only");
 assertIncludes(merchCheckout, "stripe_physical_goods", "merch checkout physical goods provider");
-assertIncludes(merchCheckout, "owner/operator-only", "merch checkout operator-only copy");
+assertIncludes(merchCheckout, "userHasActiveSandboxTesterAccess", "merch checkout approved tester access check");
+assertIncludes(merchCheckout, "beta_access_memberships", "merch checkout active beta tester allowlist");
+assertIncludes(merchCheckout, "sandbox_tester_required", "merch checkout tester-required denial");
+assertIncludes(merchCheckout, "owner/operator accounts or approved internal tester sandbox accounts", "merch checkout bounded tester copy");
 assertIncludes(merchCheckout, "creates_digital_access === true", "merch checkout digital access refusal");
 assertIncludes(merchCheckout, "physical_merch", "merch checkout physical rail metadata");
 assertIncludes(merchCheckout, "digitalAccessGrantCreated: false", "merch checkout no access grant");
@@ -157,6 +160,8 @@ assertIncludes(channelSettings, "Instant cash-out", "Studio instant cash-out rea
 assertIncludes(channelSettings, "Optional instant cash-out is", "Studio cash-out fee copy");
 assertIncludes(channelSettings, "No payout is available until setup and verification are complete.", "Studio review copy");
 assertIncludes(admin, "Creator-facing Connect Stripe setup is test-mode only", "Admin Connect read-only copy");
+assertIncludes(admin, "Payout execution remains blocked", "Admin sandbox payout execution block");
+assertIncludes(admin, "Open Sandbox Tester Tools", "Admin sandbox tester controls link");
 assertIncludes(admin, "tax/1099 readiness", "Admin tax readiness copy");
 assertIncludes(admin, "Owner approval is required", "Admin owner approval copy");
 

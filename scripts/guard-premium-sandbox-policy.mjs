@@ -52,6 +52,7 @@ const paymentRail = read("_lib/paymentRailPolicy.ts");
 const serverPaymentRail = read("supabase/functions/_shared/payment-rail-policy.ts");
 const validateRuntime = read("scripts/validate-runtime.mjs");
 const channelSettings = read("app/channel-settings.tsx");
+const adminSandboxRoute = read("app/admin-money-sandbox-purchases.tsx");
 
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY || existingRevenueCat.androidPublicSdkKey", "Expo production RevenueCat public key wiring");
 assertIncludes(appConfig, "EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_SDK_KEY_DEV || existingRevenueCat.androidDebugPublicSdkKey", "Expo debug RevenueCat public key wiring");
@@ -101,6 +102,11 @@ assertIncludes(mediaStorage, ".eq(\"entitlement_key\", \"premium\")", "media-sto
 assertIncludes(spectatorStartRoom, ".from(\"user_entitlements\")", "spectator room backend entitlement read");
 assertIncludes(channelSettings, "readCurrentUserEntitlement(\"premium\")", "Platform Studio Premium entitlement read");
 assertIncludes(channelSettings, "title=\"Premium required\"", "Platform Studio Premium denial copy");
+assertIncludes(adminSandboxRoute, "Sandbox Purchase Testing", "sandbox tester purchase route");
+assertIncludes(adminSandboxRoute, "Start real sandbox purchase", "sandbox tester digital purchase action");
+assertIncludes(adminSandboxRoute, "Start physical merch sandbox checkout", "sandbox tester merch checkout action");
+assertIncludes(adminSandboxRoute, "Payout readiness", "sandbox tester payout readiness section");
+assertIncludes(adminSandboxRoute, "cannot request, trigger, simulate, cash out", "sandbox tester payout execution blocked");
 
 assertIncludes(moneyFeatureFlags, "live_money_enabled: \"off\"", "live money default off");
 for (const key of ["live_money_enabled", "watch_party_seats_enabled", "tips_enabled", "paid_content_enabled", "payouts_enabled"]) {

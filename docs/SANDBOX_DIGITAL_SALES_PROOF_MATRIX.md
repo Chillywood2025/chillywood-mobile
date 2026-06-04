@@ -12,7 +12,7 @@ Money Center UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
 
 Public V1 money-proof RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`.
 
-Internal tester sandbox mode: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`. Approved testers can now use bounded sandbox purchase surfaces; public/default users still cannot see production-like digital buy buttons.
+Internal tester sandbox mode: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`. Approved testers can now use bounded sandbox purchase surfaces; public/default users still cannot see production-like digital buy buttons. Owner/Admin Money Center now shows `Internal Sandbox Testing` controls and tester-tool routing. Payout readiness is read-only and is not a digital purchase product.
 
 ## Backend Status
 

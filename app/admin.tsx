@@ -1154,6 +1154,7 @@ const plannedKillSwitchRows: PlannedKillSwitchRow[] = [
 
 type AdminMoneyCenterSectionId =
   | "overview"
+  | "internal_sandbox_testing"
   | "kill_switches"
   | "premium"
   | "sponsors_ads"
@@ -3480,6 +3481,7 @@ export default function AdminStudioScreen() {
   const [providerReadinessNotice, setProviderReadinessNotice] = useState<string | null>(null);
   const [expandedAdminMoneyCenterSections, setExpandedAdminMoneyCenterSections] = useState<Record<AdminMoneyCenterSectionId, boolean>>({
     overview: true,
+    internal_sandbox_testing: false,
     kill_switches: false,
     premium: false,
     sponsors_ads: false,
@@ -10474,6 +10476,54 @@ export default function AdminStudioScreen() {
             />
             <OwnerDetailGrid rows={adminLaunchReadinessRows} />
             <OwnerDetailGrid rows={adminFailureProofRows} />
+          </View>
+        ),
+      },
+      {
+        id: "internal_sandbox_testing",
+        title: "Internal Sandbox Testing",
+        summary: "Approved testers can test sandbox purchases. Payout execution remains blocked.",
+        meta: "Tester mode opens sandbox purchases only.",
+        statusLabel: liveMoneyOff && payoutsSwitch.state !== "on" ? "Sandbox only" : "Review",
+        tone: liveMoneyOff && payoutsSwitch.state !== "on" ? "success" : "danger",
+        children: (
+          <View style={{ gap: 10 }}>
+            <View style={styles.ownerMetricGrid}>
+              <OwnerMetricTile label="Tester Mode" value="Bounded" tone="info" />
+              <OwnerMetricTile label="Live Money" value={formatMoneySwitchState(liveMoneySwitch.state)} tone={liveMoneyOff ? "success" : "danger"} />
+              <OwnerMetricTile label="Payouts" value={formatMoneySwitchState(payoutsSwitch.state)} tone={payoutsSwitch.state === "on" ? "danger" : "success"} />
+              <OwnerMetricTile label="Payable Rows" value={formatHomeCount(adminFinanceReadModel.moneyAccessLedgerPayableCount, adminFinanceReadModel.loading)} tone={adminFinanceReadModel.moneyAccessLedgerPayableCount ? "danger" : "success"} />
+            </View>
+            <OwnerDetailGrid
+              rows={[
+                { label: "Approved tester access", value: "Owner, Operator, runtime allowlist, active beta/internal tester, or approved proof account" },
+                { label: "Premium", value: "Google Play / RevenueCat sandbox only; public shell remains closed" },
+                { label: "Digital access", value: "Tips, tickets, access passes, seats, paid content, and event passes use sandbox intents" },
+                { label: "Physical merch", value: "Stripe sandbox physical goods only; no digital access" },
+                { label: "Payout readiness", value: "Read-only Stripe Connect status; no payout execution" },
+                { label: "Tester authority", value: "No admin, mod, host, speaker, LiveKit publish, payout, or safety-bypass authority" },
+              ]}
+            />
+            <OwnerDetailGrid
+              rows={[
+                { label: "Creator tip", value: "Ledger-only / sandbox / not payable" },
+                { label: "Watch-Party ticket", value: "Viewer/listener entry only; host approval still wins" },
+                { label: "Live access pass", value: "Entry/viewing only; no speaker or host power" },
+                { label: "Live seat pass", value: "Seat eligibility only; canPublish remains false until host approval" },
+                { label: "Paid content", value: "Grant applies only when content safety state allows playback" },
+                { label: "Event pass", value: "Canceled, ended, removed, disabled, or unsafe events still deny" },
+              ]}
+            />
+            <View style={styles.ownerPanelActions}>
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={styles.ownerPrimaryButton}
+                onPress={() => router.push("/admin-money-sandbox-purchases" as Parameters<typeof router.push>[0])}
+              >
+                <Text style={styles.ownerPrimaryButtonText}>Open Sandbox Tester Tools</Text>
+              </TouchableOpacity>
+            </View>
+            <OwnerDisabledReason reason="This Owner/Admin section is inspection and routing only. It cannot grant tester access by itself, create provider events, mark rows payable, enable payouts, cash-out, withdrawal, transfer, or production purchases." />
           </View>
         ),
       },

@@ -8,7 +8,7 @@ Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms the sandbo
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`. This document covers the Android digital rail only. Stripe physical merch sandbox checkout and Stripe Connect payout readiness are proved separately and do not create RevenueCat products, Premium entitlements, or Android digital access.
 
-Internal tester update: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md` opens approved tester-only sandbox purchase surfaces. Public/default users still see Premium and digital purchases closed; approved testers can load Google Play / RevenueCat sandbox purchase surfaces when they are signed in, Play-installed/internal-track eligible, and provider products are available. This does not make any digital product production-live or payable.
+Internal tester update: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md` opens approved tester-only sandbox purchase surfaces and Owner/Admin status controls. Public/default users still see Premium and digital purchases closed; approved testers can load Google Play / RevenueCat sandbox purchase surfaces when they are signed in, Play-installed/internal-track eligible, and provider products are available. Owner/Admin Money Center routes approved testers to sandbox tools. This does not make any digital product production-live or payable, and payout readiness remains read-only.
 
 ## Current Outcome
 

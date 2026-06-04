@@ -6,7 +6,7 @@ Stripe Connect is the payout readiness rail. It is not an Android digital checko
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
-Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) does not activate payouts. Stripe Connect remains sandbox readiness only; app-level payouts, cash-out, withdrawal, transfer, and payable balances stay off.
+Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) does not activate payouts. Stripe Connect remains sandbox readiness only; app-level payouts, cash-out, withdrawal, transfer, and payable balances stay off. Owner/Admin Money Center lists payout readiness inside `Internal Sandbox Testing` as read-only, and internal testers cannot request, trigger, simulate, cash out, withdraw, transfer, or activate payouts.
 
 ## Current Readiness
 
