@@ -2438,6 +2438,173 @@ const OwnerControlRow = ({
   );
 };
 
+const OwnerAdminActionButton = ({
+  disabled = false,
+  label,
+  loading = false,
+  onPress,
+  variant = "secondary",
+}: {
+  disabled?: boolean;
+  label: string;
+  loading?: boolean;
+  onPress?: () => void;
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "success" | "warning";
+}) => (
+  <TouchableOpacity
+    accessibilityRole="button"
+    accessibilityState={{ busy: loading, disabled }}
+    activeOpacity={0.84}
+    disabled={disabled || loading}
+    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+    onPress={onPress}
+    style={[
+      styles.ownerAdminActionButton,
+      variant === "primary" && styles.ownerAdminActionPrimary,
+      variant === "danger" && styles.ownerAdminActionDanger,
+      variant === "success" && styles.ownerAdminActionSuccess,
+      variant === "warning" && styles.ownerAdminActionWarning,
+      variant === "ghost" && styles.ownerAdminActionGhost,
+      (disabled || loading) && styles.configSaveBtnDisabled,
+    ]}
+  >
+    {loading ? (
+      <ActivityIndicator color="#FFFFFF" size="small" />
+    ) : (
+      <Text style={[
+        styles.ownerAdminActionText,
+        variant === "danger" && styles.ownerAdminActionDangerText,
+      ]}>
+        {label}
+      </Text>
+    )}
+  </TouchableOpacity>
+);
+
+const OwnerAdminSection = ({
+  actions,
+  children,
+  defaultExpanded = true,
+  disabled = false,
+  statusLabel,
+  statusTone = "default",
+  subtitle,
+  title,
+}: {
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  defaultExpanded?: boolean;
+  disabled?: boolean;
+  statusLabel?: string;
+  statusTone?: OwnerControlTone;
+  subtitle?: string;
+  title: string;
+}) => {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const toggle = useCallback(() => {
+    if (!disabled) setExpanded((value) => !value);
+  }, [disabled]);
+
+  return (
+    <View style={[styles.ownerAdminSection, disabled && styles.ownerAdminSectionDisabled]}>
+      <TouchableOpacity
+        accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${title}`}
+        accessibilityRole="button"
+        accessibilityState={{ disabled, expanded }}
+        activeOpacity={0.84}
+        disabled={disabled}
+        hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+        onPress={toggle}
+        style={styles.ownerAdminSectionHeader}
+      >
+        <View style={styles.ownerAdminChevron}>
+          <Text style={styles.ownerAdminChevronText}>{expanded ? "v" : ">"}</Text>
+        </View>
+        <View style={styles.ownerAdminSectionCopy}>
+          <Text style={styles.ownerAdminSectionTitle}>{title}</Text>
+          {subtitle ? <Text style={styles.ownerAdminSectionSubtitle}>{subtitle}</Text> : null}
+        </View>
+        {statusLabel ? <OwnerStatusPill label={statusLabel} tone={statusTone} /> : null}
+      </TouchableOpacity>
+      {actions ? <View style={styles.ownerAdminSectionActions}>{actions}</View> : null}
+      {expanded ? <View style={styles.ownerAdminSectionBody}>{children}</View> : null}
+    </View>
+  );
+};
+
+const OwnerQuickLinkCard = ({
+  body,
+  disabled = false,
+  label,
+  onPress,
+  statusLabel,
+  statusTone = "info",
+  title,
+}: {
+  body: string;
+  disabled?: boolean;
+  label: string;
+  onPress?: () => void;
+  statusLabel?: string;
+  statusTone?: OwnerControlTone;
+  title: string;
+}) => (
+  <TouchableOpacity
+    accessibilityRole="button"
+    accessibilityState={{ disabled }}
+    activeOpacity={0.84}
+    disabled={disabled}
+    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+    onPress={onPress}
+    style={[styles.ownerQuickLinkCard, disabled && styles.configSaveBtnDisabled]}
+  >
+    <View style={styles.ownerQuickLinkCopy}>
+      <View style={styles.ownerQuickLinkTitleRow}>
+        <Text style={styles.ownerQuickLinkTitle}>{title}</Text>
+        {statusLabel ? <OwnerStatusPill label={statusLabel} tone={statusTone} /> : null}
+      </View>
+      <Text style={styles.ownerQuickLinkBody}>{body}</Text>
+    </View>
+    <View style={styles.ownerQuickLinkAction}>
+      <Text style={styles.ownerQuickLinkActionText}>{disabled ? "Locked" : label}</Text>
+      <Text style={styles.ownerQuickLinkArrow}>{">"}</Text>
+    </View>
+  </TouchableOpacity>
+);
+
+const OwnerRuleList = ({ rows }: { rows: { label: string; status?: string; value: string }[] }) => (
+  <View style={styles.ownerRuleList}>
+    {rows.map((row) => (
+      <View key={row.label} style={styles.ownerRuleRow}>
+        <View style={styles.ownerRuleDot} />
+        <View style={styles.ownerRuleCopy}>
+          <Text style={styles.ownerRuleTitle}>{row.label}</Text>
+          <Text style={styles.ownerRuleBody}>{row.value}</Text>
+        </View>
+        {row.status ? <OwnerStatusPill label={row.status} tone="success" /> : null}
+      </View>
+    ))}
+  </View>
+);
+
+const OwnerPermissionDraftSummary = ({ rows }: { rows: { label: string; value: string }[] }) => (
+  <View style={styles.ownerDraftSummaryGrid}>
+    {rows.map((row) => (
+      <View key={row.label} style={styles.ownerDraftSummaryTile}>
+        <Text style={styles.ownerDraftSummaryLabel}>{row.label}</Text>
+        <Text style={styles.ownerDraftSummaryValue}>{row.value}</Text>
+      </View>
+    ))}
+  </View>
+);
+
+const OwnerStickyActionBar = ({ children, helper }: { children: React.ReactNode; helper?: string }) => (
+  <View style={styles.ownerStickyActionBar}>
+    {helper ? <Text style={styles.ownerStickyActionHelper}>{helper}</Text> : null}
+    <View style={styles.ownerStickyActionRow}>{children}</View>
+  </View>
+);
+
 const sortPermissionKeys = (keys: readonly PlatformStaffPermissionKey[]) => (
   Array.from(new Set(keys)).sort()
 );
@@ -3573,9 +3740,13 @@ export default function AdminStudioScreen() {
     ? "Not Loaded"
     : staffPermissionDraftChanged ? "Unsaved Changes" : "Loaded";
   const selectedPermissionCountLabel = `${staffPermissionSelectedKeys.length} selected`;
+  const staffPermissionExpiresAtTrimmed = staffPermissionExpiresAt.trim();
+  const staffPermissionExpiresAtValid = !staffPermissionExpiresAtTrimmed || Number.isFinite(Date.parse(staffPermissionExpiresAtTrimmed));
+  const staffPermissionCanReset = staffPermissionDraftChanged && staffPermissionBusy === null;
   const canSaveStaffPermissions = canManageStaffPermissions
     && staffPermissionDraftChanged
     && staffPermissionReason.trim().length >= 6
+    && staffPermissionExpiresAtValid
     && staffPermissionBusy === null;
   const openAdminDrilldown = useCallback((detail: AdminDrilldownDetail) => {
     setSelectedAdminDrilldown(detail);
@@ -8698,6 +8869,10 @@ export default function AdminStudioScreen() {
       setAdminOpsNotice("Audit reason is required before saving permission changes.");
       return;
     }
+    if (!staffPermissionExpiresAtValid) {
+      setAdminOpsNotice("Expiration must be a valid ISO date/time or left blank.");
+      return;
+    }
 
     setRoleConfirm({
       kind: "save_permissions",
@@ -8710,6 +8885,7 @@ export default function AdminStudioScreen() {
     canManageStaffPermissions,
     staffPermissionDraftChanged,
     staffPermissionEmail,
+    staffPermissionExpiresAtValid,
     staffPermissionGrantDelta.length,
     staffPermissionLoadedEmail,
     staffPermissionReason,
@@ -11746,14 +11922,12 @@ export default function AdminStudioScreen() {
                   />
                 </View>
 
-                <View style={styles.contentPanel}>
-                  <View style={styles.ownerSectionHeaderRow}>
-                    <Text style={styles.ownerSectionTitle}>Active Role Roster</Text>
-                    <OwnerStatusPill
-                      label={canViewStaffRoles ? `${activePlatformRoleRoster.length} active` : "Locked"}
-                      tone={canViewStaffRoles ? "info" : "locked"}
-                    />
-                  </View>
+                <OwnerAdminSection
+                  statusLabel={canViewStaffRoles ? `${activePlatformRoleRoster.length} active` : "Locked"}
+                  statusTone={canViewStaffRoles ? "info" : "locked"}
+                  subtitle="Tap staff rows for permission context. Owner rows stay protected and inspect-only."
+                  title="Active Role Roster"
+                >
                   {!canViewStaffRoles ? (
                     <OwnerDisabledReason reason="Staff-role roster visibility requires Owner, admin_grants, or manage_moderators truth. Normal users cannot load roster rows or staff emails." />
                   ) : platformRoleRosterLoading ? (
@@ -11835,13 +12009,15 @@ export default function AdminStudioScreen() {
                       ))}
                     </View>
                   ) : null}
-                </View>
+                </OwnerAdminSection>
 
-                <View style={styles.contentPanel}>
-                  <View style={styles.ownerSectionHeaderRow}>
-                    <Text style={styles.ownerSectionTitle}>Grant / Revoke Staff Access</Text>
-                    <OwnerStatusPill label={canManageAdminStaff || canManageModeratorStaff ? "Backed RPC" : "Locked"} tone={canManageAdminStaff || canManageModeratorStaff ? "success" : "locked"} />
-                  </View>
+                <OwnerAdminSection
+                  defaultExpanded={canManageAdminStaff || canManageModeratorStaff}
+                  statusLabel={canManageAdminStaff || canManageModeratorStaff ? "Backed RPC" : "Locked"}
+                  statusTone={canManageAdminStaff || canManageModeratorStaff ? "success" : "locked"}
+                  subtitle="Grant and remove Admin or Moderator roles through the existing audited backend path."
+                  title="Grant / Revoke Staff Access"
+                >
                   <Text style={styles.contentSignalBody}>Emails normalize to lowercase. Admin is stored as internal operator. Owner grants are not available from this generic panel.</Text>
                   {canManageAdminStaff || canManageModeratorStaff ? (
                     <>
@@ -11876,32 +12052,33 @@ export default function AdminStudioScreen() {
                         style={styles.input}
                       />
                       <View style={styles.configListActions}>
-                        <TouchableOpacity
-                          style={[styles.orderBtn, (staffRoleBusy !== null || staffRoleReason.trim().length < 6) && styles.configSaveBtnDisabled]}
+                        <OwnerAdminActionButton
+                          disabled={staffRoleBusy !== null || staffRoleReason.trim().length < 6}
+                          label={staffRoleBusy === "grant" ? "Granting..." : "Grant Role"}
+                          loading={staffRoleBusy === "grant"}
                           onPress={() => void runStaffRoleGrant()}
+                          variant="primary"
+                        />
+                        <OwnerAdminActionButton
                           disabled={staffRoleBusy !== null || staffRoleReason.trim().length < 6}
-                        >
-                          <Text style={styles.orderBtnText}>{staffRoleBusy === "grant" ? "Granting..." : "Grant Role"}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.orderBtn, (staffRoleBusy !== null || staffRoleReason.trim().length < 6) && styles.configSaveBtnDisabled]}
+                          label={staffRoleBusy === "revoke" ? "Removing..." : "Remove Role"}
+                          loading={staffRoleBusy === "revoke"}
                           onPress={() => confirmStaffRoleRevoke()}
-                          disabled={staffRoleBusy !== null || staffRoleReason.trim().length < 6}
-                        >
-                          <Text style={styles.orderBtnText}>{staffRoleBusy === "revoke" ? "Removing..." : "Remove Role"}</Text>
-                        </TouchableOpacity>
+                          variant="danger"
+                        />
                       </View>
                     </>
                   ) : (
                     <OwnerDisabledReason reason="Staff management actions require active Owner, admin_grants, or manage_moderators. Moderators cannot add or remove staff." />
                   )}
-                </View>
+                </OwnerAdminSection>
 
-                <View style={styles.contentPanel}>
-                  <View style={styles.ownerSectionHeaderRow}>
-                    <Text style={styles.ownerSectionTitle}>Scoped Permission Matrix</Text>
-                    <OwnerStatusPill label={staffPermissionLoadState} tone={staffPermissionDraftChanged ? "manual" : staffPermissionSavedKeys ? "success" : "locked"} />
-                  </View>
+                <OwnerAdminSection
+                  statusLabel={staffPermissionLoadState}
+                  statusTone={staffPermissionDraftChanged ? "manual" : staffPermissionSavedKeys ? "success" : "locked"}
+                  subtitle="Load a staff account, tune scoped permissions, then save only after a valid audit reason is present."
+                  title="Scoped Permission Matrix"
+                >
                   <Text style={styles.contentSignalBody}>Tap any permission to toggle it. Multiple permissions can stay selected before saving the full backed set.</Text>
                   {canManageStaffPermissions ? (
                     <>
@@ -11953,7 +12130,7 @@ export default function AdminStudioScreen() {
                           </View>
                         ))}
                       </View>
-                      <OwnerDetailGrid
+                      <OwnerPermissionDraftSummary
                         rows={[
                           { label: "Saved Set", value: staffPermissionSavedKeys ? formatPermissionSummary(staffPermissionSavedKeys) : "load current permissions first" },
                           { label: "Draft Set", value: formatPermissionSummary(staffPermissionSelectedKeys) },
@@ -11961,14 +12138,21 @@ export default function AdminStudioScreen() {
                           { label: "Will Revoke", value: formatPermissionSummary(staffPermissionRevokeDelta) },
                         ]}
                       />
+                      <Text style={styles.ownerFieldLabel}>Expires at</Text>
                       <TextInput
                         value={staffPermissionExpiresAt}
                         onChangeText={setStaffPermissionExpiresAt}
                         placeholder="Expires at ISO date/time, optional"
                         placeholderTextColor="#788196"
-                        style={styles.input}
+                        style={[styles.input, !staffPermissionExpiresAtValid && styles.ownerInputError]}
                         autoCapitalize="none"
                       />
+                      {!staffPermissionExpiresAtValid ? (
+                        <Text style={styles.ownerInlineError}>Use a valid ISO date/time, or leave this blank.</Text>
+                      ) : (
+                        <Text style={styles.ownerFieldHint}>Optional. Leave blank for the backend default / until-revoked behavior.</Text>
+                      )}
+                      <Text style={styles.ownerFieldLabel}>Audit reason required</Text>
                       <TextInput
                         value={staffPermissionReason}
                         onChangeText={setStaffPermissionReason}
@@ -11976,58 +12160,57 @@ export default function AdminStudioScreen() {
                         placeholderTextColor="#788196"
                         style={styles.input}
                       />
-                      <View style={styles.configListActions}>
-                        <TouchableOpacity
-                          style={[styles.orderBtn, (!staffPermissionDraftChanged || staffPermissionBusy !== null) && styles.configSaveBtnDisabled]}
+                      {staffPermissionReason.trim().length > 0 && staffPermissionReason.trim().length < 6 ? (
+                        <Text style={styles.ownerInlineError}>Audit reason needs at least 6 characters before save is enabled.</Text>
+                      ) : null}
+                      <OwnerStickyActionBar helper="Existing backend protections still block self-grant and final Owner removal.">
+                        <OwnerAdminActionButton
+                          disabled={!staffPermissionCanReset}
+                          label="Reset Draft"
                           onPress={resetStaffPermissionDraft}
-                          disabled={!staffPermissionDraftChanged || staffPermissionBusy !== null}
-                        >
-                          <Text style={styles.orderBtnText}>Reset Draft</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.ownerPrimaryButton, !canSaveStaffPermissions && styles.configSaveBtnDisabled]}
-                          onPress={queueStaffPermissionSave}
+                          variant="secondary"
+                        />
+                        <OwnerAdminActionButton
                           disabled={!canSaveStaffPermissions}
-                        >
-                          {staffPermissionBusy === "save" ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.ownerPrimaryButtonText}>Save Permissions</Text>}
-                        </TouchableOpacity>
-                      </View>
+                          label="Save Permissions"
+                          loading={staffPermissionBusy === "save"}
+                          onPress={queueStaffPermissionSave}
+                          variant="primary"
+                        />
+                      </OwnerStickyActionBar>
                     </>
                   ) : (
                     <OwnerDisabledReason reason="Scoped permission editing is Owner-only in the current backend. Admins can manage roles only when separately granted admin_grants or manage_moderators." />
                   )}
-                </View>
+                </OwnerAdminSection>
 
-                <View style={styles.contentPanel}>
-                  <View style={styles.ownerSectionHeaderRow}>
-                    <Text style={styles.ownerSectionTitle}>Permission Templates Shortcut</Text>
-                    <OwnerStatusPill label={canManagePermissionTemplates ? "Connected" : "Not Connected"} tone={canManagePermissionTemplates ? "info" : "locked"} />
-                  </View>
-                  <Text style={styles.contentSignalBody}>Templates apply permission bundles only. They never create platform roles and are managed from the dedicated Permission Templates tab.</Text>
-                  <TouchableOpacity
-                    style={[styles.orderBtn, !canManagePermissionTemplates && styles.configSaveBtnDisabled]}
-                    onPress={() => setOperatorTab("permission-templates")}
-                    disabled={!canManagePermissionTemplates}
-                  >
-                    <Text style={styles.orderBtnText}>{canManagePermissionTemplates ? "Open Permission Templates" : "Template application not connected"}</Text>
-                  </TouchableOpacity>
-                </View>
+                <OwnerQuickLinkCard
+                  body="Templates apply permission bundles only. They do not create platform roles."
+                  disabled={!canManagePermissionTemplates}
+                  label="Open Permission Templates"
+                  onPress={() => setOperatorTab("permission-templates")}
+                  statusLabel={canManagePermissionTemplates ? "Connected" : "Not Connected"}
+                  statusTone={canManagePermissionTemplates ? "info" : "locked"}
+                  title="Permission Templates Shortcut"
+                />
 
-                <View style={styles.contentPanel}>
-                  <View style={styles.ownerSectionHeaderRow}>
-                    <Text style={styles.ownerSectionTitle}>Protected Owner Rules</Text>
-                    <OwnerStatusPill label="Fail Closed" tone="success" />
-                  </View>
-                  <OwnerDetailGrid
+                <OwnerAdminSection
+                  statusLabel="Fail Closed"
+                  statusTone="success"
+                  subtitle="These rules are unchanged and remain enforced by the backend."
+                  title="Protected Owner Rules"
+                >
+                  <OwnerRuleList
                     rows={[
-                      { label: "Owner Records", value: "Protected; at least one active Owner must remain" },
-                      { label: "Owner Grants", value: "Dedicated bootstrap/protected flow only" },
-                      { label: "Admin Grants", value: "Owner or admin_grants; never self-grant" },
-                      { label: "Moderator Grants", value: "Owner or manage_moderators" },
-                      { label: "Moderator Boundary", value: "Moderators cannot grant roles or permissions" },
+                      { label: "Owner Records", status: "Protected", value: "At least one active Owner must remain." },
+                      { label: "Owner Grants", status: "Protected", value: "Dedicated bootstrap/protected flow only." },
+                      { label: "Admin Grants", status: "Guarded", value: "Owner or admin_grants; never self-grant." },
+                      { label: "Moderator Grants", status: "Guarded", value: "Owner or manage_moderators." },
+                      { label: "Self-grant", status: "Blocked", value: "Users cannot grant privileged roles to themselves." },
+                      { label: "Final Owner removal", status: "Blocked", value: "The last active Owner cannot be removed." },
                     ]}
                   />
-                </View>
+                </OwnerAdminSection>
 
                 <View style={styles.contentPanel}>
                   <View style={styles.ownerSectionHeaderRow}>
@@ -12601,14 +12784,12 @@ export default function AdminStudioScreen() {
             </View>
           </View>
           <View style={styles.configList}>
-            <View style={styles.contentPanel}>
-              <View style={styles.ownerSectionHeaderRow}>
-                <Text style={styles.ownerSectionTitle}>Staff Roster Drilldowns</Text>
-                <OwnerStatusPill
-                  label={canViewStaffRoles ? `${filteredPlatformRoleRoster.length}/${platformRoleRoster.length} shown` : "Locked"}
-                  tone={canViewStaffRoles ? "info" : "locked"}
-                />
-              </View>
+            <OwnerAdminSection
+              statusLabel={canViewStaffRoles ? `${filteredPlatformRoleRoster.length}/${platformRoleRoster.length} shown` : "Locked"}
+              statusTone={canViewStaffRoles ? "info" : "locked"}
+              subtitle="Tap a row to open the sanitized staff/account drilldown. Destructive account tools are not exposed here."
+              title="Staff Roster Drilldowns"
+            >
               {!canViewStaffRoles ? (
                 <OwnerDisabledReason reason="Users drilldowns require staff-role visibility. Normal users cannot load Admin user rows, staff emails, or Admin Search." />
               ) : platformRoleRosterLoading ? (
@@ -12660,15 +12841,14 @@ export default function AdminStudioScreen() {
                   title="No admin user rows"
                 />
               )}
-            </View>
-            <View style={styles.contentPanel}>
-              <View style={styles.ownerSectionHeaderRow}>
-                <Text style={styles.ownerSectionTitle}>Broader User Directory</Text>
-                <OwnerStatusPill
-                  label={adminUsersReadModel.loading ? "Loading" : adminUsersReadModel.connected ? `${adminUsersReadModel.items.length} rows` : "Locked"}
-                  tone={adminUsersReadModel.connected ? "success" : "locked"}
-                />
-              </View>
+            </OwnerAdminSection>
+            <OwnerAdminSection
+              defaultExpanded={adminUsersReadModel.connected}
+              statusLabel={adminUsersReadModel.loading ? "Loading" : adminUsersReadModel.connected ? `${adminUsersReadModel.items.length} rows` : "Locked"}
+              statusTone={adminUsersReadModel.connected ? "success" : "locked"}
+              subtitle="Account state is inspect-only and filtered to safe metadata."
+              title="Broader User Directory"
+            >
               <OwnerControlPanelHeader
                 badgeLabel={adminUsersReadModel.connected ? "Connected" : "Permission gated"}
                 badgeTone={adminUsersReadModel.connected ? "success" : "locked"}
@@ -12777,16 +12957,16 @@ export default function AdminStudioScreen() {
                   title="No account rows"
                 />
               )}
-            </View>
-            <View style={styles.configListActions}>
-              <TouchableOpacity
-                style={[styles.ownerSecondaryButton, !canOpenOperatorTab("roles") && styles.configSaveBtnDisabled]}
-                onPress={() => setOperatorTab("roles")}
-                disabled={!canOpenOperatorTab("roles")}
-              >
-                <Text style={styles.ownerSecondaryButtonText}>{canOpenOperatorTab("roles") ? "Open Roles & Permissions" : "Roles locked"}</Text>
-              </TouchableOpacity>
-            </View>
+            </OwnerAdminSection>
+            <OwnerQuickLinkCard
+              body="Open the protected permission editor for scoped grants, revokes, templates, and Owner fail-closed rules."
+              disabled={!canOpenOperatorTab("roles")}
+              label="Open Roles & Permissions"
+              onPress={() => setOperatorTab("roles")}
+              statusLabel={canOpenOperatorTab("roles") ? "Protected" : "Locked"}
+              statusTone={canOpenOperatorTab("roles") ? "success" : "locked"}
+              title="Permission Editor"
+            />
           </View>
         </View>
         ) : null}
@@ -14745,7 +14925,12 @@ export default function AdminStudioScreen() {
           </View>
 
           <View style={styles.configList}>
-            <View style={styles.configListRow}>
+            <OwnerAdminSection
+              statusLabel={canAccessLiveOps ? "Configurable" : "Locked"}
+              statusTone={canAccessLiveOps ? "info" : "locked"}
+              subtitle="Settings persist through owner/operator RLS and do not change normal live behavior unless explicitly enabled."
+              title="Settings"
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Settings</Text>
                 <Text style={styles.configListBody}>
@@ -14885,9 +15070,15 @@ export default function AdminStudioScreen() {
                   {liveCostGuardSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.configSaveBtnText}>Save Guard</Text>}
                 </TouchableOpacity>
               </View>
-            </View>
+            </OwnerAdminSection>
 
-            <View style={styles.configListRow}>
+            <OwnerAdminSection
+              defaultExpanded={false}
+              statusLabel="Danger gated"
+              statusTone="manual"
+              subtitle="Manual controls remain audited and confirmation-gated; observe-only does not apply enforcement."
+              title="Manual Controls"
+            >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Manual Controls</Text>
                 <Text style={styles.configListBody}>
@@ -14944,7 +15135,7 @@ export default function AdminStudioScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
+            </OwnerAdminSection>
 
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
@@ -15644,11 +15835,12 @@ export default function AdminStudioScreen() {
             </View>
           ) : null}
 
-          <View style={styles.ownerToolbarPanel}>
-            <View style={styles.ownerSectionHeaderRow}>
-              <Text style={styles.ownerSectionTitle}>Apply or Revoke</Text>
-              <OwnerStatusPill label="Scoped" tone="info" />
-            </View>
+          <OwnerAdminSection
+            statusLabel="Scoped"
+            statusTone="info"
+            subtitle="Apply or revoke a permission-only bundle after selecting a target and audit reason."
+            title="Apply or Revoke"
+          >
             <Text style={styles.ownerPanelMeta}>Applies permission bundles only; it does not create platform roles or let admins self-grant.</Text>
             <View style={styles.ownerInputGroup}>
               <TextInput
@@ -15698,33 +15890,35 @@ export default function AdminStudioScreen() {
                 placeholderTextColor="#788196"
                 style={styles.input}
               />
-              <View style={styles.ownerPanelActions}>
-                <TouchableOpacity
-                  style={[styles.ownerPrimaryButton, (permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6) && styles.configSaveBtnDisabled]}
+              <OwnerStickyActionBar helper="Templates never create platform roles and cannot be self-applied by Admins.">
+                <OwnerAdminActionButton
+                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6}
+                  label={canManagePermissionTemplates ? "Apply Template" : "Locked"}
+                  loading={permissionTemplateBusy === "apply"}
                   onPress={() => void runPermissionTemplateAction("apply")}
+                  variant="primary"
+                />
+                <OwnerAdminActionButton
                   disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6}
-                >
-                  <Text style={styles.ownerPrimaryButtonText}>{permissionTemplateBusy === "apply" ? "Applying..." : canManagePermissionTemplates ? "Apply Template" : "Locked"}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.ownerSecondaryButton, (permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6) && styles.configSaveBtnDisabled]}
+                  label={canManagePermissionTemplates ? "Revoke Template" : "Locked"}
+                  loading={permissionTemplateBusy === "revoke"}
                   onPress={() => void runPermissionTemplateAction("revoke")}
-                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6}
-                >
-                  <Text style={styles.ownerSecondaryButtonText}>{permissionTemplateBusy === "revoke" ? "Revoking..." : canManagePermissionTemplates ? "Revoke Template" : "Locked"}</Text>
-                </TouchableOpacity>
-              </View>
+                  variant="warning"
+                />
+              </OwnerStickyActionBar>
               {!canManagePermissionTemplates ? (
                 <OwnerDisabledReason reason="Template actions require Owner or staff_permission_template_manage permission. Admins cannot apply templates to themselves." />
               ) : null}
             </View>
-          </View>
+          </OwnerAdminSection>
 
-          <View style={styles.ownerControlList}>
-            <View style={styles.ownerSectionHeaderRow}>
-              <Text style={styles.ownerSectionTitle}>Template Permissions</Text>
-              <OwnerStatusPill label={`${permissionTemplates.length} templates`} tone="info" />
-            </View>
+          <OwnerAdminSection
+            defaultExpanded
+            statusLabel={`${permissionTemplates.length} templates`}
+            statusTone="info"
+            subtitle="Templates are selectable bundles only; role membership is managed separately."
+            title="Template Permissions"
+          >
             {permissionTemplates.map((template) => (
               <OwnerControlRow
                 key={`template-${template.key}`}
@@ -15734,7 +15928,7 @@ export default function AdminStudioScreen() {
                 tone={permissionTemplateKey === template.key ? "info" : "default"}
               />
             ))}
-          </View>
+          </OwnerAdminSection>
         </View>
         ) : null}
 
@@ -19855,6 +20049,277 @@ const styles = StyleSheet.create({
     color: "#F4F7FB",
     fontSize: 12,
     fontWeight: "900",
+  },
+  ownerAdminActionButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderColor: "rgba(255,255,255,0.16)",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    minWidth: 126,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  ownerAdminActionPrimary: {
+    backgroundColor: "#DC143C",
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  ownerAdminActionDanger: {
+    backgroundColor: "rgba(210,54,72,0.14)",
+    borderColor: "rgba(255,96,116,0.45)",
+  },
+  ownerAdminActionSuccess: {
+    backgroundColor: "rgba(31,148,83,0.18)",
+    borderColor: "rgba(69,204,127,0.4)",
+  },
+  ownerAdminActionWarning: {
+    backgroundColor: "rgba(220,170,20,0.14)",
+    borderColor: "rgba(220,170,20,0.42)",
+  },
+  ownerAdminActionGhost: {
+    backgroundColor: "rgba(255,255,255,0.025)",
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  ownerAdminActionText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  ownerAdminActionDangerText: {
+    color: "#FFD3DA",
+  },
+  ownerAdminSection: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.105)",
+    backgroundColor: "rgba(7,10,16,0.78)",
+    gap: 10,
+    padding: 10,
+  },
+  ownerAdminSectionDisabled: {
+    opacity: 0.78,
+  },
+  ownerAdminSectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 48,
+  },
+  ownerAdminChevron: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.13)",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  ownerAdminChevronText: {
+    color: "#F7FAFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  ownerAdminSectionCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  ownerAdminSectionTitle: {
+    color: "#FFFFFF",
+    flexShrink: 1,
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 20,
+  },
+  ownerAdminSectionSubtitle: {
+    color: "#AEB8CA",
+    fontSize: 11.5,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  ownerAdminSectionActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  ownerAdminSectionBody: {
+    borderTopColor: "rgba(255,255,255,0.08)",
+    borderTopWidth: 1,
+    gap: 10,
+    paddingTop: 10,
+  },
+  ownerQuickLinkCard: {
+    alignItems: "stretch",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(116,146,255,0.25)",
+    backgroundColor: "rgba(16,22,38,0.72)",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    minHeight: 76,
+    padding: 12,
+  },
+  ownerQuickLinkCopy: {
+    flex: 1,
+    gap: 6,
+    minWidth: 190,
+  },
+  ownerQuickLinkTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  ownerQuickLinkTitle: {
+    color: "#FFFFFF",
+    flexShrink: 1,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  ownerQuickLinkBody: {
+    color: "#B8C2D4",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  ownerQuickLinkAction: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.14)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  ownerQuickLinkActionText: {
+    color: "#F4F7FB",
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
+  ownerQuickLinkArrow: {
+    color: "#AFC0FF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  ownerRuleList: {
+    gap: 8,
+  },
+  ownerRuleRow: {
+    alignItems: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 56,
+    padding: 10,
+  },
+  ownerRuleDot: {
+    backgroundColor: "#45CC7F",
+    borderRadius: 999,
+    height: 9,
+    marginTop: 5,
+    width: 9,
+  },
+  ownerRuleCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  ownerRuleTitle: {
+    color: "#FFFFFF",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  ownerRuleBody: {
+    color: "#B8C2D4",
+    fontSize: 11.5,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  ownerDraftSummaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  ownerDraftSummaryTile: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(255,255,255,0.09)",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexBasis: "47%",
+    flexGrow: 1,
+    minHeight: 70,
+    minWidth: 134,
+    padding: 10,
+    gap: 5,
+  },
+  ownerDraftSummaryLabel: {
+    color: "#8F9AAF",
+    fontSize: 10.5,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  ownerDraftSummaryValue: {
+    color: "#E5ECF8",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+  },
+  ownerStickyActionBar: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(5,8,14,0.94)",
+    gap: 9,
+    padding: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+  },
+  ownerStickyActionHelper: {
+    color: "#9EA9BB",
+    fontSize: 11.5,
+    fontWeight: "800",
+    lineHeight: 16,
+  },
+  ownerStickyActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  ownerFieldLabel: {
+    color: "#FFFFFF",
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
+  ownerFieldHint: {
+    color: "#8F9AAF",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 15,
+    marginTop: -7,
+  },
+  ownerInputError: {
+    borderColor: "rgba(255,96,116,0.7)",
+  },
+  ownerInlineError: {
+    color: "#FFB4C0",
+    fontSize: 11.5,
+    fontWeight: "800",
+    lineHeight: 16,
+    marginTop: -7,
   },
   ownerPill: {
     alignItems: "center",

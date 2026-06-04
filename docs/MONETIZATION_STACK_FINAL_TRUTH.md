@@ -4,6 +4,8 @@ Updated: June 4, 2026
 
 This document is the canonical repo truth for Chi'llwood monetization readiness after the completed Google Play / RevenueCat, Stripe merch, and Stripe Connect sandbox proof lanes. It consolidates proof status only. It does not activate production money.
 
+Owner/Admin UI follow-up: `docs/OWNER_ADMIN_TABS_UI_UX_POLISH.md` modernizes Admin tab interactions without changing this money truth, provider rail policy, production money status, payout status, or admin authority.
+
 ## Executive Summary
 
 Chi'llwood has complete sandbox monetization readiness across Android digital goods, physical merch, and creator payout readiness:

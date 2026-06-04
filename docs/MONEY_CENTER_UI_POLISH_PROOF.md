@@ -8,6 +8,8 @@ Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
 Latest Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`, with Android screenshots under `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
 
+Owner/Admin tab interaction follow-up: `docs/OWNER_ADMIN_TABS_UI_UX_POLISH.md` adds reusable collapsible sections, modern action buttons, whole-card quick links, compact protected-rule lists, permission draft summaries, and elevated save/reset action bars in `app/admin.tsx`. This follow-up modernizes adjacent Owner/Admin tabs such as Users, Roles & Permissions, Permission Templates, and Live Cost Guard without changing Money Center truth, production money state, payout state, provider rail policy, or admin authority.
+
 ## Creator Money Center
 
 The Creator Money Center now presents a compact launch-readiness summary before the detailed sections:
