@@ -64,7 +64,7 @@ Platform Studio:
 
 Player:
 
-- Playback behavior, resolver logic, paid/private/draft/deleted/admin_removed/malware/blocked denial states, storage path privacy, and Watch-Party CTA ownership were not changed. A later focused pass polished top action affordance, comments/replies touch targets, and Player unavailable/access cards without changing those behaviors.
+- Playback behavior, resolver logic, paid/private/draft/deleted/admin_removed/malware/blocked denial states, storage path privacy, and Watch-Party CTA ownership were not changed. Later focused passes polished Player touch affordance, comments/replies, unavailable/access cards, standalone overlay controls, and fullscreen sizing without changing those behaviors. Standalone Player proof is in `docs/STANDALONE_PLAYER_OVERLAY_FULLSCREEN_PROOF.md`.
 
 Watch-Party Live:
 
@@ -127,6 +127,6 @@ This lane does not change:
 
 ## Remaining UI Gaps
 
-- Player, Watch-Party Live, and Live Watch-Party / Live Stage have a focused touch-polish follow-up documented in `docs/PLAYER_LIVE_ROOMS_TOUCH_POLISH.md`; remaining work there is Android proof capture and any future deeper layout polish with the same no-behavior-change boundary.
+- Player, Watch-Party Live, and Live Watch-Party / Live Stage have focused touch-polish proof in `docs/PLAYER_LIVE_ROOMS_TOUCH_POLISH.md`; standalone Player overlay/fullscreen proof is in `docs/STANDALONE_PLAYER_OVERLAY_FULLSCREEN_PROOF.md`. Future work there should be deeper layout composition only, with the same no-behavior-change boundary.
 - Some older deep creator settings sections still use legacy row styling; the shared public components are available for targeted follow-up replacement.
 - True viewport-sticky bottom actions remain a future layout pass where screens are split into smaller route-level forms.

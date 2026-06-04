@@ -68,7 +68,8 @@ assertNotIncludes(standaloneTopChrome, "Like", "standalone top-left actions");
 assertIncludes(standaloneTopChrome, "Share", "standalone top-left Share action");
 assertIncludes(standaloneTopChrome, "canShare", "standalone Share action");
 assertIncludes(standaloneTopChrome, "canReport", "standalone Report action");
-assertNotIncludes(standaloneTopChrome, "playbackRate", "standalone top chrome");
+assertIncludes(standaloneTopChrome, "playbackRateLabel", "standalone top playback-rate chip");
+assertIncludes(standaloneTopChrome, "onCyclePlaybackRate", "standalone top playback-rate action");
 assertNotIncludes(standaloneTopChrome, "onToggleSpeedMenu", "standalone top chrome");
 assertNotIncludes(player, "Mark Shared", "standalone Player Share label");
 
@@ -76,11 +77,15 @@ assertIncludes(player, "canStartStandaloneWatchPartyLive = isStandalonePlayer", 
 assertIncludes(player, "&& !isSpectatorPlayback", "Spectator playback Watch-Party Live CTA exclusion");
 assertIncludes(player, "playbackSource && !standalonePlaybackSourceFailed", "standalone video source render");
 assertNotIncludes(player, "&& !controlsVisible ? (\n              <View\n                collapsable={false}\n                pointerEvents=\"auto\"\n                style={styles.standaloneVideoGestureTarget}", "standalone gesture target must remain available for visible-control play/pause taps");
-assertIncludes(standaloneVideoGestureTargetStyle, "top: 60", "standalone gesture target must avoid top controls");
-assertIncludes(standaloneVideoGestureTargetStyle, "bottom: 82", "standalone gesture target must avoid bottom controls");
+assertIncludes(standaloneVideoGestureTargetStyle, "top: 126", "standalone gesture target must avoid top controls");
+assertIncludes(standaloneVideoGestureTargetStyle, "bottom: 214", "standalone gesture target must avoid bottom controls");
 assertIncludes(standaloneVideoGestureTargetStyle, "zIndex: 40", "standalone gesture target must sit below control chrome and above the video");
 assertIncludes(player, "zIndex: 46", "standalone top chrome remains above gesture target");
-assertIncludes(player, "zIndex: 47", "standalone bottom chrome remains above gesture target");
+assertIncludes(player, "zIndex: 90", "standalone bottom chrome remains above gesture target");
+assertIncludes(player, "playerFrameworkFullscreenBackground", "standalone fullscreen must use plain background");
+assertIncludes(player, "isStandaloneFullscreen ? (\n          <View style={styles.playerFrameworkFullscreenBackground} />", "standalone fullscreen must not render poster blur/background wash");
+assertIncludes(player, "!isStandaloneFullscreen ? (\n          <>", "standalone fullscreen must suppress framework depth overlays");
+assertNotIncludes(player, "standaloneVideoBottomMatte", "standalone Player bottom matte");
 assertNotIncludes(player, "StandalonePlaybackMenu", "standalone Playback sheet");
 assertNotIncludes(player, "Speed and quality", "standalone Playback sheet visible copy");
 assertNotIncludes(player, "PLAYBACK_QUALITY_AUTO_LABEL", "standalone Auto quality row");
@@ -92,6 +97,8 @@ assertNotIncludes(player, "720p", "Playback menu must not fake quality options")
 assertNotIncludes(player, "1080p", "Playback menu must not fake quality options");
 assertIncludes(player, "onCycleStandalonePlaybackRate", "compact direct playback-rate control");
 assertIncludes(player, "formatPlaybackRateLabel(playbackRate)", "compact direct playback-rate label");
+assertIncludes(player, "ScreenOrientation.OrientationLock.LANDSCAPE", "standalone fullscreen landscape orientation lock");
+assertIncludes(player, "ScreenOrientation.OrientationLock.PORTRAIT_UP", "standalone fullscreen portrait orientation restore");
 assertNotIncludes(player, "partySpeedOverlay", "loose speed pills across video");
 assertNotIncludes(player, "onToggleSpeedMenu", "loose top speed toggle");
 

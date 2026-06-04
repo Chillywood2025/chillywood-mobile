@@ -7,7 +7,7 @@
     "updates": {
       "url": "https://u.expo.dev/c384ed57-5454-4e80-81ad-dcc218b8a3c8"
     },
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "chillywoodmobile",
     "userInterfaceStyle": "automatic",

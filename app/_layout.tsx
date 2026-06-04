@@ -1,4 +1,5 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
+import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
 
@@ -263,6 +264,18 @@ function RevenueCatBootstrap() {
   return null;
 }
 
+function DefaultOrientationLock() {
+  useEffect(() => {
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch((error) => {
+      reportRuntimeError("default-orientation-lock", error, {
+        surface: "root-layout",
+      });
+    });
+  }, []);
+
+  return null;
+}
+
 function RootNavigator() {
   return (
     <>
@@ -402,6 +415,7 @@ function BetaWelcomeController() {
 function PublicLegalNavigator() {
   return (
     <SessionProvider>
+      <DefaultOrientationLock />
       <BetaProgramProvider>
         <RootErrorBoundary>
           <Stack screenOptions={{ headerShown: false }} />
@@ -430,6 +444,7 @@ export default function RootLayout() {
 
   return (
     <SessionProvider>
+      <DefaultOrientationLock />
       <RuntimeUpdateGate />
       <FirebaseRuntimeBridge />
       <RevenueCatBootstrap />

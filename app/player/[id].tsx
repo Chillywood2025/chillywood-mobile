@@ -5,6 +5,7 @@ import { Asset } from "expo-asset";
 import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
+import * as ScreenOrientation from "expo-screen-orientation";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
@@ -663,6 +664,8 @@ type StandalonePlayerTopChromeProps = {
   playbackGateActive: boolean;
   overlayOpacity: Animated.Value;
   overlayTranslateY: Animated.Value;
+  playbackRateLabel: string;
+  onCyclePlaybackRate: () => void;
   canShare: boolean;
   onShare: () => void;
   canStartWatchPartyLive: boolean;
@@ -677,6 +680,8 @@ function StandalonePlayerTopChrome({
   playbackGateActive,
   overlayOpacity,
   overlayTranslateY,
+  playbackRateLabel,
+  onCyclePlaybackRate,
   canShare,
   onShare,
   canStartWatchPartyLive,
@@ -685,7 +690,7 @@ function StandalonePlayerTopChrome({
   reportBusy,
   onReport,
 }: StandalonePlayerTopChromeProps) {
-  const hasTopLeftActions = canShare || canReport;
+  const hasTopLeftActions = canShare || canReport || !!playbackRateLabel;
 
   return (
     <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
@@ -726,6 +731,18 @@ function StandalonePlayerTopChrome({
                   hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   <Text style={styles.compactChipText}>{reportBusy ? "Sending..." : "Report"}</Text>
+                </TouchableOpacity>
+              ) : null}
+              {playbackRateLabel ? (
+                <TouchableOpacity
+                  style={[styles.compactChip, styles.compactSpeedChip]}
+                  onPress={onCyclePlaybackRate}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Playback speed ${playbackRateLabel}. Tap to change speed.`}
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+                >
+                  <Text style={styles.compactChipText}>{playbackRateLabel}</Text>
                 </TouchableOpacity>
               ) : null}
               {!hasTopLeftActions ? <View style={styles.standaloneTopSpacer} /> : null}
@@ -2906,6 +2923,11 @@ export default function PlayerScreen() {
       return;
     }
 
+    if (!inWatchParty && !isLiveModeFlag && (!isVideoReady || !isPlaying)) {
+      if (!controlsVisible) setControlsVisible(true);
+      return;
+    }
+
     if (!controlsVisible) return;
 
     hideControlsTimeoutRef.current = setTimeout(() => {
@@ -2919,7 +2941,7 @@ export default function PlayerScreen() {
         hideControlsTimeoutRef.current = null;
       }
     };
-  }, [controlsVisible, shouldPinWatchPartyControls]);
+  }, [controlsVisible, inWatchParty, isLiveModeFlag, isPlaying, isVideoReady, shouldPinWatchPartyControls]);
 
   useEffect(() => {
     if (!inWatchParty) {
@@ -3126,13 +3148,18 @@ export default function PlayerScreen() {
       return;
     }
 
+    if (!inWatchParty && !isLiveModeFlag && (!isVideoReady || !isPlaying)) {
+      if (!controlsVisible) setControlsVisible(true);
+      return;
+    }
+
     if (controlsVisible) {
       hideControlsTimeoutRef.current = setTimeout(() => {
         setControlsVisible(false);
         hideControlsTimeoutRef.current = null;
       }, CONTROLS_AUTO_HIDE_MILLIS);
     }
-  }, [controlsVisible, shouldPinWatchPartyControls]);
+  }, [controlsVisible, inWatchParty, isLiveModeFlag, isPlaying, isVideoReady, shouldPinWatchPartyControls]);
 
   const showControlsAndResetAutoHideTimer = useCallback(() => {
     if (hideControlsTimeoutRef.current) {
@@ -3142,13 +3169,13 @@ export default function PlayerScreen() {
 
     setControlsVisible(true);
 
-    if (shouldPinWatchPartyControls) return;
+    if (shouldPinWatchPartyControls || (!inWatchParty && !isLiveModeFlag && (!isVideoReady || !isPlaying))) return;
 
     hideControlsTimeoutRef.current = setTimeout(() => {
       setControlsVisible(false);
       hideControlsTimeoutRef.current = null;
     }, CONTROLS_AUTO_HIDE_MILLIS);
-  }, [shouldPinWatchPartyControls]);
+  }, [inWatchParty, isLiveModeFlag, isPlaying, isVideoReady, shouldPinWatchPartyControls]);
 
   const onSendPartyComment = useCallback(async () => {
     if (!inWatchParty || !partyId || partyCommentSending) return;
@@ -3400,6 +3427,11 @@ export default function PlayerScreen() {
 
     if (isSharedPartyPlayback) {
       void handleSharedPlaybackTap();
+      return;
+    }
+
+    if (isStandalonePlayer && !isVideoReady) {
+      showControlsAndResetAutoHideTimer();
       return;
     }
 
@@ -4567,6 +4599,43 @@ export default function PlayerScreen() {
       subscription.remove();
     };
   }, [inWatchParty, isLiveModeFlag, onReturnToPartyRoom, partyId]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || inWatchParty || isLiveModeFlag || !isStandaloneFullscreen) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setIsStandaloneFullscreen(false);
+      setControlsVisible(true);
+      resetAutoHideTimer();
+      return true;
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [inWatchParty, isLiveModeFlag, isStandaloneFullscreen, resetAutoHideTimer]);
+
+  useEffect(() => {
+    if (inWatchParty || isLiveModeFlag) return undefined;
+
+    const orientationLock = isStandaloneFullscreen
+      ? ScreenOrientation.OrientationLock.LANDSCAPE
+      : ScreenOrientation.OrientationLock.PORTRAIT_UP;
+
+    void ScreenOrientation.lockAsync(orientationLock).catch((error) => {
+      debugLog("player", "standalone orientation lock failed", {
+        fullscreen: isStandaloneFullscreen,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+
+    return () => {
+      if (!isStandaloneFullscreen) return;
+      void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch((error) => {
+        debugLog("player", "standalone orientation restore failed", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+    };
+  }, [inWatchParty, isLiveModeFlag, isStandaloneFullscreen]);
 
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
@@ -7232,7 +7301,13 @@ export default function PlayerScreen() {
   );
 
   const renderCreatorVideoCommentsPanel = () => {
-    if (!isStandalonePlayer || !isCreatorVideoPlayback || standalonePlaybackGateActive || creatorVideoPaidContentLocked) {
+    if (
+      !isStandalonePlayer
+      || !isCreatorVideoPlayback
+      || isStandaloneFullscreen
+      || standalonePlaybackGateActive
+      || creatorVideoPaidContentLocked
+    ) {
       return null;
     }
 
@@ -7967,7 +8042,9 @@ export default function PlayerScreen() {
         enabled={(isStandalonePlayer && isCreatorVideoPlayback) || isSharedPartyPlayback}
       >
       <View style={styles.playerFrameworkRoot}>
-        {isSharedPartyPlayback ? (
+        {isStandaloneFullscreen ? (
+          <View style={styles.playerFrameworkFullscreenBackground} />
+        ) : isSharedPartyPlayback ? (
           <>
             <ImageBackground source={WATCH_PARTY_BRANDED_BACKGROUND} style={styles.playerFrameworkBackground} resizeMode="cover" />
             {frameworkBackgroundSource ? (
@@ -7979,9 +8056,13 @@ export default function PlayerScreen() {
         ) : (
           <View style={styles.playerFrameworkBackgroundFallback} />
         )}
-        <View style={[styles.playerFrameworkOverlay, isSharedPartyPlayback && styles.playerFrameworkOverlayWatchParty]} pointerEvents="none" />
-        <View style={[styles.playerFrameworkDepthTop, isSharedPartyPlayback && styles.playerFrameworkDepthTopWatchParty]} pointerEvents="none" />
-        <View style={[styles.playerFrameworkDepthBottom, isSharedPartyPlayback && styles.playerFrameworkDepthBottomWatchParty]} pointerEvents="none" />
+        {!isStandaloneFullscreen ? (
+          <>
+            <View style={[styles.playerFrameworkOverlay, isSharedPartyPlayback && styles.playerFrameworkOverlayWatchParty]} pointerEvents="none" />
+            <View style={[styles.playerFrameworkDepthTop, isSharedPartyPlayback && styles.playerFrameworkDepthTopWatchParty]} pointerEvents="none" />
+            <View style={[styles.playerFrameworkDepthBottom, isSharedPartyPlayback && styles.playerFrameworkDepthBottomWatchParty]} pointerEvents="none" />
+          </>
+        ) : null}
 
         <View style={[styles.container, isSharedPartyPlayback && styles.containerWatchParty]}>
         {!inWatchParty && !isLiveMode && isStandaloneFullscreen ? null : (
@@ -8235,7 +8316,7 @@ export default function PlayerScreen() {
                     ref={videoRef}
                     source={playbackSource}
                     style={styles.video}
-                    contentFit={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? "cover" : "contain"}
+                    contentFit={!inWatchParty && !isLiveMode && !isStandaloneFullscreen ? "cover" : "contain"}
                     shouldPlay={isLiveMode ? true : isPlaying}
                     playbackRate={playbackRate}
                     volume={playerVideoVolume}
@@ -8250,7 +8331,7 @@ export default function PlayerScreen() {
                     source={playbackSource}
                     style={styles.video}
                     pointerEvents="none"
-                    resizeMode={!inWatchParty && !isLiveMode && isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
+                    resizeMode={!inWatchParty && !isLiveMode && !isStandaloneFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
                     shouldPlay={isLiveMode ? true : isPlaying}
                     isLooping={false}
                     useNativeControls={false}
@@ -8315,10 +8396,6 @@ export default function PlayerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Toggle shared playback"
               />
-            ) : null}
-
-            {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
-              <View pointerEvents="none" style={styles.standaloneVideoBottomMatte} />
             ) : null}
 
             {showStandaloneAccessOverlay && standaloneAccessPresentation ? (
@@ -8486,6 +8563,15 @@ export default function PlayerScreen() {
               </View>
             ) : null}
 
+            {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
+              <View
+                collapsable={false}
+                pointerEvents="auto"
+                style={styles.standaloneVideoGestureTarget}
+                {...panResponder.panHandlers}
+              />
+            ) : null}
+
               {inWatchParty ? (
                 <>
                 <View style={[styles.partyOverlayTopRow, styles.partyOverlayTopRowWatchParty]} pointerEvents="box-none">
@@ -8552,6 +8638,11 @@ export default function PlayerScreen() {
                 playbackGateActive={standalonePlaybackGateActive}
                 overlayOpacity={compactControlsOpacity}
                 overlayTranslateY={compactControlsTranslateY}
+                playbackRateLabel={formatPlaybackRateLabel(playbackRate)}
+                onCyclePlaybackRate={() => {
+                  setControlsVisible(true);
+                  onCycleStandalonePlaybackRate();
+                }}
                 canShare={isCreatorVideoPlayback ? canShareStandaloneCreatorVideo : canShareStandaloneTitle}
                 onShare={isCreatorVideoPlayback ? onShareCreatorVideo : onShareStandaloneTitle}
                 canStartWatchPartyLive={canStartStandaloneWatchPartyLive}
@@ -8589,7 +8680,9 @@ export default function PlayerScreen() {
                         <TouchableOpacity
                           style={styles.progressFullscreenButton}
                           activeOpacity={0.84}
+                          accessibilityRole="button"
                           accessibilityLabel={isStandaloneFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                          hitSlop={{ bottom: 8, left: 8, right: 8, top: 8 }}
                           onPress={() => {
                             setIsStandaloneFullscreen((value) => !value);
                             setControlsVisible(true);
@@ -8633,46 +8726,39 @@ export default function PlayerScreen() {
                 </View>
               ) : null}
 
-              {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
-                <Animated.View
-                  pointerEvents={controlsVisible ? "auto" : "none"}
-                  style={[
-                    styles.compactControlsShell,
-                    {
-                      opacity: compactControlsOpacity,
-                      transform: [{ translateY: compactControlsTranslateY }],
-                    },
-                  ]}
-                >
-                  <View style={styles.compactActionRow}>
-                    <TouchableOpacity style={styles.compactActionBtn} onPress={() => router.back()}>
-                      <MaterialIcons name="arrow-back" size={16} color="#EEF1F7" />
-                      <Text style={styles.compactActionBtnText}>Back</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.compactActionBtn, styles.compactPlaybackBtn]}
-                      onPress={() => {
-                        setControlsVisible(true);
-                        onCycleStandalonePlaybackRate();
-                      }}
-                      accessibilityLabel={`Playback speed ${formatPlaybackRateLabel(playbackRate)}. Tap to change speed.`}
-                    >
-                      <Text style={styles.compactActionBtnText}>{formatPlaybackRateLabel(playbackRate)}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </Animated.View>
-              ) : null}
             </View>
 
             {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
-              <View
-                collapsable={false}
-                pointerEvents="auto"
-                style={styles.standaloneVideoGestureTarget}
-                {...panResponder.panHandlers}
+              <TouchableOpacity
+                style={styles.standaloneFullscreenHitTarget}
+                activeOpacity={1}
+                accessibilityRole="button"
+                accessibilityLabel={isStandaloneFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                onPress={() => {
+                  setIsStandaloneFullscreen((value) => !value);
+                  setControlsVisible(true);
+                  resetAutoHideTimer();
+                }}
               />
             ) : null}
+
           </View>
+
+          {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !isStandaloneFullscreen ? (
+            <View style={styles.standaloneBelowMediaActions}>
+              <TouchableOpacity
+                style={styles.standaloneBelowBackButton}
+                onPress={() => router.back()}
+                activeOpacity={0.86}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+              >
+                <MaterialIcons name="arrow-back" size={16} color="#EEF1F7" />
+                <Text style={styles.standaloneBelowBackText}>Back</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           {renderCreatorVideoCommentsPanel()}
 
@@ -8698,6 +8784,7 @@ const styles = StyleSheet.create({
   playerKeyboardAvoider: { flex: 1 },
   playerFrameworkRoot: { flex: 1 },
   playerFrameworkBackground: { ...StyleSheet.absoluteFillObject },
+  playerFrameworkFullscreenBackground: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000" },
   watchPartyFrameworkPosterWash: {
     ...StyleSheet.absoluteFillObject,
     opacity: 0.22,
@@ -8900,8 +8987,10 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   videoWrapStandaloneFullscreen: {
-    height: "92%",
+    height: "100%",
     marginBottom: 0,
+    borderRadius: 0,
+    borderWidth: 0,
   },
   videoWrapCreatorDiscussionKeyboard: {
     height: 210,
@@ -9071,8 +9160,8 @@ const styles = StyleSheet.create({
   },
   standaloneVideoGestureTarget: {
     ...StyleSheet.absoluteFillObject,
-    top: 60,
-    bottom: 82,
+    top: 126,
+    bottom: 214,
     zIndex: 40,
     elevation: 40,
     backgroundColor: "transparent",
@@ -9083,16 +9172,6 @@ const styles = StyleSheet.create({
     zIndex: 4,
     elevation: 4,
     backgroundColor: "transparent",
-  },
-  standaloneVideoBottomMatte: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 52,
-    backgroundColor: "rgba(0,0,0,0.96)",
-    zIndex: 38,
-    elevation: 38,
   },
   videoLoadingFallback: {
     ...StyleSheet.absoluteFillObject,
@@ -9744,6 +9823,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(220,20,60,0.52)",
     backgroundColor: "rgba(220,20,60,0.2)",
   },
+  compactSpeedChip: {
+    minWidth: 54,
+    paddingHorizontal: 12,
+  },
   compactChipText: {
     color: "#EEF1F8",
     fontSize: 11.5,
@@ -9757,11 +9840,13 @@ const styles = StyleSheet.create({
   },
   compactActionRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
     gap: 6,
   },
   compactActionBtn: {
-    flex: 1,
+    flex: 0,
     minHeight: 44,
+    minWidth: 98,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -9775,12 +9860,37 @@ const styles = StyleSheet.create({
   },
   compactPlaybackBtn: {
     flex: 0,
-    minWidth: 72,
+    minWidth: 68,
     paddingHorizontal: 16,
   },
   compactActionBtnText: {
     color: "#EEF1F7",
     fontSize: 12,
+    fontWeight: "800",
+  },
+  standaloneBelowMediaActions: {
+    marginTop: 10,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  standaloneBelowBackButton: {
+    minHeight: 44,
+    minWidth: 112,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(15,18,25,0.74)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  standaloneBelowBackText: {
+    color: "#EEF1F7",
+    fontSize: 12.5,
     fontWeight: "800",
   },
 
@@ -9796,15 +9906,26 @@ const styles = StyleSheet.create({
   },
   playerFrameworkBottomStack: {
     position: "absolute",
-    left: 10,
-    right: 10,
-    bottom: 8,
-    gap: 5,
-    zIndex: 47,
-    elevation: 47,
+    left: 12,
+    right: 12,
+    bottom: 12,
+    gap: 8,
+    zIndex: 90,
+    elevation: 90,
   },
   playerFrameworkBottomStackWatchParty: {
     gap: 3,
+  },
+  standaloneFullscreenHitTarget: {
+    position: "absolute",
+    right: 2,
+    bottom: 32,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    zIndex: 150,
+    elevation: 150,
+    backgroundColor: "transparent",
   },
   progressCardWatchPartyTitle: {
     marginTop: 0,
@@ -9824,14 +9945,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   progressFullscreenButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(0,0,0,0.34)",
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 100,
+    elevation: 100,
   },
   progressTime: {
     color: "#C5C9D3",

@@ -36,7 +36,7 @@ Player:
 - Access and unavailable cards now use stronger dark surfaces, lighter borders, clearer spacing, and 46px action targets.
 - Creator-video comments/replies now use more readable cards, compact action chips, larger composer controls, keyboard-safe sizing, and explicit accessibility labels/states.
 - Party overlay chips and compact controls now have 44px-class touch affordance.
-- The Player media-frame bottom edge now uses a small black matte to hide the visible source/render artifact without changing video loading, resolver logic, timing, or playback controls.
+- A later focused standalone Player follow-up replaced the temporary media-edge matte with full-card video and overlay controls. See `docs/STANDALONE_PLAYER_OVERLAY_FULLSCREEN_PROOF.md`.
 
 Watch-Party Live waiting room:
 
@@ -139,4 +139,4 @@ Required validation:
 
 - Deeper live-room layout composition remains a future dedicated lane if screenshots show people/media grids still feel too dense.
 - Full two-device room interaction proof still requires a second device/account and is not faked here.
-- Broader Player playback-control redesign remains out of scope; this lane only improves visible touch affordance and unavailable/comment surfaces.
+- Broader Player playback-control behavior remains out of scope; standalone visual overlay/fullscreen presentation is now covered by `docs/STANDALONE_PLAYER_OVERLAY_FULLSCREEN_PROOF.md`.
