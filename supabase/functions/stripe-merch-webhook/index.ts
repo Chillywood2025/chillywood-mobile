@@ -6,6 +6,7 @@ import {
   notConfiguredPayload,
   optionsResponse,
   parseStripeEvent,
+  readOptionalEnv,
   readStripeWebhookSecret,
   safeWriteAuditLog,
   sanitizeErrorMessage,
@@ -15,6 +16,23 @@ import {
 } from "../_shared/stripe-connect.ts";
 
 const FUNCTION_NAME = "stripe-merch-webhook";
+
+const readStripeMerchWebhookSecret = () => {
+  const merchSecret = readOptionalEnv("STRIPE_MERCH_WEBHOOK_SECRET");
+  if (merchSecret) {
+    if (!merchSecret.startsWith("whsec_")) {
+      return {
+        configured: false as const,
+        message: "Stripe merch webhook signing secret is not a valid test webhook secret.",
+        reason: "stripe_merch_webhook_secret_invalid",
+      };
+    }
+
+    return { configured: true as const, secret: merchSecret };
+  }
+
+  return readStripeWebhookSecret();
+};
 
 type StripeMerchEvent = ReturnType<typeof parseStripeEvent>;
 type StripeObject = Record<string, unknown> & {
@@ -57,7 +75,7 @@ const sanitizedEventMetadata = (event: StripeMerchEvent, object: StripeObject | 
   charge_amount_minor: typeof object?.amount === "number" ? object.amount : null,
   checkout_session_id: toText(object?.id) || null,
   creates_digital_access: false,
-  digital_access_grant_created: false,
+  app_access_record_created: false,
   event_type: toText(event.type),
   live_money_action: false,
   object_id: objectId(object),
@@ -252,7 +270,7 @@ Deno.serve(async (req) => {
   let adminClient: SupabaseClientLike | null = null;
 
   try {
-    const webhookSecret = readStripeWebhookSecret();
+    const webhookSecret = readStripeMerchWebhookSecret();
     if (!webhookSecret.configured) {
       return jsonResponse(200, notConfiguredPayload(webhookSecret.reason, webhookSecret.message, {
         eventStored: false,

@@ -6,7 +6,7 @@ Starting HEAD: `5ed7db5` (`Consolidate Admin IA and drilldowns`)
 
 June 4, 2026 Public V1 Money-Proof RC Sweep update: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` records the release-candidate regression sweep after the Money Center launch packet. Play-installed Android proof path: `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`. Remote counts stayed provider_events `6`, purchase_intents `8`, access_grants `5`, ledger_events `7`, payable/paid rows `0`, and active temporary proof roles `0`. Premium/Studio, Player/content, Watch-Party Live, Live Watch-Party / Live Stage, event pass, spectator safety, Admin/Owner safety, Play review posture, and Data Safety posture remain guarded. Remaining money blockers are production approval/payout/tax/legal/provider-tooling lanes, not fake-sale or sandbox-readiness gaps.
 
-June 4, 2026 Stripe merch/payout readiness update: physical merch now has repo-side sandbox Stripe readiness, but production merch and payouts remain blocked. The new physical merch path is server-side/operator-only sandbox checkout plus signed Stripe webhook handling, constrained to physical goods and no digital access. Stripe Connect payout readiness remains sandbox setup only. Public V1 still blocks production money, payout activation, cash-out/withdraw/transfer, public merch launch, and any Stripe Android digital checkout.
+June 4, 2026 Stripe merch/payout readiness update: physical merch now has repo-side sandbox Stripe readiness plus one real Stripe test-mode runtime checkout proof, but production merch and payouts remain blocked. The physical merch path is server-side/operator-only sandbox checkout plus signed Stripe webhook handling, constrained to physical goods and no digital access. Runtime proof produced one sandbox paid/processing merch order, one merch order item, and one processed sanitized Stripe merch event, while digital access grants, RevenueCat/Premium entitlements, payable/paid money-access rows, provider payout-enabled accounts, active proof roles, live money, and payouts stayed `0`/off. Stripe Connect payout readiness remains sandbox setup only. Public V1 still blocks production money, payout activation, cash-out/withdraw/transfer, public merch launch, and any Stripe Android digital checkout.
 
 June 4, 2026 Money Center launch-polish update: monetization proof is now review-packeted. Creator Money Center and Owner/Admin Money Center carry modern sandbox-only/not-payable proof summaries, Product Catalog / Provider Events / Purchase Intents / Access Grants / Ledger Events readouts, and failure-path status. `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md` and `docs/MONEY_CENTER_UI_POLISH_PROOF.md` are the current review/evidence index. This reduces reviewer/operator confusion but does not remove the broad public-launch blocker for production money because live money, payouts, production buy buttons, and provider refund/pending tooling remain future explicit lanes.
 
@@ -159,13 +159,13 @@ Proof folder: `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`
 5. Hero Reel playback and public watermark rendering.
 6. Native game streaming and real Chi'llyfects AR processing.
 7. Live ads, ad revenue, sponsor checkout, and ad network delivery.
-8. Live payouts, tips, paid creator checkout, merch checkout, tax/KYC, and instant cash-out.
+8. Live payouts, production tips, public paid creator checkout, production merch checkout, tax/KYC, and instant cash-out.
 9. Advanced Admin read-model polish for broader Users, Usage, System, and historical deploy rows.
 10. Richer spectator/replay catalog proof beyond current safe fixtures.
 
 ## Do Not Build Now
 
-- Do not activate live money, live payouts, tips, paid content checkout, merch checkout, sponsor checkout, or ads.
+- Do not activate live money, live payouts, production tips, paid content checkout, production merch checkout, sponsor checkout, or ads.
 - Do not fake Premium, balances, earnings, Rachi activity, live rooms, search results, reports, followers, messages, or creator activity.
 - Do not add a manual approval queue for every Profile photo/background upload.
 - Do not weaken RLS or use client-hidden buttons as security.

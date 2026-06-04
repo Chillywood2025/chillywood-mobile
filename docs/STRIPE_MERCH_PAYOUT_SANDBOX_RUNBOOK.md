@@ -6,11 +6,12 @@ This runbook covers Stripe sandbox readiness for physical merch and Stripe Conne
 
 ## Current Status
 
-- Stripe secret names are configured in Supabase Edge Functions by digest only: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`.
+- Stripe secret names are configured in Supabase Edge Functions by digest only: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and dedicated merch webhook secret `STRIPE_MERCH_WEBHOOK_SECRET`.
 - `stripe-merch-checkout` is server-side, owner/operator-only, and test-mode only.
 - `stripe-merch-webhook` verifies the Stripe webhook signature, rejects live-mode events, stores idempotent sanitized rows in `stripe_merch_events`, and updates only `merch_orders`.
-- Both functions are deployed ACTIVE version `2` on the linked Supabase project.
+- `stripe-merch-checkout` is deployed ACTIVE version `4`; `stripe-merch-webhook` is deployed ACTIVE version `5` on the linked Supabase project.
 - Smoke proof: unauthenticated checkout returns `missing_authorization`; unsigned webhook returns `invalid_signature` with `liveMoneyAction:false`.
+- Runtime proof: an upgraded proof account completed one real Stripe test-mode Checkout Session for `cw_merch_test_tee_sandbox`; the signed `checkout.session.completed` event was processed by `stripe-merch-webhook`.
 - Existing Stripe Connect account/onboarding/sync functions remain sandbox payout readiness only.
 - Transfer and payout release functions remain preflight/blocked. They do not create payouts or transfers.
 
@@ -60,6 +61,24 @@ Stripe Connect sandbox readiness may create or reuse a test connected account, c
 - transfer
 - payable creator balance
 
-## Remaining Runtime Proof
+## Runtime Proof Complete
 
-Real Stripe test-card merch checkout should be run only with an authenticated owner/operator runtime session and the Stripe sandbox checkout screen available. The current repo-side lane did not fake a paid order or manually mark an order paid.
+Proof path: `/tmp/chillywood-stripe-merch-sandbox-checkout-proof-20260603/`.
+
+Runtime readback after the real Stripe test-card checkout:
+
+- `merch_orders`: `1`
+- `merch_order_items`: `1`
+- `stripe_merch_events`: `1` processed
+- order state: sandbox/test physical merch, `paid` / `processing`
+- merch access grants: `0`
+- merch orders with digital access: `0`
+- Stripe/merch RevenueCat entitlements: `0`
+- Stripe/merch Premium entitlements: `0`
+- payable/paid money-access rows: `0`
+- provider payout-enabled accounts: `0`
+- active temporary proof/operator roles after revoke: `0`
+- `live_money_enabled`: `off`
+- `payouts_enabled`: `off`
+
+The proof used a real Stripe test-mode Checkout payment and a signed Stripe webhook. No paid order was faked or manually marked paid.

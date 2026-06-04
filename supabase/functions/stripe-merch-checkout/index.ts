@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
           cash_out_enabled: false,
           checkout_created_by: FUNCTION_NAME,
           creates_digital_access: false,
-          digital_access_grant_created: false,
+          app_access_record_created: false,
           live_money_action: false,
           physical_merch_only: true,
           premium_entitlement_created: false,

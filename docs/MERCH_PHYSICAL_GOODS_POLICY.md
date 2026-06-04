@@ -17,7 +17,7 @@ Physical merch is separate from Android digital goods.
 
 The current sandbox proof product is `cw_merch_test_tee_sandbox`. It is test-only, manually fulfilled, and not payable creator earnings.
 
-Repo-side readiness is complete and deployed. Real Stripe test-card checkout is a runtime proof follow-up requiring an authenticated owner/operator session; no paid order is claimed until Stripe Checkout and the signed webhook complete.
+Repo-side readiness and runtime proof are complete for one sandbox order. An authenticated upgraded proof account created a real Stripe test-mode Checkout Session, completed payment with a Stripe test card, and a signed `checkout.session.completed` webhook updated one sandbox merch order to `paid` / `processing`. Final proof kept merch access grants `0`, merch orders with digital access `0`, Stripe/merch entitlements `0`, Stripe/merch Premium entitlements `0`, payable/paid money-access rows `0`, provider payout-enabled accounts `0`, `live_money_enabled=off`, and `payouts_enabled=off`.
 
 ## Production Requirements
 

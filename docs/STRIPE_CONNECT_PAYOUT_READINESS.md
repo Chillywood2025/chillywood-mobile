@@ -39,3 +39,5 @@ Production payout activation requires a separate approved lane with:
 Until that lane completes, Creator Money Center must continue to show `Payouts not active`, `No verified payable earnings yet`, and `Not payable`.
 
 This lane did not run or claim a real payout. Existing Connect functions remain sandbox account/onboarding/status readiness only.
+
+June 4, 2026 Stripe merch checkout runtime proof did not change payout readiness. The physical-merch test checkout produced one sandbox merch order and one sanitized Stripe merch event, but provider payout-enabled accounts stayed `0`, app-level `payouts_enabled` stayed `off`, `live_money_enabled` stayed `off`, and no cash-out, withdrawal, transfer, payable balance, or payout simulation was created.
