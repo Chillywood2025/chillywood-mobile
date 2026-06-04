@@ -153,6 +153,29 @@ const assertPhysicalSandboxMerchProduct = (product: MerchProductRow) => {
   if (!/^[a-z]{3}$/.test(product.currency ?? "")) throw new Error("Merch product currency is invalid.");
 };
 
+const readConfiguredSandboxTesterEmails = () => {
+  const raw = [
+    Deno.env.get("INTERNAL_SANDBOX_TESTER_EMAILS"),
+    Deno.env.get("EXPO_PUBLIC_BETA_OPERATOR_ALLOWLIST"),
+  ]
+    .map((value) => toText(value))
+    .filter(Boolean)
+    .join(",");
+
+  return new Set(
+    raw
+      .split(/[,\s]+/)
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.includes("@")),
+  );
+};
+
+const userHasConfiguredSandboxTesterAccess = (currentUser: AuthenticatedUser) => {
+  const email = toText(currentUser.email).toLowerCase();
+  if (!email) return false;
+  return readConfiguredSandboxTesterEmails().has(email);
+};
+
 const userHasActiveSandboxTesterAccess = async (
   adminClient: SupabaseClientLike,
   currentUser: AuthenticatedUser,
@@ -209,10 +232,11 @@ Deno.serve(async (req) => {
       userHasPlatformRole(adminClient, currentUser, ["owner", "operator"]),
       userHasActiveSandboxTesterAccess(adminClient, currentUser),
     ]);
-    if (!isOperator && !isSandboxTester) {
+    const isConfiguredTester = userHasConfiguredSandboxTesterAccess(currentUser);
+    if (!isOperator && !isSandboxTester && !isConfiguredTester) {
       return jsonResponse(403, {
         error: "sandbox_tester_required",
-        message: "Sandbox physical merch checkout is limited to owner/operator accounts or approved internal tester sandbox accounts.",
+        message: "Sandbox physical merch checkout is limited to owner/operator accounts, active beta testers, or server-configured internal tester sandbox accounts.",
         liveMoneyAction: false,
         checkoutCreated: false,
       });

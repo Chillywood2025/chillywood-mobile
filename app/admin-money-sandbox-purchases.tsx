@@ -8,7 +8,7 @@ import {
   readRevenueCatNonSubscriptionProducts,
   syncRevenueCatCustomerIdentity,
 } from "../_lib/revenuecat";
-import { supabase } from "../_lib/supabase";
+import { SUPABASE_URL, supabase } from "../_lib/supabase";
 
 type SandboxProductKey =
   | "paid_content_access_sandbox_099"
@@ -67,6 +67,7 @@ const SANDBOX_PRODUCTS: SandboxProduct[] = [
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SANDBOX_EVENT_PASS_PROOF_SOURCE_ID = "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004";
 const SANDBOX_MERCH_PRODUCT_KEY = "cw_merch_test_tee_sandbox";
+const STRIPE_MERCH_CHECKOUT_URL = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/stripe-merch-checkout`;
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -194,13 +195,26 @@ export default function AdminMoneySandboxPurchasesScreen() {
     setMerchStatus("Creating Stripe sandbox Checkout session for physical merch...");
 
     try {
-      const { data, error } = await supabase.functions.invoke("stripe-merch-checkout", {
-        body: {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session?.access_token) {
+        throw new Error("Sign in again before starting Stripe physical merch sandbox checkout.");
+      }
+      const response = await fetch(STRIPE_MERCH_CHECKOUT_URL, {
+        body: JSON.stringify({
           product_key: SANDBOX_MERCH_PRODUCT_KEY,
           quantity: 1,
+        }),
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+          "Content-Type": "application/json",
         },
+        method: "POST",
       });
-      if (error) throw error;
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const safeMessage = normalizeText((data as { message?: unknown } | null)?.message) || "Stripe physical merch sandbox checkout could not be created.";
+        throw new Error(safeMessage);
+      }
       const payload = data as { message?: string; url?: string; orderId?: string; checkoutCreated?: boolean; physicalMerchOnly?: boolean } | null;
       const checkoutUrl = normalizeText(payload?.url);
       if (!payload?.checkoutCreated || !checkoutUrl) {
