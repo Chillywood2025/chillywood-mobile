@@ -8,6 +8,8 @@ Latest RC regression sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`. Android pr
 
 Stripe merch/payout readiness addendum: `docs/STRIPE_MERCH_PAYOUT_SANDBOX_RUNBOOK.md`, `docs/MERCH_PHYSICAL_GOODS_POLICY.md`, and `docs/STRIPE_CONNECT_PAYOUT_READINESS.md` document the sandbox-only Stripe physical-merch and Connect readiness posture. Stripe remains forbidden for Android digital goods; merch creates no access grants or RevenueCat entitlements; payout readiness creates no cash-out, withdrawal, transfer, or payable creator balance.
 
+Latest Stripe Connect payout-readiness proof: `docs/STRIPE_CONNECT_SANDBOX_PAYOUT_PROOF.md`. Proof path: `/tmp/chillywood-stripe-connect-payout-readiness-proof-20260604/`. Existing test-mode Connect functions reused a real Stripe Express connected account, created a sandbox onboarding link with an HTTPS Chi'llwood return/refresh origin, and refreshed the account into `pending_kyc` / `onboarding_in_progress` with `charges_enabled=false` and `payouts_enabled=false`. App-level `payouts_enabled` and `live_money_enabled` remain off; no cash-out, withdrawal, transfer, payable balance, digital access grant, RevenueCat/Premium entitlement, or payout simulation was created.
+
 ## Current Truth
 
 - Production live money: off.
@@ -17,6 +19,7 @@ Stripe merch/payout readiness addendum: `docs/STRIPE_MERCH_PAYOUT_SANDBOX_RUNBOO
 - Creator balance: no verified payable earnings yet.
 - Premium, creator tips, Watch-Party Live tickets, Live Watch-Party access passes, Live Watch-Party seat passes, paid content access, and event passes have real Google Play / RevenueCat sandbox proof.
 - Merch is physical goods separate; sandbox Stripe readiness is physical-only and does not create Android digital access.
+- Stripe Connect payout readiness is sandbox-only; onboarding may show pending KYC/verification but payouts are not active.
 - Payment creates access records only. Access records do not grant LiveKit publish permission, host power, speaker authority, moderator/admin power, payout access, or safety bypass.
 
 ## Product Proof Summary
@@ -42,6 +45,21 @@ Final remote readback after the June 4 launch-polish Android proof:
 - `money_access_ledger_events`: 7
 - payable/paid money-access rows: 0
 - active temporary proof roles: 0
+
+Final Stripe Connect payout-readiness readback after the June 4 backend proof:
+
+- `creator_payout_accounts`: 2
+- Stripe Connect accounts: 1 test-mode Express account
+- onboarding sessions: 2
+- provider charges-enabled accounts: 0
+- provider payout-enabled accounts: 0
+- payout requests: 0
+- payable/paid creator payout ledger rows: 0
+- payable/paid money-access rows: 0
+- payout-readiness access grants: 0
+- Stripe Connect RevenueCat/Premium entitlements: 0
+- app-level `live_money_enabled`: off
+- app-level `payouts_enabled`: off
 
 Remote-applied money migrations include:
 
@@ -94,6 +112,8 @@ Screenshots and recordings are local proof artifacts and are not committed unles
 - `/tmp/chillywood-real-sandbox-access-products-proof-20260603/`
 - `/tmp/chillywood-money-failure-and-event-pass-proof-20260604/`
 - `/tmp/chillywood-money-center-launch-polish-review-packet-20260604/`
+- `/tmp/chillywood-stripe-merch-sandbox-checkout-proof-20260603/`
+- `/tmp/chillywood-stripe-connect-payout-readiness-proof-20260604/`
 
 Latest Android proof target:
 

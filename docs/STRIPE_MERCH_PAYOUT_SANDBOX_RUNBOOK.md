@@ -61,6 +61,26 @@ Stripe Connect sandbox readiness may create or reuse a test connected account, c
 - transfer
 - payable creator balance
 
+Latest proof path: `/tmp/chillywood-stripe-connect-payout-readiness-proof-20260604/`.
+
+The upgraded proof account authenticated without a temporary operator role. `stripe-connect-account` reused the existing real Stripe test-mode Express connected account, `stripe-connect-onboarding-link` created a sandbox onboarding link after using an HTTPS Chi'llwood origin, and `stripe-connect-account-sync` refreshed account readiness from Stripe sandbox. Safe status:
+
+- provider environment: `test`
+- account type: `express`
+- account status: `pending_kyc`
+- onboarding status: `onboarding_in_progress`
+- KYC status: `pending`
+- tax status: `not_connected`
+- `charges_enabled=false`
+- `payouts_enabled=false`
+- details submitted: `false`
+- transfers capability: `inactive`
+- currently due requirements count: `5`
+
+Safety readback stayed: provider payout-enabled accounts `0`, payout requests `0`, payable/paid creator payout ledger rows `0`, payable/paid money-access rows `0`, payout-readiness access grants `0`, Stripe Connect entitlements `0`, Stripe Connect Premium entitlements `0`, active proof roles `0`, `live_money_enabled=off`, and `payouts_enabled=off`.
+
+No payout simulation was run because the provider test account is not payout-enabled. Do not claim payout success or cash-out readiness from this proof.
+
 ## Runtime Proof Complete
 
 Proof path: `/tmp/chillywood-stripe-merch-sandbox-checkout-proof-20260603/`.

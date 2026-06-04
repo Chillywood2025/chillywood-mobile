@@ -41,3 +41,47 @@ Until that lane completes, Creator Money Center must continue to show `Payouts n
 This lane did not run or claim a real payout. Existing Connect functions remain sandbox account/onboarding/status readiness only.
 
 June 4, 2026 Stripe merch checkout runtime proof did not change payout readiness. The physical-merch test checkout produced one sandbox merch order and one sanitized Stripe merch event, but provider payout-enabled accounts stayed `0`, app-level `payouts_enabled` stayed `off`, `live_money_enabled` stayed `off`, and no cash-out, withdrawal, transfer, payable balance, or payout simulation was created.
+
+## Sandbox Payout Readiness Proof
+
+Proof path: `/tmp/chillywood-stripe-connect-payout-readiness-proof-20260604/`.
+
+Existing deployed functions were used:
+
+- `stripe-connect-account` ACTIVE version `47`
+- `stripe-connect-onboarding-link` ACTIVE version `47`
+- `stripe-connect-account-sync` ACTIVE version `47`
+- `stripe-connect-webhook` ACTIVE version `49`
+
+Result:
+
+- upgraded proof account authenticated
+- no temporary operator role was required
+- existing real Stripe test-mode Express connected account was reused
+- onboarding link was created after using the approved HTTPS Chi'llwood origin
+- account status was refreshed from Stripe sandbox
+- provider environment: `test`
+- status: `pending_kyc`
+- onboarding status: `onboarding_in_progress`
+- KYC status: `pending`
+- tax status: `not_connected`
+- `charges_enabled=false`
+- `payouts_enabled=false`
+- details submitted: `false`
+- transfers capability: `inactive`
+- currently due requirements: `5`
+- active proof roles after proof: `0`
+
+Final safety readback:
+
+- app-level `live_money_enabled=off`
+- app-level `payouts_enabled=off`
+- provider payout-enabled accounts: `0`
+- payout requests: `0`
+- payable/paid creator payout ledger rows: `0`
+- payable/paid money-access rows: `0`
+- payout-readiness access grants: `0`
+- Stripe Connect entitlements: `0`
+- Stripe Connect Premium entitlements: `0`
+
+No sandbox payout simulation was run because the test connected account is not payout-enabled and payout success must not be faked.
