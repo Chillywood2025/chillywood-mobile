@@ -55,6 +55,7 @@ import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
+import { AppEmptyState, AppSection } from "../../components/ui/app-surface";
 
 type TitleRow = Omit<
   Pick<
@@ -582,6 +583,8 @@ export default function HomeScreen() {
         style={styles.feedActivityCard}
         activeOpacity={0.88}
         onPress={() => openDiscoveryFeedItem(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${title}`}
       >
         <View style={styles.feedActivityThumb}>
           {item.thumbnail_url ? (
@@ -615,6 +618,8 @@ export default function HomeScreen() {
                   event.stopPropagation();
                   openChannel(ownerId);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${title} Platform`}
               >
                 <Text style={styles.feedActivityGhostText}>Platform</Text>
               </TouchableOpacity>
@@ -632,6 +637,8 @@ export default function HomeScreen() {
         style={styles.feedEventCard}
         activeOpacity={0.88}
         onPress={() => openChannel(event.hostUserId)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${event.eventTitle}`}
       >
         <View style={styles.feedEventBadgeRow}>
           <Text style={[styles.feedEventBadge, event.isLiveNow ? styles.feedActivityLiveBadge : null]}>
@@ -660,20 +667,15 @@ export default function HomeScreen() {
     const hasRows = input.feedItems.length > 0 || input.events.length > 0;
 
     return (
-      <View style={styles.section}>
-        <View style={styles.followingHeaderRow}>
-          <View style={styles.followingHeaderCopy}>
-            <Text style={styles.sectionTitle}>{input.title}</Text>
-            <Text style={styles.followingSubtitle}>{input.subtitle}</Text>
-          </View>
-          {homeDiscoveryLoading ? <ActivityIndicator color="#E50914" /> : null}
-        </View>
+      <AppSection
+        statusLabel={homeDiscoveryLoading ? "Loading" : hasRows ? "Ready" : "Empty"}
+        statusTone={homeDiscoveryLoading ? "muted" : hasRows ? "success" : "muted"}
+        subtitle={input.subtitle}
+        title={input.title}
+      >
 
         {homeDiscoveryError ? (
-          <View style={styles.followingEmptyCard}>
-            <Text style={styles.followingEmptyTitle}>Discovery unavailable</Text>
-            <Text style={styles.followingEmptyText}>{homeDiscoveryError}</Text>
-          </View>
+          <AppEmptyState title="Discovery unavailable" body={homeDiscoveryError} />
         ) : hasRows ? (
           <ScrollView
             horizontal
@@ -684,12 +686,9 @@ export default function HomeScreen() {
             {input.events.map(renderEventCard)}
           </ScrollView>
         ) : (
-          <View style={styles.followingEmptyCard}>
-            <Text style={styles.followingEmptyTitle}>{input.emptyTitle}</Text>
-            <Text style={styles.followingEmptyText}>{input.emptyText}</Text>
-          </View>
+          <AppEmptyState title={input.emptyTitle} body={input.emptyText} />
         )}
-      </View>
+      </AppSection>
     );
   }
 
@@ -703,20 +702,15 @@ export default function HomeScreen() {
     keyPrefix: string;
   }) {
     return (
-      <View style={styles.section}>
-        <View style={styles.followingHeaderRow}>
-          <View style={styles.followingHeaderCopy}>
-            <Text style={styles.sectionTitle}>{input.title}</Text>
-            <Text style={styles.followingSubtitle}>{input.subtitle}</Text>
-          </View>
-          {input.loading ? <ActivityIndicator color="#E50914" /> : null}
-        </View>
+      <AppSection
+        statusLabel={input.loading ? "Loading" : input.videos.length ? "Ready" : "Empty"}
+        statusTone={input.loading ? "muted" : input.videos.length ? "success" : "muted"}
+        subtitle={input.subtitle}
+        title={input.title}
+      >
 
         {input.loading ? (
-          <View style={styles.followingEmptyCard}>
-            <Text style={styles.followingEmptyTitle}>Checking public uploads</Text>
-            <Text style={styles.followingEmptyText}>Only real public creator uploads appear here.</Text>
-          </View>
+          <AppEmptyState title="Checking public uploads" body="Only real public creator uploads appear here." />
         ) : input.videos.length ? (
           <FlatList
             horizontal
@@ -738,30 +732,23 @@ export default function HomeScreen() {
             )}
           />
         ) : (
-          <View style={styles.followingEmptyCard}>
-            <Text style={styles.followingEmptyTitle}>{input.emptyTitle}</Text>
-            <Text style={styles.followingEmptyText}>{input.emptyText}</Text>
-          </View>
+          <AppEmptyState title={input.emptyTitle} body={input.emptyText} />
         )}
-      </View>
+      </AppSection>
     );
   }
 
   function renderRachiOfficialUpdates() {
     return (
-      <View style={styles.section}>
-        <View style={styles.followingHeaderRow}>
-          <View style={styles.followingHeaderCopy}>
-            <Text style={styles.sectionTitle}>Rachi Official Updates</Text>
-            <Text style={styles.followingSubtitle}>Rachi shares official Chi'llwood tips, announcements, and Originals notes.</Text>
-          </View>
-        </View>
+      <AppSection
+        statusLabel={homeDiscoveryLoading ? "Loading" : rachiOfficialPosts.length ? "Official" : "Empty"}
+        statusTone={rachiOfficialPosts.length ? "premium" : "muted"}
+        subtitle="Rachi shares official Chi'llwood tips, announcements, and Originals notes."
+        title="Rachi Official Updates"
+      >
 
         {homeDiscoveryLoading ? (
-          <View style={styles.followingEmptyCard}>
-            <Text style={styles.followingEmptyTitle}>Checking Rachi updates</Text>
-            <Text style={styles.followingEmptyText}>Public Rachi posts appear here after they are published.</Text>
-          </View>
+          <AppEmptyState title="Checking Rachi updates" body="Public Rachi posts appear here after they are published." />
         ) : rachiOfficialPosts.length ? (
           <View style={styles.rachiUpdateStack}>
             {rachiOfficialPosts.map((post) => (
@@ -770,6 +757,8 @@ export default function HomeScreen() {
                 style={styles.rachiUpdateCard}
                 activeOpacity={0.86}
                 onPress={openRachiProfile}
+                accessibilityRole="button"
+                accessibilityLabel="Open Rachi official Profile"
               >
                 <View style={styles.rachiIdentityRow}>
                   <View style={styles.rachiAvatar}>
@@ -794,12 +783,9 @@ export default function HomeScreen() {
             ))}
           </View>
         ) : (
-          <View style={styles.followingEmptyCard}>
-            <Text style={styles.followingEmptyTitle}>No Rachi updates yet</Text>
-            <Text style={styles.followingEmptyText}>Official posts will appear here when Rachi publishes them.</Text>
-          </View>
+          <AppEmptyState title="No Rachi updates yet" body="Official posts will appear here when Rachi publishes them." />
         )}
-      </View>
+      </AppSection>
     );
   }
 

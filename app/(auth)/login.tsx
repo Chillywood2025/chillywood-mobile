@@ -18,6 +18,7 @@ import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { completePendingSignupProfile } from "../../_lib/signupProfileCompletion";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "../../_lib/supabase";
+import { AppActionButton, AppStatusPill } from "../../components/ui/app-surface";
 
 const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 const PASSWORD_RESET_REDIRECT_URL = "chillywoodmobile://reset-password";
@@ -186,7 +187,10 @@ export default function Login() {
           bounces={false}
         >
           <View style={styles.card}>
-            <Text style={styles.kicker}>CHI'LLYWOOD</Text>
+            <View style={styles.headerRow}>
+              <Text style={styles.kicker}>CHI'LLYWOOD</Text>
+              <AppStatusPill label={isClosedBetaEnvironment() ? "Closed Beta" : "Public V1"} tone="accent" />
+            </View>
             <Text style={styles.title}>
               {isClosedBetaEnvironment() ? "Closed Beta Sign In" : "Sign In"}
             </Text>
@@ -237,9 +241,7 @@ export default function Login() {
               </Text>
             </Pressable>
 
-            <Pressable style={styles.button} onPress={signIn} disabled={loading}>
-              <Text style={styles.buttonText}>{loading ? "Signing in..." : "Log In"}</Text>
-            </Pressable>
+            <AppActionButton label={loading ? "Signing in..." : "Log In"} loading={loading} onPress={signIn} variant="primary" />
 
             <View style={styles.row}>
               <Text style={styles.muted}>No account?</Text>
@@ -278,12 +280,18 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(12,13,19,0.94)",
     padding: 22,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
   kicker: {
     color: "#7B869E",
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.2,
-    marginBottom: 12,
   },
   title: {
     color: "#DC143C",

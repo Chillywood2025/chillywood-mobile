@@ -41,6 +41,7 @@ import {
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 
 const SKYLINE_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 
@@ -446,9 +447,7 @@ export default function PublicChannelScreen() {
       <View style={styles.unavailableCard}>
         <Text style={styles.unavailableTitle}>Platform unavailable</Text>
         <Text style={styles.unavailableBody}>{body}</Text>
-        <TouchableOpacity style={styles.primaryButton} activeOpacity={0.86} onPress={() => router.back()}>
-          <Text style={styles.primaryButtonText}>Back</Text>
-        </TouchableOpacity>
+        <AppActionButton label="Back" onPress={() => router.back()} variant="primary" />
       </View>
     </View>
   );
@@ -502,37 +501,21 @@ export default function PublicChannelScreen() {
 
         <View style={styles.actionRow}>
           {canRenderFollow ? (
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.actionButtonWide,
-                viewerFollowState === "following" ? styles.actionButtonSecondary : styles.actionButtonPrimary,
-                followBusy && styles.actionButtonDisabled,
-              ]}
-              activeOpacity={0.86}
-              disabled={followBusy}
+            <AppActionButton
+              label={followBusy ? "Updating" : followLabel}
+              loading={followBusy}
               onPress={toggleFollow}
-            >
-              <Text style={viewerFollowState === "following" ? styles.actionButtonText : styles.actionButtonTextPrimary}>
-                {followBusy ? "Updating" : followLabel}
-              </Text>
-            </TouchableOpacity>
+              style={styles.actionButtonWide}
+              variant={viewerFollowState === "following" ? "secondary" : "primary"}
+            />
           ) : null}
-          <TouchableOpacity style={styles.actionButton} activeOpacity={0.86} onPress={shareChannel}>
-            <Text style={styles.actionButtonText}>Share</Text>
-          </TouchableOpacity>
+          <AppActionButton label="Share" onPress={shareChannel} />
           {!isOwner ? (
-            <TouchableOpacity style={[styles.actionButton, styles.actionButtonReport]} activeOpacity={0.86} onPress={openReport}>
-              <Text style={styles.actionButtonReportText}>Report</Text>
-            </TouchableOpacity>
+            <AppActionButton label="Report" onPress={openReport} variant="danger" />
           ) : null}
-          <TouchableOpacity style={styles.actionButton} activeOpacity={0.86} onPress={openProfile}>
-            <Text style={styles.actionButtonText}>View Profile</Text>
-          </TouchableOpacity>
+          <AppActionButton label="View Profile" onPress={openProfile} />
           {showOwnerControls ? (
-            <TouchableOpacity style={[styles.actionButton, styles.actionButtonWide, styles.actionButtonOwner]} activeOpacity={0.86} onPress={openStudio}>
-              <Text style={styles.actionButtonOwnerText}>Open Platform Studio</Text>
-            </TouchableOpacity>
+            <AppActionButton label="Open Platform Studio" onPress={openStudio} style={styles.actionButtonWide} variant="success" />
           ) : null}
         </View>
       </View>
@@ -663,26 +646,22 @@ export default function PublicChannelScreen() {
   );
 
   const renderFeatured = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Featured</Text>
+    <AppSection title="Featured" statusLabel={featuredVideo ? "Public" : "Empty"} statusTone={featuredVideo ? "success" : "muted"}>
       {featuredVideo ? (
         renderFeaturedVideoCard(featuredVideo)
       ) : (
-        <View style={[styles.emptyCard, styles.featuredEmptyCard, styles.spotlightEmptyCard]}>
-          <Text style={styles.emptyText}>This platform has not published videos yet.</Text>
-          {showOwnerControls ? (
-            <TouchableOpacity style={styles.emptySecondaryButton} activeOpacity={0.86} onPress={openStudio}>
-              <Text style={styles.emptySecondaryButtonText}>Open Platform Studio</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
+        <AppEmptyState
+          actionLabel={showOwnerControls ? "Open Platform Studio" : undefined}
+          body="This Platform has not published videos yet."
+          onAction={showOwnerControls ? openStudio : undefined}
+          title="No featured video"
+        />
       )}
-    </View>
+    </AppSection>
   );
 
   const renderLatestUploads = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Latest Uploads</Text>
+    <AppSection title="Latest Uploads" statusLabel={latestUploadVideos.length ? "Public" : "Empty"} statusTone={latestUploadVideos.length ? "success" : "muted"}>
       {latestUploadVideos.length ? (
         <ScrollView
           horizontal
@@ -693,11 +672,9 @@ export default function PublicChannelScreen() {
           {latestUploadVideos.map((video) => renderLatestUploadCard(video))}
         </ScrollView>
       ) : (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>No public uploads yet.</Text>
-        </View>
+        <AppEmptyState title="No public uploads yet" body="Public videos appear here after this creator publishes them." />
       )}
-    </View>
+    </AppSection>
   );
 
   const renderEventCard = (event: CreatorEventSummary) => (
@@ -712,40 +689,33 @@ export default function PublicChannelScreen() {
   );
 
   const renderLiveNow = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Live Now</Text>
+    <AppSection title="Live Now" statusLabel={liveNowEvents.length ? "Live" : "Empty"} statusTone={liveNowEvents.length ? "accent" : "muted"}>
       {liveNowEvents.length ? (
         <View style={styles.listStack}>
           {liveNowEvents.map((event) => renderEventCard(event))}
         </View>
       ) : (
-        <View style={[styles.emptyCard, styles.programmingEmptyCard]}>
-          <Text style={styles.emptyText}>No public live room is active right now.</Text>
-        </View>
+        <AppEmptyState title="No public live room" body="Public live rooms appear here only while they are active." />
       )}
-    </View>
+    </AppSection>
   );
 
   const renderUpcomingEvents = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Upcoming Events</Text>
+    <AppSection title="Upcoming Events" statusLabel={upcomingEvents.length ? "Scheduled" : "Empty"} statusTone={upcomingEvents.length ? "default" : "muted"}>
       {upcomingEvents.length ? (
         <View style={styles.listStack}>
           {upcomingEvents.map((event) => renderEventCard(event))}
         </View>
       ) : (
-        <View style={[styles.emptyCard, styles.programmingEmptyCard]}>
-          <Text style={styles.emptyText}>No upcoming live events yet.</Text>
-        </View>
+        <AppEmptyState title="No upcoming events" body="Scheduled public creator events appear here when available." />
       )}
-    </View>
+    </AppSection>
   );
 
   const renderMiniPlatformCommerce = () => {
     const products = commerceSurface?.products ?? [];
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Platform Store</Text>
+      <AppSection title="Platform Store" statusLabel={products.length ? "Sandbox" : "Not active"} statusTone={products.length ? "warning" : "muted"}>
         {products.length ? (
           <ScrollView
             horizontal
@@ -765,29 +735,24 @@ export default function PublicChannelScreen() {
                     <Text style={styles.metaText}>
                       {formatMonetizationCurrency(product.priceCents, product.currency)}
                     </Text>
-                    <Text style={styles.publicChip}>Checkout pending</Text>
+                    <AppStatusPill label="Checkout pending" tone="warning" />
                   </View>
                 </View>
               </View>
             ))}
           </ScrollView>
         ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              {commerceSurface?.message ?? "Platform commerce is not active yet."}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              Tips, paid content, products, orders, and cash-out stay disabled until provider and legal checks are complete.
-            </Text>
-          </View>
+          <AppEmptyState
+            title="Commerce not active"
+            body={`${commerceSurface?.message ?? "Platform commerce is not active yet."} Tips, paid content, products, orders, and cash-out stay disabled until provider and legal checks are complete.`}
+          />
         )}
-      </View>
+      </AppSection>
     );
   };
 
   const renderAbout = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>About</Text>
+    <AppSection title="About" statusLabel={aboutItems.length ? "Public" : "Empty"} statusTone={aboutItems.length ? "success" : "muted"}>
       {aboutItems.length ? (
         <View style={styles.aboutCard}>
           {aboutItems.map((item, index) => (
@@ -804,11 +769,9 @@ export default function PublicChannelScreen() {
           ))}
         </View>
       ) : (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>This platform has not added an about section yet.</Text>
-        </View>
+        <AppEmptyState title="No about details yet" body="This Platform has not added an about section yet." />
       )}
-    </View>
+    </AppSection>
   );
 
   if (loadState === "loading") {

@@ -191,6 +191,7 @@ import type { UserChannelRole, UserProfile } from "../_lib/userData";
 import { normalizeUserProfile, readUserProfile, saveUserProfile } from "../_lib/userData";
 import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
+import { AppActionButton, AppEmptyState, AppStickyActionBar } from "../components/ui/app-surface";
 
 const SKYLINE_SOURCE = require("../assets/images/chicago-skyline.jpg");
 
@@ -3561,14 +3562,8 @@ export function ChannelStudioScreen() {
       </Text>
 
       <View style={styles.studioHeaderActions}>
-        <TouchableOpacity
-          style={[styles.studioActionButton, styles.studioActionButtonPrimary]}
-          activeOpacity={0.88}
-          onPress={openClipStudioForNew}
-        >
-          <Text style={styles.studioActionButtonText}>Add Video</Text>
-          <Text style={styles.studioActionButtonCopy}>Clip Studio · up to {CREATOR_VIDEO_MAX_RUNTIME_LABEL}</Text>
-        </TouchableOpacity>
+        <AppActionButton label="Add Video" onPress={openClipStudioForNew} variant="primary" />
+        <Text style={styles.studioActionButtonCopy}>Clip Studio · up to {CREATOR_VIDEO_MAX_RUNTIME_LABEL}</Text>
       </View>
 
       {videoNotice ? (
@@ -3648,19 +3643,14 @@ export function ChannelStudioScreen() {
           <Text style={styles.loadingText}>Loading creator videos...</Text>
         </View>
       ) : videosLoadError ? (
-        <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>{"Creator videos couldn't refresh"}</Text>
-          <Text style={styles.eventEmptyBody}>{videosLoadError}</Text>
-          <TouchableOpacity
-            style={styles.eventSecondaryButton}
-            activeOpacity={0.86}
-            onPress={() => {
-              void loadCreatorVideos();
-            }}
-          >
-            <Text style={styles.eventSecondaryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <AppEmptyState
+          actionLabel="Retry"
+          body={videosLoadError}
+          onAction={() => {
+            void loadCreatorVideos();
+          }}
+          title="Creator videos couldn't refresh"
+        />
       ) : creatorVideos.length && filteredCreatorVideos.length ? (
         <View style={styles.eventList}>
           {filteredCreatorVideos.map((video) => (
@@ -3686,17 +3676,9 @@ export function ChannelStudioScreen() {
           ))}
         </View>
       ) : creatorVideos.length ? (
-        <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>No matching videos</Text>
-          <Text style={styles.eventEmptyBody}>{filteredEmptyCopy}</Text>
-        </View>
+        <AppEmptyState title="No matching videos" body={filteredEmptyCopy} />
       ) : (
-        <View style={styles.eventEmptyCard}>
-          <Text style={styles.eventEmptyTitle}>No platform videos yet</Text>
-          <Text style={styles.eventEmptyBody}>
-            Use Clip Studio to add your first Platform video.
-          </Text>
-        </View>
+        <AppEmptyState title="No Platform videos yet" body="Use Clip Studio to add your first Platform video." />
       )}
 
       {videoEditor.editingVideoId ? (
@@ -3768,46 +3750,30 @@ export function ChannelStudioScreen() {
           {videoSubmitRequirement ? (
             <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
           ) : null}
-          <View style={styles.eventActionRow}>
-            <TouchableOpacity
-              style={[styles.eventPrimaryButton, isVideoSubmitDisabled && styles.eventPrimaryButtonDisabled]}
-              onPress={onSaveVideo}
-              activeOpacity={0.88}
+          <AppStickyActionBar helper="Save stays disabled until the current title, visibility, and safety state are valid.">
+            <AppActionButton
               disabled={isVideoSubmitDisabled}
-            >
-              {videoSaving ? (
-                <View style={styles.eventPrimaryButtonBusyRow}>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={styles.eventPrimaryButtonText}>Saving...</Text>
-                </View>
-              ) : (
-                <Text style={styles.eventPrimaryButtonText}>Update Video</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.eventSecondaryButton}
-              onPress={() => resetVideoEditor()}
-              activeOpacity={0.88}
+              label={videoSaving ? "Saving..." : "Update Video"}
+              loading={videoSaving}
+              onPress={onSaveVideo}
+              style={styles.studioStickyAction}
+              variant="primary"
+            />
+            <AppActionButton
               disabled={videoSaving}
-            >
-              <Text style={styles.eventSecondaryButtonText}>Clear</Text>
-            </TouchableOpacity>
-          </View>
+              label="Clear"
+              onPress={() => resetVideoEditor()}
+              style={styles.studioStickyAction}
+            />
+          </AppStickyActionBar>
         </>
       ) : (
-        <View style={[styles.eventEmptyCard, styles.panelSubtle]}>
-          <Text style={styles.eventEmptyTitle}>Add videos in Clip Studio</Text>
-          <Text style={styles.eventEmptyBody}>
-            Clip Studio is the upload path for Platform videos, covers, title cards, drafts, and publishing. Current long-form target: {CREATOR_VIDEO_MAX_RUNTIME_LABEL}.
-          </Text>
-          <TouchableOpacity
-            style={styles.eventPrimaryButton}
-            activeOpacity={0.88}
-            onPress={openClipStudioForNew}
-          >
-            <Text style={styles.eventPrimaryButtonText}>Open Clip Studio</Text>
-          </TouchableOpacity>
-        </View>
+        <AppEmptyState
+          actionLabel="Open Clip Studio"
+          body={`Clip Studio is the upload path for Platform videos, covers, title cards, drafts, and publishing. Current long-form target: ${CREATOR_VIDEO_MAX_RUNTIME_LABEL}.`}
+          onAction={openClipStudioForNew}
+          title="Add videos in Clip Studio"
+        />
       )}
     </View>
     );
@@ -7866,6 +7832,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     fontWeight: "700",
+  },
+  studioStickyAction: {
+    flex: 1,
   },
   studioTabScroll: {
     marginHorizontal: -18,

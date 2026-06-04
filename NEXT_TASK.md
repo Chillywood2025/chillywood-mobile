@@ -2,6 +2,8 @@
 
 ## Recommended Lane: Google Play Publishing Overview And Release Asset Closeout
 
+Latest public/creator UI note: Public V1 Visual Consistency And Touch Polish extends the Owner/Admin interaction direction into shared public components (`components/ui/app-surface.tsx`) and applies it to Home rails, public Platform sections/actions, login primary action/status, and Platform Studio content empty/error/edit action states. EAS Update group `3f98fb2e-2cfb-4a13-89e7-b0e32609707f` published Android update `019e9273-c86e-7789-9b1a-6a9aed785f16`; proof lives at `/tmp/chillywood-public-v1-visual-touch-polish-proof-20260604/`. This is UI-only polish: backend behavior, schema, Premium gates, content safety, LiveKit token issuer, Watch-Party/Live Stage route ownership, Player playback behavior, money state, and Admin authority are unchanged. Dedicated doc: `docs/PUBLIC_V1_VISUAL_TOUCH_POLISH.md`.
+
 Latest Owner/Admin UI note: Roles & Permissions, Users, Permission Templates, and Live Cost Guard now use the modern collapsible Owner/Admin interaction pattern documented in `docs/OWNER_ADMIN_TABS_UI_UX_POLISH.md`. This did not change backend authority, protected Owner rules, money state, LiveKit behavior, route ownership, Player behavior, or terminology. Future admin UI work should be targeted visual polish, not a security or monetization rebuild.
 
 Monetization sandbox proof is complete and consolidated in `docs/MONETIZATION_STACK_FINAL_TRUTH.md`. Do not start another broad monetization-foundation or sandbox-proof lane unless it targets one exact remaining provider-tooling gap.

@@ -108,3 +108,15 @@ No screenshot artifacts are committed.
 
 - Broader Owner/Admin tabs still have older row styling in some deep historical/foundation sections. The reusable components are now available for future targeted passes.
 - True sticky-to-viewport behavior for long forms remains a future layout pass if the admin screen is split into route-level surfaces; this lane adds elevated in-section sticky-style action bars without restructuring navigation.
+
+## Shared Pattern Extension
+
+The follow-up Public V1 Visual Consistency And Touch Polish lane extends the same interaction principles to public/creator screens through `components/ui/app-surface.tsx`:
+
+- modern public sections and status pills
+- 44px action buttons with disabled/loading states
+- whole-card quick links
+- cleaner empty states
+- elevated form action bars
+
+That extension is UI-only and does not alter Owner/Admin authority, money state, LiveKit behavior, route ownership, Player behavior, or terminology. Dedicated doc: `docs/PUBLIC_V1_VISUAL_TOUCH_POLISH.md`.
