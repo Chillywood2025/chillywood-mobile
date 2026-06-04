@@ -4,6 +4,8 @@ Updated June 4, 2026.
 
 This packet summarizes Chi'llywood's sandbox monetization proof for Google Play review prep, owner/operator review, and investor-readiness discussions. It does not activate production money.
 
+Latest RC regression sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`. Android proof path: `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
+
 ## Current Truth
 
 - Production live money: off.

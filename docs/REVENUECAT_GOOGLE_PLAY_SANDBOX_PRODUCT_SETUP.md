@@ -4,6 +4,8 @@ Updated June 4, 2026.
 
 This is the external setup checklist for Chi'llwood Android digital sandbox products. It does not activate production money, payouts, public buy buttons, Stripe Android digital checkout, fake balances, or fake sales.
 
+Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms the sandbox product setup stayed review-ready with no production money, no public buy buttons, no payable sandbox/setup rows, and no active proof roles.
+
 ## Current Outcome
 
 Backend readiness is in place:

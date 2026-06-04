@@ -4,6 +4,8 @@ Updated June 4, 2026.
 
 This file records the repo-side UI polish state for Money Center launch readiness. It is a review-readiness and proof-index lane, not a production-money lane.
 
+Latest Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`, with Android screenshots under `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
+
 ## Creator Money Center
 
 The Creator Money Center now presents a compact launch-readiness summary before the detailed sections:

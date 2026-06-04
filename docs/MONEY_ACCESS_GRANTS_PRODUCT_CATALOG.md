@@ -12,6 +12,8 @@ Launch review packet: `docs/MONEY_CENTER_LAUNCH_REVIEW_PACKET.md`.
 
 UI polish proof: `docs/MONEY_CENTER_UI_POLISH_PROOF.md`.
 
+Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms the money-access architecture did not regress Premium/Studio gates, Player/content safety, Watch-Party Live, Live Watch-Party / Live Stage, event pass, spectator safety, Admin/Owner safety, Play review posture, or Data Safety posture. Android proof path: `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
+
 Remote proof status on June 3, 2026:
 
 - `supabase db lint --local` passed with no schema errors.
