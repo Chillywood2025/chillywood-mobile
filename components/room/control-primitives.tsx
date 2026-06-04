@@ -35,9 +35,13 @@ type RoomControlButtonProps = {
 export function RoomControlButton({ action, styles }: RoomControlButtonProps) {
   return (
     <TouchableOpacity
+      accessibilityLabel={action.label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!action.disabled }}
       style={[styles.button, action.buttonStyle, action.disabled && styles.buttonDisabled]}
       activeOpacity={action.activeOpacity ?? 0.82}
       disabled={!!action.disabled}
+      hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
       onPress={action.onPress}
     >
       <Text style={[styles.iconText, action.iconStyle]}>{action.icon}</Text>
@@ -75,9 +79,13 @@ export function RoomReactionChipRow({
       {emojis.map((emoji) => (
         <TouchableOpacity
           key={`${keyPrefix ?? "reaction"}-${emoji}`}
+          accessibilityLabel={disabled ? `${emoji} reaction unavailable` : `Send ${emoji} reaction`}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !!disabled }}
           style={[styles.chip, disabled && styles.chipDisabled]}
           activeOpacity={chipActiveOpacity ?? 0.78}
           disabled={!!disabled}
+          hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
           onPress={() => onPressEmoji(emoji)}
         >
           <Text style={styles.chipText}>{emoji}</Text>

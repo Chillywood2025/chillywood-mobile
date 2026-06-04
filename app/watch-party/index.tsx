@@ -1412,7 +1412,10 @@ export default function WatchPartyIndexScreen() {
               activeOpacity={0.85}
               disabled={createActionBusy || !features.watchPartyEnabled}
               testID="watch-party-create-room"
+              accessibilityRole="button"
               accessibilityLabel={isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}
+              accessibilityState={{ disabled: createActionBusy || !features.watchPartyEnabled, busy: createActionBusy }}
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
               {createActionBusy ? (
                 <View style={styles.lookingRow}>
@@ -1458,6 +1461,7 @@ export default function WatchPartyIndexScreen() {
                     activeOpacity={0.88}
                     accessibilityRole="button"
                     accessibilityLabel="Join Now"
+                    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     testID="watch-party-preview-join"
                   >
                     <Text style={styles.joinNowBtnText}>Join Now →</Text>
@@ -1468,6 +1472,7 @@ export default function WatchPartyIndexScreen() {
                     activeOpacity={0.75}
                     accessibilityRole="button"
                     accessibilityLabel="Cancel room preview"
+                    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     testID="watch-party-preview-cancel"
                   >
                     <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -1500,6 +1505,10 @@ export default function WatchPartyIndexScreen() {
                   onPress={onLookup}
                   activeOpacity={0.85}
                   disabled={joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled}
+                  accessibilityRole="button"
+                  accessibilityLabel={joinLookupBusy ? "Looking up room" : "Find Room"}
+                  accessibilityState={{ disabled: joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled, busy: joinLookupBusy }}
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   {joinLookupBusy ? (
                     <View style={styles.lookingRow}>
@@ -1783,20 +1792,21 @@ const styles = StyleSheet.create({
   actionAreaLabel: { color: "#666", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
 
   joinCard: {
-    backgroundColor: "rgba(14,14,18,0.94)",
-    borderRadius: 16,
+    backgroundColor: "rgba(10,14,24,0.94)",
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.11)",
-    padding: 14,
+    borderColor: "rgba(168,192,245,0.16)",
+    padding: 15,
     gap: 12,
   },
   joinLabel: { color: "#6C7488", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
   joinSupportText: { color: "#A7B0C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
   input: {
+    minHeight: 48,
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    borderRadius: 12,
+    borderRadius: 14,
     color: "#fff",
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1806,11 +1816,17 @@ const styles = StyleSheet.create({
   },
   errorText: { color: "#DC143C", fontSize: 12, fontWeight: "600" },
   primaryButton: {
+    minHeight: 48,
     backgroundColor: "#DC143C",
-    borderRadius: 14,
+    borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#DC143C",
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   primaryButtonDisabled: { opacity: 0.45 },
   primaryButtonText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
@@ -1842,8 +1858,9 @@ const styles = StyleSheet.create({
   },
   joinNowBtn: {
     flex: 1,
+    minHeight: 46,
     backgroundColor: "#DC143C",
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -1851,7 +1868,8 @@ const styles = StyleSheet.create({
   },
   joinNowBtnText: { color: "#fff", fontSize: 14, fontWeight: "900" },
   cancelBtn: {
-    borderRadius: 12,
+    minHeight: 46,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     paddingVertical: 12,

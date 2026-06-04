@@ -707,6 +707,9 @@ function StandalonePlayerTopChrome({
                   style={styles.compactChip}
                   onPress={onShare}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share this Player item"
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   <Text style={styles.compactChipText}>Share</Text>
                 </TouchableOpacity>
@@ -717,6 +720,10 @@ function StandalonePlayerTopChrome({
                   onPress={onReport}
                   disabled={reportBusy}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={reportBusy ? "Sending safety report" : "Report this Player item"}
+                  accessibilityState={{ disabled: reportBusy, busy: reportBusy }}
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   <Text style={styles.compactChipText}>{reportBusy ? "Sending..." : "Report"}</Text>
                 </TouchableOpacity>
@@ -729,6 +736,9 @@ function StandalonePlayerTopChrome({
                   style={[styles.partyOverlayChip, styles.partyOverlayChipWatchPartyTitle, styles.standaloneSocialHandoffBtn]}
                   onPress={onWatchParty}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Start Watch-Party Live from Player"
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   <Text style={styles.partyOverlayChipText}>Watch-Party Live</Text>
                 </TouchableOpacity>
@@ -7268,6 +7278,9 @@ export default function PlayerScreen() {
                   <TouchableOpacity
                     style={styles.creatorCommentAction}
                     activeOpacity={0.84}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Reply to ${comment.authorName}`}
+                    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     onPress={() => {
                       setCreatorVideoCommentReplyTargetId(comment.id);
                       setCreatorVideoCommentsError(null);
@@ -7281,6 +7294,10 @@ export default function PlayerScreen() {
                     style={styles.creatorCommentAction}
                     activeOpacity={0.84}
                     disabled={creatorVideoCommentDeletingId === comment.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={creatorVideoCommentDeletingId === comment.id ? "Deleting comment" : "Delete comment"}
+                    accessibilityState={{ disabled: creatorVideoCommentDeletingId === comment.id, busy: creatorVideoCommentDeletingId === comment.id }}
+                    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     onPress={() => onDeleteCreatorVideoComment(comment)}
                   >
                     <Text style={styles.creatorCommentActionText}>
@@ -7292,6 +7309,9 @@ export default function PlayerScreen() {
                   <TouchableOpacity
                     style={styles.creatorCommentAction}
                     activeOpacity={0.84}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Report comment by ${comment.authorName}`}
+                    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     onPress={() => setCreatorVideoCommentReportTarget(comment)}
                   >
                     <Text style={styles.creatorCommentActionText}>Report</Text>
@@ -7351,6 +7371,9 @@ export default function PlayerScreen() {
                 <TouchableOpacity
                   activeOpacity={0.82}
                   onPress={() => setCreatorVideoCommentReplyTargetId(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel reply"
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   <Text style={styles.creatorCommentReplyCancelText}>Cancel Reply</Text>
                 </TouchableOpacity>
@@ -7371,7 +7394,10 @@ export default function PlayerScreen() {
                 onPress={() => {
                   setCreatorVideoCommentAttachmentSheetVisible(true);
                 }}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: creatorVideoCommentBusy }}
                 accessibilityLabel="Attach to creator-video comment"
+                hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
               >
                 <MaterialIcons name="attach-file" size={16} color="#E6ECFA" />
               </TouchableOpacity>
@@ -7394,11 +7420,16 @@ export default function PlayerScreen() {
                 editable={!creatorVideoCommentBusy}
                 maxLength={CREATOR_VIDEO_COMMENT_BODY_LIMIT}
                 returnKeyType="send"
+                accessibilityLabel={replyTarget ? "Creator video reply input" : "Creator video comment input"}
               />
               <TouchableOpacity
                 style={[styles.creatorCommentsSendBtn, commentDisabled && styles.secondaryBtnDisabled]}
                 activeOpacity={0.85}
                 disabled={commentDisabled}
+                accessibilityRole="button"
+                accessibilityLabel={creatorVideoCommentBusy ? "Posting comment" : replyTarget ? "Post reply" : "Post comment"}
+                accessibilityState={{ disabled: commentDisabled, busy: creatorVideoCommentBusy }}
+                hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 onPress={() => {
                   void onSubmitCreatorVideoComment();
                 }}
@@ -7798,7 +7829,13 @@ export default function PlayerScreen() {
             <Text style={styles.playerAccessTitle}>{title}</Text>
             <Text style={styles.playerAccessBody}>{body}</Text>
             <View style={styles.playerAccessActions}>
-              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={onReturnToPartyRoom} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={styles.playerAccessSecondaryBtn}
+                onPress={onReturnToPartyRoom}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
                 <Text style={styles.playerAccessSecondaryText}>Back</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -7820,6 +7857,12 @@ export default function PlayerScreen() {
                   setWatchPartyEntryRetryToken((current) => current + 1);
                 }}
                 activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  blockedPremiumAccess
+                    ? runtimeBlockedCopy ? "Go back" : "Review Premium access"
+                    : blockedAccess || watchPartyEntryMissing ? "Open Party Room" : "Retry access"
+                }
               >
                 <Text style={styles.playerAccessPrimaryText}>
                   {blockedPremiumAccess
@@ -7878,10 +7921,10 @@ export default function PlayerScreen() {
               Chi'llywood could not find a playable platform title for this route.
             </Text>
             <View style={styles.playerAccessActions}>
-              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Go back">
                 <Text style={styles.playerAccessSecondaryText}>Back</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.playerAccessPrimaryBtn} onPress={() => router.replace("/(tabs)")} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.playerAccessPrimaryBtn} onPress={() => router.replace("/(tabs)")} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Browse titles">
                 <Text style={styles.playerAccessPrimaryText}>Browse Titles</Text>
               </TouchableOpacity>
             </View>
@@ -7906,7 +7949,7 @@ export default function PlayerScreen() {
                 : "This child room could not resolve public-safe watch-only playback for the source."}
             </Text>
             <View style={styles.playerAccessActions}>
-              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Go back">
                 <Text style={styles.playerAccessSecondaryText}>Back</Text>
               </TouchableOpacity>
             </View>
@@ -8272,6 +8315,10 @@ export default function PlayerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Toggle shared playback"
               />
+            ) : null}
+
+            {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive ? (
+              <View pointerEvents="none" style={styles.standaloneVideoBottomMatte} />
             ) : null}
 
             {showStandaloneAccessOverlay && standaloneAccessPresentation ? (
@@ -8757,13 +8804,13 @@ const styles = StyleSheet.create({
   playerAccessCard: {
     width: "100%",
     maxWidth: 360,
-    borderRadius: 22,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.16)",
-    backgroundColor: "rgba(8,10,16,0.96)",
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    gap: 9,
+    borderColor: "rgba(168,192,245,0.22)",
+    backgroundColor: "rgba(8,12,20,0.96)",
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    gap: 11,
     shadowColor: "#000",
     shadowOpacity: 0.26,
     shadowRadius: 18,
@@ -8792,11 +8839,12 @@ const styles = StyleSheet.create({
   playerAccessActions: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 6,
+    marginTop: 8,
   },
   playerAccessSecondaryBtn: {
     flex: 1,
-    borderRadius: 14,
+    minHeight: 46,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -8811,7 +8859,8 @@ const styles = StyleSheet.create({
   },
   playerAccessPrimaryBtn: {
     flex: 1,
-    borderRadius: 14,
+    minHeight: 46,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(220,20,60,0.44)",
     backgroundColor: "rgba(220,20,60,0.2)",
@@ -9035,6 +9084,16 @@ const styles = StyleSheet.create({
     elevation: 4,
     backgroundColor: "transparent",
   },
+  standaloneVideoBottomMatte: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 52,
+    backgroundColor: "rgba(0,0,0,0.96)",
+    zIndex: 38,
+    elevation: 38,
+  },
   videoLoadingFallback: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -9165,8 +9224,8 @@ const styles = StyleSheet.create({
   partyPresencePillWatchPartyTitle: {
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(8,8,12,0.38)",
-    paddingHorizontal: 7,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   partyPresenceRow: {
     flexDirection: "row",
@@ -9225,18 +9284,21 @@ const styles = StyleSheet.create({
     maxWidth: "38%",
   },
   partyOverlayChip: {
+    minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(0,0,0,0.34)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   partyOverlayChipWatchPartyTitle: {
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(0,0,0,0.28)",
-    paddingHorizontal: 7,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   partyOverlayChipText: {
     color: "#F1F3F8",
@@ -9336,21 +9398,21 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   creatorCommentsPanel: {
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(115,134,255,0.18)",
-    backgroundColor: "rgba(8,10,18,0.96)",
-    paddingHorizontal: 10,
-    paddingTop: 9,
-    paddingBottom: Platform.OS === "android" ? 14 : 10,
-    gap: 8,
-    maxHeight: 258,
-    marginTop: 8,
-    marginBottom: Platform.OS === "android" ? 12 : 8,
+    borderColor: "rgba(168,192,245,0.2)",
+    backgroundColor: "rgba(8,12,20,0.96)",
+    paddingHorizontal: 12,
+    paddingTop: 11,
+    paddingBottom: Platform.OS === "android" ? 16 : 12,
+    gap: 10,
+    maxHeight: 282,
+    marginTop: 10,
+    marginBottom: Platform.OS === "android" ? 14 : 10,
   },
   creatorCommentsPanelKeyboard: {
-    maxHeight: 218,
-    paddingBottom: Platform.OS === "android" ? 10 : 8,
+    maxHeight: 238,
+    paddingBottom: Platform.OS === "android" ? 12 : 10,
   },
   creatorCommentsHeader: {
     flexDirection: "row",
@@ -9370,14 +9432,14 @@ const styles = StyleSheet.create({
   },
   creatorCommentsTitle: {
     color: "#F2F5FF",
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900",
   },
   creatorCommentsList: {
-    maxHeight: 130,
+    maxHeight: 144,
   },
   creatorCommentsListKeyboard: {
-    maxHeight: 78,
+    maxHeight: 90,
   },
   creatorCommentsListContent: {
     gap: 8,
@@ -9385,13 +9447,26 @@ const styles = StyleSheet.create({
   },
   creatorCommentsEmpty: {
     color: "#AAB3C7",
-    fontSize: 11.5,
-    lineHeight: 16,
+    fontSize: 12.5,
+    lineHeight: 18,
     fontWeight: "700",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    textAlign: "center",
   },
   creatorCommentCard: {
     flexDirection: "row",
-    gap: 8,
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   creatorCommentThread: {
     gap: 7,
@@ -9455,6 +9530,14 @@ const styles = StyleSheet.create({
   },
   creatorCommentAction: {
     alignSelf: "flex-start",
+    minHeight: 32,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(186,208,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    justifyContent: "center",
   },
   creatorCommentActionText: {
     color: "#BFC8DC",
@@ -9489,9 +9572,9 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   creatorCommentsAttachBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
     backgroundColor: "rgba(255,255,255,0.06)",
@@ -9500,6 +9583,7 @@ const styles = StyleSheet.create({
   },
   creatorCommentsInput: {
     flex: 1,
+    minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
@@ -9507,16 +9591,18 @@ const styles = StyleSheet.create({
     color: "#EEF1F8",
     fontSize: 12,
     fontWeight: "700",
-    paddingHorizontal: 11,
-    paddingVertical: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
   },
   creatorCommentsSendBtn: {
+    minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(186,208,255,0.22)",
     backgroundColor: "rgba(56,80,126,0.78)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    justifyContent: "center",
   },
   creatorCommentsSendText: {
     color: "#fff",
@@ -9580,6 +9666,7 @@ const styles = StyleSheet.create({
   },
   partyCommentsInput: {
     flex: 1,
+    minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
@@ -9588,15 +9675,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 10,
   },
   partyCommentsSendBtn: {
+    minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(220,20,60,0.7)",
     backgroundColor: "rgba(220,20,60,0.26)",
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 10,
+    justifyContent: "center",
   },
   partyCommentsSendBtnText: {
     color: "#fff",
@@ -9641,12 +9730,15 @@ const styles = StyleSheet.create({
     elevation: 47,
   },
   compactChip: {
+    minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   compactChipAccent: {
     borderColor: "rgba(220,20,60,0.52)",
@@ -9669,6 +9761,7 @@ const styles = StyleSheet.create({
   },
   compactActionBtn: {
     flex: 1,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -9678,7 +9771,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(0,0,0,0.28)",
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 10,
   },
   compactPlaybackBtn: {
     flex: 0,

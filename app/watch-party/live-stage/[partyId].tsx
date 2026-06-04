@@ -3959,6 +3959,9 @@ export default function WatchPartyLiveStageScreen({
               style={styles.routeGateSecondaryButton}
               activeOpacity={0.86}
               onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
               <Text style={styles.routeGateSecondaryText}>Back</Text>
             </TouchableOpacity>
@@ -3971,6 +3974,9 @@ export default function WatchPartyLiveStageScreen({
                   params: { partyId },
                 });
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Open Party Room"
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
               <Text style={styles.routeGatePrimaryText}>Open Party Room</Text>
             </TouchableOpacity>
@@ -3995,6 +4001,9 @@ export default function WatchPartyLiveStageScreen({
               style={styles.routeGateSecondaryButton}
               activeOpacity={0.86}
               onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
               <Text style={styles.routeGateSecondaryText}>Back</Text>
             </TouchableOpacity>
@@ -4007,6 +4016,9 @@ export default function WatchPartyLiveStageScreen({
                   params: { partyId },
                 });
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Open Party Room"
+              hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
               <Text style={styles.routeGatePrimaryText}>Open Party Room</Text>
             </TouchableOpacity>
@@ -4854,13 +4866,18 @@ const styles = StyleSheet.create({
   routeGateCard: {
     width: "88%",
     maxWidth: 460,
-    borderRadius: 26,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(8,10,16,0.94)",
-    paddingHorizontal: 22,
-    paddingVertical: 22,
-    gap: 12,
+    borderColor: "rgba(168,192,245,0.2)",
+    backgroundColor: "rgba(8,12,20,0.96)",
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    gap: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.32,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 18,
   },
   routeGateTitle: {
     color: "#FFFFFF",
@@ -4879,10 +4896,12 @@ const styles = StyleSheet.create({
   },
   routeGatePrimaryButton: {
     flex: 1,
+    minHeight: 46,
     borderRadius: 16,
     backgroundColor: "#DC143C",
     paddingVertical: 13,
     alignItems: "center",
+    justifyContent: "center",
   },
   routeGatePrimaryText: {
     color: "#FFFFFF",
@@ -4891,12 +4910,14 @@ const styles = StyleSheet.create({
   },
   routeGateSecondaryButton: {
     flex: 1,
+    minHeight: 46,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
     backgroundColor: "rgba(255,255,255,0.04)",
     paddingVertical: 13,
     alignItems: "center",
+    justifyContent: "center",
   },
   routeGateSecondaryText: {
     color: "#F2F4F8",
