@@ -140,5 +140,5 @@ Required validation:
 ## Remaining UI Gaps
 
 - Deeper live-room layout composition remains a future dedicated lane if screenshots show people/media grids still feel too dense.
-- Full two-device room interaction proof still requires a second device/account and is not faked here.
+- Full two-device room interaction proof still requires a Premium-capable host account plus a stable second authenticated device/session. The June 5, 2026 device-plus-emulator attempt is documented in `docs/DEVICE_EMULATOR_LIVE_ROOM_TEST_SWEEP.md`; physical route/gate proof passed, but the emulator path was blocked by System UI/package-service/install instability and the physical account was not Premium-host eligible.
 - Broader Player playback-control behavior remains out of scope; standalone visual overlay/fullscreen presentation is now covered by `docs/STANDALONE_PLAYER_OVERLAY_FULLSCREEN_PROOF.md`.

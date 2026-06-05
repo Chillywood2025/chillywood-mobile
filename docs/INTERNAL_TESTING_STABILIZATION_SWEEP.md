@@ -98,6 +98,7 @@ Full guard sweep pending final pre-commit validation.
 
 ## Remaining Internal Testing Issues
 
+- The dedicated device-plus-emulator room sweep is now documented in `docs/DEVICE_EMULATOR_LIVE_ROOM_TEST_SWEEP.md`. Physical-device route/gate proof passed, but true two-session host/viewer LiveKit proof remains blocked by unavailable Premium host access and emulator instability/current-debug install failure.
 - Full logged-out login/logout credential cycle was not rerun during this pass.
 - Fullscreen Player was not rerun because this sweep focused on route health and previously fixed standalone Player proof remains documented separately.
 - Live room media join, host approval, and real speaker-request flow were not rerun; route ownership and old-room guards passed, and unavailable/gate states were rechecked.
