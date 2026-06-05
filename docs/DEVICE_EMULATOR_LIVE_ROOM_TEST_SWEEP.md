@@ -172,3 +172,4 @@ Passed final validation:
 - A true Live Stage joined-room proof still needs a valid live room fixture, host session, and stable second authenticated app session.
 - Runtime participant list, speaker request, host approval/denial, mic/camera controls, composer send, attachment behavior, leave/rejoin, and reconnect remain unproved for two live sessions.
 - Route-backed gates and unavailable states are visually proved on the Play-installed physical device, but they are not a substitute for a joined-room LiveKit proof.
+- Firebase Test Lab is now the preferred free cloud smoke fallback for route/gate screenshots and logcat if local emulator instability repeats. Use `npm run firebase:test-lab:preflight` before consuming quota, then `npm run firebase:test-lab:robo` only for one bounded virtual-device Robo run. Test Lab Robo proof still does not replace true two-session LiveKit host/viewer proof.

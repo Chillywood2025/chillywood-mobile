@@ -83,6 +83,53 @@ gcloud components install beta
 gcloud beta billing projects describe chillywood-app --format='yaml(billingEnabled)'
 ```
 
+## Repo Script
+
+The repo now includes a bounded Test Lab helper:
+
+```bash
+npm run firebase:test-lab:preflight
+```
+
+Preflight writes environment, gcloud auth/config, API status, available virtual models/versions, APK hash if present, and the exact Test Lab command to:
+
+```text
+/tmp/chillywood-firebase-test-lab-proof-YYYYMMDD/
+```
+
+Preflight does not start a Test Lab run and does not consume quota.
+
+To run one bounded Robo smoke after confirming the APK, project, and quota posture:
+
+```bash
+npm run firebase:test-lab:robo
+```
+
+To build the release APK first and then run one Robo smoke:
+
+```bash
+npm run firebase:test-lab:build-robo
+```
+
+Optional environment overrides:
+
+```bash
+FIREBASE_TEST_LAB_PROJECT=chillywood-app
+FIREBASE_TEST_LAB_APK=android/app/build/outputs/apk/release/app-release.apk
+FIREBASE_TEST_LAB_DEVICE='model=MediumPhone.arm,version=35,locale=en,orientation=portrait'
+FIREBASE_TEST_LAB_TIMEOUT=5m
+FIREBASE_TEST_LAB_RESULTS_DIR=chillywood-smoke-YYYYMMDD-HHMMSS
+FIREBASE_TEST_LAB_PROOF_DIR=/tmp/chillywood-firebase-test-lab-proof-YYYYMMDD
+```
+
+Rules:
+
+- Run preflight first.
+- Use one virtual device before any physical Test Lab device.
+- Keep timeout short.
+- Do not put passwords, reviewer credentials, service-account JSON, or provider secrets in command history, scripts, or docs.
+- Do not claim signed-in or two-user LiveKit proof from a generic Robo run.
+
 ## Build A Release APK
 
 Use the repo-native Gradle release build:
