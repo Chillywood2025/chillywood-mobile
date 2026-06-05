@@ -16,6 +16,8 @@ Internal tester sandbox mode: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`. A
 
 Creator setup flow: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes the creator-facing setup layer for the same proved sandbox products. Setup configs bind real source UUIDs to approved Google Play / RevenueCat sandbox tiers only. Completion proof saved every setup row and remote readback shows processed sandbox provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, and zero production/payout/payable/publish/host-power config rows.
 
+Viewer/Admin QA: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures Play-installed Android setup/tier/internal-sandbox screens and rechecks the same sandbox provider/intent/grant/ledger counts. Fresh contextual viewer-gate screenshots remain blocked until route-backed safe fixtures are available; Owner/Admin UI drilldowns remain blocked until an active Owner/Admin app session is used.
+
 ## Backend Status
 
 | Area | Status |

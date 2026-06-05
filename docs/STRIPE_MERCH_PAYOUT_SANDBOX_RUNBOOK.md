@@ -10,6 +10,8 @@ Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) d
 
 Creator setup flow update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` proves physical merch readiness from `/creator-monetization-setup` for approved creators/internal testers. The saved merch tier is `cw_merch_test_tee_sandbox`, physical goods only, Stripe test mode only, no real fulfillment, no Android digital access, no RevenueCat/Premium entitlement, no payable balance, and no payout activation. Play-installed proof opened Stripe Checkout sandbox for Chi'llwood Test Tee; the prior Stripe lane remains the signed-webhook paid-order proof.
 
+Viewer/Admin QA update: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures the tester-facing physical merch Stripe sandbox/readiness screen and remote readback now shows sandbox merch products `1`, orders `4`, order items `4`, processed Stripe merch events `1`, merch digital-access products `0`, and Stripe/merch access grants `0`. Owner/Admin merch drilldown screenshots remain blocked until an active Owner/Admin app session is used.
+
 ## Current Status
 
 - Stripe secret names are configured in Supabase Edge Functions by digest only: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and dedicated merch webhook secret `STRIPE_MERCH_WEBHOOK_SECRET`.

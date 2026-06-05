@@ -4,6 +4,8 @@ Date: June 5, 2026
 
 This lane completes the creator monetization setup proof that began with `/creator-monetization-setup`. The result is not production monetization. It is a sandbox/internal-test setup matrix over already-proved payment rails.
 
+Follow-up QA: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` records the focused Android viewer-gate/Admin QA pass. It captured setup, approved tiers, internal sandbox launcher, physical merch, payout readiness read-only, direct paid-content route blocker, and correct non-admin Admin denial, then rechecked remote counts. Contextual route-backed viewer gate screenshots and Owner/Admin drilldown screenshots remain visual QA blockers, not backend/provider blockers.
+
 ## Scope
 
 - Creators/internal testers can save sandbox setup rows for every approved monetization type.

@@ -2,9 +2,9 @@
 
 ## Current Recommendation
 
-Public V1 contextual monetization gate and admin visual QA.
+Public V1 contextual monetization fixture and owner-session QA.
 
-The in-app creator setup layer is now completed and documented in `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md`. `/creator-monetization-setup` saved every approved sandbox setup row on the Play-installed internal build, Stripe merch sandbox checkout launched, and remote readback proved provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, merch readiness, payout readiness read-only, and zero production/payout/payable/publish/host-power config rows. The next best task is narrow visual QA: capture contextual viewer gates for paid content, ticket, live access, live seat, and event pass, plus Owner/Admin UI drilldowns for the already-proved configs. Do not rebuild payment rails or activate production money.
+The in-app creator setup layer is completed and documented in `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md`; the focused QA pass is now documented in `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md`. `/creator-monetization-setup` saved every approved sandbox setup row on the Play-installed internal build, Stripe merch sandbox checkout launched, and remote readback proved provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, merch readiness, payout readiness read-only, and zero production/payout/payable/publish/host-power config rows. The QA pass captured setup/tier/internal-sandbox/merch/payout-readiness screens plus correct Admin denial for the non-admin tester. The remaining work is narrow visual QA with route-backed public/safe fixtures and an active Owner/Admin session: capture contextual viewer gates for paid content, ticket, live access, live seat, and event pass, plus Owner/Admin UI drilldowns for the already-proved configs. Do not rebuild payment rails or activate production money.
 
 Required boundaries remain unchanged: production live money off, payouts off, payout execution absent, cash-out/withdrawal/transfer absent, sandbox/setup rows not payable, Stripe Android digital checkout absent, no fake sales/balances/provider events, no LiveKit publish or host authority from payment, and no route ownership changes.
 

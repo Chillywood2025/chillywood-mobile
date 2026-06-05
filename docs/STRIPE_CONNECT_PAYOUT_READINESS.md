@@ -10,6 +10,8 @@ Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) d
 
 Creator setup flow update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` keeps payout readiness read-only inside creator monetization setup. The setup route may show Connect/KYC/tax readiness copy, but it provides no payout request, payout simulation, withdrawal, transfer, cash-out, payable balance, or production payout activation. Completion readback still shows provider payout-enabled accounts `0`, payout requests `0`, and payable/paid creator payout ledger rows `0`.
 
+Viewer/Admin QA update: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures the internal tester payout-readiness read-only surface and remote readback still shows creator payout test accounts `2`, provider payout-enabled accounts `0`, payout requests `0`, and payable/paid creator payout ledger rows `0`. Owner/Admin payout drilldown screenshots remain blocked until an active Owner/Admin app session is used.
+
 ## Current Readiness
 
 - `stripe-connect-account` can create or reuse a Stripe test-mode connected account.

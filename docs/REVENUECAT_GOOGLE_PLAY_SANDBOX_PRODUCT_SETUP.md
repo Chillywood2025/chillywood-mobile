@@ -12,6 +12,8 @@ Internal tester update: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md` opens ap
 
 Creator setup flow update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes the in-app layer for binding approved sandbox digital products to real creator sources. Creators/internal testers select from mapped Google Play / RevenueCat product tiers only; arbitrary Android digital prices remain blocked. The setup rows are sandbox/not-payable. Completion readback shows processed sandbox provider events and consumed intents for every Android digital product, access grants where appropriate, sandbox/not-payable ledgers, and zero production/payout/payable/publish/host-power config rows.
 
+Viewer/Admin QA update: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` rechecks the Play-installed Android setup and internal sandbox launcher screens and confirms remote provider/intent/grant/ledger counts still match the sandbox-only policy. Contextual viewer-gate screenshots remain blocked until route-backed safe fixtures are available; this is a visual QA blocker, not a Google Play / RevenueCat product mapping blocker.
+
 ## Current Outcome
 
 Backend readiness is in place:

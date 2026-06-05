@@ -4,6 +4,8 @@ Date: June 5, 2026
 
 Completion update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` now closes the setup-flow matrix. `/creator-monetization-setup` saved sandbox/not-payable configs for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, creator tip, event pass, and physical merch readiness against proved source fixtures. Remote readback shows processed sandbox provider events and consumed intents for every Android digital product, sandbox/not-payable ledger rows for every digital product, access grants where appropriate, Stripe merch sandbox launch/readiness, payout readiness read-only, and zero production/payout/payable/publish/host-power config rows.
 
+Viewer/Admin QA update: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures the Play-installed Android setup/tier/internal-sandbox/merch/payout-readiness screens and correct Admin denial for the non-admin tester session. Fresh contextual viewer-gate and Owner/Admin drilldown screenshots remain visual QA blockers until a route-backed safe fixture set and active Owner/Admin session are available; backend/provider proof remains complete.
+
 This lane adds creator-facing setup flows on top of the already-proved sandbox payment rails. It does not activate production money.
 
 ## What Changed
