@@ -73,6 +73,11 @@ Static inventory is not behavioral proof. It is the coverage seed for device/man
 | Live tab route buttons and the `How Live works` disclosure needed stable test IDs/accessibility expanded state for future full-button automation. | Source automation/accessibility gap | Fixed in source; needs next build/update proof |
 | Platform Studio opens a Premium-required gate for the current proof account. | Expected protected gate | Proved |
 | Owner/Admin direct route denies the current proof account with active-admin-role copy. | Expected protected gate | Proved |
+| Owner/Admin upgraded proof pass used a temporary proof Owner role, captured every Admin main tab, staff role controls, regular-user search, scoped permission matrix, and then revoked the temporary role. | Owner/Admin proof | Proved in `/tmp/chillywood-owner-admin-full-surface-proof-20260605/` |
+| Admin search Users scope previously searched staff role rows only; it now also searches the backed broader user directory and returns `Directory user` / `Regular user` results. | Real Admin search bug | Fixed and device-proved |
+| Owner/Admin had two confusing permission surfaces. Roles now read as Step 1 Staff Access and Step 2 Scoped Permission Matrix; Permission Templates are clearly permission presets only. | Real Owner/Admin UX bug | Fixed |
+| Staff Grant/Remove buttons and template actions no longer behave like dead validation-disabled controls; they remain active and show local guarded feedback before backend writes. | Real Owner/Admin UX bug | Fixed |
+| Staff role confirmation cancel kept the Android keyboard open and covered the lower action row. | Real keyboard-safe bug | Fixed and device-proved |
 | SDK emulator AVDs were present, but `Maestro_Pixel_6_API_33_1` and `Pixel_8` exited before registering with ADB. | Environment test-session issue | Documented; no two-session proof claimed |
 
 ## Bottom Navigation Proof
@@ -142,7 +147,7 @@ Do not mark a row complete unless it has route proof, action proof, and no unsaf
 | Creator monetization setup | Product tier cards, save buttons, readiness sections, payout read-only, merch readiness | Partially proved | Monetization Setup route shows sandbox safety state, live money off, payouts off, cash-out/withdraw/transfer absent, no Stripe Android digital checkout, arbitrary prices blocked |
 | Internal sandbox purchases | Premium sandbox, digital products, merch checkout, payout readiness, non-tester denial | Not started in this lane | Prior proof exists; not full surface sweep |
 | Money Center | Collapsible/readout sections, Product Catalog, Provider Events, Intents, Grants, Ledger, Merch, Payout Readiness | Not started in this lane | Prior proof exists; not full surface sweep |
-| Owner/Admin | All tabs, Users, Roles, templates, live cost, money drilldowns, reports, protected rules | Protected denial proved | Current proof account denied; full Owner/Admin tabs require approved owner/operator session |
+| Owner/Admin | All tabs, Users, Roles, templates, live cost, money drilldowns, reports, protected rules | Proved for main tab and staff-control pass; deeper destructive writes intentionally not submitted | Temporary upgraded proof role captured all Admin main tabs, Search Admin regular-user results, Roles Step 1, Scoped Permission Matrix Step 2, Permission Templates copy, Staff Grant/Remove confirmation cancel, and post-revoke denial. Proof path `/tmp/chillywood-owner-admin-full-surface-proof-20260605/` |
 | Legal/support routes | Search, collapsibles, table of contents, links, support forms | Partially proved | Support route, support feedback sheet, Privacy, Terms, and copyright-report form open |
 | Reports/moderation | Report sheet categories, submit, cancel, admin denial/readouts | Partially proved | Player report sheet opened/canceled; copyright-report route opens; no report submitted; Admin denial proved |
 

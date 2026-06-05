@@ -6,6 +6,7 @@ import {
   Image,
   Alert,
   ImageBackground,
+  Keyboard,
   Linking,
   Modal,
   ScrollView,
@@ -865,6 +866,13 @@ const adminUsersRoleFilterOptions: readonly { key: AdminUsersRoleFilter; label: 
   { key: "inactive", label: "Inactive" },
 ];
 type RoleConfirmState =
+  | {
+      kind: "grant_role";
+      email: string;
+      role: PlatformStaffManagementRole;
+      title: string;
+      body: string;
+    }
   | {
       kind: "revoke_role";
       email: string;
@@ -2444,21 +2452,25 @@ const OwnerAdminActionButton = ({
   label,
   loading = false,
   onPress,
+  testID,
   variant = "secondary",
 }: {
   disabled?: boolean;
   label: string;
   loading?: boolean;
   onPress?: () => void;
+  testID?: string;
   variant?: "primary" | "secondary" | "ghost" | "danger" | "success" | "warning";
 }) => (
   <TouchableOpacity
+    accessibilityLabel={label}
     accessibilityRole="button"
     accessibilityState={{ busy: loading, disabled }}
     activeOpacity={0.84}
     disabled={disabled || loading}
     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
     onPress={onPress}
+    testID={testID}
     style={[
       styles.ownerAdminActionButton,
       variant === "primary" && styles.ownerAdminActionPrimary,
@@ -2502,6 +2514,7 @@ const OwnerAdminSection = ({
   title: string;
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const sectionTestID = `admin-section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
   const toggle = useCallback(() => {
     if (!disabled) setExpanded((value) => !value);
   }, [disabled]);
@@ -2517,6 +2530,7 @@ const OwnerAdminSection = ({
         hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
         onPress={toggle}
         style={styles.ownerAdminSectionHeader}
+        testID={sectionTestID}
       >
         <View style={styles.ownerAdminChevron}>
           <Text style={styles.ownerAdminChevronText}>{expanded ? "v" : ">"}</Text>
@@ -2624,6 +2638,16 @@ const formatPermissionSummary = (keys: readonly PlatformStaffPermissionKey[]) =>
   if (!keys.length) return "No scoped permissions selected";
   return sortPermissionKeys(keys).map((key) => staffPermissionLabelByKey[key] ?? formatModerationToken(key)).join(" · ");
 };
+
+const normalizeAdminTestId = (value: string) => (
+  value
+    .toLowerCase()
+    .replace(/chi'?lly/g, "chilly")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+);
+
+const looksLikeEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim().toLowerCase());
 
 const roleAuditTone = (entry: PlatformRoleAuditEvent): OwnerControlTone => {
   if (entry.action.includes("blocked")) return "danger";
@@ -3250,6 +3274,7 @@ export default function AdminStudioScreen() {
   }>();
   const consumedAdminRouteRef = useRef<string | null>(null);
   const lastAdminSearchAuditKeyRef = useRef<string | null>(null);
+  const lastAdminSearchUsersReadKeyRef = useRef<string | null>(null);
   const { isLoading: authLoading, isSignedIn, user } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const [titles, setTitles] = useState<TitleRow[]>([]);
@@ -3729,6 +3754,23 @@ export default function AdminStudioScreen() {
     [adminV1ReadModel.providerImportStatuses],
   );
   const normalizedStaffPermissionEmail = staffPermissionEmail.trim().toLowerCase();
+  const normalizedStaffRoleEmail = staffRoleEmail.trim().toLowerCase();
+  const staffRoleEmailValid = looksLikeEmail(normalizedStaffRoleEmail);
+  const staffRoleReasonValid = staffRoleReason.trim().length >= 6;
+  const selectedStaffRoleManageAllowed = staffRoleTarget === "admin" ? canManageAdminStaff : canManageModeratorStaff;
+  const staffRoleActionGuidance = !staffRoleEmail
+    ? "Enter the staff email, choose Admin or Moderator, and add an audit reason."
+    : !staffRoleEmailValid
+      ? "Use a full email address before changing staff access."
+      : !staffRoleReasonValid
+        ? "Add an audit reason of at least 6 characters before this action writes to the backend."
+        : !selectedStaffRoleManageAllowed
+          ? staffRoleTarget === "admin"
+            ? "This account can review Admin state but cannot grant or remove Admins without admin_grants."
+            : "This account can review Moderator state but cannot grant or remove Moderators without manage_moderators."
+          : staffRoleBusy !== null
+            ? "A staff role action is already running."
+            : "Ready for backed staff role confirmation.";
   const staffPermissionDraftChanged = staffPermissionSavedKeys !== null
     && normalizedStaffPermissionEmail === staffPermissionLoadedEmail
     && !permissionSetsEqual(staffPermissionSavedKeys, staffPermissionSelectedKeys);
@@ -3743,6 +3785,7 @@ export default function AdminStudioScreen() {
     : staffPermissionDraftChanged ? "Unsaved Changes" : "Loaded";
   const selectedPermissionCountLabel = `${staffPermissionSelectedKeys.length} selected`;
   const staffPermissionExpiresAtTrimmed = staffPermissionExpiresAt.trim();
+  const staffPermissionEmailValid = looksLikeEmail(normalizedStaffPermissionEmail);
   const staffPermissionExpiresAtValid = !staffPermissionExpiresAtTrimmed || Number.isFinite(Date.parse(staffPermissionExpiresAtTrimmed));
   const staffPermissionCanReset = staffPermissionDraftChanged && staffPermissionBusy === null;
   const canSaveStaffPermissions = canManageStaffPermissions
@@ -3750,6 +3793,21 @@ export default function AdminStudioScreen() {
     && staffPermissionReason.trim().length >= 6
     && staffPermissionExpiresAtValid
     && staffPermissionBusy === null;
+  const staffPermissionActionGuidance = staffPermissionEmail && !staffPermissionEmailValid
+    ? "Use a full staff email address before loading or saving permissions."
+    : staffPermissionSavedKeys === null
+    ? "Load current permissions before toggling or saving scoped access."
+    : !staffPermissionDraftChanged
+      ? staffPermissionCanReset
+        ? "Draft can be reset to the backed saved set."
+        : "Tap permission chips to prepare a backed permission change."
+      : !staffPermissionExpiresAtValid
+        ? "Use a valid ISO date/time for expiration, or leave it blank."
+        : staffPermissionReason.trim().length < 6
+          ? "Add an audit reason of at least 6 characters before saving."
+          : canSaveStaffPermissions
+            ? "Ready for backed scoped permission confirmation."
+            : "Permission save is waiting for the current action to finish.";
   const openAdminDrilldown = useCallback((detail: AdminDrilldownDetail) => {
     setSelectedAdminDrilldown(detail);
   }, []);
@@ -7705,6 +7763,24 @@ export default function AdminStudioScreen() {
     () => ADMIN_SEARCH_SCOPES.filter((scope) => adminSearchCanUseScope(scope.key)),
     [adminSearchCanUseScope],
   );
+
+  useEffect(() => {
+    const queryText = adminSearchDebouncedQuery.trim();
+    const wantsUserSearch = adminSearchScope === "all" || adminSearchScope === "users";
+    if (!canAccessAdmin || queryText.length < ADMIN_SEARCH_MIN_LENGTH || !wantsUserSearch || !adminSearchCanUseScope("users")) return;
+
+    const loadKey = `${adminSearchScope}:${queryText.toLowerCase()}`;
+    if (lastAdminSearchUsersReadKeyRef.current === loadKey) return;
+    lastAdminSearchUsersReadKeyRef.current = loadKey;
+    void loadAdminUsersReadModel(queryText);
+  }, [
+    adminSearchCanUseScope,
+    adminSearchDebouncedQuery,
+    adminSearchScope,
+    canAccessAdmin,
+    loadAdminUsersReadModel,
+  ]);
+
   const rememberAdminSearch = useCallback((query: string, scope: AdminSearchScope, resultCount: number | null) => {
     const trimmedQuery = query.trim();
     if (!shouldRememberAdminSearchQuery(trimmedQuery)) return;
@@ -7732,6 +7808,78 @@ export default function AdminStudioScreen() {
     const results: AdminSearchResult[] = [];
 
     if (includeScope("users")) {
+      adminUsersReadModel.items.forEach((entry) => {
+        if (!adminSearchMatches(queryText, [
+          entry.userId,
+          entry.email,
+          entry.identityLabel,
+          entry.username,
+          entry.displayName,
+          entry.authStatus,
+          entry.profileVisibility,
+          entry.profileRole,
+          entry.premium?.status,
+          ...entry.staffRoles.map((role) => role.role),
+          ...entry.staffRoles.map((role) => role.status),
+        ])) return;
+        results.push({
+          id: `directory-user-${entry.userId}`,
+          scope: "users",
+          title: maskOperatorIdentity(entry.identityLabel) || `User ${formatCompactIdentifier(entry.userId)}`,
+          subtitle: `Directory user · ${formatModerationToken(entry.authStatus)}`,
+          meta: [
+            entry.email ? `Email ${maskOperatorIdentity(entry.email)}` : "Email not returned",
+            entry.username ? `Username ${formatAuditDisplayText(entry.username)}` : null,
+            `${entry.counts.openReportsTargetingUser ?? 0} open reports`,
+          ].filter(Boolean).join(" · "),
+          badge: entry.staffRoles.length ? "Staff-linked user" : "Regular user",
+          tone: entry.authStatus === "active" ? "success" : adminUserStatusTone(entry.authStatus),
+          openLabel: "View User",
+          onPress: () => openAdminDrilldown({
+            title: maskOperatorIdentity(entry.identityLabel),
+            subtitle: "Broader user read model",
+            statusLabel: formatModerationToken(entry.authStatus),
+            tone: adminUserStatusTone(entry.authStatus),
+            body: "This account drilldown is inspect-only. Ban, suspend, password reset, entitlement edit, deletion, payout, and role-grant actions stay outside this search result.",
+            rows: [
+              { label: "User id", value: formatCompactIdentifier(entry.userId) },
+              { label: "Email", value: entry.email ? maskOperatorIdentity(entry.email) : "not returned" },
+              { label: "Username", value: entry.username ?? "not returned" },
+              { label: "Display", value: entry.displayName ?? "not returned" },
+              { label: "Auth status", value: formatModerationToken(entry.authStatus) },
+              { label: "Profile visibility", value: formatModerationToken(entry.profileVisibility) },
+              { label: "Premium", value: entry.premium?.status ? formatModerationToken(entry.premium.status) : "No active row returned" },
+              { label: "Staff roles", value: entry.staffRoles.length ? entry.staffRoles.map((role) => `${formatModerationToken(role.role)} ${formatModerationToken(role.status)}`).join(" · ") : "None returned" },
+            ],
+            sections: [
+              {
+                title: "Safety Signals",
+                statusLabel: `${entry.counts.openReportsTargetingUser ?? 0} open`,
+                tone: (entry.counts.openReportsTargetingUser ?? 0) > 0 ? "manual" : "success",
+                rows: [
+                  { label: "Reports made", value: formatAdminReadModelNumber(entry.counts.reportsMade) },
+                  { label: "Reports touching user", value: formatAdminReadModelNumber(entry.counts.reportsTargetingUser) },
+                  { label: "Open reports", value: formatAdminReadModelNumber(entry.counts.openReportsTargetingUser) },
+                  { label: "Blocks created", value: formatAdminReadModelNumber(entry.counts.blocksCreated) },
+                  { label: "Blocks received", value: formatAdminReadModelNumber(entry.counts.blocksReceived) },
+                ],
+              },
+              {
+                title: "Profile / Platform Signals",
+                statusLabel: "Metadata only",
+                tone: "info",
+                rows: [
+                  { label: "Profile posts", value: `${formatAdminReadModelNumber(entry.counts.publicProfilePosts)} public / ${formatAdminReadModelNumber(entry.counts.profilePosts)} total` },
+                  { label: "Creator videos", value: `${formatAdminReadModelNumber(entry.counts.publicCreatorVideos)} public / ${formatAdminReadModelNumber(entry.counts.creatorVideos)} total` },
+                  { label: "Avatar media", value: formatModerationToken(entry.profileAvatarMediaStatus) },
+                  { label: "Background media", value: formatModerationToken(entry.profileBackgroundMediaStatus) },
+                ],
+              },
+            ],
+          }),
+        });
+      });
+
       platformRoleRoster.forEach((entry) => {
         if (!adminSearchMatches(queryText, [
           entry.id,
@@ -8100,6 +8248,7 @@ export default function AdminStudioScreen() {
     adminSearchCanUseScope,
     adminSearchDebouncedQuery,
     adminSearchScope,
+    adminUsersReadModel.items,
     canAccessAdmin,
     canOpenOperatorTab,
     dmcaCases,
@@ -8108,6 +8257,7 @@ export default function AdminStudioScreen() {
     liveOpsIncidents,
     loadDmcaCaseDetail,
     moneySwitches,
+    openAdminDrilldown,
     openAdminUserDrilldown,
     openLegalRequestDetail,
     platformRoleRoster,
@@ -8694,22 +8844,23 @@ export default function AdminStudioScreen() {
     ]);
   }, [loadAdminImmutableAuditReadModel, loadStaffAndAuditVisibility]);
 
-  const runStaffRoleGrant = useCallback(async () => {
-    const email = staffRoleEmail.trim().toLowerCase();
+  const runStaffRoleGrant = useCallback(async (emailInput?: string | null, roleInput?: PlatformStaffManagementRole) => {
+    const email = (emailInput ?? staffRoleEmail).trim().toLowerCase();
+    const role = roleInput ?? staffRoleTarget;
     if (staffRoleBusy) return;
-    if (!email) {
-      setAdminOpsNotice("Enter an email before granting a staff role.");
+    if (!looksLikeEmail(email)) {
+      setAdminOpsNotice("Enter a valid staff email before granting a staff role.");
       return;
     }
     if (staffRoleReason.trim().length < 6) {
       setAdminOpsNotice("Audit reason is required before granting a staff role.");
       return;
     }
-    if (staffRoleTarget === "admin" && !canManageAdminStaff) {
+    if (role === "admin" && !canManageAdminStaff) {
       setAdminOpsNotice("Only Owner or an Admin with admin_grants can add Admins.");
       return;
     }
-    if (staffRoleTarget === "moderator" && !canManageModeratorStaff) {
+    if (role === "moderator" && !canManageModeratorStaff) {
       setAdminOpsNotice("Only Owner or an Admin with manage_moderators can add Moderators.");
       return;
     }
@@ -8719,7 +8870,7 @@ export default function AdminStudioScreen() {
       setAdminOpsNotice(null);
       const result = await grantPlatformStaffRoleByEmail({
         email,
-        role: staffRoleTarget,
+        role,
         reason: staffRoleReason.trim() || null,
       });
       setAdminOpsNotice(`${formatPlatformRoleDisplayLabel(result.role)} granted for ${maskOperatorIdentity(result.email)}.`);
@@ -8788,10 +8939,23 @@ export default function AdminStudioScreen() {
   ]);
 
   const confirmStaffRoleRevoke = useCallback((emailInput?: string | null, roleInput?: PlatformStaffManagementRole) => {
+    Keyboard.dismiss();
     const email = (emailInput ?? staffRoleEmail).trim().toLowerCase();
     const role = roleInput ?? staffRoleTarget;
-    if (!email) {
-      setAdminOpsNotice("Enter an email before removing a staff role.");
+    if (!looksLikeEmail(email)) {
+      setAdminOpsNotice("Enter a valid staff email before removing a staff role.");
+      return;
+    }
+    if (staffRoleReason.trim().length < 6) {
+      setAdminOpsNotice("Audit reason is required before removing a staff role.");
+      return;
+    }
+    if (role === "admin" && !canManageAdminStaff) {
+      setAdminOpsNotice("Only Owner or an Admin with admin_grants can remove Admins.");
+      return;
+    }
+    if (role === "moderator" && !canManageModeratorStaff) {
+      setAdminOpsNotice("Only Owner or an Admin with manage_moderators can remove Moderators.");
       return;
     }
 
@@ -8802,7 +8966,37 @@ export default function AdminStudioScreen() {
       title: "Remove Staff Role",
       body: `Remove ${formatPlatformRoleDisplayLabel(role)} from ${maskOperatorIdentity(email)}. This writes backed staff role audit and cannot remove a protected Owner flow from this panel.`,
     });
-  }, [staffRoleEmail, staffRoleTarget]);
+  }, [canManageAdminStaff, canManageModeratorStaff, staffRoleEmail, staffRoleReason, staffRoleTarget]);
+
+  const confirmStaffRoleGrant = useCallback(() => {
+    Keyboard.dismiss();
+    const email = staffRoleEmail.trim().toLowerCase();
+    const role = staffRoleTarget;
+    if (!looksLikeEmail(email)) {
+      setAdminOpsNotice("Enter a valid staff email before granting a staff role.");
+      return;
+    }
+    if (staffRoleReason.trim().length < 6) {
+      setAdminOpsNotice("Audit reason is required before granting a staff role.");
+      return;
+    }
+    if (role === "admin" && !canManageAdminStaff) {
+      setAdminOpsNotice("Only Owner or an Admin with admin_grants can add Admins.");
+      return;
+    }
+    if (role === "moderator" && !canManageModeratorStaff) {
+      setAdminOpsNotice("Only Owner or an Admin with manage_moderators can add Moderators.");
+      return;
+    }
+
+    setRoleConfirm({
+      kind: "grant_role",
+      email,
+      role,
+      title: "Grant Staff Role",
+      body: `Grant ${formatPlatformRoleDisplayLabel(role)} to ${maskOperatorIdentity(email)}. This writes backed staff role audit; it does not create Owner access, payout power, room authority, or publish authority.`,
+    });
+  }, [canManageAdminStaff, canManageModeratorStaff, staffRoleEmail, staffRoleReason, staffRoleTarget]);
 
   const loadStaffPermissionSet = useCallback(async (emailInput?: string | null, seedKeys?: readonly PlatformStaffPermissionKey[]) => {
     const email = (emailInput ?? staffPermissionEmail).trim().toLowerCase();
@@ -8811,8 +9005,8 @@ export default function AdminStudioScreen() {
       setAdminOpsNotice("Scoped permission details are Owner-only. Admins can see role-management status but cannot load another staff member's permission set.");
       return;
     }
-    if (!email) {
-      setAdminOpsNotice("Enter an Admin or Moderator email before loading scoped permissions.");
+    if (!looksLikeEmail(email)) {
+      setAdminOpsNotice("Enter a valid Admin or Moderator email before loading scoped permissions.");
       return;
     }
 
@@ -8849,11 +9043,15 @@ export default function AdminStudioScreen() {
   }, [canManageStaffPermissions, staffPermissionBusy]);
 
   const resetStaffPermissionDraft = useCallback(() => {
-    if (staffPermissionSavedKeys === null) return;
+    if (staffPermissionSavedKeys === null) {
+      setAdminOpsNotice("Load the current backed permission set before resetting a draft.");
+      return;
+    }
     setStaffPermissionSelectedKeys(staffPermissionSavedKeys);
   }, [staffPermissionSavedKeys]);
 
   const queueStaffPermissionSave = useCallback(() => {
+    Keyboard.dismiss();
     const email = staffPermissionEmail.trim().toLowerCase();
     if (!canManageStaffPermissions) {
       setAdminOpsNotice("Only Owner can save scoped staff permission sets.");
@@ -8861,6 +9059,10 @@ export default function AdminStudioScreen() {
     }
     if (!email || email !== staffPermissionLoadedEmail || staffPermissionSavedKeys === null) {
       setAdminOpsNotice("Load the current backed permission set before saving changes.");
+      return;
+    }
+    if (!looksLikeEmail(email)) {
+      setAdminOpsNotice("Use a valid staff email before saving scoped permissions.");
       return;
     }
     if (!staffPermissionDraftChanged) {
@@ -8931,13 +9133,19 @@ export default function AdminStudioScreen() {
 
   const applyRoleConfirmation = useCallback(async () => {
     if (!roleConfirm) return;
+    Keyboard.dismiss();
+    if (roleConfirm.kind === "grant_role") {
+      await runStaffRoleGrant(roleConfirm.email, roleConfirm.role);
+      setRoleConfirm(null);
+      return;
+    }
     if (roleConfirm.kind === "revoke_role") {
       await runStaffRoleRevoke(roleConfirm.email, roleConfirm.role);
       setRoleConfirm(null);
       return;
     }
     await applyStaffPermissionSave();
-  }, [applyStaffPermissionSave, roleConfirm, runStaffRoleRevoke]);
+  }, [applyStaffPermissionSave, roleConfirm, runStaffRoleGrant, runStaffRoleRevoke]);
 
   const toDbPatch = useCallback(
     (patch: Partial<TitleRow>): Record<string, any> => {
@@ -10905,6 +11113,7 @@ export default function AdminStudioScreen() {
           testID="admin-search-input"
           value={adminSearchQuery}
           onChangeText={setAdminSearchQuery}
+          accessibilityLabel="Admin search input"
           placeholder="Search users, reports, money events, rooms, or cases"
           placeholderTextColor="#8d8d8d"
           style={styles.input}
@@ -10919,6 +11128,9 @@ export default function AdminStudioScreen() {
               <TouchableOpacity
                 key={scope.key}
                 testID={`admin-search-scope-${scope.key}`}
+                accessibilityLabel={`Search ${scope.label}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
                 style={[styles.toggleChip, active && styles.toggleChipActive]}
                 onPress={() => setAdminSearchScope(scope.key)}
               >
@@ -10937,6 +11149,9 @@ export default function AdminStudioScreen() {
                 .map((scope) => (
                   <TouchableOpacity
                     key={scope.key}
+                    accessibilityLabel={`Filter results to ${scope.label}`}
+                    accessibilityRole="button"
+                    testID={`admin-search-result-chip-${scope.key}`}
                     style={styles.adminSearchSuggestionChip}
                     onPress={() => setAdminSearchScope(scope.key)}
                   >
@@ -10953,7 +11168,12 @@ export default function AdminStudioScreen() {
           <View testID="admin-search-recent" style={styles.adminSearchSuggestionGroup}>
             <View style={styles.ownerSectionHeaderRow}>
               <Text style={styles.adminSearchSuggestionTitle}>Recent searches</Text>
-              <TouchableOpacity onPress={() => setAdminRecentSearches([])}>
+              <TouchableOpacity
+                accessibilityLabel="Clear recent admin searches"
+                accessibilityRole="button"
+                onPress={() => setAdminRecentSearches([])}
+                testID="admin-search-clear-recent-button"
+              >
                 <Text style={styles.adminSearchClearText}>Clear</Text>
               </TouchableOpacity>
             </View>
@@ -10961,6 +11181,9 @@ export default function AdminStudioScreen() {
               {adminRecentSearches.map((recent) => (
                 <TouchableOpacity
                   key={recent.id}
+                  accessibilityLabel={`Run recent admin search ${recent.label}`}
+                  accessibilityRole="button"
+                  testID={`admin-search-recent-${recent.scope}`}
                   style={styles.adminSearchRecentChip}
                   onPress={() => {
                     setAdminSearchScope(recent.scope);
@@ -10983,6 +11206,8 @@ export default function AdminStudioScreen() {
                 <TouchableOpacity
                   key={result.id}
                   testID={`admin-search-result-${result.scope}`}
+                  accessibilityLabel={`Open admin search result ${result.title}`}
+                  accessibilityRole="button"
                   activeOpacity={0.86}
                   style={styles.adminSearchResultRow}
                   onPress={() => openAdminSearchResult(result)}
@@ -11133,6 +11358,10 @@ export default function AdminStudioScreen() {
             return (
               <TouchableOpacity
                 key={tab.key}
+                accessibilityLabel={`${tab.label} Admin tab`}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                testID={`admin-main-tab-${normalizeAdminTestId(tab.key)}`}
                 style={[styles.tabButton, active && styles.tabButtonActive]}
                 onPress={() => setOperatorTab(tab.key)}
               >
@@ -12065,8 +12294,8 @@ export default function AdminStudioScreen() {
                   defaultExpanded={canManageAdminStaff || canManageModeratorStaff}
                   statusLabel={canManageAdminStaff || canManageModeratorStaff ? "Backed RPC" : "Locked"}
                   statusTone={canManageAdminStaff || canManageModeratorStaff ? "success" : "locked"}
-                  subtitle="Grant and remove Admin or Moderator roles through the existing audited backend path."
-                  title="Grant / Revoke Staff Access"
+                  subtitle="Step 1. Add or remove the staff role first. This is the only generic Admin/Moderator role path."
+                  title="Step 1: Grant / Revoke Staff Access"
                 >
                   <Text style={styles.contentSignalBody}>Emails normalize to lowercase. Admin is stored as internal operator. Owner grants are not available from this generic panel.</Text>
                   {canManageAdminStaff || canManageModeratorStaff ? (
@@ -12076,17 +12305,28 @@ export default function AdminStudioScreen() {
                         onChangeText={setStaffRoleEmail}
                         placeholder="staff@example.com"
                         placeholderTextColor="#788196"
+                        accessibilityLabel="Staff role email"
                         autoCapitalize="none"
                         keyboardType="email-address"
                         style={styles.input}
+                        testID="admin-staff-role-email-input"
                       />
                       <View style={styles.toggleRowWrap}>
                         {staffRoleOptions.map((option) => (
                           <TouchableOpacity
                             key={option.key}
+                            accessibilityLabel={`Select ${option.label} role`}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: staffRoleTarget === option.key }}
                             style={[styles.toggleChip, staffRoleTarget === option.key && styles.toggleChipActive]}
-                            onPress={() => setStaffRoleTarget(option.key)}
-                            disabled={staffRoleBusy !== null}
+                            onPress={() => {
+                              if (staffRoleBusy !== null) {
+                                setAdminOpsNotice("Wait for the current staff role action to finish before changing role target.");
+                                return;
+                              }
+                              setStaffRoleTarget(option.key);
+                            }}
+                            testID={`admin-staff-role-target-${option.key}`}
                           >
                             <Text style={[styles.toggleChipText, staffRoleTarget === option.key && styles.toggleChipTextActive]}>
                               {option.label}
@@ -12099,24 +12339,38 @@ export default function AdminStudioScreen() {
                         onChangeText={setStaffRoleReason}
                         placeholder="Audit reason required"
                         placeholderTextColor="#788196"
+                        accessibilityLabel="Staff role audit reason"
                         style={styles.input}
+                        testID="admin-staff-role-reason-input"
                       />
+                      <Text style={staffRoleActionGuidance === "Ready for backed staff role confirmation." ? styles.ownerFieldHint : styles.ownerInlineError}>
+                        {staffRoleActionGuidance}
+                      </Text>
                       <View style={styles.configListActions}>
                         <OwnerAdminActionButton
-                          disabled={staffRoleBusy !== null || staffRoleReason.trim().length < 6}
                           label={staffRoleBusy === "grant" ? "Granting..." : "Grant Role"}
                           loading={staffRoleBusy === "grant"}
-                          onPress={() => void runStaffRoleGrant()}
+                          onPress={confirmStaffRoleGrant}
+                          testID="admin-staff-role-grant-button"
                           variant="primary"
                         />
                         <OwnerAdminActionButton
-                          disabled={staffRoleBusy !== null || staffRoleReason.trim().length < 6}
                           label={staffRoleBusy === "revoke" ? "Removing..." : "Remove Role"}
                           loading={staffRoleBusy === "revoke"}
                           onPress={() => confirmStaffRoleRevoke()}
+                          testID="admin-staff-role-remove-button"
                           variant="danger"
                         />
                       </View>
+                      {adminOpsNotice ? (
+                        <Text
+                          accessibilityLabel={`Staff role action status: ${adminOpsNotice}`}
+                          style={styles.ownerInlineError}
+                          testID="admin-staff-role-action-notice"
+                        >
+                          {adminOpsNotice}
+                        </Text>
+                      ) : null}
                     </>
                   ) : (
                     <OwnerDisabledReason reason="Staff management actions require active Owner, admin_grants, or manage_moderators. Moderators cannot add or remove staff." />
@@ -12126,8 +12380,8 @@ export default function AdminStudioScreen() {
                 <OwnerAdminSection
                   statusLabel={staffPermissionLoadState}
                   statusTone={staffPermissionDraftChanged ? "manual" : staffPermissionSavedKeys ? "success" : "locked"}
-                  subtitle="Load a staff account, tune scoped permissions, then save only after a valid audit reason is present."
-                  title="Scoped Permission Matrix"
+                  subtitle="Step 2. Load an existing staff account, then tune scoped permissions for that staff role."
+                  title="Step 2: Scoped Permission Matrix"
                 >
                   <Text style={styles.contentSignalBody}>Tap any permission to toggle it. Multiple permissions can stay selected before saving the full backed set.</Text>
                   {canManageStaffPermissions ? (
@@ -12137,15 +12391,19 @@ export default function AdminStudioScreen() {
                         onChangeText={setStaffPermissionEmail}
                         placeholder="admin-or-moderator@example.com"
                         placeholderTextColor="#788196"
+                        accessibilityLabel="Staff permission email"
                         autoCapitalize="none"
                         keyboardType="email-address"
                         style={styles.input}
+                        testID="admin-staff-permission-email-input"
                       />
                       <View style={styles.configListActions}>
                         <TouchableOpacity
-                          style={[styles.orderBtn, staffPermissionBusy !== null && styles.configSaveBtnDisabled]}
+                          accessibilityLabel="Load current staff permissions"
+                          accessibilityRole="button"
+                          style={styles.orderBtn}
                           onPress={() => void loadStaffPermissionSet()}
-                          disabled={staffPermissionBusy !== null}
+                          testID="admin-staff-permission-load-button"
                         >
                           <Text style={styles.orderBtnText}>{staffPermissionBusy === "load" ? "Loading..." : "Load Current"}</Text>
                         </TouchableOpacity>
@@ -12162,13 +12420,21 @@ export default function AdminStudioScreen() {
                                 return (
                                   <TouchableOpacity
                                     key={permissionKey}
+                                    accessibilityLabel={`Toggle ${staffPermissionLabelByKey[permissionKey]} permission`}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected }}
                                     style={[
                                       styles.toggleChip,
                                       selected && styles.toggleChipActive,
-                                      (staffPermissionSavedKeys === null || staffPermissionBusy !== null) && styles.toggleChipDisabled,
                                     ]}
-                                    onPress={() => toggleStaffPermissionDraft(permissionKey)}
-                                    disabled={staffPermissionSavedKeys === null || staffPermissionBusy !== null}
+                                    onPress={() => {
+                                      if (staffPermissionSavedKeys === null) {
+                                        setAdminOpsNotice("Load current permissions before toggling scoped permission chips.");
+                                        return;
+                                      }
+                                      toggleStaffPermissionDraft(permissionKey);
+                                    }}
+                                    testID={`admin-staff-permission-${permissionKey}`}
                                   >
                                     <Text style={[styles.toggleChipText, selected && styles.toggleChipTextActive]}>
                                       {staffPermissionLabelByKey[permissionKey]}
@@ -12213,18 +12479,30 @@ export default function AdminStudioScreen() {
                       {staffPermissionReason.trim().length > 0 && staffPermissionReason.trim().length < 6 ? (
                         <Text style={styles.ownerInlineError}>Audit reason needs at least 6 characters before save is enabled.</Text>
                       ) : null}
+                      <Text style={canSaveStaffPermissions ? styles.ownerFieldHint : styles.ownerInlineError}>
+                        {staffPermissionActionGuidance}
+                      </Text>
+                      {adminOpsNotice ? (
+                        <Text
+                          accessibilityLabel={`Scoped permission action status: ${adminOpsNotice}`}
+                          style={styles.ownerInlineError}
+                          testID="admin-staff-permission-action-notice"
+                        >
+                          {adminOpsNotice}
+                        </Text>
+                      ) : null}
                       <OwnerStickyActionBar helper="Existing backend protections still block self-grant and final Owner removal.">
                         <OwnerAdminActionButton
-                          disabled={!staffPermissionCanReset}
                           label="Reset Draft"
                           onPress={resetStaffPermissionDraft}
+                          testID="admin-staff-permission-reset-button"
                           variant="secondary"
                         />
                         <OwnerAdminActionButton
-                          disabled={!canSaveStaffPermissions}
                           label="Save Permissions"
                           loading={staffPermissionBusy === "save"}
                           onPress={queueStaffPermissionSave}
+                          testID="admin-staff-permission-save-button"
                           variant="primary"
                         />
                       </OwnerStickyActionBar>
@@ -12235,13 +12513,13 @@ export default function AdminStudioScreen() {
                 </OwnerAdminSection>
 
                 <OwnerQuickLinkCard
-                  body="Templates apply permission bundles only. They do not create platform roles."
+                  body="Optional presets for scoped permissions after a staff role exists. Templates do not add Admins or Moderators."
                   disabled={!canManagePermissionTemplates}
                   label="Open Permission Templates"
                   onPress={() => setOperatorTab("permission-templates")}
                   statusLabel={canManagePermissionTemplates ? "Connected" : "Not Connected"}
                   statusTone={canManagePermissionTemplates ? "info" : "locked"}
-                  title="Permission Templates Shortcut"
+                  title="Permission Template Presets"
                 />
 
                 <OwnerAdminSection
@@ -15875,8 +16153,8 @@ export default function AdminStudioScreen() {
             badgeLabel={canManagePermissionTemplates ? "Authorized" : "Locked"}
             badgeTone={canManagePermissionTemplates ? "success" : "locked"}
             kicker="PERMISSION TEMPLATES"
-            subtitle="Permission-only bundles. Templates never create platform roles, and Admins cannot apply templates to themselves."
-            title="Scoped Staff Templates"
+            subtitle="Optional presets for Step 2 scoped permissions. Templates never create Admin, Moderator, Owner, payout, room, or publish authority."
+            title="Scoped Permission Presets"
           />
 
           {ownerControlNotice ? (
@@ -15891,7 +16169,7 @@ export default function AdminStudioScreen() {
             subtitle="Apply or revoke a permission-only bundle after selecting a target and audit reason."
             title="Apply or Revoke"
           >
-            <Text style={styles.ownerPanelMeta}>Applies permission bundles only; it does not create platform roles or let admins self-grant.</Text>
+            <Text style={styles.ownerPanelMeta}>Use this only after Step 1 grants an Admin or Moderator role. Presets apply permission bundles only; they do not create staff roles or let Admins self-grant.</Text>
             <View style={styles.ownerInputGroup}>
               <TextInput
                 value={permissionTemplateEmail}
@@ -15942,14 +16220,12 @@ export default function AdminStudioScreen() {
               />
               <OwnerStickyActionBar helper="Templates never create platform roles and cannot be self-applied by Admins.">
                 <OwnerAdminActionButton
-                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6}
                   label={canManagePermissionTemplates ? "Apply Template" : "Locked"}
                   loading={permissionTemplateBusy === "apply"}
                   onPress={() => void runPermissionTemplateAction("apply")}
                   variant="primary"
                 />
                 <OwnerAdminActionButton
-                  disabled={permissionTemplateBusy !== null || !canManagePermissionTemplates || permissionTemplateReason.trim().length < 6}
                   label={canManagePermissionTemplates ? "Revoke Template" : "Locked"}
                   loading={permissionTemplateBusy === "revoke"}
                   onPress={() => void runPermissionTemplateAction("revoke")}
@@ -18602,7 +18878,7 @@ export default function AdminStudioScreen() {
         }}
       >
         <View style={styles.confirmBackdrop}>
-          <View style={styles.confirmSheet}>
+          <View style={styles.confirmSheet} testID="admin-role-confirm-modal">
             <Text style={styles.confirmKicker}>Roles & Permissions</Text>
             <Text style={styles.confirmTitle}>{roleConfirm?.title ?? "Confirm Role Action"}</Text>
             <Text style={styles.confirmBody}>
@@ -18619,24 +18895,35 @@ export default function AdminStudioScreen() {
             </View>
             <View style={styles.modalActions}>
               <TouchableOpacity
+                accessibilityLabel="Cancel role confirmation"
+                accessibilityRole="button"
                 style={styles.cancelBtn}
-                onPress={() => setRoleConfirm(null)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setRoleConfirm(null);
+                }}
                 disabled={staffRoleBusy !== null || staffPermissionBusy !== null}
+                testID="admin-role-confirm-cancel-button"
               >
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                accessibilityLabel={roleConfirm?.kind === "save_permissions" ? "Save permissions confirmation" : roleConfirm?.kind === "grant_role" ? "Grant role confirmation" : "Remove role confirmation"}
+                accessibilityRole="button"
                 style={[
                   roleConfirm?.kind === "revoke_role" ? styles.dangerConfirmBtn : styles.saveBtn,
                   (staffRoleBusy !== null || staffPermissionBusy !== null) && styles.configSaveBtnDisabled,
                 ]}
                 onPress={() => void applyRoleConfirmation()}
                 disabled={staffRoleBusy !== null || staffPermissionBusy !== null}
+                testID="admin-role-confirm-submit-button"
               >
                 {staffRoleBusy !== null || staffPermissionBusy !== null ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.saveText}>{roleConfirm?.kind === "save_permissions" ? "Save Permissions" : "Remove Role"}</Text>
+                  <Text style={styles.saveText}>
+                    {roleConfirm?.kind === "save_permissions" ? "Save Permissions" : roleConfirm?.kind === "grant_role" ? "Grant Role" : "Remove Role"}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
