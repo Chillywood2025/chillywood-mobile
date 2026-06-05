@@ -21,8 +21,11 @@ const assertNotIncludes = (source, needle, label) => {
 
 const migration = read("supabase/migrations/20260603165000_money_access_grants_product_catalog.sql");
 const purchaseIntentMigration = read("supabase/migrations/20260603190000_money_purchase_intents.sql");
+const creatorSetupMigration = read("supabase/migrations/20260605000610_creator_monetization_in_app_setup_flows.sql");
+const creatorSetupBoundMigration = read("supabase/migrations/20260605002000_bound_creator_monetization_setup_access.sql");
 const failurePathsMigration = read("supabase/migrations/20260604015548_money_failure_paths_event_pass.sql");
 const moneyAccess = read("_lib/moneyAccessGrants.ts");
+const creatorSetup = read("_lib/creatorMonetizationSetup.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const monetization = read("_lib/monetization.ts");
 const revenueCatWebhook = read("supabase/functions/revenuecat-webhook/index.ts");
@@ -59,6 +62,27 @@ const packageJson = read("package.json");
   'merch_is_physical_goods_only',
   'premium_uses_existing_revenuecat_shell',
 ].forEach((needle) => assertIncludes(purchaseIntentMigration, needle, "money purchase intent migration"));
+
+[
+  'create table if not exists public."creator_monetization_configs"',
+  '"creator_monetization_configs_not_payable_check"',
+  '"creator_monetization_configs_no_live_money_check"',
+  '"creator_monetization_configs_no_publish_by_payment_check"',
+  'save_creator_sandbox_monetization_config',
+  'list_my_creator_sandbox_monetization_configs',
+  'admin_list_creator_sandbox_monetization_configs',
+  'approved_sandbox_tier_required',
+  'premium_uses_subscription_screen',
+  'android_digital_products_require_revenuecat_google_play',
+].forEach((needle) => assertIncludes(creatorSetupMigration, needle, "creator monetization setup migration"));
+
+[
+  'create or replace function public."save_creator_sandbox_monetization_config"',
+  "has_active_beta_access()",
+  "internal_sandbox_tester_required",
+  "public.has_platform_role(array['owner'::text, 'operator'::text])",
+  "internal_sandbox_tester_required', true",
+].forEach((needle) => assertIncludes(creatorSetupBoundMigration, needle, "creator monetization setup access-bound migration"));
 
 [
   'create unique index if not exists "access_grants_provider_event_grant_unique"',
@@ -156,6 +180,15 @@ assertIncludes(moneyAccess, "dynamicPurchaseIntentsSandboxOnly: true", "purchase
 assertIncludes(moneyAccess, "missingPurchaseIntentGrantsAccess: false", "missing intent cannot grant access proof");
 assertIncludes(moneyAccess, "expiredPurchaseIntentGrantsAccess: false", "expired intent cannot grant access proof");
 assertIncludes(moneyAccess, "consumedPurchaseIntentCanBeReused: false", "consumed intent cannot be reused proof");
+assertIncludes(creatorSetup, "APPROVED_CREATOR_SANDBOX_TIERS", "creator setup approved tier list");
+assertIncludes(creatorSetup, "approved_product_tier: true", "creator setup approved tier metadata");
+assertIncludes(creatorSetup, "arbitrary_android_price: false", "creator setup arbitrary price block metadata");
+assertIncludes(creatorSetup, "launchCreatorSandboxDigitalPurchase", "creator setup digital purchase launcher");
+assertIncludes(creatorSetup, "create_money_purchase_intent", "creator setup uses purchase intent path");
+assertIncludes(creatorSetup, "launchCreatorMerchSandboxCheckout", "creator setup merch checkout launcher");
+assertIncludes(creatorSetup, "stripe_physical_goods", "creator setup merch physical rail");
+assertIncludes(creatorSetup, "liveKitPublishGrantedByPayment: false", "creator setup payment no publish proof");
+assertIncludes(creatorSetup, "hostApprovalBypassedBySeatPass: false", "creator setup host approval proof");
 assertIncludes(failurePathsMigration, '"provider_event_id", "user_id", "grant_type"', "duplicate provider event cannot duplicate grants");
 assertIncludes(failurePathsMigration, 'on public."money_access_ledger_events" ("provider_event_id")', "duplicate provider event cannot duplicate ledger rows");
 assertIncludes(failurePathsMigration, '"status" = \'revoked\'', "admin revoke marks access revoked");

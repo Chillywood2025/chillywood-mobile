@@ -10,6 +10,8 @@ Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`. This docu
 
 Internal tester update: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md` opens approved tester-only sandbox purchase surfaces and Owner/Admin status controls. Public/default users still see Premium and digital purchases closed; approved testers can load Google Play / RevenueCat sandbox purchase surfaces when they are signed in, Play-installed/internal-track eligible, and provider products are available. Owner/Admin Money Center routes approved testers to sandbox tools. This does not make any digital product production-live or payable, and payout readiness remains read-only.
 
+Creator setup flow update: `docs/CREATOR_MONETIZATION_IN_APP_FLOWS.md` adds the in-app layer for binding approved sandbox digital products to real creator sources. Creators/internal testers select from mapped Google Play / RevenueCat product tiers only; arbitrary Android digital prices remain blocked. The setup rows are sandbox/not-payable and do not create provider events, access grants, ledgers, Premium entitlements, payout access, or production money until a tester launches the existing real provider purchase path.
+
 ## Current Outcome
 
 Backend readiness is in place:

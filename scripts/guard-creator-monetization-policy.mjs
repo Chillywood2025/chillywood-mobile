@@ -21,11 +21,15 @@ const assertNotIncludes = (source, needle, label) => {
 
 const featureFlags = read("_lib/featureFlags.ts");
 const creatorMonetization = read("_lib/creatorMonetization.ts");
+const creatorMonetizationSetup = read("_lib/creatorMonetizationSetup.ts");
 const paymentRailPolicy = read("_lib/paymentRailPolicy.ts");
 const migration = read("supabase/migrations/202605140011_creator_monetization_systems_foundation.sql");
+const creatorSetupMigration = read("supabase/migrations/20260605000610_creator_monetization_in_app_setup_flows.sql");
+const creatorSetupBoundMigration = read("supabase/migrations/20260605002000_bound_creator_monetization_setup_access.sql");
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
 const channelSettings = read("app/channel-settings.tsx");
+const creatorSetupRoute = read("app/creator-monetization-setup.tsx");
 const revenueRoute = read("app/revenue.tsx");
 const publicChannel = read("app/channel/[userId].tsx");
 const player = read("app/player/[id].tsx");
@@ -61,6 +65,21 @@ assertIncludes(creatorMonetization, "setCreatorContentPrice", "creator pricing c
 assertIncludes(creatorMonetization, "requestCreatorPayout", "cash-out request client helper");
 assertIncludes(creatorMonetization, "creatorMonetizationCheckoutPreflight", "checkout preflight client helper");
 assertNotIncludes(creatorMonetization, "499", "no $4.99 cap in creator monetization helper");
+assertIncludes(creatorMonetizationSetup, "APPROVED_CREATOR_SANDBOX_TIERS", "approved creator sandbox tiers");
+assertIncludes(creatorMonetizationSetup, "arbitraryAndroidPricesAllowed: false", "no arbitrary Android prices");
+assertIncludes(creatorMonetizationSetup, "stripeAndroidDigitalCheckoutEnabled: false", "no Stripe Android digital checkout");
+assertIncludes(creatorMonetizationSetup, "payoutExecutionReadOnly: true", "payout readiness read-only");
+assertIncludes(creatorMonetizationSetup, "liveKitPublishGrantedByPayment: false", "payment cannot grant LiveKit publish");
+assertIncludes(creatorMonetizationSetup, "hostApprovalBypassedBySeatPass: false", "seat pass cannot bypass host approval");
+[
+  "cw_paid_content_access_sandbox_099",
+  "cw_watch_party_live_ticket_sandbox_099",
+  "cw_live_watch_party_access_sandbox_099",
+  "cw_live_watch_party_seat_sandbox_099",
+  "cw_creator_tip_sandbox_099",
+  "cw_event_pass_sandbox_099",
+  "cw_merch_test_tee_sandbox",
+].forEach((productId) => assertIncludes(creatorMonetizationSetup, productId, `creator setup product ${productId}`));
 assertIncludes(paymentRailPolicy, "resolvePaymentRailPolicy", "payment rail policy helper");
 assertIncludes(paymentRailPolicy, "PREMIUM_PAYMENT_RAIL = \"google_play_revenuecat\"", "Premium rail policy");
 assertIncludes(paymentRailPolicy, "ANDROID_DIGITAL_CREATOR_CONTENT_STRIPE_ENABLED = false", "Android digital paid content Stripe block");
@@ -85,6 +104,19 @@ assertIncludes(migration, "creator_monetization_checkout_preflight", "checkout p
 assertIncludes(migration, "resolve_creator_content_access", "paid content access resolver RPC");
 assertIncludes(migration, "set_creator_content_price", "creator price RPC");
 assertIncludes(migration, "calculate_creator_instant_cashout_fee", "cash-out fee RPC");
+assertIncludes(creatorSetupMigration, 'create table if not exists public."creator_monetization_configs"', "creator setup config table");
+assertIncludes(creatorSetupMigration, '"environment" = \'sandbox\'', "creator setup sandbox-only constraint");
+assertIncludes(creatorSetupMigration, '"payable_state" = \'not_payable\'', "creator setup not-payable constraint");
+assertIncludes(creatorSetupMigration, '"production_enabled" is false', "creator setup production off constraint");
+assertIncludes(creatorSetupMigration, '"payout_enabled" is false', "creator setup payouts off constraint");
+assertIncludes(creatorSetupMigration, '"grants_livekit_publish" is false', "creator setup no LiveKit publish constraint");
+assertIncludes(creatorSetupMigration, 'approved_sandbox_tier_required', "creator setup approved tier requirement");
+assertIncludes(creatorSetupMigration, 'android_digital_products_require_revenuecat_google_play', "creator setup Android digital rail guard");
+assertIncludes(creatorSetupMigration, 'save_creator_sandbox_monetization_config', "creator setup save RPC");
+assertIncludes(creatorSetupMigration, 'admin_list_creator_sandbox_monetization_configs', "creator setup admin inspection RPC");
+assertIncludes(creatorSetupBoundMigration, "has_active_beta_access()", "creator setup server-side beta/internal tester requirement");
+assertIncludes(creatorSetupBoundMigration, "internal_sandbox_tester_required", "creator setup server-side tester denial");
+assertIncludes(creatorSetupBoundMigration, "public.has_platform_role(array['owner'::text, 'operator'::text])", "creator setup owner/operator server-side access");
 
 assertIncludes(monetization, "premium_subscription: {", "RevenueCat premium target");
 assertIncludes(monetization, "offeringId: \"premium\"", "RevenueCat premium offering");
@@ -98,7 +130,12 @@ assertIncludes(channelSettings, "Tips will unlock after store products and payou
 assertIncludes(channelSettings, "Monetization", "Platform Studio Monetization tab");
 assertIncludes(channelSettings, "Paid Content", "Platform Studio paid content copy");
 assertIncludes(channelSettings, "Physical merch", "Platform Studio merch copy");
+assertIncludes(channelSettings, "/creator-monetization-setup", "Platform Studio creator setup route link");
 assertIncludes(channelSettings, "Stripe is not used to charge Android users for in-app digital access.", "Android digital Stripe block copy");
+assertIncludes(creatorSetupRoute, "Creator setup / Internal sandbox", "creator setup route header");
+assertIncludes(creatorSetupRoute, "Arbitrary Android prices", "creator setup arbitrary price guard copy");
+assertIncludes(creatorSetupRoute, "Payout readiness", "creator setup payout readiness section");
+assertIncludes(creatorSetupRoute, "Payout execution", "creator setup payout execution blocked copy");
 assertIncludes(channelSettings, "tab=monetization&focus=payouts", "old payout deep link maps to Monetization");
 assertIncludes(revenueRoute, "focus=balance", "old revenue route maps to creator balance");
 assertNotIncludes(channelSettings, "{ id: \"payouts\", label: \"Payouts\" }", "separate Payouts tab");

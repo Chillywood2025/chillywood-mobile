@@ -1,5 +1,13 @@
 # NEXT TASK
 
+## Current Recommendation
+
+Public V1 creator monetization setup visual/provider proof.
+
+The in-app creator setup layer is now implemented repo-side through `/creator-monetization-setup` and remote migrations `20260605000610_creator_monetization_in_app_setup_flows.sql` plus `20260605002000_bound_creator_monetization_setup_access.sql`. The next best task is Android proof on the Play-installed internal build after an EAS Update/build: capture creator setup save flows, at least two sandbox purchase launchers, Owner/Admin inspection, and safety states. Do not rebuild payment rails or activate production money.
+
+Required boundaries remain unchanged: production live money off, payouts off, payout execution absent, cash-out/withdrawal/transfer absent, sandbox/setup rows not payable, Stripe Android digital checkout absent, no fake sales/balances/provider events, no LiveKit publish or host authority from payment, and no route ownership changes.
+
 ## Recommended Lane: Google Play Publishing Overview And Release Asset Closeout
 
 Latest monetization tester-mode note: Internal Tester Sandbox Purchase Mode with Owner/Admin controls adds a bounded `internal_tester_sandbox` override for approved Owner/Operator, runtime-allowlisted tester, or active internal beta/tester accounts. Public/default users still see Premium purchase unavailable because `PREMIUM_PURCHASE_SHELL_ON_HOLD = true`, `premiumPurchaseEnabled=false`, `live_money_enabled=off`, and `payouts_enabled=off`. Approved testers can see clearly labeled Google Play / RevenueCat sandbox Premium purchase copy, the sandbox digital-product launcher, and Stripe physical merch sandbox checkout; all rows remain sandbox/test/not payable. Owner/Admin Money Center now exposes `Internal Sandbox Testing` status and tester-tool routing. Payout readiness is read-only: no request, simulation, cash-out, withdrawal, transfer, payable balance, or payout activation is available. Production money, Stripe Android digital checkout, fake purchases/provider events/balances, LiveKit authority, route ownership changes, and safety bypass remain absent. Dedicated doc: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`.

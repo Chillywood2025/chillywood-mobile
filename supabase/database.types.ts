@@ -1353,6 +1353,92 @@ export type Database = {
           },
         ]
       }
+      creator_monetization_configs: {
+        Row: {
+          created_at: string
+          creates_digital_access: boolean
+          creator_id: string
+          display_name: string
+          environment: string
+          grants_host_authority: boolean
+          grants_livekit_publish: boolean
+          id: string
+          metadata: Json
+          payable_state: string
+          payout_enabled: boolean
+          price_label: string
+          product_id: string
+          product_key: string
+          product_type: string
+          production_enabled: boolean
+          provider: string
+          provider_product_id: string
+          requires_host_approval: boolean
+          source_id: string
+          source_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creates_digital_access?: boolean
+          creator_id: string
+          display_name: string
+          environment?: string
+          grants_host_authority?: boolean
+          grants_livekit_publish?: boolean
+          id?: string
+          metadata?: Json
+          payable_state?: string
+          payout_enabled?: boolean
+          price_label?: string
+          product_id: string
+          product_key: string
+          product_type: string
+          production_enabled?: boolean
+          provider?: string
+          provider_product_id: string
+          requires_host_approval?: boolean
+          source_id: string
+          source_type: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creates_digital_access?: boolean
+          creator_id?: string
+          display_name?: string
+          environment?: string
+          grants_host_authority?: boolean
+          grants_livekit_publish?: boolean
+          id?: string
+          metadata?: Json
+          payable_state?: string
+          payout_enabled?: boolean
+          price_label?: string
+          product_id?: string
+          product_key?: string
+          product_type?: string
+          production_enabled?: boolean
+          provider?: string
+          provider_product_id?: string
+          requires_host_approval?: boolean
+          source_id?: string
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_monetization_configs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "monetization_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_monetization_profiles: {
         Row: {
           age_verified: boolean
@@ -10117,6 +10203,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_list_creator_sandbox_monetization_configs: {
+        Args: never
+        Returns: Json
+      }
       admin_list_money_purchase_intents: {
         Args: never
         Returns: {
@@ -10344,6 +10434,16 @@ export type Database = {
           p_target_id?: string
         }
         Returns: Json
+      }
+      creator_monetization_config_safe_row: {
+        Args: {
+          config_row: Database["public"]["Tables"]["creator_monetization_configs"]["Row"]
+        }
+        Returns: Json
+      }
+      creator_monetization_expected_source_type: {
+        Args: { p_product_type: string }
+        Returns: string
       }
       discovery_feed_item_blocked_for_current_user: {
         Args: { target_feed_item_id: string }
@@ -10655,6 +10755,10 @@ export type Database = {
           target_email: string
           target_user_id: string
         }[]
+      }
+      list_my_creator_sandbox_monetization_configs: {
+        Args: never
+        Returns: Json
       }
       list_platform_money_kill_switch_audit: {
         Args: { p_limit?: number }
@@ -10979,6 +11083,16 @@ export type Database = {
       }
       save_admin_creator_grants: {
         Args: { p_grants: Json; p_reason: string; p_target_user_id: string }
+        Returns: Json
+      }
+      save_creator_sandbox_monetization_config: {
+        Args: {
+          p_display_name?: string
+          p_metadata?: Json
+          p_product_key: string
+          p_source_id: string
+          p_source_type: string
+        }
         Returns: Json
       }
       schedule_account_deletion: {

@@ -6421,6 +6421,12 @@ export function ChannelStudioScreen() {
               <Text style={styles.eventSecondaryButtonText}>Manage Premium</Text>
             </TouchableOpacity>
           </View>
+          {renderStudioActionRow({
+            title: "Creator sandbox setup",
+            body: "Configure approved sandbox tiers for paid content, tickets, access passes, seat passes, event passes, tips, and physical merch. No production money or payouts are activated.",
+            value: "Open",
+            onPress: () => router.push("/creator-monetization-setup" as Parameters<typeof router.push>[0]),
+          })}
         </View>
 
         <View style={styles.studioAccordionStack}>
@@ -6476,6 +6482,12 @@ export function ChannelStudioScreen() {
                   value: "Open",
                   onPress: () => router.push("/subscribe" as Parameters<typeof router.push>[0]),
                 })}
+                {renderStudioActionRow({
+                  title: "Configure sandbox products",
+                  body: "Choose approved $0.99 sandbox tiers and bind them to real content, room, creator, or event UUIDs.",
+                  value: "Setup",
+                  onPress: () => router.push("/creator-monetization-setup" as Parameters<typeof router.push>[0]),
+                })}
               </>
             ),
           })}
@@ -6499,6 +6511,12 @@ export function ChannelStudioScreen() {
                   <Text style={styles.eventEmptyTitle}>Tips are planned.</Text>
                   <Text style={styles.eventEmptyBody}>No tip totals, tip balance, or tip checkout is available here.</Text>
                 </View>
+                {renderStudioActionRow({
+                  title: "Configure sandbox tip",
+                  body: "Bind the approved creator tip sandbox product to your creator id. Tips remain sandbox only and not payable.",
+                  value: "Setup",
+                  onPress: () => router.push("/creator-monetization-setup" as Parameters<typeof router.push>[0]),
+                })}
               </>
             ),
           })}
@@ -6518,6 +6536,12 @@ export function ChannelStudioScreen() {
                   "Paid seats stay planned until Google Play or RevenueCat provider setup is ready.",
                   3,
                 )}
+                {renderStudioActionRow({
+                  title: "Configure room sandbox tiers",
+                  body: "Set up Watch-Party tickets, Live access passes, and seat passes with approved sandbox products only.",
+                  value: "Setup",
+                  onPress: () => router.push("/creator-monetization-setup" as Parameters<typeof router.push>[0]),
+                })}
               </>
             ),
           })}
@@ -6537,6 +6561,12 @@ export function ChannelStudioScreen() {
                   "Paid content setup does not unlock access until provider setup is ready.",
                   3,
                 )}
+                {renderStudioActionRow({
+                  title: "Configure paid content sandbox",
+                  body: "Bind a real public-safe content UUID to the approved paid content sandbox tier. Content safety still wins.",
+                  value: "Setup",
+                  onPress: () => router.push("/creator-monetization-setup" as Parameters<typeof router.push>[0]),
+                })}
               </>
             ),
           })}
@@ -6556,6 +6586,12 @@ export function ChannelStudioScreen() {
                   "Physical merch setup will appear here when safe creator-owned records exist.",
                   3,
                 )}
+                {renderStudioActionRow({
+                  title: "Configure merch readiness",
+                  body: "Use the physical merch sandbox setup and Stripe test checkout path. Merch never unlocks digital access.",
+                  value: "Setup",
+                  onPress: () => router.push("/creator-monetization-setup" as Parameters<typeof router.push>[0]),
+                })}
               </>
             ),
           })}

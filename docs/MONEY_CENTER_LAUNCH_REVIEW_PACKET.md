@@ -6,6 +6,8 @@ This packet summarizes Chi'llywood's sandbox monetization proof for Google Play 
 
 Canonical final truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
+Creator setup flow addendum: `docs/CREATOR_MONETIZATION_IN_APP_FLOWS.md` adds the creator-facing setup map. Approved creators/internal testers can configure sandbox paid content, Watch-Party tickets, Live access passes, Live seat passes, event passes, tips, and physical merch from in-app approved tiers only. These setup records are sandbox/not-payable and do not activate public production purchases, payout execution, cash-out, withdrawal, transfer, payable balances, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin power, or safety bypass.
+
 Latest RC regression sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`. Android proof path: `/tmp/chillywood-public-v1-money-proof-rc-sweep-20260604/`.
 
 Stripe merch/payout readiness addendum: `docs/STRIPE_MERCH_PAYOUT_SANDBOX_RUNBOOK.md`, `docs/MERCH_PHYSICAL_GOODS_POLICY.md`, and `docs/STRIPE_CONNECT_PAYOUT_READINESS.md` document the sandbox-only Stripe physical-merch and Connect readiness posture. Stripe remains forbidden for Android digital goods; merch creates no access grants or RevenueCat entitlements; payout readiness creates no cash-out, withdrawal, transfer, or payable creator balance.

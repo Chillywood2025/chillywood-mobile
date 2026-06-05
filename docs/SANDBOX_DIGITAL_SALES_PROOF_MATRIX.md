@@ -14,6 +14,8 @@ Public V1 money-proof RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`.
 
 Internal tester sandbox mode: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`. Approved testers can now use bounded sandbox purchase surfaces; public/default users still cannot see production-like digital buy buttons. Owner/Admin Money Center now shows `Internal Sandbox Testing` controls and tester-tool routing. Payout readiness is read-only and is not a digital purchase product.
 
+Creator setup flow: `docs/CREATOR_MONETIZATION_IN_APP_FLOWS.md` adds a creator-facing setup layer for the same proved sandbox products. Setup configs bind real source UUIDs to approved Google Play / RevenueCat sandbox tiers only. They do not by themselves create provider events, access grants, ledger rows, payable balances, production purchases, or LiveKit authority.
+
 ## Backend Status
 
 | Area | Status |

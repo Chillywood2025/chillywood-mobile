@@ -1,5 +1,12 @@
 # ROADMAP
 
+## Current Public V1 Money Setup Status
+
+- Done repo-side: creator-facing in-app sandbox setup route `/creator-monetization-setup`, Platform Studio Money Center links, `creator_monetization_configs` migrations, linked typegen refresh, and guards for approved product tiers plus server-side owner/operator or active beta/internal tester access only.
+- Done rail-side: Google Play / RevenueCat sandbox digital goods, Stripe physical merch sandbox checkout, and Stripe Connect payout readiness.
+- Still future: production digital sales activation, production merch launch, production payouts, payout execution, cash-out, withdrawal, transfer, arbitrary/multi-tier Android pricing beyond mapped Google Play / RevenueCat products, and final public reviewer/production policy approvals.
+- Next proof: Play-installed Android visual/provider proof for the creator setup route and Owner/Admin inspection after update/build distribution.
+
 ## Planning Rule
 `ROADMAP.md` now records Chi'llywood's phased product planning truth rather than older chapter-by-chapter execution history.
 
