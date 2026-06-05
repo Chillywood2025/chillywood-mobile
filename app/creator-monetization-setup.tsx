@@ -14,6 +14,7 @@ import {
   saveCreatorSandboxMonetizationConfig,
   type CreatorMonetizationConfig,
   type CreatorMonetizationSetupSourceType,
+  type CreatorMonetizationSetupTier,
 } from "../_lib/creatorMonetizationSetup";
 import { hasPlatformRoleMembership, readMyPlatformRoleMemberships, type PlatformRoleMembership } from "../_lib/moderation";
 import { resolveInternalTesterSandboxPurchaseMode } from "../_lib/monetization";
@@ -21,6 +22,14 @@ import { useSession } from "../_lib/session";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../components/ui/app-surface";
 
 const DEFAULT_EVENT_PASS_PROOF_SOURCE_ID = "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004";
+const CREATOR_MONETIZATION_COMPLETION_PROOF_SOURCES: Partial<Record<CreatorMonetizationSetupSourceType, string>> = {
+  event: DEFAULT_EVENT_PASS_PROOF_SOURCE_ID,
+  live_watch_party_access: "9b2f4e7d-2e8e-4d2f-93ef-40b06d317002",
+  live_watch_party_seat: "9b2f4e7d-2e8e-4d2f-93ef-40b06d317003",
+  merch_physical_good: "4121ff8c-b97f-4f90-860e-8b32fa83e7e5",
+  paid_content: "4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f",
+  watch_party_live: "9b2f4e7d-2e8e-4d2f-93ef-40b06d317001",
+};
 
 const sourceCopy: Record<CreatorMonetizationSetupSourceType, { label: string; placeholder: string; helper: string }> = {
   creator_tip: {
@@ -84,6 +93,10 @@ export default function CreatorMonetizationSetupScreen() {
     () => configs.find((config) => config.productKey === selectedTier.key && config.sourceId === sourceId),
     [configs, selectedTier.key, sourceId],
   );
+  const sourceForTier = useCallback((tier: CreatorMonetizationSetupTier) => {
+    if (tier.sourceType === "creator_tip" && user?.id) return user.id;
+    return CREATOR_MONETIZATION_COMPLETION_PROOF_SOURCES[tier.sourceType] ?? "";
+  }, [user?.id]);
 
   const refreshConfigs = useCallback(async () => {
     setBusy((current) => current ?? "refresh");
@@ -183,6 +196,49 @@ export default function CreatorMonetizationSetupScreen() {
       setBusy(null);
     }
   }, [allowed, busy, displayName, refreshConfigs, selectedTier, sourceId]);
+
+  const saveConfigForTier = useCallback(async (tier: CreatorMonetizationSetupTier, proofSourceId: string) => {
+    if (!allowed || busy) return null;
+    if (!isValidCreatorMonetizationSourceId(proofSourceId)) {
+      Alert.alert("Source UUID required", `A real ${sourceCopy[tier.sourceType].label.toLowerCase()} is required before saving ${tier.label}.`);
+      return null;
+    }
+    setBusy("save");
+    setStatus(`Saving ${tier.label} proof config...`);
+    try {
+      const config = await saveCreatorSandboxMonetizationConfig({
+        displayName: tier.label,
+        metadata: {
+          completion_matrix_proof: true,
+          rail: tier.providerRail,
+          setup_screen: "creator_monetization_setup",
+          unlocks: tier.unlocks,
+          safety: tier.safety,
+        },
+        productKey: tier.key,
+        sourceId: proofSourceId,
+        sourceType: tier.sourceType,
+      });
+      setSelectedKey(tier.key);
+      setSourceId(proofSourceId);
+      setDisplayName(tier.label);
+      setStatus([
+        `${tier.label} sandbox config saved.`,
+        `Product: ${config.providerProductId}`,
+        `Source: ${config.sourceType} / ${config.sourceId}`,
+        "Sandbox only / Not payable. No payout, publish, host power, or production money was created.",
+      ].join("\n"));
+      await refreshConfigs();
+      return config;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${tier.label} sandbox config could not be saved.`;
+      setStatus(message);
+      Alert.alert("Save stopped", message);
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  }, [allowed, busy, refreshConfigs]);
 
   const handleLaunch = useCallback(async (config: CreatorMonetizationConfig) => {
     if (!allowed || busy || !user?.id) return;
@@ -296,6 +352,56 @@ export default function CreatorMonetizationSetupScreen() {
                 <Text style={styles.tierBody}>{tier.unlocks}</Text>
                 <Text style={styles.tierSafety}>{tier.safety}</Text>
               </Pressable>
+            );
+          })}
+        </View>
+      </AppSection>
+
+      <AppSection
+        title="Completion proof checklist"
+        subtitle="Save each approved sandbox tier against the proved source fixture, then launch the matching sandbox rail one by one."
+        statusLabel={`${configs.length} saved`}
+        collapsible
+      >
+        <View style={styles.completionList}>
+          {APPROVED_CREATOR_SANDBOX_TIERS.map((tier) => {
+            const proofSourceId = sourceForTier(tier);
+            const saved = configs.find((config) => config.productKey === tier.key && config.sourceId === proofSourceId);
+            const sourceLabel = sourceCopy[tier.sourceType].label;
+            return (
+              <View key={tier.key} style={styles.completionRow}>
+                <View style={styles.completionHeader}>
+                  <View style={styles.completionCopy}>
+                    <Text style={styles.completionTitle}>{tier.label}</Text>
+                    <Text style={styles.completionSource}>{sourceLabel}: {proofSourceId || "current tester required"}</Text>
+                    <Text style={styles.completionSafety}>{tier.safety}</Text>
+                  </View>
+                  <AppStatusPill label={saved ? "Saved" : "Needs save"} tone={saved ? "success" : "warning"} />
+                </View>
+                <View style={styles.pillRow}>
+                  <AppStatusPill label="Sandbox only" tone="default" />
+                  <AppStatusPill label="Not payable" tone="warning" />
+                  <AppStatusPill label={tier.providerRail === "stripe_physical_goods" ? "Stripe physical" : "Google Play"} tone={tier.providerRail === "stripe_physical_goods" ? "premium" : "default"} />
+                </View>
+                <View style={styles.actionRow}>
+                  <AppActionButton
+                    disabled={!proofSourceId || busy !== null}
+                    label={saved ? "Save again" : "Save proof config"}
+                    loading={busy === "save" && selectedTier.key === tier.key}
+                    onPress={() => void saveConfigForTier(tier, proofSourceId)}
+                    style={styles.inlineAction}
+                    variant={saved ? "secondary" : "primary"}
+                  />
+                  <AppActionButton
+                    disabled={!saved || busy !== null}
+                    label={tier.providerRail === "stripe_physical_goods" ? "Open checkout" : "Launch purchase"}
+                    loading={busy === "launch" && selectedTier.key === tier.key}
+                    onPress={saved ? () => void handleLaunch(saved) : undefined}
+                    style={styles.inlineAction}
+                    variant="secondary"
+                  />
+                </View>
+              </View>
             );
           })}
         </View>
@@ -477,6 +583,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
+  completionCopy: {
+    flex: 1,
+    gap: 6,
+  },
+  completionHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  completionList: {
+    gap: 12,
+  },
+  completionRow: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.13)",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  completionSafety: {
+    color: "#AAB4C8",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  completionSource: {
+    color: "#9BD2FF",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+  },
+  completionTitle: {
+    color: "#F8FAFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
   container: {
     backgroundColor: "#0B0F17",
     gap: 18,
@@ -493,6 +637,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     lineHeight: 18,
+  },
+  inlineAction: {
+    flex: 1,
   },
   input: {
     backgroundColor: "rgba(255,255,255,0.07)",

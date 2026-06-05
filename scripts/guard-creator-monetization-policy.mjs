@@ -134,6 +134,14 @@ assertIncludes(channelSettings, "/creator-monetization-setup", "Platform Studio 
 assertIncludes(channelSettings, "Stripe is not used to charge Android users for in-app digital access.", "Android digital Stripe block copy");
 assertIncludes(creatorSetupRoute, "Creator setup / Internal sandbox", "creator setup route header");
 assertIncludes(creatorSetupRoute, "Arbitrary Android prices", "creator setup arbitrary price guard copy");
+assertIncludes(creatorSetupRoute, "Completion proof checklist", "creator setup completion matrix UI");
+assertIncludes(creatorSetupRoute, "Save each approved sandbox tier", "creator setup one-by-one proof copy");
+assertIncludes(creatorSetupRoute, "4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f", "creator setup paid content proof source");
+assertIncludes(creatorSetupRoute, "9b2f4e7d-2e8e-4d2f-93ef-40b06d317001", "creator setup ticket proof source");
+assertIncludes(creatorSetupRoute, "9b2f4e7d-2e8e-4d2f-93ef-40b06d317002", "creator setup live access proof source");
+assertIncludes(creatorSetupRoute, "9b2f4e7d-2e8e-4d2f-93ef-40b06d317003", "creator setup live seat proof source");
+assertIncludes(creatorSetupRoute, "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004", "creator setup event pass proof source");
+assertIncludes(creatorSetupRoute, "4121ff8c-b97f-4f90-860e-8b32fa83e7e5", "creator setup merch proof source");
 assertIncludes(creatorSetupRoute, "Payout readiness", "creator setup payout readiness section");
 assertIncludes(creatorSetupRoute, "Payout execution", "creator setup payout execution blocked copy");
 assertIncludes(channelSettings, "tab=monetization&focus=payouts", "old payout deep link maps to Monetization");
