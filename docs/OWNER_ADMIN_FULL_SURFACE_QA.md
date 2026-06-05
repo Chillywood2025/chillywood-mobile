@@ -4,6 +4,10 @@ Date: 2026-06-05
 
 Lane: Owner/Admin full-surface proof and staff-access stabilization
 
+Follow-up:
+
+`docs/OWNER_ADMIN_SEARCH_PERMISSION_AUDIT_HARDENING.md` supersedes this doc for the latest search, exact-targeting, scoped-permission preview, audit reason, keyboard, and stable test-ID details. The follow-up proof path is `/tmp/chillywood-owner-admin-search-permission-audit-proof-20260605/`, EAS Update group `fda01165-2608-4c82-8079-2436f429ad74`, Android update `019e99a0-3b76-7475-a129-cf3d787cd4f1`.
+
 Proof path:
 
 ```text
@@ -83,28 +87,47 @@ Stable test IDs and accessibility labels now cover:
 
 - `admin-section-*`
 - `admin-main-tab-*`
-- `admin-search-input`
+- `admin-user-search-input`
+- `admin-user-search-submit-button`
+- `admin-user-search-clear-button`
+- `admin-user-search-result-row`
+- `admin-user-search-empty-state`
+- `admin-user-search-error-state`
 - `admin-search-scope-*`
 - `admin-search-result-chip-*`
 - `admin-search-clear-recent-button`
 - `admin-search-recent-*`
 - `admin-search-result-*`
+- `admin-selected-user-summary`
 - `admin-staff-role-email-input`
 - `admin-staff-role-target-admin`
 - `admin-staff-role-target-moderator`
 - `admin-staff-role-reason-input`
-- `admin-staff-role-grant-button`
-- `admin-staff-role-remove-button`
+- `admin-staff-grant-button`
+- `admin-staff-revoke-button`
 - `admin-staff-role-action-notice`
 - `admin-staff-permission-email-input`
 - `admin-staff-permission-load-button`
 - `admin-staff-permission-*`
 - `admin-staff-permission-action-notice`
-- `admin-staff-permission-reset-button`
-- `admin-staff-permission-save-button`
+- `admin-scoped-permission-matrix`
+- `admin-permission-template-shortcut`
+- `admin-permission-active-summary`
+- `admin-permission-expired-summary`
+- `admin-permission-will-grant-summary`
+- `admin-permission-will-revoke-summary`
+- `admin-permission-expiration-input`
+- `admin-permission-audit-reason-input`
+- `admin-permission-reset-button`
+- `admin-permission-save-button`
 - `admin-role-confirm-modal`
-- `admin-role-confirm-cancel-button`
-- `admin-role-confirm-submit-button`
+- `admin-staff-grant-confirm-modal`
+- `admin-staff-revoke-confirm-modal`
+- `admin-staff-confirm-cancel-button`
+- `admin-staff-confirm-submit-button`
+- `admin-protected-owner-rules-section`
+- `admin-permission-audit-section`
+- `admin-post-revoke-denial-screen`
 
 ## Device Proof
 

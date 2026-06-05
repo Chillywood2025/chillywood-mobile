@@ -4,6 +4,8 @@ Updated: June 4, 2026
 
 This lane modernizes repeated Owner/Admin tab interactions without changing backend authority, role safety, money state, LiveKit behavior, route ownership, Player behavior, or terminology.
 
+Latest follow-up: `docs/OWNER_ADMIN_SEARCH_PERMISSION_AUDIT_HARDENING.md` records the June 5, 2026 hardening pass for search clarity, exact target summaries, scoped permission active/expired/will-change previews, audit reason confirmation copy, keyboard-safe Grant/Revoke cancel behavior, and stable test IDs. Proof path: `/tmp/chillywood-owner-admin-search-permission-audit-proof-20260605/`.
+
 ## Scope
 
 Modernized surfaces:
@@ -26,14 +28,16 @@ Reusable UI pattern added in `app/admin.tsx`:
 
 The dense stacked-card permission editor now presents:
 
-- compact draft summary for saved set, draft set, will grant, and will revoke
-- inline optional ISO expiration guidance and invalid-date error
+- compact draft summary for active, expired, unchanged, pending draft, will grant, and will revoke
+- inline optional ISO expiration guidance, invalid-date error, and future-date enforcement
 - audit reason required copy
 - save disabled until a loaded staff account has a changed permission draft, valid expiration, and sufficient audit reason
 - reset disabled until there are draft changes
 - an elevated Reset Draft / Save Permissions action bar
 - a whole-card Permission Templates shortcut
 - a collapsible Protected Owner Rules section
+
+The June 5 hardening pass also adds exact selected-target summaries before staff Grant/Revoke or scoped permission save. The summary shows masked target/email, short user id when loaded, current role status, selected role, permission summary, protected warning, and audit reason readiness.
 
 Protected rules are unchanged:
 

@@ -2554,6 +2554,7 @@ const OwnerQuickLinkCard = ({
   onPress,
   statusLabel,
   statusTone = "info",
+  testID,
   title,
 }: {
   body: string;
@@ -2562,6 +2563,7 @@ const OwnerQuickLinkCard = ({
   onPress?: () => void;
   statusLabel?: string;
   statusTone?: OwnerControlTone;
+  testID?: string;
   title: string;
 }) => (
   <TouchableOpacity
@@ -2572,6 +2574,7 @@ const OwnerQuickLinkCard = ({
     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
     onPress={onPress}
     style={[styles.ownerQuickLinkCard, disabled && styles.configSaveBtnDisabled]}
+    testID={testID}
   >
     <View style={styles.ownerQuickLinkCopy}>
       <View style={styles.ownerQuickLinkTitleRow}>
@@ -2602,8 +2605,8 @@ const OwnerRuleList = ({ rows }: { rows: { label: string; status?: string; value
   </View>
 );
 
-const OwnerPermissionDraftSummary = ({ rows }: { rows: { label: string; value: string }[] }) => (
-  <View style={styles.ownerDraftSummaryGrid}>
+const OwnerPermissionDraftSummary = ({ rows, testID }: { rows: { label: string; value: string }[]; testID?: string }) => (
+  <View style={styles.ownerDraftSummaryGrid} testID={testID}>
     {rows.map((row) => (
       <View key={row.label} style={styles.ownerDraftSummaryTile}>
         <Text style={styles.ownerDraftSummaryLabel}>{row.label}</Text>
@@ -3787,11 +3790,15 @@ export default function AdminStudioScreen() {
   const staffPermissionExpiresAtTrimmed = staffPermissionExpiresAt.trim();
   const staffPermissionEmailValid = looksLikeEmail(normalizedStaffPermissionEmail);
   const staffPermissionExpiresAtValid = !staffPermissionExpiresAtTrimmed || Number.isFinite(Date.parse(staffPermissionExpiresAtTrimmed));
+  const staffPermissionExpiresAtInPast = staffPermissionExpiresAtValid
+    && !!staffPermissionExpiresAtTrimmed
+    && Date.parse(staffPermissionExpiresAtTrimmed) <= Date.now();
   const staffPermissionCanReset = staffPermissionDraftChanged && staffPermissionBusy === null;
   const canSaveStaffPermissions = canManageStaffPermissions
     && staffPermissionDraftChanged
     && staffPermissionReason.trim().length >= 6
     && staffPermissionExpiresAtValid
+    && !staffPermissionExpiresAtInPast
     && staffPermissionBusy === null;
   const staffPermissionActionGuidance = staffPermissionEmail && !staffPermissionEmailValid
     ? "Use a full staff email address before loading or saving permissions."
@@ -3803,11 +3810,44 @@ export default function AdminStudioScreen() {
         : "Tap permission chips to prepare a backed permission change."
       : !staffPermissionExpiresAtValid
         ? "Use a valid ISO date/time for expiration, or leave it blank."
+        : staffPermissionExpiresAtInPast
+          ? "Expiration must be in the future, or left blank for until-revoked behavior."
         : staffPermissionReason.trim().length < 6
           ? "Add an audit reason of at least 6 characters before saving."
           : canSaveStaffPermissions
             ? "Ready for backed scoped permission confirmation."
             : "Permission save is waiting for the current action to finish.";
+  const buildStaffTargetRows = useCallback((email: string, selectedRole?: PlatformStaffManagementRole) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const roleRows = platformRoleRoster.filter((entry) => entry.email?.toLowerCase() === normalizedEmail);
+    const directoryRow = adminUsersReadModel.items.find((entry) => entry.email?.toLowerCase() === normalizedEmail) ?? null;
+    const activeRoleRows = roleRows.filter((entry) => entry.status === "active");
+    const protectedOwner = activeRoleRows.some((entry) => entry.role === "owner");
+    const permissionKeys = Array.from(new Set(roleRows.flatMap((entry) => entry.permissionKeys)));
+
+    return [
+      { label: "Target", value: normalizedEmail ? (directoryRow?.identityLabel ? maskOperatorIdentity(directoryRow.identityLabel) : maskOperatorIdentity(normalizedEmail)) : "no target selected" },
+      { label: "Email", value: normalizedEmail ? maskOperatorIdentity(normalizedEmail) : "enter a full email" },
+      { label: "User ID", value: directoryRow?.userId ? formatCompactIdentifier(directoryRow.userId) : roleRows[0]?.userId ? formatCompactIdentifier(roleRows[0].userId) : "not loaded" },
+      { label: "Current role status", value: activeRoleRows.length ? activeRoleRows.map((entry) => `${formatPlatformRoleDisplayLabel(entry.role)} active`).join(" · ") : roleRows.length ? "No active staff role" : "Regular user or not loaded" },
+      { label: "Selected role", value: selectedRole ? formatPlatformRoleDisplayLabel(selectedRole) : "not selected" },
+      { label: "Permissions", value: permissionKeys.length ? formatPermissionSummary(permissionKeys) : "No active scoped permissions loaded" },
+      { label: "Protected warning", value: protectedOwner ? "Owner-protected target; backend final Owner and self-grant rules still apply." : "No active Owner role detected in loaded rows." },
+    ];
+  }, [adminUsersReadModel.items, platformRoleRoster]);
+  const staffRoleTargetRows = useMemo(
+    () => buildStaffTargetRows(normalizedStaffRoleEmail, staffRoleTarget),
+    [buildStaffTargetRows, normalizedStaffRoleEmail, staffRoleTarget],
+  );
+  const staffPermissionTargetRows = useMemo(
+    () => buildStaffTargetRows(normalizedStaffPermissionEmail),
+    [buildStaffTargetRows, normalizedStaffPermissionEmail],
+  );
+  const activePermissionSummary = staffPermissionSavedKeys ? formatPermissionSummary(staffPermissionSavedKeys) : "Load current permissions first";
+  const expiredPermissionSummary = "Expired grants are filtered out by the backed permission reader and do not count as active.";
+  const unchangedPermissionKeys = staffPermissionSavedKeys
+    ? staffPermissionSavedKeys.filter((key) => staffPermissionSelectedKeys.includes(key))
+    : [];
   const openAdminDrilldown = useCallback((detail: AdminDrilldownDetail) => {
     setSelectedAdminDrilldown(detail);
   }, []);
@@ -9077,6 +9117,10 @@ export default function AdminStudioScreen() {
       setAdminOpsNotice("Expiration must be a valid ISO date/time or left blank.");
       return;
     }
+    if (staffPermissionExpiresAtInPast) {
+      setAdminOpsNotice("Expiration must be in the future, or left blank for until-revoked behavior.");
+      return;
+    }
 
     setRoleConfirm({
       kind: "save_permissions",
@@ -9090,6 +9134,7 @@ export default function AdminStudioScreen() {
     staffPermissionDraftChanged,
     staffPermissionEmail,
     staffPermissionExpiresAtValid,
+    staffPermissionExpiresAtInPast,
     staffPermissionGrantDelta.length,
     staffPermissionLoadedEmail,
     staffPermissionReason,
@@ -11110,7 +11155,7 @@ export default function AdminStudioScreen() {
         </View>
 
         <TextInput
-          testID="admin-search-input"
+          testID="admin-user-search-input"
           value={adminSearchQuery}
           onChangeText={setAdminSearchQuery}
           accessibilityLabel="Admin search input"
@@ -11120,6 +11165,28 @@ export default function AdminStudioScreen() {
           autoCapitalize="none"
           autoCorrect={false}
         />
+        <View style={styles.configListActions}>
+          <OwnerAdminActionButton
+            label={adminSearchAuditLoading ? "Searching..." : "Search"}
+            loading={adminSearchAuditLoading}
+            onPress={() => {
+              setAdminSearchDebouncedQuery(adminSearchQuery);
+              if (adminSearchScope === "users" || adminSearchScope === "all") void loadAdminUsersReadModel(adminSearchQuery.trim());
+            }}
+            testID="admin-user-search-submit-button"
+            variant="secondary"
+          />
+          <OwnerAdminActionButton
+            label="Clear Search"
+            onPress={() => {
+              setAdminSearchQuery("");
+              setAdminSearchDebouncedQuery("");
+              setAdminSearchAuditReceipt(null);
+            }}
+            testID="admin-user-search-clear-button"
+            variant="ghost"
+          />
+        </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.adminSearchScopeRow}>
           {availableAdminSearchScopes.map((scope) => {
@@ -11205,7 +11272,7 @@ export default function AdminStudioScreen() {
               {adminSearchResults.map((result) => (
                 <TouchableOpacity
                   key={result.id}
-                  testID={`admin-search-result-${result.scope}`}
+                  testID="admin-user-search-result-row"
                   accessibilityLabel={`Open admin search result ${result.title}`}
                   accessibilityRole="button"
                   activeOpacity={0.86}
@@ -11225,7 +11292,7 @@ export default function AdminStudioScreen() {
               ))}
             </View>
           ) : (
-            <View testID="admin-search-empty" style={styles.configListRowSubtle}>
+            <View testID="admin-user-search-empty-state" style={styles.configListRowSubtle}>
               <Text style={styles.configListTitle}>No admin matches</Text>
               <Text style={styles.configListBody}>Try another user, report, money event, room, or case.</Text>
             </View>
@@ -11238,7 +11305,11 @@ export default function AdminStudioScreen() {
         )}
 
         {queryReady || adminSearchAuditReceipt ? (
-          <View testID="admin-search-audit-status" style={styles.configListRowSubtle}>
+          <View testID="admin-search-audit-status">
+          <View
+            testID={adminSearchAuditReceipt && !adminSearchAuditReceipt.ok ? "admin-user-search-error-state" : undefined}
+            style={styles.configListRowSubtle}
+          >
             <View style={styles.ownerSectionHeaderRow}>
               <Text style={styles.configListTitle}>{auditTitle}</Text>
               <OwnerStatusPill
@@ -11247,6 +11318,7 @@ export default function AdminStudioScreen() {
               />
             </View>
             <Text style={styles.configListBody}>{auditBody}</Text>
+          </View>
           </View>
         ) : null}
       </View>
@@ -11302,15 +11374,17 @@ export default function AdminStudioScreen() {
 
   if (!canAccessAdmin) {
     return (
-      <BetaAccessScreen
-        title="This account does not have an active admin role"
-        body={
-          moderationAccess.isLocalTestHelper
-            ? "This account is recognized by the local test helper, but Admin access requires an active owner, operator, or moderator platform role."
-            : "Admin access requires an active owner, operator, or moderator platform role."
-        }
-        operatorOnly
-      />
+      <View testID="admin-post-revoke-denial-screen" style={{ flex: 1 }}>
+        <BetaAccessScreen
+          title="This account does not have an active admin role"
+          body={
+            moderationAccess.isLocalTestHelper
+              ? "This account is recognized by the local test helper, but Admin access requires an active owner, operator, or moderator platform role."
+              : "Admin access requires an active owner, operator, or moderator platform role."
+          }
+          operatorOnly
+        />
+      </View>
     );
   }
 
@@ -12272,7 +12346,7 @@ export default function AdminStudioScreen() {
                     />
                   )}
                   {revokedPlatformRoleRoster.length ? (
-                    <View style={styles.ownerNestedProofPanel}>
+                    <View style={styles.ownerNestedProofPanel} testID="admin-permission-audit-section">
                       <View style={styles.ownerSectionHeaderRow}>
                         <Text style={styles.ownerSectionTitle}>Revoked / History Rows</Text>
                         <OwnerStatusPill label={`${revokedPlatformRoleRoster.length} rows`} tone="locked" />
@@ -12287,7 +12361,11 @@ export default function AdminStudioScreen() {
                         />
                       ))}
                     </View>
-                  ) : null}
+                  ) : (
+                    <View style={styles.ownerNestedProofPanel} testID="admin-permission-audit-section">
+                      <OwnerDisabledReason reason="Audit history not available here yet for this slice. Staff role and permission writes still use the backed audit RPC paths." />
+                    </View>
+                  )}
                 </OwnerAdminSection>
 
                 <OwnerAdminSection
@@ -12346,19 +12424,26 @@ export default function AdminStudioScreen() {
                       <Text style={staffRoleActionGuidance === "Ready for backed staff role confirmation." ? styles.ownerFieldHint : styles.ownerInlineError}>
                         {staffRoleActionGuidance}
                       </Text>
+                      <OwnerPermissionDraftSummary
+                        rows={[
+                          ...staffRoleTargetRows,
+                          { label: "Audit reason", value: staffRoleReasonValid ? "Ready" : "Required before confirmation" },
+                        ]}
+                        testID="admin-selected-user-summary"
+                      />
                       <View style={styles.configListActions}>
                         <OwnerAdminActionButton
                           label={staffRoleBusy === "grant" ? "Granting..." : "Grant Role"}
                           loading={staffRoleBusy === "grant"}
                           onPress={confirmStaffRoleGrant}
-                          testID="admin-staff-role-grant-button"
+                          testID="admin-staff-grant-button"
                           variant="primary"
                         />
                         <OwnerAdminActionButton
                           label={staffRoleBusy === "revoke" ? "Removing..." : "Remove Role"}
                           loading={staffRoleBusy === "revoke"}
                           onPress={() => confirmStaffRoleRevoke()}
-                          testID="admin-staff-role-remove-button"
+                          testID="admin-staff-revoke-button"
                           variant="danger"
                         />
                       </View>
@@ -12383,7 +12468,9 @@ export default function AdminStudioScreen() {
                   subtitle="Step 2. Load an existing staff account, then tune scoped permissions for that staff role."
                   title="Step 2: Scoped Permission Matrix"
                 >
-                  <Text style={styles.contentSignalBody}>Tap any permission to toggle it. Multiple permissions can stay selected before saving the full backed set.</Text>
+                  <View testID="admin-scoped-permission-matrix">
+                    <Text style={styles.contentSignalBody}>Tap any permission to toggle it. Multiple permissions can stay selected before saving the full backed set.</Text>
+                  </View>
                   {canManageStaffPermissions ? (
                     <>
                       <TextInput
@@ -12396,6 +12483,13 @@ export default function AdminStudioScreen() {
                         keyboardType="email-address"
                         style={styles.input}
                         testID="admin-staff-permission-email-input"
+                      />
+                      <OwnerPermissionDraftSummary
+                        rows={[
+                          ...staffPermissionTargetRows,
+                          { label: "Audit reason", value: staffPermissionReason.trim().length >= 6 ? "Ready" : "Required before save" },
+                        ]}
+                        testID="admin-selected-user-summary"
                       />
                       <View style={styles.configListActions}>
                         <TouchableOpacity
@@ -12448,11 +12542,31 @@ export default function AdminStudioScreen() {
                       </View>
                       <OwnerPermissionDraftSummary
                         rows={[
-                          { label: "Saved Set", value: staffPermissionSavedKeys ? formatPermissionSummary(staffPermissionSavedKeys) : "load current permissions first" },
-                          { label: "Draft Set", value: formatPermissionSummary(staffPermissionSelectedKeys) },
+                          { label: "Active", value: activePermissionSummary },
+                          { label: "Expired", value: expiredPermissionSummary },
+                          { label: "Unchanged", value: formatPermissionSummary(unchangedPermissionKeys) },
+                          { label: "Pending Draft", value: formatPermissionSummary(staffPermissionSelectedKeys) },
+                        ]}
+                        testID="admin-permission-active-summary"
+                      />
+                      <OwnerPermissionDraftSummary
+                        rows={[
                           { label: "Will Grant", value: formatPermissionSummary(staffPermissionGrantDelta) },
                           { label: "Will Revoke", value: formatPermissionSummary(staffPermissionRevokeDelta) },
                         ]}
+                        testID="admin-permission-will-grant-summary"
+                      />
+                      <OwnerPermissionDraftSummary
+                        rows={[
+                          { label: "Will Revoke", value: formatPermissionSummary(staffPermissionRevokeDelta) },
+                        ]}
+                        testID="admin-permission-will-revoke-summary"
+                      />
+                      <OwnerPermissionDraftSummary
+                        rows={[
+                          { label: "Expired", value: expiredPermissionSummary },
+                        ]}
+                        testID="admin-permission-expired-summary"
                       />
                       <Text style={styles.ownerFieldLabel}>Expires at</Text>
                       <TextInput
@@ -12462,9 +12576,12 @@ export default function AdminStudioScreen() {
                         placeholderTextColor="#788196"
                         style={[styles.input, !staffPermissionExpiresAtValid && styles.ownerInputError]}
                         autoCapitalize="none"
+                        testID="admin-permission-expiration-input"
                       />
-                      {!staffPermissionExpiresAtValid ? (
-                        <Text style={styles.ownerInlineError}>Use a valid ISO date/time, or leave this blank.</Text>
+                      {!staffPermissionExpiresAtValid || staffPermissionExpiresAtInPast ? (
+                        <Text style={styles.ownerInlineError}>
+                          {!staffPermissionExpiresAtValid ? "Use a valid ISO date/time, or leave this blank." : "Expiration must be in the future, or leave this blank."}
+                        </Text>
                       ) : (
                         <Text style={styles.ownerFieldHint}>Optional. Leave blank for the backend default / until-revoked behavior.</Text>
                       )}
@@ -12475,6 +12592,7 @@ export default function AdminStudioScreen() {
                         placeholder="Audit reason required"
                         placeholderTextColor="#788196"
                         style={styles.input}
+                        testID="admin-permission-audit-reason-input"
                       />
                       {staffPermissionReason.trim().length > 0 && staffPermissionReason.trim().length < 6 ? (
                         <Text style={styles.ownerInlineError}>Audit reason needs at least 6 characters before save is enabled.</Text>
@@ -12495,14 +12613,14 @@ export default function AdminStudioScreen() {
                         <OwnerAdminActionButton
                           label="Reset Draft"
                           onPress={resetStaffPermissionDraft}
-                          testID="admin-staff-permission-reset-button"
+                          testID="admin-permission-reset-button"
                           variant="secondary"
                         />
                         <OwnerAdminActionButton
                           label="Save Permissions"
                           loading={staffPermissionBusy === "save"}
                           onPress={queueStaffPermissionSave}
-                          testID="admin-staff-permission-save-button"
+                          testID="admin-permission-save-button"
                           variant="primary"
                         />
                       </OwnerStickyActionBar>
@@ -12519,6 +12637,7 @@ export default function AdminStudioScreen() {
                   onPress={() => setOperatorTab("permission-templates")}
                   statusLabel={canManagePermissionTemplates ? "Connected" : "Not Connected"}
                   statusTone={canManagePermissionTemplates ? "info" : "locked"}
+                  testID="admin-permission-template-shortcut"
                   title="Permission Template Presets"
                 />
 
@@ -12528,16 +12647,18 @@ export default function AdminStudioScreen() {
                   subtitle="These rules are unchanged and remain enforced by the backend."
                   title="Protected Owner Rules"
                 >
-                  <OwnerRuleList
-                    rows={[
-                      { label: "Owner Records", status: "Protected", value: "At least one active Owner must remain." },
-                      { label: "Owner Grants", status: "Protected", value: "Dedicated bootstrap/protected flow only." },
-                      { label: "Admin Grants", status: "Guarded", value: "Owner or admin_grants; never self-grant." },
-                      { label: "Moderator Grants", status: "Guarded", value: "Owner or manage_moderators." },
-                      { label: "Self-grant", status: "Blocked", value: "Users cannot grant privileged roles to themselves." },
-                      { label: "Final Owner removal", status: "Blocked", value: "The last active Owner cannot be removed." },
-                    ]}
-                  />
+                  <View testID="admin-protected-owner-rules-section">
+                    <OwnerRuleList
+                      rows={[
+                        { label: "Owner Records", status: "Protected", value: "At least one active Owner must remain." },
+                        { label: "Owner Grants", status: "Protected", value: "Dedicated bootstrap/protected flow only." },
+                        { label: "Admin Grants", status: "Guarded", value: "Owner or admin_grants; never self-grant." },
+                        { label: "Moderator Grants", status: "Guarded", value: "Owner or manage_moderators." },
+                        { label: "Self-grant", status: "Blocked", value: "Users cannot grant privileged roles to themselves." },
+                        { label: "Final Owner removal", status: "Blocked", value: "The last active Owner cannot be removed." },
+                      ]}
+                    />
+                  </View>
                 </OwnerAdminSection>
 
                 <View style={styles.contentPanel}>
@@ -18878,7 +18999,10 @@ export default function AdminStudioScreen() {
         }}
       >
         <View style={styles.confirmBackdrop}>
-          <View style={styles.confirmSheet} testID="admin-role-confirm-modal">
+          <View
+            style={styles.confirmSheet}
+            testID={roleConfirm?.kind === "grant_role" ? "admin-staff-grant-confirm-modal" : roleConfirm?.kind === "revoke_role" ? "admin-staff-revoke-confirm-modal" : "admin-role-confirm-modal"}
+          >
             <Text style={styles.confirmKicker}>Roles & Permissions</Text>
             <Text style={styles.confirmTitle}>{roleConfirm?.title ?? "Confirm Role Action"}</Text>
             <Text style={styles.confirmBody}>
@@ -18889,6 +19013,11 @@ export default function AdminStudioScreen() {
                 {roleConfirm?.kind === "save_permissions"
                   ? `Selected set: ${formatPermissionSummary(roleConfirm.selectedPermissions)}`
                   : `Target role: ${roleConfirm ? formatPlatformRoleDisplayLabel(roleConfirm.role) : "Unknown"}`}
+              </Text>
+              <Text style={styles.confirmMetaText}>
+                {roleConfirm?.kind === "save_permissions"
+                  ? `Audit reason: ${formatAuditDisplayText(staffPermissionReason) || "missing"}`
+                  : `Audit reason: ${formatAuditDisplayText(staffRoleReason) || "missing"}`}
               </Text>
               <Text style={styles.confirmMetaText}>Audit reason is required and server-side role protection remains enforced.</Text>
               <Text style={styles.confirmMetaText}>No room, LiveKit, Premium, Player, upload, chat, or payment behavior changes.</Text>
@@ -18903,7 +19032,7 @@ export default function AdminStudioScreen() {
                   setRoleConfirm(null);
                 }}
                 disabled={staffRoleBusy !== null || staffPermissionBusy !== null}
-                testID="admin-role-confirm-cancel-button"
+                testID="admin-staff-confirm-cancel-button"
               >
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -18916,7 +19045,7 @@ export default function AdminStudioScreen() {
                 ]}
                 onPress={() => void applyRoleConfirmation()}
                 disabled={staffRoleBusy !== null || staffPermissionBusy !== null}
-                testID="admin-role-confirm-submit-button"
+                testID="admin-staff-confirm-submit-button"
               >
                 {staffRoleBusy !== null || staffPermissionBusy !== null ? (
                   <ActivityIndicator color="#fff" />
