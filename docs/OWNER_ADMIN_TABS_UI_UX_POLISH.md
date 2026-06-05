@@ -4,7 +4,9 @@ Updated: June 4, 2026
 
 This lane modernizes repeated Owner/Admin tab interactions without changing backend authority, role safety, money state, LiveKit behavior, route ownership, Player behavior, or terminology.
 
-Latest follow-up: `docs/OWNER_ADMIN_SEARCH_PERMISSION_AUDIT_HARDENING.md` records the June 5, 2026 hardening pass for search clarity, exact target summaries, scoped permission active/expired/will-change previews, audit reason confirmation copy, keyboard-safe Grant/Revoke cancel behavior, and stable test IDs. Proof path: `/tmp/chillywood-owner-admin-search-permission-audit-proof-20260605/`.
+Latest follow-up: `docs/OWNER_ADMIN_BUTTON_FUNCTION_PROOF.md` records the June 5, 2026 button-function pass for the Staff Access and Scoped Permission Matrix controls shown in user screenshots. `Grant Role` and `Remove Role` now remain reachable above the target summary after the keyboard is dismissed, scoped permission chips show nearby feedback before `Load Current`, `Use Step 1 Target` copies the Step 1 target into Step 2, and representative chips across Support, Moderation, Live Ops, Legal, and Security/Admin were proved on the Play-installed Android device. Proof path: `/tmp/chillywood-owner-admin-button-function-proof-20260605/`.
+
+Previous follow-up: `docs/OWNER_ADMIN_SEARCH_PERMISSION_AUDIT_HARDENING.md` records the June 5, 2026 hardening pass for search clarity, exact target summaries, scoped permission active/expired/will-change previews, audit reason confirmation copy, keyboard-safe Grant/Revoke cancel behavior, and stable test IDs. Proof path: `/tmp/chillywood-owner-admin-search-permission-audit-proof-20260605/`.
 
 ## Scope
 

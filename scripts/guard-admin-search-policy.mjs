@@ -50,11 +50,13 @@ assertIncludes(admin, 'testID="admin-selected-user-summary"', "Admin selected us
 assertIncludes(admin, '"admin-user-search-error-state"', "Admin user search error state");
 assertIncludes(admin, 'testID="admin-staff-grant-button"', "Admin staff grant button");
 assertIncludes(admin, 'testID="admin-staff-revoke-button"', "Admin staff revoke button");
+assertIncludes(admin, 'testID="admin-staff-permission-use-step-one-target-button"', "Admin copy Step 1 target into permission editor button");
 assertIncludes(admin, '"admin-staff-grant-confirm-modal"', "Admin staff grant confirmation modal");
 assertIncludes(admin, '"admin-staff-revoke-confirm-modal"', "Admin staff revoke confirmation modal");
 assertIncludes(admin, 'testID="admin-staff-confirm-cancel-button"', "Admin staff confirmation cancel");
 assertIncludes(admin, 'testID="admin-staff-confirm-submit-button"', "Admin staff confirmation submit");
 assertIncludes(admin, 'testID="admin-scoped-permission-matrix"', "Admin scoped permission matrix");
+assertIncludes(admin, 'testID="admin-scoped-permission-inline-notice"', "Admin scoped permission inline notice");
 assertIncludes(admin, 'testID="admin-permission-template-shortcut"', "Admin permission template shortcut");
 assertIncludes(admin, 'testID="admin-permission-will-grant-summary"', "Admin permission will-grant summary");
 assertIncludes(admin, 'testID="admin-permission-will-revoke-summary"', "Admin permission will-revoke summary");

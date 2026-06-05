@@ -802,7 +802,7 @@ const staffPermissionOptions: readonly { key: PlatformStaffPermissionKey; label:
   { key: "manage_moderators", label: "Moderator Grants" },
   { key: "audit_review", label: "Audit Review" },
   { key: "security_review", label: "Security Review" },
-  { key: "staff_permission_templates", label: "Permission Templates" },
+  { key: "staff_permission_templates", label: "Template Access" },
   { key: "legal_request_intake", label: "Legal Intake" },
 ];
 const staffPermissionLabelByKey = staffPermissionOptions.reduce<Record<PlatformStaffPermissionKey, string>>((acc, option) => {
@@ -3803,7 +3803,7 @@ export default function AdminStudioScreen() {
   const staffPermissionActionGuidance = staffPermissionEmail && !staffPermissionEmailValid
     ? "Use a full staff email address before loading or saving permissions."
     : staffPermissionSavedKeys === null
-    ? "Load current permissions before toggling or saving scoped access."
+    ? "Load Current before saving. Permission chips stay tappable and will explain what is missing."
     : !staffPermissionDraftChanged
       ? staffPermissionCanReset
         ? "Draft can be reset to the backed saved set."
@@ -3848,6 +3848,28 @@ export default function AdminStudioScreen() {
   const unchangedPermissionKeys = staffPermissionSavedKeys
     ? staffPermissionSavedKeys.filter((key) => staffPermissionSelectedKeys.includes(key))
     : [];
+  const handleStaffPermissionEmailChange = useCallback((value: string) => {
+    setStaffPermissionEmail(value);
+    const normalizedValue = value.trim().toLowerCase();
+    if (staffPermissionLoadedEmail && normalizedValue !== staffPermissionLoadedEmail) {
+      setStaffPermissionSavedKeys(null);
+      setStaffPermissionSelectedKeys([]);
+      setStaffPermissionLoadedEmail("");
+      setAdminOpsNotice("Permission target changed. Load Current again before saving or toggling scoped permissions.");
+    }
+  }, [staffPermissionLoadedEmail]);
+  const copyStaffRoleTargetToPermissionEditor = useCallback(() => {
+    Keyboard.dismiss();
+    if (!staffRoleEmailValid) {
+      setAdminOpsNotice("Enter a valid Step 1 staff email before copying it into the scoped permission editor.");
+      return;
+    }
+    setStaffPermissionEmail(normalizedStaffRoleEmail);
+    setStaffPermissionSavedKeys(null);
+    setStaffPermissionSelectedKeys([]);
+    setStaffPermissionLoadedEmail("");
+    setAdminOpsNotice(`Copied ${maskOperatorIdentity(normalizedStaffRoleEmail)} into Step 2. Tap Load Current before saving scoped permissions.`);
+  }, [normalizedStaffRoleEmail, staffRoleEmailValid]);
   const openAdminDrilldown = useCallback((detail: AdminDrilldownDetail) => {
     setSelectedAdminDrilldown(detail);
   }, []);
@@ -9082,6 +9104,38 @@ export default function AdminStudioScreen() {
     ));
   }, [canManageStaffPermissions, staffPermissionBusy]);
 
+  const handleStaffPermissionChipPress = useCallback((permissionKey: PlatformStaffPermissionKey) => {
+    if (staffPermissionBusy !== null) {
+      setAdminOpsNotice("Wait for the current scoped permission action to finish before changing chips.");
+      return;
+    }
+    if (!canManageStaffPermissions) {
+      setAdminOpsNotice("Scoped permission editing is Owner-only in the current backend.");
+      return;
+    }
+    if (staffPermissionSavedKeys === null) {
+      const permissionLabel = staffPermissionLabelByKey[permissionKey] ?? "this";
+      if (staffPermissionEmailValid) {
+        setAdminOpsNotice(`Load Current for ${maskOperatorIdentity(normalizedStaffPermissionEmail)} before toggling ${permissionLabel}. This prevents expired grants from being silently resurrected.`);
+      } else if (staffRoleEmailValid) {
+        setAdminOpsNotice(`Tap Use Step 1 Target, then Load Current before toggling ${permissionLabel}.`);
+      } else {
+        setAdminOpsNotice(`Choose a staff target and Load Current before toggling ${permissionLabel}.`);
+      }
+      return;
+    }
+    toggleStaffPermissionDraft(permissionKey);
+    setAdminOpsNotice(`${staffPermissionLabelByKey[permissionKey] ?? "Permission"} draft updated. Review Will Grant / Will Revoke before saving.`);
+  }, [
+    canManageStaffPermissions,
+    normalizedStaffPermissionEmail,
+    staffPermissionBusy,
+    staffPermissionEmailValid,
+    staffPermissionSavedKeys,
+    staffRoleEmailValid,
+    toggleStaffPermissionDraft,
+  ]);
+
   const resetStaffPermissionDraft = useCallback(() => {
     if (staffPermissionSavedKeys === null) {
       setAdminOpsNotice("Load the current backed permission set before resetting a draft.");
@@ -11396,7 +11450,11 @@ export default function AdminStudioScreen() {
     >
       <View style={[styles.overlay, { backgroundColor: themePalette.screenOverlay }]} />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.headerBlock}>
           <View>
             <Text style={styles.kicker}>PRIVATE PLATFORM SURFACE</Text>
@@ -12386,6 +12444,8 @@ export default function AdminStudioScreen() {
                         accessibilityLabel="Staff role email"
                         autoCapitalize="none"
                         keyboardType="email-address"
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
                         style={styles.input}
                         testID="admin-staff-role-email-input"
                       />
@@ -12418,19 +12478,14 @@ export default function AdminStudioScreen() {
                         placeholder="Audit reason required"
                         placeholderTextColor="#788196"
                         accessibilityLabel="Staff role audit reason"
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
                         style={styles.input}
                         testID="admin-staff-role-reason-input"
                       />
                       <Text style={staffRoleActionGuidance === "Ready for backed staff role confirmation." ? styles.ownerFieldHint : styles.ownerInlineError}>
                         {staffRoleActionGuidance}
                       </Text>
-                      <OwnerPermissionDraftSummary
-                        rows={[
-                          ...staffRoleTargetRows,
-                          { label: "Audit reason", value: staffRoleReasonValid ? "Ready" : "Required before confirmation" },
-                        ]}
-                        testID="admin-selected-user-summary"
-                      />
                       <View style={styles.configListActions}>
                         <OwnerAdminActionButton
                           label={staffRoleBusy === "grant" ? "Granting..." : "Grant Role"}
@@ -12447,6 +12502,13 @@ export default function AdminStudioScreen() {
                           variant="danger"
                         />
                       </View>
+                      <OwnerPermissionDraftSummary
+                        rows={[
+                          ...staffRoleTargetRows,
+                          { label: "Audit reason", value: staffRoleReasonValid ? "Ready" : "Required before confirmation" },
+                        ]}
+                        testID="admin-selected-user-summary"
+                      />
                       {adminOpsNotice ? (
                         <Text
                           accessibilityLabel={`Staff role action status: ${adminOpsNotice}`}
@@ -12475,12 +12537,14 @@ export default function AdminStudioScreen() {
                     <>
                       <TextInput
                         value={staffPermissionEmail}
-                        onChangeText={setStaffPermissionEmail}
+                        onChangeText={handleStaffPermissionEmailChange}
                         placeholder="admin-or-moderator@example.com"
                         placeholderTextColor="#788196"
                         accessibilityLabel="Staff permission email"
                         autoCapitalize="none"
                         keyboardType="email-address"
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
                         style={styles.input}
                         testID="admin-staff-permission-email-input"
                       />
@@ -12492,6 +12556,15 @@ export default function AdminStudioScreen() {
                         testID="admin-selected-user-summary"
                       />
                       <View style={styles.configListActions}>
+                        <TouchableOpacity
+                          accessibilityLabel="Use Step 1 target for scoped permissions"
+                          accessibilityRole="button"
+                          style={styles.orderBtn}
+                          onPress={copyStaffRoleTargetToPermissionEditor}
+                          testID="admin-staff-permission-use-step-one-target-button"
+                        >
+                          <Text style={styles.orderBtnText}>Use Step 1 Target</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity
                           accessibilityLabel="Load current staff permissions"
                           accessibilityRole="button"
@@ -12521,13 +12594,7 @@ export default function AdminStudioScreen() {
                                       styles.toggleChip,
                                       selected && styles.toggleChipActive,
                                     ]}
-                                    onPress={() => {
-                                      if (staffPermissionSavedKeys === null) {
-                                        setAdminOpsNotice("Load current permissions before toggling scoped permission chips.");
-                                        return;
-                                      }
-                                      toggleStaffPermissionDraft(permissionKey);
-                                    }}
+                                    onPress={() => handleStaffPermissionChipPress(permissionKey)}
                                     testID={`admin-staff-permission-${permissionKey}`}
                                   >
                                     <Text style={[styles.toggleChipText, selected && styles.toggleChipTextActive]}>
@@ -12540,6 +12607,13 @@ export default function AdminStudioScreen() {
                           </View>
                         ))}
                       </View>
+                      <Text
+                        accessibilityLabel={`Scoped permission guidance: ${adminOpsNotice ?? staffPermissionActionGuidance}`}
+                        style={adminOpsNotice ? styles.ownerInlineNotice : styles.ownerFieldHint}
+                        testID="admin-scoped-permission-inline-notice"
+                      >
+                        {adminOpsNotice ?? staffPermissionActionGuidance}
+                      </Text>
                       <OwnerPermissionDraftSummary
                         rows={[
                           { label: "Active", value: activePermissionSummary },
@@ -12576,6 +12650,8 @@ export default function AdminStudioScreen() {
                         placeholderTextColor="#788196"
                         style={[styles.input, !staffPermissionExpiresAtValid && styles.ownerInputError]}
                         autoCapitalize="none"
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
                         testID="admin-permission-expiration-input"
                       />
                       {!staffPermissionExpiresAtValid || staffPermissionExpiresAtInPast ? (
@@ -12592,6 +12668,8 @@ export default function AdminStudioScreen() {
                         placeholder="Audit reason required"
                         placeholderTextColor="#788196"
                         style={styles.input}
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
                         testID="admin-permission-audit-reason-input"
                       />
                       {staffPermissionReason.trim().length > 0 && staffPermissionReason.trim().length < 6 ? (
@@ -20786,6 +20864,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 16,
     marginTop: -7,
+  },
+  ownerInlineNotice: {
+    color: "#D8E2FF",
+    fontSize: 11.5,
+    fontWeight: "800",
+    lineHeight: 16,
+    marginTop: 2,
   },
   ownerPill: {
     alignItems: "center",

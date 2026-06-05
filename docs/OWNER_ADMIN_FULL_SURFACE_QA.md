@@ -8,6 +8,10 @@ Follow-up:
 
 `docs/OWNER_ADMIN_SEARCH_PERMISSION_AUDIT_HARDENING.md` supersedes this doc for the latest search, exact-targeting, scoped-permission preview, audit reason, keyboard, and stable test-ID details. The follow-up proof path is `/tmp/chillywood-owner-admin-search-permission-audit-proof-20260605/`, EAS Update group `fda01165-2608-4c82-8079-2436f429ad74`, Android update `019e99a0-3b76-7475-a129-cf3d787cd4f1`.
 
+Button-function follow-up:
+
+`docs/OWNER_ADMIN_BUTTON_FUNCTION_PROOF.md` records the later June 5 proof for the user-reported buttons in the Staff Access and Scoped Permission Matrix screenshots. It fixed the Step 1 `Grant Role` / `Remove Role` reachability problem by moving those actions above the exact-target summary, added nearby scoped-permission chip guidance, added `Use Step 1 Target`, renamed the matrix chip `Permission Templates` to `Template Access`, and proved representative chips across Support, Moderation, Live Ops, Legal, and Security/Admin. Proof path: `/tmp/chillywood-owner-admin-button-function-proof-20260605/`; final EAS Update group `4d2e19a9-80c2-4326-a446-ff4bb481700d`; Android update `019e99d5-c372-780a-99b7-8d8f5c7bd028`.
+
 Proof path:
 
 ```text

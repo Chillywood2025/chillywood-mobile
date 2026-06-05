@@ -10,11 +10,19 @@ Proof path:
 /tmp/chillywood-owner-admin-search-permission-audit-proof-20260605/
 ```
 
+Button-function follow-up proof:
+
+```text
+/tmp/chillywood-owner-admin-button-function-proof-20260605/
+```
+
 ## Build And Device
 
 - Starting HEAD: `0e4c915`
 - EAS Update group: `fda01165-2608-4c82-8079-2436f429ad74`
 - Android update: `019e99a0-3b76-7475-a129-cf3d787cd4f1`
+- Button-function follow-up EAS Update group: `4d2e19a9-80c2-4326-a446-ff4bb481700d`
+- Button-function follow-up Android update: `019e99d5-c372-780a-99b7-8d8f5c7bd028`
 - Runtime: `1.0.0`
 - Device: `R5CR120QCBF`
 - Package: `com.chillywood.mobile`
@@ -89,11 +97,15 @@ Grant/Revoke controls are active and guarded:
 
 Device/Maestro proof opened and canceled both Grant and Revoke confirmation modals. No grant or revoke action was submitted from the UI during this proof.
 
+Follow-up device proof found a real reachability issue: after entering email and audit reason, the selected-target summary could push `Grant Role` and `Remove Role` below the current viewport, making them feel dead. The buttons now sit directly under the readiness line and above the target summary. The final proof opened and canceled both confirmation modals from that state with the keyboard dismissed.
+
 ## Scoped Permission Matrix
 
 The scoped permission editor has stable proof hooks:
 
 - `admin-scoped-permission-matrix`
+- `admin-scoped-permission-inline-notice`
+- `admin-staff-permission-use-step-one-target-button`
 - `admin-permission-template-shortcut`
 - `admin-permission-active-summary`
 - `admin-permission-expired-summary`
@@ -115,6 +127,10 @@ The preview separates:
 
 Expired grants are described as filtered out by the backed permission reader and not counted active. Past expiration values are blocked with inline copy: `Expiration must be in the future, or leave this blank.`
 
+Follow-up device proof found that scoped permission chips felt like dead buttons before `Load Current` because feedback was too far away. Permission chips now stay active and show immediate nearby guidance at `admin-scoped-permission-inline-notice`. `Use Step 1 Target` copies the Step 1 target into Step 2, and after `Load Current` the same chip handler updates the draft state. The chip label `Permission Templates` inside the matrix was renamed to `Template Access` to avoid looking like a second Admin-add route.
+
+The final device proof toggled representative chips across the shared handler: Support Inbox, Reports Review, Live Ops, Legal Intake, and Security Review. Reset Draft was tapped afterward so no permission draft was left pending.
+
 ## Audit Reason And Audit Trail
 
 Audit reason is required for staff Grant, Revoke, and scoped permission save. The reason status appears in the target summary and confirmation modal.
@@ -135,6 +151,7 @@ Result:
 - Confirmation cancel closes the modal.
 - The keyboard does not remain over the lower Admin action row.
 - Grant/Revoke action buttons remain visible and reachable after cancel.
+- The save/reset area is reachable with no keyboard covering it.
 
 ## Safety Proof
 

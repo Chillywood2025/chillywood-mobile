@@ -60,6 +60,7 @@ Static inventory is not behavioral proof. It is the coverage seed for device/man
 
 | Finding | Classification | Status |
 | --- | --- | --- |
+| Owner/Admin button-function follow-up fixed the screenshot-reported controls: Step 1 Grant/Remove actions are now reachable above the target summary, scoped permission chips show nearby feedback before Load Current, `Use Step 1 Target` copies the target into Step 2, and representative chips across Support/Moderation/Live Ops/Legal/Security toggled after Load Current. | Owner/Admin button proof | Proved in `/tmp/chillywood-owner-admin-button-function-proof-20260605/` |
 | Owner/Admin search and permission audit hardening now has a dedicated follow-up proof: regular-user search clarity, exact target summaries, grant/revoke confirmation cancel, active/expired permission previews, invalid expiration validation, keyboard-safe lower action rows, protected Owner rules, audit readout, cleanup readback, and post-revoke denial. | Owner/Admin proof | Proved in `/tmp/chillywood-owner-admin-search-permission-audit-proof-20260605/` |
 | Play build bottom nav has four visible bottom tabs: Home, Explore, Live, Library. | Current app truth | Proved |
 | Profile is not a bottom tab on the tested Home screen; Profile access is exposed as the top-right avatar/action. | Current app truth | Documented |
