@@ -256,6 +256,31 @@ To build the release APK first and then run one Robo smoke:
 npm run firebase:test-lab:build-robo
 ```
 
+To prepare a signed-in Robo smoke, provide credentials only through the current shell or an approved secret store. Do not commit them and do not put them in tracked files:
+
+```bash
+export FIREBASE_TEST_LAB_SIGNIN_EMAIL='test-account@example.com'
+export FIREBASE_TEST_LAB_SIGNIN_PASSWORD='enter-outside-repo'
+
+npm run firebase:test-lab:signed-in-preflight
+```
+
+To run one bounded signed-in Robo after the signed-in preflight passes:
+
+```bash
+FIREBASE_TEST_LAB_PROOF_DIR=/tmp/chillywood-firebase-test-lab-signed-in-proof-YYYYMMDD \
+FIREBASE_TEST_LAB_RESULTS_DIR=chillywood-signed-in-YYYYMMDD-HHMMSS \
+npm run firebase:test-lab:signed-in-build-robo
+```
+
+Signed-in Robo uses these stable login resource IDs:
+
+- `login-email-input`
+- `login-password-input`
+- `login-submit-button`
+
+The helper writes only credential presence booleans and a redacted command to the proof folder. It intentionally fails before any Test Lab run if `FIREBASE_TEST_LAB_SIGNIN_EMAIL` or `FIREBASE_TEST_LAB_SIGNIN_PASSWORD` is missing.
+
 Optional environment overrides:
 
 ```bash
@@ -274,6 +299,7 @@ Rules:
 - Keep timeout short.
 - Do not put passwords, reviewer credentials, service-account JSON, or provider secrets in command history, scripts, or docs.
 - Do not claim signed-in or two-user LiveKit proof from a generic Robo run.
+- Signed-in Robo is route smoke only. It still does not prove LiveKit two-session behavior, purchases, Stripe, Owner/Admin, or Money Center.
 
 ## Build A Release APK
 

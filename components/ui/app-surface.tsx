@@ -31,28 +31,33 @@ export const AppStatusPill = ({ label, tone = "default" }: { label: string; tone
 };
 
 export const AppActionButton = ({
+  accessibilityLabel,
   disabled = false,
   label,
   loading = false,
   onPress,
   style,
+  testID,
   variant = "secondary",
 }: {
+  accessibilityLabel?: string;
   disabled?: boolean;
   label: string;
   loading?: boolean;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
   variant?: "primary" | "secondary" | "ghost" | "danger" | "success";
 }) => (
   <TouchableOpacity
-    accessibilityLabel={label}
+    accessibilityLabel={accessibilityLabel ?? label}
     accessibilityRole="button"
     accessibilityState={{ disabled: disabled || loading, busy: loading }}
     activeOpacity={0.84}
     disabled={disabled || loading}
     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
     onPress={onPress}
+    testID={testID}
     style={[
       styles.actionButton,
       variant === "primary" && styles.actionButtonPrimary,

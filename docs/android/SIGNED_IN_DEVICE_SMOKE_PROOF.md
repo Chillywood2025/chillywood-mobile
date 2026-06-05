@@ -65,6 +65,17 @@ Firebase Test Lab signed-in Robo/instrumentation remains a future improvement. T
 
 Until one of those exists, the signed-in proof source is the Play-installed physical device proof above, while Firebase Test Lab remains bounded signed-out/public cloud smoke.
 
+The repo now has a bounded signed-in Firebase Test Lab setup path:
+
+```bash
+export FIREBASE_TEST_LAB_SIGNIN_EMAIL='test-account@example.com'
+export FIREBASE_TEST_LAB_SIGNIN_PASSWORD='enter-outside-repo'
+npm run firebase:test-lab:signed-in-preflight
+npm run firebase:test-lab:signed-in-build-robo
+```
+
+The script consumes those values only from environment variables at runtime, writes only redacted command/proof metadata, and fails closed if either value is missing. The login screen exposes stable test IDs for Firebase Robo directives: `login-email-input`, `login-password-input`, and `login-submit-button`.
+
 ## Safety Status
 
 Unchanged:

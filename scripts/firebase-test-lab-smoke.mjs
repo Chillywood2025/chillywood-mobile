@@ -7,6 +7,7 @@ const args = new Set(process.argv.slice(2));
 const shouldBuild = args.has("--build");
 const shouldRun = args.has("--run");
 const shouldDownload = args.has("--download");
+const shouldUseSignedInRobo = args.has("--signed-in");
 const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
 const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z");
 
@@ -23,6 +24,8 @@ const resultsDir =
 const proofDir =
   process.env.FIREBASE_TEST_LAB_PROOF_DIR ||
   `/tmp/chillywood-firebase-test-lab-proof-${today}`;
+const signInEmail = process.env.FIREBASE_TEST_LAB_SIGNIN_EMAIL || "";
+const signInPassword = process.env.FIREBASE_TEST_LAB_SIGNIN_PASSWORD || "";
 
 function run(command, commandArgs, options = {}) {
   const result = spawnSync(command, commandArgs, {
@@ -77,8 +80,26 @@ const environment = [
   `build_requested=${shouldBuild}`,
   `run_requested=${shouldRun}`,
   `download_requested=${shouldDownload}`,
+  `signed_in_robo_requested=${shouldUseSignedInRobo}`,
+  `signed_in_email_present=${Boolean(signInEmail)}`,
+  `signed_in_password_present=${Boolean(signInPassword)}`,
 ].join("\n");
 writeFileSync(join(proofDir, "00-environment.txt"), `${environment}\n`);
+
+if (shouldUseSignedInRobo && (!signInEmail || !signInPassword)) {
+  writeFileSync(
+    join(proofDir, "06-signed-in-robo-status.txt"),
+    [
+      "signed_in_robo_ready=false",
+      "missing=FIREBASE_TEST_LAB_SIGNIN_EMAIL or FIREBASE_TEST_LAB_SIGNIN_PASSWORD",
+      "No Firebase Test Lab run was started.",
+      "Provide credentials through an approved non-repo secret path, then rerun with --signed-in.",
+    ].join("\n") + "\n",
+  );
+  throw new Error(
+    `Signed-in Robo requested, but credentials are missing. Set FIREBASE_TEST_LAB_SIGNIN_EMAIL and FIREBASE_TEST_LAB_SIGNIN_PASSWORD outside the repo. See ${join(proofDir, "06-signed-in-robo-status.txt")}.`,
+  );
+}
 
 if (!commandExists("gcloud")) {
   throw new Error(
@@ -175,12 +196,43 @@ const runCommand = [
   "--results-dir",
   resultsDir,
 ];
-writeFileSync(join(proofDir, "08-test-lab-command.txt"), `${runCommand.join(" ")}\n`);
+const redactedRunCommand = [...runCommand];
+
+if (shouldUseSignedInRobo) {
+  const roboDirectives = [
+    `text:login-email-input=${signInEmail}`,
+    `text:login-password-input=${signInPassword}`,
+    "click:login-submit-button=",
+  ].join(",");
+  const redactedRoboDirectives = [
+    "text:login-email-input=[REDACTED_EMAIL]",
+    "text:login-password-input=[REDACTED]",
+    "click:login-submit-button=",
+  ].join(",");
+
+  runCommand.push("--robo-directives", roboDirectives);
+  redactedRunCommand.push("--robo-directives", redactedRoboDirectives);
+  writeFileSync(
+    join(proofDir, "06-signed-in-robo-status.txt"),
+    [
+      "signed_in_robo_ready=true",
+      "email_present=true",
+      "password_present=true",
+      "credential_storage=environment-only",
+      "password_redacted_in_command_file=true",
+      "login_email_resource=login-email-input",
+      "login_password_resource=login-password-input",
+      "login_submit_resource=login-submit-button",
+    ].join("\n") + "\n",
+  );
+}
+
+writeFileSync(join(proofDir, "08-test-lab-command.txt"), `${redactedRunCommand.join(" ")}\n`);
 
 if (!shouldRun) {
   console.log(`Firebase Test Lab preflight written to ${proofDir}`);
   console.log("No test was started. Re-run with --run to consume Test Lab quota.");
-  console.log(runCommand.join(" "));
+  console.log(redactedRunCommand.join(" "));
   process.exit(0);
 }
 

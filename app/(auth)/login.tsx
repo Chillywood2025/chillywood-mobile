@@ -204,10 +204,12 @@ export default function Login() {
               style={styles.input}
               placeholder="Email"
               placeholderTextColor="#7A859A"
+              accessibilityLabel="Login email"
               autoCapitalize="none"
               keyboardType="email-address"
               autoCorrect={false}
               returnKeyType="next"
+              testID="login-email-input"
               value={email}
               onChangeText={setEmail}
               onFocus={() => {
@@ -219,8 +221,10 @@ export default function Login() {
               style={styles.input}
               placeholder="Password"
               placeholderTextColor="#7A859A"
+              accessibilityLabel="Login password"
               secureTextEntry
               returnKeyType="done"
+              testID="login-password-input"
               value={password}
               onChangeText={setPassword}
               onFocus={() => {
@@ -241,7 +245,14 @@ export default function Login() {
               </Text>
             </Pressable>
 
-            <AppActionButton label={loading ? "Signing in..." : "Log In"} loading={loading} onPress={signIn} variant="primary" />
+            <AppActionButton
+              accessibilityLabel="Log in"
+              label={loading ? "Signing in..." : "Log In"}
+              loading={loading}
+              onPress={signIn}
+              testID="login-submit-button"
+              variant="primary"
+            />
 
             <View style={styles.row}>
               <Text style={styles.muted}>No account?</Text>
