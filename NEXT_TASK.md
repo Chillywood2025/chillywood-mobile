@@ -2,9 +2,11 @@
 
 ## Current Recommendation
 
-Public V1 contextual monetization fixture and owner-session QA.
+Google Play Publishing Overview And Release Asset Closeout.
 
-The in-app creator setup layer is completed and documented in `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md`; the focused QA pass is now documented in `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md`. `/creator-monetization-setup` saved every approved sandbox setup row on the Play-installed internal build, Stripe merch sandbox checkout launched, and remote readback proved provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, merch readiness, payout readiness read-only, and zero production/payout/payable/publish/host-power config rows. The QA pass captured setup/tier/internal-sandbox/merch/payout-readiness screens plus correct Admin denial for the non-admin tester. The remaining work is narrow visual QA with route-backed public/safe fixtures and an active Owner/Admin session: capture contextual viewer gates for paid content, ticket, live access, live seat, and event pass, plus Owner/Admin UI drilldowns for the already-proved configs. Do not rebuild payment rails or activate production money.
+The route-backed monetization visual proof is complete and documented in `docs/ROUTE_BACKED_MONETIZATION_VISUAL_PROOF.md`. Play-installed Android proof captured contextual viewer gates for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, and event pass, plus Owner/Admin Money Center readouts for Product Catalog, Provider Events/Webhooks, Purchase Intents, Access Grants, Ledger Events, Merch Products/Orders, Payout Readiness, Money Center Overview, Money Audit Explorer, and Technical Checks. Remote readback still shows live money off, payouts off, cash-out off, production/payout/payable/publish/host-power config rows `0`, payable/paid money-access rows `0`, payout requests `0`, provider payout-enabled accounts `0`, active route-backed proof roles `0`, and active temp/proof roles `0`.
+
+Do not start another broad monetization foundation, setup, sandbox purchase, route-backed gate, or Owner/Admin monetization drilldown lane unless a specific regression is found. The next useful work is Play/release execution, release-candidate visual QA, or future production approval planning.
 
 Required boundaries remain unchanged: production live money off, payouts off, payout execution absent, cash-out/withdrawal/transfer absent, sandbox/setup rows not payable, Stripe Android digital checkout absent, no fake sales/balances/provider events, no LiveKit publish or host authority from payment, and no route ownership changes.
 

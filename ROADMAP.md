@@ -2,12 +2,13 @@
 
 ## Current Public V1 Money Setup Status
 
+- Done visual-QA side: `docs/ROUTE_BACKED_MONETIZATION_VISUAL_PROOF.md` closes the final route-backed monetization QA gap with Play-installed Android screenshots for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, event pass, and Owner/Admin Money Center drilldowns. The proof kept live money, payouts, cash-out, production configs, payable rows, publish configs, host-power configs, payout requests, provider payout-enabled accounts, and active temp/proof roles off/zero.
 - Done repo-side and Play-installed proof: creator-facing in-app sandbox setup route `/creator-monetization-setup`, Platform Studio Money Center links, `creator_monetization_configs` migrations, linked typegen refresh, guards for approved product tiers plus server-side owner/operator or active beta/internal tester access only, and the completion checklist proof for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, creator tip, event pass, and physical merch readiness.
 - Done rail-side: Google Play / RevenueCat sandbox digital goods, Stripe physical merch sandbox checkout, and Stripe Connect payout readiness.
 - Done matrix-side: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` records one safe setup config for every monetization type plus provider-event/intent/grant/ledger/order/readiness readback.
 - Done QA-readback-side: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures Play-installed Android setup/tier/internal-sandbox/merch/payout-readiness screens, correct Admin denial for the non-admin tester, and fresh remote readback confirming production/payout/payable/publish/host-power rows remain zero.
 - Still future: production digital sales activation, production merch launch, production payouts, payout execution, cash-out, withdrawal, transfer, arbitrary/multi-tier Android pricing beyond mapped Google Play / RevenueCat products, and final public reviewer/production policy approvals.
-- Next proof: contextual viewer-gate screenshots and Owner/Admin UI drilldown screenshots using route-backed safe fixtures plus an active Owner/Admin session; the backend/provider setup matrix is already complete.
+- Next proof: no broad monetization proof remains. Future money work should be production approval planning or a narrowly scoped provider-tooling regression/gap.
 
 ## Planning Rule
 `ROADMAP.md` now records Chi'llywood's phased product planning truth rather than older chapter-by-chapter execution history.

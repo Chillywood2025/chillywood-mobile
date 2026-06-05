@@ -4,6 +4,8 @@ Date: June 5, 2026
 
 This QA lane verifies the completed creator monetization setup system on the Play-installed Android app and remote backend. It does not add monetization architecture and does not activate production money.
 
+Supersession note: this doc records the first focused QA pass and the blockers it found. The contextual viewer-gate and Owner/Admin drilldown blockers are now closed by `docs/ROUTE_BACKED_MONETIZATION_VISUAL_PROOF.md`, with proof at `/tmp/chillywood-route-backed-monetization-visual-proof-20260605/`.
+
 ## Scope
 
 - Confirm real in-app setup, internal tester sandbox launcher, merch readiness, payout-readiness read-only copy, and admin denial on Android.

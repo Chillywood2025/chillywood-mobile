@@ -46,6 +46,10 @@ import {
   getMonetizationAccessSheetPresentation,
 } from "../../../_lib/monetization";
 import {
+  readRouteBackedMonetizationProofConfig,
+  type RouteBackedMonetizationProofConfig,
+} from "../../../_lib/routeBackedMonetizationVisualProof";
+import {
   LIVE_COMMENT_FALLBACK_REFRESH_MS,
   LIVE_VIDEO_CAPTURE_OPTIONS,
   ROOM_HEARTBEAT_MS,
@@ -113,6 +117,7 @@ import {
 import { useCommunicationRoomSession } from "../../../hooks/use-communication-room-session";
 import { InternalInviteSheet } from "../../../components/chat/internal-invite-sheet";
 import { AccessSheet, type AccessSheetReason } from "../../../components/monetization/access-sheet";
+import { RouteBackedMonetizationProofCard } from "../../../components/monetization/route-backed-monetization-proof-card";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { RoomReactionPicker, pushRecentReaction } from "../../../components/room/reaction-picker";
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
@@ -750,6 +755,7 @@ export default function WatchPartyLiveStageScreen({
   const [loading, setLoading] = useState(true);
   const [room, setRoom] = useState<WatchPartyState | null>(null);
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
+  const [routeProofConfig, setRouteProofConfig] = useState<RouteBackedMonetizationProofConfig | null>(null);
   const [liveWatchPartyPremiumGate, setLiveWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [liveWatchPartyAccessSheetVisible, setLiveWatchPartyAccessSheetVisible] = useState(false);
   const [livePremiumGateKind, setLivePremiumGateKind] = useState<"live_first" | "live_watch_party">("live_watch_party");
@@ -826,6 +832,23 @@ export default function WatchPartyLiveStageScreen({
   const stripOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
+
+  useEffect(() => {
+    let active = true;
+    readRouteBackedMonetizationProofConfig({
+      sourceId: partyId,
+      sourceTypes: ["live_watch_party_access", "live_watch_party_seat"],
+    })
+      .then((config) => {
+        if (active) setRouteProofConfig(config);
+      })
+      .catch(() => {
+        if (active) setRouteProofConfig(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [partyId]);
 
   useEffect(() => {
     return () => {
@@ -3996,6 +4019,10 @@ export default function WatchPartyLiveStageScreen({
           <Text style={styles.routeGateBody}>
             {blockedRoomAccess ? getLiveStageAccessBody(blockedRoomAccess) : roomEntryError}
           </Text>
+          <RouteBackedMonetizationProofCard
+            config={routeProofConfig}
+            surface={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_seat" : "live_access"}
+          />
           <View style={styles.routeGateActions}>
             <TouchableOpacity
               style={styles.routeGateSecondaryButton}

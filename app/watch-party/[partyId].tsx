@@ -63,6 +63,10 @@ import {
     getMonetizationAccessSheetPresentation,
 } from "../../_lib/monetization";
 import {
+  readRouteBackedMonetizationProofConfig,
+  type RouteBackedMonetizationProofConfig,
+} from "../../_lib/routeBackedMonetizationVisualProof";
+import {
   ROOM_HEARTBEAT_MS,
   ROOM_SNAPSHOT_REFRESH_MS,
 } from "../../_lib/performancePolicy";
@@ -118,6 +122,7 @@ import {
 import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
+import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
@@ -342,6 +347,7 @@ export default function WatchPartyRoomScreen() {
   const [presenceSynced, setPresenceSynced] = useState(false);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
+  const [routeProofConfig, setRouteProofConfig] = useState<RouteBackedMonetizationProofConfig | null>(null);
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
@@ -349,6 +355,23 @@ export default function WatchPartyRoomScreen() {
   const [reportBusy, setReportBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ type: "room" | "participant"; targetId: string; label: string } | null>(null);
   // Watch-Party Live controls are intentionally persistent and must not auto-hide.
+
+  useEffect(() => {
+    let active = true;
+    readRouteBackedMonetizationProofConfig({
+      sourceId: partyId,
+      sourceTypes: ["watch_party_live"],
+    })
+      .then((config) => {
+        if (active) setRouteProofConfig(config);
+      })
+      .catch(() => {
+        if (active) setRouteProofConfig(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [partyId]);
   const [watchPartyLiveControlsVisible] = useState(true);
   const [watchPartyLiveOpening, setWatchPartyLiveOpening] = useState(false);
   const [joinRetryToken, setJoinRetryToken] = useState(0);
@@ -2371,6 +2394,7 @@ export default function WatchPartyRoomScreen() {
             <Text style={styles.errorBody}>
             {getAccessGateBody(accessGate)}
             </Text>
+          <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           <ProtectedSessionNote
             {...getProtectedSessionCopy(sharedRoomMode === "live" ? "live-room" : "party-room", {
               contentAccessRule: room.contentAccessRule,

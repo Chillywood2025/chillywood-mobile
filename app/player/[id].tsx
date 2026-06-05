@@ -105,6 +105,10 @@ import {
 } from "../../_lib/userData";
 import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
 import {
+  readRouteBackedMonetizationProofConfig,
+  type RouteBackedMonetizationProofConfig,
+} from "../../_lib/routeBackedMonetizationVisualProof";
+import {
     createPartyRoom,
     decodePartySeatRequestMessage,
     emitSyncEvent,
@@ -126,6 +130,7 @@ import {
 } from "../../_lib/watchParty";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
+import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
@@ -976,6 +981,7 @@ export default function PlayerScreen() {
   const [titleLoading, setTitleLoading] = useState(true);
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [standaloneAccess, setStandaloneAccess] = useState<ContentAccessResolution | null>(null);
+  const [standaloneRouteProofConfig, setStandaloneRouteProofConfig] = useState<RouteBackedMonetizationProofConfig | null>(null);
   const [standaloneAccessLoading, setStandaloneAccessLoading] = useState(true);
   const [standaloneAccessRetryToken, setStandaloneAccessRetryToken] = useState(0);
   const [standaloneAccessSheetVisible, setStandaloneAccessSheetVisible] = useState(false);
@@ -6142,6 +6148,35 @@ export default function PlayerScreen() {
     };
   }, [cleanId, displayItem?.content_access_rule, displayItem?.id, isStandalonePlayer, playbackSourceKind, standaloneAccessRetryToken]);
 
+  useEffect(() => {
+    let active = true;
+    if (!isStandalonePlayer) {
+      setStandaloneRouteProofConfig(null);
+      return () => {
+        active = false;
+      };
+    }
+    const safeTitleId = String(displayItem?.id ?? cleanId).trim();
+    const loadProofConfig = () => {
+      readRouteBackedMonetizationProofConfig({
+        sourceId: safeTitleId,
+        sourceTypes: ["paid_content"],
+      })
+        .then((config) => {
+          if (active) setStandaloneRouteProofConfig(config);
+        })
+        .catch(() => {
+          if (active) setStandaloneRouteProofConfig(null);
+        });
+    };
+    loadProofConfig();
+    const retry = setTimeout(loadProofConfig, 1500);
+    return () => {
+      active = false;
+      clearTimeout(retry);
+    };
+  }, [cleanId, displayItem?.id, isStandalonePlayer]);
+
   const standalonePlaybackBlocked = isStandalonePlayer && !!standaloneAccess && !standaloneAccess.isAllowed;
   const standalonePlaybackUnknown = isStandalonePlayer && !standaloneAccessLoading && !standaloneAccess && !!accessError;
   const standalonePlaybackGateActive = isStandalonePlayer && (
@@ -8402,6 +8437,7 @@ export default function PlayerScreen() {
                   <Text style={styles.playerAccessKicker}>STANDALONE PLAYER</Text>
                   <Text style={styles.playerAccessTitle}>{standaloneAccessPresentation.title}</Text>
                   <Text style={styles.playerAccessBody}>{standaloneAccessPresentation.body}</Text>
+                  <RouteBackedMonetizationProofCard config={standaloneRouteProofConfig} surface="paid_content" />
                   <View style={styles.playerAccessActions}>
                     <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
                       <Text style={styles.playerAccessSecondaryText}>Back</Text>

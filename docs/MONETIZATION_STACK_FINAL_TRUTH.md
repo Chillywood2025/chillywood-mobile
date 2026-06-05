@@ -1,12 +1,14 @@
 # Monetization Stack Final Truth
 
-Updated: June 4, 2026
+Updated: June 5, 2026
 
 This document is the canonical repo truth for Chi'llwood monetization readiness after the completed Google Play / RevenueCat, Stripe merch, and Stripe Connect sandbox proof lanes. It consolidates proof status only. It does not activate production money.
 
+Route-backed visual proof update: `docs/ROUTE_BACKED_MONETIZATION_VISUAL_PROOF.md` closes the final contextual monetization QA gap. Play-installed Android proof captured route-backed viewer gates for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, and event pass, plus Owner/Admin Money Center readouts for Product Catalog, Provider Events/Webhooks, Purchase Intents, Access Grants, Ledger Events, Merch Products/Orders, Payout Readiness, Money Center Overview, Money Audit Explorer, and Technical Checks. Remote readback still has live money off, payouts off, cash-out off, production/payout/payable/publish/host-power config rows `0`, payable/paid money-access rows `0`, payout requests `0`, provider payout-enabled accounts `0`, merch access grants `0`, and active temp/proof roles `0`.
+
 Creator setup update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` closes the in-app creator-facing sandbox setup matrix. `/creator-monetization-setup` now has saved sandbox/not-payable configs for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, creator tip, event pass, and physical merch readiness. Remote readback proves processed sandbox provider events and consumed intents for every Android digital product, access grants where appropriate, sandbox/not-payable ledger rows, Stripe merch sandbox launch/readiness, and payout readiness read-only. Production money, payouts, LiveKit publish, host authority, payable rows, arbitrary Android pricing, and Stripe Android digital checkout remain off/absent.
 
-Viewer/Admin QA update: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures the Play-installed Android setup, approved tier, internal sandbox launcher, merch/readiness, payout-readiness read-only, and non-admin Admin denial screens. Remote readback still confirms the monetization stack is sandbox/not-payable only. Fresh contextual viewer gates and Owner/Admin drilldown screenshots require a future route-backed fixture/admin-session QA pass.
+Viewer/Admin QA update: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures the first Play-installed Android setup, approved tier, internal sandbox launcher, merch/readiness, payout-readiness read-only, and non-admin Admin denial screens. Its route-backed visual gap is now superseded by `docs/ROUTE_BACKED_MONETIZATION_VISUAL_PROOF.md`.
 
 Owner/Admin UI follow-up: `docs/OWNER_ADMIN_TABS_UI_UX_POLISH.md` modernizes Admin tab interactions without changing this money truth, provider rail policy, production money status, payout status, or admin authority.
 
