@@ -2,7 +2,7 @@
 
 ## Current Proof
 
-Status: repo-side Test Lab smoke setup is complete, with one bounded virtual-device Robo proof.
+Status: repo-side Test Lab smoke setup is complete. A prior bounded virtual-device Robo proof passed on 2026-05-30. The 2026-06-05 continuation built the current release APK successfully but was blocked by Google Cloud project authorization before a new cloud device run could start.
 
 - Proof folder: `/tmp/chillywood-firebase-test-lab-proof-20260530/`
 - Google Cloud SDK: installed locally; active project was `chillywood-app`
@@ -55,6 +55,38 @@ Scope not proved:
 - LiveKit multi-user, TURN, cellular, reconnect, real microphone/camera, Watch-Party capacity, or heat/battery behavior.
 - Google Play acceptance or Play pre-launch report acceptance.
 - Physical Test Lab device coverage.
+
+## 2026-06-05 Authorization Blocker
+
+Proof folder:
+
+```text
+/tmp/chillywood-firebase-test-lab-proof-20260605/
+```
+
+What passed:
+
+- Release APK build completed successfully with `./gradlew assembleRelease bundleRelease`.
+- Current APK path: `android/app/build/outputs/apk/release/app-release.apk`.
+- APK SHA-256: `c62b6b14a82d0691f86774b094a2fd410cd77cbe38bea1dc0f67679685a97b87`.
+- Firebase and Test Lab APIs were visible as enabled for project `chillywood-app`.
+
+What blocked:
+
+- `gcloud firebase test android models list` and `gcloud firebase test android versions list` returned a project authorization error.
+- The bounded Robo run also failed before creating a test matrix with: `ResponseError 403: Not authorized for project chillywood-app`.
+- No Firebase Test Lab device run started, no route smoke was executed, and no Test Lab quota was intentionally consumed by the failed authorization attempt.
+
+Cause:
+
+- The active `gcloud` account during the attempt was not authorized to access the Firebase Test Lab environment catalog for project `chillywood-app`.
+
+Fix needed before rerun:
+
+1. Authenticate `gcloud` with an owner-approved Google account that has Firebase Test Lab access for `chillywood-app`, or grant the current automation account the minimum owner-approved Test Lab/project permissions.
+2. Do not commit credentials, service-account JSON, refresh tokens, passwords, or owner account details.
+3. Rerun `npm run firebase:test-lab:preflight`. The preflight now fails fast if catalog access is still blocked.
+4. Only after preflight succeeds, run one bounded cloud smoke with `npm run firebase:test-lab:robo` or `npm run firebase:test-lab:build-robo`.
 
 ## Prerequisites
 

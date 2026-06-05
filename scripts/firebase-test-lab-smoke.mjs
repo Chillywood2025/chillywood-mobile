@@ -45,6 +45,25 @@ function commandExists(command) {
   return result.status === 0;
 }
 
+function commandOutput(result) {
+  return [result.stdout, result.stderr].filter(Boolean).join("\n");
+}
+
+function assertTestLabCatalogAccess(label, result, proofFile) {
+  const output = commandOutput(result);
+  const denied = /not authorized|unable to access the test environment catalog/i.test(output);
+  if (result.status !== 0 || denied) {
+    throw new Error(
+      [
+        `Firebase Test Lab ${label} preflight failed.`,
+        `See ${join(proofDir, proofFile)}.`,
+        `The active gcloud account must have Firebase Test Lab access for project ${project}.`,
+        "No Firebase Test Lab run was started.",
+      ].join(" "),
+    );
+  }
+}
+
 mkdirSync(proofDir, { recursive: true });
 
 const environment = [
@@ -80,16 +99,10 @@ if (shouldBuild) {
 }
 
 const auth = run("gcloud", ["auth", "list"], { allowFailure: true });
-writeFileSync(
-  join(proofDir, "01-gcloud-auth-list.txt"),
-  [auth.stdout, auth.stderr].filter(Boolean).join("\n"),
-);
+writeFileSync(join(proofDir, "01-gcloud-auth-list.txt"), commandOutput(auth));
 
 const config = run("gcloud", ["config", "list"], { allowFailure: true });
-writeFileSync(
-  join(proofDir, "01-gcloud-config-list.txt"),
-  [config.stdout, config.stderr].filter(Boolean).join("\n"),
-);
+writeFileSync(join(proofDir, "01-gcloud-config-list.txt"), commandOutput(config));
 
 const services = run(
   "gcloud",
@@ -105,7 +118,7 @@ const services = run(
 );
 writeFileSync(
   join(proofDir, "07-services-status.txt"),
-  [services.stdout, services.stderr].filter(Boolean).join("\n"),
+  commandOutput(services),
 );
 
 if (existsSync(apk)) {
@@ -128,8 +141,9 @@ const models = run(
 );
 writeFileSync(
   join(proofDir, "04-test-lab-models.txt"),
-  [models.stdout, models.stderr].filter(Boolean).join("\n"),
+  commandOutput(models),
 );
+assertTestLabCatalogAccess("models catalog", models, "04-test-lab-models.txt");
 
 const versions = run(
   "gcloud",
@@ -138,8 +152,9 @@ const versions = run(
 );
 writeFileSync(
   join(proofDir, "05-test-lab-versions.txt"),
-  [versions.stdout, versions.stderr].filter(Boolean).join("\n"),
+  commandOutput(versions),
 );
+assertTestLabCatalogAccess("versions catalog", versions, "05-test-lab-versions.txt");
 
 const runCommand = [
   "gcloud",
