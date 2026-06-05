@@ -201,6 +201,51 @@ Signed-in route proof was captured on the Play-installed physical Android device
 
 This closes the local signed-in route-smoke proof gap, but not the Firebase Test Lab signed-in cloud gap. A Test Lab signed-in run still requires owner-approved credentials or a secure instrumentation/Robo-script path outside committed source.
 
+## 2026-06-05 Signed-In Firebase Test Lab Proof
+
+Proof folder:
+
+```text
+/tmp/chillywood-firebase-test-lab-signed-in-proof-20260605/
+```
+
+Credential path:
+
+- Used ignored local proof-account values from `.env.local`.
+- Mapped them at runtime to `FIREBASE_TEST_LAB_SIGNIN_EMAIL` and `FIREBASE_TEST_LAB_SIGNIN_PASSWORD`.
+- No credential value was added to tracked source, docs, committed proof, or command files.
+- `08-test-lab-command.txt` contains only redacted directives.
+
+Preflight:
+
+- `npm run firebase:test-lab:signed-in-preflight` passed.
+- The helper confirmed signed-in Robo readiness and stable login resources.
+
+Bounded signed-in smoke:
+
+- Command shape: `npm run firebase:test-lab:signed-in-build-robo`.
+- APK build: passed.
+- Matrix: `matrix-3pmfaxfsjto4g`.
+- Axis: `MediumPhone.arm-35-en-portrait`.
+- Outcome: `Passed`.
+- Test time: `307 seconds`.
+- Firebase Console: `https://console.firebase.google.com/project/chillywood-app/testlab/histories/bh.e9371a121da8f5fe/matrices/6107457672569830735`.
+- Raw results bucket: `gs://test-lab-nt3ctukisd678-ykr9mdfzvpc9x/chillywood-signed-in-20260605-122952/`.
+- Downloaded results: `/tmp/chillywood-firebase-test-lab-signed-in-proof-20260605/results/MediumPhone.arm-35-en-portrait/`.
+- Downloaded artifacts include screenshots `0.png` through `37.png`, `actions.json`, `logcat`, `video.mp4`, `robo_results.pb`, `baseline_profile.txt`, and `crawlscript.json`.
+- Crash scan: no Chi'llwood fatal exception, ANR, TypeError, ReferenceError, invariant violation, or unhandled fatal pattern found.
+
+Signed-in coverage observed:
+
+- Robo entered the test account through `login-email-input`, `login-password-input`, and `login-submit-button`.
+- Action trace reached signed-in Settings sections, including Account `Signed in`, Profile and Platform, Platform Studio, and Settings.
+- Screenshots show signed-in Explore/Home surfaces, Settings signed-in state, Profile/Platform actions, Player/fullscreen, and comments.
+
+Scope remains bounded:
+
+- This proves signed-in Firebase Test Lab route smoke.
+- It does not prove LiveKit two-session host/viewer behavior, Google Play / RevenueCat purchase completion, Stripe Checkout, Stripe Connect, Owner/Admin authority, or Money Center final proof.
+
 ## Prerequisites
 
 1. Install Google Cloud SDK.

@@ -76,6 +76,8 @@ npm run firebase:test-lab:signed-in-build-robo
 
 The script consumes those values only from environment variables at runtime, writes only redacted command/proof metadata, and fails closed if either value is missing. The login screen exposes stable test IDs for Firebase Robo directives: `login-email-input`, `login-password-input`, and `login-submit-button`.
 
+June 5, 2026 update: the signed-in Firebase Test Lab path ran successfully with the ignored local proof-account values mapped into the required environment variables. Matrix `matrix-3pmfaxfsjto4g` passed on `MediumPhone.arm-35-en-portrait` in `307 seconds`; proof lives at `/tmp/chillywood-firebase-test-lab-signed-in-proof-20260605/`. The run reached signed-in Settings, Profile/Platform actions, Platform Studio actions, Player/fullscreen, and comments. This is signed-in route smoke only, not LiveKit two-session, purchase, Stripe, Owner/Admin, or Money Center proof.
+
 ## Safety Status
 
 Unchanged:
