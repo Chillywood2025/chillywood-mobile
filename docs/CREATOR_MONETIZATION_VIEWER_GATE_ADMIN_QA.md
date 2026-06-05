@@ -6,6 +6,8 @@ This QA lane verifies the completed creator monetization setup system on the Pla
 
 Supersession note: this doc records the first focused QA pass and the blockers it found. The contextual viewer-gate and Owner/Admin drilldown blockers are now closed by `docs/ROUTE_BACKED_MONETIZATION_VISUAL_PROOF.md`, with proof at `/tmp/chillywood-route-backed-monetization-visual-proof-20260605/`.
 
+Stabilization follow-up: `docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md` rechecked the route-backed viewer fixtures after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc`. Watch-Party ticket, Live access, and Live seat unavailable branches now show their sandbox proof cards when the sanitized setup config exists. This does not change backend/provider proof, purchase intents, access grants, ledger rows, Owner/Admin authority, or money state.
+
 ## Scope
 
 - Confirm real in-app setup, internal tester sandbox launcher, merch readiness, payout-readiness read-only copy, and admin denial on Android.

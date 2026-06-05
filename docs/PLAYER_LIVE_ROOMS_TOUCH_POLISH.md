@@ -1,8 +1,10 @@
 # Player And Live Rooms Touch Polish
 
-Updated: June 4, 2026
+Updated: June 5, 2026
 
 This lane applies the Public V1 shared touch-polish direction to Player and live-room viewer surfaces without changing playback behavior, LiveKit behavior, route ownership, Premium gates, access gates, monetization truth, or content safety.
+
+Stabilization follow-up: the June 5, 2026 internal testing sweep (`docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md`) rechecked Player and room surfaces on Play-installed `R5CR120QCBF` after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc`. Public Player playback and comments composer loaded on the Rachi fixture. Watch-Party ticket, Live access, and Live seat unavailable fixture branches now render the existing route-backed sandbox proof cards. This follow-up is visual-only and does not change playback, LiveKit, route ownership, old-room handling, host approval, access grants, ledger logic, or money state.
 
 ## Starting Truth
 

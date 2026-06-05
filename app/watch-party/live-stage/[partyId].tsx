@@ -3977,6 +3977,10 @@ export default function WatchPartyLiveStageScreen({
           <Text style={styles.routeGateBody}>
             This live room could not be found anymore. Open Party Room if you want to re-check the canonical room route.
           </Text>
+          <RouteBackedMonetizationProofCard
+            config={routeProofConfig}
+            surface={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_seat" : "live_access"}
+          />
           <View style={styles.routeGateActions}>
             <TouchableOpacity
               style={styles.routeGateSecondaryButton}

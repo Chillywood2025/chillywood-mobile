@@ -2487,6 +2487,7 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.errorCard}>
           <Text style={styles.errorTitle}>Room not found</Text>
           <Text style={styles.errorBody}>This party may have ended or the code is incorrect.</Text>
+          <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>← Go Back</Text>
           </TouchableOpacity>

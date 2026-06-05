@@ -6965,6 +6965,8 @@ export function ChannelStudioScreen() {
       <BetaAccessScreen
         title="Premium required"
         body="Platform Studio, Brand Studio, Clip Studio, and creator uploads require active Premium entitlement. Open Premium setup when RevenueCat/Google Play access is available, or use an owner/operator account for setup-only review."
+        primaryActionLabel="Manage Premium"
+        primaryActionRoute="/subscribe"
       />
     );
   }

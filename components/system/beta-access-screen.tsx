@@ -30,6 +30,8 @@ type BetaAccessScreenProps = {
   operatorOnly?: boolean;
   loadingOverride?: boolean;
   accessState?: "invited" | "not_invited" | "paused" | "revoked" | "error" | null;
+  primaryActionLabel?: string;
+  primaryActionRoute?: Parameters<ReturnType<typeof useRouter>["push"]>[0];
 };
 
 export function BetaAccessScreen({
@@ -38,11 +40,13 @@ export function BetaAccessScreen({
   operatorOnly = false,
   loadingOverride = false,
   accessState = null,
+  primaryActionLabel,
+  primaryActionRoute,
 }: BetaAccessScreenProps) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useGlobalSearchParams();
-  const { isLoading } = useSession();
+  const { isLoading, isSignedIn } = useSession();
 
   const redirectTo = useMemo(
     () => serializeRedirectTarget(pathname, params as Record<string, unknown>),
@@ -64,7 +68,11 @@ export function BetaAccessScreen({
     : isInviteBlocked
       ? "INVITE-ONLY ACCESS"
       : "SIGNED-IN ACCESS";
-  const primaryLabel = isInviteBlocked ? "Open Support Guide" : "Sign In to Continue";
+  const primaryLabel = isInviteBlocked
+    ? "Open Support Guide"
+    : isSignedIn
+      ? primaryActionLabel ?? "Back to Home"
+      : "Sign In to Continue";
 
   return (
     <View style={styles.outer}>
@@ -79,6 +87,11 @@ export function BetaAccessScreen({
             onPress={() => {
               if (isInviteBlocked) {
                 router.push(getSupportRoutePath());
+                return;
+              }
+
+              if (isSignedIn) {
+                router.push(primaryActionRoute ?? "/(tabs)");
                 return;
               }
 

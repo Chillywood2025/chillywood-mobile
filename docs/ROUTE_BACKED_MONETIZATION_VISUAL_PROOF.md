@@ -18,6 +18,8 @@ Device/app:
 - EAS Update group `a60dda7c-00ef-405e-a608-0a6d087e82cf`
 - Android update `019e9640-2474-7c87-ba50-6fd7c9c4e373`
 
+Stabilization follow-up: `docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md` rechecked the route-backed fixtures after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc` / Android update `019e980c-fca8-78db-b44e-6551a6d4d0f4`. Watch-Party ticket, Live access pass, and Live seat pass unavailable branches now render the same sanitized sandbox proof card as their access-denial branches when the route-backed proof config exists. The fix is visual only and does not change provider events, purchase intents, access grants, ledger rows, room ownership, LiveKit authority, or money state.
+
 ## Route Fixtures
 
 Safe sandbox route-backed fixtures were created only to expose visual gates. They do not create fake provider events, fake access grants, fake ledger rows, fake orders, payable balances, payout rows, or production purchases.
