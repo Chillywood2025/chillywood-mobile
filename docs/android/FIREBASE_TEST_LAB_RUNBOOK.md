@@ -187,6 +187,20 @@ Rerun result:
 
 Scope remains bounded. This rerun proves cloud APK build/upload/install/launch smoke after the confirmed UI fixes. It does not prove signed-in routes, LiveKit two-session behavior, Google Play purchases, RevenueCat restore, Stripe Checkout, Stripe Connect, Owner/Admin, or Money Center.
 
+## 2026-06-05 Signed-In Device Follow-Up
+
+Signed-in route proof was captured on the Play-installed physical Android device because safe reviewer/test credentials are intentionally not stored in the repo or environment for Firebase Test Lab.
+
+- Doc: `docs/android/SIGNED_IN_DEVICE_SMOKE_PROOF.md`.
+- Proof path: `/tmp/chillywood-signed-in-proof-20260605/`.
+- Device: `R5CR120QCBF`.
+- Package: `com.chillywood.mobile`.
+- Installer: `com.android.vending`.
+- Version: `1.0.0`, versionCode `25`.
+- Screens covered: signed-in Home, Settings, Profile, Watch-Party waiting-room/Premium gate, and route-backed Live seat gate.
+
+This closes the local signed-in route-smoke proof gap, but not the Firebase Test Lab signed-in cloud gap. A Test Lab signed-in run still requires owner-approved credentials or a secure instrumentation/Robo-script path outside committed source.
+
 ## Prerequisites
 
 1. Install Google Cloud SDK.

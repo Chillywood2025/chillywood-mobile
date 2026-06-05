@@ -115,3 +115,21 @@ Unchanged:
 ## Remaining Testing Gaps
 
 Firebase Test Lab Robo remains useful as bounded cloud install/launch smoke and public-surface crawl proof. It is not a substitute for the separate manual and device-backed proof lanes for signed-in routes, LiveKit, monetization purchases, Stripe, Owner/Admin, or Money Center.
+
+## Signed-In Follow-Up
+
+A separate Play-installed physical-device signed-in proof was captured after this Robo review because Test Lab signed-in cloud coverage still needs credentials supplied through a safe non-repo path.
+
+Signed-in proof doc:
+
+```text
+docs/android/SIGNED_IN_DEVICE_SMOKE_PROOF.md
+```
+
+Signed-in proof path:
+
+```text
+/tmp/chillywood-signed-in-proof-20260605/
+```
+
+That proof covers signed-in Home, Settings, Profile, Watch-Party waiting-room/Premium gate, and route-backed Live seat gate on device `R5CR120QCBF`, package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `25`.
