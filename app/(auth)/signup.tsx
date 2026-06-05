@@ -369,6 +369,7 @@ export default function Signup() {
           <TextInput
             style={styles.input}
             placeholder="Display name"
+            placeholderTextColor="#8F98AA"
             autoCapitalize="words"
             autoCorrect
             returnKeyType="next"
@@ -381,6 +382,7 @@ export default function Signup() {
             <TextInput
               style={styles.usernameInput}
               placeholder="creatorname"
+              placeholderTextColor="#8F98AA"
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="next"
@@ -426,6 +428,7 @@ export default function Signup() {
         <TextInput
           style={styles.input}
           placeholder="Email"
+          placeholderTextColor="#8F98AA"
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
@@ -438,6 +441,7 @@ export default function Signup() {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor="#8F98AA"
           secureTextEntry
           returnKeyType="done"
           value={password}

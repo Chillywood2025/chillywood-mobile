@@ -81,7 +81,14 @@ export function LegalPolicyViewer({ policy }: LegalPolicyViewerProps) {
                 activeOpacity={0.84}
                 onPress={() => setExpanded((current) => ({ ...current, [section.heading]: true }))}
               >
-                <Text style={[styles.tocChipText, expanded[section.heading] && styles.tocChipTextActive]} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.tocChipText,
+                    dark ? styles.tocChipTextDark : styles.tocChipTextLight,
+                    expanded[section.heading] && (dark ? styles.tocChipTextActiveDark : styles.tocChipTextActiveLight),
+                  ]}
+                  numberOfLines={1}
+                >
                   {section.heading}
                 </Text>
               </TouchableOpacity>
@@ -301,11 +308,19 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,76,114,0.8)",
   },
   tocChipText: {
-    color: "#AEB7C7",
     fontSize: 13,
     fontWeight: "800",
   },
-  tocChipTextActive: {
+  tocChipTextLight: {
+    color: "#8A3D57",
+  },
+  tocChipTextDark: {
+    color: "#AEB7C7",
+  },
+  tocChipTextActiveLight: {
+    color: "#7D1E3A",
+  },
+  tocChipTextActiveDark: {
     color: "#FFF2F5",
   },
   emptyCard: {

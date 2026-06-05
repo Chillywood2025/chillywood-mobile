@@ -142,6 +142,51 @@ Scope not proved:
 - Google Play purchase, RevenueCat purchase/restore, Stripe Checkout, Stripe Connect, Owner/Admin drilldown, or Money Center final proof.
 - Play internal install proof; this cloud run uses a locally built release APK uploaded to Test Lab.
 
+## 2026-06-05 Robo Artifact Review And Fix Rerun
+
+Artifact review doc:
+
+```text
+docs/android/FIREBASE_TEST_LAB_ARTIFACT_REVIEW.md
+```
+
+Proof folder:
+
+```text
+/tmp/chillywood-firebase-test-lab-artifact-review-fix-proof-20260605/
+```
+
+Reviewed matrix:
+
+- Matrix: `matrix-pcl66znev5dca`.
+- Axis: `MediumPhone.arm-35-en-portrait`.
+- Outcome: `Passed`.
+- Reviewed artifacts: screenshots, `video.mp4`, `actions.json`, `sitemap.png`, `robo_results.pb`, and `logcat`.
+
+Artifact review result:
+
+- No Chi'llwood fatal exception, ANR, blank screen, broken route, unsafe money copy, production purchase button, payout/cash-out button, Stripe Android digital checkout, LiveKit issue, or route-ownership issue was found.
+- `AndroidRuntime` matches were Android command-wrapper process starts/exits, not app crashes.
+- Robo covered signed-out auth and legal pages only; that is expected for a bounded generic Robo smoke.
+- Two low-severity real UI/accessibility issues were confirmed and fixed: dark signup placeholders and low-contrast light-theme legal TOC chip text.
+
+Rerun result:
+
+- Preflight: passed.
+- Command: `FIREBASE_TEST_LAB_PROOF_DIR=/tmp/chillywood-firebase-test-lab-artifact-review-fix-proof-20260605 FIREBASE_TEST_LAB_RESULTS_DIR=chillywood-artifact-review-fix-20260605-115352 npm run firebase:test-lab:build-robo`.
+- APK build: passed.
+- APK SHA-256: `527f803a38cab78fa440020e68d0ef827b7d4cb7b6083e79a7ecb46fe3532d24`.
+- Matrix: `matrix-1ovvi4nwvs469`.
+- Axis: `MediumPhone.arm-35-en-portrait`.
+- Outcome: `Passed`.
+- Test time: `306 seconds`.
+- Firebase Console: `https://console.firebase.google.com/project/chillywood-app/testlab/histories/bh.e9371a121da8f5fe/matrices/7065165681326020512`.
+- Raw results bucket: `gs://test-lab-nt3ctukisd678-ykr9mdfzvpc9x/chillywood-artifact-review-fix-20260605-115352/`.
+- Downloaded results: `/tmp/chillywood-firebase-test-lab-artifact-review-fix-proof-20260605/results/MediumPhone.arm-35-en-portrait/`.
+- Crash scan: no Chi'llwood fatal exception, ANR, TypeError, ReferenceError, or invariant violation.
+
+Scope remains bounded. This rerun proves cloud APK build/upload/install/launch smoke after the confirmed UI fixes. It does not prove signed-in routes, LiveKit two-session behavior, Google Play purchases, RevenueCat restore, Stripe Checkout, Stripe Connect, Owner/Admin, or Money Center.
+
 ## Prerequisites
 
 1. Install Google Cloud SDK.
