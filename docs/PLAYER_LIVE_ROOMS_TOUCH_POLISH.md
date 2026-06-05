@@ -4,6 +4,8 @@ Updated: June 5, 2026
 
 This lane applies the Public V1 shared touch-polish direction to Player and live-room viewer surfaces without changing playback behavior, LiveKit behavior, route ownership, Premium gates, access gates, monetization truth, or content safety.
 
+June 5, 2026 shared/standalone fullscreen follow-up: standalone fullscreen now keeps the same cover-fit presentation used by the normal standalone media card, so standalone title, creator-video, and other standalone Player surfaces no longer switch back to black side letterboxing when fullscreen is entered. Shared Watch-Party playback now mirrors the standalone overlay direction with compact Party Room, Comments, and speed controls over the video, no Watch-Party Live handoff toggle, and a shared fullscreen mode that can rotate landscape, cover the screen, show compact room-member bubbles on the left, and keep the room comment composer on the right. The Android hardware Back button exits shared fullscreen before returning to the Party Room. This follow-up is presentation-only: it does not change media resolver logic, playback sync authority, LiveKit token issuance, host approval, route ownership, money state, access grants, or content safety.
+
 Stabilization follow-up: the June 5, 2026 internal testing sweep (`docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md`) rechecked Player and room surfaces on Play-installed `R5CR120QCBF` after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc`. Public Player playback and comments composer loaded on the Rachi fixture. Watch-Party ticket, Live access, and Live seat unavailable fixture branches now render the existing route-backed sandbox proof cards. This follow-up is visual-only and does not change playback, LiveKit, route ownership, old-room handling, host approval, access grants, ledger logic, or money state.
 
 ## Starting Truth
@@ -39,6 +41,8 @@ Player:
 - Creator-video comments/replies now use more readable cards, compact action chips, larger composer controls, keyboard-safe sizing, and explicit accessibility labels/states.
 - Party overlay chips and compact controls now have 44px-class touch affordance.
 - A later focused standalone Player follow-up replaced the temporary media-edge matte with full-card video and overlay controls. See `docs/STANDALONE_PLAYER_OVERLAY_FULLSCREEN_PROOF.md`.
+- The June 5 fullscreen follow-up keeps all standalone Player fullscreen video in cover mode instead of switching to contain mode, removing the black side boxes the tester reported.
+- Shared Watch-Party playback now uses compact in-video overlay controls and shared fullscreen side rails for room bubbles plus comments, while keeping LiveKit publish/host authority unchanged.
 
 Watch-Party Live waiting room:
 
