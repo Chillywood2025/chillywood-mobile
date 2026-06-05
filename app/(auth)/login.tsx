@@ -205,6 +205,7 @@ export default function Login() {
               placeholder="Email"
               placeholderTextColor="#7A859A"
               accessibilityLabel="Login email"
+              accessibilityHint="Enter the email address for your Chi'llwood account"
               autoCapitalize="none"
               keyboardType="email-address"
               autoCorrect={false}
@@ -222,6 +223,7 @@ export default function Login() {
               placeholder="Password"
               placeholderTextColor="#7A859A"
               accessibilityLabel="Login password"
+              accessibilityHint="Enter your Chi'llwood account password"
               secureTextEntry
               returnKeyType="done"
               testID="login-password-input"
@@ -239,6 +241,10 @@ export default function Login() {
               style={styles.forgotPasswordButton}
               onPress={sendPasswordReset}
               disabled={resetPasswordLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password"
+              accessibilityState={{ disabled: resetPasswordLoading }}
+              testID="login-forgot-password-button"
             >
               <Text style={[styles.forgotPasswordText, resetPasswordLoading && styles.forgotPasswordTextDisabled]}>
                 {resetPasswordLoading ? "Sending reset..." : "Forgot password?"}

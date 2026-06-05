@@ -113,6 +113,15 @@ type SettingsRowProps = {
   children?: React.ReactNode;
 };
 
+const toSettingsTestId = (prefix: string, value: string) => {
+  const slug = value
+    .toLowerCase()
+    .replace(/chi'?lly/g, "chilly")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${prefix}-${slug || "item"}`;
+};
+
 const NOTIFICATION_GROUPS: {
   id: string;
   title: string;
@@ -264,8 +273,10 @@ function SettingsAccordion({
         style={styles.groupHeader}
         activeOpacity={0.86}
         accessibilityRole="button"
+        accessibilityLabel={`${isOpen ? "Collapse" : "Expand"} ${title}`}
         accessibilityState={{ expanded: isOpen }}
         onPress={() => onToggle(id)}
+        testID={`settings-section-${id}`}
       >
         <View style={styles.groupCopy}>
           {kicker ? <Text style={styles.groupKicker}>{kicker}</Text> : null}
@@ -298,8 +309,10 @@ function InlineAccordion({
         style={styles.inlineAccordionHeader}
         activeOpacity={0.86}
         accessibilityRole="button"
+        accessibilityLabel={`${isOpen ? "Collapse" : "Expand"} ${title}`}
         accessibilityState={{ expanded: isOpen }}
         onPress={() => onToggle(id)}
+        testID={`settings-inline-section-${id}`}
       >
         <View style={styles.inlineAccordionCopy}>
           <Text style={styles.inlineAccordionTitle}>{title}</Text>
@@ -339,7 +352,9 @@ function SettingsRow({ title, subtitle, value, onPress, tone = "default", childr
         style={styles.settingsRow}
         activeOpacity={0.86}
         accessibilityRole="button"
+        accessibilityLabel={title}
         onPress={onPress}
+        testID={toSettingsTestId("settings-row", title)}
       >
         {content}
       </TouchableOpacity>

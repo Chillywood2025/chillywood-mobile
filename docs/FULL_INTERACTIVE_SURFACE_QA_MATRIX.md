@@ -54,6 +54,7 @@ Static inventory is not behavioral proof. It is the coverage seed for device/man
 | Version | `1.0.0` |
 | Version code | `25` |
 | Proof path | `/tmp/chillywood-full-interactive-surface-qa-20260605/` |
+| EAS Update | group `58f4eeb6-2d38-43aa-bc07-88be79dabdb4`; Android update `019e9945-bd16-7f3c-92e0-ee919d93dfea`; runtime `1.0.0` |
 
 ## Current Findings
 
@@ -64,6 +65,15 @@ Static inventory is not behavioral proof. It is the coverage seed for device/man
 | Home top `Settings` action is visible and opens Settings. | Device proof | Proved |
 | Maestro could not target `login-email-input` by id in the Play-installed app, although visible fields exist. | Automation selector gap | Documented |
 | Visible-label login targeting works when credentials are passed through Maestro `--env`. | Automation workaround | Proved |
+| Login/signup fields and actions needed stronger stable accessibility/test hooks for future automation. | Source accessibility gap | Fixed in source; needs next build/update proof |
+| Bottom tabs needed stable tab button test IDs to avoid ambiguous text taps, especially Explore chip `Live` versus bottom tab `Live`. | Source automation/accessibility gap | Fixed in source; needs next build/update proof |
+| Explore search placeholder is `Search content, people, and Platforms`, not the older expected `Search titles, people, live rooms`. | Current app truth | Documented |
+| Settings accordions and row buttons needed stable generated test IDs and clearer accessibility labels for future automation. | Source automation/accessibility gap | Fixed in source; needs next build/update proof |
+| Creator-video Player Discussion focuses the comment input, but the Play-installed build lets the Android keyboard cover the composer so typed draft/Post controls are not visible. | Real Player keyboard UI bug | Fixed in source; needs next build/update proof |
+| Live tab route buttons and the `How Live works` disclosure needed stable test IDs/accessibility expanded state for future full-button automation. | Source automation/accessibility gap | Fixed in source; needs next build/update proof |
+| Platform Studio opens a Premium-required gate for the current proof account. | Expected protected gate | Proved |
+| Owner/Admin direct route denies the current proof account with active-admin-role copy. | Expected protected gate | Proved |
+| SDK emulator AVDs were present, but `Maestro_Pixel_6_API_33_1` and `Pixel_8` exited before registering with ADB. | Environment test-session issue | Documented; no two-session proof claimed |
 
 ## Bottom Navigation Proof
 
@@ -83,6 +93,29 @@ Result:
 | Live bottom tab | Visible and tappable | Visible, tapped, `LIVE` header shown | Passed | final Maestro run |
 | Library bottom tab | Visible and tappable | Visible, tapped, `LIBRARY` header shown | Passed | final Maestro run |
 | Settings top action on Home | Visible and opens Settings | Visible, tapped, `SETTINGS` header shown | Passed | `/tmp/chillywood-full-interactive-surface-qa-20260605/01-bottom-tabs-settings-pass.png` |
+| Login forgot password | Empty email path shows reset-password alert | Alert appeared and dismissed | Passed | Maestro flow `/tmp/chillywood-auth-signup-visible-qa.yaml` |
+| Signup route | `Sign up` opens Create Account | Signup screen opened | Passed | `/tmp/chillywood-full-interactive-surface-qa-20260605/02-auth-signup-pass.png` |
+| Signup 18+ checkbox | Checkbox toggles without crash | Tapped successfully | Passed | Maestro flow `/tmp/chillywood-auth-signup-visible-qa.yaml` |
+| Signup required fields | Empty submit produces display-name error | `Choose your display name` alert shown | Passed | Maestro flow `/tmp/chillywood-auth-signup-visible-qa.yaml` |
+| Signup legal link | Terms link opens Terms route | `Terms of Use` visible | Passed | Maestro flow `/tmp/chillywood-auth-signup-visible-qa.yaml` |
+| Signup sign-in handoff | `Sign in` returns to login | `Sign In` visible | Passed | `/tmp/chillywood-full-interactive-surface-qa-20260605/02-auth-signup-pass.png` |
+| Explore scope chips | All, Content, People, Platforms, Originals, Live, Events visible | All visible | Passed | Maestro flow `/tmp/chillywood-tab-local-buttons-qa.yaml` |
+| Explore search field | Field accepts text | `Rachi` entered and visible | Passed | Maestro flow `/tmp/chillywood-tab-local-buttons-qa.yaml` |
+| Live bottom tab | Bottom tab opens Live screen | `LIVE` header visible | Passed | Maestro flow `/tmp/chillywood-tab-local-buttons-qa.yaml` |
+| Library bottom tab | Bottom tab opens Library screen | `LIBRARY` header visible | Passed | `/tmp/chillywood-full-interactive-surface-qa-20260605/03-tab-local-buttons-pass.png` |
+| Settings Profile Appearance | Section expands | Profile Photo and Preview Profile visible | Passed | Maestro/ADB proof |
+| Settings Account | Section expands | Username, Profile visibility, Password/security, Chi'lly Circle rows visible | Passed | `/tmp/chillywood-full-interactive-surface-qa-20260605/04-settings-account-open.png` |
+| Player creator-video route | Share/Report/Watch-Party Live and Discussion visible | Creator-video route opened, Report sheet opened/canceled, Discussion and comment field visible | Passed | Maestro flow `/tmp/chillywood-player-comments-qa.yaml` |
+| Player creator-video comment keyboard | Composer remains visible while typing | Play build hid composer behind keyboard | Failed on installed build; fixed in source | `/tmp/chillywood-full-interactive-surface-qa-20260605/05-player-comments-input-failed.png` |
+| Profile route | Open Profile from Settings | Profile loaded with Platform Studio, Open Platform, Settings actions | Passed | Maestro flow `/tmp/chillywood-profile-studio-qa.yaml` |
+| Platform route | Open Platform from Profile | Platform route opened | Passed | Maestro flow `/tmp/chillywood-profile-studio-qa.yaml` |
+| Platform Studio protected route | Platform Studio action | Current proof account receives Premium-required gate | Passed as expected gate | `/tmp/chillywood-full-interactive-surface-qa-20260605/06-profile-platform-studio-fail.png` |
+| Monetization setup | Sandbox safety state | Route shows Sandbox only, Not payable, live money off, payouts off, cash-out/withdraw/transfer absent, Stripe Android digital checkout absent, arbitrary Android prices blocked, payment grants publish = No | Passed visually | `/tmp/chillywood-full-interactive-surface-qa-20260605/07-monetization-route-fail.png` |
+| Owner/Admin protected route | Direct Admin route | Current proof account is denied with active-admin-role requirement | Passed as expected gate | `/tmp/chillywood-full-interactive-surface-qa-20260605/08-admin-route-fail.png` |
+| Support | Support route and feedback action | Support opened and feedback sheet opened/canceled | Passed | Maestro flow `/tmp/chillywood-support-legal-qa.yaml` |
+| Legal | Privacy and Terms routes | Privacy Policy and Terms of Use opened | Passed | Maestro flow `/tmp/chillywood-support-legal-qa.yaml` |
+| Copyright report | Copyright report form route | Report Copyright Infringement opened with reporter/email fields visible; no report submitted | Passed | `/tmp/chillywood-full-interactive-surface-qa-20260605/10-copyright-report-route-fail.png` |
+| Live tab local controls | Open Live, Enter Code, Browse, How Live works | Buttons visible; guide disclosure toggles; source test IDs added for next automation run | Partially proved | `/tmp/chillywood-full-interactive-surface-qa-20260605/11-live-watch-party-entry-fail.png` |
 
 ## Coverage Matrix
 
@@ -90,28 +123,28 @@ Do not mark a row complete unless it has route proof, action proof, and no unsaf
 
 | Area | Controls to test | Current status | Proof/fix |
 | --- | --- | --- | --- |
-| Auth login | Email field, password field, forgot password, login, sign-up link, invalid credentials, keyboard | Partially proved | Login visible; visible-label login works; invalid/forgot/signup still needs focused proof |
-| Auth signup | All fields, 18+ confirmation, legal links, invalid states, submit, keyboard | Not started | Needs device proof |
-| Home | Bottom tabs, Settings, avatar/Profile, hero, rails, Rachi updates, cards, empty states, refresh | Partially proved | Bottom tabs and Settings proved |
-| Explore | Scope chips, search input, clear, typeahead results, people results, title cards, event cards, retry | Not started | Needs device proof |
-| Live tab | Watch-Party entry, Live Stage entry, empty states, gates | Not started in this lane | Prior route proof exists; not full button sweep |
-| Library | Empty state, saved/list cards, route links | Not started | Needs device proof |
-| Settings | Account collapsibles, Profile/Platform section, Premium section, Support/legal routes, logout, delete/restore, switches | Not started in this lane | Needs device proof |
-| Profile | Profile actions, Platform link, Chi'lly Chat, report/share, owner rails | Not started in this lane | Prior signed-in smoke reached Profile; not all buttons |
-| Platform page | Content cards, Platform actions, Studio link, empty states | Not started in this lane | Needs device proof |
-| Platform Studio | Content tab, Brand tab, upload/edit/publish/delete, Money Center links, Premium gates | Not started in this lane | Needs device proof |
-| Player | Share, Report, Watch-Party Live, speed, fullscreen, Back, comments, replies, attachments, gates | Not started in this lane | Prior signed-in Firebase reached Player; not every control |
-| Comments/replies | Comment field, submit, reply, cancel reply, attachment, report/delete | Not started | Needs device proof |
-| Watch-Party Live | Join, create, code entry, gates, composer, controls, leave/rejoin | Not started in this lane | Two-session proof remains blocked |
-| Live Stage | Access/seat gates, request/reserve, composer, reactions, mic/camera disabled states, leave/rejoin | Not started in this lane | Two-session proof remains blocked |
+| Auth login | Email field, password field, forgot password, login, sign-up link, invalid credentials, keyboard | Partially proved | Login visible; visible-label login works; forgot-password empty-email proved; full invalid/login keyboard still needs proof |
+| Auth signup | All fields, 18+ confirmation, legal links, invalid states, submit, keyboard | Partially proved | Signup route, 18+ checkbox, empty-submit error, Terms link, sign-in handoff proved; actual new-account submit and keyboard fit still need proof |
+| Home | Bottom tabs, Settings, avatar/Profile, hero, rails, Rachi updates, cards, empty states, refresh | Partially proved | Bottom tabs and Settings proved; avatar/Profile and card routes still need proof |
+| Explore | Scope chips, search input, clear, typeahead results, people results, title cards, event cards, retry | Partially proved | Scope chips and search input proved; clear/typeahead/cards still need proof |
+| Live tab | Watch-Party entry, Live Stage entry, empty states, gates | Partially proved | Bottom tab opens Live; local entry buttons still need proof |
+| Library | Empty state, saved/list cards, route links | Partially proved | Bottom tab opens Library; local actions/cards still need proof |
+| Settings | Account collapsibles, Profile/Platform section, Premium section, Support/legal routes, logout, delete/restore, switches | Partially proved | Profile Appearance and Account expansion proved; generated source test IDs added; Premium/legal/notifications/logout/delete still need focused proof |
+| Profile | Profile actions, Platform link, Chi'lly Chat, report/share, owner rails | Partially proved | Open Profile, Open Platform, Settings/Studio actions visible; Platform route opens; chat/report/share still need focused proof |
+| Platform page | Content cards, Platform actions, Studio link, empty states | Partially proved | Open Platform route proved from Profile; content-card detail actions still need focused proof |
+| Platform Studio | Content tab, Brand tab, upload/edit/publish/delete, Money Center links, Premium gates | Gate proved | Current proof account gets Premium-required Studio gate; no Premium bypass attempted |
+| Player | Share, Report, Watch-Party Live, speed, fullscreen, Back, comments, replies, attachments, gates | Partially proved | Creator-video Player Share/Report/Watch-Party Live visible, Report sheet canceled, Discussion visible; comment keyboard bug fixed in source; fullscreen/speed/back still need post-update proof |
+| Comments/replies | Comment field, submit, reply, cancel reply, attachment, report/delete | Partially proved | Comment input focus exposed keyboard bug; source adds test IDs and keyboard-safe compact state; no fake comment submitted |
+| Watch-Party Live | Join, create, code entry, gates, composer, controls, leave/rejoin | Partially proved | Live tab Watch-Party Live entry card/button visible; full two-session proof unavailable because emulator did not attach |
+| Live Stage | Access/seat gates, request/reserve, composer, reactions, mic/camera disabled states, leave/rejoin | Partially proved | Live tab Live Watch-Party/Open Live action visible; full two-session proof unavailable because emulator did not attach |
 | Party Room old-room | Old/stale/ended denial, route ownership, recovery actions | Not started in this lane | Guards/prior route proof exist; not full button sweep |
 | Chi'lly Chat | Inbox, thread, compose, send, empty states, keyboard | Not started | Needs device proof |
-| Creator monetization setup | Product tier cards, save buttons, readiness sections, payout read-only, merch readiness | Not started in this lane | Prior monetization proof exists; not full surface sweep |
+| Creator monetization setup | Product tier cards, save buttons, readiness sections, payout read-only, merch readiness | Partially proved | Monetization Setup route shows sandbox safety state, live money off, payouts off, cash-out/withdraw/transfer absent, no Stripe Android digital checkout, arbitrary prices blocked |
 | Internal sandbox purchases | Premium sandbox, digital products, merch checkout, payout readiness, non-tester denial | Not started in this lane | Prior proof exists; not full surface sweep |
 | Money Center | Collapsible/readout sections, Product Catalog, Provider Events, Intents, Grants, Ledger, Merch, Payout Readiness | Not started in this lane | Prior proof exists; not full surface sweep |
-| Owner/Admin | All tabs, Users, Roles, templates, live cost, money drilldowns, reports, protected rules | Not started in this lane | Needs admin session proof; normal denial previously proved |
-| Legal/support routes | Search, collapsibles, table of contents, links, support forms | Not started in this lane | Needs device proof |
-| Reports/moderation | Report sheet categories, submit, cancel, admin denial/readouts | Not started | Needs device proof |
+| Owner/Admin | All tabs, Users, Roles, templates, live cost, money drilldowns, reports, protected rules | Protected denial proved | Current proof account denied; full Owner/Admin tabs require approved owner/operator session |
+| Legal/support routes | Search, collapsibles, table of contents, links, support forms | Partially proved | Support route, support feedback sheet, Privacy, Terms, and copyright-report form open |
+| Reports/moderation | Report sheet categories, submit, cancel, admin denial/readouts | Partially proved | Player report sheet opened/canceled; copyright-report route opens; no report submitted; Admin denial proved |
 
 ## Required Next Passes
 

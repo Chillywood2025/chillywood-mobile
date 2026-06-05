@@ -129,6 +129,7 @@ export default function LiveTabScreen() {
                   onPress={entry.onPress}
                   accessibilityRole="button"
                   accessibilityLabel={entry.action}
+                  testID={`live-tab-${entry.action.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-button`}
                 >
                   <Text style={[styles.cardButtonText, entry.tone !== "primary" && styles.secondaryButtonText]}>{entry.action}</Text>
                 </Pressable>
@@ -142,6 +143,8 @@ export default function LiveTabScreen() {
               onPress={() => setDetailsOpen((current) => !current)}
               accessibilityRole="button"
               accessibilityLabel={detailsOpen ? "Hide how Live works" : "Show how Live works"}
+              accessibilityState={{ expanded: detailsOpen }}
+              testID="live-tab-how-live-works-toggle"
             >
               <View>
                 <Text style={styles.disclosureTitle}>How Live works</Text>

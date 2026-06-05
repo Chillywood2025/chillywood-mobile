@@ -7505,6 +7505,7 @@ export default function PlayerScreen() {
                 accessibilityRole="button"
                 accessibilityState={{ disabled: creatorVideoCommentBusy }}
                 accessibilityLabel="Attach to creator-video comment"
+                testID="creator-video-comment-attach-button"
                 hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
               >
                 <MaterialIcons name="attach-file" size={16} color="#E6ECFA" />
@@ -7516,6 +7517,7 @@ export default function PlayerScreen() {
                   if (creatorVideoCommentsError) setCreatorVideoCommentsError(null);
                 }}
                 onFocus={() => {
+                  setCreatorVideoCommentKeyboardOpen(true);
                   setControlsVisible(true);
                   resetAutoHideTimer();
                 }}
@@ -7529,6 +7531,7 @@ export default function PlayerScreen() {
                 maxLength={CREATOR_VIDEO_COMMENT_BODY_LIMIT}
                 returnKeyType="send"
                 accessibilityLabel={replyTarget ? "Creator video reply input" : "Creator video comment input"}
+                testID={replyTarget ? "creator-video-reply-input" : "creator-video-comment-input"}
               />
               <TouchableOpacity
                 style={[styles.creatorCommentsSendBtn, commentDisabled && styles.secondaryBtnDisabled]}
@@ -7537,6 +7540,7 @@ export default function PlayerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={creatorVideoCommentBusy ? "Posting comment" : replyTarget ? "Post reply" : "Post comment"}
                 accessibilityState={{ disabled: commentDisabled, busy: creatorVideoCommentBusy }}
+                testID={replyTarget ? "creator-video-reply-submit-button" : "creator-video-comment-submit-button"}
                 hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 onPress={() => {
                   void onSubmitCreatorVideoComment();
@@ -8778,7 +8782,7 @@ export default function PlayerScreen() {
 
           </View>
 
-          {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !isStandaloneFullscreen ? (
+          {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !isStandaloneFullscreen && !creatorVideoCommentKeyboardOpen ? (
             <View style={styles.standaloneBelowMediaActions}>
               <TouchableOpacity
                 style={styles.standaloneBelowBackButton}
@@ -9027,7 +9031,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   videoWrapCreatorDiscussionKeyboard: {
-    height: 210,
+    height: 150,
   },
   liveRoomWrap: {
     alignItems: "center",
@@ -9522,8 +9526,11 @@ const styles = StyleSheet.create({
     marginBottom: Platform.OS === "android" ? 14 : 10,
   },
   creatorCommentsPanelKeyboard: {
-    maxHeight: 238,
-    paddingBottom: Platform.OS === "android" ? 12 : 10,
+    maxHeight: 206,
+    paddingTop: 9,
+    paddingBottom: Platform.OS === "android" ? 10 : 8,
+    marginTop: 6,
+    marginBottom: Platform.OS === "android" ? 8 : 6,
   },
   creatorCommentsHeader: {
     flexDirection: "row",
@@ -9550,7 +9557,7 @@ const styles = StyleSheet.create({
     maxHeight: 144,
   },
   creatorCommentsListKeyboard: {
-    maxHeight: 90,
+    maxHeight: 56,
   },
   creatorCommentsListContent: {
     gap: 8,

@@ -32,6 +32,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
+          tabBarButtonTestID: 'main-tab-home',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
@@ -39,6 +40,7 @@ export default function TabLayout() {
         name="explore"
         options={{
           title: 'Explore',
+          tabBarButtonTestID: 'main-tab-explore',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />
@@ -46,6 +48,7 @@ export default function TabLayout() {
         name="live"
         options={{
           title: 'Live',
+          tabBarButtonTestID: 'main-tab-live',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="play.circle.fill" color={color} />,
         }}
       />
@@ -53,6 +56,7 @@ export default function TabLayout() {
         name="my-list"
         options={{
           title: 'Library',
+          tabBarButtonTestID: 'main-tab-library',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="bookmark.fill" color={color} />,
         }}
       />

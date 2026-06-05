@@ -705,6 +705,14 @@ Profile Viewer State Runtime Proof Closeout ran on Android device `R5CR120QCBF` 
 - Never stage `supabase/.temp/`.
 - Stage only task-pure files for the active lane.
 
+## Full Interactive Surface QA Sweep
+
+June 5, 2026 full interactive QA is in progress from a tester point of view. The static inventory lives in `docs/FULL_INTERACTIVE_SURFACE_QA_INVENTORY.md`; the live matrix lives in `docs/FULL_INTERACTIVE_SURFACE_QA_MATRIX.md`; proof is outside the repo at `/tmp/chillywood-full-interactive-surface-qa-20260605/`.
+
+Play-installed device `R5CR120QCBF` proved Home/Explore/Live/Library bottom tabs, auth/signup visible states, Settings Profile Appearance and Account collapsibles, creator-video Player Share/Report/Discussion, Profile -> Platform routing, Platform Studio Premium gate, Monetization Setup safety state, Owner/Admin denial, Support feedback, Privacy/Terms, and Copyright Report intake. The sweep found and fixed a real Player UI bug where the Android keyboard could cover the creator-video comment composer; the fix is UI-only and does not change playback, resolver, or comment backend behavior. Additional source-only testability/accessibility fixes add stable IDs/labels for login/signup, bottom tabs, Settings accordions/rows, Live tab route buttons/disclosure, and creator-video comment controls. EAS Update group `58f4eeb6-2d38-43aa-bc07-88be79dabdb4` published Android update `019e9945-bd16-7f3c-92e0-ee919d93dfea` on runtime `1.0.0` so Play-installed internal testers can pick up the JS/UI fixes after update polling.
+
+Two-session live-room proof is not claimed in this checkpoint: only `R5CR120QCBF` was attached, and local SDK emulator AVDs `Maestro_Pixel_6_API_33_1` and `Pixel_8` exited before registering with ADB. No production money, payouts, cash-out, withdrawal, transfer, Stripe Android digital checkout, LiveKit token issuer, route ownership, Player playback pipeline, Premium/content safety gate, or Owner/Admin authority changed.
+
 ## Current Build Copy Gap Closeout
 
 May 31, 2026 follow-up proof closed the reachable normal-user copy gaps from the current release build.

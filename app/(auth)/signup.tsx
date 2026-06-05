@@ -340,7 +340,9 @@ export default function Signup() {
             onPress={() => setAgeConfirmed((current) => !current)}
             disabled={loading}
             accessibilityRole="checkbox"
+            accessibilityLabel="Confirm you are 18 or older"
             accessibilityState={{ checked: ageConfirmed, disabled: loading }}
+            testID="signup-age-confirmation-checkbox"
           >
             <View style={[styles.checkbox, ageConfirmed && styles.checkboxChecked]}>
               {ageConfirmed ? <View style={styles.checkboxDot} /> : null}
@@ -370,9 +372,11 @@ export default function Signup() {
             style={styles.input}
             placeholder="Display name"
             placeholderTextColor="#8F98AA"
+            accessibilityLabel="Signup display name"
             autoCapitalize="words"
             autoCorrect
             returnKeyType="next"
+            testID="signup-display-name-input"
             value={displayName}
             onChangeText={setDisplayName}
             onFocus={scrollSignupIdentityIntoView}
@@ -383,9 +387,11 @@ export default function Signup() {
               style={styles.usernameInput}
               placeholder="creatorname"
               placeholderTextColor="#8F98AA"
+              accessibilityLabel="Signup username"
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="next"
+              testID="signup-username-input"
               value={username}
               onChangeText={(value) => setUsername(normalizeUsernameHandle(value))}
               onFocus={scrollSignupIdentityIntoView}
@@ -417,6 +423,10 @@ export default function Signup() {
                   style={styles.suggestionChip}
                   onPress={() => setUsername(suggestion)}
                   disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use username ${suggestion}`}
+                  accessibilityState={{ disabled: loading }}
+                  testID={`signup-username-suggestion-${suggestion}`}
                 >
                   <Text style={styles.suggestionChipText}>@{suggestion}</Text>
                 </Pressable>
@@ -429,10 +439,12 @@ export default function Signup() {
           style={styles.input}
           placeholder="Email"
           placeholderTextColor="#8F98AA"
+          accessibilityLabel="Signup email"
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
           returnKeyType="next"
+          testID="signup-email-input"
           value={email}
           onChangeText={setEmail}
           onFocus={scrollSignupEmailIntoView}
@@ -442,8 +454,10 @@ export default function Signup() {
           style={styles.input}
           placeholder="Password"
           placeholderTextColor="#8F98AA"
+          accessibilityLabel="Signup password"
           secureTextEntry
           returnKeyType="done"
+          testID="signup-password-input"
           value={password}
           onChangeText={setPassword}
           onFocus={scrollSignupPasswordIntoView}
@@ -452,7 +466,15 @@ export default function Signup() {
           }}
         />
 
-        <Pressable style={styles.button} onPress={signUp} disabled={loading}>
+        <Pressable
+          style={styles.button}
+          onPress={signUp}
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Sign up"
+          accessibilityState={{ disabled: loading }}
+          testID="signup-submit-button"
+        >
           <Text style={styles.buttonText}>
             {loading ? "Creating..." : "Sign Up"}
           </Text>
