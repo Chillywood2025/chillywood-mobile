@@ -1048,9 +1048,9 @@ export default function PlayerScreen() {
   const [partySyncRole, setPartySyncRole] = useState<"host" | "guest" | null>(null);
   const [partySyncStatus, setPartySyncStatus] = useState<string | null>(null);
   const [watchPartyLiveKitJoinContract, setWatchPartyLiveKitJoinContract] = useState<LiveKitTokenReady | null>(null);
-  // Watch-Party Live controls are intentionally persistent and must not auto-hide.
+  // Live-stage controls stay persistent; shared Player chrome should auto-hide like standalone Player chrome.
   const shouldPinWatchPartyControls = inWatchParty
-    && !isLiveModeFlag
+    && isLiveModeFlag
     && watchPartyEntryAllowed
     && Platform.OS !== "web"
     && !!watchPartyLiveKitJoinContract;
@@ -2973,7 +2973,7 @@ export default function PlayerScreen() {
     ]).start();
 
     Animated.timing(partyPresenceOpacity, {
-      toValue: effectiveControlsVisible ? 1 : 0.4,
+      toValue: effectiveControlsVisible ? 1 : 0,
       duration: effectiveControlsVisible ? 180 : 280,
       easing: effectiveControlsVisible ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
       useNativeDriver: true,
@@ -3361,7 +3361,7 @@ export default function PlayerScreen() {
   ]);
 
   const handleSharedPlaybackTap = useCallback(async () => {
-    setControlsVisible(true);
+    showControlsAndResetAutoHideTimer();
     if (blockViewerSharedPlaybackControl("tap-toggle")) return;
 
     if (!isVideoReady) return;
@@ -3418,7 +3418,7 @@ export default function PlayerScreen() {
     } catch {
       // ignore transient player errors
     }
-  }, [blockViewerSharedPlaybackControl, isPlaying, isVideoReady, nextTitleId, syncHostSharedPlayback, titleId]);
+  }, [blockViewerSharedPlaybackControl, isPlaying, isVideoReady, nextTitleId, showControlsAndResetAutoHideTimer, syncHostSharedPlayback, titleId]);
 
   const handleSingleTap = () => {
     if (isStandalonePlayer && standaloneAccessLoading) return;
@@ -7207,9 +7207,8 @@ export default function PlayerScreen() {
     );
   };
 
-  const renderTitleParticipantExpandedPanel = () => (
-    <View style={styles.titleParticipantFeedWrap}>
-      <View style={[styles.watchPartySocialShell, sharedPartyCommentsKeyboardActive && styles.watchPartySocialShellKeyboardHidden]}>
+  const renderWatchPartySocialPanel = (hideForKeyboard = true) => (
+      <View style={[styles.watchPartySocialShell, hideForKeyboard && sharedPartyCommentsKeyboardActive && styles.watchPartySocialShellKeyboardHidden]}>
         <View style={styles.watchPartySocialHeaderRow}>
           <View style={styles.watchPartyPlayerBandMeta}>
             <Text style={styles.watchPartyPlayerBandKicker}>WATCH-PARTY LIVE</Text>
@@ -7255,6 +7254,11 @@ export default function PlayerScreen() {
           </View>
         )}
       </View>
+  );
+
+  const renderTitleParticipantExpandedPanel = () => (
+    <View style={styles.titleParticipantFeedWrap}>
+      {renderWatchPartySocialPanel()}
 
       <Animated.View
         pointerEvents={effectiveControlsVisible ? "auto" : "none"}
@@ -7633,59 +7637,13 @@ export default function PlayerScreen() {
   const renderSharedFullscreenOverlay = () => {
     if (!isSharedPartyPlayback || !isPlayerFullscreen) return null;
 
-    const fullscreenParticipants = liveBubbleParticipants.slice(0, 6);
-
     return (
       <View style={styles.sharedFullscreenOverlayLayer} pointerEvents="box-none">
-        <View style={styles.sharedFullscreenParticipantRail} pointerEvents="auto">
-          <Text style={styles.sharedFullscreenRailKicker}>ROOM</Text>
-          <ScrollView
-            contentContainerStyle={styles.sharedFullscreenParticipantStack}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {fullscreenParticipants.length > 0 ? (
-              fullscreenParticipants.map((participant) => {
-                const isCurrentUser = participant.id === trackedUserId;
-                const isSpeaking = participant.isSpeaking && participant.canSpeak;
-                const initials = getInitials(participant.name);
-                const bubbleMediaUri = participant.avatarUrl || "";
-                return (
-                  <TouchableOpacity
-                    key={`shared-fullscreen-${participant.id}`}
-                    style={[
-                      styles.sharedFullscreenParticipantBubble,
-                      isSpeaking && styles.sharedFullscreenParticipantBubbleActive,
-                    ]}
-                    onPress={() => onFocusPlayerParticipant(participant)}
-                    activeOpacity={0.86}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Focus ${isCurrentUser ? "your" : participant.name} room bubble`}
-                  >
-                    <View style={styles.sharedFullscreenParticipantAvatar}>
-                      {bubbleMediaUri ? (
-                        <Image source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
-                      ) : (
-                        <Text style={styles.sharedFullscreenParticipantInitials}>{initials}</Text>
-                      )}
-                    </View>
-                    <Text style={styles.sharedFullscreenParticipantName} numberOfLines={1}>
-                      {isCurrentUser ? "You" : participant.name}
-                    </Text>
-                    <Text style={styles.sharedFullscreenParticipantStatus} numberOfLines={1}>
-                      {participant.canSpeak ? (isSpeaking ? "Speaking" : "Seat") : "Viewer"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })
-            ) : (
-              <Text style={styles.sharedFullscreenRailEmpty}>No room members yet.</Text>
-            )}
-          </ScrollView>
-        </View>
-
         <View style={styles.sharedFullscreenCommentsRail} pointerEvents="auto">
           {renderPartyCommentsContent()}
+        </View>
+        <View style={styles.sharedFullscreenParticipantRail} pointerEvents="auto">
+          {renderWatchPartySocialPanel(false)}
         </View>
       </View>
     );
@@ -8697,23 +8655,34 @@ export default function PlayerScreen() {
                   >
                     <TouchableOpacity
                       style={styles.compactChip}
-                      onPress={onPressWatchPartyRoom}
+                      onPress={isCreatorVideoPlayback ? onShareCreatorVideo : onShareStandaloneTitle}
                       activeOpacity={0.85}
                       accessibilityRole="button"
-                      accessibilityLabel="Open Party Room"
+                      accessibilityLabel="Share this shared Player item"
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     >
-                      <Text style={styles.compactChipText}>Party Room</Text>
+                      <Text style={styles.compactChipText}>Share</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.compactChip}
-                      onPress={onToggleWatchPartyComments}
+                      style={[styles.compactChip, (isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy) && styles.secondaryBtnDisabled]}
+                      onPress={() => {
+                        if (isCreatorVideoPlayback) {
+                          setCreatorVideoReportVisible(true);
+                          return;
+                        }
+                        setTitleReportVisible(true);
+                      }}
+                      disabled={isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy}
                       activeOpacity={0.85}
                       accessibilityRole="button"
-                      accessibilityLabel={partyCommentsOpen ? "Hide room comments" : "Show room comments"}
+                      accessibilityLabel={(isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy) ? "Sending safety report" : "Report this shared Player item"}
+                      accessibilityState={{
+                        disabled: isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy,
+                        busy: isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy,
+                      }}
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     >
-                      <Text style={styles.compactChipText}>Comments</Text>
+                      <Text style={styles.compactChipText}>{(isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy) ? "Sending..." : "Report"}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.compactChip, styles.compactSpeedChip, watchPartyLiveSharedPlaybackControlsLocked && styles.secondaryBtnDisabled]}
@@ -9943,16 +9912,16 @@ const styles = StyleSheet.create({
   },
   sharedFullscreenParticipantRail: {
     position: "absolute",
-    left: 10,
+    right: 10,
     top: 54,
     bottom: 76,
-    width: 92,
+    width: 286,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(4,6,10,0.5)",
-    paddingHorizontal: 8,
-    paddingVertical: 10,
+    backgroundColor: "rgba(4,6,10,0.44)",
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   sharedFullscreenRailKicker: {
     color: "#E8EDF8",
@@ -10013,10 +9982,10 @@ const styles = StyleSheet.create({
   },
   sharedFullscreenCommentsRail: {
     position: "absolute",
-    right: 10,
+    left: 10,
     top: 54,
     bottom: 76,
-    width: 238,
+    width: 330,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -10264,9 +10233,10 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: "rgba(8,10,18,0.46)",
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 22,
     minHeight: 176,
-    maxHeight: 312,
+    maxHeight: 430,
     shadowColor: "#000",
     shadowOpacity: 0.22,
     shadowRadius: 18,
