@@ -1,10 +1,12 @@
 # Money Center Launch Review Packet
 
-Updated June 4, 2026.
+Updated June 5, 2026.
 
 This packet summarizes Chi'llywood's sandbox monetization proof for Google Play review prep, owner/operator review, and investor-readiness discussions. It does not activate production money.
 
 Canonical final truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
+Production policy operations readiness addendum: `docs/PRODUCTION_MONEY_POLICY_OPERATIONS_READINESS.md` and `docs/PRODUCTION_MONEY_READINESS_INDEX.md` prepare legal, tax, fraud/risk, support, refund/return, merch fulfillment, payout operations, and Owner/Admin approval-gate material for a future explicit production activation lane. These docs are drafts/readiness artifacts only. They do not activate production money, production merch checkout, payout execution, cash-out, withdrawal, transfer, payable balances, or Stripe Android digital checkout.
 
 Creator setup flow addendum: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes the creator-facing setup map. Approved creators/internal testers can configure sandbox paid content, Watch-Party tickets, Live access passes, Live seat passes, event passes, tips, and physical merch from in-app approved tiers only. Play-installed proof saved every setup row, and remote readback proves provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, merch readiness, and payout readiness read-only. These setup records do not activate public production purchases, payout execution, cash-out, withdrawal, transfer, payable balances, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin power, or safety bypass.
 

@@ -1,8 +1,10 @@
 # Money Center Product Policy
 
-Last updated: June 4, 2026
+Last updated: June 5, 2026
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
+June 5, 2026 production policy operations readiness update: `docs/PRODUCTION_MONEY_POLICY_OPERATIONS_READINESS.md` and `docs/PRODUCTION_MONEY_READINESS_INDEX.md` add the future-production legal, tax, fraud/risk, support, refund/return, merch fulfillment, payout operations, and Owner/Admin approval-gate framework. Money Center/Admin copy may reference these documents as readiness/draft status only: legal review needed, tax review needed, fraud/support workflows prepared for review, refund/return drafts ready for review, merch fulfillment plan ready for review, payout terms draft ready for review, production activation locked, payouts not active, and no payable balance. Do not add or imply live activation buttons from this packet.
 
 June 5, 2026 creator setup flow update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` records the completed in-app setup matrix for approved creator/internal tester sandbox monetization. Platform Studio links to `/creator-monetization-setup`, where creators choose approved sandbox tiers only and bind a real source UUID. Migrations `20260605000610_creator_monetization_in_app_setup_flows.sql` and `20260605002000_bound_creator_monetization_setup_access.sql` add `creator_monetization_configs` plus safe creator/admin RPCs, then require owner/operator or active beta/internal tester access for saves. Config rows are sandbox-only/not-payable and remote readback proves one safe setup row for each product type, provider-event/intent/grant/ledger proof for Android digital products, merch readiness, payout readiness read-only, and no production money, payouts, payable balance, cash-out, withdrawal, transfer, Stripe Android digital checkout, fake sales, LiveKit publish, host/speaker/mod/admin authority, or safety bypass.
 

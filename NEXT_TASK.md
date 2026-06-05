@@ -4,9 +4,11 @@
 
 Google Play Publishing Overview And Release Asset Closeout.
 
+Production Money Policy Operations Readiness is now prepared without activation. `docs/PRODUCTION_MONEY_POLICY_OPERATIONS_READINESS.md` and `docs/PRODUCTION_MONEY_READINESS_INDEX.md` collect the legal drafts, tax readiness, fraud/risk rules, support workflows, refund/return policy drafts, merch fulfillment plan, payout operations plan, and Owner/Admin approval gates needed for a future production-money activation lane. These documents are drafts/readiness artifacts only; they do not enable production checkout, production merch, payout execution, cash-out, withdrawal, transfer, payable balances, or Stripe Android digital checkout.
+
 The route-backed monetization visual proof is complete and documented in `docs/ROUTE_BACKED_MONETIZATION_VISUAL_PROOF.md`. Play-installed Android proof captured contextual viewer gates for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, and event pass, plus Owner/Admin Money Center readouts for Product Catalog, Provider Events/Webhooks, Purchase Intents, Access Grants, Ledger Events, Merch Products/Orders, Payout Readiness, Money Center Overview, Money Audit Explorer, and Technical Checks. Remote readback still shows live money off, payouts off, cash-out off, production/payout/payable/publish/host-power config rows `0`, payable/paid money-access rows `0`, payout requests `0`, provider payout-enabled accounts `0`, active route-backed proof roles `0`, and active temp/proof roles `0`.
 
-Do not start another broad monetization foundation, setup, sandbox purchase, route-backed gate, or Owner/Admin monetization drilldown lane unless a specific regression is found. The next useful work is Play/release execution, release-candidate visual QA, or future production approval planning.
+Do not start another broad monetization foundation, setup, sandbox purchase, route-backed gate, Owner/Admin monetization drilldown, or production-readiness-docs lane unless a specific regression is found. The next useful work is Play/release execution, release-candidate visual QA, or a future explicit production activation approval lane after legal/tax/provider/fraud/support signoff.
 
 Required boundaries remain unchanged: production live money off, payouts off, payout execution absent, cash-out/withdrawal/transfer absent, sandbox/setup rows not payable, Stripe Android digital checkout absent, no fake sales/balances/provider events, no LiveKit publish or host authority from payment, and no route ownership changes.
 
