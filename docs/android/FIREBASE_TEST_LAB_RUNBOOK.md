@@ -246,6 +246,30 @@ Scope remains bounded:
 - This proves signed-in Firebase Test Lab route smoke.
 - It does not prove LiveKit two-session host/viewer behavior, Google Play / RevenueCat purchase completion, Stripe Checkout, Stripe Connect, Owner/Admin authority, or Money Center final proof.
 
+## 2026-06-05 Signed-In Artifact Review
+
+Artifact review doc:
+
+```text
+docs/android/FIREBASE_TEST_LAB_SIGNED_IN_ARTIFACT_REVIEW.md
+```
+
+Reviewed matrix:
+
+- Matrix: `matrix-3pmfaxfsjto4g`.
+- Axis: `MediumPhone.arm-35-en-portrait`.
+- Outcome: `Passed`.
+- Reviewed artifacts: screenshots, `video.mp4`, `actions.json`, `sitemap.png`, `robo_results.pb`, and `logcat`.
+
+Artifact review result:
+
+- No Chi'llwood fatal exception, ANR, React Native fatal error, broken route, blank screen, stuck loading state, unsafe money/payout copy, production buy button, Stripe Android digital checkout, visible committed credential, LiveKit issue, or route-ownership issue was found.
+- The action trace contained 71 successful Robo events and confirmed signed-in route smoke through Settings / Account, Profile / Platform actions, Platform Studio, Player/fullscreen, and comments.
+- The signed-in account identifier appears in Settings as expected account UI. Screenshots/logs remain in `/tmp` and are not committed.
+- No code fix was made, so no signed-in Test Lab rerun was needed for this artifact-review lane.
+
+Scope remains bounded. This signed-in artifact review does not prove LiveKit two-session behavior, Google Play purchases, RevenueCat restore, Stripe Checkout, Stripe Connect, Owner/Admin authority, or Money Center final proof.
+
 ## Prerequisites
 
 1. Install Google Cloud SDK.
