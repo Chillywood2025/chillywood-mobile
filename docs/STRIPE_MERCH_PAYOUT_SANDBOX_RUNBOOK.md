@@ -8,7 +8,7 @@ Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
 Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) does not change Stripe policy. Stripe remains physical merch sandbox checkout and Stripe Connect payout-readiness only; Android digital goods stay on Google Play / RevenueCat. Approved testers can use Stripe physical merch sandbox checkout through the sandbox tester route; `stripe-merch-checkout` still requires a sandbox physical merch product with `creates_digital_access=false`. Stripe Connect payout readiness remains read-only with no payout request, simulation, cash-out, withdrawal, transfer, payable balance, or payout activation.
 
-Creator setup flow update: `docs/CREATOR_MONETIZATION_IN_APP_FLOWS.md` exposes physical merch readiness from `/creator-monetization-setup` for approved creators/internal testers. The only merch tier in this lane is `cw_merch_test_tee_sandbox`, physical goods only, Stripe test mode only, no real fulfillment, no Android digital access, no RevenueCat/Premium entitlement, no payable balance, and no payout activation.
+Creator setup flow update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` proves physical merch readiness from `/creator-monetization-setup` for approved creators/internal testers. The saved merch tier is `cw_merch_test_tee_sandbox`, physical goods only, Stripe test mode only, no real fulfillment, no Android digital access, no RevenueCat/Premium entitlement, no payable balance, and no payout activation. Play-installed proof opened Stripe Checkout sandbox for Chi'llwood Test Tee; the prior Stripe lane remains the signed-webhook paid-order proof.
 
 ## Current Status
 

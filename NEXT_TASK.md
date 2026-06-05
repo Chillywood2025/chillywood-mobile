@@ -2,9 +2,9 @@
 
 ## Current Recommendation
 
-Public V1 creator monetization setup visual/provider proof.
+Public V1 contextual monetization gate and admin visual QA.
 
-The in-app creator setup layer is now implemented repo-side through `/creator-monetization-setup` and remote migrations `20260605000610_creator_monetization_in_app_setup_flows.sql` plus `20260605002000_bound_creator_monetization_setup_access.sql`. The next best task is Android proof on the Play-installed internal build after an EAS Update/build: capture creator setup save flows, at least two sandbox purchase launchers, Owner/Admin inspection, and safety states. Do not rebuild payment rails or activate production money.
+The in-app creator setup layer is now completed and documented in `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md`. `/creator-monetization-setup` saved every approved sandbox setup row on the Play-installed internal build, Stripe merch sandbox checkout launched, and remote readback proved provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, merch readiness, payout readiness read-only, and zero production/payout/payable/publish/host-power config rows. The next best task is narrow visual QA: capture contextual viewer gates for paid content, ticket, live access, live seat, and event pass, plus Owner/Admin UI drilldowns for the already-proved configs. Do not rebuild payment rails or activate production money.
 
 Required boundaries remain unchanged: production live money off, payouts off, payout execution absent, cash-out/withdrawal/transfer absent, sandbox/setup rows not payable, Stripe Android digital checkout absent, no fake sales/balances/provider events, no LiveKit publish or host authority from payment, and no route ownership changes.
 

@@ -4,7 +4,7 @@ Updated: June 4, 2026
 
 This document explains the bounded purchase mode for approved internal testers and the Owner/Admin controls around it. It does not activate production money.
 
-Creator setup flow addendum: `docs/CREATOR_MONETIZATION_IN_APP_FLOWS.md` adds `/creator-monetization-setup` for approved creators/internal testers. The screen lets testers bind real source UUIDs to approved sandbox tiers for paid content, Watch-Party tickets, Live access passes, Live seat passes, event passes, tips, and physical merch. It still uses the same internal tester gate, keeps public/default purchase surfaces closed, and cannot create payout execution, payable balances, production purchases, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin authority, fake sales, or safety bypass.
+Creator setup flow addendum: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes `/creator-monetization-setup` for approved creators/internal testers. The screen saves real source UUIDs to approved sandbox tiers for paid content, Watch-Party tickets, Live access passes, Live seat passes, event passes, tips, and physical merch. It still uses the same internal tester gate, keeps public/default purchase surfaces closed, and cannot create payout execution, payable balances, production purchases, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin authority, fake sales, or safety bypass.
 
 ## Why Premium Looked Unavailable
 

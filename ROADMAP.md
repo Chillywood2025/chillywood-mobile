@@ -2,10 +2,11 @@
 
 ## Current Public V1 Money Setup Status
 
-- Done repo-side: creator-facing in-app sandbox setup route `/creator-monetization-setup`, Platform Studio Money Center links, `creator_monetization_configs` migrations, linked typegen refresh, and guards for approved product tiers plus server-side owner/operator or active beta/internal tester access only.
+- Done repo-side and Play-installed proof: creator-facing in-app sandbox setup route `/creator-monetization-setup`, Platform Studio Money Center links, `creator_monetization_configs` migrations, linked typegen refresh, guards for approved product tiers plus server-side owner/operator or active beta/internal tester access only, and the completion checklist proof for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, creator tip, event pass, and physical merch readiness.
 - Done rail-side: Google Play / RevenueCat sandbox digital goods, Stripe physical merch sandbox checkout, and Stripe Connect payout readiness.
+- Done matrix-side: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` records one safe setup config for every monetization type plus provider-event/intent/grant/ledger/order/readiness readback.
 - Still future: production digital sales activation, production merch launch, production payouts, payout execution, cash-out, withdrawal, transfer, arbitrary/multi-tier Android pricing beyond mapped Google Play / RevenueCat products, and final public reviewer/production policy approvals.
-- Next proof: Play-installed Android visual/provider proof for the creator setup route and Owner/Admin inspection after update/build distribution.
+- Next proof: contextual viewer-gate screenshots and Owner/Admin UI drilldown screenshots for release QA; the backend/provider setup matrix is already complete.
 
 ## Planning Rule
 `ROADMAP.md` now records Chi'llywood's phased product planning truth rather than older chapter-by-chapter execution history.

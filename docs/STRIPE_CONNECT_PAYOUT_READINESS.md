@@ -8,7 +8,7 @@ Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
 Internal tester sandbox mode (`docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`) does not activate payouts. Stripe Connect remains sandbox readiness only; app-level payouts, cash-out, withdrawal, transfer, and payable balances stay off. Owner/Admin Money Center lists payout readiness inside `Internal Sandbox Testing` as read-only, and internal testers cannot request, trigger, simulate, cash out, withdraw, transfer, or activate payouts.
 
-Creator setup flow update: `docs/CREATOR_MONETIZATION_IN_APP_FLOWS.md` keeps payout readiness read-only inside creator monetization setup. The setup route may show Connect/KYC/tax readiness copy, but it provides no payout request, payout simulation, withdrawal, transfer, cash-out, payable balance, or production payout activation.
+Creator setup flow update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` keeps payout readiness read-only inside creator monetization setup. The setup route may show Connect/KYC/tax readiness copy, but it provides no payout request, payout simulation, withdrawal, transfer, cash-out, payable balance, or production payout activation. Completion readback still shows provider payout-enabled accounts `0`, payout requests `0`, and payable/paid creator payout ledger rows `0`.
 
 ## Current Readiness
 

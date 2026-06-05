@@ -14,7 +14,7 @@ Public V1 money-proof RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`.
 
 Internal tester sandbox mode: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md`. Approved testers can now use bounded sandbox purchase surfaces; public/default users still cannot see production-like digital buy buttons. Owner/Admin Money Center now shows `Internal Sandbox Testing` controls and tester-tool routing. Payout readiness is read-only and is not a digital purchase product.
 
-Creator setup flow: `docs/CREATOR_MONETIZATION_IN_APP_FLOWS.md` adds a creator-facing setup layer for the same proved sandbox products. Setup configs bind real source UUIDs to approved Google Play / RevenueCat sandbox tiers only. They do not by themselves create provider events, access grants, ledger rows, payable balances, production purchases, or LiveKit authority.
+Creator setup flow: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes the creator-facing setup layer for the same proved sandbox products. Setup configs bind real source UUIDs to approved Google Play / RevenueCat sandbox tiers only. Completion proof saved every setup row and remote readback shows processed sandbox provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, and zero production/payout/payable/publish/host-power config rows.
 
 ## Backend Status
 
@@ -38,6 +38,7 @@ Creator setup flow: `docs/CREATOR_MONETIZATION_IN_APP_FLOWS.md` adds a creator-f
 | Play item availability | Fixed for the proof device by accepting the exact internal-test opt-in link, uninstalling the EAS/internal install with `installer=null`, installing from Google Play, then updating from Play to versionCode `23` with `installer=com.android.vending` |
 | Real non-Premium sandbox purchases | Creator tip, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, paid content access, and event pass completed through Google Play test card / RevenueCat sandbox and webhook processing |
 | Internal tester sandbox mode | Added for approved testers only; normal users remain closed/default and all rows stay sandbox/not-payable |
+| Creator setup completion matrix | Completed on Play-installed Android; proof path `/tmp/chillywood-creator-monetization-flow-completion-matrix-proof-20260605/`; all approved setup rows saved; provider-event/intent/grant/ledger proof read back remotely |
 
 ## Product Proof Matrix
 

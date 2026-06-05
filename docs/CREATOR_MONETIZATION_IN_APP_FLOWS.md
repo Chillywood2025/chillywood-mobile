@@ -2,6 +2,8 @@
 
 Date: June 5, 2026
 
+Completion update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` now closes the setup-flow matrix. `/creator-monetization-setup` saved sandbox/not-payable configs for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, creator tip, event pass, and physical merch readiness against proved source fixtures. Remote readback shows processed sandbox provider events and consumed intents for every Android digital product, sandbox/not-payable ledger rows for every digital product, access grants where appropriate, Stripe merch sandbox launch/readiness, payout readiness read-only, and zero production/payout/payable/publish/host-power config rows.
+
 This lane adds creator-facing setup flows on top of the already-proved sandbox payment rails. It does not activate production money.
 
 ## What Changed
@@ -100,16 +102,20 @@ Unavailable after the final access-bound migration:
 
 ## Proof Path
 
-Planned Android proof path:
+Initial Android proof path:
 
 `/tmp/chillywood-creator-monetization-in-app-flows-proof-20260604/`
 
-Repo-side proof is complete. Android proof should capture the route after EAS Update or Play/internal build distribution.
+Completion matrix proof path:
+
+`/tmp/chillywood-creator-monetization-flow-completion-matrix-proof-20260605/`
+
+Play-installed Android proof captured the completion checklist, saved rows for every approved tier, and Stripe sandbox checkout launch. Remote readback supplies the provider-event, purchase-intent, access-grant, ledger, merch, and payout-readiness counts.
 
 ## Remaining Gaps
 
-- Android visual/provider proof after the route is distributed to internal testers.
-- Optional real purchase rerun from saved creator config for at least two flows.
+- Fresh contextual Android screenshots for every viewer gate remain useful release QA, but the provider/resolver/backend proof exists.
+- Fresh Owner/Admin UI screenshots for every config row were not captured with the internal tester session; sanitized remote readback proves the inspection data.
 - Additional price tiers require future Google Play / RevenueCat products.
 - Production merch launch requires fulfillment, refund/return, support, legal, and Data Safety approval.
 - Production payouts require live Stripe approval, tax/legal readiness, fraud review, payout policy, support readiness, and explicit owner approval.
