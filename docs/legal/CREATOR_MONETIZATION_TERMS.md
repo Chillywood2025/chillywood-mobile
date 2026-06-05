@@ -1,8 +1,8 @@
-# Merch Operation Checklist
+# Creator Monetization Terms
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
-This checklist defines the steps required before production merch checkout can be enabled.
+These terms describe the expected rules for creators who configure monetized content or experiences on Chi'llwood after production approval. They are not active until Chi'llwood enables production money in a separate approved lane.
 
 
 ## Chi'llwood Money Boundary
@@ -19,24 +19,22 @@ Before this material is used as public policy or production operating procedure,
 
 The approval standard is evidence-based. A reviewer should be able to inspect the current repo docs, Owner/Admin readiness screens, provider dashboards, Data Safety answers, support playbooks, tax plan, legal terms, fraud rules, and kill-switch state before approving production. If any dependency is missing, the correct state is blocked or review needed, not ready. A production activation checklist item is complete only when a named owner, date, evidence link, and rollback decision are recorded.
 
-## Prelaunch Checklist
+## Creator Eligibility
 
-Confirm product catalog, SKU definitions, inventory or fulfillment partner, shipping policy, return policy, support playbook, sales tax readiness, privacy review, fraud rules, Stripe live configuration, webhook verification, order status readout, fulfillment status readout, refund process, chargeback process, Owner approval, rollback plan, and Data Safety update. Each item should have evidence and an owner.
+A creator should be eligible for monetization only if the account is in good standing, satisfies age and identity requirements, accepts the applicable terms, and complies with Chi'llwood creator, community, copyright, and safety rules. Eligibility should be revocable when the creator violates policy, appears to manipulate purchases, sells prohibited content, fails verification, triggers fraud review, or creates unacceptable support risk. Eligibility does not guarantee earnings, audience, availability, placement, or payout approval.
 
-## Launch Readiness
+## Creator Responsibilities
 
-Production merch should remain locked until the product can be described accurately, fulfilled reliably, supported consistently, taxed appropriately, refunded or returned according to policy, and disabled quickly through a kill switch. A test-mode Checkout success does not prove those operational dependencies.
+Creators are responsible for the content, events, rooms, merch descriptions, titles, thumbnails, and access claims they publish. They must have the rights needed to monetize the material. They must not imply that a ticket, access pass, event pass, seat pass, tip, or merch order grants host power, speaker authority, moderator authority, admin authority, LiveKit publish permission, or safety bypass. They must not describe sandbox activity as real earnings. They must not direct Android users to Stripe or external payment links for digital goods.
 
-## Postlaunch Review
+## Platform Rights
 
-After launch, review order failures, support volume, delayed shipments, damaged item claims, refunds, disputes, fraudulent orders, and fulfillment timing. Update policy copy and support templates when evidence shows users are confused.
+Chi'llwood may remove or restrict monetized content, cancel or block monetized rooms or events, revoke access grants, disable monetization, hold or block payout eligibility, or escalate an account for review when safety, copyright, fraud, provider, support, or legal concerns arise. If content becomes private, draft, deleted, admin removed, malware detected, blocked, canceled, ended, stale, removed, or disabled, access may be denied even if a user previously purchased access. Purchase does not override safety or availability rules.
 
+## Refunds And Violations
 
-## Operating Review Cadence
+Refunds, reversals, provider disputes, chargebacks, fraud holds, policy removals, support decisions, and provider fees may reduce or eliminate future payable amounts after production activation. Sandbox activity is never payable. Repeated abuse, misleading access claims, refund manipulation, prohibited content, or suspicious sales may cause monetization suspension. Creator disputes should follow the support and escalation process rather than direct provider manipulation.
 
-This document should be reviewed before any production-money activation request, after any material provider-policy change, after any chargeback or fraud pattern that reveals a process gap, and before any public launch that changes data collection, payment collection, creator eligibility, merch fulfillment, or payout readiness. Reviewers should confirm that the document still matches the repo truth: live money off until approved, payouts off until approved, sandbox rows not payable, no Stripe Android digital checkout, no fake balances, and no payment-created authority. If a future activation lane changes any of those facts, the document should be updated in the same lane and validated against guards before release.
-
-Operational owners should avoid silent policy drift. If support starts using a different refund phrase, if Owner/Admin sees a new readiness state, if a provider adds a requirement, or if a new product tier is added to Google Play or Stripe, the matching policy and checklist should be updated. Public-facing policy text should be versioned, dated, and stored with the release evidence so support and reviewers know which language governed a specific purchase or account action.
 
 ## Operating Review Cadence
 

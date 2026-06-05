@@ -1,8 +1,8 @@
-# Merch Operation Checklist
+# Merch Terms
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
-This checklist defines the steps required before production merch checkout can be enabled.
+These terms describe physical merch operations for a future production merch launch. Merch is physical goods only and must remain separate from Android digital access.
 
 
 ## Chi'llwood Money Boundary
@@ -19,17 +19,21 @@ Before this material is used as public policy or production operating procedure,
 
 The approval standard is evidence-based. A reviewer should be able to inspect the current repo docs, Owner/Admin readiness screens, provider dashboards, Data Safety answers, support playbooks, tax plan, legal terms, fraud rules, and kill-switch state before approving production. If any dependency is missing, the correct state is blocked or review needed, not ready. A production activation checklist item is complete only when a named owner, date, evidence link, and rollback decision are recorded.
 
-## Prelaunch Checklist
+## Physical Goods Only
 
-Confirm product catalog, SKU definitions, inventory or fulfillment partner, shipping policy, return policy, support playbook, sales tax readiness, privacy review, fraud rules, Stripe live configuration, webhook verification, order status readout, fulfillment status readout, refund process, chargeback process, Owner approval, rollback plan, and Data Safety update. Each item should have evidence and an owner.
+Merch refers to physical goods such as apparel or creator-branded items. A merch purchase must not unlock Premium, paid content, tickets, access passes, seat passes, event passes, tips, LiveKit publish, host power, speaker authority, moderator/admin authority, or payout access. Product pages should clearly distinguish merch from digital access and should not imply that buying a physical item changes a user's content or room permissions.
 
-## Launch Readiness
+## Descriptions, Pricing, And Availability
 
-Production merch should remain locked until the product can be described accurately, fulfilled reliably, supported consistently, taxed appropriately, refunded or returned according to policy, and disabled quickly through a kill switch. A test-mode Checkout success does not prove those operational dependencies.
+Merch descriptions should identify the item, size or variant, materials where relevant, price, shipping expectations, fulfillment status, inventory limitations, and support contact. If inventory is limited or manual fulfillment is used, the customer should see realistic timing rather than automated fulfillment promises. Out-of-stock, delayed, canceled, refunded, disputed, and blocked states should be handled by support and Owner/Admin readouts.
 
-## Postlaunch Review
+## Shipping And Fulfillment
 
-After launch, review order failures, support volume, delayed shipments, damaged item claims, refunds, disputes, fraudulent orders, and fulfillment timing. Update policy copy and support templates when evidence shows users are confused.
+Production merch requires a documented fulfillment owner, address handling policy, tracking strategy, damaged-item process, missing-item process, delayed-shipment process, return window, exchange rules, and privacy review. Manual fulfillment can be acceptable for an early launch only if support copy, status states, and escalation paths are clear. Stripe test-mode proof does not prove production fulfillment readiness.
+
+## Returns And Refunds
+
+Merch refund and return decisions should consider damaged items, wrong items, missing packages, delayed shipments, out-of-stock cancellations, fraud risk, chargebacks, and support evidence. A refund must not create digital access changes except to ensure merch never created such access in the first place. Customer support should avoid promising guaranteed delivery or guaranteed refund outside the approved policy.
 
 
 ## Operating Review Cadence

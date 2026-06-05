@@ -1,8 +1,8 @@
-# Merch Operation Checklist
+# Creator Payout Terms
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
-This checklist defines the steps required before production merch checkout can be enabled.
+These terms describe the payout framework Chi'llwood should use only after production payout activation is approved. Payout readiness is currently read-only and no payout execution is available.
 
 
 ## Chi'llwood Money Boundary
@@ -19,17 +19,21 @@ Before this material is used as public policy or production operating procedure,
 
 The approval standard is evidence-based. A reviewer should be able to inspect the current repo docs, Owner/Admin readiness screens, provider dashboards, Data Safety answers, support playbooks, tax plan, legal terms, fraud rules, and kill-switch state before approving production. If any dependency is missing, the correct state is blocked or review needed, not ready. A production activation checklist item is complete only when a named owner, date, evidence link, and rollback decision are recorded.
 
-## Prelaunch Checklist
+## Payout Eligibility
 
-Confirm product catalog, SKU definitions, inventory or fulfillment partner, shipping policy, return policy, support playbook, sales tax readiness, privacy review, fraud rules, Stripe live configuration, webhook verification, order status readout, fulfillment status readout, refund process, chargeback process, Owner approval, rollback plan, and Data Safety update. Each item should have evidence and an owner.
+A creator should become payout eligible only after accepting payout terms, completing required Stripe Connect onboarding, satisfying KYC and tax requirements, clearing fraud and policy review, meeting any minimum payout threshold, and having an approved payout method. Provider status alone is not enough. App-level payout approval, support readiness, refund reserve rules, chargeback handling, and Owner/Admin approval are required before payout execution.
 
-## Launch Readiness
+## Tax And Verification
 
-Production merch should remain locked until the product can be described accurately, fulfilled reliably, supported consistently, taxed appropriately, refunded or returned according to policy, and disabled quickly through a kill switch. A test-mode Checkout success does not prove those operational dependencies.
+Creators are responsible for accurate tax identity and payment information. Chi'llwood should rely on Stripe Connect where appropriate for identity and tax collection, but the platform must still confirm its own filing responsibilities with tax professionals. U.S. and non-U.S. creators may require different forms, withholding decisions, support processes, and reporting timelines. No document should promise 1099 treatment, payout timing, or withholding outcomes until tax review is complete.
 
-## Postlaunch Review
+## Payout Holds
 
-After launch, review order failures, support volume, delayed shipments, damaged item claims, refunds, disputes, fraudulent orders, and fulfillment timing. Update policy copy and support templates when evidence shows users are confused.
+Payouts may be held for new creator review, KYC or tax incompleteness, provider requirements, suspicious sales, refund or chargeback spikes, policy reports, blocked accounts, suspicious device changes, negative balance risk, disputes, or legal requests. Holds should be visible as review states, not as available balances. Releasing a hold should require evidence, audit reason, and authorized Owner/Admin action after production activation.
+
+## No Current Payout Execution
+
+Current Chi'llwood payout readiness is sandbox/read-only. Creators cannot request payout, simulate payout, cash out, withdraw, transfer, or access a payable balance. Test-mode Stripe Connect statuses may appear in readiness screens, but they are not approval for real payouts. Sandbox and setup rows are not earnings.
 
 
 ## Operating Review Cadence

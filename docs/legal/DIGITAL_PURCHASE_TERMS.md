@@ -1,8 +1,8 @@
-# Merch Operation Checklist
+# Digital Purchase Terms
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
-This checklist defines the steps required before production merch checkout can be enabled.
+These terms describe Android digital purchase expectations for future production activation. Android digital goods use Google Play and RevenueCat, not Stripe.
 
 
 ## Chi'llwood Money Boundary
@@ -19,17 +19,21 @@ Before this material is used as public policy or production operating procedure,
 
 The approval standard is evidence-based. A reviewer should be able to inspect the current repo docs, Owner/Admin readiness screens, provider dashboards, Data Safety answers, support playbooks, tax plan, legal terms, fraud rules, and kill-switch state before approving production. If any dependency is missing, the correct state is blocked or review needed, not ready. A production activation checklist item is complete only when a named owner, date, evidence link, and rollback decision are recorded.
 
-## Prelaunch Checklist
+## Covered Digital Products
 
-Confirm product catalog, SKU definitions, inventory or fulfillment partner, shipping policy, return policy, support playbook, sales tax readiness, privacy review, fraud rules, Stripe live configuration, webhook verification, order status readout, fulfillment status readout, refund process, chargeback process, Owner approval, rollback plan, and Data Safety update. Each item should have evidence and an owner.
+Digital products include Premium, creator tips, Watch-Party Live tickets, Live Watch-Party access passes, Live Watch-Party seat passes, paid content access, and event passes. Each product must be mapped to an approved Google Play and RevenueCat product before it is offered on Android. Creators must not type arbitrary Android prices unless the backend maps that price to an approved provider product.
 
-## Launch Readiness
+## Access Limits
 
-Production merch should remain locked until the product can be described accurately, fulfilled reliably, supported consistently, taxed appropriately, refunded or returned according to policy, and disabled quickly through a kill switch. A test-mode Checkout success does not prove those operational dependencies.
+Digital purchases grant only the access described by the product. Paid content grants paid-content access only while the content remains public and safe. A ticket grants viewer or listener entry only. An access pass grants entry or viewing only. A seat pass grants eligibility only and host approval remains required for mic, camera, or speaker authority. An event pass grants viewing or entry only while the event remains active and allowed. Tips are support activity and do not unlock access.
 
-## Postlaunch Review
+## Refunds And Reversals
 
-After launch, review order failures, support volume, delayed shipments, damaged item claims, refunds, disputes, fraudulent orders, and fulfillment timing. Update policy copy and support templates when evidence shows users are confused.
+Refund handling may involve Google Play, RevenueCat, Chi'llwood support, or provider dashboards depending on product and payment state. Refunds, chargebacks, reversals, fraud holds, or safety removals may revoke access or prevent future access. A purchase does not override blocked-user, private, draft, deleted, admin-removed, malware, canceled, ended, stale, removed, or disabled states.
+
+## Android Payment Policy
+
+Android in-app digital goods should remain on Google Play Billing through RevenueCat unless a future eligible policy path is reviewed and approved. Stripe merch checkout must not be repurposed for Android digital goods. External payment links must not be added for Android digital goods.
 
 
 ## Operating Review Cadence

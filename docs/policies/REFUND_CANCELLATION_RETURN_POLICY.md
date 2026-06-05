@@ -1,8 +1,8 @@
-# Merch Operation Checklist
+# Refund Cancellation Return Policy
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
-This checklist defines the steps required before production merch checkout can be enabled.
+This policy defines the high-level refund, cancellation, and return approach across digital goods and physical merch.
 
 
 ## Chi'llwood Money Boundary
@@ -19,17 +19,17 @@ Before this material is used as public policy or production operating procedure,
 
 The approval standard is evidence-based. A reviewer should be able to inspect the current repo docs, Owner/Admin readiness screens, provider dashboards, Data Safety answers, support playbooks, tax plan, legal terms, fraud rules, and kill-switch state before approving production. If any dependency is missing, the correct state is blocked or review needed, not ready. A production activation checklist item is complete only when a named owner, date, evidence link, and rollback decision are recorded.
 
-## Prelaunch Checklist
+## Policy Scope
 
-Confirm product catalog, SKU definitions, inventory or fulfillment partner, shipping policy, return policy, support playbook, sales tax readiness, privacy review, fraud rules, Stripe live configuration, webhook verification, order status readout, fulfillment status readout, refund process, chargeback process, Owner approval, rollback plan, and Data Safety update. Each item should have evidence and an owner.
+This policy covers Premium, paid content, tickets, access passes, seat passes, event passes, creator tips, and physical merch. Digital goods remain subject to provider and app rules. Merch remains subject to fulfillment and return rules. Payout readiness is not a consumer purchase and has no payout execution. Sandbox purchases are test-only and not payable.
 
-## Launch Readiness
+## Cancellation And Access Changes
 
-Production merch should remain locked until the product can be described accurately, fulfilled reliably, supported consistently, taxed appropriately, refunded or returned according to policy, and disabled quickly through a kill switch. A test-mode Checkout success does not prove those operational dependencies.
+A cancellation, refund, reversal, or chargeback may revoke access, remove entitlement, reverse ledger state, cancel fulfillment, or place creator payout eligibility on hold after production activation. Safety removals, blocked accounts, private or deleted content, malware, canceled events, ended rooms, stale rooms, and policy violations may deny access even without refund. Support should explain the specific reason where safe.
 
-## Postlaunch Review
+## No Guarantee Language
 
-After launch, review order failures, support volume, delayed shipments, damaged item claims, refunds, disputes, fraudulent orders, and fulfillment timing. Update policy copy and support templates when evidence shows users are confused.
+The policy should avoid blanket guaranteed refund language. Some refunds may be required by law or provider rules, some may be support-approved, and some may be denied due to abuse or delivered value. Merch returns may depend on item condition, timing, and fulfillment proof. Public language should be reviewed by counsel before use.
 
 
 ## Operating Review Cadence
