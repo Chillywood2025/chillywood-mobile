@@ -2,7 +2,7 @@
 
 ## Current Proof
 
-Status: repo-side Test Lab smoke setup is complete. A prior bounded virtual-device Robo proof passed on 2026-05-30. The 2026-06-05 continuation built the current release APK successfully but was blocked by Google Cloud project authorization before a new cloud device run could start.
+Status: repo-side Test Lab smoke setup is complete. A prior bounded virtual-device Robo proof passed on 2026-05-30. The 2026-06-05 IAM follow-up cleared the Test Lab catalog authorization blocker with an owner-approved Google user account and completed one bounded virtual-device Robo smoke.
 
 - Proof folder: `/tmp/chillywood-firebase-test-lab-proof-20260530/`
 - Google Cloud SDK: installed locally; active project was `chillywood-app`
@@ -87,6 +87,60 @@ Fix needed before rerun:
 2. Do not commit credentials, service-account JSON, refresh tokens, passwords, or owner account details.
 3. Rerun `npm run firebase:test-lab:preflight`. The preflight now fails fast if catalog access is still blocked.
 4. Only after preflight succeeds, run one bounded cloud smoke with `npm run firebase:test-lab:robo` or `npm run firebase:test-lab:build-robo`.
+
+## 2026-06-05 IAM Smoke Proof
+
+Proof folder:
+
+```text
+/tmp/chillywood-firebase-test-lab-iam-smoke-proof-20260605/
+```
+
+IAM result:
+
+- The Google Play service account could describe project `chillywood-app`, but still failed Firebase Test Lab model catalog access.
+- Switching to the already-authenticated owner-approved Google user account cleared the catalog blocker.
+- `gcloud projects describe chillywood-app` succeeded.
+- `npm run firebase:test-lab:preflight` succeeded and wrote available virtual models, Android versions, enabled Firebase/Test Lab APIs, APK hash, and the exact bounded command.
+- No secrets, OAuth tokens, service-account JSON, keystores, passwords, or API keys were committed.
+
+Bounded smoke command:
+
+```bash
+FIREBASE_TEST_LAB_PROOF_DIR=/tmp/chillywood-firebase-test-lab-iam-smoke-proof-20260605 \
+FIREBASE_TEST_LAB_RESULTS_DIR=chillywood-iam-smoke-20260605-113243 \
+npm run firebase:test-lab:build-robo
+```
+
+Result:
+
+- APK build: passed with `./gradlew assembleRelease bundleRelease`.
+- APK: `android/app/build/outputs/apk/release/app-release.apk`.
+- APK SHA-256: `c62b6b14a82d0691f86774b094a2fd410cd77cbe38bea1dc0f67679685a97b87`.
+- Matrix: `matrix-pcl66znev5dca`.
+- Axis: `MediumPhone.arm-35-en-portrait`.
+- Outcome: `Passed`.
+- Test time: `306 seconds`.
+- Firebase Console: `https://console.firebase.google.com/project/chillywood-app/testlab/histories/bh.e9371a121da8f5fe/matrices/8784351659501891083`.
+- Raw results bucket path: `gs://test-lab-nt3ctukisd678-ykr9mdfzvpc9x/chillywood-iam-smoke-20260605-113243/`.
+- Downloaded results: `/tmp/chillywood-firebase-test-lab-iam-smoke-proof-20260605/results/MediumPhone.arm-35-en-portrait/`.
+- Downloaded artifacts include `actions.json`, screenshots, `logcat`, `video.mp4`, `robo_results.pb`, `baseline_profile.txt`, and `sitemap.png`.
+- Logcat fatal scan found no Chi'llwood app fatal exception or ANR. `AndroidRuntime` lines in the scan were Android command-wrapper process starts/exits.
+
+Scope proved:
+
+- Owner-approved account can access `chillywood-app` and Firebase Test Lab virtual-device catalogs.
+- Test Lab can upload the current release APK.
+- Test Lab creates and completes a one-device virtual Robo matrix.
+- The app installs and launches in Test Lab without a startup crash.
+- Test Lab screenshots, video, action trace, sitemap, and logcat are available for inspection.
+
+Scope not proved:
+
+- Signed-in route coverage.
+- LiveKit two-session host/viewer behavior.
+- Google Play purchase, RevenueCat purchase/restore, Stripe Checkout, Stripe Connect, Owner/Admin drilldown, or Money Center final proof.
+- Play internal install proof; this cloud run uses a locally built release APK uploaded to Test Lab.
 
 ## Prerequisites
 
