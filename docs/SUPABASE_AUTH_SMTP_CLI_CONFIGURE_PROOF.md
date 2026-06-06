@@ -2,7 +2,7 @@
 
 Date: 2026-06-06
 
-Status: Supabase SMTP configured and recovery dispatch accepted; exact Brevo DNS host records pending
+Status: Supabase SMTP configured, exact Brevo DNS host records applied, recovery dispatch accepted; mailbox click validation pending
 
 ## Scope
 
@@ -127,13 +127,14 @@ Observed:
   - CNAME `brevo1._domainkey.chillywood` => full DNS name likely `brevo1._domainkey.chillywood.chillywoodstream.com`
   - CNAME `brevo2._domainkey.chillywood` => full DNS name likely `brevo2._domainkey.chillywood.chillywoodstream.com`
   - TXT `_dmarc.chillywood` => full DNS name likely `_dmarc.chillywood.chillywoodstream.com`
-- Those exact `chillywood.*` host records were checked and were not resolving yet from public DNS.
-- DNS-provider credentials were not present in the shell (`CLOUDFLARE_API_TOKEN`, `CF_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_ZONE_ID` missing), so the exact Brevo records could not be applied directly from this environment.
+- The exact `chillywood.*` host records were added in Cloudflare using the existing Cloudflare email/API-key auth already present in the shell.
+- Public DNS and authoritative Cloudflare nameserver checks now resolve the exact TXT, DKIM CNAME, and DMARC records.
+- Proof file: `/tmp/chillywood-brevo-domain-auth-smtp-proof-20260606/cloudflare-post-create-authoritative-proof.txt`
 
 ### Delivery interpretation
 
 - Recovery dispatch is currently accepted by Supabase Auth API (`200`), so the current blocker is mailbox-level/Inbox acceptance rather than API transport.
-- Next step: add or correct the exact current Brevo DNS records in the DNS provider, wait for Brevo to mark the domain authenticated, then re-open the safe test inbox for delivery and reset-link behavior.
+- Next step: refresh Brevo's domain authentication check if the dashboard has not already updated, then re-open the safe test inbox for delivery and reset-link behavior.
 
 ## Validation executed
 
@@ -149,7 +150,7 @@ All checks passed.
 
 ## Blockers / next steps
 
-- Exact Brevo DNS records are pending at the `chillywood.*` hostnames from the dashboard. Root-domain records are present, but they are not enough to claim the currently requested Brevo dashboard authentication.
+- Brevo dashboard-side authentication status still needs visual/dashboard confirmation after DNS propagation.
 - Mailbox-level proof still pending: confirm the reset email arrives from `Chi'llwood <no-reply@chillywoodstream.com>`, opens `chillywoodmobile://reset-password`, and returns to login after a successful reset.
 
 ## Safety

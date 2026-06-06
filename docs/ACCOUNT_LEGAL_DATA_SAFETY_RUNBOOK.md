@@ -23,7 +23,7 @@ The repo-side acceptance package is now mapped more explicitly:
 - public legal URL proof lives at `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/public-legal-url-check.tsv`;
 - email/DNS proof lives at `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/dns-email-check.txt`;
 - Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`;
-- DKIM selectors are being verified through Brevo. Root-domain selector CNAMEs resolve, but the current Brevo dashboard requires exact `chillywood` host records that are not resolving yet;
+- DKIM selectors are being verified through Brevo. Root-domain selector CNAMEs resolve, and the current Brevo dashboard exact `chillywood` host records are applied/resolving;
 - outbound legal/support email remains manual until a real provider is selected, domain-verified, DKIM-published, and test-proved;
 - Supabase Auth transactional email has now had custom SMTP reconfigured for `no-reply@chillywoodstream.com` (`smtp-relay.brevo.com`) and readback confirmed. `POST /auth/v1/recover` returns `200`, and current verification work remains focused on mailbox visibility and reset-link click route confirmation pending.
 - repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable as of May 30, 2026;

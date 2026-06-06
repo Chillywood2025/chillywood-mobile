@@ -23,7 +23,7 @@ The current Brevo dashboard values supplied by the owner now ask for `chillywood
 - CNAME `brevo2._domainkey.chillywood -> b2.chillywood-stream-com.dkim.brevo.com`
 - TXT `_dmarc.chillywood` with `v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com`
 
-If the DNS provider auto-appends the zone, these become `chillywood.chillywoodstream.com`, `brevo1._domainkey.chillywood.chillywoodstream.com`, `brevo2._domainkey.chillywood.chillywoodstream.com`, and `_dmarc.chillywood.chillywoodstream.com`. These exact names were not resolving in the current DNS check, and DNS-provider API credentials were not present in this shell to add them directly.
+If the DNS provider auto-appends the zone, these become `chillywood.chillywoodstream.com`, `brevo1._domainkey.chillywood.chillywoodstream.com`, `brevo2._domainkey.chillywood.chillywoodstream.com`, and `_dmarc.chillywood.chillywoodstream.com`. These exact names were added in Cloudflare on June 6, 2026 and now resolve from public DNS / authoritative Cloudflare nameservers.
 
 | Item | Current status | Evidence |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ If the DNS provider auto-appends the zone, these become `chillywood.chillywoodst
 | Inbound routing | Cloudflare MX records exist for `chillywoodstream.com`. | `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/dns-email-check.txt` |
 | SPF | Root TXT includes `v=spf1 include:_spf.mx.cloudflare.net ~all`. | DNS proof file |
 | DMARC | `_dmarc.chillywoodstream.com` includes `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`. | DNS proof file |
-| DKIM | Root-domain `brevo1`/`brevo2` CNAME selectors for `chillywoodstream.com` are present, but the current Brevo dashboard requests `brevo1._domainkey.chillywood` and `brevo2._domainkey.chillywood`; those exact hostnames are pending. | DNS proof file |
+| DKIM | Root-domain `brevo1`/`brevo2` CNAME selectors for `chillywoodstream.com` are present, and the current Brevo dashboard selectors `brevo1._domainkey.chillywood` and `brevo2._domainkey.chillywood` are also applied/resolving. | DNS proof file |
 | Outbound provider | Brevo is selected for Auth SMTP; sender readback confirmed through Management API. | Redacted proof docs |
 | Automated support/legal receipts | Not proved. | Current fallback is manual support email or in-app support feedback. |
 
@@ -49,7 +49,7 @@ Inbox-level delivery and click confirmation remain pending:
 - confirmed tap opens `chillywoodmobile://reset-password` with reset flow completion
 - confirmed click/return behavior to login
 
-DNS proof at `/tmp/chillywood-brevo-domain-auth-smtp-proof-20260606/exact-brevo-record-checks.txt` currently shows root SPF and DMARC baseline and root Brevo DKIM selector CNAMEs in place for `chillywoodstream.com`; the exact owner-provided Brevo `chillywood` hostnames remain pending until added in DNS and authenticated by Brevo.
+DNS proof at `/tmp/chillywood-brevo-domain-auth-smtp-proof-20260606/cloudflare-post-create-authoritative-proof.txt` currently shows root SPF/DMARC baseline and the owner-provided Brevo `chillywood` hostnames resolving after Cloudflare DNS application.
 
 ## Outbound Use Cases
 
@@ -98,7 +98,7 @@ These names are placeholders for planning. They are not proof that a provider is
 | Select outbound provider | Owner/Admin | Provider name and account/project reference without secrets | Pending |
 | Verify sending domain | Owner/Admin or email operator | Provider screenshot/redacted verification receipt | Pending |
 | Publish SPF update if provider requires one | DNS operator | DNS TXT proof with no secrets | Pending |
-| Publish DKIM TXT/CNAME records | DNS operator | Provider DKIM status screenshot plus `dig`/DNS proof | Pending for exact current Brevo `chillywood` hosts |
+| Publish DKIM TXT/CNAME records | DNS operator | Provider DKIM status screenshot plus `dig`/DNS proof | Applied/resolving for exact current Brevo `chillywood` hosts; Brevo dashboard refresh still needs confirmation |
 | Keep DMARC report address monitored | Owner/Admin | DMARC aggregate receipt or provider dashboard proof | Pending |
 | Send test support email | Support operator | Redacted delivery screenshot/header summary, no private content | Pending |
 | Send test account-deletion receipt if automation exists | Support operator | Redacted test ticket/proof | Pending |
