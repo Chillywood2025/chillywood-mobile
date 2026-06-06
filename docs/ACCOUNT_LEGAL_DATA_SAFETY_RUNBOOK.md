@@ -25,7 +25,7 @@ The repo-side acceptance package is now mapped more explicitly:
 - Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`;
 - DKIM selectors are being verified through Brevo. Root-domain selector CNAMEs resolve, and the current Brevo dashboard exact `chillywood` host records are applied/resolving;
 - outbound legal/support email remains manual until a real provider is selected, domain-verified, DKIM-published, and test-proved;
-- Supabase Auth transactional email has now had custom SMTP reconfigured for `no-reply@chillywoodstream.com` (`smtp-relay.brevo.com`) and readback confirmed. `POST /auth/v1/recover` returns `200`, and current verification work remains focused on mailbox visibility and reset-link click route confirmation pending.
+- Supabase Auth transactional email has now had custom SMTP reconfigured for verified sender `Chi'llwood <no-reply@chillywoodstream.com>` (`smtp-relay.brevo.com`) and readback confirmed. `POST /auth/v1/recover` returns `200`, and current verification work remains focused on mailbox visibility and reset-link click route confirmation pending.
 - repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable as of May 30, 2026;
 - support/moderation/account deletion ownership is mapped by role, but staffing/SLA approval remains external;
 - optional disposable-fixture report lifecycle visual proof was not run because no safe disposable fixture was provided and production reports must not be faked.

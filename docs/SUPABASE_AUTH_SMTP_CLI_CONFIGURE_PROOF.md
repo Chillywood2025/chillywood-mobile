@@ -2,7 +2,7 @@
 
 Date: 2026-06-06
 
-Status: Supabase SMTP configured, exact Brevo DNS host records applied, recovery dispatch accepted; mailbox click validation pending
+Status: Supabase SMTP configured with verified Brevo sender, exact Brevo DNS host records applied, recovery dispatch accepted; mailbox click validation pending
 
 ## Scope
 
@@ -59,7 +59,11 @@ Result:
 
 Readback verification succeeded with the same sender/relay values (password/user redacted).
 
-June 6 follow-up: the sender remains `Chi'llwood <no-reply@chillywoodstream.com>` using the same Brevo relay credentials. The Management API expects `smtp_port` as a string value; after correcting that request shape, the PATCH returned `200`.
+June 6 follow-up after Brevo sender verification: the sender remains `Chi'llwood <no-reply@chillywoodstream.com>` using the same Brevo relay credentials. The Management API expects `smtp_port` as a string value; after correcting that request shape, the PATCH returned `200`.
+
+Latest proof path:
+
+`/tmp/chillywood-brevo-verified-sender-smtp-proof-20260606/`
 
 ## Custom SMTP Status Readback
 

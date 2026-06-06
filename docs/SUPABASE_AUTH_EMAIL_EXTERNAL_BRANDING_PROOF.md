@@ -2,7 +2,7 @@
 
 Date: 2026-06-06
 
-Status: custom SMTP configured and read back; exact Brevo DNS host records applied; API-level recovery dispatch accepted; mailbox click proof pending.
+Status: custom SMTP configured/read back with verified Brevo sender; exact Brevo DNS host records applied; API-level recovery dispatch accepted; mailbox click proof pending.
 
 ## Scope
 
@@ -14,6 +14,7 @@ This proof lane confirms hosted Supabase Auth custom SMTP wiring and app-route b
 - Supabase project: `bmkkhihfbmsnnmcqkoly`
 - Project auth config was patched via Management API.
 - SMTP host/user/sender fields were written and read back.
+- Brevo sender is now verified: `Chi'llwood <no-reply@chillywoodstream.com>`.
 - Password value was never printed.
 - Email callback routing was fixed so reset links do not match auth callback routing logic.
 - Forgot-password request trigger was executed against the same project and accepted.
@@ -24,7 +25,8 @@ This proof lane confirms hosted Supabase Auth custom SMTP wiring and app-route b
 - `PATCH /v1/projects/{ref}/config/auth` succeeded.
 - `GET /v1/projects/{ref}/config/auth` confirms configured host/user/sender settings.
 - `smtp_pass` was redacted from all captured outputs.
-- Sender remains `Chi'llwood <no-reply@chillywoodstream.com>` through `smtp-relay.brevo.com`.
+- Sender remains verified `Chi'llwood <no-reply@chillywoodstream.com>` through `smtp-relay.brevo.com`.
+- Latest redacted proof path: `/tmp/chillywood-brevo-verified-sender-smtp-proof-20260606/`
 
 ## Brevo DNS Status
 
@@ -51,7 +53,7 @@ June 6 follow-up: the four exact records above were added in Cloudflare and now 
 
 - `POST /auth/v1/recover` now returns `200` for `rob2037gn@gmail.com`, so API-level dispatch is accepted.
 - Mailbox-level confirmation is still pending: verify delivery from `no-reply@chillywoodstream.com`, tap behavior to `chillywoodmobile://reset-password`, and post-reset return to login.
-- Actual mailbox receipt and manual click-through validation still requires reading the test inbox after Brevo dashboard authentication refreshes.
+- Actual mailbox receipt and manual click-through validation still requires reading the test inbox. Chrome/Gmail automation was not available in this session, so inbox proof could not be completed by Codex.
 - This lane has endpoint-level routing proof and accepted dispatch proof plus recovery-route correction proof; user-side click proof remains pending until safe inbox verification confirms sender/subject/content and route behavior.
 
 ## Required Follow-up

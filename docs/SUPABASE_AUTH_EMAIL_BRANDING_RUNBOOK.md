@@ -8,7 +8,7 @@ Latest external status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` and `do
 
 - host: `smtp-relay.brevo.com`
 - sender name: `Chi’llwood`
-- sender email: `no-reply@chillywoodstream.com`
+- verified sender email: `no-reply@chillywoodstream.com`
 - `POST /auth/v1/recover` for `rob2037gn@gmail.com` now returns `200`
 
 This is account email only. It is not marketing email, newsletter email, production money activation, payout activation, LiveKit work, or a replacement for Supabase Auth.
@@ -35,6 +35,7 @@ Proved sender address:
 
 Notes:
 
+- Brevo sender verification is confirmed for `Chi'llwood <no-reply@chillywoodstream.com>`.
 - `no-reply@auth.chillywoodstream.com` can be used only after separate verified sender setup and DNS allowlist for that subdomain.
 
 Support address: `support@chillywoodstream.com`

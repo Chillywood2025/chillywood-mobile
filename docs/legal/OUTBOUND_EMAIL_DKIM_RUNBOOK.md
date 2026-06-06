@@ -39,7 +39,7 @@ June 6, 2026 Auth SMTP CLI follow-up: Supabase Auth custom SMTP is now confirmed
 
 - sender host: `smtp-relay.brevo.com`
 - sender name: `Chi’llwood`
-- sender email: `no-reply@chillywoodstream.com`
+- verified sender email: `no-reply@chillywoodstream.com`
 
 The same run confirms `POST /auth/v1/recover` returns HTTP `200` with `rob2037gn@gmail.com` using `chillywoodmobile://reset-password` redirect.
 
