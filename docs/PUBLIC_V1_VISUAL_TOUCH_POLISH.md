@@ -6,6 +6,22 @@ This lane applies the modern Owner/Admin interaction direction to public and cre
 
 Stabilization follow-up: the June 5, 2026 internal testing sweep (`docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md`) rechecked Home, Profile, Explore, Library, Live, Platform Studio, Player, and sandbox routes on Play-installed `R5CR120QCBF`. The only public/creator gate copy fix was signed-in Platform Studio: Premium-gated signed-in users now see `Manage Premium` instead of `Sign In to Continue`. No auth, Premium entitlement, upload, playback, money, or route behavior changed.
 
+## Search And Social Discovery Polish
+
+Search polish work on June 6, 2026 modernizes:
+
+- Chi’lly Chat inbox typeahead/search (`app/chat/index.tsx`) with debounced local thread filtering and debounced `searchPublicPeople` suggestions.
+- Chi’lly Circle discovery (`app/chilly-circle.tsx`) with local list/request filtering plus People suggestions, compact sections, and compact official Rachi row.
+- Home Explore search/typeahead (`app/(tabs)/explore.tsx`) with debounced query + scope filtering + grouped suggestions and stable clear action.
+
+Search behavior source boundaries remain explicit:
+
+- Chi’lly Chat: local `listChatThreads()` thread rows for existing threads plus `searchPublicPeople` for People suggestions.
+- Chi’lly Circle: local `listMyChillyCircle` / request lists for social graph rows plus `searchPublicPeople` for people discovery.
+- Explore: existing discovery, titles, creator videos, live/replay/events, and `searchPublicPeople` for public people.
+
+No fake people/threads/relationships were introduced. Current safety remains in existing policy-backed queries and UI-level filtering. Proof path is prepared at `/tmp/chillywood-search-typeahead-social-discovery-proof-20260605/` (capture pending).
+
 ## Shared Components
 
 Added `components/ui/app-surface.tsx`:

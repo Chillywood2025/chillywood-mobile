@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -23,9 +24,39 @@ import {
   type ChillyCircleListItem,
 } from "../_lib/friendGraph";
 import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
+import { searchPublicPeople, type PublicPeopleSearchResult } from "../_lib/publicPeopleSearch";
 import { useSession } from "../_lib/session";
 
 type CircleAction = "accept" | "decline" | "cancel" | "remove";
+
+const CHILLY_CIRCLE_SEARCH_DEBOUNCE_MS = 280;
+const CHILLY_CIRCLE_SUGGESTION_MIN_LENGTH = 2;
+const CHILLY_CIRCLE_SUGGESTION_DEBOUNCE_MS = 260;
+const CHILLY_CIRCLE_LOCAL_SEARCH_MIN_LENGTH = 1;
+const CHILLY_CIRCLE_MAX_LOCAL_RESULTS = 4;
+const CHILLY_CIRCLE_MAX_PEOPLE_RESULTS = 5;
+
+type ChillyCircleSuggestion = {
+  id: string;
+  kind: "circle" | "incoming" | "outgoing" | "people" | "official";
+  title: string;
+  subtitle: string;
+  avatarUrl: string | null;
+  onPress: () => void;
+};
+
+const normalizeCircleSearchNeedle = (value: string) => value.trim().toLowerCase();
+
+const matchesCircleItem = (item: ChillyCircleListItem, needle: string) => {
+  if (!needle) return true;
+  const haystacks = [
+    item.displayName,
+    item.handle,
+    item.tagline,
+    item.relationshipStatus,
+  ].map((value) => String(value ?? "").toLowerCase());
+  return haystacks.some((value) => value.includes(needle));
+};
 
 const formatUpdatedAt = (value: string) => {
   const parsed = new Date(value);
@@ -44,6 +75,10 @@ const normalizeCircleError = (error: unknown) => {
     .replace(/friend/gi, "Chi'lly Circle");
 };
 
+const includesNeedle = (value: unknown, needle: string) => {
+  return String(value ?? "").trim().toLowerCase().includes(needle);
+};
+
 export default function ChillyCircleScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -54,6 +89,34 @@ export default function ChillyCircleScreen() {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [peopleError, setPeopleError] = useState<string | null>(null);
+  const [peopleResults, setPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
+
+  const normalizedNeedle = normalizeCircleSearchNeedle(debouncedSearchQuery);
+  const hasSearchQuery = normalizedNeedle.length >= CHILLY_CIRCLE_LOCAL_SEARCH_MIN_LENGTH;
+
+  const buildSuggestionRow = (
+    kind: ChillyCircleSuggestion["kind"],
+    id: string,
+    title: string,
+    subtitle: string,
+    avatarUrl: string | null,
+    onPress: () => void,
+  ): ChillyCircleSuggestion => ({
+    id,
+    kind,
+    title,
+    subtitle,
+    avatarUrl,
+    onPress,
+  });
+
+  const openProfile = useCallback((userId: string) => {
+    router.push({ pathname: "/profile/[userId]", params: { userId } });
+  }, [router]);
 
   useEffect(() => {
     if (sessionLoading || isSignedIn) return;
@@ -89,9 +152,147 @@ export default function ChillyCircleScreen() {
     void loadCircle();
   }, [isSignedIn, loadCircle, sessionLoading]);
 
-  const openProfile = useCallback((userId: string) => {
-    router.push({ pathname: "/profile/[userId]", params: { userId } });
-  }, [router]);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, CHILLY_CIRCLE_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const query = debouncedSearchQuery.trim();
+    if (query.length < CHILLY_CIRCLE_SUGGESTION_MIN_LENGTH) {
+      setPeopleLoading(false);
+      setPeopleError(null);
+      setPeopleResults([]);
+      return;
+    }
+
+    let active = true;
+    setPeopleLoading(true);
+    setPeopleError(null);
+
+    const timeout = setTimeout(() => {
+      searchPublicPeople(query, { limit: 10 })
+        .then((results) => {
+          if (!active) return;
+          const existingIds = new Set([...circle, ...incoming, ...outgoing].map((item) => item.id));
+          setPeopleResults(results.filter((person) => !existingIds.has(person.userId)));
+        })
+        .catch(() => {
+          if (!active) return;
+          setPeopleResults([]);
+          setPeopleError("People search is unavailable right now.");
+        })
+        .finally(() => {
+          if (active) {
+            setPeopleLoading(false);
+          }
+        });
+    }, CHILLY_CIRCLE_SUGGESTION_DEBOUNCE_MS);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [debouncedSearchQuery, circle, incoming, outgoing]);
+
+  const circleSearchResults = useMemo(
+    () => circle.filter((item) => matchesCircleItem(item, normalizedNeedle)),
+    [circle, normalizedNeedle],
+  );
+  const incomingSearchResults = useMemo(
+    () => incoming.filter((item) => matchesCircleItem(item, normalizedNeedle)),
+    [incoming, normalizedNeedle],
+  );
+  const outgoingSearchResults = useMemo(
+    () => outgoing.filter((item) => matchesCircleItem(item, normalizedNeedle)),
+    [outgoing, normalizedNeedle],
+  );
+
+  const isOfficialSuggestionMatch = useMemo(
+    () => includesNeedle(RACHI_OFFICIAL_ACCOUNT.displayName, normalizedNeedle)
+      || includesNeedle(RACHI_OFFICIAL_ACCOUNT.handle, normalizedNeedle),
+    [normalizedNeedle],
+  );
+
+  const suggestionGroups = useMemo(() => {
+    if (!hasSearchQuery) return [] as Array<{ label: string; kind: ChillyCircleSuggestion["kind"]; rows: ChillyCircleSuggestion[] }>;
+
+    const next = [
+      {
+        label: "In your Chi'lly Circle",
+        kind: "circle" as const,
+        rows: circleSearchResults.slice(0, CHILLY_CIRCLE_MAX_LOCAL_RESULTS).map((item) => buildSuggestionRow(
+          "circle",
+          `circle-${item.id}`,
+          item.displayName,
+          item.tagline || `Updated ${formatUpdatedAt(item.relationshipUpdatedAt)}`,
+          item.avatarUrl ?? null,
+          () => openProfile(item.id),
+        )),
+      },
+      {
+        label: "Requests",
+        kind: "incoming" as const,
+        rows: incomingSearchResults.slice(0, CHILLY_CIRCLE_MAX_LOCAL_RESULTS).map((item) => buildSuggestionRow(
+          "incoming",
+          `incoming-${item.id}`,
+          item.displayName,
+          item.tagline || "Incoming request",
+          item.avatarUrl ?? null,
+          () => openProfile(item.id),
+        )),
+      },
+      {
+        label: "Requests",
+        kind: "outgoing" as const,
+        rows: outgoingSearchResults.slice(0, CHILLY_CIRCLE_MAX_LOCAL_RESULTS).map((item) => buildSuggestionRow(
+          "outgoing",
+          `outgoing-${item.id}`,
+          item.displayName,
+          item.tagline || "Sent request",
+          item.avatarUrl ?? null,
+          () => openProfile(item.id),
+        )),
+      },
+      {
+        label: "People",
+        kind: "people" as const,
+        rows: peopleResults.slice(0, CHILLY_CIRCLE_MAX_PEOPLE_RESULTS).map((person) => buildSuggestionRow(
+          "people",
+          person.userId,
+          person.displayName,
+          person.username ? `@${person.username}` : "Public profile",
+          person.avatarUrl ?? null,
+          () => openProfile(person.userId),
+        )),
+      },
+      ...(isOfficialSuggestionMatch ? [{
+        label: "Official",
+        kind: "official" as const,
+        rows: [
+          buildSuggestionRow(
+            "official",
+            "official-rachi",
+            RACHI_OFFICIAL_ACCOUNT.displayName,
+            "Official Chi'llwood updates and Originals.",
+            RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? null,
+            () => openProfile(RACHI_OFFICIAL_ACCOUNT.userId),
+          ),
+        ],
+      }] : []),
+    ];
+
+    return next
+      .map((group) => ({
+        ...group,
+        rows: group.rows.filter((row) => row.title.toLowerCase().includes(normalizedNeedle)),
+      }))
+      .filter((group) => group.rows.length > 0);
+  }, [circleSearchResults, incomingSearchResults, outgoingSearchResults, hasSearchQuery, isOfficialSuggestionMatch, normalizedNeedle, openProfile, peopleResults]);
+
+  const hasAnySuggestions = suggestionGroups.some((group) => group.rows.length > 0);
 
   const runAction = useCallback(async (action: CircleAction, userId: string) => {
     const key = `${action}:${userId}`;
@@ -119,12 +320,12 @@ export default function ChillyCircleScreen() {
     }
   }, [busyKey, loadCircle]);
 
-  const renderAvatar = (item: ChillyCircleListItem) => (
+  const renderAvatar = (avatarUrl: string | null, label: string) => (
     <View style={styles.avatar}>
-      {item.avatarUrl ? (
-        <Image source={{ uri: item.avatarUrl }} style={styles.avatarImage} />
+      {avatarUrl ? (
+        <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
       ) : (
-        <Text style={styles.avatarInitial}>{item.displayName.slice(0, 1).toUpperCase()}</Text>
+        <Text style={styles.avatarInitial}>{label.slice(0, 1).toUpperCase()}</Text>
       )}
     </View>
   );
@@ -154,37 +355,33 @@ export default function ChillyCircleScreen() {
     );
   };
 
-  const renderRachiOfficialConnection = () => (
-    <View style={styles.sectionCard}>
-      <Text style={styles.sectionTitle}>Official connection</Text>
-      <Text style={styles.sectionBody}>Rachi is your first Chi'lly Circle connection for official Chi'llwood updates, tips, and Originals.</Text>
-      <View style={styles.personCard}>
-        <TouchableOpacity
-          style={styles.personMain}
-          activeOpacity={0.86}
-          onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
-        >
-          <View style={[styles.avatar, styles.officialAvatar]}>
-            <Text style={styles.avatarInitial}>R</Text>
-          </View>
-          <View style={styles.personCopy}>
-            <Text style={styles.personName} numberOfLines={1}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
-            <Text style={styles.personMeta} numberOfLines={1}>Official Chi'llwood · Your first Chi'lly Circle connection</Text>
-          </View>
-          <View style={[styles.statusPill, styles.officialStatusPill]}>
-            <Text style={[styles.statusPillText, styles.officialStatusPillText]}>Official</Text>
-          </View>
-        </TouchableOpacity>
-        <Text style={styles.officialPrivacyText}>Rachi does not read your private chats.</Text>
-        <View style={styles.personActions}>
+  const renderSuggestionGroup = (group: { label: string; kind: ChillyCircleSuggestion["kind"]; rows: ChillyCircleSuggestion[] }, index: number) => (
+    <View key={`${group.label}-${group.kind}-${index}`} style={styles.sectionCard}>
+      <Text style={styles.sectionTitle}>{group.label}</Text>
+      <View style={styles.sectionStack}>
+        {group.rows.map((suggestion, rowIndex) => (
           <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonAccent]}
+            key={suggestion.id}
+            testID={`chilly-circle-suggestion-row-${suggestion.kind}-${rowIndex}`}
             activeOpacity={0.86}
-            onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
+            style={styles.suggestionRow}
+            onPress={suggestion.onPress}
           >
-            <Text style={[styles.actionButtonText, styles.actionButtonTextAccent]}>View Rachi</Text>
+            {renderAvatar(suggestion.avatarUrl, suggestion.title)}
+            <View style={styles.personCopy}>
+              <View style={styles.searchResultMetaRow}>
+                <Text style={styles.personName} numberOfLines={1}>{suggestion.title}</Text>
+                <View style={styles.resultPill}>
+                  <Text style={styles.resultPillText}>
+                    {suggestion.kind === "circle" ? "Circle" : suggestion.kind === "incoming" ? "Incoming"
+                      : suggestion.kind === "outgoing" ? "Sent" : suggestion.kind === "official" ? "Official" : "Person"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.personMeta} numberOfLines={1}>{suggestion.subtitle}</Text>
+            </View>
           </TouchableOpacity>
-        </View>
+        ))}
       </View>
     </View>
   );
@@ -193,50 +390,50 @@ export default function ChillyCircleScreen() {
     item: ChillyCircleListItem,
     actions: { label: string; action: CircleAction; accent?: boolean }[],
     statusLabel?: string,
-  ) => {
-    const meta = item.handle || item.tagline || `Updated ${formatUpdatedAt(item.relationshipUpdatedAt)}`;
-    return (
-      <View key={item.id} style={styles.personCard}>
-        <TouchableOpacity
-          style={styles.personMain}
-          activeOpacity={0.86}
-          onPress={() => openProfile(item.id)}
-        >
-          {renderAvatar(item)}
-          <View style={styles.personCopy}>
-            <Text style={styles.personName} numberOfLines={1}>{item.displayName}</Text>
-            <Text style={styles.personMeta} numberOfLines={1}>{meta}</Text>
-          </View>
-          {statusLabel ? (
-            <View style={styles.statusPill}>
-              <Text style={styles.statusPillText}>{statusLabel}</Text>
-            </View>
-          ) : null}
-        </TouchableOpacity>
-        {actions.length ? (
-          <View style={styles.personActions}>
-            {actions.map((entry) => renderActionButton(entry.label, entry.action, item, entry.accent))}
+  ) => (
+    <View key={item.id} style={styles.personCard}>
+      <TouchableOpacity
+        style={styles.personMain}
+        activeOpacity={0.86}
+        onPress={() => openProfile(item.id)}
+      >
+        {renderAvatar(item.avatarUrl ?? null, item.displayName)}
+        <View style={styles.personCopy}>
+          <Text style={styles.personName} numberOfLines={1}>{item.displayName}</Text>
+          <Text style={styles.personMeta} numberOfLines={1}>
+            {item.tagline || `Updated ${formatUpdatedAt(item.relationshipUpdatedAt)}`}
+          </Text>
+        </View>
+        {statusLabel ? (
+          <View style={styles.statusPill}>
+            <Text style={styles.statusPillText}>{statusLabel}</Text>
           </View>
         ) : null}
-      </View>
-    );
-  };
+      </TouchableOpacity>
+      {actions.length ? (
+        <View style={styles.personActions}>
+          {actions.map((entry) => renderActionButton(entry.label, entry.action, item, entry.accent))}
+        </View>
+      ) : null}
+    </View>
+  );
 
   const renderSection = (
     title: string,
-    body: string,
     items: ChillyCircleListItem[],
     emptyText: string,
     actionsForItem: (item: ChillyCircleListItem) => { label: string; action: CircleAction; accent?: boolean }[],
     statusLabel?: string,
   ) => (
     <View style={styles.sectionCard}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionBody}>{body}</Text>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionCount}>{items.length}</Text>
+      </View>
       <View style={styles.sectionStack}>
         {loading ? (
           <View style={styles.loadingInline}>
-            <ActivityIndicator color="#DC143C" />
+            <ActivityIndicator color="#DC143C" size="small" />
             <Text style={styles.emptyText}>Loading</Text>
           </View>
         ) : items.length ? (
@@ -244,6 +441,35 @@ export default function ChillyCircleScreen() {
         ) : (
           <Text style={styles.emptyText}>{emptyText}</Text>
         )}
+      </View>
+    </View>
+  );
+
+  const renderRachiConnection = () => (
+    <View style={styles.sectionCard}>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>Official connection</Text>
+        <View style={styles.statusPill}>
+          <Text style={styles.statusPillText}>Official</Text>
+        </View>
+      </View>
+      <View style={styles.personMain}>
+        <View style={[styles.avatar, styles.officialAvatar]}>
+          <Text style={styles.avatarInitial}>R</Text>
+        </View>
+        <View style={styles.personCopy}>
+          <Text style={styles.personName} numberOfLines={1}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
+          <Text style={styles.personMeta} numberOfLines={1}>Official Chi'llwood updates and Originals.</Text>
+        </View>
+      </View>
+      <View style={styles.personActions}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.actionButtonAccent]}
+          activeOpacity={0.86}
+          onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
+        >
+          <Text style={[styles.actionButtonText, styles.actionButtonTextAccent]}>View Rachi</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -273,59 +499,86 @@ export default function ChillyCircleScreen() {
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.kicker}>{"CHI'LLY CIRCLE"}</Text>
+        <Text style={styles.kicker}>CHI'LLY CIRCLE</Text>
         <TouchableOpacity activeOpacity={0.82} onPress={() => { void loadCircle(); }}>
           <Text style={styles.refreshText}>Refresh</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.heroCard}>
-        <Text style={styles.heroKicker}>{"CHI'LLY CIRCLE REQUESTS"}</Text>
-        <Text style={styles.heroTitle}>Manage mutual connections.</Text>
-        <Text style={styles.heroBody}>
-          {"Rachi is pinned as your official Chi'lly Circle connection. Mutual creator connections stay separate and only appear after acceptance."}
-        </Text>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryPill}>
-            <Text style={styles.summaryValue}>1</Text>
-            <Text style={styles.summaryLabel}>Official</Text>
-          </View>
-          <View style={styles.summaryPill}>
-            <Text style={styles.summaryValue}>{loading ? "..." : String(circle.length)}</Text>
-            <Text style={styles.summaryLabel}>In Circle</Text>
-          </View>
-          <View style={styles.summaryPill}>
-            <Text style={styles.summaryValue}>{loading ? "..." : String(incoming.length)}</Text>
-            <Text style={styles.summaryLabel}>Incoming</Text>
-          </View>
-          <View style={styles.summaryPill}>
-            <Text style={styles.summaryValue}>{loading ? "..." : String(outgoing.length)}</Text>
-            <Text style={styles.summaryLabel}>Sent</Text>
-          </View>
-        </View>
-        {notice ? (
-          <View style={styles.notice}>
-            <Text style={styles.noticeText}>{notice}</Text>
-          </View>
+      <Text style={styles.pageTitle}>Chi'lly Circle</Text>
+      <Text style={styles.pageSubtle}>Find people and manage official and mutual connections.</Text>
+
+      <View style={styles.searchShell}>
+        <TextInput
+          testID="chilly-circle-search-input"
+          accessibilityLabel="Search Chi'lly Circle"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search your Circle, requests, or people"
+          placeholderTextColor="#75829A"
+          style={styles.searchInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+        />
+        {searchQuery.trim() ? (
+          <TouchableOpacity
+            testID="chilly-circle-search-clear-button"
+            accessibilityLabel="Clear Chi'lly Circle search"
+            activeOpacity={0.86}
+            onPress={() => setSearchQuery("")}
+            style={styles.searchClearButton}
+          >
+            <Text style={styles.searchClearButtonText}>Clear</Text>
+          </TouchableOpacity>
         ) : null}
       </View>
 
-      {renderRachiOfficialConnection()}
+      {notice ? (
+        <View style={styles.notice}>
+          <Text style={styles.noticeText}>{notice}</Text>
+        </View>
+      ) : null}
+
+      {renderRachiConnection()}
+
+      {hasSearchQuery ? (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Search suggestions</Text>
+              {peopleLoading ? (
+                <View style={styles.suggestionPanelState}>
+                  <ActivityIndicator color="#F34B74" size="small" />
+                  <Text style={styles.emptyText}>Searching people...</Text>
+                </View>
+              ) : peopleError ? (
+                <View style={styles.suggestionPanelState}>
+                  <Text style={styles.emptyText}>{peopleError}</Text>
+                </View>
+              ) : hasAnySuggestions ? (
+                <View style={styles.suggestionPanel}>
+                  {suggestionGroups.map((group, index) => renderSuggestionGroup(group, index))}
+                </View>
+          ) : (
+            <View style={styles.suggestionPanelState}>
+              <Text style={styles.emptyText}>No matching Circle connections, requests, or people.</Text>
+              <Text style={styles.emptySmall}>Try another name or open “Find people” from Profiles.</Text>
+            </View>
+          )}
+        </View>
+      ) : null}
 
       {renderSection(
         "My Chi'lly Circle",
-        "People who have accepted a mutual Chi'lly Circle connection.",
-        circle,
-        "No one is in your Chi'lly Circle yet.",
+        hasSearchQuery ? circleSearchResults : circle,
+        "No Chi'lly Circle connections yet",
         () => [{ label: "Remove from Chi'lly Circle", action: "remove" }],
-        "In Chi'lly Circle",
+        "Connected",
       )}
 
       {renderSection(
         "Incoming requests",
-        "Requests waiting for your response.",
-        incoming,
-        "No incoming Chi'lly Circle requests.",
+        hasSearchQuery ? incomingSearchResults : incoming,
+        "No incoming Chi'lly Circle requests",
         () => [
           { label: "Accept", action: "accept", accent: true },
           { label: "Decline", action: "decline" },
@@ -334,9 +587,8 @@ export default function ChillyCircleScreen() {
 
       {renderSection(
         "Sent requests",
-        "Requests you sent that have not been accepted yet.",
-        outgoing,
-        "No sent Chi'lly Circle requests.",
+        hasSearchQuery ? outgoingSearchResults : outgoing,
+        "No sent Chi'lly Circle requests",
         () => [{ label: "Cancel Request", action: "cancel" }],
         "Requested",
       )}
@@ -351,7 +603,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   content: {
-    gap: 14,
+    gap: 10,
   },
   loadingScreen: {
     flex: 1,
@@ -364,7 +616,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 18,
+    marginBottom: 4,
   },
   backArrow: {
     color: "#AAB4C8",
@@ -383,55 +635,48 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
   },
-  heroCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(18,18,18,0.96)",
-    padding: 18,
-    gap: 12,
-  },
-  heroKicker: {
-    color: "#7B7B7B",
-    fontSize: 9.5,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-  },
-  heroTitle: {
+  pageTitle: {
     color: "#FFFFFF",
-    fontSize: 27,
+    fontSize: 26,
     fontWeight: "900",
   },
-  heroBody: {
-    color: "#B8C1D6",
-    fontSize: 13,
-    lineHeight: 19,
+  pageSubtle: {
+    color: "#B6BFD3",
+    fontSize: 12.5,
+    marginTop: 3,
+    marginBottom: 6,
     fontWeight: "600",
   },
-  summaryRow: {
+  searchShell: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
     gap: 10,
-  },
-  summaryPill: {
-    minWidth: 92,
-    flex: 1,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 12,
-    gap: 2,
+    borderColor: "rgba(255,255,255,0.11)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  summaryValue: {
-    color: "#F6F8FF",
-    fontSize: 22,
-    fontWeight: "900",
+  searchInput: {
+    flex: 1,
+    color: "#F7FBFF",
+    fontSize: 13,
+    fontWeight: "600",
+    paddingVertical: 0,
   },
-  summaryLabel: {
-    color: "#9EA8BA",
+  searchClearButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  searchClearButtonText: {
+    color: "#EAF0FF",
     fontSize: 11,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   notice: {
     borderRadius: 12,
@@ -447,56 +692,93 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   sectionCard: {
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(18,18,18,0.96)",
-    padding: 16,
+    padding: 12,
+    gap: 10,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
   },
   sectionTitle: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: 16.5,
     fontWeight: "900",
   },
-  sectionBody: {
-    color: "#AEB8CC",
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontWeight: "600",
+  sectionCount: {
+    color: "#9EA8BA",
+    fontSize: 11.5,
+    fontWeight: "900",
   },
   sectionStack: {
-    gap: 10,
+    gap: 8,
   },
   loadingInline: {
-    minHeight: 58,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+  suggestionPanel: {
+    gap: 8,
+  },
+  suggestionPanelState: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
   },
   emptyText: {
     color: "#93A0B6",
     fontSize: 12.5,
     lineHeight: 18,
     fontWeight: "700",
+    textAlign: "center",
+  },
+  emptySmall: {
+    color: "#9FB0CA",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+    textAlign: "center",
   },
   personCard: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 12,
-    gap: 12,
+    padding: 10,
+    gap: 10,
   },
   personMain: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
+  personCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  personName: {
+    color: "#F4F7FC",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  personMeta: {
+    color: "#9CA7BA",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+  },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(220,20,60,0.28)",
@@ -513,49 +795,51 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     color: "#FFFFFF",
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "900",
-  },
-  personCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  personName: {
-    color: "#F4F7FC",
-    fontSize: 14.5,
-    fontWeight: "900",
-  },
-  personMeta: {
-    color: "#9CA7BA",
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 2,
   },
   statusPill: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
   statusPillText: {
     color: "#E8EEFB",
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: "900",
   },
-  officialStatusPill: {
-    borderColor: "rgba(220,20,60,0.4)",
-    backgroundColor: "rgba(220,20,60,0.18)",
+  searchResultMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
   },
-  officialStatusPillText: {
-    color: "#FFE8EF",
+  resultPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.35)",
+    backgroundColor: "rgba(220,20,60,0.16)",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  officialPrivacyText: {
-    color: "#B8C1D6",
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "700",
+  resultPillText: {
+    color: "#FFE6EF",
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.2,
+  },
+  suggestionRow: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   personActions: {
     flexDirection: "row",
@@ -563,8 +847,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButton: {
-    minHeight: 40,
-    borderRadius: 12,
+    minHeight: 36,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)",
@@ -583,7 +867,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: "#EAF0FF",
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: "900",
   },
   actionButtonTextAccent: {

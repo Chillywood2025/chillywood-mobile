@@ -1,20 +1,25 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   FlatList,
   RefreshControl,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
-import { listChatThreads, subscribeToInbox, type ChatThreadSummary } from "../../_lib/chat";
+import {
+  listChatThreads,
+  subscribeToInbox,
+  type ChatThreadSummary,
+} from "../../_lib/chat";
+import { searchPublicPeople, type PublicPeopleSearchResult } from "../../_lib/publicPeopleSearch";
 import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import { useSession } from "../../_lib/session";
@@ -23,6 +28,20 @@ import { formatUsernameHandle } from "../../_lib/usernameHandles";
 type InboxErrorState = {
   message: string;
 };
+
+const CHAT_SUGGESTION_MIN_LENGTH = 2;
+const CHAT_SUGGESTION_DEBOUNCE_MS = 300;
+
+function buildThreadMap(items: ChatThreadSummary[]) {
+  const map = new Map<string, ChatThreadSummary>();
+  for (const item of items) {
+    const userId = item.otherMember?.userId;
+    if (userId) {
+      map.set(userId, item);
+    }
+  }
+  return map;
+}
 
 function buildPreview(thread: ChatThreadSummary) {
   if (thread.activeCommunicationRoomId && thread.activeCallType) {
@@ -73,6 +92,10 @@ export default function ChillyChatInboxScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<InboxErrorState | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [searchPeopleLoading, setSearchPeopleLoading] = useState(false);
+  const [searchPeopleError, setSearchPeopleError] = useState<string | null>(null);
+  const [searchPeopleResults, setSearchPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
   const [quickActionThreadId, setQuickActionThreadId] = useState("");
   const [activeFriendUserIds, setActiveFriendUserIds] = useState<string[]>([]);
 
@@ -147,6 +170,57 @@ export default function ChillyChatInboxScreen() {
     [searchQuery, threads],
   );
 
+  const threadByOtherUserId = useMemo(
+    () => buildThreadMap(threads),
+    [threads],
+  );
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, CHAT_SUGGESTION_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const query = debouncedSearchQuery.trim();
+    if (query.length < CHAT_SUGGESTION_MIN_LENGTH) {
+      setSearchPeopleLoading(false);
+      setSearchPeopleError(null);
+      setSearchPeopleResults([]);
+      return;
+    }
+
+    let active = true;
+    setSearchPeopleLoading(true);
+    setSearchPeopleError(null);
+
+    const timeout = setTimeout(() => {
+      searchPublicPeople(query, { limit: 6 })
+        .then((results) => {
+          if (!active) return;
+          const filtered = results
+            .filter((person) => person.userId !== "")
+            .filter((person) => (person.userId ? !threadByOtherUserId.has(person.userId) : true));
+          setSearchPeopleResults(filtered);
+        })
+        .catch(() => {
+          if (!active) return;
+          setSearchPeopleResults([]);
+          setSearchPeopleError("People search is unavailable right now.");
+        })
+        .finally(() => {
+          if (active) setSearchPeopleLoading(false);
+        });
+    }, 120);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [debouncedSearchQuery, threadByOtherUserId]);
+
   const unreadThreadCount = useMemo(
     () => threads.filter((thread) => (thread.currentMember?.unreadCount ?? 0) > 0).length,
     [threads],
@@ -204,6 +278,90 @@ export default function ChillyChatInboxScreen() {
       },
     });
   }, [router]);
+
+  const openProfileByPerson = useCallback((person: PublicPeopleSearchResult) => {
+    const officialAccount = getOfficialPlatformAccount(person.userId);
+    const avatarUrl = officialAccount ? undefined : person.avatarUrl;
+
+    router.push({
+      pathname: "/profile/[userId]",
+      params: {
+        userId: person.userId,
+        displayName: officialAccount?.displayName ?? person.displayName,
+        avatarUrl,
+        tagline: person.shortBio,
+      },
+    });
+  }, [router]);
+
+  const openSearchSuggestion = useCallback((person: PublicPeopleSearchResult) => {
+    const thread = threadByOtherUserId.get(person.userId);
+    if (thread) {
+      openThread(thread);
+      return;
+    }
+
+    openProfileByPerson(person);
+  }, [openProfileByPerson, openThread, threadByOtherUserId]);
+
+  const renderPeopleSuggestionRows = () => {
+    const query = debouncedSearchQuery.trim();
+    if (query.length < CHAT_SUGGESTION_MIN_LENGTH) {
+      return null;
+    }
+
+    return (
+      <View style={styles.suggestionPanel}>
+        <Text style={styles.suggestionPanelTitle}>People</Text>
+        {searchPeopleLoading ? (
+          <View style={styles.suggestionPanelState}>
+            <ActivityIndicator color="#F34B74" size="small" />
+            <Text style={styles.suggestionPanelText}>Searching people…</Text>
+          </View>
+        ) : searchPeopleError ? (
+          <View style={styles.suggestionPanelState}>
+            <Text style={styles.suggestionPanelText}>{searchPeopleError}</Text>
+          </View>
+        ) : searchPeopleResults.length ? (
+          <View style={styles.suggestionPanelList}>
+            {searchPeopleResults.slice(0, 5).map((person, index) => {
+              const initial = person.displayName.slice(0, 1).toUpperCase();
+              const hasAvatar = Boolean(person.avatarUrl);
+              return (
+                <TouchableOpacity
+                  key={person.userId}
+                  testID={`chat-search-suggestion-row-${index}`}
+                  activeOpacity={0.86}
+                  style={styles.suggestionRow}
+                  onPress={() => openSearchSuggestion(person)}
+                >
+                  <View style={styles.suggestionAvatar}>
+                {hasAvatar ? (
+                      <Image source={{ uri: person.avatarUrl as string }} style={styles.suggestionAvatarImage} />
+                    ) : (
+                      <Text style={styles.suggestionAvatarText}>{initial}</Text>
+                    )}
+                  </View>
+                  <View style={styles.suggestionCopy}>
+                    <Text style={styles.suggestionName} numberOfLines={1}>{person.displayName}</Text>
+                    <Text style={styles.suggestionMeta} numberOfLines={1}>
+                      {person.username ? `@${person.username}` : "Profile"}
+                    </Text>
+                  </View>
+                  <Text style={styles.suggestionAction}>View</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.suggestionPanelState}>
+            <Text style={styles.suggestionPanelText}>No matching people</Text>
+            <Text style={styles.suggestionSubtext}>Try another name or exact username.</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const listHeader = useMemo(() => (
     <View style={styles.header}>
@@ -300,7 +458,7 @@ export default function ChillyChatInboxScreen() {
       <View style={styles.searchShell}>
         <Text style={styles.searchLabel}>Search</Text>
         <TextInput
-          testID="chat-inbox-search-input"
+          testID="chat-search-input"
           accessibilityLabel="Search Chi'lly Chat inbox"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -311,7 +469,19 @@ export default function ChillyChatInboxScreen() {
           autoCorrect={false}
           clearButtonMode="while-editing"
         />
+        {searchQuery.trim() ? (
+          <TouchableOpacity
+            testID="chat-search-clear-button"
+            accessibilityLabel="Clear Chi'lly Chat search"
+            activeOpacity={0.86}
+            onPress={() => setSearchQuery("")}
+            style={styles.searchClearButton}
+          >
+            <Text style={styles.searchClearButtonText}>Clear</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
+      {renderPeopleSuggestionRows()}
     </View>
   ), [
     error,
@@ -319,8 +489,13 @@ export default function ChillyChatInboxScreen() {
     loadThreads,
     openProfile,
     openThread,
+    openSearchSuggestion,
     quickActionThread,
     searchQuery,
+    debouncedSearchQuery,
+    searchPeopleError,
+    searchPeopleLoading,
+    searchPeopleResults,
     threads.length,
     unreadThreadCount,
   ]);
@@ -635,6 +810,102 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     paddingVertical: 0,
+  },
+  searchClearButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  searchClearButtonText: {
+    color: "#EAF0FF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  suggestionPanel: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10,
+    marginTop: 8,
+    gap: 8,
+  },
+  suggestionPanelTitle: {
+    color: "#E7EEFA",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  suggestionPanelState: {
+    gap: 4,
+    paddingVertical: 4,
+  },
+  suggestionPanelText: {
+    color: "#D7E1F4",
+    fontSize: 12.5,
+    fontWeight: "800",
+  },
+  suggestionSubtext: {
+    color: "#AAB5C7",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  suggestionPanelList: {
+    gap: 8,
+  },
+  suggestionRow: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 50,
+  },
+  suggestionAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(243,75,116,0.26)",
+  },
+  suggestionAvatarText: {
+    color: "#F7FBFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  suggestionAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  suggestionCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  suggestionName: {
+    color: "#F4F8FF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  suggestionMeta: {
+    color: "#9FB0CA",
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  suggestionAction: {
+    color: "#EAF0FF",
+    fontSize: 11,
+    fontWeight: "900",
   },
   kicker: {
     color: "#8894AB",

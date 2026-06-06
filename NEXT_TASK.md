@@ -2,6 +2,12 @@
 
 ## Current Recommendation
 
+Finish and verify Search, Typeahead And Social Discovery Polish for Chi’lly Chat, Chi’lly Circle, and Home Explore, then capture Android proof at `/tmp/chillywood-search-typeahead-social-discovery-proof-20260605/` for:
+
+- Search-by-typeahead on Chi’lly Chat inbox with debounced thread filtering and People suggestions
+- Chi’lly Circle “Find people” and compact official Rachi card behavior
+- Explore search/typeahead scope behavior and fallback/empty-state safety
+
 Continue the Full Interactive Surface QA sweep from the updated matrix, then resolve the two-session live-room proof blocker with a stable second device/emulator before Google Play Publishing Overview And Release Asset Closeout.
 
 Player shared/fullscreen follow-up is repo-side complete and OTA-published, and the later Shared Player custom fullscreen rails lane is repo-side complete. `app/player/[id].tsx` keeps standalone fullscreen video in cover mode, lets shared Watch-Party playback enter fullscreen, overlays compact Share / Report / speed controls without a Watch-Party Live handoff toggle, auto-hides shared Player chrome after 5 seconds idle, and keeps tap-to-play on the existing shared playback tap handler. Shared fullscreen now uses a real three-zone layout rather than absolute overlay cards: left dark rail for existing room comments/input/Send, center flex stage for the existing shared video/player surface, and right dark rail for compact participant bubbles from `liveBubbleParticipants`. It no longer reuses the full Watch-Party social panel, placeholder shared-player card, duplicate LiveKit media surface, `Shared playback stays here...` fallback text, or a separately invented fullscreen bubble. Latest dedicated doc: `docs/SHARED_PLAYER_CUSTOM_FULLSCREEN_RAILS.md`; planned proof path `/tmp/chillywood-shared-player-custom-fullscreen-rails-proof-20260605/`. Android visual proof still needs an active Premium-capable signed-in session because the current local proof account reads back `premium` status `canceled` and the app correctly blocks the direct Watch-Party route. This did not change media resolver logic, playback sync authority, LiveKit token issuer, host approval, route ownership, Party Room behavior, old-room handling, money state, Premium/content safety, or Owner/Admin authority.

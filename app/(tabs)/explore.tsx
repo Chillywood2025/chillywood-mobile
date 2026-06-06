@@ -952,7 +952,7 @@ export default function ExploreScreen() {
   const renderTypeaheadSuggestion = (suggestion: ExploreTypeaheadSuggestion) => (
     <TouchableOpacity
       key={`${suggestion.group}-${suggestion.id}`}
-      testID={`explore-typeahead-result-${suggestion.group}`}
+      testID={`home-explore-suggestion-row-${suggestion.group}-${suggestion.id}`}
       activeOpacity={0.86}
       style={styles.typeaheadRow}
       onPress={suggestion.onPress}
@@ -977,35 +977,37 @@ export default function ExploreScreen() {
     const hasGroups = typeaheadGroups.some((group) => group.suggestions.length > 0);
 
     return (
-      <View testID="explore-typeahead-results" style={styles.typeaheadPanel}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Suggestions</Text>
-          <Text style={styles.sectionMeta}>Typeahead</Text>
+      <View testID="explore-typeahead-results">
+        <View testID="home-explore-typeahead-results" style={styles.typeaheadPanel}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Suggestions</Text>
+            <Text style={styles.sectionMeta}>Typeahead</Text>
+          </View>
+          {peopleLoading && showPeopleScope ? (
+            <View style={styles.inlineEmpty}>
+              <Text style={styles.inlineEmptyTitle}>Searching people...</Text>
+            </View>
+          ) : null}
+          {hasGroups ? (
+            <View style={styles.typeaheadGroupList}>
+              {typeaheadGroups.map((group) => (
+                <View
+                  key={group.key}
+                  testID={`explore-typeahead-group-${group.key}`}
+                  style={styles.typeaheadGroup}
+                >
+                  <Text style={styles.typeaheadGroupTitle}>{group.label}</Text>
+                  {group.suggestions.map(renderTypeaheadSuggestion)}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View testID="explore-typeahead-empty" style={styles.inlineEmpty}>
+              <Text style={styles.inlineEmptyTitle}>No matches found</Text>
+              <Text style={styles.inlineEmptyText}>Try a username, creator, or title.</Text>
+            </View>
+          )}
         </View>
-        {peopleLoading && showPeopleScope ? (
-          <View style={styles.inlineEmpty}>
-            <Text style={styles.inlineEmptyTitle}>Searching people...</Text>
-          </View>
-        ) : null}
-        {hasGroups ? (
-          <View style={styles.typeaheadGroupList}>
-            {typeaheadGroups.map((group) => (
-              <View
-                key={group.key}
-                testID={`explore-typeahead-group-${group.key}`}
-                style={styles.typeaheadGroup}
-              >
-                <Text style={styles.typeaheadGroupTitle}>{group.label}</Text>
-                {group.suggestions.map(renderTypeaheadSuggestion)}
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View testID="explore-typeahead-empty" style={styles.inlineEmpty}>
-            <Text style={styles.inlineEmptyTitle}>No matches found</Text>
-            <Text style={styles.inlineEmptyText}>Try a username, creator, or title.</Text>
-          </View>
-        )}
       </View>
     );
   };
@@ -1132,7 +1134,7 @@ export default function ExploreScreen() {
                   <View style={styles.searchInputRow}>
                     <MaterialIcons name="search" size={20} color="#AAB4C7" />
                     <TextInput
-                      testID="explore-search-input"
+                      testID="home-explore-search-input"
                       accessibilityLabel="Search Chi'llwood Explore"
                       value={searchQuery}
                       onChangeText={setSearchQuery}
@@ -1144,7 +1146,7 @@ export default function ExploreScreen() {
                     />
                     {searchQuery.trim() ? (
                       <Pressable
-                        testID="explore-search-clear"
+                        testID="home-explore-search-clear-button"
                         accessibilityRole="button"
                         accessibilityLabel="Clear Explore search"
                         style={styles.searchClearButton}
