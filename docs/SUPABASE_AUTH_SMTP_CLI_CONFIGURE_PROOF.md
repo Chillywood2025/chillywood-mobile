@@ -106,6 +106,7 @@ Email inbox delivery and click-through confirmation still require access to a sa
 
 - `POST /auth/v1/recover` for `rob2037gn@gmail.com` with redirect `chillywoodmobile://reset-password` now returns `200`, indicating API accept/replay path is open.
 - Reset-link open-to-login confirmation is still pending on user inbox proof. If inbox confirmation is still blocked, classify by first party as DNS-provider trust, sender-domain trust, mailbox acceptance, or postmaster filtering.
+- During this lane, Brevo Transactional API readback could not be used for provider-side classification because the API key/key type tested returned `401 (key not found)`; that path is blocked until a valid Brevo transactional API credential is provided.
 
 ## Routing / Callback Proof
 
@@ -151,6 +152,16 @@ Observed:
 - targeted secret-pattern scan on changed files and proof artifacts (no secret values introduced)
 
 All checks passed.
+
+## Delivery Failure Trace Classification
+
+- `POST /auth/v1/recover` is currently accepted by Supabase Auth (`200`) with correct sender metadata.
+- DNS/SPF/DMARC/DKIM trust is in place for the current `chillywoodstream.com` and `chillywood.*` hosts.
+- Provider-side event evidence is still unavailable in this lane because Brevo transactional readback is blocked without a valid API key.
+- Therefore, this is classified as **Inbox/provider visibility blocker** pending one of:
+  - valid Brevo transactional API access + event lookup,
+  - manual safe-inbox verification,
+  - or explicit provider-side suppression/rejection review.
 
 ## Blockers / next steps
 

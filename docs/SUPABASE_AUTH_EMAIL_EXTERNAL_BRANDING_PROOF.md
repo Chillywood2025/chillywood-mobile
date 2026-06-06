@@ -55,6 +55,7 @@ June 6 follow-up: the four exact records above were added in Cloudflare and now 
 - Mailbox-level confirmation is still pending: verify delivery from `no-reply@chillywoodstream.com`, tap behavior to `chillywoodmobile://reset-password`, and post-reset return to login.
 - Actual mailbox receipt and manual click-through validation still requires reading the test inbox. Chrome/Gmail automation was not available in this session, so inbox proof could not be completed by Codex.
 - This lane has endpoint-level routing proof and accepted dispatch proof plus recovery-route correction proof; user-side click proof remains pending until safe inbox verification confirms sender/subject/content and route behavior.
+- Supabase Management API readback remains configured and correct; Brevo transactional readback was not available from the tested credentials (`401 key not found`), so provider-side suppression/access explanation is currently unresolved.
 
 ## Required Follow-up
 
