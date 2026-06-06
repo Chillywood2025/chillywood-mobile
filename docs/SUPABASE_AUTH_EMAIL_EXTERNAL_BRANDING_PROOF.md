@@ -76,6 +76,30 @@ Because `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` were missing, the req
 
 Because SMTP variables were missing, no custom SMTP config was applied.
 
+## Extended Secret Search
+
+After the initial blocked preflight, a broader safe search checked only filenames, variable names, and Supabase secret names/digests. Secret values were not printed.
+
+Checked locations:
+
+- repo env files such as `.env.local`, `.env.brand-review-proof.local`, and `maestro/.env.example`
+- shell profile files such as `.zshrc`, `.zprofile`, `.bash_profile`, and `.bashrc`
+- `/Users/loverslane/secrets`
+- `/Users/loverslane/.supabase`
+- `/Users/loverslane/.config`
+- Supabase Edge Function secret names for project `bmkkhihfbmsnnmcqkoly`
+- shell/session cache files by variable-name presence only
+
+Findings:
+
+- `.env.local` contains existing app/test runtime keys, but not the required `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, or `CHILLYWOOD_AUTH_SMTP_*` variables.
+- `.env.brand-review-proof.local` contains Brand Review proof account variables only.
+- Supabase Edge Function secrets include `CANARY_SUPABASE_ACCESS_TOKEN` and `CANARY_SUPABASE_PROJECT_REF`, but only names/digests are available through `supabase secrets list`; values are not retrievable from the CLI and were not printed.
+- Supabase Edge Function secrets do not include SMTP/mail/provider secrets such as `CHILLYWOOD_AUTH_SMTP_*`, `SMTP_*`, `RESEND_*`, `POSTMARK_*`, `SENDGRID_*`, `BREVO_*`, or `SES_*`.
+- No local file matching the approved search scope exposed a Management API token or SMTP credentials for this lane.
+
+Conclusion: the hosted canary has a Management API credential available server-side, but this lane still cannot apply external Auth email branding safely because the required local apply credentials are missing and SMTP credentials are absent both locally and from the visible Supabase secret-name inventory.
+
 ## External Setup Status
 
 | Item | Status | Reason |
