@@ -10,6 +10,14 @@ It does not change LiveKit token issuance, publish authority, host approval, rou
 
 ## Implementation
 
+`app/player/[id].tsx` reuses the same regular shared-player LiveKit bubble surface for fullscreen right rail:
+
+- regular shared-player dock: `LiveKitStageMediaSurface` with `layout="bubble-grid"`
+- fullscreen right rail: the same `LiveKitStageMediaSurface` with `layout="bubble-grid"`
+- shared participant source: `watchPartyLiveKitParticipantRoster`, `watchPartyLiveKitParticipantLabelsByIdentity`, and `watchPartyLiveKitParticipantAvatarUrlsByIdentity`
+
+The shared surface preserves LiveKit camera tracks, participant labels, request indicators, participant press behavior, and publish flags. It also accepts a shared avatar fallback map so regular portrait and fullscreen can render the same real avatar/camera-preview URL when a LiveKit camera track is not currently renderable.
+
 Fullscreen Shared Player still uses the three-zone layout:
 
 - left black rail for room comments
@@ -53,4 +61,3 @@ Required captures:
 - fullscreen right rail using the same LiveKit bubble surface
 - no fullscreen fallback card/text
 - touch play/pause and fullscreen exit still work
-

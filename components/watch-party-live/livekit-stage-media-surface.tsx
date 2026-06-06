@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   AppState,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -48,6 +49,7 @@ type LiveKitStageMediaSurfaceProps = {
   fillParent?: boolean;
   layout?: "stage" | "bubble-grid";
   participantLabelsByIdentity?: Record<string, string>;
+  participantAvatarUrlsByIdentity?: Record<string, string>;
   participantRoster?: LiveKitStageParticipantRosterEntry[];
   onParticipantPress?: (identity: string) => void;
   showRequestIndicators?: boolean;
@@ -60,6 +62,7 @@ type LiveKitStageMediaContentProps = {
   joinContract: LiveKitTokenReady;
   layout: "stage" | "bubble-grid";
   participantLabelsByIdentity?: Record<string, string>;
+  participantAvatarUrlsByIdentity?: Record<string, string>;
   participantRoster?: LiveKitStageParticipantRosterEntry[];
   onParticipantPress?: (identity: string) => void;
   showRequestIndicators: boolean;
@@ -79,6 +82,7 @@ type BubbleGridItem = {
   canPublish: boolean;
   isRequestingToSpeak: boolean;
   trackRef: RenderableLiveKitTrackReference | null;
+  avatarUrl: string | null;
 };
 
 const isRenderableTrackReference = (trackRef: unknown): trackRef is RenderableLiveKitTrackReference => (
@@ -201,6 +205,7 @@ function LiveKitStageMediaContent({
   joinContract,
   layout,
   participantLabelsByIdentity,
+  participantAvatarUrlsByIdentity,
   participantRoster,
   onParticipantPress,
   showRequestIndicators,
@@ -351,6 +356,7 @@ function LiveKitStageMediaContent({
         canPublish: !!entry.canPublish,
         isRequestingToSpeak: showRequestIndicators && !!entry.isRequestingToSpeak,
         trackRef,
+        avatarUrl: String(participantAvatarUrlsByIdentity?.[identity] ?? "").trim() || null,
       });
       seenIdentities.add(identity);
     });
@@ -367,6 +373,7 @@ function LiveKitStageMediaContent({
         canPublish: !!participantRosterByIdentity.get(identity)?.canPublish,
         isRequestingToSpeak: showRequestIndicators && !!participantRosterByIdentity.get(identity)?.isRequestingToSpeak,
         trackRef,
+        avatarUrl: String(participantAvatarUrlsByIdentity?.[identity] ?? "").trim() || null,
       });
       seenIdentities.add(identity);
     });
@@ -375,6 +382,7 @@ function LiveKitStageMediaContent({
   }, [
     bubbleGridTracks,
     localParticipant.identity,
+    participantAvatarUrlsByIdentity,
     participantLabelsByIdentity,
     participantRosterByIdentity,
     showRequestIndicators,
@@ -487,6 +495,10 @@ function LiveKitStageMediaContent({
                       mirror={isLocalParticipant}
                       zOrder={0}
                     />
+                  </View>
+                ) : item.avatarUrl ? (
+                  <View style={styles.bubbleVideoWrap} collapsable={false}>
+                    <Image source={{ uri: item.avatarUrl }} style={styles.bubbleAvatarImage} />
                   </View>
                 ) : (
                   <View style={[styles.bubbleVideoWrap, styles.bubblePlaceholderWrap]} collapsable={false}>
@@ -630,6 +642,7 @@ export function LiveKitStageMediaSurface({
   fillParent = true,
   layout = "stage",
   participantLabelsByIdentity,
+  participantAvatarUrlsByIdentity,
   participantRoster,
   onParticipantPress,
   showRequestIndicators = true,
@@ -927,6 +940,7 @@ export function LiveKitStageMediaSurface({
           joinContract={joinContract}
           layout={layout}
           participantLabelsByIdentity={participantLabelsByIdentity}
+          participantAvatarUrlsByIdentity={participantAvatarUrlsByIdentity}
           participantRoster={participantRoster}
           onParticipantPress={onParticipantPress}
           showRequestIndicators={showRequestIndicators}
@@ -983,6 +997,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   bubbleVideo: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 39,
+  },
+  bubbleAvatarImage: {
     width: "100%",
     height: "100%",
     borderRadius: 39,

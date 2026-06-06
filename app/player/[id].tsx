@@ -5361,6 +5361,18 @@ export default function PlayerScreen() {
     ])),
     [liveBubbleParticipants, trackedUserId],
   );
+  const watchPartyLiveKitParticipantAvatarUrlsByIdentity = useMemo(
+    () => Object.fromEntries(liveBubbleParticipants.map((participant) => [
+      participant.id,
+      String(
+        (participant.id === trackedUserId ? myCameraPreviewUrlRef.current : "")
+        || participant.cameraPreviewUrl
+        || participant.avatarUrl
+        || "",
+      ).trim(),
+    ]).filter(([, avatarUrl]) => avatarUrl)),
+    [liveBubbleParticipants, trackedUserId],
+  );
   const watchPartyLiveKitParticipantRoster = useMemo(
     () => liveBubbleParticipants.map((participant) => {
       const role: LiveKitStageParticipantRosterEntry["role"] = participant.role === "host"
@@ -7244,6 +7256,7 @@ export default function PlayerScreen() {
         fillParent={false}
         layout="bubble-grid"
         participantLabelsByIdentity={watchPartyLiveKitParticipantLabelsByIdentity}
+        participantAvatarUrlsByIdentity={watchPartyLiveKitParticipantAvatarUrlsByIdentity}
         participantRoster={watchPartyLiveKitParticipantRoster}
         onParticipantPress={onWatchPartyLiveKitParticipantPress}
         showRequestIndicators={currentWatchPartyHostAuthority.isHost}
@@ -7695,7 +7708,24 @@ export default function PlayerScreen() {
       style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
       pointerEvents="auto"
     >
-      {renderParticipantPanel(true, true, true)}
+      {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
+        <LiveKitStageMediaSurface
+          joinContract={watchPartyLiveKitJoinContract}
+          onFallback={onWatchPartyLiveKitFallback}
+          active={playerMediaIsInteractive}
+          fillParent={false}
+          layout="bubble-grid"
+          participantLabelsByIdentity={watchPartyLiveKitParticipantLabelsByIdentity}
+          participantAvatarUrlsByIdentity={watchPartyLiveKitParticipantAvatarUrlsByIdentity}
+          participantRoster={watchPartyLiveKitParticipantRoster}
+          onParticipantPress={onWatchPartyLiveKitParticipantPress}
+          showRequestIndicators={currentWatchPartyHostAuthority.isHost}
+          surfaceLabel="Watch-Party Live"
+          publishLocalAudio={publishWatchPartyLiveKitAudio}
+          publishLocalVideo={publishWatchPartyLiveKitVideo}
+          containerStyle={styles.sharedFullscreenLiveKitBubbleSurface}
+        />
+      ) : null}
     </View>
   );
 
