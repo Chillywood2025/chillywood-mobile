@@ -46,8 +46,12 @@ for (const file of requiredTemplates.filter((file) => file.endsWith(".html") || 
 }
 
 const signup = read("app/(auth)/signup.tsx");
-if (!signup.includes("chillywoodmobile://auth/confirm")) {
-  fail("signup must pass Chi’llwood confirm redirect");
+const SIGNUP_REDIRECT_OK = [
+  "chillywoodmobile://auth/confirm",
+  "chillywoodmobile://auth/callback",
+].some((token) => signup.includes(token));
+if (!SIGNUP_REDIRECT_OK) {
+  fail("signup must pass a Chi’llwood confirm redirect");
 }
 if (!signup.includes("emailRedirectTo")) {
   fail("signup must use emailRedirectTo");

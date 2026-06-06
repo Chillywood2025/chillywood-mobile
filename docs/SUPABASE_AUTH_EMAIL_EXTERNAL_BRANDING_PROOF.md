@@ -2,145 +2,49 @@
 
 Date: 2026-06-06
 
-Status: blocked before external mutation.
-
-June 6 CLI/Management API follow-up: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` repeated the external setup preflight with the exact requested variable names (`SUPABASE_ACCESS_TOKEN`, `PROJECT_REF`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_ADMIN_EMAIL`, `SMTP_SENDER_NAME`). Supabase CLI was logged in and project `bmkkhihfbmsnnmcqkoly` was visible as active, but the Management API token and SMTP provider variables were missing from the local shell. No hosted Auth config mutation was attempted and no email delivery proof is claimed.
+Status: custom SMTP configured and read back; mailbox-based email-delivery proof still pending.
 
 ## Scope
 
-This proof lane attempted to apply the repo-ready Chi’llwood Supabase Auth email branding setup from commit `9a08385 Add Chi'llwood auth email branding templates` to the hosted Supabase project.
+This proof lane confirms hosted Supabase Auth custom SMTP wiring and app-route behavior for email callbacks. It complements
+`docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` and does not include marketing traffic, monetary activation, payout, or ownership changes.
 
-The intended external changes were:
+## Execution Summary
 
-- custom SMTP sender configuration
-- Chi’llwood Auth email template application
-- Supabase Auth redirect URL allowlist verification/application
-- real branded forgot-password email proof
-- real branded signup confirmation email proof
-- app deep-link proof back into Chi’llwood
+- Supabase project: `bmkkhihfbmsnnmcqkoly`
+- Project auth config was patched via Management API.
+- SMTP host/user/sender fields were written and read back.
+- Password value was never printed.
+- Email callback routing was fixed so reset links do not match auth callback routing logic.
+- Forgot-password request trigger was executed against the same project and accepted.
 
-## Starting Repo State
+## External Configuration Status
 
-Starting HEAD: `9a08385 Add Chi'llwood auth email branding templates`
+- `PATCH /v1/projects/{ref}/config/auth` succeeded.
+- `GET /v1/projects/{ref}/config/auth` confirms configured host/user/sender settings.
+- `smtp_pass` was redacted from all captured outputs.
 
-Branch state: `main...origin/main`
+## App Callback Routing Status
 
-Tracked worktree: clean at preflight.
+- Confirm route: `chillywoodmobile://auth/callback`
+- Reset route: `chillywoodmobile://reset-password`
+- `app/_layout.tsx` guards now ensure `/reset-password` does not enter auth-callback flow and reaches `app/reset-password.tsx`.
+- `app/auth-callback.tsx` routes to login after successful verification.
 
-Untracked paths present and untouched:
+## Inbox / Click-through Status
 
-- `artifacts/`
-- `supabase/.temp/`
+- `POST /auth/v1/recover` request was accepted (`200` + `{}`).
+- Actual mailbox receipt and manual click-through validation requires reading the test inbox.
+- This lane has captured the endpoint-level and routing-level proof; user-side click proof remains a manual check for the provided test inbox.
 
-Current app redirects:
+## Required Follow-up
 
-- Confirm signup: `chillywoodmobile://auth/callback`
-- Reset password: `chillywoodmobile://reset-password`
-- Legacy auth callback: `chillywoodmobile://auth/confirm`
-- Planned auth callback: `chillywoodmobile://auth/callback`
-- Legacy auth callback tolerated: `chillywoodmobile://auth-callback`
-
-Template files present:
-
-- `docs/auth-email-templates/confirm-signup.html`
-- `docs/auth-email-templates/confirm-signup.txt`
-- `docs/auth-email-templates/reset-password.html`
-- `docs/auth-email-templates/reset-password.txt`
-- `docs/auth-email-templates/magic-link.html`
-- `docs/auth-email-templates/magic-link.txt`
-- `docs/auth-email-templates/invite-user.html`
-- `docs/auth-email-templates/invite-user.txt`
-- `docs/auth-email-templates/email-change.html`
-- `docs/auth-email-templates/email-change.txt`
-- `docs/auth-email-templates/reauthentication.html`
-- `docs/auth-email-templates/reauthentication.txt`
-- `docs/auth-email-templates/SUBJECTS.md`
-- `docs/auth-email-templates/README.md`
-
-## Environment Preflight
-
-The lane requires approved local environment variables before any Supabase Management API mutation.
-
-Environment presence check, by name only:
-
-| Variable | Status |
-| --- | --- |
-| `SUPABASE_ACCESS_TOKEN` | missing |
-| `SUPABASE_PROJECT_REF` | missing |
-| `CHILLYWOOD_AUTH_SMTP_HOST` | missing |
-| `CHILLYWOOD_AUTH_SMTP_PORT` | missing |
-| `CHILLYWOOD_AUTH_SMTP_USER` | missing |
-| `CHILLYWOOD_AUTH_SMTP_PASS` | missing |
-| `CHILLYWOOD_AUTH_SMTP_FROM` | missing |
-| `CHILLYWOOD_AUTH_SMTP_SENDER_NAME` | missing |
-| `CHILLYWOOD_AUTH_TEST_EMAIL` | missing |
-
-Because `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` were missing, the required read-only Management API preflight was not attempted.
-
-Because SMTP variables were missing, no custom SMTP config was applied.
-
-## Extended Secret Search
-
-After the initial blocked preflight, a broader safe search checked only filenames, variable names, and Supabase secret names/digests. Secret values were not printed.
-
-Checked locations:
-
-- repo env files such as `.env.local`, `.env.brand-review-proof.local`, and `maestro/.env.example`
-- shell profile files such as `.zshrc`, `.zprofile`, `.bash_profile`, and `.bashrc`
-- `/Users/loverslane/secrets`
-- `/Users/loverslane/.supabase`
-- `/Users/loverslane/.config`
-- Supabase Edge Function secret names for project `bmkkhihfbmsnnmcqkoly`
-- shell/session cache files by variable-name presence only
-
-Findings:
-
-- `.env.local` contains existing app/test runtime keys, but not the required `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, or `CHILLYWOOD_AUTH_SMTP_*` variables.
-- `.env.brand-review-proof.local` contains Brand Review proof account variables only.
-- Supabase Edge Function secrets include `CANARY_SUPABASE_ACCESS_TOKEN` and `CANARY_SUPABASE_PROJECT_REF`, but only names/digests are available through `supabase secrets list`; values are not retrievable from the CLI and were not printed.
-- Supabase Edge Function secrets do not include SMTP/mail/provider secrets such as `CHILLYWOOD_AUTH_SMTP_*`, `SMTP_*`, `RESEND_*`, `POSTMARK_*`, `SENDGRID_*`, `BREVO_*`, or `SES_*`.
-- No local file matching the approved search scope exposed a Management API token or SMTP credentials for this lane.
-
-Conclusion: the hosted canary has a Management API credential available server-side, but this lane still cannot apply external Auth email branding safely because the required local apply credentials are missing and SMTP credentials are absent both locally and from the visible Supabase secret-name inventory.
-
-## External Setup Status
-
-| Item | Status | Reason |
-| --- | --- | --- |
-| Management API read preflight | blocked | `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` missing |
-| Custom SMTP apply | blocked | SMTP host, port, user, password, from, and sender name missing |
-| Template apply | blocked | Management API preflight unavailable |
-| Redirect allowlist apply | blocked | Management API preflight unavailable |
-| Real forgot-password branded email proof | blocked | custom SMTP/templates not applied; test email missing |
-| Real signup confirmation branded email proof | blocked | custom SMTP/templates not applied; test email missing |
-| Android deep-link proof | not rerun | app-side deep-link support was already OTA-published; external email links were unavailable |
-
-## Required Owner Action
-
-Provide approved environment variables in the local secret environment or approved secret store:
-
-- `SUPABASE_ACCESS_TOKEN`
-- `SUPABASE_PROJECT_REF`
-- `CHILLYWOOD_AUTH_SMTP_HOST`
-- `CHILLYWOOD_AUTH_SMTP_PORT`
-- `CHILLYWOOD_AUTH_SMTP_USER`
-- `CHILLYWOOD_AUTH_SMTP_PASS`
-- `CHILLYWOOD_AUTH_SMTP_FROM`
-- `CHILLYWOOD_AUTH_SMTP_SENDER_NAME`
-- optional `CHILLYWOOD_AUTH_TEST_EMAIL`
-
-Expected sender name remains `Chi’llwood`.
-
-Preferred sender is `no-reply@auth.chillywoodstream.com`, or another provider-approved Chi'llwood auth sender if the outbound provider requires a different verified address.
-
-Support address remains `support@chillywoodstream.com`.
-
-After the variables are available, rerun the external setup lane and capture proof under:
-
-`/tmp/chillywood-supabase-auth-email-external-branding-proof-20260606/`
+- Re-run mailbox validation in the safe test inbox immediately after deploy:
+  - verify reset email arrives
+  - verify sender/subject and Chi'llwood template content
+  - verify tap opens `chillywoodmobile://reset-password`
+  - confirm successful password update returns to login
 
 ## Safety
 
-No Supabase Management API token, SMTP password, service-role key, `.env` file, API key, provider secret, keystore, service account JSON, auth link token, or email header was committed.
-
-No email confirmation bypass, auth security weakening, production money change, payout change, LiveKit token issuer change, or route ownership change was made.
+No SMTP password, Supabase Management API token, service role key, provider secret, or local `.env` secret value was committed.

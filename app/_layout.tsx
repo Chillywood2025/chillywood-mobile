@@ -129,6 +129,13 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
     const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
+    const isResetPasswordPath = normalizedHost === "reset-password"
+      || (
+        normalizedHost === "chillywoodstream.com"
+        && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
+      )
+      || normalizedPath === "/reset-password";
+    if (isResetPasswordPath) return null;
     const hasAuthCallbackParam = [
       "code",
       "token",
@@ -163,17 +170,17 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       ].some((key) => hashParams.has(key));
     })();
 
-    const hasConfirmPath = normalizedPath === "/confirm" || normalizedPath === "/verify" || normalizedPath === "/recovery";
-    const isAuthCallbackLink = normalizedHost === "auth-callback"
-      || normalizedPath === "/auth-callback"
-      || normalizedPath === "/auth"
-      || (normalizedHost === "auth" && (normalizedPath === "" || normalizedPath === "/" || normalizedPath === "/confirm" || normalizedPath === "/callback"))
-      || (normalizedHost === "auth" && hasConfirmPath)
-      || (normalizedHost === "chillywoodstream.com" && hasConfirmPath)
-      || (normalizedHost === "chillywoodstream.com" && normalizedPath.includes("/auth") && hasAuthCallbackParam)
-      || (normalizedPath.includes("confirm") && hasAuthCallbackParam)
-      || hasAuthCallbackParam
-      || hasHashAuthParam;
+    const hasConfirmPath = normalizedPath === "/confirm" || normalizedPath === "/verify" || normalizedPath === "/recovery" || normalizedPath === "/auth" || normalizedPath === "/callback" || normalizedPath === "/auth-callback";
+    const isKnownAuthHost = normalizedHost === "auth" || normalizedHost === "auth-callback";
+    const isKnownWebAuthPath = normalizedHost === "chillywoodstream.com" && (
+      normalizedPath === "/" ||
+      hasConfirmPath ||
+      normalizedPath.startsWith("/auth") ||
+      normalizedPath.includes("/confirm") ||
+      normalizedPath.includes("/verify")
+    );
+    const isAuthCallbackLink = (isKnownAuthHost || isKnownWebAuthPath)
+      && (hasAuthCallbackParam || hasHashAuthParam || normalizedPath === "/auth" || normalizedPath === "/auth-callback" || hasConfirmPath);
 
     if (!isAuthCallbackLink) return null;
 
