@@ -31,6 +31,7 @@ import {
     TextInput,
     TouchableOpacity,
     UIManager,
+    useWindowDimensions,
     View,
     type AppStateStatus,
     type GestureResponderEvent,
@@ -924,6 +925,7 @@ const clampZoomTranslation = (translation: ZoomTranslation, scale: number, layou
 
 export default function PlayerScreen() {
   const { isSignedIn } = useSession();
+  const { width: viewportWidth } = useWindowDimensions();
   const {
     id,
     partyId: partyIdParam,
@@ -952,6 +954,8 @@ export default function PlayerScreen() {
   const expectsSpectatorPlayback = sourceRaw === "spectator-playback";
   const isLiveModeFlag = liveModeRaw === "1" || liveModeRaw === "true" || liveModeRaw === "yes" || liveModeRaw === "live";
   const isSharedPartyPlayback = inWatchParty && !isLiveModeFlag;
+  const sharedFullscreenLeftRailWidth = Math.max(132, Math.min(190, Math.round(viewportWidth * 0.24)));
+  const sharedFullscreenRightRailWidth = Math.max(74, Math.min(104, Math.round(viewportWidth * 0.12)));
   let rawId = id;
   if (typeof rawId !== "string") rawId = String(rawId ?? "");
   const cleanId = rawId.replace(/["']/g, "").trim();
@@ -7662,19 +7666,40 @@ export default function PlayerScreen() {
     </>
   );
 
-  const renderSharedFullscreenOverlay = () => {
-    if (!isSharedPartyPlayback || !isPlayerFullscreen) return null;
+  const renderSharedFullscreenCommentsRail = () => (
+    <View
+      style={[styles.sharedFullscreenCommentsRail, { width: sharedFullscreenLeftRailWidth }]}
+      pointerEvents="auto"
+    >
+      {renderPartyCommentsContent(true)}
+    </View>
+  );
+
+  const renderSharedFullscreenParticipantRail = () => {
+    const participants = liveBubbleParticipants.slice(0, 10);
 
     return (
-      <View style={styles.sharedFullscreenOverlayLayer} pointerEvents="box-none">
-        <View style={styles.sharedFullscreenCommentsRail} pointerEvents="auto">
-          {renderPartyCommentsContent(true)}
-        </View>
-        <View style={styles.sharedFullscreenParticipantRail} pointerEvents="auto">
-          {liveBubbleParticipants.slice(0, 6).map((participant) => {
+      <View
+        style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
+        pointerEvents="auto"
+      >
+        <ScrollView
+          style={styles.sharedFullscreenBubbleScroll}
+          contentContainerStyle={styles.sharedFullscreenBubbleScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {participants.length > 0 ? participants.map((participant) => {
             const isCurrentUser = participant.id === trackedUserId;
             const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
             const initials = getInitials(participant.name);
+            const roleLabel = getLiveParticipantStatusText({
+              isSpeaking: participant.isSpeaking && participant.canSpeak,
+              isRequesting: currentWatchPartyHostAuthority.isHost && participant.isRequestingToSpeak && !participant.canSpeak,
+              isMuted: participant.muted,
+              role: participant.role,
+              canSpeak: participant.canSpeak,
+              isFeatured: participant.canSpeak && primaryActiveParticipantIds.includes(participant.id) && participant.role !== "host",
+            });
 
             return (
               <TouchableOpacity
@@ -7698,10 +7723,21 @@ export default function PlayerScreen() {
                 <Text style={styles.sharedFullscreenBubbleLabel} numberOfLines={1}>
                   {isCurrentUser ? "You" : participant.name}
                 </Text>
+                {roleLabel ? (
+                  <Text style={styles.sharedFullscreenBubbleRole} numberOfLines={1}>
+                    {roleLabel}
+                  </Text>
+                ) : null}
               </TouchableOpacity>
             );
-          })}
-        </View>
+          }) : (
+            <View style={styles.sharedFullscreenBubbleItem} pointerEvents="none">
+              <View style={styles.sharedFullscreenBubbleAvatar}>
+                <Text style={styles.sharedFullscreenBubbleInitials}>...</Text>
+              </View>
+            </View>
+          )}
+        </ScrollView>
       </View>
     );
   };
@@ -8217,6 +8253,9 @@ export default function PlayerScreen() {
 
         {source || isLiveMode || isCreatorVideoPlayback ? (
           <>
+          <View style={isSharedPartyPlayback && isPlayerFullscreen ? styles.sharedFullscreenRailsLayout : styles.sharedFullscreenPassthrough}>
+            {isSharedPartyPlayback && isPlayerFullscreen ? renderSharedFullscreenCommentsRail() : null}
+            <View style={isSharedPartyPlayback && isPlayerFullscreen ? styles.sharedFullscreenCenterStage : styles.sharedFullscreenCenterPassthrough}>
           <View
             style={[
               styles.videoWrap,
@@ -8827,7 +8866,6 @@ export default function PlayerScreen() {
                     <Text style={styles.partyLocalReactionText}>{entry.emoji}</Text>
                   </Animated.View>
                 ))}
-                {renderSharedFullscreenOverlay()}
               </>
             ) : (
               <StandalonePlayerTopChrome
@@ -8941,6 +8979,9 @@ export default function PlayerScreen() {
               />
             ) : null}
 
+          </View>
+            </View>
+            {isSharedPartyPlayback && isPlayerFullscreen ? renderSharedFullscreenParticipantRail() : null}
           </View>
 
           {!inWatchParty && !isLiveMode && !standalonePlaybackGateActive && !isStandaloneFullscreen && !creatorVideoCommentKeyboardOpen ? (
@@ -10016,30 +10057,54 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
-  sharedFullscreenOverlayLayer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 82,
-    elevation: 82,
+  sharedFullscreenPassthrough: {
+    width: "100%",
+  },
+  sharedFullscreenCenterPassthrough: {
+    width: "100%",
+  },
+  sharedFullscreenRailsLayout: {
+    flex: 1,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "stretch",
+    backgroundColor: "#020306",
+  },
+  sharedFullscreenCenterStage: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: "#000",
   },
   sharedFullscreenParticipantRail: {
-    position: "absolute",
-    right: 8,
-    top: 92,
-    bottom: 94,
-    width: 72,
+    height: "100%",
+    borderLeftWidth: 1,
+    borderLeftColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(2,3,6,0.98)",
+    paddingHorizontal: 6,
+    paddingTop: 52,
+    paddingBottom: 48,
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "center",
+  },
+  sharedFullscreenBubbleScroll: {
+    width: "100%",
+  },
+  sharedFullscreenBubbleScrollContent: {
+    minHeight: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
   },
   sharedFullscreenBubbleItem: {
-    width: 70,
+    width: "100%",
     alignItems: "center",
     gap: 4,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   sharedFullscreenBubbleAvatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.24)",
     backgroundColor: "rgba(8,10,16,0.76)",
@@ -10050,7 +10115,7 @@ const styles = StyleSheet.create({
   sharedFullscreenBubbleAvatarImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 27,
+    borderRadius: 28,
   },
   sharedFullscreenBubbleInitials: {
     color: "#F7F8FC",
@@ -10067,18 +10132,25 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
+  sharedFullscreenBubbleRole: {
+    width: "100%",
+    color: "rgba(230,234,244,0.68)",
+    fontSize: 8.5,
+    fontWeight: "800",
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.72)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
   sharedFullscreenCommentsRail: {
-    position: "absolute",
-    left: 6,
-    top: 94,
-    bottom: 102,
-    width: 66,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(4,6,10,0.52)",
-    paddingHorizontal: 5,
-    paddingVertical: 10,
+    height: "100%",
+    borderRightWidth: 1,
+    borderRightColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(2,3,6,0.98)",
+    paddingHorizontal: 10,
+    paddingTop: 58,
+    paddingBottom: 50,
+    justifyContent: "center",
   },
 
   partyTransportRow: {
