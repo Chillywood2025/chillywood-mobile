@@ -30,11 +30,11 @@ The rail-specific composer is compact: the placeholder is `Comment`, the input r
 
 ## Right Bubble Rail
 
-The participant rail now reuses the exact `LiveKitStageMediaSurface` bubble-grid surface used by the regular shared player. Fullscreen no longer maps `liveBubbleParticipants` into a separate look-alike bubble renderer. That keeps the real LiveKit camera/avatar/placeholder behavior aligned between regular portrait shared player and fullscreen.
+The participant rail now reuses the exact regular shared-player participant bubble renderer. Regular portrait shared player calls `renderParticipantPanel(true, true)`, fullscreen right rail calls `renderParticipantPanel(true, true, true)`, and both render `liveBubbleParticipants` through `renderSharedPlayerParticipantBubble`. Fullscreen no longer maps `liveBubbleParticipants` into a separate look-alike bubble renderer and no longer mounts a fullscreen `LiveKitStageMediaSurface` rail.
 
-Fullscreen passes the same join contract, participant labels, roster, request indicators, participant press handler, and publish flags that the regular shared player passes. It does not call the regular fallback card path, so the right rail must not show the `Shared Player` placeholder card or the copy `Shared playback stays here if the room drops back from live camera.`
+Fullscreen keeps the same participant source, avatar/camera fallback, badges, mute/request/speaking state, reactions, and participant press handler as regular shared player. It does not call the regular fallback card path, so the right rail must not show the `Shared Player` placeholder card or the copy `Shared playback stays here if the room drops back from live camera.`
 
-If LiveKit is not available, fullscreen leaves the right rail empty rather than showing explanatory fallback text. No fake participants or fake LiveKit state are added.
+Fullscreen does not show explanatory fallback text in the rail. No fake participants or fake LiveKit state are added.
 
 ## Regular Shared Player
 

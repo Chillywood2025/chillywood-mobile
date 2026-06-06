@@ -6909,9 +6909,8 @@ export default function PlayerScreen() {
               style={[
                 styles.participantBubbleItem,
                 liveLayout && styles.participantBubbleItemLive,
-                liveLayout && !fullscreenRail && styles.participantBubbleItemLiveGrid,
+                liveLayout && styles.participantBubbleItemLiveGrid,
                 dockLayout && styles.participantBubbleItemLiveDock,
-                fullscreenRail && styles.participantBubbleItemFullscreenRail,
                 !liveLayout && !fullscreenRail && styles.participantBubbleItemTitleCompact,
                 shouldDim && styles.participantBubbleInactive,
                 isReactionBoosted && styles.participantBubbleReactionBoost,
@@ -6932,7 +6931,6 @@ export default function PlayerScreen() {
                 style={[
                   styles.partyParticipantBubbleTap,
                   dockLayout && styles.partyParticipantBubbleTapDock,
-                  fullscreenRail && styles.partyParticipantBubbleTapFullscreenRail,
                 ]}
                 onPressIn={() => {
                   const press = participantPressScaleMapRef.current[participant.id];
@@ -6963,7 +6961,6 @@ export default function PlayerScreen() {
                   style={[
                     styles.partyParticipantAvatarWrap,
                     dockLayout && styles.partyParticipantAvatarWrapDock,
-                    fullscreenRail && styles.partyParticipantAvatarWrapFullscreenRail,
                   ]}
                 >
                   <View
@@ -6971,7 +6968,6 @@ export default function PlayerScreen() {
                       styles.participantAvatar,
                       liveLayout && styles.participantAvatarLive,
                       dockLayout && styles.participantAvatarLiveDock,
-                      fullscreenRail && styles.participantAvatarFullscreenRail,
                       dockLayout && styles.watchPartyParticipantAvatar,
                       !liveLayout && styles.participantAvatarTitleCompact,
                       participant.muted && styles.participantAvatarMuted,
@@ -7060,7 +7056,6 @@ export default function PlayerScreen() {
                     styles.participantName,
                     liveLayout && styles.participantNameLive,
                     dockLayout && styles.participantNameLiveDock,
-                    fullscreenRail && styles.participantNameFullscreenRail,
                     !liveLayout && !fullscreenRail && styles.participantNameTitleCompact,
                   ]}
                   numberOfLines={1}
@@ -7072,7 +7067,6 @@ export default function PlayerScreen() {
                     style={[
                       styles.partyParticipantStatus,
                       dockLayout && styles.partyParticipantStatusDock,
-                      fullscreenRail && styles.partyParticipantStatusFullscreenRail,
                     ]}
                   >
                     {getLiveParticipantStatusText({
@@ -7708,24 +7702,7 @@ export default function PlayerScreen() {
       style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
       pointerEvents="auto"
     >
-      {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
-        <LiveKitStageMediaSurface
-          joinContract={watchPartyLiveKitJoinContract}
-          onFallback={onWatchPartyLiveKitFallback}
-          active={playerMediaIsInteractive}
-          fillParent={false}
-          layout="bubble-grid"
-          participantLabelsByIdentity={watchPartyLiveKitParticipantLabelsByIdentity}
-          participantAvatarUrlsByIdentity={watchPartyLiveKitParticipantAvatarUrlsByIdentity}
-          participantRoster={watchPartyLiveKitParticipantRoster}
-          onParticipantPress={onWatchPartyLiveKitParticipantPress}
-          showRequestIndicators={currentWatchPartyHostAuthority.isHost}
-          surfaceLabel="Watch-Party Live"
-          publishLocalAudio={publishWatchPartyLiveKitAudio}
-          publishLocalVideo={publishWatchPartyLiveKitVideo}
-          containerStyle={styles.sharedFullscreenLiveKitBubbleSurface}
-        />
-      ) : null}
+      {renderParticipantPanel(true, true, true)}
     </View>
   );
 
@@ -10083,11 +10060,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sharedFullscreenLiveKitBubbleSurface: {
-    width: "100%",
-    flex: 1,
-    backgroundColor: "transparent",
-  },
   sharedFullscreenCommentsRail: {
     height: "100%",
     borderRightWidth: 1,
@@ -11048,16 +11020,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     backgroundColor: "transparent",
   },
-  participantBubbleItemFullscreenRail: {
-    width: 76,
-    minHeight: 82,
-    borderRadius: 0,
-    borderWidth: 0,
-    borderColor: "transparent",
-    backgroundColor: "transparent",
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
   participantBubbleActive: {
     borderColor: "rgba(255,255,255,0.18)",
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -11081,9 +11043,6 @@ const styles = StyleSheet.create({
   },
   partyParticipantBubbleTapDock: {
     gap: 2,
-  },
-  partyParticipantBubbleTapFullscreenRail: {
-    gap: 3,
   },
   watchPartyParticipantRow: {
     borderRadius: 18,
@@ -11112,9 +11071,6 @@ const styles = StyleSheet.create({
   },
   partyParticipantAvatarWrapDock: {
     marginBottom: 0,
-  },
-  partyParticipantAvatarWrapFullscreenRail: {
-    marginBottom: 1,
   },
   watchPartyParticipantAvatarWrap: {
     marginRight: 0,
@@ -11184,14 +11140,6 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     borderColor: "transparent",
     backgroundColor: "rgba(0,0,0,0.44)",
-  },
-  participantAvatarFullscreenRail: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderColor: "rgba(255,255,255,0.26)",
-    backgroundColor: "rgba(0,0,0,0.46)",
-    overflow: "hidden",
   },
   watchPartyParticipantAvatar: {
     borderWidth: 0,
@@ -11397,12 +11345,6 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
     fontSize: 9,
     color: "#F3F6FD",
-    textAlign: "center",
-  },
-  participantNameFullscreenRail: {
-    maxWidth: 68,
-    color: "#F5F7FC",
-    fontSize: 10,
     textAlign: "center",
   },
   watchPartyParticipantScroll: {
@@ -11712,12 +11654,6 @@ const styles = StyleSheet.create({
   partyParticipantStatusDock: {
     maxWidth: "100%",
     color: "#C0C8D9",
-    fontSize: 8,
-    textAlign: "center",
-  },
-  partyParticipantStatusFullscreenRail: {
-    maxWidth: 68,
-    color: "#D8DEEB",
     fontSize: 8,
     textAlign: "center",
   },

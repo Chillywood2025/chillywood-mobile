@@ -467,7 +467,7 @@ Verify:
 - regular portrait shared player still shows the working LiveKit bubble/avatar behavior
 - fullscreen left rail has compact room comments with `Comment` placeholder and compact Send chip
 - fullscreen center video remains large
-- fullscreen right rail uses the same `LiveKitStageMediaSurface` bubble-grid surface as portrait
+- fullscreen right rail uses the same `renderParticipantPanel` / `renderSharedPlayerParticipantBubble` path as portrait
 - fullscreen right rail does not show `Shared Player` fallback card/text
 - touch play/pause and fullscreen exit still work
 
