@@ -7,7 +7,23 @@ This runbook documents the current email posture and the exact external setup re
 
 ## Current Truth
 
-May 30, 2026 proof refresh: `/tmp/chillywood-google-play-acceptance-closeout-20260530/dns-email-check.txt` again shows Cloudflare MX, SPF, and DMARC baseline records for `chillywoodstream.com`; common selectors `default`, `google`, `selector1`, `selector2`, `mail`, and `k1` returned no DKIM TXT record. DKIM remains external/unverified.
+May 30, 2026 proof refresh: `/tmp/chillywood-google-play-acceptance-closeout-20260530/dns-email-check.txt` showed baseline records for `chillywoodstream.com`.
+
+June 6, 2026 proof refresh: `/tmp/chillywood-brevo-domain-auth-smtp-proof-20260606/exact-brevo-record-checks.txt` and direct DNS checks confirm `chillywoodstream.com` SPF+DMARC are present and root-domain Brevo DKIM CNAME selectors are resolving:
+
+- `_dmarc.chillywoodstream.com` with `p=none`
+- `brevo1._domainkey.chillywoodstream.com -> b1.chillywoodstream-com.dkim.brevo.com.`
+- `brevo2._domainkey.chillywoodstream.com -> b2.chillywoodstream-com.dkim.brevo.com.`
+- Brevo TXT verification `brevo-code:...`
+
+The current Brevo dashboard values supplied by the owner now ask for `chillywood` host records instead:
+
+- TXT `chillywood` with `brevo-code:...`
+- CNAME `brevo1._domainkey.chillywood -> b1.chillywood-stream-com.dkim.brevo.com`
+- CNAME `brevo2._domainkey.chillywood -> b2.chillywood-stream-com.dkim.brevo.com`
+- TXT `_dmarc.chillywood` with `v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com`
+
+If the DNS provider auto-appends the zone, these become `chillywood.chillywoodstream.com`, `brevo1._domainkey.chillywood.chillywoodstream.com`, `brevo2._domainkey.chillywood.chillywoodstream.com`, and `_dmarc.chillywood.chillywoodstream.com`. These exact names were not resolving in the current DNS check, and DNS-provider API credentials were not present in this shell to add them directly.
 
 | Item | Current status | Evidence |
 | --- | --- | --- |
@@ -15,11 +31,25 @@ May 30, 2026 proof refresh: `/tmp/chillywood-google-play-acceptance-closeout-202
 | Inbound routing | Cloudflare MX records exist for `chillywoodstream.com`. | `/tmp/chillywood-store-legal-account-deletion-ops-closeout-20260529/dns-email-check.txt` |
 | SPF | Root TXT includes `v=spf1 include:_spf.mx.cloudflare.net ~all`. | DNS proof file |
 | DMARC | `_dmarc.chillywoodstream.com` includes `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`. | DNS proof file |
-| DKIM | Common selectors checked from public DNS returned no DKIM TXT/CNAME record. | DNS proof file |
-| Outbound provider | Not selected/proved by repo evidence. | No provider keys or DKIM records are committed or printed. |
+| DKIM | Root-domain `brevo1`/`brevo2` CNAME selectors for `chillywoodstream.com` are present, but the current Brevo dashboard requests `brevo1._domainkey.chillywood` and `brevo2._domainkey.chillywood`; those exact hostnames are pending. | DNS proof file |
+| Outbound provider | Brevo is selected for Auth SMTP; sender readback confirmed through Management API. | Redacted proof docs |
 | Automated support/legal receipts | Not proved. | Current fallback is manual support email or in-app support feedback. |
 
-June 6, 2026 Auth SMTP CLI follow-up: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` checked the exact local shell variables needed for Supabase Auth custom SMTP and confirmed they were absent. Supabase CLI could see project `bmkkhihfbmsnnmcqkoly`, but custom Auth SMTP was not configured because the Management API bearer token and SMTP provider credentials were not available. Fresh DNS proof at `/tmp/chillywood-supabase-auth-smtp-proof-20260606/dns-email-check.txt` still shows root SPF and DMARC baseline, no checked DKIM selector, and no checked `auth.chillywoodstream.com` SPF/DMARC/DKIM record.
+June 6, 2026 Auth SMTP CLI follow-up: Supabase Auth custom SMTP is now confirmed configured for project `bmkkhihfbmsnnmcqkoly` by Management API readback with sender metadata:
+
+- sender host: `smtp-relay.brevo.com`
+- sender name: `Chi’llwood`
+- sender email: `no-reply@chillywoodstream.com`
+
+The same run confirms `POST /auth/v1/recover` returns HTTP `200` with `rob2037gn@gmail.com` using `chillywoodmobile://reset-password` redirect.
+
+Inbox-level delivery and click confirmation remain pending:
+
+- confirmed mailbox receipt for safe test inbox
+- confirmed tap opens `chillywoodmobile://reset-password` with reset flow completion
+- confirmed click/return behavior to login
+
+DNS proof at `/tmp/chillywood-brevo-domain-auth-smtp-proof-20260606/exact-brevo-record-checks.txt` currently shows root SPF and DMARC baseline and root Brevo DKIM selector CNAMEs in place for `chillywoodstream.com`; the exact owner-provided Brevo `chillywood` hostnames remain pending until added in DNS and authenticated by Brevo.
 
 ## Outbound Use Cases
 
@@ -36,7 +66,7 @@ June 6, 2026 Auth SMTP CLI follow-up: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PRO
 | Field | Recommended value / rule |
 | --- | --- |
 | Sending domain | `chillywoodstream.com` |
-| From address | Support/legal: `support@chillywoodstream.com` or a provider-approved subaddress such as `notices@chillywoodstream.com`; Supabase Auth: preferred `no-reply@auth.chillywoodstream.com` |
+| From address | Support/legal: `support@chillywoodstream.com` or a provider-approved subaddress such as `notices@chillywoodstream.com`; Supabase Auth: `no-reply@chillywoodstream.com` |
 | Reply-To | `support@chillywoodstream.com` unless legal counsel specifies a separate notices inbox |
 | Display name | `Chi'llywood Support` or `Chi'llywood Legal` by queue |
 | Bounce handling | Provider-managed bounce/complaint handling enabled |
@@ -68,7 +98,7 @@ These names are placeholders for planning. They are not proof that a provider is
 | Select outbound provider | Owner/Admin | Provider name and account/project reference without secrets | Pending |
 | Verify sending domain | Owner/Admin or email operator | Provider screenshot/redacted verification receipt | Pending |
 | Publish SPF update if provider requires one | DNS operator | DNS TXT proof with no secrets | Pending |
-| Publish DKIM TXT/CNAME records | DNS operator | Provider DKIM status screenshot plus `dig`/DNS proof | Pending |
+| Publish DKIM TXT/CNAME records | DNS operator | Provider DKIM status screenshot plus `dig`/DNS proof | Pending for exact current Brevo `chillywood` hosts |
 | Keep DMARC report address monitored | Owner/Admin | DMARC aggregate receipt or provider dashboard proof | Pending |
 | Send test support email | Support operator | Redacted delivery screenshot/header summary, no private content | Pending |
 | Send test account-deletion receipt if automation exists | Support operator | Redacted test ticket/proof | Pending |

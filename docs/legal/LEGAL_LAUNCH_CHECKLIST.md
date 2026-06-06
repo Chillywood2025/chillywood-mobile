@@ -14,7 +14,7 @@ Blocker 8 is no longer blocked on missing repo-side moderation tooling. Safety r
 
 Proof for this follow-up is recorded at `/tmp/chillywood-blocker8-moderation-legal-closeout-20260529/`, and the current release screenshots in `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/` remain the visual proof for Support, Account Deletion, Copyright Report, Moderation Policy, Admin Reports, Privacy, and Terms.
 
-Remaining launch blockers are external/operational: attorney approval, Google Play policy acceptance, support/account-deletion SLA ownership, outbound email/DKIM, and an optional disposable-fixture visual drill for a full general report lifecycle. Production ClamAV worker deployment/runtime proof is now closed. Do not fake reports or create real moderation rows without a safe disposable target.
+Remaining launch blockers are external/operational: attorney approval, Google Play policy acceptance, support/account-deletion SLA ownership, externalized outbound notice/receipt reliability, and an optional disposable-fixture visual drill for a full general report lifecycle. Production ClamAV worker deployment/runtime proof is now closed. Do not fake reports or create real moderation rows without a safe disposable target.
 
 ## May 29, 2026 Store Legal Account Deletion Ops Closeout
 
@@ -26,7 +26,7 @@ Repo-side legal/support/account-deletion reachability is current:
 - Android release proof still covers Settings, Support, Account Deletion, Copyright Report, Moderation Policy, Admin Reports, Privacy, and Terms;
 - account deletion is an honest self-service scheduled deletion flow with a 30-day restore window and does not claim permanent destructive purge completion until the backend job/runbook is proved;
 - support/moderation/account deletion operational roles and SLA targets are mapped, but staffing/owner acceptance remains external;
-- outbound email/DKIM is not complete. Cloudflare MX, SPF, and DMARC baseline exist, but no DKIM record was found for common selectors and no provider delivery proof is claimed;
+- outbound email/DKIM is partially complete. Cloudflare MX, SPF, and DMARC baseline exist. `chillywoodstream.com` Brevo DKIM selectors are present, and Supabase Auth custom SMTP is configured (`no-reply@chillywoodstream.com`, `smtp-relay.brevo.com`) with Management API readback verified. Provider mailbox delivery/click proof remains pending, and no production-wide automated outbound notice stack is fully claimed yet.
 - repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable;
 - optional disposable report lifecycle visual proof remains fixture-blocked and must not be faked.
 
@@ -51,7 +51,7 @@ Proof folder: `/tmp/chillywood-google-play-acceptance-closeout-20260530/`.
 
 Current URL proof returns HTTP 200 after redirects for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Moderation Policy, Community Guidelines, and Creator Rules. Android proof captures Settings Legal and Support, Privacy, Terms, Account Deletion, Copyright Report, and Moderation Policy. Direct Support deep-link proof did not resolve in this run, so the May 29 release proof remains the current Support visual proof until the next route smoke.
 
-Production malware scanning is now closed: the ClamAV worker is deployed on `chillywood-prod-01`, benign and EICAR runtime proof passed, public gates fail closed, and Admin scanner review is sanitized. DKIM, Play/Data Safety/content-rating/account-deletion acceptance, legal approval, account deletion fulfillment, and support staffing remain external.
+Production malware scanning is now closed: the ClamAV worker is deployed on `chillywood-prod-01`, benign and EICAR runtime proof passed, public gates fail closed, and Admin scanner review is sanitized. Play/Data Safety/content-rating/account-deletion acceptance, legal approval, account deletion fulfillment, and support staffing remain external; outbound delivery automation remains proof-limited to authenticated auth flows until safe inbox-click verification is complete.
 
 ## May 21, 2026 Production Legal Policy Source
 
@@ -134,8 +134,9 @@ Status key:
 - preserve and monitor the hosted public DMCA intake URL `https://chillywoodstream.com/copyright-report`; `PUBLIC_DMCA_URL` is configured for the canary/function path;
 - keep U.S. Copyright Office DMCA agent registration current, including renewals/updates if agent contact information changes;
 - support inbox receipt proof for `support@chillywoodstream.com` passed on May 13, 2026 by operator-confirmed destination-inbox receipt; no screenshots, raw headers, inbox exports, private contents, sender private details, credentials, tokens, or email secrets are committed;
-- domain email baseline DNS is proved: Cloudflare MX records remain present, SPF is `v=spf1 include:_spf.mx.cloudflare.net ~all`, and DMARC is `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`; DKIM remains pending until a real outbound mail provider for `@chillywoodstream.com` issues selector records;
-- Supabase Auth custom SMTP remains external: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` confirms the CLI can see the Supabase project, but local Management API and SMTP provider variables were missing, so no custom Auth sender or forgot-password delivery proof is claimed. Preferred Auth sender is `no-reply@auth.chillywoodstream.com` after provider/DNS setup.
+- domain email baseline DNS is proved: Cloudflare MX records remain present, SPF is `v=spf1 include:_spf.mx.cloudflare.net ~all`, DMARC is `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`, and root Brevo DKIM CNAME selectors for `chillywoodstream.com` are present and resolving. Current Brevo dashboard records under the `chillywood` host are still pending DNS application/propagation.
+- Supabase Auth custom SMTP is configured by Management API for project `bmkkhihfbmsnnmcqkoly`: host `smtp-relay.brevo.com`, sender name `Chi’llwood`, sender email `no-reply@chillywoodstream.com`; `POST /auth/v1/recover` for `rob2037gn@gmail.com` returns `200`.
+- Remaining blocker is exact Brevo dashboard DNS authentication plus mailbox inbox delivery visibility and reset-link click behavior from safe test inbox (inbox proof and post-click login route still required).
 - account deletion process/SLA/backend retention runbook;
 - Google Play Android developer/package verification for `com.chillywood.mobile` is complete; Google Play account deletion URL acceptance and Data Safety answers remain pending;
 - RevenueCat/Google Play purchase, restore, cancellation/refund/revocation proof if Premium ships live;

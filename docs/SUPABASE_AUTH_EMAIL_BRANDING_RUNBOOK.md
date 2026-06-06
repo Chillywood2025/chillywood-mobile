@@ -4,7 +4,12 @@
 
 Chi’llwood Auth emails should look and read like official Chi’llwood account emails, not generic provider messages. This runbook prepares the sender, templates, redirect allowlist, test plan, and rollback path for Supabase Auth email branding without committing secrets and without weakening email confirmation or password reset security.
 
-Latest external apply attempt: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` records a blocked CLI/Management API preflight on 2026-06-06. Supabase CLI was logged in and the Chi'llwood project was visible, but the required local Management API token and SMTP provider variables were missing, so no external Supabase mutation was attempted and no branded email delivery proof is claimed yet.
+Latest external status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` and `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` record successful Supabase Auth SMTP reconfiguration for project `bmkkhihfbmsnnmcqkoly`, with readback confirming:
+
+- host: `smtp-relay.brevo.com`
+- sender name: `Chi’llwood`
+- sender email: `no-reply@chillywoodstream.com`
+- `POST /auth/v1/recover` for `rob2037gn@gmail.com` now returns `200`
 
 This is account email only. It is not marketing email, newsletter email, production money activation, payout activation, LiveKit work, or a replacement for Supabase Auth.
 
@@ -24,14 +29,17 @@ This is account email only. It is not marketing email, newsletter email, product
 
 Sender name: `Chi’llwood`
 
-Preferred sender address:
+Proved sender address:
 
-- `no-reply@auth.chillywoodstream.com`
-- or another provider-approved Chi'llwood auth sender if DNS/provider verification requires it
-- legacy approved fallbacks remain `no-reply@chillywoodstream.com` or `auth@chillywoodstream.com` if the provider cannot verify the `auth` subdomain sender yet
-- or another provider-approved `chillywoodstream.com` auth sender approved by the owner
+- `no-reply@chillywoodstream.com`
+
+Notes:
+
+- `no-reply@auth.chillywoodstream.com` can be used only after separate verified sender setup and DNS allowlist for that subdomain.
 
 Support address: `support@chillywoodstream.com`
+
+For operational fallback routing and audit channels, `auth@chillywoodstream.com` is documented as a reserved auth/contact alias and must remain configured only if provider/domain allowlists and DNS are explicitly updated before production use.
 
 Do not use the support inbox as the SMTP credential account unless the provider requires it. Keep auth transactional email separate from marketing email.
 
@@ -57,7 +65,19 @@ Before switching on custom SMTP:
 - Bounce/complaint handling is understood for the provider.
 - Sender address is verified in the provider and in Supabase SMTP settings.
 
-Current repo truth already records support inbox routing and DMARC baseline. DKIM remains provider-dependent until an outbound provider issues selector records.
+Current repo truth already records support inbox routing and DMARC baseline. Brevo selector records are present for `chillywoodstream.com` as CNAMEs:
+
+- `brevo1._domainkey.chillywoodstream.com`
+- `brevo2._domainkey.chillywoodstream.com`
+
+Current Brevo dashboard truth from June 6, 2026 asks for exact host records under `chillywood`:
+
+- TXT `chillywood`
+- CNAME `brevo1._domainkey.chillywood`
+- CNAME `brevo2._domainkey.chillywood`
+- TXT `_dmarc.chillywood`
+
+If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appends the zone name, those hosts become `chillywood.chillywoodstream.com`, `brevo1._domainkey.chillywood.chillywoodstream.com`, `brevo2._domainkey.chillywood.chillywoodstream.com`, and `_dmarc.chillywood.chillywoodstream.com`. Those exact current Brevo hosts must resolve and authenticate before Chi'llwood can claim complete branded Auth sender deliverability.
 
 ## Supabase Dashboard Steps
 
@@ -67,7 +87,7 @@ Current repo truth already records support inbox routing and DMARC baseline. DKI
 4. Open SMTP settings.
 5. Enable custom SMTP.
 6. Set sender name to `Chi’llwood`.
-7. Set sender email to `no-reply@auth.chillywoodstream.com` or the approved auth sender.
+7. Set sender email to `no-reply@chillywoodstream.com` (current validated auth sender) or the approved auth sender for your approved domain path.
 8. Enter SMTP host, port, username, and password from the provider.
 9. Save and send a test email.
 10. Do not paste or store SMTP credentials in repo docs, code, screenshots, or chat.
@@ -111,7 +131,7 @@ Do not commit `$SUPABASE_MANAGEMENT_TOKEN`, SMTP credentials, service-role keys,
 - Signup subject is `Confirm your Chi’llwood account`.
 - Signup CTA opens the app through `chillywoodmobile://auth/callback`.
 - Confirmed signup returns to login or signed-in state according to app behavior.
-- Forgot-password email is from `Chi’llwood`.
+- Forgot-password email is from `Chi’llwood` (`no-reply@chillywoodstream.com` in the current config).
 - Reset subject is `Reset your Chi’llwood password`.
 - Reset CTA opens `chillywoodmobile://reset-password`.
 - Reset success returns to login.

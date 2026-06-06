@@ -92,14 +92,6 @@ const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
     const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
-    const isResetPasswordLink = normalizedHost === "reset-password"
-      || (
-        normalizedHost === "chillywoodstream.com"
-        && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
-      )
-      || normalizedPath === "/reset-password";
-    if (!isResetPasswordLink) return null;
-
     const params = new URLSearchParams(parsedUrl.search);
     const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
 
@@ -109,6 +101,17 @@ const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
         if (!params.has(key)) params.set(key, value);
       });
     }
+
+    const isRecoveryType = params.get("type") === "recovery";
+    const hasRecoveryToken = params.get("access_token") && params.get("refresh_token");
+    const isResetPasswordPath = normalizedHost === "reset-password"
+      || (
+        normalizedHost === "chillywoodstream.com"
+        && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
+      )
+      || normalizedPath === "/reset-password";
+
+    if (!isRecoveryType && !hasRecoveryToken && !isResetPasswordPath) return null;
 
     const query = params.toString();
     return query ? `/reset-password?${query}` : "/reset-password";
@@ -129,6 +132,17 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
     const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
+    const params = new URLSearchParams(parsedUrl.search);
+    const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
+
+    if (fragment) {
+      const hashParams = new URLSearchParams(fragment);
+      hashParams.forEach((value, key) => {
+        if (!params.has(key)) params.set(key, value);
+      });
+    }
+
+    if (params.get("type") === "recovery") return null;
     const isResetPasswordPath = normalizedHost === "reset-password"
       || (
         normalizedHost === "chillywoodstream.com"
@@ -148,27 +162,7 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       "token_hash",
       "confirmation_token",
       "recovery_token",
-    ].some((key) => parsedUrl.searchParams.has(key));
-
-    const hasHashAuthParam = (() => {
-      const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
-      if (!fragment) return false;
-
-      const hashParams = new URLSearchParams(fragment);
-      return [
-        "code",
-        "token",
-        "type",
-        "error",
-        "error_code",
-        "error_description",
-        "access_token",
-        "refresh_token",
-        "token_hash",
-        "confirmation_token",
-        "recovery_token",
-      ].some((key) => hashParams.has(key));
-    })();
+    ].some((key) => params.has(key));
 
     const hasConfirmPath = normalizedPath === "/confirm" || normalizedPath === "/verify" || normalizedPath === "/recovery" || normalizedPath === "/auth" || normalizedPath === "/callback" || normalizedPath === "/auth-callback";
     const isKnownAuthHost = normalizedHost === "auth" || normalizedHost === "auth-callback";
@@ -180,19 +174,9 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       normalizedPath.includes("/verify")
     );
     const isAuthCallbackLink = (isKnownAuthHost || isKnownWebAuthPath)
-      && (hasAuthCallbackParam || hasHashAuthParam || normalizedPath === "/auth" || normalizedPath === "/auth-callback" || hasConfirmPath);
+      && (hasAuthCallbackParam || normalizedPath === "/auth" || normalizedPath === "/auth-callback" || hasConfirmPath);
 
     if (!isAuthCallbackLink) return null;
-
-    const params = new URLSearchParams(parsedUrl.search);
-    const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
-
-    if (fragment) {
-      const hashParams = new URLSearchParams(fragment);
-      hashParams.forEach((value, key) => {
-        if (!params.has(key)) params.set(key, value);
-      });
-    }
 
     const query = params.toString();
     return query ? `/auth-callback?${query}` : "/auth-callback";

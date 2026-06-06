@@ -6,7 +6,7 @@ Chi’llwood now has repo-backed Supabase Auth email branding templates and app 
 
 External application status: blocked before hosted Supabase mutation on June 6, 2026 because the required Management API and SMTP env vars were not present. No external SMTP/template/redirect claim should be made until `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` is superseded by a successful apply proof.
 
-CLI/Management API follow-up status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` confirms custom SMTP is reconfigured for project `bmkkhihfbmsnnmcqkoly` (`smtp-relay.brevo.com` + `no-reply@chillywoodstream.com`, sender `Chi'llwood`) with readback parity. Root SPF/DMARC are present for `chillywoodstream.com`; forgot-password dispatch is currently blocked at transport/API with `unexpected_failure` and is being revalidated after Brevo sender-domain provisioning + mailbox acceptance checks.
+CLI/Management API follow-up status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` confirms custom SMTP is reconfigured for project `bmkkhihfbmsnnmcqkoly` (`smtp-relay.brevo.com` + `no-reply@chillywoodstream.com`, sender `Chi'llwood`) with readback parity. `POST /auth/v1/recover` returns `200` in API proof. Current Brevo dashboard DNS records are exact `chillywood` host records, not only root-domain records; those exact records are pending DNS application/propagation before inbox visibility and reset-link click-through behavior can be fully proved in the test mailbox.
 
 ## Current Public V1 Money Setup Status
 
