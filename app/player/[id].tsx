@@ -7720,7 +7720,9 @@ export default function PlayerScreen() {
       style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
       pointerEvents="auto"
     >
-      {renderParticipantPanel(false, false, true)}
+      {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract
+        ? renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)
+        : null}
     </View>
   );
 

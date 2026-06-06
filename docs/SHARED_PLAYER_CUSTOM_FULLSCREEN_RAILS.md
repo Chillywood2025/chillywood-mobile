@@ -1,6 +1,6 @@
 # Shared Player Custom Fullscreen Rails
 
-Updated: June 5, 2026
+Updated: June 6, 2026
 
 ## Intent
 
@@ -8,9 +8,9 @@ Watch-Party Live Shared Player fullscreen is a custom Chi'llwood layout, not a n
 
 - left dark rail for room comments
 - large center shared player/video surface
-- right dark rail for LiveKit participant bubbles
+- right dark rail for the same LiveKit participant bubbles used by the portrait shared-player surface
 
-The left rail uses the existing room comments data and send path. The right rail uses the existing shared player participant data. The center video keeps the existing playback surface and shared playback tap handler.
+The left rail uses the existing room comments data and send path. The right rail uses the existing portrait shared-player LiveKit bubble surface. The center video keeps the existing playback surface and shared playback tap handler.
 
 ## Layout
 
@@ -30,9 +30,11 @@ The rail-specific composer is compact: the placeholder is `Comment`, the input r
 
 ## Right Bubble Rail
 
-The participant rail now reuses the exact regular shared-player participant bubble renderer. Regular portrait shared player calls `renderParticipantPanel(true, true)`, fullscreen right rail calls `renderParticipantPanel(true, true, true)`, and both render `liveBubbleParticipants` through `renderSharedPlayerParticipantBubble`. Fullscreen no longer maps `liveBubbleParticipants` into a separate look-alike bubble renderer and no longer mounts a fullscreen `LiveKitStageMediaSurface` rail.
+The participant rail now reuses the exact regular shared-player portrait bubble surface. Regular portrait shared player reaches `renderWatchPartyBubbleGridSurface` through `renderWatchPartySocialPanel`; fullscreen right rail calls the same `renderWatchPartyBubbleGridSurface(styles.sharedFullscreenLiveKitBubbleSurface)` path inside `renderSharedFullscreenParticipantRail`.
 
-Fullscreen keeps the same participant source, avatar/camera fallback, badges, mute/request/speaking state, reactions, and participant press handler as regular shared player. It does not call the regular fallback card path, so the right rail must not show the `Shared Player` placeholder card or the copy `Shared playback stays here if the room drops back from live camera.`
+Fullscreen keeps the same LiveKit roster, participant labels, `watchPartyLiveKitParticipantAvatarUrlsByIdentity`, camera-track rendering, local participant fallback, avatar image fallback, initials fallback, request indicators, and participant press handler as regular portrait shared player. This avoids the former non-LiveKit `renderParticipantPanel(false, false, true)` rail path that could show initials while portrait showed the real image/camera bubble.
+
+The fullscreen rail is guarded by `shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract`. It does not call the regular fallback card path, so the right rail must not show the `Shared Player` placeholder card or the copy `Shared playback stays here if the room drops back from live camera.`
 
 Fullscreen does not show explanatory fallback text in the rail. No fake participants or fake LiveKit state are added.
 
@@ -57,8 +59,8 @@ This layout change does not alter:
 
 ## Proof Status
 
-Repo-side validation passed before the lane was documented. Android visual proof still requires a Premium-capable signed-in session because the available proof account currently has `premium` status `canceled` and the app correctly blocks the direct Watch-Party route.
+Repo-side validation passed. EAS production candidate update group `40b451bc-f4fc-4929-9052-46baa8cff145` downloaded and applied on the Play-installed `R5CR120QCBF` runtime `1.0.0`; user visual confirmation reported the shared-player fullscreen view works after the final right-rail reuse fix.
 
-Planned proof path:
+Proof path:
 
-`/tmp/chillywood-shared-player-custom-fullscreen-rails-proof-20260605/`
+`/tmp/chillywood-shared-player-fullscreen-bubble-reuse-proof-20260605/`
