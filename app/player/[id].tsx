@@ -6923,7 +6923,7 @@ export default function PlayerScreen() {
           liveLayout && styles.participantBubbleItemLive,
           liveLayout && styles.participantBubbleItemLiveGrid,
           dockLayout && styles.participantBubbleItemLiveDock,
-          !liveLayout && !fullscreenRail && styles.participantBubbleItemTitleCompact,
+          !liveLayout && styles.participantBubbleItemTitleCompact,
           shouldDim && styles.participantBubbleInactive,
           isReactionBoosted && styles.participantBubbleReactionBoost,
           isExpanded && !fullscreenRail && styles.partyParticipantCardExpanded,
@@ -7068,7 +7068,7 @@ export default function PlayerScreen() {
               styles.participantName,
               liveLayout && styles.participantNameLive,
               dockLayout && styles.participantNameLiveDock,
-              !liveLayout && !fullscreenRail && styles.participantNameTitleCompact,
+              !liveLayout && styles.participantNameTitleCompact,
             ]}
             numberOfLines={1}
           >
