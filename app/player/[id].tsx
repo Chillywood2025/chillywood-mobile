@@ -8489,6 +8489,23 @@ export default function PlayerScreen() {
               />
             ) : null}
 
+            {isSharedPartyPlayback && canTogglePlayerFullscreen ? (
+              <TouchableOpacity
+                style={styles.sharedPlayerFullscreenHitTarget}
+                testID="player-fullscreen-button"
+                activeOpacity={0.82}
+                accessibilityRole="button"
+                accessibilityLabel={isStandaloneFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                accessibilityHint={isStandaloneFullscreen ? "Return to the normal shared player view." : "Open the shared player in fullscreen."}
+                onPress={() => {
+                  setIsStandaloneFullscreen((value) => !value);
+                  setControlsVisible(true);
+                  resetAutoHideTimer();
+                }}
+                hitSlop={{ bottom: 8, left: 8, right: 8, top: 8 }}
+              />
+            ) : null}
+
             {showStandaloneAccessOverlay && standaloneAccessPresentation ? (
               <View style={styles.playerAccessOverlay}>
                 <View style={styles.playerAccessCard}>
@@ -9321,6 +9338,17 @@ const styles = StyleSheet.create({
     bottom: 56,
     zIndex: 4,
     elevation: 4,
+    backgroundColor: "transparent",
+  },
+  sharedPlayerFullscreenHitTarget: {
+    position: "absolute",
+    right: 14,
+    bottom: 56,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    zIndex: 170,
+    elevation: 170,
     backgroundColor: "transparent",
   },
   videoLoadingFallback: {
