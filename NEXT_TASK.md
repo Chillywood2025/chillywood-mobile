@@ -6,7 +6,7 @@ Run external Supabase Auth email setup/proof for Chi’llwood branding: configur
 
 Current blocker: forgot-password emails are now confirmed as accepted by Supabase Auth, and SMTP relay handoff is successful, but manual inbox visibility is still unverified in this environment. See `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` for the latest proof and a mailbox-domain deliverability check list.
 
-June 6 CLI follow-up was completed: `SUPABASE_ACCESS_TOKEN`, `PROJECT_REF`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_ADMIN_EMAIL`, and `SMTP_SENDER_NAME` were present in local shell for the operation. Patch/readback succeeded for project `bmkkhihfbmsnnmcqkoly`, `POST /auth/v1/recover` to `rob2037gn@gmail.com` returned 200, and the sender is currently `adcc56001@smtp-brevo.com` via `smtp-relay.brevo.com`.
+June 6 SMTP follow-up was completed with sender change to `no-reply@chillywoodstream.com` and sender name `Chi'llwood`. Patch/readback succeeded for project `bmkkhihfbmsnnmcqkoly`; `smtp_host=smtp-relay.brevo.com`, `smtp_port=587`, and existing Brevo credentials. `POST /auth/v1/recover` to `rob2037gn@gmail.com` now returns `500` (`unexpected_failure`) and delivery remains blocked pending sender-domain/mailbox trust revalidation.
 
 ## Current Recommendation
 

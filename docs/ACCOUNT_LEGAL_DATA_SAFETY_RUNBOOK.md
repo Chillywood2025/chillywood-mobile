@@ -25,7 +25,7 @@ The repo-side acceptance package is now mapped more explicitly:
 - Cloudflare MX, SPF, and DMARC baseline are present for `chillywoodstream.com`;
 - DKIM is not verified because common public selectors returned no DKIM record;
 - outbound legal/support email remains manual until a real provider is selected, domain-verified, DKIM-published, and test-proved;
-- Supabase Auth transactional email also remains pending custom SMTP: the June 6 CLI/Management API preflight in `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` found the project visible but local Management API and SMTP provider variables missing, so no Auth SMTP mutation or forgot-password delivery proof was claimed;
+- Supabase Auth transactional email has now had custom SMTP reconfigured for `no-reply@chillywoodstream.com` (`smtp-relay.brevo.com`) and readback confirmed, but current forgot-password delivery is still blocked at transport (`POST /auth/v1/recover` returning `unexpected_failure`) pending Brevo sender trust/mailbox acceptance revalidation.
 - repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable as of May 30, 2026;
 - support/moderation/account deletion ownership is mapped by role, but staffing/SLA approval remains external;
 - optional disposable-fixture report lifecycle visual proof was not run because no safe disposable fixture was provided and production reports must not be faked.

@@ -33,9 +33,9 @@ This proof lane confirms hosted Supabase Auth custom SMTP wiring and app-route b
 
 ## Inbox / Click-through Status
 
-- `POST /auth/v1/recover` request was accepted (`200` + `{}`).
-- Actual mailbox receipt and manual click-through validation requires reading the test inbox.
-- This lane has captured the endpoint-level and routing-level proof; user-side click proof remains a manual check for the provided test inbox.
+- `POST /auth/v1/recover` was previously accepted, but current verification in this pass returns `500` with `unexpected_failure` for `rob2037gn@gmail.com`, so transport/mailbox-level confirmation is currently blocked.
+- Actual mailbox receipt and manual click-through validation still requires reading the test inbox after sender trust is revalidated.
+- This lane has endpoint-level routing proof; user-side click proof remains blocked until external sender-domain and mailbox trust steps are confirmed.
 
 ## Required Follow-up
 
