@@ -7690,6 +7690,13 @@ export default function PlayerScreen() {
         >
           {participants.length > 0 ? participants.map((participant) => {
             const isCurrentUser = participant.id === trackedUserId;
+            const showLocalCameraPreview = (
+              Platform.OS !== "web"
+              && isCurrentUser
+              && !!cameraPermission?.granted
+              && playerMediaIsInteractive
+              && !shouldRenderWatchPartyLiveKit
+            );
             const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
             const initials = getInitials(participant.name);
             const roleLabel = getLiveParticipantStatusText({
@@ -7714,7 +7721,9 @@ export default function PlayerScreen() {
                 accessibilityLabel={isCurrentUser ? "You" : participant.name}
               >
                 <View style={styles.sharedFullscreenBubbleAvatar}>
-                  {bubbleMediaUri ? (
+                  {showLocalCameraPreview ? (
+                    <CameraView style={styles.sharedFullscreenBubbleAvatarImage} facing="front" mute mirror />
+                  ) : bubbleMediaUri ? (
                     <Image source={{ uri: bubbleMediaUri }} style={styles.sharedFullscreenBubbleAvatarImage} />
                   ) : (
                     <Text style={styles.sharedFullscreenBubbleInitials}>{initials}</Text>
@@ -9002,7 +9011,7 @@ export default function PlayerScreen() {
 
           {renderCreatorVideoCommentsPanel()}
 
-          {isSharedPartyPlayback && source ? (
+          {isSharedPartyPlayback && source && !isPlayerFullscreen ? (
             <View style={[styles.titleParticipantFeedDock, hasActiveRailParticipants && styles.titleWatchPartyRailDockActive]}>
               {renderTitleParticipantExpandedPanel()}
             </View>
