@@ -7229,6 +7229,33 @@ export default function PlayerScreen() {
     );
   };
 
+  const renderWatchPartyBubbleGridSurface = (containerStyle?: object) => (
+    shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
+      <LiveKitStageMediaSurface
+        joinContract={watchPartyLiveKitJoinContract}
+        onFallback={onWatchPartyLiveKitFallback}
+        active={playerMediaIsInteractive}
+        fillParent={false}
+        layout="bubble-grid"
+        participantLabelsByIdentity={watchPartyLiveKitParticipantLabelsByIdentity}
+        participantRoster={watchPartyLiveKitParticipantRoster}
+        onParticipantPress={onWatchPartyLiveKitParticipantPress}
+        showRequestIndicators={currentWatchPartyHostAuthority.isHost}
+        surfaceLabel="Watch-Party Live"
+        publishLocalAudio={publishWatchPartyLiveKitAudio}
+        publishLocalVideo={publishWatchPartyLiveKitVideo}
+        containerStyle={containerStyle ?? styles.watchPartySocialMediaFrameInner}
+      />
+    ) : (
+      <View style={styles.watchPartySocialPlaceholder}>
+        <Text style={styles.watchPartySocialPlaceholderKicker}>SHARED PLAYER</Text>
+        <Text style={styles.watchPartySocialPlaceholderBody}>
+          Shared playback stays here if the room drops back from live camera.
+        </Text>
+      </View>
+    )
+  );
+
   const renderWatchPartySocialPanel = (hideForKeyboard = true) => (
       <View style={[styles.watchPartySocialShell, hideForKeyboard && sharedPartyCommentsKeyboardActive && styles.watchPartySocialShellKeyboardHidden]}>
         <View style={styles.watchPartySocialHeaderRow}>
@@ -7249,32 +7276,9 @@ export default function PlayerScreen() {
             {watchPartyPreviewLabel}
           </Text>
         ) : null}
-        {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
-          <View style={styles.watchPartySocialMediaFrame}>
-            <LiveKitStageMediaSurface
-              joinContract={watchPartyLiveKitJoinContract}
-              onFallback={onWatchPartyLiveKitFallback}
-              active={playerMediaIsInteractive}
-              fillParent={false}
-              layout="bubble-grid"
-              participantLabelsByIdentity={watchPartyLiveKitParticipantLabelsByIdentity}
-              participantRoster={watchPartyLiveKitParticipantRoster}
-              onParticipantPress={onWatchPartyLiveKitParticipantPress}
-              showRequestIndicators={currentWatchPartyHostAuthority.isHost}
-              surfaceLabel="Watch-Party Live"
-              publishLocalAudio={publishWatchPartyLiveKitAudio}
-              publishLocalVideo={publishWatchPartyLiveKitVideo}
-              containerStyle={styles.watchPartySocialMediaFrameInner}
-            />
-          </View>
-        ) : (
-          <View style={styles.watchPartySocialPlaceholder}>
-            <Text style={styles.watchPartySocialPlaceholderKicker}>SHARED PLAYER</Text>
-            <Text style={styles.watchPartySocialPlaceholderBody}>
-              Shared playback stays here if the room drops back from live camera.
-            </Text>
-          </View>
-        )}
+        <View style={styles.watchPartySocialMediaFrame}>
+          {renderWatchPartyBubbleGridSurface(styles.watchPartySocialMediaFrameInner)}
+        </View>
       </View>
   );
 
@@ -7667,7 +7671,7 @@ export default function PlayerScreen() {
           {renderPartyCommentsContent(true)}
         </View>
         <View style={styles.sharedFullscreenParticipantRail} pointerEvents="auto">
-          {renderParticipantPanel(true, false, true)}
+          {renderWatchPartyBubbleGridSurface(styles.sharedFullscreenBubbleSurface)}
         </View>
       </View>
     );
@@ -9939,7 +9943,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   partyCommentsInputRowFullscreenRail: {
-    gap: 4,
+    flexDirection: "column",
+    gap: 6,
     alignItems: "stretch",
   },
   partyCommentsInput: {
@@ -9956,10 +9961,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   partyCommentsInputFullscreenRail: {
-    minHeight: 38,
-    fontSize: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    minHeight: 36,
+    fontSize: 9.5,
+    paddingHorizontal: 7,
+    paddingVertical: 7,
   },
   partyCommentsSendBtn: {
     minHeight: 44,
@@ -9972,9 +9977,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   partyCommentsSendBtnFullscreenRail: {
-    minHeight: 38,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    minHeight: 34,
+    alignItems: "center",
+    paddingHorizontal: 7,
+    paddingVertical: 7,
   },
   partyCommentsSendBtnText: {
     color: "#fff",
@@ -9991,21 +9997,27 @@ const styles = StyleSheet.create({
     right: 18,
     top: 92,
     bottom: 94,
-    width: 100,
+    width: 102,
     alignItems: "center",
     justifyContent: "flex-start",
   },
+  sharedFullscreenBubbleSurface: {
+    flex: 1,
+    width: "100%",
+    borderRadius: 56,
+    backgroundColor: "transparent",
+  },
   sharedFullscreenCommentsRail: {
     position: "absolute",
-    left: 16,
+    left: 10,
     top: 94,
     bottom: 102,
-    width: 132,
-    borderRadius: 18,
+    width: 88,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(4,6,10,0.52)",
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 10,
   },
 
