@@ -6104,7 +6104,8 @@ export default function PlayerScreen() {
   const playerVideoVolume = isSharedPartyPlayback ? effectiveVideoVolume : 1;
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);
-  const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback) && !isLiveMode;
+  const isSharedPlayerFullscreen = isSharedPartyPlayback && isPlayerFullscreen;
+  const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback) && !isLiveMode && !isSharedPlayerFullscreen;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
@@ -7634,6 +7635,57 @@ export default function PlayerScreen() {
     </>
   );
 
+  const renderSharedFullscreenParticipantBubbles = () => {
+    const visibleParticipants = liveBubbleParticipants.slice(0, 6);
+
+    if (visibleParticipants.length === 0) {
+      return (
+        <Text style={styles.sharedFullscreenRailEmpty}>
+          Room bubbles appear when viewers join.
+        </Text>
+      );
+    }
+
+    return (
+      <View style={styles.sharedFullscreenParticipantStack} pointerEvents="none">
+        {visibleParticipants.map((participant) => {
+          const isCurrentUser = participant.id === trackedUserId;
+          const isActive = participant.isSpeaking || primaryActiveParticipantIds.includes(participant.id);
+          const bubbleMediaUri = participant.avatarUrl || participant.cameraPreviewUrl || "";
+          const statusLabel = participant.role === "host"
+            ? "Host"
+            : participant.canSpeak
+              ? "Seat"
+              : "Viewer";
+
+          return (
+            <View
+              key={participant.id}
+              style={[
+                styles.sharedFullscreenParticipantBubble,
+                isActive && styles.sharedFullscreenParticipantBubbleActive,
+              ]}
+            >
+              <View style={styles.sharedFullscreenParticipantAvatar}>
+                {bubbleMediaUri ? (
+                  <Image source={{ uri: bubbleMediaUri }} style={styles.participantAvatarImage} />
+                ) : (
+                  <Text style={styles.sharedFullscreenParticipantInitials}>{getInitials(participant.name)}</Text>
+                )}
+              </View>
+              <Text style={styles.sharedFullscreenParticipantName} numberOfLines={1}>
+                {isCurrentUser ? "You" : participant.name}
+              </Text>
+              <Text style={styles.sharedFullscreenParticipantStatus} numberOfLines={1}>
+                {statusLabel}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   const renderSharedFullscreenOverlay = () => {
     if (!isSharedPartyPlayback || !isPlayerFullscreen) return null;
 
@@ -7642,8 +7694,8 @@ export default function PlayerScreen() {
         <View style={styles.sharedFullscreenCommentsRail} pointerEvents="auto">
           {renderPartyCommentsContent()}
         </View>
-        <View style={styles.sharedFullscreenParticipantRail} pointerEvents="auto">
-          {renderWatchPartySocialPanel(false)}
+        <View style={styles.sharedFullscreenParticipantRail} pointerEvents="none">
+          {renderSharedFullscreenParticipantBubbles()}
         </View>
       </View>
     );
@@ -9912,16 +9964,12 @@ const styles = StyleSheet.create({
   },
   sharedFullscreenParticipantRail: {
     position: "absolute",
-    right: 10,
-    top: 54,
-    bottom: 76,
-    width: 286,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(4,6,10,0.44)",
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+    right: 18,
+    top: 58,
+    bottom: 72,
+    width: 76,
+    alignItems: "center",
+    justifyContent: "flex-start",
   },
   sharedFullscreenRailKicker: {
     color: "#E8EDF8",
@@ -9933,23 +9981,28 @@ const styles = StyleSheet.create({
   },
   sharedFullscreenParticipantStack: {
     gap: 8,
+    alignItems: "center",
     paddingBottom: 4,
   },
   sharedFullscreenParticipantBubble: {
     alignItems: "center",
     gap: 3,
-    borderRadius: 14,
+    width: 68,
+    borderRadius: 999,
     paddingHorizontal: 5,
-    paddingVertical: 6,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingVertical: 7,
+    backgroundColor: "rgba(4,6,10,0.42)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
   },
   sharedFullscreenParticipantBubbleActive: {
-    backgroundColor: "rgba(220,20,60,0.18)",
+    backgroundColor: "rgba(220,20,60,0.24)",
+    borderColor: "rgba(255,255,255,0.32)",
   },
   sharedFullscreenParticipantAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.28)",
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -9965,12 +10018,12 @@ const styles = StyleSheet.create({
   sharedFullscreenParticipantName: {
     maxWidth: "100%",
     color: "#F4F7FF",
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: "900",
   },
   sharedFullscreenParticipantStatus: {
     color: "#B9C0CF",
-    fontSize: 8.5,
+    fontSize: 8,
     fontWeight: "800",
   },
   sharedFullscreenRailEmpty: {
@@ -9982,14 +10035,14 @@ const styles = StyleSheet.create({
   },
   sharedFullscreenCommentsRail: {
     position: "absolute",
-    left: 10,
-    top: 54,
-    bottom: 76,
-    width: 330,
+    left: 18,
+    top: 58,
+    bottom: 72,
+    width: 320,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(4,6,10,0.58)",
+    backgroundColor: "rgba(4,6,10,0.46)",
     paddingHorizontal: 10,
     paddingVertical: 10,
   },
