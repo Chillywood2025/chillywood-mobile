@@ -5,7 +5,7 @@ Status: field-ready copy; credentials must be entered only in Play Console
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
-June 6, 2026 Auth email note: signup confirmation and forgot-password emails are intended to be Chi’llwood-branded transactional Auth emails after external Supabase SMTP/template setup. App redirects are repo-ready: signup confirmation uses `chillywoodmobile://auth/confirm`, reset password uses `chillywoodmobile://reset-password`, and both should return the reviewer to the app/login flow instead of a policy-page fallback. Do not expect production payout/cash-out or marketing email behavior from this Auth email setup.
+June 6, 2026 Auth email note: signup confirmation and forgot-password emails are intended to be Chi’llwood-branded transactional Auth emails after external Supabase SMTP/template setup. App redirects are repo-ready: signup confirmation uses `chillywoodmobile://auth/callback`, reset password uses `chillywoodmobile://reset-password`, and both should return the reviewer to the app/login flow instead of a policy-page fallback. Do not expect production payout/cash-out or marketing email behavior from this Auth email setup.
 
 External apply note: hosted custom SMTP/templates/redirect allowlist were not applied in the June 6 external lane because required Management API and SMTP env vars were missing. Reviewers should not be told branded Auth sender delivery is live until a successful external proof supersedes `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md`.
 

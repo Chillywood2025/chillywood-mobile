@@ -18,6 +18,11 @@ type AuthCallbackParams = {
   error?: string | string[];
   error_code?: string | string[];
   error_description?: string | string[];
+  access_token?: string | string[];
+  refresh_token?: string | string[];
+  token?: string | string[];
+  token_hash?: string | string[];
+  email?: string | string[];
   flow?: string | string[];
   type?: string | string[];
 };
@@ -37,37 +42,124 @@ export default function AuthCallbackScreen() {
 
   const callbackState = useMemo(() => ({
     code: firstParam(params.code),
+    token: firstParam(params.token),
+    tokenHash: firstParam(params.token_hash),
+    accessToken: firstParam(params.access_token),
+    refreshToken: firstParam(params.refresh_token),
     error: firstParam(params.error),
     errorCode: firstParam(params.error_code),
     errorDescription: firstParam(params.error_description),
+    email: firstParam(params.email),
     flow: firstParam(params.flow),
     type: firstParam(params.type),
   }), [params]);
+
+  const resolveOtpType = (flowOrType?: string) => {
+    const normalized = String(flowOrType ?? "").trim().toLowerCase();
+    if (normalized === "signup" || normalized === "email" || normalized === "email_change" || normalized === "invite" || normalized === "magiclink") {
+      return normalized as
+        | "signup"
+        | "email"
+        | "email_change"
+        | "invite"
+        | "magiclink";
+    }
+
+    if (normalized === "recovery" || normalized === "recover") {
+      return "recovery";
+    }
+
+    return "signup";
+  };
+
+  const finishWithAuthSuccess = () => {
+    setTitle("Email verified");
+    setMessage("Your account is verified. Sign in with your email and password to continue.");
+    goToLogin();
+  };
+
+  const finishWithFailure = (text: string, reason?: string) => {
+    setTitle("Verification link problem");
+    setMessage(text || "This email link could not be verified. Try signing in or request a fresh email.");
+    trackEvent("auth_email_callback_failed", {
+      reason: reason || "unknown",
+    });
+  };
+
+  const goToLogin = () => {
+    router.replace("/(auth)/login");
+  };
 
   useEffect(() => {
     let active = true;
 
     const finishCallback = async () => {
       try {
-        if (callbackState.error || callbackState.errorCode) {
-          setTitle("Verification link problem");
-          setMessage(callbackState.errorDescription || "This email link could not be verified. Try signing in or request a fresh email.");
-          trackEvent("auth_email_callback_failed", {
-            reason: callbackState.errorCode || callbackState.error || "unknown",
+        if (callbackState.accessToken && callbackState.refreshToken && !callbackState.tokenHash) {
+          const { error } = await supabase.auth.setSession({
+            access_token: callbackState.accessToken,
+            refresh_token: callbackState.refreshToken,
           });
+
+          if (error) {
+            finishWithFailure(
+              "This email link could not be opened. Request a fresh link if your email is still unverified.",
+              error.message,
+            );
+            return;
+          }
+        }
+
+        if (callbackState.error || callbackState.errorCode) {
+          finishWithFailure(
+            callbackState.errorDescription || "This email link could not be verified. Try signing in or request a fresh email.",
+            callbackState.errorCode || callbackState.error || "unknown",
+          );
           return;
         }
 
         if (callbackState.code) {
           const { error } = await supabase.auth.exchangeCodeForSession(callbackState.code);
           if (error) {
-            setTitle("Verification link problem");
-            setMessage("This email link could not be opened. Try signing in, or request a fresh email if the account is still unverified.");
-            trackEvent("auth_email_callback_failed", {
-              reason: error.message,
-            });
+            finishWithFailure(
+              "This email link could not be opened. Try signing in, or request a fresh email if the account is still unverified.",
+              error.message,
+            );
             return;
           }
+        } else if (callbackState.tokenHash) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: callbackState.tokenHash,
+            type: resolveOtpType(callbackState.type || callbackState.flow),
+          });
+
+          if (error) {
+            finishWithFailure(
+              "This email link could not be opened. Request a fresh link if your email is still unverified.",
+              error.message,
+            );
+            return;
+          }
+        } else if (callbackState.token && callbackState.email) {
+          const { error } = await supabase.auth.verifyOtp({
+            email: callbackState.email,
+            token: callbackState.token,
+            type: resolveOtpType(callbackState.type || callbackState.flow),
+          });
+
+          if (error) {
+            finishWithFailure(
+              "This email link could not be opened. Request a fresh link if your email is still unverified.",
+              error.message,
+            );
+            return;
+          }
+        } else if (callbackState.token && !callbackState.email) {
+          setMessage("This verification link is missing an email value. Request a fresh link if needed.");
+          trackEvent("auth_email_callback_failed", {
+            reason: "missing_email_for_token",
+          });
+          return;
         } else if (!callbackState.flow && !callbackState.type) {
           await supabase.auth.signOut().catch(() => null);
           if (!active) return;
@@ -77,20 +169,22 @@ export default function AuthCallbackScreen() {
         }
 
         await supabase.auth.signOut().catch(() => null);
-
         if (!active) return;
-        setTitle("Email verified");
-        setMessage("Your account is verified. Sign in with your email and password to continue.");
+
+        finishWithAuthSuccess();
         trackEvent("auth_email_callback_success", {
           flow: callbackState.flow || callbackState.type || "signup",
+          method: callbackState.code ? "code" : callbackState.tokenHash ? "token_hash" : callbackState.token ? "token" : "no_credentials",
         });
       } catch (error) {
         if (!active) return;
         reportRuntimeError("auth-email-callback", error, {
           flow: callbackState.flow || callbackState.type || "unknown",
         });
-        setTitle("Verification link problem");
-        setMessage("Unable to finish email verification right now. Try signing in, or request a fresh email if needed.");
+        finishWithFailure(
+          "Unable to finish email verification right now. Try signing in, or request a fresh email if needed.",
+          "runtime_error",
+        );
       } finally {
         if (active) setChecking(false);
       }
@@ -123,14 +217,16 @@ export default function AuthCallbackScreen() {
             <Text style={styles.statusText}>Checking link...</Text>
           </View>
         ) : (
-          <Pressable
-            style={styles.button}
-            onPress={() => router.replace("/(auth)/login")}
-            accessibilityRole="button"
-            accessibilityLabel="Go to login"
-          >
-            <Text style={styles.buttonText}>Go to login</Text>
-          </Pressable>
+          <View style={styles.actions}>
+            <Pressable
+              style={styles.button}
+              onPress={goToLogin}
+              accessibilityRole="button"
+              accessibilityLabel="Go to login"
+            >
+              <Text style={styles.buttonText}>Go to login</Text>
+            </Pressable>
+          </View>
         )}
       </View>
     </View>
@@ -180,6 +276,9 @@ const styles = StyleSheet.create({
     color: "#D7DEEC",
     fontSize: 13,
     fontWeight: "800",
+  },
+  actions: {
+    gap: 10,
   },
   button: {
     alignItems: "center",

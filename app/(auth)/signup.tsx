@@ -30,7 +30,7 @@ import {
 } from "../../_lib/usernameHandles";
 
 const COMMUNITY_GUIDELINES_HREF = "/community-guidelines" as Href;
-const EMAIL_CONFIRM_REDIRECT_URL = "chillywoodmobile://auth/confirm";
+const EMAIL_CONFIRM_REDIRECT_URL = "chillywoodmobile://auth/callback";
 
 function getSignupErrorMessage(error: unknown) {
   const raw = String(

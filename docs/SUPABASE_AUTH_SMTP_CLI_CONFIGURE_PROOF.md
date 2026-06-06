@@ -51,7 +51,7 @@ This proof does not claim that sender is configured in Supabase.
 
 Repo-side app redirects are already wired:
 
-- Signup confirmation uses `chillywoodmobile://auth/confirm`
+- Signup confirmation uses `chillywoodmobile://auth/callback`
 - Forgot password uses `supabase.auth.resetPasswordForEmail` with `chillywoodmobile://reset-password`
 - Reset-password screen consumes token or code recovery links and returns to login after a successful password update
 - Signup success copy tells the user to verify email and then returns to login from the success alert

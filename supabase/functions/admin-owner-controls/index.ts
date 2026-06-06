@@ -3852,7 +3852,7 @@ const canaryRun = async (
         actor: "system",
         actual: authConfig.ok && siteOk && resetOk && authCallbackOk ? "Hosted Auth Site URL, reset-password redirect, and auth-callback redirect are configured." : `Hosted Auth URL proof failed: status ${authConfig.status}, site ${siteOk ? "ok" : "bad"}, reset redirect ${resetOk ? "found" : "missing"}, auth callback redirect ${authCallbackOk ? "found" : "missing"}.`,
         details: { auth_callback_redirect_found: authCallbackOk, http_status: authConfig.status, redirect_count: redirectSources.length, reset_redirect_found: resetOk, site_url_ok: siteOk },
-        expected: "Real Site URL is non-localhost and chillywoodmobile://reset-password plus chillywoodmobile://auth/confirm are allowlisted.",
+        expected: "Real Site URL is non-localhost and chillywoodmobile://reset-password plus chillywoodmobile://auth/callback (with legacy chillywoodmobile://auth/confirm tolerated) are allowlisted.",
         key: "supabase_redirect_urls",
         label: "Supabase redirect URLs configured",
         section: "Auth / Redirects",

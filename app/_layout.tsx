@@ -85,11 +85,19 @@ const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
 
   try {
     const parsedUrl = new URL(url);
-    if (parsedUrl.protocol !== "chillywoodmobile:") return null;
+    const isSupabaseDeepLink = parsedUrl.protocol === "chillywoodmobile:"
+      || parsedUrl.protocol === "https:"
+      || parsedUrl.protocol === "http:";
+    if (!isSupabaseDeepLink) return null;
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
     const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
-    const isResetPasswordLink = normalizedHost === "reset-password" || normalizedPath === "/reset-password";
+    const isResetPasswordLink = normalizedHost === "reset-password"
+      || (
+        normalizedHost === "chillywoodstream.com"
+        && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
+      )
+      || normalizedPath === "/reset-password";
     if (!isResetPasswordLink) return null;
 
     const params = new URLSearchParams(parsedUrl.search);
@@ -114,13 +122,59 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
 
   try {
     const parsedUrl = new URL(url);
-    if (parsedUrl.protocol !== "chillywoodmobile:") return null;
+    const isSupabaseDeepLink = parsedUrl.protocol === "chillywoodmobile:"
+      || parsedUrl.protocol === "https:"
+      || parsedUrl.protocol === "http:";
+    if (!isSupabaseDeepLink) return null;
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
     const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
+    const hasAuthCallbackParam = [
+      "code",
+      "token",
+      "type",
+      "error",
+      "error_code",
+      "error_description",
+      "access_token",
+      "refresh_token",
+      "token_hash",
+      "confirmation_token",
+      "recovery_token",
+    ].some((key) => parsedUrl.searchParams.has(key));
+
+    const hasHashAuthParam = (() => {
+      const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
+      if (!fragment) return false;
+
+      const hashParams = new URLSearchParams(fragment);
+      return [
+        "code",
+        "token",
+        "type",
+        "error",
+        "error_code",
+        "error_description",
+        "access_token",
+        "refresh_token",
+        "token_hash",
+        "confirmation_token",
+        "recovery_token",
+      ].some((key) => hashParams.has(key));
+    })();
+
+    const hasConfirmPath = normalizedPath === "/confirm" || normalizedPath === "/verify" || normalizedPath === "/recovery";
     const isAuthCallbackLink = normalizedHost === "auth-callback"
       || normalizedPath === "/auth-callback"
-      || (normalizedHost === "auth" && (normalizedPath === "/confirm" || normalizedPath === "/callback"));
+      || normalizedPath === "/auth"
+      || (normalizedHost === "auth" && (normalizedPath === "" || normalizedPath === "/" || normalizedPath === "/confirm" || normalizedPath === "/callback"))
+      || (normalizedHost === "auth" && hasConfirmPath)
+      || (normalizedHost === "chillywoodstream.com" && hasConfirmPath)
+      || (normalizedHost === "chillywoodstream.com" && normalizedPath.includes("/auth") && hasAuthCallbackParam)
+      || (normalizedPath.includes("confirm") && hasAuthCallbackParam)
+      || hasAuthCallbackParam
+      || hasHashAuthParam;
+
     if (!isAuthCallbackLink) return null;
 
     const params = new URLSearchParams(parsedUrl.search);

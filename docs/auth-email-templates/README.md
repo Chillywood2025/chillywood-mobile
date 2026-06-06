@@ -21,7 +21,7 @@ Use `{{ .ConfirmationURL }}` for confirmation, reset, magic-link, invite, and em
 
 The app currently sends:
 
-- Confirm signup: `chillywoodmobile://auth/confirm`
+- Confirm signup: `chillywoodmobile://auth/callback`
 - Reset password: `chillywoodmobile://reset-password`
 - Planned magic link / OTP: `chillywoodmobile://auth/callback`
 

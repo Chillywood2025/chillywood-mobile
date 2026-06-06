@@ -34,8 +34,9 @@ Untracked paths present and untouched:
 
 Current app redirects:
 
-- Confirm signup: `chillywoodmobile://auth/confirm`
+- Confirm signup: `chillywoodmobile://auth/callback`
 - Reset password: `chillywoodmobile://reset-password`
+- Legacy auth callback: `chillywoodmobile://auth/confirm`
 - Planned auth callback: `chillywoodmobile://auth/callback`
 - Legacy auth callback tolerated: `chillywoodmobile://auth-callback`
 

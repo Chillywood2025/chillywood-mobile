@@ -12,13 +12,13 @@ This is account email only. It is not marketing email, newsletter email, product
 
 | Auth action | App call | Redirect |
 | --- | --- | --- |
-| Confirm signup | `supabase.auth.signUp` in `app/(auth)/signup.tsx` | `chillywoodmobile://auth/confirm` |
+| Confirm signup | `supabase.auth.signUp` in `app/(auth)/signup.tsx` | `chillywoodmobile://auth/callback` |
 | Reset password | `supabase.auth.resetPasswordForEmail` in `app/(auth)/login.tsx` | `chillywoodmobile://reset-password` |
 | Magic link / OTP | No current app caller | Planned: `chillywoodmobile://auth/callback` |
-| Invite user | No current app caller | Use `chillywoodmobile://auth/confirm` or onboarding route after product approval |
+| Invite user | No current app caller | Use `chillywoodmobile://auth/callback` or onboarding route after product approval |
 | Email change | No current app caller | Use `chillywoodmobile://auth/callback` or settings confirmation route after product approval |
 
-`app/_layout.tsx` routes `chillywoodmobile://reset-password`, `chillywoodmobile://auth/confirm`, `chillywoodmobile://auth/callback`, and legacy `chillywoodmobile://auth-callback` into safe app screens. Token-like params are stripped from route analytics.
+`app/_layout.tsx` routes `chillywoodmobile://reset-password`, `chillywoodmobile://auth/callback`, `chillywoodmobile://auth/confirm`, and legacy `chillywoodmobile://auth-callback` into safe app screens. Token-like params are stripped from route analytics.
 
 ## Sender Recommendation
 
@@ -85,8 +85,8 @@ Current repo truth already records support inbox routing and DMARC baseline. DKI
 
 Supabase Authentication redirect URLs must include:
 
-- `chillywoodmobile://auth/confirm`
 - `chillywoodmobile://auth/callback`
+- `chillywoodmobile://auth/confirm`
 - `chillywoodmobile://auth-callback` while legacy links are still tolerated
 - `chillywoodmobile://reset-password`
 - official web fallback URL if needed, such as `https://chillywoodstream.com`
@@ -109,7 +109,7 @@ Do not commit `$SUPABASE_MANAGEMENT_TOKEN`, SMTP credentials, service-role keys,
 
 - Signup email is from `Chi’llwood`.
 - Signup subject is `Confirm your Chi’llwood account`.
-- Signup CTA opens the app through `chillywoodmobile://auth/confirm`.
+- Signup CTA opens the app through `chillywoodmobile://auth/callback`.
 - Confirmed signup returns to login or signed-in state according to app behavior.
 - Forgot-password email is from `Chi’llwood`.
 - Reset subject is `Reset your Chi’llwood password`.
