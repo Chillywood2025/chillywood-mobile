@@ -76,9 +76,11 @@ Executed:
 
 `POST /auth/v1/recover`
 
-- Target used: safe test inbox target on the configured SMTP sender domain
+- Target used: `rob2037gn@gmail.com`
 - `RECOVER_HTTP_STATUS=200`
 - Response body: `{}`
+
+Note: first retry with the same target returned `429` with `over_email_send_rate_limit` (`retry after 53 seconds`), then succeeded on a second attempt after cooldown.
 
 ### Remaining Delivery Validation
 
