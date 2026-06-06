@@ -954,8 +954,8 @@ export default function PlayerScreen() {
   const expectsSpectatorPlayback = sourceRaw === "spectator-playback";
   const isLiveModeFlag = liveModeRaw === "1" || liveModeRaw === "true" || liveModeRaw === "yes" || liveModeRaw === "live";
   const isSharedPartyPlayback = inWatchParty && !isLiveModeFlag;
-  const sharedFullscreenLeftRailWidth = Math.max(132, Math.min(190, Math.round(viewportWidth * 0.24)));
-  const sharedFullscreenRightRailWidth = Math.max(74, Math.min(104, Math.round(viewportWidth * 0.12)));
+  const sharedFullscreenLeftRailWidth = Math.max(150, Math.min(214, Math.round(viewportWidth * 0.25)));
+  const sharedFullscreenRightRailWidth = Math.max(112, Math.min(136, Math.round(viewportWidth * 0.13)));
   let rawId = id;
   if (typeof rawId !== "string") rawId = String(rawId ?? "");
   const cleanId = rawId.replace(/["']/g, "").trim();
@@ -6853,50 +6853,7 @@ export default function PlayerScreen() {
   );
 
   const renderParticipantPanel = (liveLayout = false, dockLayout = false, fullscreenRail = false) => {
-    return (
-      <View
-        style={[
-          styles.partyFeedCard,
-          liveLayout && styles.partyFeedCardLive,
-          dockLayout && styles.partyFeedCardLiveDock,
-          fullscreenRail && styles.partyFeedCardFullscreenRail,
-          !liveLayout && styles.partyFeedCardTitleCompact,
-        ]}
-      >
-        <FlatList
-          key={fullscreenRail ? "watch-party-fullscreen-rail" : liveLayout ? "watch-party-live-grid" : "watch-party-title-rail"}
-          horizontal={!liveLayout && !fullscreenRail}
-          numColumns={liveLayout && !fullscreenRail ? 5 : undefined}
-          data={liveBubbleParticipants}
-          keyExtractor={(participant) => participant.id}
-          showsHorizontalScrollIndicator={!liveLayout && !fullscreenRail}
-          showsVerticalScrollIndicator={liveLayout || fullscreenRail}
-          keyboardShouldPersistTaps="handled"
-          removeClippedSubviews={Platform.OS === "android"}
-          initialNumToRender={fullscreenRail ? 8 : dockLayout ? 18 : liveLayout ? 12 : 10}
-          maxToRenderPerBatch={dockLayout ? 20 : 16}
-          windowSize={7}
-          columnWrapperStyle={liveLayout && !fullscreenRail ? styles.participantBubbleGridRow : undefined}
-          extraData={{
-          trackedUserId,
-          partySyncRole,
-          currentUserCanApproveSeatRequests: currentWatchPartyHostAuthority.isHost,
-          activeParticipantId,
-          primaryActiveParticipantIds,
-          participantReactionBoostIds,
-          partyParticipantReactions,
-          liveFaceFilter,
-          cameraGranted: !!cameraPermission?.granted,
-          }}
-          contentContainerStyle={[
-            styles.participantBubbleScroll,
-            liveLayout && styles.participantBubbleScrollLive,
-            liveLayout && !fullscreenRail && styles.participantBubbleScrollLiveGrid,
-            dockLayout && styles.participantBubbleScrollLiveDock,
-            fullscreenRail && styles.participantBubbleScrollFullscreenRail,
-            !liveLayout && !fullscreenRail && styles.participantBubbleScrollTitleCompact,
-        ]}
-        renderItem={({ item: participant }) => {
+    const renderSharedPlayerParticipantBubble = ({ item: participant }: { item: PartyParticipant }) => {
           const isCurrentUser = participant.id === trackedUserId;
           const isHost = currentWatchPartyHostAuthority.isHost;
           const isExpanded = liveLayout && isHost && activeParticipantId === participant.id;
@@ -7128,7 +7085,52 @@ export default function PlayerScreen() {
               }) : null}
             </Animated.View>
           );
-        }}
+    };
+
+    return (
+      <View
+        style={[
+          styles.partyFeedCard,
+          liveLayout && styles.partyFeedCardLive,
+          dockLayout && styles.partyFeedCardLiveDock,
+          fullscreenRail && styles.partyFeedCardFullscreenRail,
+          !liveLayout && styles.partyFeedCardTitleCompact,
+        ]}
+      >
+        <FlatList
+          key={fullscreenRail ? "watch-party-fullscreen-rail" : liveLayout ? "watch-party-live-grid" : "watch-party-title-rail"}
+          horizontal={!liveLayout && !fullscreenRail}
+          numColumns={liveLayout && !fullscreenRail ? 5 : undefined}
+          data={liveBubbleParticipants}
+          keyExtractor={(participant) => participant.id}
+          showsHorizontalScrollIndicator={!liveLayout && !fullscreenRail}
+          showsVerticalScrollIndicator={liveLayout || fullscreenRail}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={Platform.OS === "android"}
+          initialNumToRender={fullscreenRail ? 8 : dockLayout ? 18 : liveLayout ? 12 : 10}
+          maxToRenderPerBatch={dockLayout ? 20 : 16}
+          windowSize={7}
+          columnWrapperStyle={liveLayout && !fullscreenRail ? styles.participantBubbleGridRow : undefined}
+          extraData={{
+          trackedUserId,
+          partySyncRole,
+          currentUserCanApproveSeatRequests: currentWatchPartyHostAuthority.isHost,
+          activeParticipantId,
+          primaryActiveParticipantIds,
+          participantReactionBoostIds,
+          partyParticipantReactions,
+          liveFaceFilter,
+          cameraGranted: !!cameraPermission?.granted,
+          }}
+          contentContainerStyle={[
+            styles.participantBubbleScroll,
+            liveLayout && styles.participantBubbleScrollLive,
+            liveLayout && !fullscreenRail && styles.participantBubbleScrollLiveGrid,
+            dockLayout && styles.participantBubbleScrollLiveDock,
+            fullscreenRail && styles.participantBubbleScrollFullscreenRail,
+            !liveLayout && !fullscreenRail && styles.participantBubbleScrollTitleCompact,
+        ]}
+        renderItem={renderSharedPlayerParticipantBubble}
       />
       </View>
     );
@@ -7646,20 +7648,33 @@ export default function PlayerScreen() {
               void onSendPartyComment();
             }}
             style={[styles.partyCommentsInput, compactFullscreenRail && styles.partyCommentsInputFullscreenRail]}
-            placeholder="Say something"
+            placeholder={compactFullscreenRail ? "Comment" : "Say something"}
             placeholderTextColor="rgba(212,216,226,0.7)"
             editable={!partyCommentSending}
             returnKeyType="send"
           />
           <TouchableOpacity
-            style={[styles.partyCommentsSendBtn, compactFullscreenRail && styles.partyCommentsSendBtnFullscreenRail]}
+            style={[
+              styles.partyCommentsSendBtn,
+              compactFullscreenRail && styles.partyCommentsSendBtnFullscreenRail,
+              (partyCommentSending || !partyCommentDraft.trim()) && styles.partyCommentsSendBtnDisabled,
+            ]}
             onPress={() => {
               void onSendPartyComment();
             }}
             disabled={partyCommentSending || !partyCommentDraft.trim()}
             activeOpacity={0.85}
+            accessibilityLabel={partyCommentSending ? "Sending room comment" : "Send room comment"}
           >
-            <Text style={styles.partyCommentsSendBtnText}>{partyCommentSending ? "..." : "Send"}</Text>
+            {compactFullscreenRail ? (
+              partyCommentSending ? (
+                <Text style={[styles.partyCommentsSendBtnText, styles.partyCommentsSendBtnTextFullscreenRail]}>...</Text>
+              ) : (
+                <MaterialIcons name="arrow-upward" size={16} color="#F5F7FC" />
+              )
+            ) : (
+              <Text style={styles.partyCommentsSendBtnText}>{partyCommentSending ? "..." : "Send"}</Text>
+            )}
           </TouchableOpacity>
         </View>
       ) : null}
@@ -7675,81 +7690,14 @@ export default function PlayerScreen() {
     </View>
   );
 
-  const renderSharedFullscreenParticipantRail = () => {
-    const participants = liveBubbleParticipants.slice(0, 10);
-
-    return (
-      <View
-        style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
-        pointerEvents="auto"
-      >
-        <ScrollView
-          style={styles.sharedFullscreenBubbleScroll}
-          contentContainerStyle={styles.sharedFullscreenBubbleScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {participants.length > 0 ? participants.map((participant) => {
-            const isCurrentUser = participant.id === trackedUserId;
-            const showLocalCameraPreview = (
-              Platform.OS !== "web"
-              && isCurrentUser
-              && !!cameraPermission?.granted
-              && playerMediaIsInteractive
-              && !shouldRenderWatchPartyLiveKit
-            );
-            const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
-            const initials = getInitials(participant.name);
-            const roleLabel = getLiveParticipantStatusText({
-              isSpeaking: participant.isSpeaking && participant.canSpeak,
-              isRequesting: currentWatchPartyHostAuthority.isHost && participant.isRequestingToSpeak && !participant.canSpeak,
-              isMuted: participant.muted,
-              role: participant.role,
-              canSpeak: participant.canSpeak,
-              isFeatured: participant.canSpeak && primaryActiveParticipantIds.includes(participant.id) && participant.role !== "host",
-            });
-
-            return (
-              <TouchableOpacity
-                key={participant.id}
-                style={styles.sharedFullscreenBubbleItem}
-                onPress={() => {
-                  onFocusPlayerParticipant(participant);
-                  resetAutoHideTimer();
-                }}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={isCurrentUser ? "You" : participant.name}
-              >
-                <View style={styles.sharedFullscreenBubbleAvatar}>
-                  {showLocalCameraPreview ? (
-                    <CameraView style={styles.sharedFullscreenBubbleAvatarImage} facing="front" mute mirror />
-                  ) : bubbleMediaUri ? (
-                    <Image source={{ uri: bubbleMediaUri }} style={styles.sharedFullscreenBubbleAvatarImage} />
-                  ) : (
-                    <Text style={styles.sharedFullscreenBubbleInitials}>{initials}</Text>
-                  )}
-                </View>
-                <Text style={styles.sharedFullscreenBubbleLabel} numberOfLines={1}>
-                  {isCurrentUser ? "You" : participant.name}
-                </Text>
-                {roleLabel ? (
-                  <Text style={styles.sharedFullscreenBubbleRole} numberOfLines={1}>
-                    {roleLabel}
-                  </Text>
-                ) : null}
-              </TouchableOpacity>
-            );
-          }) : (
-            <View style={styles.sharedFullscreenBubbleItem} pointerEvents="none">
-              <View style={styles.sharedFullscreenBubbleAvatar}>
-                <Text style={styles.sharedFullscreenBubbleInitials}>...</Text>
-              </View>
-            </View>
-          )}
-        </ScrollView>
-      </View>
-    );
-  };
+  const renderSharedFullscreenParticipantRail = () => (
+    <View
+      style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
+      pointerEvents="auto"
+    >
+      {renderParticipantPanel(true, true, true)}
+    </View>
+  );
 
   const renderLiveFilterSheet = (sheetStyle?: object) => (
     <View style={[styles.liveFilterSheet, sheetStyle]}>
@@ -10005,7 +9953,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   partyCommentsListFullscreenRail: {
-    maxHeight: 74,
+    maxHeight: 86,
   },
   partyCommentsLine: {
     color: "#D4D8E2",
@@ -10022,9 +9970,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   partyCommentsInputRowFullscreenRail: {
-    flexDirection: "column",
-    gap: 6,
-    alignItems: "stretch",
+    gap: 5,
+    alignItems: "center",
   },
   partyCommentsInput: {
     flex: 1,
@@ -10041,8 +9988,8 @@ const styles = StyleSheet.create({
   },
   partyCommentsInputFullscreenRail: {
     minHeight: 34,
-    fontSize: 8.5,
-    paddingHorizontal: 6,
+    fontSize: 10,
+    paddingHorizontal: 8,
     paddingVertical: 7,
   },
   partyCommentsSendBtn: {
@@ -10056,15 +10003,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   partyCommentsSendBtnFullscreenRail: {
-    minHeight: 32,
+    width: 34,
+    height: 34,
+    minHeight: 34,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.1)",
     alignItems: "center",
-    paddingHorizontal: 6,
-    paddingVertical: 7,
+    justifyContent: "center",
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  partyCommentsSendBtnDisabled: {
+    opacity: 0.48,
   },
   partyCommentsSendBtnText: {
     color: "#fff",
     fontSize: 11,
     fontWeight: "900",
+  },
+  partyCommentsSendBtnTextFullscreenRail: {
+    fontSize: 10,
   },
   sharedFullscreenPassthrough: {
     width: "100%",
@@ -10089,76 +10047,25 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderLeftColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(2,3,6,0.98)",
-    paddingHorizontal: 6,
-    paddingTop: 52,
-    paddingBottom: 48,
+    paddingHorizontal: 0,
+    paddingTop: 48,
+    paddingBottom: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  sharedFullscreenBubbleScroll: {
+  sharedFullscreenLiveKitBubbleSurface: {
     width: "100%",
-  },
-  sharedFullscreenBubbleScrollContent: {
-    minHeight: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-  },
-  sharedFullscreenBubbleItem: {
-    width: "100%",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 12,
-  },
-  sharedFullscreenBubbleAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.24)",
-    backgroundColor: "rgba(8,10,16,0.76)",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  sharedFullscreenBubbleAvatarImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 28,
-  },
-  sharedFullscreenBubbleInitials: {
-    color: "#F7F8FC",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  sharedFullscreenBubbleLabel: {
-    width: "100%",
-    color: "#F5F6FB",
-    fontSize: 10,
-    fontWeight: "900",
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.72)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  sharedFullscreenBubbleRole: {
-    width: "100%",
-    color: "rgba(230,234,244,0.68)",
-    fontSize: 8.5,
-    fontWeight: "800",
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.72)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    flex: 1,
+    backgroundColor: "transparent",
   },
   sharedFullscreenCommentsRail: {
     height: "100%",
     borderRightWidth: 1,
     borderRightColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(2,3,6,0.98)",
-    paddingHorizontal: 10,
-    paddingTop: 58,
-    paddingBottom: 50,
+    paddingHorizontal: 8,
+    paddingTop: 52,
+    paddingBottom: 44,
     justifyContent: "center",
   },
 
@@ -11059,10 +10966,12 @@ const styles = StyleSheet.create({
     minHeight: 118,
   },
   participantBubbleScrollFullscreenRail: {
-    rowGap: 10,
+    rowGap: 12,
     alignItems: "center",
     paddingHorizontal: 0,
     paddingVertical: 0,
+    justifyContent: "center",
+    flexGrow: 1,
   },
   participantBubbleGridRow: {
     justifyContent: "space-between",
@@ -11110,13 +11019,14 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   participantBubbleItemFullscreenRail: {
-    width: 86,
-    minHeight: 108,
-    borderRadius: 999,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(4,6,10,0.54)",
-    paddingHorizontal: 8,
-    paddingVertical: 10,
+    width: 76,
+    minHeight: 82,
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: "transparent",
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   participantBubbleActive: {
     borderColor: "rgba(255,255,255,0.18)",
@@ -11143,7 +11053,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   partyParticipantBubbleTapFullscreenRail: {
-    gap: 4,
+    gap: 3,
   },
   watchPartyParticipantRow: {
     borderRadius: 18,
@@ -11246,9 +11156,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.44)",
   },
   participantAvatarFullscreenRail: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     borderColor: "rgba(255,255,255,0.26)",
     backgroundColor: "rgba(0,0,0,0.46)",
     overflow: "hidden",
@@ -11460,7 +11370,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   participantNameFullscreenRail: {
-    maxWidth: 72,
+    maxWidth: 68,
     color: "#F5F7FC",
     fontSize: 10,
     textAlign: "center",
@@ -11776,9 +11686,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   partyParticipantStatusFullscreenRail: {
-    maxWidth: 72,
+    maxWidth: 68,
     color: "#D8DEEB",
-    fontSize: 8.5,
+    fontSize: 8,
     textAlign: "center",
   },
   participantExpandedSummary: {

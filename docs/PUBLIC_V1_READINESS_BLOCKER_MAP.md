@@ -379,6 +379,8 @@ All commands below passed with status `0` in both `/tmp/chillywood-public-v1-rea
 
 Run **Owner Play Console Submission And Release Diagnostics** first, while keeping Profile media manual runtime proof as the next owner-device follow-up.
 
+Current UI proof addendum: Shared Player fullscreen rails have a targeted exact-component fix pending Android visual proof at `/tmp/chillywood-shared-player-rails-exact-component-proof-20260605/`. This does not change LiveKit authority, route ownership, old-room handling, playback pipeline, or money state.
+
 Scope:
 
 - finish Play Console listing/content rating/Data Safety/account-deletion acceptance using `docs/google-play/`

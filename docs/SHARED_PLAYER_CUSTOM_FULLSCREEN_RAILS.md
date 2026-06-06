@@ -26,11 +26,15 @@ This replaces the previous fullscreen approach that placed comments and particip
 
 The comments rail renders `renderPartyCommentsContent(true)`, which keeps the existing room comments list, empty state, input, and Send button. It does not create fake comments or a second backend path. The rail itself is the dark container, so the comments UI is configured as rail content rather than a floating card over the video.
 
+The rail-specific composer is compact: the placeholder is `Comment`, the input remains inside the rail, and the Send action is a small chip instead of a large red pill. This is presentation-only and does not change the room comment send path.
+
 ## Right Bubble Rail
 
-The participant rail renders compact bubbles from `liveBubbleParticipants`. It does not call the Watch-Party social card or the LiveKit media surface fallback. That prevents the wrong `Shared Player` placeholder card and the copy `Shared playback stays here if the room drops back from live camera.` from appearing in fullscreen.
+The participant rail now reuses the exact `LiveKitStageMediaSurface` bubble-grid surface used by the regular shared player. Fullscreen no longer maps `liveBubbleParticipants` into a separate look-alike bubble renderer. That keeps the real LiveKit camera/avatar/placeholder behavior aligned between regular portrait shared player and fullscreen.
 
-If a participant has a camera preview or avatar, the rail uses it. If not, it falls back to the same circular initials behavior rather than creating a fake participant or explanatory card.
+Fullscreen passes the same join contract, participant labels, roster, request indicators, participant press handler, and publish flags that the regular shared player passes. It does not call the regular fallback card path, so the right rail must not show the `Shared Player` placeholder card or the copy `Shared playback stays here if the room drops back from live camera.`
+
+If LiveKit is not available, fullscreen leaves the right rail empty rather than showing explanatory fallback text. No fake participants or fake LiveKit state are added.
 
 ## Regular Shared Player
 
@@ -58,4 +62,3 @@ Repo-side validation passed before the lane was documented. Android visual proof
 Planned proof path:
 
 `/tmp/chillywood-shared-player-custom-fullscreen-rails-proof-20260605/`
-

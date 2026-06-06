@@ -458,6 +458,23 @@ Recommended next lane:
 - Watch-Party Live Two-Device Audio Ducking Closeout with two joined devices/accounts proving remote speech ducks/restores local video while Party Room and Live Watch-Party still have no Audio Mix.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
 
+## Shared Player Fullscreen Rails Follow-Up
+
+Current next proof target: publish and visually prove the exact-component Shared Player fullscreen rails fix on `R5CR120QCBF`.
+
+Verify:
+
+- regular portrait shared player still shows the working LiveKit bubble/avatar behavior
+- fullscreen left rail has compact room comments with `Comment` placeholder and compact Send chip
+- fullscreen center video remains large
+- fullscreen right rail uses the same `LiveKitStageMediaSurface` bubble-grid surface as portrait
+- fullscreen right rail does not show `Shared Player` fallback card/text
+- touch play/pause and fullscreen exit still work
+
+Proof path:
+
+`/tmp/chillywood-shared-player-rails-exact-component-proof-20260605/`
+
 ## Previous Recommended Lane: RevenueCat / Google Play Webhook Secret Linking And Signed Sandbox Proof
 
 Money Center, Owner/Admin Money Center consolidation, the Money Audit Explorer drilldowns, and the Stripe CLI signed sandbox webhook proof are Android-proved. The next useful lane is only RevenueCat/Google Play server credential and webhook-secret linking, followed by safe signed-provider sandbox event proof if the provider tooling is available without exposing secrets.

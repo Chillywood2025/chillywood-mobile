@@ -143,6 +143,7 @@ Required validation:
 
 ## Remaining UI Gaps
 
+- Shared Player fullscreen rails now have a dedicated exact-component follow-up in `docs/SHARED_PLAYER_RAILS_EXACT_COMPONENT_PROOF.md`: the right rail reuses the regular shared-player `LiveKitStageMediaSurface` bubble-grid surface, and the left comments rail is compacted without changing room comment behavior.
 - Deeper live-room layout composition remains a future dedicated lane if screenshots show people/media grids still feel too dense.
 - Full two-device room interaction proof still requires a Premium-capable host account plus a stable second authenticated device/session. The June 5, 2026 device-plus-emulator attempt is documented in `docs/DEVICE_EMULATOR_LIVE_ROOM_TEST_SWEEP.md`; physical route/gate proof passed, but the emulator path was blocked by System UI/package-service/install instability and the physical account was not Premium-host eligible.
 - Broader Player playback-control behavior remains out of scope; standalone visual overlay/fullscreen presentation is now covered by `docs/STANDALONE_PLAYER_OVERLAY_FULLSCREEN_PROOF.md`.
