@@ -84,7 +84,11 @@ Note: first retry with the same target returned `429` with `over_email_send_rate
 
 ### Remaining Delivery Validation
 
-Email inbox delivery and click-through confirmation still require access to the target mailbox. This run confirms service acceptance and route wiring, not end-user manual inbox interaction.
+Email inbox delivery and click-through confirmation still require access to the target mailbox.
+
+- `POST /auth/v1/recover` for `rob2037gn@gmail.com` with redirect `chillywoodmobile://reset-password` returned `200` (`{}`), confirming service acceptance.
+- SMTP transport and relay credential checks passed (connection/login/no-op and direct handoff test using `smtplib`).
+- A direct mail submission to `rob2037gn@gmail.com` using the same Brevo relay credentials was accepted by SMTP (`accepted`), so the current blocker is most likely mailbox/provider deliverability rather than auth API rejection.
 
 ## Routing / Callback Proof
 
@@ -103,8 +107,14 @@ Observed:
 
 - `chillywoodstream.com` SPF: present (`v=spf1 include:_spf.mx.cloudflare.net ~all`)
 - `chillywoodstream.com` DMARC: present (`p=none`, reporting enabled)
-- No common checked DKIM selectors were visible in this DNS run
-- `auth.chillywoodstream.com` records: no SPF/DMARC/DKIM confirmed from the same public resolver run
+- No common checked DKIM selectors were visible in this DNS run for `chillywoodstream.com`.
+- `auth.chillywoodstream.com` records: no SPF/DMARC/DKIM confirmed from the same public resolver run.
+
+### Delivery interpretation
+
+- The endpoint accepts requests and SMTP handoff succeeds, but `rob2037gn@gmail.com` has not been verifiably observed in this environment yet.
+- This is most likely caused by mailbox/provider filtering, delayed inbox delivery, or sender reputation/DMARC/DKIM alignment.
+- Next step: switch to a freshly verified mailbox and/or add the missing domain authentication records on the authenticated sender domain before considering auth email infrastructure as fully live.
 
 ## Validation executed
 
