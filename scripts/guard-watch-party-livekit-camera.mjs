@@ -107,7 +107,7 @@ const playerWatchPartyHostSeatRequestPolling = sliceBetween(
 const playerWatchPartyHostControls = sliceBetween(
   player,
   "const renderParticipantExpandedHostShell = ({",
-  "const renderParticipantPanel = (liveLayout = false, dockLayout = false) => {",
+  "const renderParticipantPanel = (liveLayout = false, dockLayout = false",
   "Player Watch-Party host controls boundary",
 );
 const playerWatchPartyHostSeatApproval = sliceBetween(
@@ -1051,8 +1051,8 @@ assertIncludes(
 );
 assertIncludes(
   player,
-  "numColumns={liveLayout ? 5 : undefined}",
-  "Watch-Party Live player participant surface must use a five-column grid",
+  "numColumns={liveLayout && !fullscreenRail ? 5 : undefined}",
+  "Watch-Party Live player participant surface must use a five-column grid outside shared fullscreen rail",
 );
 assertIncludes(
   player,
