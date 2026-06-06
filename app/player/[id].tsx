@@ -7671,7 +7671,36 @@ export default function PlayerScreen() {
           {renderPartyCommentsContent(true)}
         </View>
         <View style={styles.sharedFullscreenParticipantRail} pointerEvents="auto">
-          {renderWatchPartyBubbleGridSurface(styles.sharedFullscreenBubbleSurface)}
+          {liveBubbleParticipants.slice(0, 6).map((participant) => {
+            const isCurrentUser = participant.id === trackedUserId;
+            const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
+            const initials = getInitials(participant.name);
+
+            return (
+              <TouchableOpacity
+                key={participant.id}
+                style={styles.sharedFullscreenBubbleItem}
+                onPress={() => {
+                  onFocusPlayerParticipant(participant);
+                  resetAutoHideTimer();
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={isCurrentUser ? "You" : participant.name}
+              >
+                <View style={styles.sharedFullscreenBubbleAvatar}>
+                  {bubbleMediaUri ? (
+                    <Image source={{ uri: bubbleMediaUri }} style={styles.sharedFullscreenBubbleAvatarImage} />
+                  ) : (
+                    <Text style={styles.sharedFullscreenBubbleInitials}>{initials}</Text>
+                  )}
+                </View>
+                <Text style={styles.sharedFullscreenBubbleLabel} numberOfLines={1}>
+                  {isCurrentUser ? "You" : participant.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     );
@@ -9915,8 +9944,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   partyCommentsDrawerTitleFullscreenRail: {
-    fontSize: 9.5,
-    lineHeight: 13,
+    fontSize: 8.5,
+    lineHeight: 11,
   },
   partyCommentsList: {
     maxHeight: 76,
@@ -9926,7 +9955,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   partyCommentsListFullscreenRail: {
-    maxHeight: 78,
+    maxHeight: 74,
   },
   partyCommentsLine: {
     color: "#D4D8E2",
@@ -9961,9 +9990,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   partyCommentsInputFullscreenRail: {
-    minHeight: 36,
-    fontSize: 9.5,
-    paddingHorizontal: 7,
+    minHeight: 34,
+    fontSize: 8.5,
+    paddingHorizontal: 6,
     paddingVertical: 7,
   },
   partyCommentsSendBtn: {
@@ -9977,9 +10006,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   partyCommentsSendBtnFullscreenRail: {
-    minHeight: 34,
+    minHeight: 32,
     alignItems: "center",
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     paddingVertical: 7,
   },
   partyCommentsSendBtnText: {
@@ -9994,30 +10023,61 @@ const styles = StyleSheet.create({
   },
   sharedFullscreenParticipantRail: {
     position: "absolute",
-    right: 18,
+    right: 8,
     top: 92,
     bottom: 94,
-    width: 102,
+    width: 72,
     alignItems: "center",
     justifyContent: "flex-start",
   },
-  sharedFullscreenBubbleSurface: {
-    flex: 1,
+  sharedFullscreenBubbleItem: {
+    width: 70,
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 10,
+  },
+  sharedFullscreenBubbleAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(8,10,16,0.76)",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  sharedFullscreenBubbleAvatarImage: {
     width: "100%",
-    borderRadius: 56,
-    backgroundColor: "transparent",
+    height: "100%",
+    borderRadius: 27,
+  },
+  sharedFullscreenBubbleInitials: {
+    color: "#F7F8FC",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  sharedFullscreenBubbleLabel: {
+    width: "100%",
+    color: "#F5F6FB",
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.72)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   sharedFullscreenCommentsRail: {
     position: "absolute",
-    left: 10,
+    left: 6,
     top: 94,
     bottom: 102,
-    width: 88,
+    width: 66,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(4,6,10,0.52)",
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 10,
   },
 
