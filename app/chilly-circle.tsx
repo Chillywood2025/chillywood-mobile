@@ -45,6 +45,10 @@ type ChillyCircleSuggestion = {
   onPress: () => void;
 };
 
+type CircleSectionKey = "circle" | "incoming" | "outgoing";
+
+const CIRCLE_SECTION_COLLAPSE_THRESHOLD = 6;
+
 const normalizeCircleSearchNeedle = (value: string) => value.trim().toLowerCase();
 
 const matchesCircleItem = (item: ChillyCircleListItem, needle: string) => {
@@ -94,6 +98,7 @@ export default function ChillyCircleScreen() {
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [peopleResults, setPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
+  const [collapsedSections, setCollapsedSections] = useState<Partial<Record<CircleSectionKey, boolean>>>({});
 
   const normalizedNeedle = normalizeCircleSearchNeedle(debouncedSearchQuery);
   const hasSearchQuery = normalizedNeedle.length >= CHILLY_CIRCLE_LOCAL_SEARCH_MIN_LENGTH;
@@ -294,6 +299,24 @@ export default function ChillyCircleScreen() {
 
   const hasAnySuggestions = suggestionGroups.some((group) => group.rows.length > 0);
 
+  const resolveSectionCollapsed = (key: CircleSectionKey, itemCount: number) => {
+    if (hasSearchQuery) return false;
+    if (typeof collapsedSections[key] === "boolean") {
+      return collapsedSections[key]!;
+    }
+    return itemCount > CIRCLE_SECTION_COLLAPSE_THRESHOLD;
+  };
+
+  const toggleSectionCollapsed = (key: CircleSectionKey) => {
+    setCollapsedSections((prev) => {
+      const currentlyCollapsed = resolveSectionCollapsed(key, 0);
+      return {
+        ...prev,
+        [key]: !currentlyCollapsed,
+      };
+    });
+  };
+
   const runAction = useCallback(async (action: CircleAction, userId: string) => {
     const key = `${action}:${userId}`;
     if (busyKey) return;
@@ -419,6 +442,7 @@ export default function ChillyCircleScreen() {
   );
 
   const renderSection = (
+    sectionKey: CircleSectionKey,
     title: string,
     items: ChillyCircleListItem[],
     emptyText: string,
@@ -428,49 +452,66 @@ export default function ChillyCircleScreen() {
     <View style={styles.sectionCard}>
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={styles.sectionCount}>{items.length}</Text>
+        <View style={styles.sectionHeaderRight}>
+          <Text style={styles.sectionCount}>{items.length}</Text>
+          {!!items.length ? (
+            <TouchableOpacity
+              activeOpacity={0.86}
+              style={styles.sectionToggleButton}
+              onPress={() => toggleSectionCollapsed(sectionKey)}
+            >
+              <Text style={styles.sectionToggleText}>
+                {resolveSectionCollapsed(sectionKey, items.length) ? "Expand" : "Collapse"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
-      <View style={styles.sectionStack}>
-        {loading ? (
-          <View style={styles.loadingInline}>
-            <ActivityIndicator color="#DC143C" size="small" />
-            <Text style={styles.emptyText}>Loading</Text>
-          </View>
-        ) : items.length ? (
-          items.map((item) => renderPersonRow(item, actionsForItem(item), statusLabel))
-        ) : (
-          <Text style={styles.emptyText}>{emptyText}</Text>
-        )}
-      </View>
+      {resolveSectionCollapsed(sectionKey, items.length) ? (
+        <View style={styles.sectionCollapsedNotice}>
+          <Text style={styles.sectionCollapsedNoticeText}>
+            {loading
+              ? "Loading"
+              : `This section is collapsed. Expand to view ${items.length} ${items.length === 1 ? "person" : "people"}.`}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.sectionStack}>
+          {loading ? (
+            <View style={styles.loadingInline}>
+              <ActivityIndicator color="#DC143C" size="small" />
+              <Text style={styles.emptyText}>Loading</Text>
+            </View>
+          ) : items.length ? (
+            items.map((item) => renderPersonRow(item, actionsForItem(item), statusLabel))
+          ) : (
+            <Text style={styles.emptyText}>{emptyText}</Text>
+          )}
+        </View>
+      )}
     </View>
   );
 
   const renderRachiConnection = () => (
-    <View style={styles.sectionCard}>
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Official connection</Text>
-        <View style={styles.statusPill}>
-          <Text style={styles.statusPillText}>Official</Text>
-        </View>
-      </View>
-      <View style={styles.personMain}>
-        <View style={[styles.avatar, styles.officialAvatar]}>
-          <Text style={styles.avatarInitial}>R</Text>
+    <View style={styles.officialCard}>
+      <TouchableOpacity
+        style={styles.officialRow}
+        activeOpacity={0.86}
+        onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
+      >
+        <View style={[styles.avatar, styles.officialAvatar, styles.officialAvatarCompact]}>
+          <Text style={[styles.avatarInitial, styles.officialAvatarInitial]}>R</Text>
         </View>
         <View style={styles.personCopy}>
-          <Text style={styles.personName} numberOfLines={1}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
-          <Text style={styles.personMeta} numberOfLines={1}>Official Chi'llwood updates and Originals.</Text>
+          <View style={styles.officialTitleRow}>
+            <Text style={styles.officialName} numberOfLines={1}>{RACHI_OFFICIAL_ACCOUNT.displayName}</Text>
+            <View style={styles.officialPill}>
+              <Text style={styles.statusPillText}>Official</Text>
+            </View>
+          </View>
+          <Text style={styles.officialMeta} numberOfLines={1}>Official Chi'llwood updates and Originals.</Text>
         </View>
-      </View>
-      <View style={styles.personActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionButtonAccent]}
-          activeOpacity={0.86}
-          onPress={() => openProfile(RACHI_OFFICIAL_ACCOUNT.userId)}
-        >
-          <Text style={[styles.actionButtonText, styles.actionButtonTextAccent]}>View Rachi</Text>
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     </View>
   );
 
@@ -568,6 +609,7 @@ export default function ChillyCircleScreen() {
       ) : null}
 
       {renderSection(
+        "circle",
         "My Chi'lly Circle",
         hasSearchQuery ? circleSearchResults : circle,
         "No Chi'lly Circle connections yet",
@@ -576,6 +618,7 @@ export default function ChillyCircleScreen() {
       )}
 
       {renderSection(
+        "incoming",
         "Incoming requests",
         hasSearchQuery ? incomingSearchResults : incoming,
         "No incoming Chi'lly Circle requests",
@@ -586,6 +629,7 @@ export default function ChillyCircleScreen() {
       )}
 
       {renderSection(
+        "outgoing",
         "Sent requests",
         hasSearchQuery ? outgoingSearchResults : outgoing,
         "No sent Chi'lly Circle requests",
@@ -715,8 +759,89 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "900",
   },
+  sectionHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sectionToggleButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 9,
+    paddingVertical: 2,
+  },
+  sectionToggleText: {
+    color: "#E9EEFB",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  sectionCollapsedNotice: {
+    minHeight: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    padding: 10,
+    justifyContent: "center",
+  },
+  sectionCollapsedNoticeText: {
+    color: "#9CA7BA",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
   sectionStack: {
     gap: 8,
+  },
+  officialCard: {
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(18,18,18,0.9)",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  officialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  officialTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  officialName: {
+    color: "#F4F7FC",
+    fontSize: 12.5,
+    fontWeight: "900",
+    flex: 1,
+  },
+  officialMeta: {
+    color: "#9CA7BA",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 1,
+  },
+  officialPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+  },
+  officialAvatarCompact: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  officialAvatarInitial: {
+    fontSize: 10,
   },
   loadingInline: {
     minHeight: 44,

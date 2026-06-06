@@ -6,6 +6,13 @@ This file is intentionally compact. Keep current truth here, keep detailed proof
 Full checkpoint history through April 24, 2026 is preserved at `docs/archive/current-state-history-through-2026-04-24.md`. Later detailed proof history is available in git history and task artifacts; this hot-path file should carry only the current governing facts future sessions must not undo.
 
 ## Current Checkpoint
+June 6, 2026 Chat/Circle collapsible list UI polish is repo-side and pending OTA proof.
+`app/chat/index.tsx` now collapses long thread lists with a preview limit (`CHAT_THREAD_PREVIEW_LIMIT = 8`) and an expand/collapse control; no thread data source changes, no participant/action changes, and search still performs direct debounced filtering.
+`app/chilly-circle.tsx` now adds per-section collapsible controls for `My Chi'lly Circle`, `Incoming requests`, and `Sent requests`, with a default collapsed threshold for large sections and search-driven auto-uncollapse.
+Rachi official row remains a compact, single-row tap target (`/profile/[userId]`) with no additional action button.
+No LiveKit token issuer, route ownership, money logic, fake users, fake connections, fake rooms, or search backend model changes were introduced.
+This update is tracked in `docs/CHAT_CIRCLE_COLLAPSIBLE_UI_UPDATE_20260606.md`. Proof artifacts still pending.
+
 June 6, 2026 Search Typeahead And Social Discovery Polish is repo-side complete across Chi’lly Chat, Chi’lly Circle, and Home Explore. Chat inbox supports debounced local thread filtering plus debounced People suggestions from `searchPublicPeople`, compact empty states, and clear/search IDs (`chat-search-*`). Chi’lly Circle now has a compact search/finding flow with local Circle/requests filtering, People suggestions, a compact official Rachi card/action, and one shared search result language set (`chilly-circle-*`) without introducing fake threads/connections or private data. Home Explore now keeps debounced scope-filtered content search with grouped typeahead suggestion rows and a stable clear action (`home-explore-*` plus required legacy `explore-typeahead-results`), while staying to existing public-backed models only. Search policy boundaries are unchanged: no fake people/threads/rooms data, no private identities, and no `friends` or `Mini Platform` terminology. This lane did not change LiveKit token issuance, route ownership, money state, Premium gates, or blocklist rules.
 
 This lane is prepared for Android proof at `/tmp/chillywood-search-typeahead-social-discovery-proof-20260605/` with required captures defined in this path. Proof capture is still pending as of this checkpoint.

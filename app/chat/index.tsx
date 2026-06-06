@@ -31,6 +31,7 @@ type InboxErrorState = {
 
 const CHAT_SUGGESTION_MIN_LENGTH = 2;
 const CHAT_SUGGESTION_DEBOUNCE_MS = 300;
+const CHAT_THREAD_PREVIEW_LIMIT = 8;
 
 function buildThreadMap(items: ChatThreadSummary[]) {
   const map = new Map<string, ChatThreadSummary>();
@@ -98,6 +99,7 @@ export default function ChillyChatInboxScreen() {
   const [searchPeopleResults, setSearchPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
   const [quickActionThreadId, setQuickActionThreadId] = useState("");
   const [activeFriendUserIds, setActiveFriendUserIds] = useState<string[]>([]);
+  const [areThreadsExpanded, setAreThreadsExpanded] = useState(false);
 
   const loadThreads = useCallback(async (refresh = false) => {
     if (!isSignedIn) {
@@ -169,6 +171,25 @@ export default function ChillyChatInboxScreen() {
     () => threads.filter((thread) => matchesSearch(thread, searchQuery)),
     [searchQuery, threads],
   );
+
+  const shouldCollapseThreads = !searchQuery.trim() && filteredThreads.length > CHAT_THREAD_PREVIEW_LIMIT;
+  const visibleThreads = useMemo(
+    () => shouldCollapseThreads && !areThreadsExpanded
+      ? filteredThreads.slice(0, CHAT_THREAD_PREVIEW_LIMIT)
+      : filteredThreads,
+    [filteredThreads, shouldCollapseThreads, areThreadsExpanded],
+  );
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setAreThreadsExpanded(false);
+      return;
+    }
+
+    if (!shouldCollapseThreads) {
+      setAreThreadsExpanded(false);
+    }
+  }, [searchQuery, shouldCollapseThreads]);
 
   const threadByOtherUserId = useMemo(
     () => buildThreadMap(threads),
@@ -536,7 +557,7 @@ export default function ChillyChatInboxScreen() {
       accessibilityLabel="Chi'lly Chat inbox screen"
     >
       <FlatList
-        data={filteredThreads}
+        data={visibleThreads}
         keyExtractor={(item) => item.threadId}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadThreads(true)} tintColor="#F34B74" />}
@@ -632,7 +653,7 @@ export default function ChillyChatInboxScreen() {
                     {officialAccount ? "Platform-owned conversation" : "Direct conversation"}
                   </Text>
                 )}
-                <Text style={styles.threadPreview} numberOfLines={2}>{preview}</Text>
+                <Text style={styles.threadPreview} numberOfLines={1}>{preview}</Text>
                 {item.activeCommunicationRoomId && item.activeCallType ? (
                   <View style={styles.callPill}>
                     <Text style={styles.callPillText}>
@@ -649,6 +670,18 @@ export default function ChillyChatInboxScreen() {
             </TouchableOpacity>
           );
         }}
+        ListFooterComponent={shouldCollapseThreads ? (
+          <TouchableOpacity
+            testID="chat-thread-list-collapse-toggle"
+            activeOpacity={0.84}
+            onPress={() => setAreThreadsExpanded((next) => !next)}
+            style={styles.expandCollapseButton}
+          >
+            <Text style={styles.expandCollapseButtonText}>
+              {areThreadsExpanded ? "Show fewer threads" : `Show ${filteredThreads.length - CHAT_THREAD_PREVIEW_LIMIT} more threads`}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       />
     </View>
   );
@@ -667,7 +700,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 18,
     paddingBottom: 38,
-    gap: 14,
+    gap: 8,
   },
   header: {
     gap: 9,
@@ -791,12 +824,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.055)",
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
   searchLabel: {
     color: "#8E9BB2",
@@ -829,9 +862,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 10,
-    marginTop: 8,
-    gap: 8,
+    padding: 7,
+    marginTop: 6,
+    gap: 7,
   },
   suggestionPanelTitle: {
     color: "#E7EEFA",
@@ -862,29 +895,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 10,
+    padding: 8,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    minHeight: 50,
+    gap: 8,
+    minHeight: 46,
   },
   suggestionAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(243,75,116,0.26)",
   },
   suggestionAvatarText: {
     color: "#F7FBFF",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
   },
   suggestionAvatarImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 14,
+    borderRadius: 13,
     backgroundColor: "rgba(255,255,255,0.06)",
   },
   suggestionCopy: {
@@ -894,17 +927,17 @@ const styles = StyleSheet.create({
   },
   suggestionName: {
     color: "#F4F8FF",
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: "900",
   },
   suggestionMeta: {
     color: "#9FB0CA",
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: "700",
   },
   suggestionAction: {
     color: "#EAF0FF",
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "900",
   },
   kicker: {
@@ -927,16 +960,15 @@ const styles = StyleSheet.create({
   threadCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    borderRadius: 20,
+    gap: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 15,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+    padding: 8,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
   },
   threadCardUnread: {
     borderColor: "rgba(243,75,116,0.26)",
@@ -950,36 +982,36 @@ const styles = StyleSheet.create({
     borderColor: "rgba(243,75,116,0.3)",
   },
   avatarButton: {
-    borderRadius: 26,
+    borderRadius: 20,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: "rgba(243,75,116,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
   avatarImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: "rgba(255,255,255,0.06)",
   },
   avatarText: {
     color: "#FFF5F8",
-    fontSize: 20,
+    fontSize: 14.5,
     fontWeight: "900",
   },
   threadCopy: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   threadTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
   },
   threadTitleWrap: {
     flex: 1,
@@ -990,7 +1022,7 @@ const styles = StyleSheet.create({
   },
   threadTitle: {
     color: "#F7FBFF",
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: "900",
   },
   threadHandle: {
@@ -1015,28 +1047,28 @@ const styles = StyleSheet.create({
   },
   threadTime: {
     color: "#93A1B7",
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
   },
   threadPreview: {
     color: "#BBC7DA",
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 11.5,
+    lineHeight: 15,
     fontWeight: "600",
   },
   threadMetaRow: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
   },
   threadKindPill: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(6,10,18,0.28)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   threadKindPillOfficial: {
     borderColor: "rgba(242,194,91,0.32)",
@@ -1058,8 +1090,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(120, 225, 180, 0.18)",
     backgroundColor: "rgba(120, 225, 180, 0.09)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   identityPillUnread: {
     borderColor: "rgba(243,75,116,0.3)",
@@ -1087,8 +1119,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(182, 202, 255, 0.18)",
     backgroundColor: "rgba(182, 202, 255, 0.08)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   friendHintPillText: {
     color: "#DCE6FF",
@@ -1098,7 +1130,7 @@ const styles = StyleSheet.create({
   threadTagline: {
     flex: 1,
     color: "#90A0B9",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
   },
   threadRouteHint: {
@@ -1113,12 +1145,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(243,75,116,0.16)",
     borderWidth: 1,
     borderColor: "rgba(243,75,116,0.35)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   callPillText: {
     color: "#FFD8E2",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
   },
   unreadBadge: {
@@ -1132,16 +1164,16 @@ const styles = StyleSheet.create({
   },
   unreadText: {
     color: "#fff",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
   },
   quickActionCard: {
-    gap: 10,
-    borderRadius: 18,
+    gap: 8,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(243,75,116,0.28)",
     backgroundColor: "rgba(243,75,116,0.1)",
-    padding: 16,
+    padding: 12,
   },
   quickActionKicker: {
     color: "#FFB8C8",
@@ -1151,28 +1183,28 @@ const styles = StyleSheet.create({
   },
   quickActionTitle: {
     color: "#FFF5F8",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900",
   },
   quickActionBody: {
     color: "#FFD8E2",
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 11.5,
+    lineHeight: 17,
     fontWeight: "600",
   },
   quickActionRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
   },
   quickActionButton: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(6,10,18,0.35)",
-    paddingVertical: 11,
+    paddingVertical: 7,
     paddingHorizontal: 10,
   },
   quickActionButtonText: {
@@ -1189,14 +1221,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
   },
+  expandCollapseButton: {
+    marginTop: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignSelf: "flex-start",
+  },
+  expandCollapseButtonText: {
+    color: "#EAF0FF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
   emptyCard: {
-    borderRadius: 18,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(255,255,255,0.03)",
-    padding: 18,
+    padding: 10,
     gap: 8,
-    marginTop: 12,
+    marginTop: 10,
   },
   emptyTitle: {
     color: "#F8FBFF",
