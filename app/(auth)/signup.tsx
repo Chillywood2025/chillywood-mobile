@@ -30,6 +30,7 @@ import {
 } from "../../_lib/usernameHandles";
 
 const COMMUNITY_GUIDELINES_HREF = "/community-guidelines" as Href;
+const EMAIL_CONFIRM_REDIRECT_URL = "chillywoodmobile://auth-callback?flow=signup";
 
 function getSignupErrorMessage(error: unknown) {
   const raw = String(
@@ -112,8 +113,8 @@ export default function Signup() {
     Alert.alert(
       "Success",
       isClosedBetaEnvironment()
-        ? "Check your email to confirm signup. Closed-beta access only activates if this email is on the invite list."
-        : "Check your email to confirm signup before signing in.",
+        ? "Check your email to confirm signup. Tap Verify and Chi'llwood will bring you back to login. Closed-beta access only activates if this email is on the invite list."
+        : "Check your email to confirm signup. Tap Verify and Chi'llwood will bring you back to login.",
       [
         {
           text: "Go to login",
@@ -219,6 +220,7 @@ export default function Signup() {
         email: normalizedEmail,
         password,
         options: {
+          emailRedirectTo: EMAIL_CONFIRM_REDIRECT_URL,
           data: {
             display_name: normalizedDisplayName,
             username: normalizedUsername,

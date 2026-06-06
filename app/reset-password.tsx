@@ -291,13 +291,14 @@ export default function ResetPasswordScreen() {
 
       setNewPassword("");
       setConfirmPassword("");
+      await supabase.auth.signOut().catch(() => null);
       trackEvent("auth_password_recovery_update_success", {
         source: "reset-password",
       });
       Alert.alert("Reset password", "Your password has been updated.", [
         {
-          text: "Continue",
-          onPress: () => router.replace("/"),
+          text: "Go to login",
+          onPress: () => router.replace("/(auth)/login"),
         },
       ]);
     } catch (error) {

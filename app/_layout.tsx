@@ -64,7 +64,7 @@ const SENSITIVE_ROUTE_PARAM_NAMES = new Set([
 ]);
 
 const sanitizeRouteAnalyticsParams = (pathname: string, params: Record<string, unknown>) => {
-  if (pathname === "/reset-password") return {};
+  if (pathname === "/reset-password" || pathname === "/auth-callback") return {};
 
   const sanitized: Record<string, string> = {};
 
@@ -109,6 +109,35 @@ const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
   }
 };
 
+const getAuthCallbackRouteFromUrl = (url: string | null) => {
+  if (!url) return null;
+
+  try {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== "chillywoodmobile:") return null;
+
+    const normalizedHost = parsedUrl.hostname.toLowerCase();
+    const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
+    const isAuthCallbackLink = normalizedHost === "auth-callback" || normalizedPath === "/auth-callback";
+    if (!isAuthCallbackLink) return null;
+
+    const params = new URLSearchParams(parsedUrl.search);
+    const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
+
+    if (fragment) {
+      const hashParams = new URLSearchParams(fragment);
+      hashParams.forEach((value, key) => {
+        if (!params.has(key)) params.set(key, value);
+      });
+    }
+
+    const query = params.toString();
+    return query ? `/auth-callback?${query}` : "/auth-callback";
+  } catch {
+    return null;
+  }
+};
+
 function RouteAnalyticsBridge() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
@@ -136,10 +165,16 @@ function RouteAnalyticsBridge() {
       if (!recoveryRoute || pathname === "/reset-password") return;
       router.replace(recoveryRoute as Parameters<typeof router.replace>[0]);
     };
+    const routeAuthCallbackUrl = (url: string | null) => {
+      const callbackRoute = getAuthCallbackRouteFromUrl(url);
+      if (!callbackRoute || pathname === "/auth-callback") return;
+      router.replace(callbackRoute as Parameters<typeof router.replace>[0]);
+    };
 
     Linking.getInitialURL()
       .then((url) => {
         if (!active) return;
+        routeAuthCallbackUrl(url);
         routeRecoveryUrl(url);
       })
       .catch((error) => {
@@ -149,6 +184,7 @@ function RouteAnalyticsBridge() {
       });
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
+      routeAuthCallbackUrl(url);
       routeRecoveryUrl(url);
     });
 
@@ -297,6 +333,7 @@ function RootNavigator() {
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="channel/[userId]" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="auth-callback" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="subscribe" />
         <Stack.Screen name="admin" />

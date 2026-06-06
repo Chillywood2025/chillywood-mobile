@@ -17,7 +17,7 @@ import { trackEvent } from "../../_lib/analytics";
 import { reportRuntimeError } from "../../_lib/logger";
 import { isClosedBetaEnvironment } from "../../_lib/runtimeConfig";
 import { completePendingSignupProfile } from "../../_lib/signupProfileCompletion";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from "../../_lib/supabase";
+import { supabase } from "../../_lib/supabase";
 import { AppActionButton, AppStatusPill } from "../../components/ui/app-surface";
 
 const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
@@ -41,39 +41,11 @@ function getPasswordResetErrorMessage(error: unknown) {
 }
 
 async function requestPasswordResetEmail(email: string) {
-  const recoverUrl = new URL(`${SUPABASE_URL.replace(/\/+$/g, "")}/auth/v1/recover`);
-  recoverUrl.searchParams.set("redirect_to", PASSWORD_RESET_REDIRECT_URL);
-
-  const response = await fetch(recoverUrl.toString(), {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json;charset=UTF-8",
-      "X-Supabase-Api-Version": "2024-01-01",
-    },
-    body: JSON.stringify({
-      email,
-      gotrue_meta_security: {},
-    }),
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: PASSWORD_RESET_REDIRECT_URL,
   });
 
-  if (response.ok) {
-    return;
-  }
-
-  let message = "Unable to send a reset link right now.";
-  try {
-    const data = await response.json();
-    if (typeof data?.msg === "string") message = data.msg;
-    else if (typeof data?.message === "string") message = data.message;
-    else if (typeof data?.error_description === "string") message = data.error_description;
-    else if (typeof data?.error === "string") message = data.error;
-  } catch {
-    // Keep the user-facing fallback when Supabase returns a non-JSON error body.
-  }
-
-  throw new Error(message);
+  if (error) throw error;
 }
 
 export default function Login() {
@@ -147,7 +119,7 @@ export default function Login() {
       trackEvent("auth_password_reset_requested", {
         source: "login",
       });
-      Alert.alert("Reset password", "Check your email for a password reset link.");
+      Alert.alert("Reset password", "Check your email for a password reset link. It may take a minute to arrive.");
     } catch (error) {
       reportRuntimeError("auth-password-reset", error, {
         source: "login",
