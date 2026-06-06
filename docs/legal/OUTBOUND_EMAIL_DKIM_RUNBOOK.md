@@ -19,6 +19,8 @@ May 30, 2026 proof refresh: `/tmp/chillywood-google-play-acceptance-closeout-202
 | Outbound provider | Not selected/proved by repo evidence. | No provider keys or DKIM records are committed or printed. |
 | Automated support/legal receipts | Not proved. | Current fallback is manual support email or in-app support feedback. |
 
+June 6, 2026 Auth SMTP CLI follow-up: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` checked the exact local shell variables needed for Supabase Auth custom SMTP and confirmed they were absent. Supabase CLI could see project `bmkkhihfbmsnnmcqkoly`, but custom Auth SMTP was not configured because the Management API bearer token and SMTP provider credentials were not available. Fresh DNS proof at `/tmp/chillywood-supabase-auth-smtp-proof-20260606/dns-email-check.txt` still shows root SPF and DMARC baseline, no checked DKIM selector, and no checked `auth.chillywoodstream.com` SPF/DMARC/DKIM record.
+
 ## Outbound Use Cases
 
 | Use case | Current status | Required before claiming automated email |
@@ -34,7 +36,7 @@ May 30, 2026 proof refresh: `/tmp/chillywood-google-play-acceptance-closeout-202
 | Field | Recommended value / rule |
 | --- | --- |
 | Sending domain | `chillywoodstream.com` |
-| From address | `support@chillywoodstream.com` or a provider-approved subaddress such as `notices@chillywoodstream.com` |
+| From address | Support/legal: `support@chillywoodstream.com` or a provider-approved subaddress such as `notices@chillywoodstream.com`; Supabase Auth: preferred `no-reply@auth.chillywoodstream.com` |
 | Reply-To | `support@chillywoodstream.com` unless legal counsel specifies a separate notices inbox |
 | Display name | `Chi'llywood Support` or `Chi'llywood Legal` by queue |
 | Bounce handling | Provider-managed bounce/complaint handling enabled |

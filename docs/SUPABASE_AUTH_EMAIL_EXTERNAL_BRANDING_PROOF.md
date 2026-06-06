@@ -4,6 +4,8 @@ Date: 2026-06-06
 
 Status: blocked before external mutation.
 
+June 6 CLI/Management API follow-up: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` repeated the external setup preflight with the exact requested variable names (`SUPABASE_ACCESS_TOKEN`, `PROJECT_REF`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_ADMIN_EMAIL`, `SMTP_SENDER_NAME`). Supabase CLI was logged in and project `bmkkhihfbmsnnmcqkoly` was visible as active, but the Management API token and SMTP provider variables were missing from the local shell. No hosted Auth config mutation was attempted and no email delivery proof is claimed.
+
 ## Scope
 
 This proof lane attempted to apply the repo-ready Chi’llwood Supabase Auth email branding setup from commit `9a08385 Add Chi'llwood auth email branding templates` to the hosted Supabase project.
@@ -128,7 +130,7 @@ Provide approved environment variables in the local secret environment or approv
 
 Expected sender name remains `Chi’llwood`.
 
-Preferred sender is `no-reply@chillywoodstream.com` or `auth@chillywoodstream.com`.
+Preferred sender is `no-reply@auth.chillywoodstream.com`, or another provider-approved Chi'llwood auth sender if the outbound provider requires a different verified address.
 
 Support address remains `support@chillywoodstream.com`.
 

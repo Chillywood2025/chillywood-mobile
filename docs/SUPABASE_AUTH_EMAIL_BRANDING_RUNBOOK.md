@@ -4,7 +4,7 @@
 
 Chi’llwood Auth emails should look and read like official Chi’llwood account emails, not generic provider messages. This runbook prepares the sender, templates, redirect allowlist, test plan, and rollback path for Supabase Auth email branding without committing secrets and without weakening email confirmation or password reset security.
 
-Latest external apply attempt: `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` records a blocked preflight on 2026-06-06. Required Management API and SMTP environment variables were missing, so no external Supabase mutation was attempted and no branded email delivery proof is claimed yet.
+Latest external apply attempt: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` records a blocked CLI/Management API preflight on 2026-06-06. Supabase CLI was logged in and the Chi'llwood project was visible, but the required local Management API token and SMTP provider variables were missing, so no external Supabase mutation was attempted and no branded email delivery proof is claimed yet.
 
 This is account email only. It is not marketing email, newsletter email, production money activation, payout activation, LiveKit work, or a replacement for Supabase Auth.
 
@@ -26,8 +26,9 @@ Sender name: `Chi’llwood`
 
 Preferred sender address:
 
-- `no-reply@chillywoodstream.com`
-- or `auth@chillywoodstream.com`
+- `no-reply@auth.chillywoodstream.com`
+- or another provider-approved Chi'llwood auth sender if DNS/provider verification requires it
+- legacy approved fallbacks remain `no-reply@chillywoodstream.com` or `auth@chillywoodstream.com` if the provider cannot verify the `auth` subdomain sender yet
 - or another provider-approved `chillywoodstream.com` auth sender approved by the owner
 
 Support address: `support@chillywoodstream.com`
@@ -66,7 +67,7 @@ Current repo truth already records support inbox routing and DMARC baseline. DKI
 4. Open SMTP settings.
 5. Enable custom SMTP.
 6. Set sender name to `Chi’llwood`.
-7. Set sender email to `no-reply@chillywoodstream.com` or the approved auth sender.
+7. Set sender email to `no-reply@auth.chillywoodstream.com` or the approved auth sender.
 8. Enter SMTP host, port, username, and password from the provider.
 9. Save and send a test email.
 10. Do not paste or store SMTP credentials in repo docs, code, screenshots, or chat.

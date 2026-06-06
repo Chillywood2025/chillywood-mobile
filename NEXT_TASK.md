@@ -6,6 +6,8 @@ Run external Supabase Auth email setup/proof for Chi’llwood branding: configur
 
 Current blocker: the external apply lane stopped before mutation because the required local secret env vars were missing. A second-pass search found server-side Supabase canary Management API secret names, but no retrievable local Management API token and no SMTP/mail provider secrets locally or in the visible Supabase secret-name inventory. See `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md`. Provide `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `CHILLYWOOD_AUTH_SMTP_HOST`, `CHILLYWOOD_AUTH_SMTP_PORT`, `CHILLYWOOD_AUTH_SMTP_USER`, `CHILLYWOOD_AUTH_SMTP_PASS`, `CHILLYWOOD_AUTH_SMTP_FROM`, `CHILLYWOOD_AUTH_SMTP_SENDER_NAME`, and optional `CHILLYWOOD_AUTH_TEST_EMAIL` through the approved secret path, then rerun.
 
+June 6 CLI follow-up uses the shorter requested variable names and remains blocked for the same reason: `SUPABASE_ACCESS_TOKEN`, `PROJECT_REF`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_ADMIN_EMAIL`, and `SMTP_SENDER_NAME` were all missing from the local shell. Supabase CLI can see project `bmkkhihfbmsnnmcqkoly`, but no Management API PATCH or SMTP apply was attempted. Preferred auth sender is now `no-reply@auth.chillywoodstream.com`; real forgot-password delivery proof still requires an owner-controlled inbox after custom SMTP is configured. See `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md`.
+
 ## Current Recommendation
 
 Finish and verify Search, Typeahead And Social Discovery Polish for Chi’lly Chat, Chi’lly Circle, and Home Explore, then capture Android proof at `/tmp/chillywood-search-typeahead-social-discovery-proof-20260605/` for:

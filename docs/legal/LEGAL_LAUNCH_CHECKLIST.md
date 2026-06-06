@@ -135,6 +135,7 @@ Status key:
 - keep U.S. Copyright Office DMCA agent registration current, including renewals/updates if agent contact information changes;
 - support inbox receipt proof for `support@chillywoodstream.com` passed on May 13, 2026 by operator-confirmed destination-inbox receipt; no screenshots, raw headers, inbox exports, private contents, sender private details, credentials, tokens, or email secrets are committed;
 - domain email baseline DNS is proved: Cloudflare MX records remain present, SPF is `v=spf1 include:_spf.mx.cloudflare.net ~all`, and DMARC is `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`; DKIM remains pending until a real outbound mail provider for `@chillywoodstream.com` issues selector records;
+- Supabase Auth custom SMTP remains external: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` confirms the CLI can see the Supabase project, but local Management API and SMTP provider variables were missing, so no custom Auth sender or forgot-password delivery proof is claimed. Preferred Auth sender is `no-reply@auth.chillywoodstream.com` after provider/DNS setup.
 - account deletion process/SLA/backend retention runbook;
 - Google Play Android developer/package verification for `com.chillywood.mobile` is complete; Google Play account deletion URL acceptance and Data Safety answers remain pending;
 - RevenueCat/Google Play purchase, restore, cancellation/refund/revocation proof if Premium ships live;
