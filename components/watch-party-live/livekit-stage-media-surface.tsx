@@ -50,6 +50,7 @@ type LiveKitStageMediaSurfaceProps = {
   layout?: "stage" | "bubble-grid";
   participantLabelsByIdentity?: Record<string, string>;
   participantAvatarUrlsByIdentity?: Record<string, string>;
+  localParticipantFallback?: React.ReactNode;
   participantRoster?: LiveKitStageParticipantRosterEntry[];
   onParticipantPress?: (identity: string) => void;
   showRequestIndicators?: boolean;
@@ -63,6 +64,7 @@ type LiveKitStageMediaContentProps = {
   layout: "stage" | "bubble-grid";
   participantLabelsByIdentity?: Record<string, string>;
   participantAvatarUrlsByIdentity?: Record<string, string>;
+  localParticipantFallback?: React.ReactNode;
   participantRoster?: LiveKitStageParticipantRosterEntry[];
   onParticipantPress?: (identity: string) => void;
   showRequestIndicators: boolean;
@@ -206,6 +208,7 @@ function LiveKitStageMediaContent({
   layout,
   participantLabelsByIdentity,
   participantAvatarUrlsByIdentity,
+  localParticipantFallback,
   participantRoster,
   onParticipantPress,
   showRequestIndicators,
@@ -496,6 +499,10 @@ function LiveKitStageMediaContent({
                       zOrder={0}
                     />
                   </View>
+                ) : isLocalParticipant && localParticipantFallback ? (
+                  <View style={styles.bubbleVideoWrap} collapsable={false}>
+                    {localParticipantFallback}
+                  </View>
                 ) : item.avatarUrl ? (
                   <View style={styles.bubbleVideoWrap} collapsable={false}>
                     <Image source={{ uri: item.avatarUrl }} style={styles.bubbleAvatarImage} />
@@ -643,6 +650,7 @@ export function LiveKitStageMediaSurface({
   layout = "stage",
   participantLabelsByIdentity,
   participantAvatarUrlsByIdentity,
+  localParticipantFallback,
   participantRoster,
   onParticipantPress,
   showRequestIndicators = true,
@@ -941,6 +949,7 @@ export function LiveKitStageMediaSurface({
           layout={layout}
           participantLabelsByIdentity={participantLabelsByIdentity}
           participantAvatarUrlsByIdentity={participantAvatarUrlsByIdentity}
+          localParticipantFallback={localParticipantFallback}
           participantRoster={participantRoster}
           onParticipantPress={onParticipantPress}
           showRequestIndicators={showRequestIndicators}

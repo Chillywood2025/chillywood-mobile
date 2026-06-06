@@ -5340,6 +5340,13 @@ export default function PlayerScreen() {
     && watchPartyLiveKitJoinContract.participantRole !== "viewer";
   const publishWatchPartyLiveKitAudio = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
   const publishWatchPartyLiveKitVideo = watchPartyLiveKitCanPublish && !currentWatchPartyParticipantMuted;
+  const watchPartyLiveKitLocalParticipantFallback = (
+    Platform.OS !== "web"
+    && publishWatchPartyLiveKitVideo
+    && !!cameraPermission?.granted
+  ) ? (
+    <CameraView style={styles.participantAvatarImage} facing="front" mute mirror />
+  ) : null;
   const currentWatchPartyMembershipAuthoritySignature = useMemo(() => {
     const currentMembership = partyMembershipMapRef.current[trackedUserId];
     return [
@@ -7702,7 +7709,25 @@ export default function PlayerScreen() {
       style={[styles.sharedFullscreenParticipantRail, { width: sharedFullscreenRightRailWidth }]}
       pointerEvents="auto"
     >
-      {renderParticipantPanel(true, true, true)}
+      {shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract ? (
+        <LiveKitStageMediaSurface
+          joinContract={watchPartyLiveKitJoinContract}
+          onFallback={onWatchPartyLiveKitFallback}
+          active={playerMediaIsInteractive}
+          fillParent={false}
+          layout="bubble-grid"
+          participantLabelsByIdentity={watchPartyLiveKitParticipantLabelsByIdentity}
+          participantAvatarUrlsByIdentity={watchPartyLiveKitParticipantAvatarUrlsByIdentity}
+          localParticipantFallback={watchPartyLiveKitLocalParticipantFallback}
+          participantRoster={watchPartyLiveKitParticipantRoster}
+          onParticipantPress={onWatchPartyLiveKitParticipantPress}
+          showRequestIndicators={currentWatchPartyHostAuthority.isHost}
+          surfaceLabel="Watch-Party Live"
+          publishLocalAudio={publishWatchPartyLiveKitAudio}
+          publishLocalVideo={publishWatchPartyLiveKitVideo}
+          containerStyle={styles.sharedFullscreenLiveKitBubbleSurface}
+        />
+      ) : null}
     </View>
   );
 
@@ -10059,6 +10084,11 @@ const styles = StyleSheet.create({
     paddingBottom: 44,
     alignItems: "center",
     justifyContent: "center",
+  },
+  sharedFullscreenLiveKitBubbleSurface: {
+    width: "100%",
+    flex: 1,
+    backgroundColor: "transparent",
   },
   sharedFullscreenCommentsRail: {
     height: "100%",

@@ -4,20 +4,19 @@ Updated: June 5, 2026
 
 ## Scope
 
-This lane fixes the Shared Player custom fullscreen rails by reusing the regular shared-player participant bubble renderer in fullscreen. It is a targeted UI/component reuse fix only.
+This lane fixes the Shared Player custom fullscreen rails by reusing the regular shared-player LiveKit bubble surface in fullscreen. It is a targeted UI/component reuse fix only.
 
 It does not change LiveKit token issuance, publish authority, host approval, route ownership, old-room handling, backend room behavior, Player playback pipeline, monetization state, payouts, cash-out, withdrawals, transfers, or Stripe Android checkout policy.
 
 ## Implementation
 
-`app/player/[id].tsx` reuses the same regular shared-player participant bubble renderer for fullscreen right rail:
+`app/player/[id].tsx` reuses the same regular shared-player LiveKit bubble surface for fullscreen right rail:
 
-- regular shared-player dock: `renderParticipantPanel(true, true)`
-- fullscreen right rail: `renderParticipantPanel(true, true, true)`
-- shared item renderer: `renderSharedPlayerParticipantBubble`
-- shared participant source: `liveBubbleParticipants`
+- regular shared-player dock: `LiveKitStageMediaSurface` with `layout="bubble-grid"`
+- fullscreen right rail: the same `LiveKitStageMediaSurface` with `layout="bubble-grid"`
+- shared participant source: `watchPartyLiveKitParticipantRoster`, `watchPartyLiveKitParticipantLabelsByIdentity`, and `watchPartyLiveKitParticipantAvatarUrlsByIdentity`
 
-The shared renderer preserves current-user camera preview, participant camera preview, participant avatar URL, initials fallback, host/co-host badges, mute/request/speaking state, reactions, and participant press behavior. Fullscreen only changes the outer rail layout/scroll mode; it no longer applies fullscreen-only item, avatar, name, or status styles to the bubble.
+The shared surface preserves LiveKit camera tracks, participant labels, request indicators, participant press behavior, and publish flags. It also accepts a shared avatar fallback map plus a local participant fallback node. The local fallback is supplied by `app/player/[id].tsx`, so the LiveKit media surface does not import `expo-camera` directly and the Watch-Party LiveKit guard remains intact.
 
 Fullscreen Shared Player still uses the three-zone layout:
 
@@ -27,7 +26,7 @@ Fullscreen Shared Player still uses the three-zone layout:
 
 The left rail keeps the real room comment data and send handler through `renderPartyCommentsContent(true)`. The fullscreen rail placeholder is shortened to `Comment`, and the Send action is styled as a compact chip so it does not dominate the narrow rail.
 
-The right rail now mounts the exact regular shared-player participant bubble renderer. The prior fullscreen-only look-alike bubble map and the later fullscreen `LiveKitStageMediaSurface` rail were removed from the runtime path.
+The right rail now mounts the exact regular shared-player `LiveKitStageMediaSurface` bubble-grid surface. The prior fullscreen-only look-alike bubble map and `renderParticipantPanel(true, true, true)` rail were removed from the runtime path.
 
 Fullscreen no longer renders the regular shared-player fallback card in the right rail. The right rail must not show `Shared Player` or `Shared playback stays here if the room drops back from live camera.` in fullscreen.
 
@@ -44,7 +43,7 @@ Fullscreen shared player:
 - comment placeholder is short
 - Send is compact
 - center player stays large
-- right rail uses the regular shared-player participant bubble renderer
+- right rail uses the regular shared-player `LiveKitStageMediaSurface` bubble-grid surface
 - no fullscreen fallback card or fallback text appears
 - no fake participants, comments, LiveKit state, room stats, or money rows are created
 
