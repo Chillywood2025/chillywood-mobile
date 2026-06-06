@@ -1,0 +1,9 @@
+Chi’llwood
+
+Confirm your email change
+
+Use this secure link to confirm the email address for your Chi’llwood account:
+
+{{ .ConfirmationURL }}
+
+If you did not request this email change, contact support@chillywoodstream.com.

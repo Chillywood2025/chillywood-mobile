@@ -1,0 +1,11 @@
+Chi’llwood
+
+You’re invited
+
+Use this invite link to finish setting up your Chi’llwood account:
+
+{{ .ConfirmationURL }}
+
+If you did not expect this invite, you can ignore this email.
+
+Need help? Contact support@chillywoodstream.com

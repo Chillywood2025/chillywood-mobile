@@ -1,0 +1,11 @@
+Chi’llwood
+
+Confirm it’s you
+
+Use this one-time code to continue:
+
+{{ .Token }}
+
+If you did not request this, you can ignore this email.
+
+Need help? Contact support@chillywoodstream.com

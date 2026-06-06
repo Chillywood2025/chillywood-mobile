@@ -3844,13 +3844,15 @@ const canaryRun = async (
       ].flatMap((value) => Array.isArray(value) ? value.map(toText) : toText(value).split(/[,\n]/).map(toText)).filter(Boolean);
       const siteOk = /^https:\/\/[^/]+/.test(siteUrl) && !siteUrl.includes("localhost") && !siteUrl.includes("127.0.0.1");
       const resetOk = redirectSources.includes("chillywoodmobile://reset-password");
-      const authCallbackOk = redirectSources.includes("chillywoodmobile://auth-callback")
+      const authCallbackOk = redirectSources.includes("chillywoodmobile://auth/confirm")
+        || redirectSources.includes("chillywoodmobile://auth/callback")
+        || redirectSources.includes("chillywoodmobile://auth-callback")
         || redirectSources.includes("chillywoodmobile://auth-callback?flow=signup");
       results.push(canaryResult({
         actor: "system",
         actual: authConfig.ok && siteOk && resetOk && authCallbackOk ? "Hosted Auth Site URL, reset-password redirect, and auth-callback redirect are configured." : `Hosted Auth URL proof failed: status ${authConfig.status}, site ${siteOk ? "ok" : "bad"}, reset redirect ${resetOk ? "found" : "missing"}, auth callback redirect ${authCallbackOk ? "found" : "missing"}.`,
         details: { auth_callback_redirect_found: authCallbackOk, http_status: authConfig.status, redirect_count: redirectSources.length, reset_redirect_found: resetOk, site_url_ok: siteOk },
-        expected: "Real Site URL is non-localhost and chillywoodmobile://reset-password plus chillywoodmobile://auth-callback are allowlisted.",
+        expected: "Real Site URL is non-localhost and chillywoodmobile://reset-password plus chillywoodmobile://auth/confirm are allowlisted.",
         key: "supabase_redirect_urls",
         label: "Supabase redirect URLs configured",
         section: "Auth / Redirects",

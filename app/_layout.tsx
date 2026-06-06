@@ -118,7 +118,9 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
     const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
-    const isAuthCallbackLink = normalizedHost === "auth-callback" || normalizedPath === "/auth-callback";
+    const isAuthCallbackLink = normalizedHost === "auth-callback"
+      || normalizedPath === "/auth-callback"
+      || (normalizedHost === "auth" && (normalizedPath === "/confirm" || normalizedPath === "/callback"));
     if (!isAuthCallbackLink) return null;
 
     const params = new URLSearchParams(parsedUrl.search);

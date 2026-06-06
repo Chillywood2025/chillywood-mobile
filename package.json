@@ -34,6 +34,7 @@
     "guard:stripe-connect-policy": "node ./scripts/guard-stripe-connect-policy.mjs",
     "guard:provider-readiness-policy": "node ./scripts/guard-provider-readiness-policy.mjs",
     "guard:premium-sandbox-policy": "node ./scripts/guard-premium-sandbox-policy.mjs",
+    "guard:auth-email-branding-policy": "node ./scripts/guard-auth-email-branding-policy.mjs",
     "guard:android-launcher-icon-policy": "node ./scripts/guard-android-launcher-icon-policy.mjs",
     "guard:admin-auth-safety": "node ./scripts/guard-admin-auth-safety.mjs",
     "guard:owner-security-center": "node ./scripts/guard-owner-security-center.mjs",
