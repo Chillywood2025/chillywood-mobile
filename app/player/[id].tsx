@@ -8826,9 +8826,11 @@ export default function PlayerScreen() {
                       {canTogglePlayerFullscreen ? (
                         <TouchableOpacity
                           style={styles.progressFullscreenButton}
+                          testID="player-fullscreen-button"
                           activeOpacity={0.84}
                           accessibilityRole="button"
                           accessibilityLabel={isStandaloneFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                          accessibilityHint={isStandaloneFullscreen ? "Return to the normal player view." : "Open the player in fullscreen."}
                           hitSlop={{ bottom: 8, left: 8, right: 8, top: 8 }}
                           onPress={() => {
                             setIsStandaloneFullscreen((value) => !value);
