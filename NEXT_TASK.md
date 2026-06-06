@@ -4,6 +4,8 @@
 
 Run external Supabase Auth email setup/proof for Chi’llwood branding: configure custom SMTP sender name `Chi’llwood`, use an approved auth sender such as `no-reply@chillywoodstream.com` or `auth@chillywoodstream.com`, paste templates from `docs/auth-email-templates/`, allowlist `chillywoodmobile://auth/confirm`, `chillywoodmobile://auth/callback`, legacy `chillywoodmobile://auth-callback`, and `chillywoodmobile://reset-password`, then send one sanitized signup confirmation and one reset-password proof email. Confirm both CTAs return to the app/login flow, not the policy page. Do not commit SMTP passwords, Supabase management tokens, service-role keys, `.env` files, screenshots containing private headers, or provider secrets.
 
+Current blocker: the external apply lane stopped before mutation because the required local secret env vars were missing. See `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md`. Provide `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `CHILLYWOOD_AUTH_SMTP_HOST`, `CHILLYWOOD_AUTH_SMTP_PORT`, `CHILLYWOOD_AUTH_SMTP_USER`, `CHILLYWOOD_AUTH_SMTP_PASS`, `CHILLYWOOD_AUTH_SMTP_FROM`, `CHILLYWOOD_AUTH_SMTP_SENDER_NAME`, and optional `CHILLYWOOD_AUTH_TEST_EMAIL` through the approved secret path, then rerun.
+
 ## Current Recommendation
 
 Finish and verify Search, Typeahead And Social Discovery Polish for Chi’lly Chat, Chi’lly Circle, and Home Explore, then capture Android proof at `/tmp/chillywood-search-typeahead-social-discovery-proof-20260605/` for:

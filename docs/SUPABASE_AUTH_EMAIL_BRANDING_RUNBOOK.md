@@ -4,6 +4,8 @@
 
 Chi’llwood Auth emails should look and read like official Chi’llwood account emails, not generic provider messages. This runbook prepares the sender, templates, redirect allowlist, test plan, and rollback path for Supabase Auth email branding without committing secrets and without weakening email confirmation or password reset security.
 
+Latest external apply attempt: `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` records a blocked preflight on 2026-06-06. Required Management API and SMTP environment variables were missing, so no external Supabase mutation was attempted and no branded email delivery proof is claimed yet.
+
 This is account email only. It is not marketing email, newsletter email, production money activation, payout activation, LiveKit work, or a replacement for Supabase Auth.
 
 ## Current App Redirect Map

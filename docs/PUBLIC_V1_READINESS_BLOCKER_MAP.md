@@ -57,6 +57,8 @@ Branch at audit start: `main...origin/main`
 
 June 6, 2026 Auth email branding readiness update: Chi’llwood now has repo-tracked Supabase Auth templates under `docs/auth-email-templates/`, exact subject lines, and `docs/SUPABASE_AUTH_EMAIL_BRANDING_RUNBOOK.md`. Signup passes `chillywoodmobile://auth/confirm`; forgot-password passes `chillywoodmobile://reset-password`; root deep-link handling routes reset, auth confirm, auth callback, and legacy auth callback links back into app screens without exposing tokens in analytics. Remaining blocker is external Supabase SMTP/template/redirect allowlist setup and sanitized live email proof. Do not claim branded sender delivery until custom SMTP, templates, and allowlisted redirects are verified in the hosted project.
 
+External apply follow-up: `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` confirms the June 6 external setup lane stopped before mutation because required Management API and SMTP environment variables were missing. Hosted SMTP/templates/redirect allowlist remain external blockers.
+
 ## Summary
 
 Current status: **partial**.
