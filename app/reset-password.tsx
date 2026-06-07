@@ -295,12 +295,9 @@ export default function ResetPasswordScreen() {
       trackEvent("auth_password_recovery_update_success", {
         source: "reset-password",
       });
-      Alert.alert("Reset password", "Your password has been updated.", [
-        {
-          text: "Go to login",
-          onPress: () => router.replace("/(auth)/login"),
-        },
-      ]);
+      setStatus("missing");
+      setStatusMessage("Password updated. Returning to sign in...");
+      router.replace("/(auth)/login");
     } catch (error) {
       reportRuntimeError("auth-password-recovery-update", error, {
         source: "reset-password",

@@ -2,7 +2,7 @@
 
 Date: 2026-06-06
 
-Status: custom SMTP configured/read back with verified Brevo sender; exact Brevo DNS host records applied; API-level recovery dispatch accepted; mailbox click proof pending.
+Status: custom SMTP configured/read back with verified Brevo sender; exact Brevo DNS host records applied; API-level recovery dispatch accepted; mailbox click proof remains manual and pending.
 
 ## Scope
 

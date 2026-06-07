@@ -165,6 +165,7 @@ export default function AuthCallbackScreen() {
           if (!active) return;
           setTitle("Go to login");
           setMessage("Use this screen after confirming your email. Sign in to continue.");
+          goToLogin();
           return;
         }
 

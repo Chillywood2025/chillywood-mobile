@@ -142,7 +142,9 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       });
     }
 
-    if (params.get("type") === "recovery") return null;
+    const callbackType = String(params.get("type") ?? "").trim().toLowerCase();
+    if (callbackType === "recovery" || callbackType === "recover") return null;
+
     const isResetPasswordPath = normalizedHost === "reset-password"
       || (
         normalizedHost === "chillywoodstream.com"
@@ -150,6 +152,17 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       )
       || normalizedPath === "/reset-password";
     if (isResetPasswordPath) return null;
+
+    const hasKnownAuthType = [
+      "signup",
+      "recovery",
+      "recover",
+      "email",
+      "email_change",
+      "invite",
+      "magiclink",
+      "reauthentication",
+    ].includes(callbackType);
     const hasAuthCallbackParam = [
       "code",
       "token",
@@ -164,17 +177,15 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       "recovery_token",
     ].some((key) => params.has(key));
 
-    const hasConfirmPath = normalizedPath === "/confirm" || normalizedPath === "/verify" || normalizedPath === "/recovery" || normalizedPath === "/auth" || normalizedPath === "/callback" || normalizedPath === "/auth-callback";
-    const isKnownAuthHost = normalizedHost === "auth" || normalizedHost === "auth-callback";
-    const isKnownWebAuthPath = normalizedHost === "chillywoodstream.com" && (
-      normalizedPath === "/" ||
-      hasConfirmPath ||
-      normalizedPath.startsWith("/auth") ||
-      normalizedPath.includes("/confirm") ||
-      normalizedPath.includes("/verify")
-    );
-    const isAuthCallbackLink = (isKnownAuthHost || isKnownWebAuthPath)
-      && (hasAuthCallbackParam || normalizedPath === "/auth" || normalizedPath === "/auth-callback" || hasConfirmPath);
+    const hasConfirmPath =
+      normalizedPath === "/confirm"
+      || normalizedPath === "/verify"
+      || normalizedPath.endsWith("/verify")
+      || normalizedPath === "/recovery"
+      || normalizedPath === "/auth"
+      || normalizedPath === "/callback"
+      || normalizedPath === "/auth-callback";
+    const isAuthCallbackLink = hasKnownAuthType || hasAuthCallbackParam || hasConfirmPath;
 
     if (!isAuthCallbackLink) return null;
 

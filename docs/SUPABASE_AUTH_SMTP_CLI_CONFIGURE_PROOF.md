@@ -2,7 +2,7 @@
 
 Date: 2026-06-07
 
-Status: Supabase Auth SMTP is configured to Brevo (`smtp-relay.brevo.com`) and reset emails are being sent and delivered to the tested inbox; route/callback handling for recovery links is confirmed to target `reset-password` before `auth-callback`.
+Status: Supabase Auth SMTP is configured to Brevo (`smtp-relay.brevo.com`) and reset emails are being sent and delivered to the tested inbox; route/callback handling for recovery links is confirmed to target `reset-password` before `auth-callback`, then return to login.
 
 ## Scope
 
@@ -91,7 +91,7 @@ Recovery-link routing behavior in `app/_layout.tsx` now:
 Related route targets:
 
 - `app/auth-callback.tsx` remains a direct auth confirmation destination.
-- `app/reset-password.tsx` routes to `/(auth)/login` after successful reset submission.
+- `app/reset-password.tsx` routes to `/(auth)/login` immediately after successful reset submission.
 
 This proves recovery links are no longer captured by auth-callback routing.
 
