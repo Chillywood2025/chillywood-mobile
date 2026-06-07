@@ -45,7 +45,7 @@ Result:
   - `smtp_host: smtp-relay.brevo.com`
   - `smtp_port: 587`
   - `smtp_admin_email: no-reply@chillywoodstream.com`
-  - `smtp_sender_name: Chi'llwood`
+  - `smtp_sender_name: Chi'llywood`
 
 And config readback via:
 

@@ -38,7 +38,7 @@ If the DNS provider auto-appends the zone, these become `chillywood.chillywoodst
 June 6, 2026 Auth SMTP CLI follow-up: Supabase Auth custom SMTP is now confirmed configured for project `bmkkhihfbmsnnmcqkoly` by Management API readback with sender metadata:
 
 - sender host: `smtp-relay.brevo.com`
-- sender name: `Chi’llwood`
+- sender name: `Chi’llywood`
 - verified sender email: `no-reply@chillywoodstream.com`
 
 The same run confirms `POST /auth/v1/recover` returns HTTP `200` with `rob2037gn@gmail.com` using `chillywoodmobile://reset-password` redirect.

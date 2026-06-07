@@ -39,7 +39,7 @@ Run a final focused pass on: DNS/recipient checks, mail-route validation, latest
 1. provide a Brevo REST API key (v3/`api-key` for the Brevo account that owns this sender) and re-run log endpoint checks,
 2. verify the test inbox manually (or via Gmail API) for message receipt,
 3. retry recover once and check:
-   - sender is `Chi'llwood <no-reply@chillywoodstream.com>`,
+   - sender is `Chi'llywood <no-reply@chillywoodstream.com>`,
    - tap opens `chillywoodmobile://reset-password`,
    - post-reset route lands on login.
 

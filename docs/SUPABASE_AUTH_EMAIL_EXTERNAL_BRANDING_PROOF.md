@@ -2,7 +2,7 @@
 
 Date: 2026-06-07
 
-Status: Callback routing is now fixed for recovery links, sender branding is configured (`Chi'llwood <no-reply@chillywoodstream.com>`), and recovery dispatch succeeds. This pass adds explicit inbox-arrival diagnostics for recipient-side and mail-route evidence.
+Status: Callback routing is now fixed for recovery links, sender branding is configured (`Chi'llywood <no-reply@chillywoodstream.com>`), and recovery dispatch succeeds. This pass adds explicit inbox-arrival diagnostics for recipient-side and mail-route evidence.
 
 ## Scope
 
@@ -12,7 +12,7 @@ This proof confirms auth email callback behavior, Supabase Auth SMTP sender bran
 
 - project: `bmkkhihfbmsnnmcqkoly`
 - sender: `no-reply@chillywoodstream.com`
-- sender name: `Chi'llwood`
+- sender name: `Chi'llywood`
 - recovery endpoint: `chillywoodmobile://reset-password`
 - signup verification remains on auth callback path.
 
@@ -22,7 +22,7 @@ This proof confirms auth email callback behavior, Supabase Auth SMTP sender bran
   - `smtp_host: smtp-relay.brevo.com`
   - `smtp_port: 587`
   - `smtp_admin_email: no-reply@chillywoodstream.com`
-  - `smtp_sender_name: Chi'llwood`
+  - `smtp_sender_name: Chi'llywood`
 - `app/_layout.tsx` now treats recovery links as reset routes and does not consume them in the callback handler intended for signup confirmation.
 - `app/reset-password.tsx` returns to login on success immediately.
 
