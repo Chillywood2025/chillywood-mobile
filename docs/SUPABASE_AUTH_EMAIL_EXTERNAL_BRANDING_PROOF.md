@@ -1,71 +1,60 @@
 # Supabase Auth Email External Branding Proof
 
-Date: 2026-06-06
+Date: 2026-06-07
 
-Status: custom SMTP configured/read back with verified Brevo sender; exact Brevo DNS host records applied; API-level recovery dispatch accepted; mailbox click proof remains manual and pending.
+Status: Callback routing is now fixed for recovery links, sender branding is configured (`Chi'llwood <no-reply@chillywoodstream.com>`), and recovery dispatch succeeds. This pass adds explicit inbox-arrival diagnostics for recipient-side and mail-route evidence.
 
 ## Scope
 
-This proof lane confirms hosted Supabase Auth custom SMTP wiring and app-route behavior for email callbacks. It complements
-`docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` and does not include marketing traffic, monetary activation, payout, or ownership changes.
+This proof confirms auth email callback behavior, Supabase Auth SMTP sender branding, and route handling for password reset links. It does not alter monetization, payouts, LiveKit behavior, or route ownership.
 
-## Execution Summary
+## Execution summary
 
-- Supabase project: `bmkkhihfbmsnnmcqkoly`
-- Project auth config was patched via Management API.
-- SMTP host/user/sender fields were written and read back.
-- Brevo sender is now verified: `Chi'llwood <no-reply@chillywoodstream.com>`.
-- Password value was never printed.
-- Email callback routing was fixed so reset links do not match auth callback routing logic.
-- Forgot-password request trigger was executed against the same project and accepted.
-- Current Brevo dashboard records were rechecked against public DNS using the exact owner-provided hostnames.
+- project: `bmkkhihfbmsnnmcqkoly`
+- sender: `no-reply@chillywoodstream.com`
+- sender name: `Chi'llwood`
+- recovery endpoint: `chillywoodmobile://reset-password`
+- signup verification remains on auth callback path.
 
-## External Configuration Status
+## SMTP/app callback status
 
-- `PATCH /v1/projects/{ref}/config/auth` succeeded.
-- `GET /v1/projects/{ref}/config/auth` confirms configured host/user/sender settings.
-- `smtp_pass` was redacted from all captured outputs.
-- Sender remains verified `Chi'llwood <no-reply@chillywoodstream.com>` through `smtp-relay.brevo.com`.
-- Latest redacted proof path: `/tmp/chillywood-brevo-verified-sender-smtp-proof-20260606/`
+- `PATCH` on `v1/projects/.../config/auth` succeeded and remains read-backed:
+  - `smtp_host: smtp-relay.brevo.com`
+  - `smtp_port: 587`
+  - `smtp_admin_email: no-reply@chillywoodstream.com`
+  - `smtp_sender_name: Chi'llwood`
+- `app/_layout.tsx` now treats recovery links as reset routes and does not consume them in the callback handler intended for signup confirmation.
+- `app/reset-password.tsx` returns to login on success immediately.
 
-## Brevo DNS Status
+## Send dispatch status
 
-Owner-provided Brevo dashboard values on June 6, 2026:
+- `POST /auth/v1/recover` for `rob2037gn@gmail.com` returns `HTTP 200` with `{}`.
+- latest send timestamp: `20260607T005540Z`.
+- this indicates API dispatch is healthy.
 
-| Record | Brevo host | Expected full DNS name if the zone auto-appends `chillywoodstream.com` | Public DNS result |
-| --- | --- | --- | --- |
-| Brevo code TXT | `chillywood` | `chillywood.chillywoodstream.com` | Resolving |
-| DKIM 1 CNAME | `brevo1._domainkey.chillywood` | `brevo1._domainkey.chillywood.chillywoodstream.com` | Resolving |
-| DKIM 2 CNAME | `brevo2._domainkey.chillywood` | `brevo2._domainkey.chillywood.chillywoodstream.com` | Resolving |
-| DMARC TXT | `_dmarc.chillywood` | `_dmarc.chillywood.chillywoodstream.com` | Resolving |
+## Recipient/mail-route diagnostics
 
-June 6 follow-up: the four exact records above were added in Cloudflare and now resolve from public DNS / authoritative Cloudflare nameservers. Existing root-domain Brevo records remain visible at `chillywoodstream.com`, `brevo1._domainkey.chillywoodstream.com`, and `brevo2._domainkey.chillywoodstream.com`; those were left in place to avoid disrupting existing domain behavior.
+A follow-up diagnostics pass was run for recipient-side evidence:
 
-## App Callback Routing Status
+- DNS for sender identity and protection is present:
+  - `chillywoodstream.com` SPF/DMARC resolvable
+  - `brevo1._domainkey.chillywoodstream.com` and `brevo2._domainkey.chillywoodstream.com` CNAMEs resolvable
+- recipient domain route (`gmail.com`) is healthy by MX.
+- Brevo v3 API endpoints were attempted with the supplied credential, but returned `401 Key not found`; the key appears to be an SMTP credential rather than a REST API key, so delivery trail (sent/delivered/opened events) could not be pulled in this lane.
 
-- Confirm route: `chillywoodmobile://auth/callback`
-- Reset route: `chillywoodmobile://reset-password`
-- `app/_layout.tsx` now excludes `type=recovery` links and `/auth/v1/verify` recovery links from auth-callback flow so they reach `app/reset-password.tsx`.
-- Generic confirmation `code` links are not treated as password recovery by themselves, so signup confirmation remains on the auth-callback-to-login path.
-- `app/auth-callback.tsx` routes to login after successful verification.
+## Remaining gap
 
-## Inbox / Click-through Status
+- We still need mailbox-side confirmation in the actual safe inbox because inbound/provider telemetry could not be queried with current keys.
 
-- `POST /auth/v1/recover` now returns `200` for `rob2037gn@gmail.com`, so API-level dispatch is accepted.
-- Mailbox-level confirmation is still pending: verify delivery from `no-reply@chillywoodstream.com`, tap behavior to `chillywoodmobile://reset-password`, and post-reset return to login.
-- Actual mailbox receipt and manual click-through validation still requires reading the test inbox. Chrome/Gmail automation was not available in this session, so inbox proof could not be completed by Codex.
-- This lane has endpoint-level routing proof and accepted dispatch proof plus recovery-route correction proof; user-side click proof remains pending until safe inbox verification confirms sender/subject/content and route behavior.
-- Supabase Management API readback remains configured and correct; Brevo transactional readback was not available from the tested credentials (`401 key not found`), so provider-side suppression/access explanation is currently unresolved.
+## Next step
 
-## Required Follow-up
+Capture one fresh recover email in the safe inbox and verify:
 
-- Re-run mailbox validation in the safe test inbox immediately after deploy:
-  - refresh/recheck Brevo domain authentication status
-  - verify reset email arrives
-  - verify sender/subject and Chi'llwood template content
-  - verify tap opens `chillywoodmobile://reset-password`
-  - confirm successful password update returns to login
+1. sender and subject
+2. reset link opens reset screen
+3. successful reset returns to login
+4. no signup-policy route intercepts recovery links
 
 ## Safety
 
-No SMTP password, Supabase Management API token, service role key, provider secret, or local `.env` secret value was committed.
+No SMTP/API secret, Supabase token, service-role key, `.env` secret, keystore, or service account file was committed. No secret values were added to docs.

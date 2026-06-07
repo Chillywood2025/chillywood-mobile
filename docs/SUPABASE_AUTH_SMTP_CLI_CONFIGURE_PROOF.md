@@ -2,16 +2,16 @@
 
 Date: 2026-06-07
 
-Status: Supabase Auth SMTP is configured to Brevo (`smtp-relay.brevo.com`) and reset emails are being sent and delivered to the tested inbox; route/callback handling for recovery links is confirmed to target `reset-password` before `auth-callback`, then return to login.
+Status: Supabase Auth SMTP is configured to Brevo (`smtp-relay.brevo.com`) and recovery dispatch is accepted by auth. Route/callback handling is confirmed to target `reset-password` before `auth-callback`, then return to login.
 
 ## Scope
 
-This lane validates Supabase Auth email recovery delivery for configured SMTP and confirms callback routing behavior through app deep-link handling. It does not change monetization, LiveKit, route ownership, payout logic, or content safety behavior.
+This lane validates Supabase Auth email recovery setup, re-runs sender routing checks, and runs an inbox-arrival diagnostic pass focused on DNS/recipient/mail-route signals. It does not change monetization, LiveKit, route ownership, payout logic, or content safety behavior.
 
 ## Starting State
 
 - Branch: `main...origin/main`
-- Starting HEAD: `d460741 Route auth verification to login immediately`
+- Starting HEAD: `d31e0d0 Fix auth verify/reset routing to login`
 - Untracked paths intentionally untouched:
   - `artifacts/`
   - `supabase/.temp/`
@@ -40,6 +40,7 @@ Executed:
 Result:
 
 - `PATCH_STATUS=200`
+- `smtp_port` sent as string per API schema
 - Redacted readback values:
   - `smtp_host: smtp-relay.brevo.com`
   - `smtp_port: 587`
@@ -53,7 +54,7 @@ And config readback via:
 Result:
 
 - `GET_STATUS=200`
-- Redacted values match expected sender and relay values.
+- Redacted readback matches expected sender and relay values.
 
 ## Forgot-password recovery checks
 
@@ -65,25 +66,26 @@ Observed results:
 
 - `rob2037gn@gmail.com` with `gotrue_redirect_to=chillywoodmobile://reset-password`
   - `HTTP:200` with `{}` after cooldown window.
+  - Latest send timestamp: `20260607T005540Z`
 - immediate repeated request can return:
   - `HTTP:429` with `over_email_send_rate_limit` (security cooldown).
 - unknown email probe (`nonexistent_user_zzztest@example.com`) returns:
   - `HTTP:200` with `{}` (auth privacy-safe behavior).
 
-## Provider delivery proof
+## Provider/readback checks
 
-Brevo transactional readback for `rob2037gn@gmail.com` now shows active delivery:
+We re-verified provider-readback paths for this pass:
 
-- `uuid: a3346d6c-f2f8-470e-950b-6a5d869366ef`
-- `subject: Reset Your Password`
-- `from: no-reply@chillywoodstream.com`
-- events: `sent` then `delivered`
+- Supabase Auth config readback remains correct and complete.
+- Brevo v3 API probe for transactional log/statistics endpoints returned `401 Key not found` for every attempted `/v3/smtp/*`, `/v3/senders*`, and `/v3/account` call using the user-provided token.
+- Interpretation: mailbox-side/route telemetry is currently blocked by credential type mismatch (provided credential is valid for SMTP, not for Brevo API REST).
+- Because of that, direct provider message status proof is still pending in this lane.
 
 ## Callback/route proof
 
 Recovery-link routing behavior in `app/_layout.tsx` now:
 
-- treats `type=recovery` and recovery token URLs as reset routes;
+- treats `type=recovery` and recovery-token URLs as reset routes;
 - routes recovery links to `/reset-password` directly;
 - excludes generic `code` links so signup confirmation stays on `auth-callback` path;
 - avoids wrong policy/other pages for recovery flow.
@@ -93,27 +95,31 @@ Related route targets:
 - `app/auth-callback.tsx` remains a direct auth confirmation destination.
 - `app/reset-password.tsx` routes to `/(auth)/login` immediately after successful reset submission.
 
-This proves recovery links are no longer captured by auth-callback routing.
+## DNS and mail-route diagnostics
 
-## DNS/sender trust checks
+Captured at:
 
-Captured under:
+- `/tmp/chillywood-inbox-arrival-diagnostics-20260607/dns_checks.txt`
 
-`/tmp/chillywood-brevo-domain-auth-smtp-proof-20260606/exact-brevo-record-checks.txt`
+Latest observed DNS status:
 
-Observed:
-
-- SPF/DKIM/DMARC records are present for Brevo-authenticating domains and hosts used in the SMTP proof.
-- Brevo-domain records for the provided `chillywood.*` hostnames are present in DNS and Cloudflare.
+- `chillywoodstream.com` SPF TXT: `brevo-code:d6b1f6ef8dabad2f3a5b9a3fcda6f9e9`
+- `chillywoodstream.com` SPF: `v=spf1 include:_spf.mx.cloudflare.net ~all`
+- `_dmarc.chillywoodstream.com` TXT: `v=DMARC1; p=none; rua=mailto:support@chillywoodstream.com; adkim=r; aspf=r; fo=1`
+- `brevo1._domainkey.chillywoodstream.com` CNAME: `b1.chillywoodstream-com.dkim.brevo.com.`
+- `brevo2._domainkey.chillywoodstream.com` CNAME: `b2.chillywoodstream-com.dkim.brevo.com.`
+- `gmail.com` MX is healthy.
+- `chillywoodstream.com` MX is `route1/2/3.mx.cloudflare.net.` (unrelated to Gmail delivery, but useful for domain routing hygiene)
 
 ## Delivery interpretation
 
-- Transport + provider delivery is now proven for recovery with current SMTP settings (no `500 unexpected_failure` in latest run).
-- If an internal tester still does not see an email in the app inbox, the remaining causes are likely mailbox-level, not SMTP-auth configuration:
+- SMTP transport setup and in-app recovery link handling are correct.
+- Recipient mailbox receipt remains the remaining unknown in this pass because direct Brevo message-trace proof was not retrievable with the supplied key.
+- In practice, the likely remaining blockers are recipient-side:
   - spam/promotions filtering
-  - opening stale/previous links (short URLs are time-sensitive)
-  - client cache/inbox refresh timing
-  - recipient-specific client rules
+  - stale email link usage
+  - inbox cache/refresh delay
+  - Gmail-side rules/postbox routing
 
 ## Validation executed
 
@@ -123,15 +129,21 @@ Observed:
 - `npm run guard:critical-ux-polish-policy`
 - `git diff --check`
 - `git diff --cached --check`
-- targeted secret-pattern scan on modified files (no secret values introduced)
 
 ## Closeout and next step
 
 Next manual verification step:
 
-1. confirm receipt in the safe inbox UI for the latest send timestamp,
-2. open the latest single recovery email (avoid old/stale links),
-3. confirm reset page opens to the app path and updates to login after completion.
+1. confirm receipt in the safe inbox UI for timestamp `20260607T005540Z`,
+2. open only the latest single recovery email (avoid old/stale links),
+3. confirm reset page opens with `chillywoodmobile://reset-password`,
+4. confirm success returns to login.
+
+If the message still never appears, the highest-confidence unblockers are:
+
+- rotate/replace the Brevo SMTP password with a known-good SMTP key pair,
+- supply a valid Brevo REST API key (not the SMTP login token) to continue provider trail lookup,
+- capture inbox logs from a direct mailbox API (Gmail API or mail test inbox).
 
 ## Safety
 
