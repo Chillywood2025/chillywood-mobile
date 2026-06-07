@@ -91,27 +91,32 @@ const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
     if (!isSupabaseDeepLink) return null;
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
-    const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
+    const normalizedPath = parsedUrl.pathname.toLowerCase().replace(/\/+$/u, "");
     const params = new URLSearchParams(parsedUrl.search);
     const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
 
     if (fragment) {
       const hashParams = new URLSearchParams(fragment);
       hashParams.forEach((value, key) => {
-        if (!params.has(key)) params.set(key, value);
+        if (!params.has(key)) {
+          params.set(key, value);
+        }
       });
     }
 
-    const isRecoveryType = params.get("type") === "recovery";
-    const hasRecoveryToken = params.get("access_token") && params.get("refresh_token");
+    const type = String(params.get("type") ?? "").trim().toLowerCase();
+    const flow = String(params.get("flow") ?? "").trim().toLowerCase();
+    const isRecoveryType = type === "recovery" || type === "recover" || flow === "recovery" || flow === "recover";
+    const isRecoveryPath = normalizedPath.includes("recovery") || normalizedPath.includes("reset-password");
     const isResetPasswordPath = normalizedHost === "reset-password"
       || (
         normalizedHost === "chillywoodstream.com"
         && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
       )
-      || normalizedPath === "/reset-password";
+      || normalizedPath === "/reset-password"
+      || normalizedPath === "/auth/reset-password";
 
-    if (!isRecoveryType && !hasRecoveryToken && !isResetPasswordPath) return null;
+    if (!isRecoveryType && !isRecoveryPath && !isResetPasswordPath) return null;
 
     const query = params.toString();
     return query ? `/reset-password?${query}` : "/reset-password";
@@ -131,38 +136,48 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
     if (!isSupabaseDeepLink) return null;
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
-    const normalizedPath = parsedUrl.pathname.replace(/\/+$/u, "");
+    const normalizedPath = parsedUrl.pathname.toLowerCase().replace(/\/+$/u, "");
     const params = new URLSearchParams(parsedUrl.search);
     const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
 
     if (fragment) {
       const hashParams = new URLSearchParams(fragment);
       hashParams.forEach((value, key) => {
-        if (!params.has(key)) params.set(key, value);
+        if (!params.has(key)) {
+          params.set(key, value);
+        }
       });
     }
 
     const callbackType = String(params.get("type") ?? "").trim().toLowerCase();
-    if (callbackType === "recovery" || callbackType === "recover") return null;
+    const callbackFlow = String(params.get("flow") ?? "").trim().toLowerCase();
+    if (
+      callbackType === "recovery"
+      || callbackType === "recover"
+      || callbackFlow === "recovery"
+      || callbackFlow === "recover"
+    ) {
+      return null;
+    }
 
     const isResetPasswordPath = normalizedHost === "reset-password"
       || (
         normalizedHost === "chillywoodstream.com"
         && (normalizedPath === "/reset-password" || normalizedPath === "/auth/reset-password")
       )
-      || normalizedPath === "/reset-password";
+      || normalizedPath === "/reset-password"
+      || normalizedPath === "/auth/reset-password";
     if (isResetPasswordPath) return null;
 
     const hasKnownAuthType = [
       "signup",
-      "recovery",
-      "recover",
       "email",
       "email_change",
       "invite",
       "magiclink",
       "reauthentication",
     ].includes(callbackType);
+
     const hasAuthCallbackParam = [
       "code",
       "token",
@@ -175,6 +190,7 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       "token_hash",
       "confirmation_token",
       "recovery_token",
+      "email",
     ].some((key) => params.has(key));
 
     const hasConfirmPath =
@@ -185,9 +201,20 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       || normalizedPath === "/auth"
       || normalizedPath === "/callback"
       || normalizedPath === "/auth-callback";
-    const isAuthCallbackLink = hasKnownAuthType || hasAuthCallbackParam || hasConfirmPath;
 
-    if (!isAuthCallbackLink) return null;
+    const isLikelyAuthCallback = hasKnownAuthType || hasAuthCallbackParam || hasConfirmPath;
+    if (!isLikelyAuthCallback) return null;
+
+    const isPolicyPath =
+      normalizedPath === "/support-policy"
+      || normalizedPath === "/privacy"
+      || normalizedPath === "/terms"
+      || normalizedPath === "/creator-rules"
+      || normalizedPath === "/moderation-policy";
+
+    if (isPolicyPath && params.has("type") && !params.has("code") && !params.has("token_hash") && !params.has("token")) {
+      return null;
+    }
 
     const query = params.toString();
     return query ? `/auth-callback?${query}` : "/auth-callback";
