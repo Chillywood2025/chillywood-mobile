@@ -34,7 +34,8 @@ for (const file of requiredTemplates) {
 for (const file of requiredTemplates.filter((file) => file.endsWith(".html") || file.endsWith(".txt"))) {
   const relativePath = `${templateDir}/${file}`;
   const contents = read(relativePath);
-  if (!contents.includes("Chi’llwood")) fail(`${relativePath} must use Chi’llwood branding`);
+  const hasBrandingWithY = /Chi['\u2019]lywood/.test(contents);
+  if (!hasBrandingWithY) fail(`${relativePath} must use Chi’llywood branding`);
   if (!contents.includes("support@chillywoodstream.com")) fail(`${relativePath} must include support contact`);
   if (/\bSupabase\b/u.test(contents)) fail(`${relativePath} must not show provider branding in user-facing copy`);
   if (/password\s*[:=]|smtp|service_role|secret|api[_-]?key/i.test(contents)) {

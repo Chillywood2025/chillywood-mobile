@@ -38,7 +38,7 @@ export default function AuthCallbackScreen() {
   const insets = useSafeAreaInsets();
   const [checking, setChecking] = useState(true);
   const [title, setTitle] = useState("Confirming your account");
-  const [message, setMessage] = useState("Opening your Chi'llwood email verification...");
+  const [message, setMessage] = useState("Opening your Chi’llywood email verification...");
 
   const callbackState = useMemo(() => ({
     code: firstParam(params.code),
@@ -53,6 +53,35 @@ export default function AuthCallbackScreen() {
     flow: firstParam(params.flow),
     type: firstParam(params.type),
   }), [params]);
+
+  const isRecoveryCallback = useMemo(() => {
+    const normalizedType = String(callbackState.type ?? "").trim().toLowerCase();
+    const normalizedFlow = String(callbackState.flow ?? "").trim().toLowerCase();
+    return (
+      normalizedType === "recovery"
+      || normalizedType === "recover"
+      || normalizedFlow === "recovery"
+      || normalizedFlow === "recover"
+    );
+  }, [callbackState.flow, callbackState.type]);
+
+  const recoveryRouteQuery = useMemo(() => {
+    const query = new URLSearchParams();
+
+    if (callbackState.code) query.set("code", callbackState.code);
+    if (callbackState.token) query.set("token", callbackState.token);
+    if (callbackState.tokenHash) query.set("token_hash", callbackState.tokenHash);
+    if (callbackState.accessToken) query.set("access_token", callbackState.accessToken);
+    if (callbackState.refreshToken) query.set("refresh_token", callbackState.refreshToken);
+    if (callbackState.error) query.set("error", callbackState.error);
+    if (callbackState.errorCode) query.set("error_code", callbackState.errorCode);
+    if (callbackState.errorDescription) query.set("error_description", callbackState.errorDescription);
+    if (callbackState.email) query.set("email", callbackState.email);
+    if (callbackState.type) query.set("type", callbackState.type);
+    if (callbackState.flow) query.set("flow", callbackState.flow);
+
+    return query.toString();
+  }, [callbackState]);
 
   const resolveOtpType = (flowOrType?: string) => {
     const normalized = String(flowOrType ?? "").trim().toLowerCase();
@@ -95,6 +124,25 @@ export default function AuthCallbackScreen() {
 
     const finishCallback = async () => {
       try {
+        if (isRecoveryCallback) {
+          const hasRecoveryLinkData = (
+            callbackState.code
+            || callbackState.token
+            || callbackState.tokenHash
+            || callbackState.error
+            || callbackState.errorCode
+            || (callbackState.accessToken && callbackState.refreshToken)
+          );
+
+          if (hasRecoveryLinkData) {
+            const targetRoute = recoveryRouteQuery ? `/reset-password?${recoveryRouteQuery}` : "/reset-password";
+            router.replace(targetRoute as Parameters<typeof router.replace>[0]);
+            if (!active) return;
+            setChecking(false);
+            return;
+          }
+        }
+
         if (callbackState.accessToken && callbackState.refreshToken && !callbackState.tokenHash) {
           const { error } = await supabase.auth.setSession({
             access_token: callbackState.accessToken,

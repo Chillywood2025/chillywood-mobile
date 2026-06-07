@@ -1,8 +1,8 @@
-Chi’llwood
+Chi’lywood
 
 You’re invited
 
-Use this invite link to finish setting up your Chi’llwood account:
+Use this invite link to finish setting up your Chi’lywood account:
 
 {{ .ConfirmationURL }}
 

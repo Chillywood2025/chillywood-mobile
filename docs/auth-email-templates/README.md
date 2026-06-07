@@ -1,6 +1,6 @@
-# Chi’llwood Auth Email Templates
+# Chi’lywood Auth Email Templates
 
-These files are the Chi’llwood-ready Supabase Auth templates for dashboard copy/paste. They do not configure SMTP by themselves and contain no credentials.
+These files are the Chi’lywood-ready Supabase Auth templates for dashboard copy/paste. They do not configure SMTP by themselves and contain no credentials.
 
 ## Templates
 
@@ -29,7 +29,7 @@ All mobile URLs used in Auth templates must be allowlisted in Supabase Authentic
 
 ## Sender
 
-Recommended sender name: `Chi’llwood`
+Recommended sender name: `Chi’lywood`
 
 Recommended sender address: `no-reply@chillywoodstream.com` or `auth@chillywoodstream.com` after the domain has provider-approved SPF, DKIM, and DMARC.
 

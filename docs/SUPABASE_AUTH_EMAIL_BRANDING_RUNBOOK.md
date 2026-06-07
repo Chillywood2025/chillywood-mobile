@@ -35,7 +35,7 @@ Proved sender address:
 
 Notes:
 
-- Brevo sender verification is confirmed for `Chi'llywood <no-reply@chillywoodstream.com>`.
+- Brevo sender verification is confirmed for `Chi’llywood <no-reply@chillywoodstream.com>`.
 - `no-reply@auth.chillywoodstream.com` can be used only after separate verified sender setup and DNS allowlist for that subdomain.
 
 Support address: `support@chillywoodstream.com`
@@ -78,7 +78,7 @@ Current Brevo dashboard truth from June 6, 2026 asks for exact host records unde
 - CNAME `brevo2._domainkey.chillywood`
 - TXT `_dmarc.chillywood`
 
-If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appends the zone name, those hosts become `chillywood.chillywoodstream.com`, `brevo1._domainkey.chillywood.chillywoodstream.com`, `brevo2._domainkey.chillywood.chillywoodstream.com`, and `_dmarc.chillywood.chillywoodstream.com`. Those exact current Brevo hosts must resolve and authenticate before Chi'llwood can claim complete branded Auth sender deliverability.
+If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appends the zone name, those hosts become `chillywood.chillywoodstream.com`, `brevo1._domainkey.chillywood.chillywoodstream.com`, `brevo2._domainkey.chillywood.chillywoodstream.com`, and `_dmarc.chillywood.chillywoodstream.com`. Those exact current Brevo hosts must resolve and authenticate before Chi’llywood can claim complete branded Auth sender deliverability.
 
 ## Supabase Dashboard Steps
 
@@ -129,14 +129,15 @@ Do not commit `$SUPABASE_MANAGEMENT_TOKEN`, SMTP credentials, service-role keys,
 ## Test Checklist
 
 - Signup email is from `Chi’llywood`.
-- Signup subject is `Confirm your Chi’llwood account`.
+- Signup subject is `Confirm your Chi’llywood account`.
 - Signup CTA opens the app through `chillywoodmobile://auth/callback`.
 - Confirmed signup returns to login or signed-in state according to app behavior.
 - Forgot-password email is from `Chi’llywood` (`no-reply@chillywoodstream.com` in the current config).
-- Reset subject is `Reset your Chi’llwood password`.
+- Reset subject is `Reset your Chi’llywood password`.
+- Signup copy is set to `Chi’llywood`.
 - Reset CTA opens `chillywoodmobile://reset-password`.
 - Reset success returns to login.
-- Expired/invalid links show safe Chi’llwood copy.
+- Expired/invalid links show safe Chi’llywood copy.
 - No raw tokens, provider payloads, SMTP credentials, or secrets appear in UI/logs.
 
 ## Rollback
