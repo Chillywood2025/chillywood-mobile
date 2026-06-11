@@ -837,6 +837,111 @@ export type Database = {
           },
         ]
       }
+      chat_call_events: {
+        Row: {
+          actor_user_id: string
+          call_invite_id: string | null
+          call_type: string
+          created_at: string
+          duration_seconds: number | null
+          event_type: string
+          id: string
+          thread_id: string
+        }
+        Insert: {
+          actor_user_id: string
+          call_invite_id?: string | null
+          call_type: string
+          created_at?: string
+          duration_seconds?: number | null
+          event_type: string
+          id?: string
+          thread_id: string
+        }
+        Update: {
+          actor_user_id?: string
+          call_invite_id?: string | null
+          call_type?: string
+          created_at?: string
+          duration_seconds?: number | null
+          event_type?: string
+          id?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_call_events_call_invite_id_fkey"
+            columns: ["call_invite_id"]
+            isOneToOne: false
+            referencedRelation: "chat_call_invites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_call_events_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "chat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_call_invites: {
+        Row: {
+          accepted_at: string | null
+          callee_user_id: string
+          call_type: string
+          caller_user_id: string
+          communication_room_id: string | null
+          created_at: string
+          ended_at: string | null
+          expires_at: string
+          id: string
+          status: string
+          thread_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          callee_user_id: string
+          call_type: string
+          caller_user_id: string
+          communication_room_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          expires_at?: string
+          id?: string
+          status?: string
+          thread_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          callee_user_id?: string
+          call_type?: string
+          caller_user_id?: string
+          communication_room_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          expires_at?: string
+          id?: string
+          status?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_call_invites_communication_room_id_fkey"
+            columns: ["communication_room_id"]
+            isOneToOne: false
+            referencedRelation: "communication_rooms"
+            referencedColumns: ["room_id"]
+          },
+          {
+            foreignKeyName: "chat_call_invites_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "chat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_thread_members: {
         Row: {
           avatar_url: string | null
@@ -5790,6 +5895,10 @@ export type Database = {
       }
       notification_preferences: {
         Row: {
+          chilly_chat_call_custom_in_app_sound_uri: string | null
+          chilly_chat_call_sound_key: string
+          chilly_chat_call_vibrate_enabled: boolean
+          chilly_chat_calls_enabled: boolean
           circle_friend_live_enabled: boolean
           created_at: string
           event_starts_soon_enabled: boolean
@@ -5802,6 +5911,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          chilly_chat_call_custom_in_app_sound_uri?: string | null
+          chilly_chat_call_sound_key?: string
+          chilly_chat_call_vibrate_enabled?: boolean
+          chilly_chat_calls_enabled?: boolean
           circle_friend_live_enabled?: boolean
           created_at?: string
           event_starts_soon_enabled?: boolean
@@ -5814,6 +5927,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          chilly_chat_call_custom_in_app_sound_uri?: string | null
+          chilly_chat_call_sound_key?: string
+          chilly_chat_call_vibrate_enabled?: boolean
+          chilly_chat_calls_enabled?: boolean
           circle_friend_live_enabled?: boolean
           created_at?: string
           event_starts_soon_enabled?: boolean

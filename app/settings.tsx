@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
@@ -28,6 +28,7 @@ import {
   type NotificationPreferenceSettings,
   type PushRegistrationState,
 } from "../_lib/notifications";
+import { CHILLY_CHAT_RINGTONE_OPTIONS, type ChillyChatRingtoneKey } from "../_lib/chillyChatCalls";
 import {
   canAccessAdminConsole,
   getModerationAccess,
@@ -150,6 +151,23 @@ const NOTIFICATION_GROUPS: {
         key: "inAppEnabled",
         label: "In-app activity",
         description: "Keep recent activity visible in your Profile Feed.",
+      },
+    ],
+  },
+  {
+    id: "notification-chat-calls",
+    title: "Chi'lly Chat calls",
+    summary: "Incoming call alerts, vibration, and in-app ring behavior",
+    items: [
+      {
+        key: "chillyChatCallsEnabled",
+        label: "Call alerts",
+        description: "Allow Chi'lly Chat incoming call sheets and call notifications for this account.",
+      },
+      {
+        key: "chillyChatCallVibrateEnabled",
+        label: "Vibrate on calls",
+        description: "Use a soft vibration pattern while in-app call alerts are ringing.",
       },
     ],
   },
@@ -652,6 +670,33 @@ export default function SettingsScreen() {
       setNotificationSavingKey(null);
     }
   }, [notificationSavingKey]);
+
+  const onSelectChillyChatRingtone = useCallback(async (key: ChillyChatRingtoneKey) => {
+    if (!notificationPreferences || notificationSavingKey) return;
+    setNotificationSavingKey("chillyChatCallSoundKey");
+    try {
+      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: key });
+      setNotificationPreferences(updated);
+    } catch (error) {
+      const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call sound.");
+      Alert.alert("Chi'lly Chat calls", message);
+    } finally {
+      setNotificationSavingKey(null);
+    }
+  }, [notificationPreferences, notificationSavingKey]);
+
+  const onPreviewChillyChatRingtone = useCallback(() => {
+    if (!notificationPreferences) return;
+    if (notificationPreferences.chillyChatCallVibrateEnabled) {
+      Vibration.vibrate(notificationPreferences.chillyChatCallSoundKey === "quiet_buzz" ? [0, 120, 80, 120] : [0, 220, 120, 220]);
+    }
+    Alert.alert(
+      "Chi'lly Chat preview",
+      notificationPreferences.chillyChatCallSoundKey === "silent_vibrate"
+        ? "Silent / Vibrate Only is selected. In-app calls will not play a ringtone."
+        : "This preview confirms the selected in-app call style. Bundled notification-channel sounds require a native build with sound files.",
+    );
+  }, [notificationPreferences]);
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections((current) => ({ ...current, [id]: !current[id] }));
@@ -1793,6 +1838,48 @@ export default function SettingsScreen() {
             </View>
           </InlineAccordion>
         ))}
+        <SettingsRow
+          title="Incoming call sound"
+          subtitle="Default Chi'llwood sounds are used for in-app ringing. Background push sounds use Android channels and bundled native sound files only."
+          value={
+            CHILLY_CHAT_RINGTONE_OPTIONS.find((option) => option.key === notificationPreferences?.chillyChatCallSoundKey)?.label
+            ?? "Chi'lly Ring"
+          }
+        >
+          <View style={styles.preferenceList}>
+            {CHILLY_CHAT_RINGTONE_OPTIONS.map((option) => {
+              const selected = notificationPreferences?.chillyChatCallSoundKey === option.key;
+              return (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[styles.ringtoneOptionRow, selected && styles.ringtoneOptionRowSelected]}
+                  activeOpacity={0.86}
+                  disabled={!!notificationSavingKey}
+                  onPress={() => {
+                    void onSelectChillyChatRingtone(option.key);
+                  }}
+                >
+                  <View style={styles.preferenceTextWrap}>
+                    <Text style={styles.preferenceLabel}>{option.label}</Text>
+                    <Text style={styles.preferenceDescription}>{option.description}</Text>
+                  </View>
+                  <Text style={styles.ringtoneSelectedText}>{selected ? "Selected" : "Choose"}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={styles.utilityButton}
+              activeOpacity={0.86}
+              disabled={!notificationPreferences}
+              onPress={onPreviewChillyChatRingtone}
+            >
+              <Text style={styles.utilityButtonText}>Preview sound</Text>
+            </TouchableOpacity>
+            <Text style={styles.metaText}>
+              Downloaded/imported sounds are in-app only for V1. Android background notification sounds stay controlled by the bundled channel sound and the user's system settings.
+            </Text>
+          </View>
+        </SettingsRow>
       </SettingsAccordion>
 
       <SettingsAccordion
@@ -2341,6 +2428,26 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
     fontWeight: "600",
+  },
+  ringtoneOptionRow: {
+    minHeight: 54,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  ringtoneOptionRowSelected: {
+    borderColor: "rgba(220,20,60,0.58)",
+    backgroundColor: "rgba(220,20,60,0.16)",
+  },
+  ringtoneSelectedText: {
+    color: "#FFE4EA",
+    fontSize: 11,
+    fontWeight: "900",
   },
   input: {
     minHeight: 46,

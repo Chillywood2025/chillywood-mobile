@@ -9,7 +9,7 @@ This map records the current Chi'llywood app navigation and product language aft
 - Platform = the public creator surface for uploads, videos, events, live context, and backed shelves.
 - Platform Studio = the signed-in owner creator control center.
 - Chi'lly Circle = mutual personal connection layer. Do not replace it with generic `friends` copy.
-- Chi'lly Chat = standalone inbox/direct-thread messaging plus room-linked chat surfaces.
+- Chi'lly Chat = standalone inbox/direct-thread messaging, direct voice/video call invites, missed/declined/ended call cards, and room-linked chat surfaces.
 - Watch-Party Live = content/player-driven watch-together flow.
 - Live Watch-Party = people-first live room / Live Stage flow.
 - Party Room = canonical room shell after a Watch-Party Live room exists.

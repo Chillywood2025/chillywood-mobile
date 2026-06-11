@@ -8,6 +8,7 @@ import {
   isCommunicationRoomActive,
   readCommunicationIdentity,
 } from "./communication";
+import { CHAT_CALL_EVENTS_TABLE, CHAT_CALL_INVITES_TABLE, createChillyChatCallInvite } from "./chillyChatCalls";
 import {
   createSocialAttachmentForSurface,
   readSocialAttachmentsForSurfaces,
@@ -815,6 +816,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   }
 
   const roomId = toText(created.roomId);
+  const calleeUserId = toText(thread.otherMember?.userId);
   const startCallUpdate: ChatThreadUpdate = {
     active_communication_room_id: roomId,
     active_call_type: mode,
@@ -824,6 +826,16 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
     .from(CHAT_THREADS_TABLE)
     .update(startCallUpdate)
     .eq("id", thread.threadId);
+
+  if (calleeUserId) {
+    await createChillyChatCallInvite({
+      calleeUserId,
+      callerUserId: currentUserId,
+      callType: mode,
+      communicationRoomId: roomId,
+      threadId: thread.threadId,
+    }).catch(() => null);
+  }
 
   const updated = await getChatThread(thread.threadId);
   if (!updated) {
@@ -912,6 +924,38 @@ export function subscribeToThread(threadId: string, onChange: () => void) {
         logChatThread("thread_subscription_event", {
           threadId: normalizedThreadId,
           table: CHAT_MESSAGES_TABLE,
+        });
+        onChange();
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: CHAT_CALL_INVITES_TABLE,
+        filter: `thread_id=eq.${normalizedThreadId}`,
+      },
+      () => {
+        logChatThread("thread_subscription_event", {
+          threadId: normalizedThreadId,
+          table: CHAT_CALL_INVITES_TABLE,
+        });
+        onChange();
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: CHAT_CALL_EVENTS_TABLE,
+        filter: `thread_id=eq.${normalizedThreadId}`,
+      },
+      () => {
+        logChatThread("thread_subscription_event", {
+          threadId: normalizedThreadId,
+          table: CHAT_CALL_EVENTS_TABLE,
         });
         onChange();
       },

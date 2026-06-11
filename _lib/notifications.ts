@@ -16,6 +16,7 @@ import {
   readPublicEventSummaries,
 } from "./liveEvents";
 import { supabase } from "./supabase";
+import { normalizeChillyChatRingtoneKey, type ChillyChatRingtoneKey } from "./chillyChatCalls";
 
 export const NOTIFICATIONS_TABLE = "notifications";
 export const EVENT_REMINDERS_TABLE = "event_reminders";
@@ -28,7 +29,9 @@ export type NotificationCategory =
   | "content_dropped"
   | "reply_comment"
   | "moderation_notice"
-  | "payment_access_confirmation";
+  | "payment_access_confirmation"
+  | "chilly_chat_call"
+  | "chilly_chat_missed_call";
 
 export type DiscoveryActivityTriggerKey =
   | "followed_creator_went_live"
@@ -226,6 +229,8 @@ const normalizeNotificationCategory = (value: unknown): NotificationCategory => 
     || normalized === "reply_comment"
     || normalized === "moderation_notice"
     || normalized === "payment_access_confirmation"
+    || normalized === "chilly_chat_call"
+    || normalized === "chilly_chat_missed_call"
   ) {
     return normalized;
   }
@@ -897,6 +902,10 @@ export type NotificationPreferenceSettings = {
   eventStartsSoonEnabled: boolean;
   publicUploadEnabled: boolean;
   replayLaterEnabled: boolean;
+  chillyChatCallsEnabled: boolean;
+  chillyChatCallSoundKey: ChillyChatRingtoneKey;
+  chillyChatCallVibrateEnabled: boolean;
+  chillyChatCallCustomInAppSoundUri: string | null;
   pushEnabled: boolean;
   inAppEnabled: boolean;
   updatedAt: string | null;
@@ -926,6 +935,10 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
   eventStartsSoonEnabled: true,
   followedCreatorLiveEnabled: true,
   inAppEnabled: true,
+  chillyChatCallCustomInAppSoundUri: null,
+  chillyChatCallSoundKey: "chilly_ring",
+  chillyChatCallVibrateEnabled: true,
+  chillyChatCallsEnabled: true,
   publicUploadEnabled: true,
   pushEnabled: true,
   replayLaterEnabled: true,
@@ -953,6 +966,10 @@ const parsePreferenceRow = (row: NotificationPreferenceRow | null): Notification
   if (!row) return DEFAULT_NOTIFICATION_PREFERENCES;
   return {
     circleFriendLiveEnabled: row.circle_friend_live_enabled !== false,
+    chillyChatCallCustomInAppSoundUri: normalizeText(row.chilly_chat_call_custom_in_app_sound_uri) || null,
+    chillyChatCallSoundKey: normalizeChillyChatRingtoneKey(row.chilly_chat_call_sound_key),
+    chillyChatCallVibrateEnabled: row.chilly_chat_call_vibrate_enabled !== false,
+    chillyChatCallsEnabled: row.chilly_chat_calls_enabled !== false,
     eventStartsSoonEnabled: row.event_starts_soon_enabled !== false,
     followedCreatorLiveEnabled: row.followed_creator_live_enabled !== false,
     inAppEnabled: row.in_app_enabled !== false,
@@ -973,6 +990,18 @@ const buildPreferenceUpdate = (patch: NotificationPreferencePatch): Notification
   }
   if (typeof patch.eventStartsSoonEnabled === "boolean") {
     update.event_starts_soon_enabled = patch.eventStartsSoonEnabled;
+  }
+  if (typeof patch.chillyChatCallsEnabled === "boolean") {
+    update.chilly_chat_calls_enabled = patch.chillyChatCallsEnabled;
+  }
+  if (typeof patch.chillyChatCallVibrateEnabled === "boolean") {
+    update.chilly_chat_call_vibrate_enabled = patch.chillyChatCallVibrateEnabled;
+  }
+  if (patch.chillyChatCallSoundKey) {
+    update.chilly_chat_call_sound_key = normalizeChillyChatRingtoneKey(patch.chillyChatCallSoundKey);
+  }
+  if (typeof patch.chillyChatCallCustomInAppSoundUri === "string" || patch.chillyChatCallCustomInAppSoundUri === null) {
+    update.chilly_chat_call_custom_in_app_sound_uri = patch.chillyChatCallCustomInAppSoundUri;
   }
   if (typeof patch.publicUploadEnabled === "boolean") {
     update.public_upload_enabled = patch.publicUploadEnabled;
@@ -1071,6 +1100,21 @@ export async function configureNotificationRuntime() {
       importance: Notifications.AndroidImportance.HIGH,
       name: "Chi'llywood activity",
       vibrationPattern: [0, 250, 250, 250],
+    });
+    await Notifications.setNotificationChannelAsync("chilly_chat_messages", {
+      importance: Notifications.AndroidImportance.DEFAULT,
+      name: "Chi'lly Chat messages",
+      vibrationPattern: [0, 120],
+    });
+    await Notifications.setNotificationChannelAsync("chilly_chat_calls", {
+      importance: Notifications.AndroidImportance.MAX,
+      name: "Chi'lly Chat calls",
+      vibrationPattern: [0, 400, 180, 400],
+    });
+    await Notifications.setNotificationChannelAsync("chilly_chat_missed_calls", {
+      importance: Notifications.AndroidImportance.HIGH,
+      name: "Missed Chi'lly Chat calls",
+      vibrationPattern: [0, 220, 180, 220],
     });
   }
 }
