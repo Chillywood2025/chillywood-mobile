@@ -1,11 +1,10 @@
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   Alert,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,34 +20,9 @@ import { supabase } from "../../_lib/supabase";
 import { AppActionButton, AppStatusPill } from "../../components/ui/app-surface";
 
 const LOGIN_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
-const PASSWORD_RESET_REDIRECT_URL = "chillywoodmobile://reset-password";
-
-function getPasswordResetErrorMessage(error: unknown) {
-  const raw = String(
-    (error as { message?: unknown; code?: unknown; name?: unknown } | null)?.message
-    ?? (error as { code?: unknown } | null)?.code
-    ?? (error as { name?: unknown } | null)?.name
-    ?? "",
-  ).toLowerCase();
-
-  if (raw.includes("email rate") || raw.includes("over_email_send_rate_limit") || raw.includes("rate limit")) {
-    return "Too many reset emails were requested. Wait a few minutes, then try again.";
-  }
-  if (raw.includes("invalid") && raw.includes("email")) {
-    return "Enter a valid email address.";
-  }
-  return "Unable to send a reset link right now.";
-}
-
-async function requestPasswordResetEmail(email: string) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: PASSWORD_RESET_REDIRECT_URL,
-  });
-
-  if (error) throw error;
-}
 
 export default function Login() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ redirectTo?: string }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
@@ -56,7 +30,6 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
 
   const signIn = async () => {
     if (!email || !password) {
@@ -100,39 +73,6 @@ export default function Login() {
       Alert.alert("Login Error", "Unable to sign in right now.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const sendPasswordReset = async () => {
-    const normalizedEmail = email.trim();
-
-    if (!normalizedEmail) {
-      Alert.alert("Reset password", "Enter your email first and we'll send you a password reset link.");
-      return;
-    }
-
-    setResetPasswordLoading(true);
-
-    try {
-      await requestPasswordResetEmail(normalizedEmail);
-
-      trackEvent("auth_password_reset_requested", {
-        source: "login",
-      });
-      Alert.alert("Reset password", "Check your email for a password reset link. It may take a minute to arrive.");
-    } catch (error) {
-      reportRuntimeError("auth-password-reset", error, {
-        source: "login",
-      });
-      trackEvent("auth_password_reset_failure", {
-        reason: "runtime_error",
-      });
-      Alert.alert(
-        "Reset password",
-        getPasswordResetErrorMessage(error),
-      );
-    } finally {
-      setResetPasswordLoading(false);
     }
   };
 
@@ -209,19 +149,17 @@ export default function Login() {
               }}
             />
 
-            <Pressable
-              style={styles.forgotPasswordButton}
-              onPress={sendPasswordReset}
-              disabled={resetPasswordLoading}
-              accessibilityRole="button"
+            <AppActionButton
               accessibilityLabel="Forgot password"
-              accessibilityState={{ disabled: resetPasswordLoading }}
+              label="Forgot password?"
+              onPress={() => {
+                const query = email.trim() ? `?email=${encodeURIComponent(email.trim())}` : "";
+                router.push(`/forgot-password${query}` as Href);
+              }}
+              style={styles.forgotPasswordButton}
               testID="login-forgot-password-button"
-            >
-              <Text style={[styles.forgotPasswordText, resetPasswordLoading && styles.forgotPasswordTextDisabled]}>
-                {resetPasswordLoading ? "Sending reset..." : "Forgot password?"}
-              </Text>
-            </Pressable>
+              variant="secondary"
+            />
 
             <AppActionButton
               accessibilityLabel="Log in"
@@ -317,23 +255,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   forgotPasswordButton: {
-    minHeight: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
     marginBottom: 12,
-  },
-  forgotPasswordText: {
-    color: "#F2F5FB",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  forgotPasswordTextDisabled: {
-    color: "#7A859A",
   },
   row: {
     flexDirection: "row",

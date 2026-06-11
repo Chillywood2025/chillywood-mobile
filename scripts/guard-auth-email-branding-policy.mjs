@@ -59,10 +59,14 @@ if (!signup.includes("emailRedirectTo")) {
 }
 
 const login = read("app/(auth)/login.tsx");
-if (!login.includes("resetPasswordForEmail")) {
+const forgotPassword = read("app/(auth)/forgot-password.tsx");
+if (!login.includes("/forgot-password")) {
+  fail("login must route forgot password to the dedicated reset request screen");
+}
+if (!forgotPassword.includes("resetPasswordForEmail")) {
   fail("forgot password must use resetPasswordForEmail");
 }
-if (!login.includes("chillywoodmobile://reset-password")) {
+if (!forgotPassword.includes("chillywoodmobile://reset-password")) {
   fail("forgot password must pass reset-password redirect");
 }
 
