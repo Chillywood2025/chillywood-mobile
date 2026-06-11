@@ -10,6 +10,8 @@ Branch state at start: `main...origin/main`
 
 Proof path: `/tmp/chillywood-device-emulator-live-room-test-sweep-20260605/`
 
+Follow-up: June 10, 2026 live-room wake-lock/back/overlay stabilization is tracked in `docs/LIVE_ROOM_WAKE_LOCK_BACK_OVERLAY_PROOF.md`. That follow-up adds `expo-keep-awake`, replaces stack-history Back returns on Watch-Party Live / Live Stage with room-context returns, and keeps the Live Stage 10-second overlay timeout plus tap-to-reveal behavior. Full idle/wake-lock proof requires a Play/internal runtime that includes the new native module.
+
 ## Summary
 
 This sweep attempted the requested two-session live-room proof with one Play-installed physical Android device and one Android emulator. The physical device proof succeeded for route health, Premium-gated Watch-Party entry, Live Stage unavailable handling, route-backed ticket/access/seat monetization gates, no-publish/no-host/no-admin/no-money copy, and background/foreground recovery on a gated room route.

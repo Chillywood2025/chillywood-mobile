@@ -8,6 +8,8 @@ June 5, 2026 shared/standalone fullscreen follow-up: standalone fullscreen now k
 
 Stabilization follow-up: the June 5, 2026 internal testing sweep (`docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md`) rechecked Player and room surfaces on Play-installed `R5CR120QCBF` after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc`. Public Player playback and comments composer loaded on the Rachi fixture. Watch-Party ticket, Live access, and Live seat unavailable fixture branches now render the existing route-backed sandbox proof cards. This follow-up is visual-only and does not change playback, LiveKit, route ownership, old-room handling, host approval, access grants, ledger logic, or money state.
 
+June 10, 2026 live-room stabilization follow-up: Watch-Party Live and Live Stage now use focused-screen `expo-keep-awake` activation so active room surfaces should not dim/sleep/black out during idle once the Play/internal runtime contains the native module. Live Stage Android Back now returns from Stage to the embedded Live Room surface first; Watch-Party Live Back/leave/error states return to the Watch-Party entry context instead of relying on stack history. The existing Live Stage 10-second overlay auto-hide remains in place, tap-to-reveal remains active, and locked controls now keep the overlay visible without arming auto-hide. Dedicated proof doc: `docs/LIVE_ROOM_WAKE_LOCK_BACK_OVERLAY_PROOF.md`. This follow-up does not change LiveKit token issuance, publish authority, host approval, route ownership, Party Room behavior, old-room handling, playback, access grants, ledger logic, or money state.
+
 ## Starting Truth
 
 - Starting HEAD: `84768a2` or later.

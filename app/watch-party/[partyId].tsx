@@ -22,6 +22,7 @@ import {
     Alert,
     Animated,
     AppState,
+    BackHandler,
     Image,
     ImageBackground,
     type ImageSourcePropType,
@@ -37,6 +38,7 @@ import {
     UIManager,
     View
 } from "react-native";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../_data/titles";
 import {
@@ -303,6 +305,18 @@ export default function WatchPartyRoomScreen() {
   const roomModeParam = Array.isArray(modeParam) ? modeParam[0] : modeParam;
   const source = String(Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "").trim().toLowerCase();
   const sharedRoomMode = normalizeSharedRoomMode(roomModeParam, "live");
+  const returnToWatchPartyEntry = useCallback(() => {
+    router.replace({
+      pathname: "/watch-party",
+      params: {
+        ...(partyId ? { partyId } : {}),
+        ...(roomCodeHint ? { roomCode: roomCodeHint } : {}),
+        ...(titleIdHint ? { titleId: titleIdHint } : {}),
+        mode: sharedRoomMode,
+        ...(source ? { source } : {}),
+      },
+    });
+  }, [partyId, roomCodeHint, router, sharedRoomMode, source, titleIdHint]);
   const canUseBetaRoom = isSignedIn && isActive;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Watch-party rooms");
 
@@ -378,6 +392,34 @@ export default function WatchPartyRoomScreen() {
   const chatScrollRef = useRef<ScrollView>(null);
   const roomScrollRef = useRef<ScrollView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  useEffect(() => {
+    if (!isFocused || Platform.OS === "web") return undefined;
+
+    const keepAwakeTag = `chillywood-watch-party-live-room:${partyId || "route"}`;
+    activateKeepAwakeAsync(keepAwakeTag).catch((error) => {
+      reportRuntimeError("watch-party-keep-awake-activate", error, { partyId });
+    });
+
+    return () => {
+      deactivateKeepAwake(keepAwakeTag).catch((error) => {
+        reportRuntimeError("watch-party-keep-awake-deactivate", error, { partyId });
+      });
+    };
+  }, [isFocused, partyId]);
+
+  useEffect(() => {
+    if (!isFocused || Platform.OS === "web") return undefined;
+
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      returnToWatchPartyEntry();
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isFocused, returnToWatchPartyEntry]);
   const [partyRoomCameraPreviewSuppressed, setPartyRoomCameraPreviewSuppressed] = useState(false);
 
   // ── Host controls (broadcast-driven) ────────────────────────────────────────
@@ -1600,7 +1642,7 @@ export default function WatchPartyRoomScreen() {
     const currentRole = myRoleRef.current === "host" ? "host" : "viewer";
     const leaveRoom = () => {
       if (!partyId || !currentUserId) {
-        router.back();
+        returnToWatchPartyEntry();
         return;
       }
 
@@ -1615,7 +1657,7 @@ export default function WatchPartyRoomScreen() {
         displayName: myProfileUsernameRef.current,
         cameraPreviewUrl: myCameraPreviewUrlRef.current,
       }).finally(() => {
-        router.back();
+        returnToWatchPartyEntry();
       });
     };
 
@@ -1629,7 +1671,7 @@ export default function WatchPartyRoomScreen() {
         { text: "Leave", style: "destructive", onPress: leaveRoom },
       ],
     );
-  }, [partyId, router]);
+  }, [partyId, returnToWatchPartyEntry]);
 
   const onResolveAccessGate = useCallback(async (action: "purchase" | "restore") => {
     if (!accessGate) {
@@ -2412,7 +2454,7 @@ export default function WatchPartyRoomScreen() {
               </Text>
             </TouchableOpacity>
           ) : null}
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={returnToWatchPartyEntry} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>← Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -2472,7 +2514,7 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.errorCard}>
           <Text style={styles.errorTitle}>{getBlockedRoomTitle(blockedRoomAccess)}</Text>
           <Text style={styles.errorBody}>{getRoomAccessMessage(blockedRoomAccess)}</Text>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={returnToWatchPartyEntry} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>← Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -2488,7 +2530,7 @@ export default function WatchPartyRoomScreen() {
           <Text style={styles.errorTitle}>Room not found</Text>
           <Text style={styles.errorBody}>This party may have ended or the code is incorrect.</Text>
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={returnToWatchPartyEntry} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>← Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -3052,7 +3094,7 @@ export default function WatchPartyRoomScreen() {
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12} activeOpacity={0.75}>
+          <TouchableOpacity onPress={returnToWatchPartyEntry} hitSlop={12} activeOpacity={0.75}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.kicker}>CHI'LLYWOOD · WATCH PARTY</Text>

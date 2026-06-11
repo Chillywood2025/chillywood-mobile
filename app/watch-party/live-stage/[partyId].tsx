@@ -10,6 +10,7 @@ import {
     Alert,
     Animated,
     AppState,
+    BackHandler,
     FlatList,
     Image,
     ImageBackground,
@@ -28,6 +29,7 @@ import {
     View,
     type ImageSourcePropType,
 } from "react-native";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { titles as localTitles } from "../../../_data/titles";
@@ -749,6 +751,28 @@ export default function WatchPartyLiveStageScreen({
   const source = String(routeSource ?? (Array.isArray(sourceParam) ? sourceParam[0] : sourceParam ?? "")).trim().toLowerCase();
   const requestedRouteStageMode = normalizeSharedRoomMode(modeParamValue, "live");
   const initialStageMode = requestedRouteStageMode === "hybrid" ? "live" : requestedRouteStageMode;
+  const returnToWatchPartyRoomRoute = useCallback(() => {
+    const routeParams = {
+      mode: requestedRouteStageMode,
+      ...(source ? { source } : {}),
+    };
+
+    if (!partyId) {
+      router.replace({
+        pathname: "/watch-party",
+        params: routeParams,
+      });
+      return;
+    }
+
+    router.replace({
+      pathname: "/watch-party/[partyId]",
+      params: {
+        partyId,
+        ...routeParams,
+      },
+    });
+  }, [partyId, requestedRouteStageMode, router, source]);
   const canUseBetaStage = isSignedIn && isActive;
   const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Live Stage");
 
@@ -778,6 +802,21 @@ export default function WatchPartyLiveStageScreen({
   const [hybridCommentDraft, setHybridCommentDraft] = useState("");
   const [hybridCommentError, setHybridCommentError] = useState("");
   const [hybridCommentSending, setHybridCommentSending] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused || Platform.OS === "web") return undefined;
+
+    const keepAwakeTag = `chillywood-live-stage:${partyId || "route"}`;
+    activateKeepAwakeAsync(keepAwakeTag).catch((error) => {
+      reportRuntimeError("live-stage-keep-awake-activate", error, { partyId });
+    });
+
+    return () => {
+      deactivateKeepAwake(keepAwakeTag).catch((error) => {
+        reportRuntimeError("live-stage-keep-awake-deactivate", error, { partyId });
+      });
+    };
+  }, [isFocused, partyId]);
   const [hybridCommentAttachmentFile, setHybridCommentAttachmentFile] = useState<SocialAttachmentFile | null>(null);
   const [hybridCommentAttachmentSheetVisible, setHybridCommentAttachmentSheetVisible] = useState(false);
   const [stageKeyboardHeight, setStageKeyboardHeight] = useState(0);
@@ -1903,9 +1942,17 @@ export default function WatchPartyLiveStageScreen({
   }, [clearStageOverlayAutoHideTimeout, clearStageOverlayFinalizeHideTimeout, stageOverlayMotion]);
 
   const onToggleControlsLock = useCallback(() => {
+    const nextLocked = !controlsLocked;
+    setControlsLocked(nextLocked);
+
+    if (nextLocked) {
+      revealStageOverlay({ armAutoHide: false });
+      setStageOverlayAutoHideArmed(false);
+      return;
+    }
+
     revealStageOverlay();
-    setControlsLocked((value) => !value);
-  }, [revealStageOverlay]);
+  }, [controlsLocked, revealStageOverlay]);
 
   const armAndRevealStageOverlay = useCallback(() => {
     revealStageOverlay();
@@ -3035,6 +3082,28 @@ export default function WatchPartyLiveStageScreen({
     setLiveSurface("room");
   }, [closeStageOverlayPanels, stageOverlayMotion]);
 
+  const onLiveStageBack = useCallback(() => {
+    if (!isLiveRoomSurface) {
+      onReturnToLiveRoom();
+      return;
+    }
+
+    returnToWatchPartyRoomRoute();
+  }, [isLiveRoomSurface, onReturnToLiveRoom, returnToWatchPartyRoomRoute]);
+
+  useEffect(() => {
+    if (!isFocused || Platform.OS === "web") return undefined;
+
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      onLiveStageBack();
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isFocused, onLiveStageBack]);
+
   const onOpenStageReactionPicker = useCallback(() => {
     if (!stageReactionsEnabled) return;
     revealStageOverlay();
@@ -3985,7 +4054,7 @@ export default function WatchPartyLiveStageScreen({
             <TouchableOpacity
               style={styles.routeGateSecondaryButton}
               activeOpacity={0.86}
-              onPress={() => router.back()}
+              onPress={returnToWatchPartyRoomRoute}
               accessibilityRole="button"
               accessibilityLabel="Go back"
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
@@ -4031,7 +4100,7 @@ export default function WatchPartyLiveStageScreen({
             <TouchableOpacity
               style={styles.routeGateSecondaryButton}
               activeOpacity={0.86}
-              onPress={() => router.back()}
+              onPress={returnToWatchPartyRoomRoute}
               accessibilityRole="button"
               accessibilityLabel="Go back"
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
