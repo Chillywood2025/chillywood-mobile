@@ -71,11 +71,14 @@ Closed on June 11, 2026:
 
 Remaining proof:
 
-- Capture Money Center visual transaction readback using a real creator-owned paid-video fixture. The current proof fixture is blocked for visual Money Center readback because creator id `0f53ad26-0b27-4f7f-9d6f-000000000001` has no `user_profiles` row or real creator app login.
-- Authenticated paid fan re-login/direct-link proof needs valid tester credentials; cold-start direct-link proof passed before app data clear.
-- Authenticated second-unpaid-fan proof needs valid tester credentials. Logged-out direct-link denial and grant-scoping readback already passed.
-- Confirm no Tips transaction, Premium entitlement, VIP, room access, subscription, event access, payout, cash-out, withdrawal, transfer, or LiveKit authority is created.
-- Provider refund/revoke remains deferred until RevenueCat/Google Play refund tooling and safe order identifiers are available.
+- Provider refund/revoke remains deferred until RevenueCat/Google Play refund tooling and safe order identifiers are available. Do not claim refund/revoke proof passed yet.
+
+Closed fixture-based proof on June 11, 2026:
+
+- Repaired the exact fixture creator id `0f53ad26-0b27-4f7f-9d6f-000000000001` as a real auth/profile test fixture and used a short-lived `test_grant` Premium entitlement only for existing Platform Studio creator-tool entry.
+- Creator Money Center visual transaction readback passed for ledger `7f237e32-bdfc-4394-9bb3-f8537cae8e38`: Transactions showed `$0.99 video unlock`, `Paid`, `Chi'llwood Originals Proof Fixture`, `Sandbox`, Premium/Tips separation, and `payout status: not_payable`.
+- Authenticated second unpaid fan `da8b248b-e26c-474d-81b9-8a62fa1c1c72` direct-link denial passed and grant readback showed `0` active grants for that user.
+- Paid fan cold-start direct-link and logged-out denial remain passed; no Tips transaction, VIP, room access, subscription, event access, payout, cash-out, withdrawal, transfer, or LiveKit authority was created.
 
 ## Tips V1 Test-Mode Proof Follow-Up
 
