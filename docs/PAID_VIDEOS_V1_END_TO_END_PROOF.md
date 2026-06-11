@@ -68,14 +68,18 @@ Observed proof:
 
 Still not complete:
 
-- A second unpaid-fan device proof has not been captured yet.
-- Provider refund/revoke proof is not claimed yet.
-- Money Center visual transaction readback after this exact purchase still needs a device screenshot/manual proof pass.
+- Money Center visual transaction readback after this exact purchase is blocked because the proof fixture owner id `0f53ad26-0b27-4f7f-9d6f-000000000001` has no `user_profiles` row and no real creator app login for Platform Studio Money Center. Server ledger/readback exists, but visual creator Money Center proof for this exact fixture cannot be captured without a real creator-owned test video/account.
+- Paid-fan cold-start direct-link proof passed before app data was cleared for unpaid testing: `R5CR120QCBF` force-stopped `com.chillywood.mobile`, opened `chillywoodmobile://player/6e1c3405-7db8-4cb2-98f3-5a7642e82126?source=creator-video`, and the paywall/Unlock CTA was absent while normal Player controls were present. Proof files are outside the repo at `/tmp/chillywood-paid-videos-v1-remaining-proof-20260611-171446/paid-fan-direct-link.*`.
+- Logged-out unpaid direct-link denial passed after app data clear: the same deep link showed `Paid creator content`, `Unlock Video`, sandbox/Premium-separation copy, and no normal paid playback. Proof files are outside the repo at `/tmp/chillywood-paid-videos-v1-remaining-proof-20260611-171446/logged-out-direct-link-lock.*`.
+- Authenticated second-unpaid-fan device proof is blocked by tester credentials in this environment. Existing local proof credentials attempted for alternate accounts returned app `Login Error`, and no new fake account was created.
+- Grant scoping readback passed: exactly one active content grant exists for the video, it belongs to paid fan `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f`, and there are zero active grants for other users on that video.
+- Direct anon client write safety passed: direct `content_access_grants` insert and direct `money_purchase_intents` paid-status update both failed with RLS error code `42501`.
+- Provider refund/revoke proof is not claimed. It is blocked here because no RevenueCat/Google Play refund tooling or safe order id is available from this environment, and the stored provider event intentionally has `provider_payload_stored=false`.
 - Live money remains disabled; sandbox rows are not payable.
 
 ## Current Blocker
 
-The first happy-path sandbox purchase is proven. Remaining blockers before calling Paid Videos V1 fully proof-complete are unpaid-second-fan/direct-link proof, Money Center visual readback proof, and provider refund/revoke proof.
+The first happy-path sandbox purchase, paid-fan cold-start direct-link access, logged-out direct-link denial, grant scoping, and direct client write-denial proof are complete. Remaining blockers before calling Paid Videos V1 fully proof-complete are creator Money Center visual readback on a real creator-owned test video/account, authenticated second-unpaid-fan proof with valid credentials, and provider refund/revoke tooling.
 
 Do not sideload an APK for future Paid Videos purchase proof. Sideloaded builds can validate UI/code smoke, but they cannot close Google Play Billing sandbox proof.
 

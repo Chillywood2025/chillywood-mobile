@@ -47,4 +47,5 @@
 - Paid Video purchases use the Android digital product path, not Stripe Tips.
 - Verified RevenueCat webhook events create shared access grants, mirrored content access grants, and sandbox/not-payable ledger rows.
 - Paid Videos unlock only the purchased creator video. They do not include Premium, subscriptions, VIP, live rooms, Watch-Party seats, Tips, events, other creator content, payout access, or LiveKit authority.
-- Remaining proof gaps: Money Center visual transaction readback, paid-fan fresh direct-link playback, second unpaid-fan/direct-link denial, and provider refund/revoke status.
+- Follow-up proof passed paid-fan cold-start direct-link access, logged-out direct-link denial, exact grant scoping to the paid fan, and direct anon client write denial.
+- Remaining proof gaps: visual Money Center transaction readback on a real creator-owned paid-video fixture, authenticated second-unpaid-fan proof with valid credentials, and provider refund/revoke status.

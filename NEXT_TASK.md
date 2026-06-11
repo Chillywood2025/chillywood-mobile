@@ -71,11 +71,11 @@ Closed on June 11, 2026:
 
 Remaining proof:
 
-- Capture Money Center visual transaction readback for this exact purchase.
-- Confirm paid fan can play through a fresh reload/direct link.
-- Confirm a different unpaid fan cannot play and direct deep link cannot bypass the gate.
+- Capture Money Center visual transaction readback using a real creator-owned paid-video fixture. The current proof fixture is blocked for visual Money Center readback because creator id `0f53ad26-0b27-4f7f-9d6f-000000000001` has no `user_profiles` row or real creator app login.
+- Authenticated paid fan re-login/direct-link proof needs valid tester credentials; cold-start direct-link proof passed before app data clear.
+- Authenticated second-unpaid-fan proof needs valid tester credentials. Logged-out direct-link denial and grant-scoping readback already passed.
 - Confirm no Tips transaction, Premium entitlement, VIP, room access, subscription, event access, payout, cash-out, withdrawal, transfer, or LiveKit authority is created.
-- If provider tooling allows, prove refund/revoke removes playback access; otherwise document it as deferred.
+- Provider refund/revoke remains deferred until RevenueCat/Google Play refund tooling and safe order identifiers are available.
 
 ## Tips V1 Test-Mode Proof Follow-Up
 
