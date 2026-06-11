@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Linking,
   ActivityIndicator,
   Pressable,
   StyleSheet,
@@ -27,9 +28,79 @@ type AuthCallbackParams = {
   type?: string | string[];
 };
 
-const firstParam = (value?: string | string[]) => {
+type AuthCallbackState = {
+  code: string;
+  token: string;
+  tokenHash: string;
+  accessToken: string;
+  refreshToken: string;
+  error: string;
+  errorCode: string;
+  errorDescription: string;
+  email: string;
+  flow: string;
+  type: string;
+};
+
+const isDefined = (value: string) => value.trim().length > 0;
+
+const mergeAuthCallbackState = (primary: AuthCallbackState, secondary?: AuthCallbackState | null) => {
+  if (!secondary) return primary;
+  return {
+    code: isDefined(secondary.code) ? secondary.code : primary.code,
+    token: isDefined(secondary.token) ? secondary.token : primary.token,
+    tokenHash: isDefined(secondary.tokenHash) ? secondary.tokenHash : primary.tokenHash,
+    accessToken: isDefined(secondary.accessToken) ? secondary.accessToken : primary.accessToken,
+    refreshToken: isDefined(secondary.refreshToken) ? secondary.refreshToken : primary.refreshToken,
+    error: isDefined(secondary.error) ? secondary.error : primary.error,
+    errorCode: isDefined(secondary.errorCode) ? secondary.errorCode : primary.errorCode,
+    errorDescription: isDefined(secondary.errorDescription) ? secondary.errorDescription : primary.errorDescription,
+    email: isDefined(secondary.email) ? secondary.email : primary.email,
+    flow: isDefined(secondary.flow) ? secondary.flow : primary.flow,
+    type: isDefined(secondary.type) ? secondary.type : primary.type,
+  };
+};
+
+const firstParam = (value?: string | string[] | null) => {
   const normalized = Array.isArray(value) ? value[0] : value;
   return String(normalized ?? "").trim();
+};
+
+const parseAuthCallbackSearchParams = (params: URLSearchParams) => ({
+  code: firstParam(params.get("code")),
+  token: firstParam(params.get("token")),
+  tokenHash: firstParam(params.get("token_hash")),
+  accessToken: firstParam(params.get("access_token")),
+  refreshToken: firstParam(params.get("refresh_token")),
+  error: firstParam(params.get("error")),
+  errorCode: firstParam(params.get("error_code")),
+  errorDescription: firstParam(params.get("error_description")),
+  email: firstParam(params.get("email")),
+  flow: firstParam(params.get("flow")),
+  type: firstParam(params.get("type")),
+});
+
+const parseAuthCallbackUrl = (url: string | null) => {
+  if (!url) return null;
+
+  try {
+    const parsedUrl = new URL(url);
+    const params = new URLSearchParams(parsedUrl.search);
+    const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
+
+    if (fragment) {
+      const fragmentParams = new URLSearchParams(fragment);
+      fragmentParams.forEach((value, key) => {
+        if (!params.has(key)) {
+          params.set(key, value);
+        }
+      });
+    }
+
+    return parseAuthCallbackSearchParams(params);
+  } catch {
+    return null;
+  }
 };
 
 export default function AuthCallbackScreen() {
@@ -39,8 +110,10 @@ export default function AuthCallbackScreen() {
   const [checking, setChecking] = useState(true);
   const [title, setTitle] = useState("Confirming your account");
   const [message, setMessage] = useState("Opening your Chi’llywood email verification...");
+  const [urlState, setUrlState] = useState<AuthCallbackState | null>(null);
+  const [urlHydrated, setUrlHydrated] = useState(false);
 
-  const callbackState = useMemo(() => ({
+  const routeState = useMemo<AuthCallbackState>(() => ({
     code: firstParam(params.code),
     token: firstParam(params.token),
     tokenHash: firstParam(params.token_hash),
@@ -53,6 +126,24 @@ export default function AuthCallbackScreen() {
     flow: firstParam(params.flow),
     type: firstParam(params.type),
   }), [params]);
+
+  const callbackState = useMemo(() => mergeAuthCallbackState(routeState, urlState), [routeState, urlState]);
+
+  const hydrateUrlState = useCallback(async () => {
+    try {
+      const initialUrl = await Linking.getInitialURL();
+      const parsed = parseAuthCallbackUrl(initialUrl);
+      if (parsed) {
+        setUrlState(parsed);
+      }
+    } finally {
+      setUrlHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void hydrateUrlState();
+  }, [hydrateUrlState]);
 
   const isRecoveryCallback = useMemo(() => {
     const normalizedType = String(callbackState.type ?? "").trim().toLowerCase();
@@ -79,7 +170,6 @@ export default function AuthCallbackScreen() {
     if (callbackState.email) query.set("email", callbackState.email);
     if (callbackState.type) query.set("type", callbackState.type);
     if (callbackState.flow) query.set("flow", callbackState.flow);
-
     return query.toString();
   }, [callbackState]);
 
@@ -123,6 +213,8 @@ export default function AuthCallbackScreen() {
     let active = true;
 
     const finishCallback = async () => {
+      if (!urlHydrated) return;
+
       try {
         if (isRecoveryCallback) {
           const hasRecoveryLinkData = (
@@ -166,6 +258,13 @@ export default function AuthCallbackScreen() {
           return;
         }
 
+        const hasVerificationCredential = !!(
+          callbackState.code
+          || callbackState.tokenHash
+          || callbackState.token
+          || (callbackState.accessToken && callbackState.refreshToken)
+        );
+
         if (callbackState.code) {
           const { error } = await supabase.auth.exchangeCodeForSession(callbackState.code);
           if (error) {
@@ -208,7 +307,7 @@ export default function AuthCallbackScreen() {
             reason: "missing_email_for_token",
           });
           return;
-        } else if (!callbackState.flow && !callbackState.type) {
+        } else if (!hasVerificationCredential) {
           await supabase.auth.signOut().catch(() => null);
           if (!active) return;
           setTitle("Go to login");
@@ -244,7 +343,7 @@ export default function AuthCallbackScreen() {
     return () => {
       active = false;
     };
-  }, [callbackState]);
+  }, [callbackState, urlHydrated]);
 
   return (
     <View

@@ -51,6 +51,42 @@ const PUBLIC_LEGAL_PATHS = new Set([
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
 
+const hasAuthLinkLikeParams = (params: Record<string, unknown>) => {
+  const type = String(params.type ?? "").trim().toLowerCase();
+  const flow = String(params.flow ?? "").trim().toLowerCase();
+
+  return (
+    type === "signup"
+    || type === "email"
+    || type === "email_change"
+    || type === "invite"
+    || type === "magiclink"
+    || type === "reauthentication"
+    || type === "recovery"
+    || type === "recover"
+    || flow === "signup"
+    || flow === "email"
+    || flow === "email_change"
+    || flow === "invite"
+    || flow === "magiclink"
+    || flow === "reauthentication"
+    || flow === "recovery"
+    || flow === "recover"
+    || Object.prototype.hasOwnProperty.call(params, "type")
+    || Object.prototype.hasOwnProperty.call(params, "flow")
+    || Object.prototype.hasOwnProperty.call(params, "code")
+    || Object.prototype.hasOwnProperty.call(params, "token")
+    || Object.prototype.hasOwnProperty.call(params, "token_hash")
+    || Object.prototype.hasOwnProperty.call(params, "access_token")
+    || Object.prototype.hasOwnProperty.call(params, "refresh_token")
+    || Object.prototype.hasOwnProperty.call(params, "error")
+    || Object.prototype.hasOwnProperty.call(params, "error_code")
+    || Object.prototype.hasOwnProperty.call(params, "error_description")
+    || Object.prototype.hasOwnProperty.call(params, "confirmation_token")
+    || Object.prototype.hasOwnProperty.call(params, "recovery_token")
+  );
+};
+
 const SENSITIVE_ROUTE_PARAM_NAMES = new Set([
   "access_token",
   "authorization",
@@ -80,6 +116,22 @@ const sanitizeRouteAnalyticsParams = (pathname: string, params: Record<string, u
   return sanitized;
 };
 
+const getUrlSearchParamsWithFragment = (url: URL) => {
+  const params = new URLSearchParams(url.search);
+  const fragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+
+  if (fragment) {
+    const hashParams = new URLSearchParams(fragment);
+    hashParams.forEach((value, key) => {
+      if (!params.has(key)) {
+        params.set(key, value);
+      }
+    });
+  }
+
+  return params;
+};
+
 const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
   if (!url) return null;
 
@@ -92,22 +144,19 @@ const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
     const normalizedPath = parsedUrl.pathname.toLowerCase().replace(/\/+$/u, "");
-    const params = new URLSearchParams(parsedUrl.search);
-    const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
-
-    if (fragment) {
-      const hashParams = new URLSearchParams(fragment);
-      hashParams.forEach((value, key) => {
-        if (!params.has(key)) {
-          params.set(key, value);
-        }
-      });
-    }
+    const params = getUrlSearchParamsWithFragment(parsedUrl);
 
     const type = String(params.get("type") ?? "").trim().toLowerCase();
     const flow = String(params.get("flow") ?? "").trim().toLowerCase();
-    const isRecoveryType = type === "recovery" || type === "recover" || flow === "recovery" || flow === "recover";
-    const isRecoveryPath = normalizedPath.includes("recovery") || normalizedPath.includes("reset-password");
+    const hasRecoveryType = type === "recovery" || type === "recover" || flow === "recovery" || flow === "recover";
+    const isRecoveryPath = (
+      normalizedPath.includes("recovery")
+      || normalizedPath.includes("reset-password")
+      || normalizedPath.endsWith("/recovery")
+      || normalizedPath.endsWith("/auth/reset-password")
+      || normalizedHost === "reset-password"
+    );
+    const hasRecoveryTokens = params.has("access_token") && params.has("refresh_token");
     const isResetPasswordPath = normalizedHost === "reset-password"
       || (
         normalizedHost === "chillywoodstream.com"
@@ -116,7 +165,11 @@ const getPasswordRecoveryRouteFromUrl = (url: string | null) => {
       || normalizedPath === "/reset-password"
       || normalizedPath === "/auth/reset-password";
 
-    if (!isRecoveryType && !isRecoveryPath && !isResetPasswordPath) return null;
+    const appearsToBeRecoveryLink = hasRecoveryType
+      || isRecoveryPath
+      || hasRecoveryTokens;
+
+    if (!appearsToBeRecoveryLink && !isResetPasswordPath) return null;
 
     const query = params.toString();
     return query ? `/reset-password?${query}` : "/reset-password";
@@ -137,20 +190,14 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
 
     const normalizedHost = parsedUrl.hostname.toLowerCase();
     const normalizedPath = parsedUrl.pathname.toLowerCase().replace(/\/+$/u, "");
-    const params = new URLSearchParams(parsedUrl.search);
-    const fragment = parsedUrl.hash.startsWith("#") ? parsedUrl.hash.slice(1) : parsedUrl.hash;
-
-    if (fragment) {
-      const hashParams = new URLSearchParams(fragment);
-      hashParams.forEach((value, key) => {
-        if (!params.has(key)) {
-          params.set(key, value);
-        }
-      });
-    }
+    const params = getUrlSearchParamsWithFragment(parsedUrl);
 
     const callbackType = String(params.get("type") ?? "").trim().toLowerCase();
     const callbackFlow = String(params.get("flow") ?? "").trim().toLowerCase();
+    const hasAuthData = params.has("code")
+      || params.has("token")
+      || params.has("token_hash")
+      || (params.has("access_token") && params.has("refresh_token"));
     if (
       callbackType === "recovery"
       || callbackType === "recover"
@@ -190,31 +237,27 @@ const getAuthCallbackRouteFromUrl = (url: string | null) => {
       "token_hash",
       "confirmation_token",
       "recovery_token",
-      "email",
     ].some((key) => params.has(key));
 
     const hasConfirmPath =
       normalizedPath === "/confirm"
       || normalizedPath === "/verify"
       || normalizedPath.endsWith("/verify")
-      || normalizedPath === "/recovery"
+      || normalizedPath === "/v1/verify"
+      || normalizedPath.endsWith("/v1/verify")
       || normalizedPath === "/auth"
+      || (normalizedHost === "auth" && (normalizedPath === "" || normalizedPath === "/" || normalizedPath === "/callback"))
       || normalizedPath === "/callback"
-      || normalizedPath === "/auth-callback";
+      || normalizedPath === "/auth-callback"
+      || normalizedHost === "auth-callback"
+      || normalizedHost === "callback"
+      || normalizedHost === "verify"
+      || normalizedPath === "/auth/verify"
+      || normalizedPath === "/auth/v1/verify";
 
     const isLikelyAuthCallback = hasKnownAuthType || hasAuthCallbackParam || hasConfirmPath;
-    if (!isLikelyAuthCallback) return null;
-
-    const isPolicyPath =
-      normalizedPath === "/support-policy"
-      || normalizedPath === "/privacy"
-      || normalizedPath === "/terms"
-      || normalizedPath === "/creator-rules"
-      || normalizedPath === "/moderation-policy";
-
-    if (isPolicyPath && params.has("type") && !params.has("code") && !params.has("token_hash") && !params.has("token")) {
-      return null;
-    }
+    const appearsToBeAuthCallback = isLikelyAuthCallback || hasAuthData;
+    if (!appearsToBeAuthCallback) return null;
 
     const query = params.toString();
     return query ? `/auth-callback?${query}` : "/auth-callback";
@@ -259,8 +302,13 @@ function RouteAnalyticsBridge() {
     Linking.getInitialURL()
       .then((url) => {
         if (!active) return;
+        const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
+        if (recoveryRoute) {
+          routeRecoveryUrl(url);
+          return;
+        }
+
         routeAuthCallbackUrl(url);
-        routeRecoveryUrl(url);
       })
       .catch((error) => {
         reportRuntimeError("auth-password-recovery-route", error, {
@@ -269,8 +317,13 @@ function RouteAnalyticsBridge() {
       });
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
+      const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
+      if (recoveryRoute) {
+        routeRecoveryUrl(url);
+        return;
+      }
+
       routeAuthCallbackUrl(url);
-      routeRecoveryUrl(url);
     });
 
     return () => {
@@ -419,6 +472,13 @@ function RootNavigator() {
         <Stack.Screen name="channel/[userId]" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="auth-callback" />
+        <Stack.Screen name="auth/callback" />
+        <Stack.Screen name="auth/index" />
+        <Stack.Screen name="auth/verify" />
+        <Stack.Screen name="auth/v1/index" />
+        <Stack.Screen name="auth/v1/verify" />
+        <Stack.Screen name="callback" />
+        <Stack.Screen name="verify" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="subscribe" />
         <Stack.Screen name="admin" />
@@ -549,9 +609,11 @@ function PublicLegalNavigator() {
 
 export default function RootLayout() {
   const pathname = usePathname();
+  const params = useGlobalSearchParams<Record<string, string | string[]>>();
   const publicLegalPath = isPublicLegalPath(pathname);
+  const publicLegalPathWithNoAuthData = publicLegalPath && !hasAuthLinkLikeParams(params as Record<string, unknown>);
 
-  if (!isRuntimeConfigValid() && !publicLegalPath) {
+  if (!isRuntimeConfigValid() && !publicLegalPathWithNoAuthData) {
     const message = getRuntimeConfigIssueSummary();
     if (__DEV__) {
       throw new Error(message);
@@ -560,7 +622,7 @@ export default function RootLayout() {
     return <RuntimeUnavailableScreen message={message} />;
   }
 
-  if (publicLegalPath) {
+  if (publicLegalPathWithNoAuthData) {
     return <PublicLegalNavigator />;
   }
 

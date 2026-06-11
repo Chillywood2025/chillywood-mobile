@@ -22,10 +22,13 @@ import { supabase } from "../_lib/supabase";
 type RecoveryParams = {
   accessToken: string | null;
   code: string | null;
+  email: string | null;
   error: string | null;
   errorCode: string | null;
   errorDescription: string | null;
   refreshToken: string | null;
+  token: string | null;
+  tokenHash: string | null;
 };
 
 type RecoveryStatus = "checking" | "ready" | "missing" | "failed";
@@ -34,10 +37,13 @@ const PASSWORD_MIN_LENGTH = 8;
 const RECOVERY_PARAM_KEYS = [
   "access_token",
   "code",
+  "email",
   "error",
   "error_code",
   "error_description",
   "refresh_token",
+  "token",
+  "token_hash",
 ] as const;
 
 function getPasswordUpdateErrorMessage(error: unknown) {
@@ -89,10 +95,13 @@ const parseRecoveryUrl = (url: string | null): RecoveryParams | null => {
     return {
       accessToken: readParam(params, "access_token"),
       code: readParam(params, "code"),
+      email: readParam(params, "email"),
       error: readParam(params, "error"),
       errorCode: readParam(params, "error_code"),
       errorDescription: readParam(params, "error_description"),
       refreshToken: readParam(params, "refresh_token"),
+      token: readParam(params, "token"),
+      tokenHash: readParam(params, "token_hash"),
     };
   } catch {
     return null;
@@ -105,10 +114,13 @@ const parseRecoveryRouteParams = (
   const recovery = {
     accessToken: readRouteParam(params, "access_token"),
     code: readRouteParam(params, "code"),
+    email: readRouteParam(params, "email"),
     error: readRouteParam(params, "error"),
     errorCode: readRouteParam(params, "error_code"),
     errorDescription: readRouteParam(params, "error_description"),
     refreshToken: readRouteParam(params, "refresh_token"),
+    token: readRouteParam(params, "token"),
+    tokenHash: readRouteParam(params, "token_hash"),
   };
 
   return Object.values(recovery).some(Boolean) ? recovery : null;
@@ -212,6 +224,61 @@ export default function ResetPasswordScreen() {
       setStatusMessage("Choose a new password for this account.");
       trackEvent("auth_password_recovery_link_opened", {
         flow: "code",
+      });
+      return true;
+    }
+
+    if (recovery.tokenHash) {
+      handledRecoveryRef.current = true;
+      setStatus("checking");
+      setStatusMessage("Opening your reset session...");
+
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: recovery.tokenHash,
+        type: "recovery",
+      });
+
+      if (error) {
+        setStatus("failed");
+        setStatusMessage("This reset link could not be opened. Request a fresh link.");
+        trackEvent("auth_password_recovery_link_failed", {
+          reason: error.message,
+        });
+        return true;
+      }
+
+      setStatus("ready");
+      setStatusMessage("Choose a new password for this account.");
+      trackEvent("auth_password_recovery_link_opened", {
+        flow: "token_hash",
+      });
+      return true;
+    }
+
+    if (recovery.token && recovery.email) {
+      handledRecoveryRef.current = true;
+      setStatus("checking");
+      setStatusMessage("Opening your reset session...");
+
+      const { error } = await supabase.auth.verifyOtp({
+        email: recovery.email,
+        token: recovery.token,
+        type: "recovery",
+      });
+
+      if (error) {
+        setStatus("failed");
+        setStatusMessage("This reset link could not be opened. Request a fresh link.");
+        trackEvent("auth_password_recovery_link_failed", {
+          reason: error.message,
+        });
+        return true;
+      }
+
+      setStatus("ready");
+      setStatusMessage("Choose a new password for this account.");
+      trackEvent("auth_password_recovery_link_opened", {
+        flow: "token",
       });
       return true;
     }

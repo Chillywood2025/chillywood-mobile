@@ -2,7 +2,9 @@
 
 Date: 2026-06-07
 
-Status: In progress – SMTP configuration and link routing are healthy; inbox arrival proof remains pending without mailbox/provider-trace credentials.
+Latest recovery check: 2026-06-10
+
+Status: In progress – app link routing is healthy and SMTP transport is restored after Brevo SMTP key rotation. Inbox arrival and Play/internal app click-through proof remain the next checks.
 
 ## Objective
 
@@ -22,6 +24,11 @@ Run a final focused pass on: DNS/recipient checks, mail-route validation, latest
 | Recipient MX | `dig +short MX gmail.com` | Gmail MX healthy |
 | Route handling | app deep-link routes | recovery points to `/reset-password`, then `/(auth)/login` |
 | Provider REST telemetry | Brevo v3 with supplied credential | `401 key not found` |
+| Pre-rotation direct SMTP auth | Brevo SMTP relay with stale stored SMTP key | `535 Authentication failed` |
+| Pre-rotation recover dispatch | `POST /auth/v1/recover` | `500 unexpected_failure` / `Error sending recovery email` |
+| Post-rotation direct SMTP auth | Brevo SMTP relay with rotated SMTP key | Pass |
+| Post-rotation SMTP config patch/readback | Supabase Management API through curl | 200, secrets redacted |
+| Post-rotation recover dispatch | `POST /auth/v1/recover` | 200 `{}` at `2026-06-11T01:10:42Z` |
 
 ## Proof artifacts
 
@@ -31,17 +38,17 @@ Run a final focused pass on: DNS/recipient checks, mail-route validation, latest
 
 ## Interpretation
 
-- **Configuration side is passing**: Supabase Auth is sending recovery requests and routing is correct in app.
-- **Current unresolved side**: Mailbox/provider proof (exact delivery trail + click/open state) is not yet verifiable from the current terminal environment because Brevo API credential used for tracing is not a valid REST key for the attempted endpoints.
+- **App route side is passing repo validation**: recovery links route to `/reset-password`, signup links route through `auth-callback`, reset success returns to login, and public policy pages are no longer treated as auth links unless they carry real auth/recovery parameters.
+- **Transport side is restored**: the rotated Brevo SMTP key authenticates, Supabase Auth SMTP patch/readback succeeds, and recovery dispatch returns 200.
+- **Current unresolved side**: newest-message inbox arrival and device click-through proof from the Play/internal app runtime.
 
 ## What to do next (non-code)
 
-1. provide a Brevo REST API key (v3/`api-key` for the Brevo account that owns this sender) and re-run log endpoint checks,
-2. verify the test inbox manually (or via Gmail API) for message receipt,
-3. retry recover once and check:
+1. Open the newest recover email sent after `2026-06-11T01:10:42Z` and check:
    - sender is `Chi'llywood <no-reply@chillywoodstream.com>`,
    - tap opens `chillywoodmobile://reset-password`,
    - post-reset route lands on login.
+2. If inbox/provider trail is still unclear after SMTP auth and recover dispatch pass, provide a Brevo REST API key with message-event access or use Gmail inbox proof.
 
 ## Safety and scope boundaries
 

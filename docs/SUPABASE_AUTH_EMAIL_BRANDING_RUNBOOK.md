@@ -4,12 +4,12 @@
 
 Chi’llywood Auth emails should look and read like official Chi’llywood account emails, not generic provider messages. This runbook prepares the sender, templates, redirect allowlist, test plan, and rollback path for Supabase Auth email branding without committing secrets and without weakening email confirmation or password reset security.
 
-Latest external status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` and `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` record successful Supabase Auth SMTP reconfiguration for project `bmkkhihfbmsnnmcqkoly`, with readback confirming:
+Latest external status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` and `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` record the sender branding and the current transport blocker. Supabase Auth was previously reconfigured for project `bmkkhihfbmsnnmcqkoly`, with readback confirming:
 
 - host: `smtp-relay.brevo.com`
 - sender name: `Chi’llywood`
 - verified sender email: `no-reply@chillywoodstream.com`
-- `POST /auth/v1/recover` for `rob2037gn@gmail.com` now returns `200`
+The latest 2026-06-10 rerun first reproduced a stale SMTP-key failure (`535 Authentication failed` plus Supabase Auth recovery `500 unexpected_failure` / `Error sending recovery email`). The Brevo SMTP key was then rotated locally, Supabase Auth SMTP was patched/read back with secrets redacted, direct SMTP auth passed, and `POST /auth/v1/recover` for `rob2037gn@gmail.com` returned `200 {}`. The app route contract is corrected; remaining proof is newest-message inbox arrival and Play/internal app click-through.
 
 This is account email only. It is not marketing email, newsletter email, production money activation, payout activation, LiveKit work, or a replacement for Supabase Auth.
 
@@ -139,6 +139,26 @@ Do not commit `$SUPABASE_MANAGEMENT_TOKEN`, SMTP credentials, service-role keys,
 - Reset success returns to login.
 - Expired/invalid links show safe Chi’llywood copy.
 - No raw tokens, provider payloads, SMTP credentials, or secrets appear in UI/logs.
+
+## SMTP Key Rotation Checklist
+
+Use this when recovery dispatch returns `Error sending recovery email` or direct SMTP auth returns `535 Authentication failed`.
+
+1. Open Brevo dashboard for the account that owns the verified sender `no-reply@chillywoodstream.com`.
+2. Go to `Settings > SMTP & API > SMTP`.
+3. Create a new SMTP key. Copy it once into the local secret store only; Brevo does not show the full key again.
+4. Keep the relay values unchanged unless Brevo says otherwise:
+   - host: `smtp-relay.brevo.com`
+   - port: `587`
+   - sender email: `no-reply@chillywoodstream.com`
+   - sender name: `Chi'llywood`
+5. Patch Supabase Auth SMTP with the fresh SMTP key using a valid Supabase Management API token.
+6. Read back Supabase Auth config with `smtp_user` and `smtp_pass` redacted.
+7. Run direct SMTP auth before sending user mail.
+8. Trigger `POST /auth/v1/recover` for the safe inbox and require `HTTP 200`.
+9. Tap the newest reset email on the Play/internal app runtime and prove reset-password, password update, login return, and sign-in.
+
+Do not paste the SMTP key into docs, git, screenshots, or chat.
 
 ## Rollback
 
