@@ -17,6 +17,12 @@ import {
 } from "./liveEvents";
 import { supabase } from "./supabase";
 import { normalizeChillyChatRingtoneKey, type ChillyChatRingtoneKey } from "./chillyChatCalls";
+import {
+  CHILLY_CHAT_CALL_CHANNEL_ID,
+  CHILLY_CHAT_DEFAULT_NOTIFICATION_SOUND,
+  CHILLY_CHAT_MESSAGE_CHANNEL_ID,
+  CHILLY_CHAT_MISSED_CALL_CHANNEL_ID,
+} from "./chillyChatCallSoundAssets";
 
 export const NOTIFICATIONS_TABLE = "notifications";
 export const EVENT_REMINDERS_TABLE = "event_reminders";
@@ -1101,17 +1107,18 @@ export async function configureNotificationRuntime() {
       name: "Chi'llywood activity",
       vibrationPattern: [0, 250, 250, 250],
     });
-    await Notifications.setNotificationChannelAsync("chilly_chat_messages", {
+    await Notifications.setNotificationChannelAsync(CHILLY_CHAT_MESSAGE_CHANNEL_ID, {
       importance: Notifications.AndroidImportance.DEFAULT,
       name: "Chi'lly Chat messages",
       vibrationPattern: [0, 120],
     });
-    await Notifications.setNotificationChannelAsync("chilly_chat_calls", {
+    await Notifications.setNotificationChannelAsync(CHILLY_CHAT_CALL_CHANNEL_ID, {
       importance: Notifications.AndroidImportance.MAX,
       name: "Chi'lly Chat calls",
+      sound: CHILLY_CHAT_DEFAULT_NOTIFICATION_SOUND,
       vibrationPattern: [0, 400, 180, 400],
     });
-    await Notifications.setNotificationChannelAsync("chilly_chat_missed_calls", {
+    await Notifications.setNotificationChannelAsync(CHILLY_CHAT_MISSED_CALL_CHANNEL_ID, {
       importance: Notifications.AndroidImportance.HIGH,
       name: "Missed Chi'lly Chat calls",
       vibrationPattern: [0, 220, 180, 220],

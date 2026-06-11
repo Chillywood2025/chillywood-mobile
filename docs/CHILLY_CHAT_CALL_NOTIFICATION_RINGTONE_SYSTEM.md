@@ -15,6 +15,7 @@ The new layer adds:
 - call-specific Android notification channels
 - Chi'lly Chat call settings for alert enablement, vibration, and ringtone preference
 - ringtone option labels for Chi'lly Ring, Skyline Pulse, Theater Bell, Velvet Knock, Quiet Buzz, Classic Phone, and Silent / Vibrate Only
+- bundled CC0 WAV assets for Chi'lly Chat call sounds, documented in `docs/CHILLY_CHAT_SOUND_LICENSES.md`
 
 ## What Changed
 
@@ -23,10 +24,13 @@ Files touched:
 - `supabase/migrations/202606100001_chilly_chat_call_invites_and_ringtones.sql`
 - `supabase/database.types.ts`
 - `_lib/chillyChatCalls.ts`
+- `_lib/chillyChatCallSoundAssets.ts`
 - `_lib/chat.ts`
 - `_lib/notifications.ts`
 - `app/chat/[threadId].tsx`
 - `app/settings.tsx`
+- `assets/sounds/chilly-chat/*.wav`
+- `docs/CHILLY_CHAT_SOUND_LICENSES.md`
 
 ## Data Model
 
@@ -68,31 +72,43 @@ Accept marks the invite accepted and opens the existing communication room surfa
 
 ## Ringtone Behavior
 
-The repo currently has no bundled audio/ringtone files under `assets/`. Because of that, this pass does not claim bundled push notification sounds are live.
-
 Current V1 behavior:
 
 - user can choose a Chi'lly Chat ringtone preference in Settings
 - user can toggle call alerts and vibration
-- in-app call alerts vibrate according to the selected style
-- Silent / Vibrate Only does not imply a background push sound
+- in-app call alerts play the selected bundled sound unless Silent / Vibrate Only is selected
+- ringtone preview plays the selected bundled sound in Settings
+- Silent / Vibrate Only does not play in-app ringtone audio
 - downloaded/imported sounds remain in-app-only for V1
+- if an in-app selected sound fails, the app falls back to Chi'lly Ring
 
 Native-build requirement:
 
-- background push notification sounds require bundled local sound files configured through the Expo notifications config plugin and a new native build
-- OTA updates alone cannot add new native notification-channel sounds
+- bundled background push notification sounds are configured through the Expo notifications config plugin
+- OTA updates alone cannot add new native notification-channel sounds; a new native/internal Android build is required
 - Android channel sound/importance behavior is ultimately controlled by Android and the user's channel settings after the channel exists
+- the old `chilly_chat_calls` Android channel may already exist on tester devices without a custom sound, so future call notifications should use the versioned `chilly_chat_calls_v2` channel
+
+Bundled sound files:
+
+- `assets/sounds/chilly-chat/chilly-ring.wav`
+- `assets/sounds/chilly-chat/skyline-pulse.wav`
+- `assets/sounds/chilly-chat/theater-bell.wav`
+- `assets/sounds/chilly-chat/velvet-knock.wav`
+- `assets/sounds/chilly-chat/quiet-buzz.wav`
+- `assets/sounds/chilly-chat/classic-phone.wav`
 
 ## Push Notification Readiness
 
 The app now creates Android channels:
 
 - `chilly_chat_messages`
-- `chilly_chat_calls`
+- `chilly_chat_calls_v2`
 - `chilly_chat_missed_calls`
 
-Notification tap routing already accepts `/chat/...` deep links, including an `openCall` query if the server dispatch path sends it later. This pass does not add service-role secrets to mobile code and does not log push tokens.
+`chilly_chat_calls_v2` uses `chilly-ring.wav` as its bundled native sound where Android and the installed native build support it. Messages and missed-call channels stay calmer and do not use the call ringtone.
+
+Notification tap routing already accepts `/chat/...` deep links, including an `openCall` query if the server dispatch path sends it later. This pass does not add service-role secrets to mobile code and does not log push tokens. The existing `notification-dispatch` Edge Function is still a discovery/activity dispatcher and does not yet dispatch Chi'lly Chat call pushes; a future call-push dispatcher should use `chilly_chat_calls_v2`.
 
 ## Safety
 
@@ -111,21 +127,19 @@ The implementation does not:
 Passed:
 
 - `npm run typecheck`
+- `npm run validate:runtime`
 - `git diff --check`
-- `supabase db push`
-- `supabase db push --dry-run` reported remote database up to date after applying `202606100001`
+- `git diff --cached --check`
 
 Required before production claim:
 
-- run `npm run validate:runtime`
-- run diff checks after docs
 - two-user Android proof with both users in Chi'lly Chat
 - background notification proof after backend dispatch wiring is available
-- native build proof if bundled push ringtone files are added
+- native/internal Android build proof for the bundled background push channel sound
 
 ## Remaining Gaps
 
-- No bundled ringtone audio assets exist yet.
+- Bundled notification sounds are configured, but background push ringtone behavior is not proven until a new native/internal Android build is installed.
 - Background call push dispatch is channel-ready but still needs the approved server dispatch path for call invites.
 - Two-user device proof is required to prove recipient incoming sheet, accept/decline, and missed-card behavior.
 - Dynamic downloaded sounds are intentionally not promised for Android background push notifications in V1.

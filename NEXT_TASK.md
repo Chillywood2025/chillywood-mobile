@@ -10,8 +10,9 @@ Run two-user Android proof for the Supabase-applied Chi'lly Chat call invite/rin
 - User B accepts, vibration stops, and both route through the existing communication room surface.
 - A timed-out invite becomes a missed call card.
 - Settings > Notifications exposes Chi'lly Chat call alerts, vibration, and ringtone preference.
+- Bundled CC0 call sounds are present under `assets/sounds/chilly-chat/`, with provenance in `docs/CHILLY_CHAT_SOUND_LICENSES.md`; Settings preview should play the selected bundled in-app sound.
 - Background call push proof still needs the approved server dispatch path and Play/internal push-token setup.
-- Bundled background push ringtone sound proof requires a native build with local sound files; OTA alone is not enough.
+- Bundled background push ringtone sound proof requires a native/internal Android build with local sound files and the versioned `chilly_chat_calls_v2` channel; OTA alone is not enough.
 
 Do not change LiveKit token issuer, communication room authority, Watch-Party route ownership, Player behavior, auth, Premium gates, content safety, money state, payouts, or admin authority.
 

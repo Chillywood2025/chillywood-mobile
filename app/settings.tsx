@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -29,6 +29,11 @@ import {
   type PushRegistrationState,
 } from "../_lib/notifications";
 import { CHILLY_CHAT_RINGTONE_OPTIONS, type ChillyChatRingtoneKey } from "../_lib/chillyChatCalls";
+import {
+  playChillyChatCallSound,
+  stopChillyChatCallSound,
+  type ChillyChatPlayingSound,
+} from "../_lib/chillyChatCallSoundAssets";
 import {
   canAccessAdminConsole,
   getModerationAccess,
@@ -415,6 +420,7 @@ export default function SettingsScreen() {
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
   const [pushRegistration, setPushRegistration] = useState<PushRegistrationState | null>(null);
+  const ringtonePreviewSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const [canOpenAdminDashboard, setCanOpenAdminDashboard] = useState(false);
   const [adminAccessLoading, setAdminAccessLoading] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -685,21 +691,45 @@ export default function SettingsScreen() {
     }
   }, [notificationPreferences, notificationSavingKey]);
 
-  const onPreviewChillyChatRingtone = useCallback(() => {
+  const onPreviewChillyChatRingtone = useCallback(async () => {
     if (!notificationPreferences) return;
+    await stopChillyChatCallSound(ringtonePreviewSoundRef.current);
+    ringtonePreviewSoundRef.current = null;
     if (notificationPreferences.chillyChatCallVibrateEnabled) {
       Vibration.vibrate(notificationPreferences.chillyChatCallSoundKey === "quiet_buzz" ? [0, 120, 80, 120] : [0, 220, 120, 220]);
+    }
+    if (notificationPreferences.chillyChatCallSoundKey !== "silent_vibrate") {
+      try {
+        const sound = await playChillyChatCallSound(notificationPreferences.chillyChatCallSoundKey, { volume: 0.85 });
+        ringtonePreviewSoundRef.current = sound;
+        setTimeout(() => {
+          void stopChillyChatCallSound(sound);
+          if (ringtonePreviewSoundRef.current === sound) {
+            ringtonePreviewSoundRef.current = null;
+          }
+        }, 1800);
+      } catch {
+        Alert.alert("Chi'lly Chat preview", "Unable to preview that sound. Incoming calls will fall back to Chi'lly Ring.");
+        return;
+      }
     }
     Alert.alert(
       "Chi'lly Chat preview",
       notificationPreferences.chillyChatCallSoundKey === "silent_vibrate"
         ? "Silent / Vibrate Only is selected. In-app calls will not play a ringtone."
-        : "This preview confirms the selected in-app call style. Bundled notification-channel sounds require a native build with sound files.",
+        : "Playing the selected in-app call sound. Background push sound uses the Android call channel from the native app bundle.",
     );
   }, [notificationPreferences]);
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections((current) => ({ ...current, [id]: !current[id] }));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      void stopChillyChatCallSound(ringtonePreviewSoundRef.current);
+      ringtonePreviewSoundRef.current = null;
+    };
   }, []);
 
   const premiumTarget = monetizationSnapshot.targets.premium_subscription;
@@ -1840,7 +1870,7 @@ export default function SettingsScreen() {
         ))}
         <SettingsRow
           title="Incoming call sound"
-          subtitle="Default Chi'llwood sounds are used for in-app ringing. Background push sounds use Android channels and bundled native sound files only."
+          subtitle="Bundled Chi'llwood sounds play in-app. Background call alerts use the Android call channel sound from a native build, and Android settings may override it."
           value={
             CHILLY_CHAT_RINGTONE_OPTIONS.find((option) => option.key === notificationPreferences?.chillyChatCallSoundKey)?.label
             ?? "Chi'lly Ring"
@@ -1871,12 +1901,14 @@ export default function SettingsScreen() {
               style={styles.utilityButton}
               activeOpacity={0.86}
               disabled={!notificationPreferences}
-              onPress={onPreviewChillyChatRingtone}
+              onPress={() => {
+                void onPreviewChillyChatRingtone();
+              }}
             >
               <Text style={styles.utilityButtonText}>Preview sound</Text>
             </TouchableOpacity>
             <Text style={styles.metaText}>
-              Downloaded/imported sounds are in-app only for V1. Android background notification sounds stay controlled by the bundled channel sound and the user's system settings.
+              Downloaded/imported sounds are in-app only for V1. Background push sounds use bundled app files in the call notification channel, not downloaded sounds.
             </Text>
           </View>
         </SettingsRow>

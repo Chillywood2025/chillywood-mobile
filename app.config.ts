@@ -16,6 +16,14 @@ const DEPLOYED_TERMS_OF_SERVICE_URL = "https://chillywoodstream.com/terms";
 const DEPLOYED_ACCOUNT_DELETION_URL = "https://chillywoodstream.com/account-deletion";
 const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-report";
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
+const CHILLY_CHAT_NOTIFICATION_SOUND_FILES = [
+  "./assets/sounds/chilly-chat/chilly-ring.wav",
+  "./assets/sounds/chilly-chat/skyline-pulse.wav",
+  "./assets/sounds/chilly-chat/theater-bell.wav",
+  "./assets/sounds/chilly-chat/velvet-knock.wav",
+  "./assets/sounds/chilly-chat/quiet-buzz.wav",
+  "./assets/sounds/chilly-chat/classic-phone.wav",
+] as const;
 
 const resolveExistingFile = (...candidates: Array<string | undefined>) => {
   for (const candidate of candidates) {
@@ -115,7 +123,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     plugins: mergePlugins(base.plugins, [
       "@livekit/react-native-expo-plugin",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          sounds: CHILLY_CHAT_NOTIFICATION_SOUND_FILES,
+        },
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "@react-native-firebase/perf",

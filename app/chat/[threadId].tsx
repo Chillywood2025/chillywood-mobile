@@ -28,6 +28,11 @@ import {
   type ChillyChatCallInvite,
 } from "../../_lib/chillyChatCalls";
 import {
+  playChillyChatCallSound,
+  stopChillyChatCallSound,
+  type ChillyChatPlayingSound,
+} from "../../_lib/chillyChatCallSoundAssets";
+import {
   clearEndedChatThreadCall,
   getChatThread,
   listChatMessages,
@@ -231,6 +236,7 @@ export default function ChillyChatThreadScreen() {
   const autoOpenCallRef = useRef("");
   const lastReadReceiptWriteAtRef = useRef(0);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
@@ -446,6 +452,8 @@ export default function ChillyChatThreadScreen() {
 
   useEffect(() => {
     Vibration.cancel();
+    void stopChillyChatCallSound(incomingCallSoundRef.current);
+    incomingCallSoundRef.current = null;
     if (incomingCallTimeoutRef.current) {
       clearTimeout(incomingCallTimeoutRef.current);
       incomingCallTimeoutRef.current = null;
@@ -459,14 +467,27 @@ export default function ChillyChatThreadScreen() {
 
     const vibrateEnabled = callPreferences?.chillyChatCallVibrateEnabled !== false;
     const soundKey = callPreferences?.chillyChatCallSoundKey ?? "chilly_ring";
+    let soundActive = true;
     if (vibrateEnabled) {
       Vibration.vibrate(soundKey === "quiet_buzz" ? [0, 120, 80, 120] : [0, 380, 180, 380], true);
     }
+    void playChillyChatCallSound(soundKey, { loop: true, volume: 0.78 })
+      .then((sound) => {
+        if (!sound) return;
+        if (!soundActive) {
+          void stopChillyChatCallSound(sound);
+          return;
+        }
+        incomingCallSoundRef.current = sound;
+      })
+      .catch(() => null);
 
     const expiresAt = Date.parse(incomingCallInvite.expiresAt);
     const timeoutMs = Math.max(1000, Number.isFinite(expiresAt) ? expiresAt - Date.now() : 45_000);
     incomingCallTimeoutRef.current = setTimeout(() => {
       Vibration.cancel();
+      void stopChillyChatCallSound(incomingCallSoundRef.current);
+      incomingCallSoundRef.current = null;
       void updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
         invite: incomingCallInvite,
@@ -479,7 +500,10 @@ export default function ChillyChatThreadScreen() {
     }, timeoutMs);
 
     return () => {
+      soundActive = false;
       Vibration.cancel();
+      void stopChillyChatCallSound(incomingCallSoundRef.current);
+      incomingCallSoundRef.current = null;
       if (incomingCallTimeoutRef.current) {
         clearTimeout(incomingCallTimeoutRef.current);
         incomingCallTimeoutRef.current = null;
@@ -763,6 +787,8 @@ export default function ChillyChatThreadScreen() {
   const handleAcceptIncomingCall = useCallback(async () => {
     if (!incomingCallInvite || callBusy || !currentUserId) return;
     Vibration.cancel();
+    void stopChillyChatCallSound(incomingCallSoundRef.current);
+    incomingCallSoundRef.current = null;
     setCallBusy(true);
     try {
       await updateChillyChatCallInviteStatus({
@@ -788,6 +814,8 @@ export default function ChillyChatThreadScreen() {
   const handleDeclineIncomingCall = useCallback(async () => {
     if (!incomingCallInvite || callBusy || !currentUserId) return;
     Vibration.cancel();
+    void stopChillyChatCallSound(incomingCallSoundRef.current);
+    incomingCallSoundRef.current = null;
     setCallBusy(true);
     try {
       await updateChillyChatCallInviteStatus({
