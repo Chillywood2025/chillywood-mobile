@@ -8557,28 +8557,9 @@ export default function PlayerScreen() {
                     </Text>
                   ) : null}
                   {creatorVideoPaidContentLocked ? (
-                    <View style={styles.paidVideoUnlockCard}>
-                      <TouchableOpacity
-                        style={[styles.playerAccessPrimaryBtn, paidVideoUnlockBusy && styles.secondaryBtnDisabled]}
-                        activeOpacity={0.86}
-                        disabled={paidVideoUnlockBusy}
-                        onPress={() => {
-                          void handlePaidVideoUnlock();
-                        }}
-                      >
-                        {paidVideoUnlockBusy ? (
-                          <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                          <Text style={styles.playerAccessPrimaryText}>Unlock Video</Text>
-                        )}
-                      </TouchableOpacity>
-                      <Text style={styles.videoLoadingSubtext}>
-                        Google Play / RevenueCat sandbox test only. Premium is separate from creator video purchases.
-                      </Text>
-                      {paidVideoUnlockMessage ? (
-                        <Text style={styles.videoLoadingSubtext}>{paidVideoUnlockMessage}</Text>
-                      ) : null}
-                    </View>
+                    <Text style={styles.videoLoadingSubtext}>
+                      Google Play / RevenueCat sandbox test only. Premium is separate from creator video purchases.
+                    </Text>
                   ) : null}
                   {isSpectatorPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>
@@ -8597,6 +8578,34 @@ export default function PlayerScreen() {
                 </View>
               )}
             </Animated.View>
+
+            {creatorVideoPaidContentLocked ? (
+              <View pointerEvents="box-none" style={styles.paidVideoUnlockFloatingCard}>
+                <TouchableOpacity
+                  style={[
+                    styles.playerAccessPrimaryBtn,
+                    styles.paidVideoUnlockPrimaryButton,
+                    paidVideoUnlockBusy && styles.secondaryBtnDisabled,
+                  ]}
+                  activeOpacity={0.86}
+                  disabled={paidVideoUnlockBusy}
+                  onPress={() => {
+                    void handlePaidVideoUnlock();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Unlock Video"
+                >
+                  {paidVideoUnlockBusy ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.playerAccessPrimaryText}>Unlock Video</Text>
+                  )}
+                </TouchableOpacity>
+                {paidVideoUnlockMessage ? (
+                  <Text style={styles.videoLoadingSubtext}>{paidVideoUnlockMessage}</Text>
+                ) : null}
+              </View>
+            ) : null}
 
             {shouldUseSharedAndroidVideoSurface && !creatorVideoPaidContentLocked ? (
               <View
@@ -9502,6 +9511,21 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     alignItems: "center",
     gap: 10,
+  },
+  paidVideoUnlockFloatingCard: {
+    position: "absolute",
+    left: 24,
+    right: 24,
+    bottom: 104,
+    zIndex: 190,
+    elevation: 190,
+    alignItems: "center",
+    gap: 10,
+  },
+  paidVideoUnlockPrimaryButton: {
+    flex: 0,
+    minWidth: 198,
+    paddingHorizontal: 18,
   },
   video: {
     width: "100%",
