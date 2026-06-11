@@ -41,6 +41,13 @@ import {
   requireWatchPartyLivePremium,
   type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
+import {
+  formatPaidWatchPartyTicketPrice,
+  purchasePaidWatchPartyTicket,
+  resolvePaidWatchPartyTicketAccess,
+  savePaidWatchPartyOffer,
+  type PaidWatchPartyTicketAccess,
+} from "../../_lib/paidWatchPartyTickets";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { useSession } from "../../_lib/session";
 import {
@@ -206,6 +213,10 @@ export default function WatchPartyIndexScreen() {
   const [watchPartyPremiumSheetCopy, setWatchPartyPremiumSheetCopy] = useState<PremiumLiveUpsellCopy>(WATCH_PARTY_LIVE_PREMIUM_UPSELL_COPY);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const [embeddedLiveStageEntry, setEmbeddedLiveStageEntry] = useState<EmbeddedLiveStageEntry | null>(null);
+  const [paidTicketGate, setPaidTicketGate] = useState<PaidWatchPartyTicketAccess | null>(null);
+  const [paidTicketBusy, setPaidTicketBusy] = useState(false);
+  const [paidTicketNotice, setPaidTicketNotice] = useState<string | null>(null);
+  const [paidTicketSeatLimit, setPaidTicketSeatLimit] = useState("12");
   const handoffLoadedRef = useRef(false);
   const liveWaitingRoomLoadedRef = useRef(false);
   const lastEntryLaneKeyRef = useRef(entryLaneKey);
@@ -255,6 +266,9 @@ export default function WatchPartyIndexScreen() {
     setWatchPartyPremiumGate(null);
     setWatchPartyPremiumSheetVisible(false);
     setInviteSheetVisible(false);
+    setPaidTicketGate(null);
+    setPaidTicketNotice(null);
+    setPaidTicketBusy(false);
   }, [entryLaneKey]);
 
   const resolveContentDisplayName = useCallback(async (input: {
@@ -660,6 +674,23 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
+    if (nextPreview.room.roomType !== "live") {
+      const ticketAccess = await resolvePaidWatchPartyTicketAccess(nextPartyId).catch(() => null);
+      if (!ticketAccess) {
+        setJoinError("Unable to confirm room ticket access right now.");
+        return;
+      }
+      if (!ticketAccess.allowed) {
+        setPaidTicketGate(ticketAccess);
+        setPaidTicketNotice(
+          ticketAccess.requiresPurchase
+            ? "Buy your ticket before entering the waiting room."
+            : "This room ticket is not available right now.",
+        );
+        return;
+      }
+    }
+
     const userId = await getSafePartyUserId().catch(() => "");
     const access = await resolveRoomAccess({
       roomSurface: "watch_party",
@@ -707,6 +738,72 @@ export default function WatchPartyIndexScreen() {
     if (!preview) return;
     await attemptJoinRoom(preview);
   };
+
+  const onSavePaidTicketOffer = useCallback(async () => {
+    const targetRoom = preparedRoom?.room ?? preview?.room ?? null;
+    const partyId = String(targetRoom?.partyId ?? "").trim();
+    if (!targetRoom || !partyId || targetRoom.roomType === "live") {
+      setPaidTicketNotice("Create a Party Room before adding a room ticket.");
+      return;
+    }
+    const seatLimit = Number.parseInt(paidTicketSeatLimit, 10);
+    setPaidTicketBusy(true);
+    setPaidTicketNotice(null);
+    try {
+      const offer = await savePaidWatchPartyOffer({
+        partyId,
+        title: `${getWaitingRoomPreviewTitle({ room: targetRoom, titleName: entryTitleName })} room ticket`,
+        priceCents: 99,
+        seatLimit: Number.isFinite(seatLimit) && seatLimit > 0 ? seatLimit : null,
+        status: "sandbox",
+      });
+      setPaidTicketGate(null);
+      setPaidTicketNotice(
+        `Room tickets are sandbox-only at ${formatPaidWatchPartyTicketPrice(offer.priceCents, offer.currency)}. Live money is not active.`,
+      );
+      trackEvent("money_offer_created", {
+        creator_id: targetRoom.hostUserId,
+        offer_type: "paid_watch_party",
+        route_name: "watch-party",
+        room_type: "party_room",
+        source_surface: "party_waiting_room",
+      });
+    } catch {
+      setPaidTicketNotice("Paid room ticket setup is not available for this room yet.");
+    } finally {
+      setPaidTicketBusy(false);
+    }
+  }, [entryTitleName, paidTicketSeatLimit, preparedRoom, preview]);
+
+  const onBuyPaidTicketAndJoin = useCallback(async () => {
+    const targetPreview = preview ?? preparedRoom;
+    const partyId = String(targetPreview?.room.partyId ?? "").trim();
+    if (!targetPreview || !partyId) {
+      setPaidTicketNotice("This room is missing the ticket details needed to continue.");
+      return;
+    }
+    if (!isSignedIn) {
+      router.push("/login" as Parameters<typeof router.push>[0]);
+      return;
+    }
+    setPaidTicketBusy(true);
+    setPaidTicketNotice(null);
+    try {
+      const result = await purchasePaidWatchPartyTicket({
+        partyId,
+        sourceSurface: "party_waiting_room",
+      });
+      setPaidTicketGate(result.access);
+      setPaidTicketNotice(result.message);
+      if (result.ok && result.access.allowed) {
+        navigateToPreviewRoom(targetPreview);
+      }
+    } catch {
+      setPaidTicketNotice("Room ticket checkout could not start. Try again later.");
+    } finally {
+      setPaidTicketBusy(false);
+    }
+  }, [isSignedIn, navigateToPreviewRoom, preparedRoom, preview, router]);
 
   const onResolveJoinAccess = useCallback(async (action: "purchase" | "restore") => {
     if (!pendingAccessPreview || !pendingAccessDecision || !accessSheetReason) {
@@ -1251,6 +1348,55 @@ export default function WatchPartyIndexScreen() {
             {waitingRoomPermissionsBody}
           </Text>
         </View>
+
+        {!isLiveWaitingRoom && topRoomCode ? (
+          <View style={styles.permissionsCard}>
+            <Text style={styles.permissionsLabel}>ROOM TICKETS</Text>
+            <Text style={styles.permissionsBody}>
+              Room tickets are sandbox-only until live money is approved. This ticket unlocks access to this Watch-Party room only. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.
+            </Text>
+            {hostLabel === "You are hosting" ? (
+              <>
+                <TextInput
+                  value={paidTicketSeatLimit}
+                  onChangeText={setPaidTicketSeatLimit}
+                  placeholder="Seat limit"
+                  placeholderTextColor="#5A5A5A"
+                  keyboardType="number-pad"
+                  style={styles.input}
+                  editable={!paidTicketBusy}
+                />
+                <TouchableOpacity
+                  style={[styles.generateCodeButton, paidTicketBusy && styles.generateCodeButtonDisabled]}
+                  onPress={onSavePaidTicketOffer}
+                  activeOpacity={0.85}
+                  disabled={paidTicketBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Set up paid Watch-Party ticket"
+                >
+                  <Text style={styles.generateCodeButtonText}>
+                    {paidTicketBusy ? "Saving Ticket" : "Set Up $0.99 Sandbox Ticket"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : paidTicketGate?.requiresPurchase ? (
+              <TouchableOpacity
+                style={[styles.generateCodeButton, paidTicketBusy && styles.generateCodeButtonDisabled]}
+                onPress={onBuyPaidTicketAndJoin}
+                activeOpacity={0.85}
+                disabled={paidTicketBusy}
+                testID="buy-room-ticket-button"
+                accessibilityRole="button"
+                accessibilityLabel="Buy Room Ticket"
+              >
+                <Text style={styles.generateCodeButtonText}>
+                  {paidTicketBusy ? "Opening Checkout" : "Buy Room Ticket"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            {paidTicketNotice ? <Text style={styles.errorText}>{paidTicketNotice}</Text> : null}
+          </View>
+        ) : null}
 
         {shouldShowWaitingRoomInviteSection ? (
           <>

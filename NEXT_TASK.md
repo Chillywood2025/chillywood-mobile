@@ -1,5 +1,32 @@
 # NEXT TASK
 
+## Paid Watch-Party Seats V1 Sandbox Proof
+
+Paid Watch-Party Seats / Room Tickets V1 is implemented and remote-applied, but not Play/internal sandbox-proven yet.
+
+Current truth:
+
+- Remote migrations applied: `20260611231512_paid_watch_party_seats_v1_sandbox.sql`, `20260611232455_paid_watch_party_seat_limit_verification_guard.sql`, and `20260611232545_paid_watch_party_offer_direct_write_tightening.sql`.
+- Provider path is RevenueCat / Google Play dynamic sandbox product `watch_party_live_ticket_sandbox_099` / `cw_watch_party_live_ticket_sandbox_099`.
+- Party Waiting Room checks ticket access before routing to Party Room.
+- Party Room re-checks ticket access before membership/session/presence setup.
+- Money Center reads Paid Watch-Party offers and transactions separately from Tips and Paid Videos.
+- Direct offer table writes are closed to authenticated clients; offer management is RPC-only.
+- Live money remains off, rows are sandbox/not-payable, and tickets do not grant Premium, Tips, Paid Videos, VIP, subscriptions, events, Live Stage, LiveKit authority, payouts, cash-out, withdrawal, or transfer.
+
+Next proof:
+
+- Build/install a Play/internal runtime containing this code.
+- Creator creates a sandbox paid Watch-Party ticket offer from Party Waiting Room after a Party Room code exists.
+- Unpaid fan is blocked before Party Room and direct link stays blocked.
+- Fan completes RevenueCat / Google Play sandbox ticket purchase.
+- Verified provider event creates a room-ticket transaction and active ticket.
+- Paid fan enters Party Waiting Room and Party Room.
+- Second unpaid fan remains blocked.
+- Money Center visually shows the Paid Watch-Party transaction.
+- Seat-limit proof passes.
+- Refund/revoke proof is attempted only if provider tooling gives a safe path; otherwise document the exact blocker.
+
 ## Immediate Chi'lly Chat Call Follow-Up
 
 Run two-user Android proof for the Supabase-applied Chi'lly Chat call invite/ringtone foundation in `docs/CHILLY_CHAT_CALL_NOTIFICATION_RINGTONE_SYSTEM.md`:

@@ -81,6 +81,11 @@ import {
     requireWatchPartyLivePremium,
     type PremiumWatchPartyFeatureAccessDecision,
 } from "../../_lib/premiumWatchPartyAccess";
+import {
+  purchasePaidWatchPartyTicket,
+  resolvePaidWatchPartyTicketAccess,
+  type PaidWatchPartyTicketAccess,
+} from "../../_lib/paidWatchPartyTickets";
 import { useSession } from "../../_lib/session";
 import { supabase } from "../../_lib/supabase";
 import { buildUserChannelProfile, readUserProfile, saveLastPartySession, type UserProfile } from "../../_lib/userData";
@@ -363,6 +368,9 @@ export default function WatchPartyRoomScreen() {
   const [accessGate, setAccessGate] = useState<MonetizationGate | null>(null);
   const [routeProofConfig, setRouteProofConfig] = useState<RouteBackedMonetizationProofConfig | null>(null);
   const [blockedRoomAccess, setBlockedRoomAccess] = useState<RoomAccessResolution | null>(null);
+  const [paidTicketGate, setPaidTicketGate] = useState<PaidWatchPartyTicketAccess | null>(null);
+  const [paidTicketBusy, setPaidTicketBusy] = useState(false);
+  const [paidTicketNotice, setPaidTicketNotice] = useState<string | null>(null);
   const [accessSheetVisible, setAccessSheetVisible] = useState(false);
   const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -728,6 +736,8 @@ export default function WatchPartyRoomScreen() {
     setNotFound(false);
     setAccessGate(null);
     setBlockedRoomAccess(null);
+    setPaidTicketGate(null);
+    setPaidTicketNotice(null);
 
     const bootstrap = async () => {
       let resolvedRoomForBootstrap = false;
@@ -798,6 +808,34 @@ export default function WatchPartyRoomScreen() {
             });
           }
           return;
+        }
+
+        if (snapshot.room.roomType !== "live") {
+          const ticketAccess = await resolvePaidWatchPartyTicketAccess(snapshot.room.partyId).catch(() => null);
+          if (cancelled) return;
+          if (!ticketAccess) {
+            setConnState("error");
+            setLoading(false);
+            return;
+          }
+          if (!ticketAccess.allowed) {
+            setRoom(snapshot.room);
+            setPaidTicketGate(ticketAccess);
+            setPaidTicketNotice(
+              ticketAccess.requiresPurchase
+                ? "Buy your ticket before entering the Party Room."
+                : "This room ticket is not available right now.",
+            );
+            setLoading(false);
+            trackEvent("money_provider_blocked_state_seen", {
+              blocked_reason: ticketAccess.reason,
+              offer_type: "paid_watch_party",
+              route_name: "watch-party-room",
+              room_type: "party_room",
+              source_surface: "party_room_direct_link",
+            });
+            return;
+          }
         }
 
         syncRoomFromSnapshot(snapshot, userId);
@@ -1794,6 +1832,30 @@ export default function WatchPartyRoomScreen() {
     }
   }, [accessGate, room]);
 
+  const onBuyPaidTicketFromRoomGate = useCallback(async () => {
+    const normalizedPartyId = String(room?.partyId ?? partyId ?? "").trim();
+    if (!normalizedPartyId || paidTicketBusy) return;
+    setPaidTicketBusy(true);
+    setPaidTicketNotice(null);
+    try {
+      const result = await purchasePaidWatchPartyTicket({
+        partyId: normalizedPartyId,
+        sourceSurface: "party_room_direct_link",
+      });
+      setPaidTicketGate(result.access);
+      setPaidTicketNotice(result.message);
+      if (result.ok && result.access.allowed) {
+        setPaidTicketGate(null);
+        setLoading(true);
+        setJoinRetryToken((value) => value + 1);
+      }
+    } catch {
+      setPaidTicketNotice("Room ticket checkout could not start. Try again later.");
+    } finally {
+      setPaidTicketBusy(false);
+    }
+  }, [paidTicketBusy, partyId, room?.partyId]);
+
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async () => {
     if (watchPartyLiveOpeningRef.current) return;
@@ -2504,6 +2566,47 @@ export default function WatchPartyRoomScreen() {
             onClose={() => setAccessSheetVisible(false)}
           />
         ) : null}
+      </View>
+    );
+  }
+
+  if (paidTicketGate && room) {
+    const offer = paidTicketGate.offer;
+    const priceLabel = offer
+      ? `${(offer.priceCents / 100).toLocaleString(undefined, { style: "currency", currency: offer.currency.toUpperCase() })}`
+      : "$0.99";
+    return (
+      <View style={styles.center}>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>
+            {paidTicketGate.requiresPurchase ? "Buy Room Ticket" : "Room ticket unavailable"}
+          </Text>
+          <Text style={styles.errorBody}>
+            {paidTicketGate.requiresPurchase
+              ? `This ticket unlocks access to this Watch-Party room only for ${priceLabel}. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.`
+              : "This paid Watch-Party ticket is not available right now."}
+          </Text>
+          <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
+          {paidTicketGate.requiresPurchase ? (
+            <TouchableOpacity
+              style={[styles.secondaryBtn, styles.accessPrimaryButton, paidTicketBusy && styles.secondaryBtnDisabled]}
+              onPress={onBuyPaidTicketFromRoomGate}
+              activeOpacity={0.85}
+              disabled={paidTicketBusy}
+              testID="buy-room-ticket-button"
+              accessibilityRole="button"
+              accessibilityLabel="Buy Room Ticket"
+            >
+              <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
+                {paidTicketBusy ? "Opening Checkout" : "Buy Room Ticket"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {paidTicketNotice ? <Text style={styles.errorBody}>{paidTicketNotice}</Text> : null}
+          <TouchableOpacity style={styles.secondaryBtn} onPress={returnToWatchPartyEntry} activeOpacity={0.85}>
+            <Text style={styles.secondaryBtnText}>← Go Back</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -3606,6 +3709,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
+  secondaryBtnDisabled: { opacity: 0.58 },
   secondaryBtnText: { color: "#ccc", fontSize: 13, fontWeight: "700" },
   accessPrimaryButton: {
     borderColor: "rgba(220,20,60,0.48)",

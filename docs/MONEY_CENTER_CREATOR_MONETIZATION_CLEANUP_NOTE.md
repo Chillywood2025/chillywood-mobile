@@ -49,3 +49,13 @@
 - Paid Videos unlock only the purchased creator video. They do not include Premium, subscriptions, VIP, live rooms, Watch-Party seats, Tips, events, other creator content, payout access, or LiveKit authority.
 - Follow-up proof passed paid-fan cold-start direct-link access, logged-out direct-link denial, exact grant scoping to the paid fan, direct anon client write denial, creator fixture login repair, Money Center visual transaction readback, and authenticated second-unpaid-fan direct-link denial.
 - Remaining provider proof gap: refund/revoke status waits on RevenueCat/Google Play refund tooling and safe order identifiers.
+
+## Paid Watch-Party Seats V1 Follow-Up
+- Paid Watch-Party Seats / Room Tickets V1 is implemented and Supabase-applied, but not Play/internal sandbox-proven yet.
+- Provider path is RevenueCat / Google Play dynamic sandbox product `watch_party_live_ticket_sandbox_099` / `cw_watch_party_live_ticket_sandbox_099`; Stripe Tips is not used.
+- Money Center remains the consolidated readout: Paid Watch-Party offers appear in Offers and verified room-ticket rows appear in Transactions.
+- Party Waiting Room checks paid-ticket access before routing to Party Room.
+- Party Room re-checks paid-ticket access before membership/session/presence setup so direct deep links cannot bypass the ticket gate.
+- Paid Watch-Party tickets unlock only the linked Party Waiting Room and Party Room. They do not include Premium, Tips, Paid Videos, VIP, subscriptions, events, Live Stage, payout access, or LiveKit authority.
+- Remote proof so far is schema/RPC/readback only: ticket switches are sandbox-only, live money is off, oversell guard exists, and direct authenticated offer writes are closed.
+- Remaining proof gaps: Play/internal build install, creator offer setup, unpaid gate, real RevenueCat/Google Play sandbox ticket purchase, provider-created transaction/ticket, paid fan entry, second unpaid denial, Money Center visual readback, seat-limit proof, and provider refund/revoke if tooling allows.

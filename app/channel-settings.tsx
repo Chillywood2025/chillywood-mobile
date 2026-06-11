@@ -62,6 +62,12 @@ import {
   type CreatorPaidVideoTransaction,
 } from "../_lib/creatorPaidVideos";
 import {
+  listMyPaidWatchPartyOffers,
+  listMyPaidWatchPartyTransactions,
+  type PaidWatchPartyOffer,
+  type PaidWatchPartyTransaction,
+} from "../_lib/paidWatchPartyTickets";
+import {
   listMyCreatorTipTransactions,
   readMyCreatorTipSettings,
   saveMyCreatorTipSettings,
@@ -1124,6 +1130,8 @@ export function ChannelStudioScreen() {
   const [creatorTipTransactions, setCreatorTipTransactions] = useState<CreatorTipTransaction[]>([]);
   const [creatorPaidVideoOffers, setCreatorPaidVideoOffers] = useState<CreatorPaidVideoOffer[]>([]);
   const [creatorPaidVideoTransactions, setCreatorPaidVideoTransactions] = useState<CreatorPaidVideoTransaction[]>([]);
+  const [creatorPaidWatchPartyOffers, setCreatorPaidWatchPartyOffers] = useState<PaidWatchPartyOffer[]>([]);
+  const [creatorPaidWatchPartyTransactions, setCreatorPaidWatchPartyTransactions] = useState<PaidWatchPartyTransaction[]>([]);
   const [tipSettingsBusy, setTipSettingsBusy] = useState(false);
   const [tipSettingsNotice, setTipSettingsNotice] = useState<string | null>(null);
   const [providerReadinessSummary, setProviderReadinessSummary] = useState<ProviderReadinessSummaryRow[]>(
@@ -1295,6 +1303,8 @@ export function ChannelStudioScreen() {
       setCreatorTipTransactions([]);
       setCreatorPaidVideoOffers([]);
       setCreatorPaidVideoTransactions([]);
+      setCreatorPaidWatchPartyOffers([]);
+      setCreatorPaidWatchPartyTransactions([]);
       setTipSettingsNotice(null);
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
       setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
@@ -1324,6 +1334,8 @@ export function ChannelStudioScreen() {
       listMyCreatorTipTransactions(25).catch(() => []),
       listMyPaidVideoOffers().catch(() => []),
       listMyPaidVideoTransactions(50).catch(() => []),
+      listMyPaidWatchPartyOffers().catch(() => []),
+      listMyPaidWatchPartyTransactions(50).catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
@@ -1344,6 +1356,8 @@ export function ChannelStudioScreen() {
         resolvedCreatorTipTransactions,
         resolvedCreatorPaidVideoOffers,
         resolvedCreatorPaidVideoTransactions,
+        resolvedCreatorPaidWatchPartyOffers,
+        resolvedCreatorPaidWatchPartyTransactions,
         resolvedProviderReadinessSummary,
         resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
@@ -1368,6 +1382,8 @@ export function ChannelStudioScreen() {
         setCreatorTipTransactions(resolvedCreatorTipTransactions);
         setCreatorPaidVideoOffers(resolvedCreatorPaidVideoOffers);
         setCreatorPaidVideoTransactions(resolvedCreatorPaidVideoTransactions);
+        setCreatorPaidWatchPartyOffers(resolvedCreatorPaidWatchPartyOffers);
+        setCreatorPaidWatchPartyTransactions(resolvedCreatorPaidWatchPartyTransactions);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
@@ -1393,6 +1409,8 @@ export function ChannelStudioScreen() {
         setCreatorTipTransactions([]);
         setCreatorPaidVideoOffers([]);
         setCreatorPaidVideoTransactions([]);
+        setCreatorPaidWatchPartyOffers([]);
+        setCreatorPaidWatchPartyTransactions([]);
         setTipSettingsNotice(null);
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
         setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
@@ -6167,6 +6185,8 @@ export function ChannelStudioScreen() {
     const tipPendingTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "pending" || transaction.status === "checkout_started");
     const paidVideoPaidTransactions = creatorPaidVideoTransactions.filter((transaction) => transaction.status === "paid");
     const paidVideoGrossCents = paidVideoPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
+    const paidWatchPartyPaidTransactions = creatorPaidWatchPartyTransactions.filter((transaction) => transaction.status === "paid");
+    const paidWatchPartyGrossCents = paidWatchPartyPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const tipFeatureStatus: MonetizationFeatureStatus = (() => {
       if (tipsFlag.state === "locked") return "Blocked";
       if (!creatorTipSettings) return "Not set up";
@@ -6414,7 +6434,7 @@ export function ChannelStudioScreen() {
     const featureStatusByKey: Record<MonetizationFeatureKey, MonetizationFeatureStatus> = {
       tips: tipFeatureStatus,
       paid_videos: paidContentFlag.state === "locked" ? "Blocked" : creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Active" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : paidContentFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
-      paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : watchPartyTicketsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
+      paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : watchPartyTicketsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       channel_subscriptions: "Blocked",
       vip_passes: "Blocked",
       paid_events: digitalSalesStatus === "Blocked" ? "Blocked" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
@@ -6478,7 +6498,7 @@ export function ChannelStudioScreen() {
     );
     const offerRows: readonly SummaryMetricCard[] = [
       { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
-      { label: "Paid Watch-Party tickets", value: watchPartyTicketsStatus, body: "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: "unavailable" },
+      { label: "Paid Watch-Party tickets", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox ticket${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
       { label: "Channel subscriptions", value: "Blocked", body: "Offer type: channel_subscription. Separate from Chi'llywood Premium and not backed yet.", tone: "unavailable" },
       { label: "VIP passes", value: "Blocked", body: "Offer type: vip_pass. Disabled until VIP unlocks real access or perks.", tone: "unavailable" },
       { label: "Paid event passes", value: digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: "Offer type: paid_event. Live Events route to Live Waiting Room; Watch-Party Events route to Party Waiting Room.", tone: "unavailable" },
@@ -6512,6 +6532,9 @@ export function ChannelStudioScreen() {
       : [];
     const visiblePaidVideoTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "videos"
       ? creatorPaidVideoTransactions
+      : [];
+    const visiblePaidWatchPartyTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "rooms"
+      ? creatorPaidWatchPartyTransactions
       : [];
     const renderTipTransactionRows = () => {
       if (!visibleTipTransactions.length) return null;
@@ -6554,6 +6577,29 @@ export function ChannelStudioScreen() {
               </Text>
               <Text style={styles.eventEmptyBody}>
                 Paid Videos unlock only this creator video. Premium and Tips stay separate. Payout status: {transaction.payoutStatus}.
+              </Text>
+            </View>
+          ))}
+        </View>
+      );
+    };
+    const renderPaidWatchPartyTransactionRows = () => {
+      if (!visiblePaidWatchPartyTransactions.length) return null;
+      return (
+        <View style={styles.eventList}>
+          {visiblePaidWatchPartyTransactions.map((transaction) => (
+            <View key={transaction.id} style={styles.eventEmptyCard}>
+              <View style={styles.eventCardHeader}>
+                <Text style={styles.eventEmptyTitle}>
+                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} room ticket
+                </Text>
+                {renderStudioStatusPill(transaction.status === "paid" ? "Paid" : transaction.status, transaction.status === "paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "revoked" ? "warning" : "muted")}
+              </View>
+              <Text style={styles.eventEmptyBody}>
+                {transaction.roomTitle} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
+              </Text>
+              <Text style={styles.eventEmptyBody}>
+                Paid Watch-Party tickets unlock only this Party Waiting Room and Party Room. Premium, Tips, Paid Videos, VIP, subscriptions, events, and Live Stage stay separate. Payout status: {transaction.payoutStatus}.
               </Text>
             </View>
           ))}
@@ -6781,6 +6827,24 @@ export function ChannelStudioScreen() {
                     ))}
                   </View>
                 ) : null}
+                {creatorPaidWatchPartyOffers.length ? (
+                  <View style={styles.eventList}>
+                    {creatorPaidWatchPartyOffers.map((offer) => (
+                      <View key={offer.id} style={styles.eventEmptyCard}>
+                        <View style={styles.eventCardHeader}>
+                          <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
+                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                        </View>
+                        <Text style={styles.eventEmptyBody}>
+                          paid_watch_party · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} seats sold · Party Room {offer.partyId ?? "not linked"}
+                        </Text>
+                        <Text style={styles.eventEmptyBody}>
+                          Purchases happen before Party Waiting Room and route to Party Room, not Live Stage. Sandbox rows are not payable.
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
                 {renderCreatorMoneyEventRows(
                   [...digitalEvents, ...merchEvents],
                   "No offers yet",
@@ -6819,6 +6883,7 @@ export function ChannelStudioScreen() {
                 </View>
                 {renderTipTransactionRows()}
                 {renderPaidVideoTransactionRows()}
+                {renderPaidWatchPartyTransactionRows()}
                 {renderCreatorMoneyEventRows(
                   filteredTransactionEvents,
                   "No transactions yet",
