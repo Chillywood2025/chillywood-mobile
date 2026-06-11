@@ -51,6 +51,10 @@ Paid Videos V1 is implemented and Supabase-applied for sandbox testing, but not 
 Closed on June 11, 2026:
 
 - Migration `20260611182509_paid_videos_v1_sandbox_bridge.sql` is remote-applied to project `bmkkhihfbmsnnmcqkoly`.
+- Paid Videos V1 implementation was committed as `c4fe47d5ddc3ec94ba9cd024f7bf479ebbbb2167`.
+- EAS production Android AAB build `cc38dd8a-59a9-4aad-9641-71862b7f5075` was started for versionCode `35`, app version `1.0.0`, runtime `1.0.0`, distribution `STORE`, channel `production`.
+- EAS scheduled Google Play internal submission `73665297-db15-46f9-b9fd-a9495125dea3`.
+- Latest EAS readback during this pass: build status `IN_PROGRESS`, no AAB artifact URL yet; install proof cannot start until the build completes and Play processes the internal rollout.
 - Creator video upload/edit now supports Free vs Paid Unlock plus price.
 - Paid Video offers are stored in existing `creator_content_prices` with RevenueCat / Google Play sandbox provider metadata.
 - Player locked state hides paid creator-video media URLs before access and shows `Unlock Video`.
@@ -63,7 +67,7 @@ Closed on June 11, 2026:
 
 Remaining proof:
 
-- Publish or install a Play/internal tester runtime that contains the Paid Videos V1 code. The June 11 proof attempt found attached device `R5CR120QCBF` on `com.chillywood.mobile` versionCode `32` with `installer=null`, so it is not acceptable for Google Play Billing proof and cannot prove the new Paid Videos code.
+- Wait for EAS build `cc38dd8a-59a9-4aad-9641-71862b7f5075` to complete and for internal submission `73665297-db15-46f9-b9fd-a9495125dea3` to finish Play processing. The June 11 proof attempt found attached device `R5CR120QCBF` on `com.chillywood.mobile` versionCode `32` with `installer=null`, so it is not acceptable for Google Play Billing proof and cannot prove the new Paid Videos code.
 - Confirm package readback shows installer `com.android.vending`, package `com.chillywood.mobile`, and a build/update that includes the Paid Videos V1 implementation.
 - Use a Play-installed/internal tester runtime with RevenueCat configured.
 - Creator marks an existing uploaded video as Paid Unlock and saves a valid sandbox price.

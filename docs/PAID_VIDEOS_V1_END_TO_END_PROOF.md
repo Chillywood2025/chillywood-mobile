@@ -58,6 +58,25 @@ Paid Videos V1 cannot be called sandbox-proven until a tester installs or update
 
 Do not sideload an APK for the Paid Videos purchase proof. Sideloaded builds can validate UI/code smoke, but they cannot close the Google Play Billing sandbox proof required for this flow.
 
+## Play/Internal Runtime Preparation
+
+June 11, 2026:
+
+- Paid Videos V1 was committed as `c4fe47d5ddc3ec94ba9cd024f7bf479ebbbb2167` (`Implement Paid Videos V1 sandbox flow`).
+- EAS production Android AAB build was started with auto-submit to the Google Play internal track.
+- EAS incremented Android versionCode from remote `34` to `35`.
+- Build id: `cc38dd8a-59a9-4aad-9641-71862b7f5075`.
+- Submission id scheduled by EAS: `73665297-db15-46f9-b9fd-a9495125dea3`.
+- App version: `1.0.0`.
+- Runtime version: `1.0.0`.
+- Build profile: `production`.
+- Channel: `production`.
+- Distribution: `STORE`.
+- Artifact type requested: Android App Bundle (`app-bundle` / AAB).
+- Latest readback during this pass: build status `IN_PROGRESS`, no AAB artifact URL yet.
+
+Paid Videos V1 purchase proof is still pending until the build completes, Play internal processing finishes, and the tester installs/updates from Google Play with `installer=com.android.vending`.
+
 Expected sandbox proof:
 
 1. Creator marks an uploaded video as Paid Unlock and saves a test price.
