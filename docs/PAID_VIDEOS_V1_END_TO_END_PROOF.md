@@ -66,16 +66,16 @@ June 11, 2026:
 - EAS production Android AAB build was started with auto-submit to the Google Play internal track.
 - EAS incremented Android versionCode from remote `34` to `35`.
 - Build id: `cc38dd8a-59a9-4aad-9641-71862b7f5075`.
-- Submission id scheduled by EAS: `73665297-db15-46f9-b9fd-a9495125dea3`.
+- Auto-submission id initially scheduled by EAS: `73665297-db15-46f9-b9fd-a9495125dea3`. Explicit confirmed submission id: `19a77260-4f23-4a24-887c-1730790b7b98`.
 - App version: `1.0.0`.
 - Runtime version: `1.0.0`.
 - Build profile: `production`.
 - Channel: `production`.
 - Distribution: `STORE`.
 - Artifact type requested: Android App Bundle (`app-bundle` / AAB).
-- Latest readback during this pass: build status `IN_PROGRESS`, no AAB artifact URL yet.
+- Final readback during this pass: build status `FINISHED`, AAB artifact URL `https://expo.dev/artifacts/eas/jr8n0pSiAERN5zPsyqoaBWpmNk-zDHkoAGEzVVkKYCg.aab`.
 
-Paid Videos V1 purchase proof is still pending until the build completes, Play internal processing finishes, and the tester installs/updates from Google Play with `installer=com.android.vending`.
+Paid Videos V1 purchase proof is still pending until Play internal processing reaches tester devices and the tester installs/updates from Google Play with `installer=com.android.vending`.
 
 Expected sandbox proof:
 

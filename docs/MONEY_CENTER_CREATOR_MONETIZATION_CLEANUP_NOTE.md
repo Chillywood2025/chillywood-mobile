@@ -41,7 +41,7 @@
 ## Paid Videos V1 Follow-Up
 - Paid Videos V1 is now implemented for RevenueCat / Google Play sandbox testing, but not yet Play-installed sandbox-proven end to end.
 - June 11 proof attempt stopped before checkout because attached device `R5CR120QCBF` had `com.chillywood.mobile` versionCode `32` installed with `installer=null`; a Play/internal tester runtime with installer `com.android.vending` and the Paid Videos V1 code is required.
-- EAS production Android AAB build `cc38dd8a-59a9-4aad-9641-71862b7f5075` was started from commit `c4fe47d5ddc3ec94ba9cd024f7bf479ebbbb2167` for versionCode `35`, and EAS scheduled Google Play internal submission `73665297-db15-46f9-b9fd-a9495125dea3`. Latest readback in this pass was build `IN_PROGRESS`, so install proof and purchase proof remain pending.
+- EAS production Android AAB build `cc38dd8a-59a9-4aad-9641-71862b7f5075` was started from commit `c4fe47d5ddc3ec94ba9cd024f7bf479ebbbb2167` for versionCode `35`; build readback finished with AAB artifact `https://expo.dev/artifacts/eas/jr8n0pSiAERN5zPsyqoaBWpmNk-zDHkoAGEzVVkKYCg.aab`. EAS initially scheduled Google Play internal submission `73665297-db15-46f9-b9fd-a9495125dea3`, and explicit confirmed submission `19a77260-4f23-4a24-887c-1730790b7b98` completed. Install proof and purchase proof remain pending.
 - Creator setup stays in the existing creator video upload/edit flow: Free or Paid Unlock plus price.
 - Money Center remains the consolidated readout: Paid Video offers appear in Offers and verified sandbox unlock rows appear in Transactions.
 - Paid Video purchases use the Android digital product path, not Stripe Tips.
