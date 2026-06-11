@@ -44,6 +44,69 @@ June 6 SMTP follow-up was completed with sender change to `no-reply@chillywoodst
 
 ## Current Recommendation
 
+## Tips V1 Test-Mode Proof Follow-Up
+
+Tips V1 is implemented, deployed, and sandbox-proven as pure creator contribution only, not a live-money launch. Do not build Paid Videos, Paid Watch-Parties, Channel Subscriptions, VIP Passes, or Paid Events until the owner explicitly approves the next monetization build.
+
+Closed on June 11, 2026:
+
+- Migration `20260611151221_tips_v1_stripe_checkout.sql` is remote-applied to project `bmkkhihfbmsnnmcqkoly`.
+- Edge Functions `create-creator-tip-checkout` and `stripe-tip-webhook` are deployed ACTIVE version `1`.
+- Existing Stripe Connect account/onboarding/sync functions were redeployed with the shared helper update.
+- Stripe test webhook endpoint is configured to the deployed `stripe-tip-webhook` URL with required Tips V1 events, and `STRIPE_TIP_WEBHOOK_SECRET` is configured in Supabase without committing or printing the value.
+- Deterministic local-only proof users `tips_creator_test`, `tips_fan_test`, and `tips_blocked_test` were created/repaired and can sign in.
+- Unauthenticated checkout returns `401`.
+- Unsigned webhook returns `400 invalid_signature`.
+- A signed-in local proof account saved Tips settings through RPC and reload persisted suggested/default/min/max amounts.
+- Original hosted-onboarding account correctly stayed `canTip=false` while provider onboarding/document verification was blocked.
+- Fresh Stripe test connected account was created with Stripe test-only verification values and synced ready: `charges_enabled=true`, `payouts_enabled=true`, `details_submitted=true`, provider ready, settings active, public `canTip=true`, and live money still disabled.
+- Self-tip checkout returns `403 self_tip_blocked`.
+- Unready creator checkout returns `403 provider_not_ready` with no transaction row.
+- A seeded creator-to-`tips_blocked_test` audience block causes checkout to return `403 audience_blocked` before provider checkout.
+- Manual Chrome CAPTCHA/onboarding returned to `https://chillywoodstream.com/stripe-connect/return?proof=tips-v1`, which currently lands on the public legal/support page instead of a polished Stripe return/status screen.
+- Safe readback for the original hosted-onboarding account showed `individual.verification.document` past due and `card_payments=inactive`; this was resolved for proof by binding `tips_creator_test` to a fresh verified Stripe test account.
+- Rapid duplicate attempts while the creator is unready return `403 provider_not_ready` and create no rows.
+- Money Center's deployed transaction read path returns zero rows and zero paid rows for `tips_creator_test`.
+- Direct client insert of a `paid` tip transaction and direct client provider-status update are denied.
+- `create-creator-tip-checkout` was redeployed after fixing the audience-block lookup to select the existing `channel_user_id` column.
+- Successful $1.00 test tip passed: server checkout created, Stripe Checkout completed with test card, signed webhook marked tip `48c9ffc0-804f-4f63-915f-f1476ec45f78` paid, Money Center transaction readback showed the verified paid tip with `payout_status=not_payable`.
+- Failed-card proof passed: $3.00 declined-card checkout was marked failed and did not credit creator earnings.
+- No-unlock proof passed: zero new `access_grants`, zero new `content_access_grants`, and zero updated `user_entitlements` for the fan after the paid tip.
+
+Remaining follow-up:
+
+- Later UI follow-up: replace the current `/stripe-connect/return?proof=tips-v1` public legal/support landing with a proper Stripe return/status screen. Do not redesign it inside the Tips proof unless it blocks provider status refresh.
+- Device/manual polish proof still useful: creator opens Platform Studio > Money Center > Ways to Earn > Tips, confirms test/sandbox copy, and fan opens the native channel Tip sheet with no-perk copy. Server/browser proof already closes the payment/webhook path.
+- Optional negative follow-up: explicit user-canceled Checkout status, because failed-card proof already proves failed provider payments do not credit the creator.
+- Keep `live_money_enabled=off`; do not claim live tips until legal/tax/fraud/support/provider/owner approval and live-mode proof are explicitly complete.
+
+## BrowserStack Final Regression Deferral
+
+Do not use BrowserStack for the current Tips sandbox proof unless explicitly requested. Use cheap local/manual proof with real devices/internal testers after each monetization flow. Save BrowserStack for the final full regression after all creator monetization flows are implemented and locally proved:
+
+- Tips
+- Paid Videos
+- Paid Watch-Party seats
+- Channel Subscriptions
+- VIP Passes
+- Paid Events
+- Chi'lly Chat calls
+- Brand Studio
+- Watch-Party participant rail
+- Auth email reset/signup
+- Premium gates
+- key Android device sizes
+
+## Creator Monetization Truth Follow-Up
+
+The June 11, 2026 Money Center cleanup is a clean hub and readiness surface. Tips V1 is the first repo-side end-to-end test-mode creator contribution path; it is not a live-money launch. Before building any other creator-money feature, keep this truth fixed:
+
+- Tips, paid videos, paid Watch-Parties, channel subscriptions, VIP passes, and paid events must not be called live unless creator setup, fan checkout, server-side verification, access/transaction records, payout tracking, and admin/safety handling are all proved.
+- Tips V1 must remain pure contribution only and cannot unlock content, badges, VIP, rooms, subscriptions, paid videos, event access, Watch-Party seats, public ranking rewards, or any other digital benefit.
+- Paid Watch-Party seats are not sellable end-to-end today: no creator ticketed-room setup UI with price/capacity/date/status, no public `Buy Room Ticket` checkout before Party Waiting Room, no Party Room paid-ticket recheck, no creator transaction/net payout path, and no admin refund/review path for live paid seats.
+- Paid videos are the closest backed access model because `creator_content_prices`, `content_access_grants`, `resolve_creator_content_access`, and the locked Player state exist, but checkout is still preflight/readiness only.
+- The next real monetization build after Tips should still avoid route/room authority. Recommended next candidate is paid videos only after provider rail choice, refund handling, and access grant enforcement are proved without mixing Premium copy.
+
 Finish and verify Search, Typeahead And Social Discovery Polish for Chi’lly Chat, Chi’lly Circle, and Home Explore, then capture Android proof at `/tmp/chillywood-search-typeahead-social-discovery-proof-20260605/` for:
 
 - Search-by-typeahead on Chi’lly Chat inbox with debounced thread filtering and People suggestions

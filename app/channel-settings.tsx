@@ -55,6 +55,13 @@ import {
   type CreatorMonetizationFoundationSummary,
 } from "../_lib/creatorMonetization";
 import {
+  listMyCreatorTipTransactions,
+  readMyCreatorTipSettings,
+  saveMyCreatorTipSettings,
+  type CreatorTipSettings,
+  type CreatorTipTransaction,
+} from "../_lib/creatorTips";
+import {
   CREATOR_MONETIZATION_FEATURE_CATALOG,
   type MonetizationFeatureAction,
   type MonetizationFeatureCatalogItem,
@@ -1091,6 +1098,10 @@ export function ChannelStudioScreen() {
   const [creatorMoneyAuditSourceRows, setCreatorMoneyAuditSourceRows] = useState<MoneyAuditSourceRow[]>([]);
   const [selectedCreatorMoneyAuditEvent, setSelectedCreatorMoneyAuditEvent] = useState<MoneyAuditEvent | null>(null);
   const [moneyTransactionFilter, setMoneyTransactionFilter] = useState<MoneyTransactionFilter>("all");
+  const [creatorTipSettings, setCreatorTipSettings] = useState<CreatorTipSettings | null>(null);
+  const [creatorTipTransactions, setCreatorTipTransactions] = useState<CreatorTipTransaction[]>([]);
+  const [tipSettingsBusy, setTipSettingsBusy] = useState(false);
+  const [tipSettingsNotice, setTipSettingsNotice] = useState<string | null>(null);
   const [providerReadinessSummary, setProviderReadinessSummary] = useState<ProviderReadinessSummaryRow[]>(
     getProviderReadinessFallbackSummary,
   );
@@ -1256,6 +1267,9 @@ export function ChannelStudioScreen() {
       setCreatorMonetizationSummary(null);
       setCreatorMoneyAuditSourceRows([]);
       setSelectedCreatorMoneyAuditEvent(null);
+      setCreatorTipSettings(null);
+      setCreatorTipTransactions([]);
+      setTipSettingsNotice(null);
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
       setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
       setPayoutSetupNotice(null);
@@ -1280,6 +1294,8 @@ export function ChannelStudioScreen() {
       readCreatorPayoutDashboardSummary({ creatorUserId: String(user?.id ?? ""), limit: 5 }),
       readCreatorMonetizationFoundationSummary(String(user?.id ?? "")).catch(() => null),
       readCreatorMoneyAuditSourceRows(String(user?.id ?? "")).catch(() => []),
+      readMyCreatorTipSettings().catch(() => null),
+      listMyCreatorTipTransactions(25).catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
@@ -1296,6 +1312,8 @@ export function ChannelStudioScreen() {
         resolvedCreatorPayoutSummary,
         resolvedCreatorMonetizationSummary,
         resolvedCreatorMoneyAuditSourceRows,
+        resolvedCreatorTipSettings,
+        resolvedCreatorTipTransactions,
         resolvedProviderReadinessSummary,
         resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
@@ -1316,6 +1334,8 @@ export function ChannelStudioScreen() {
         setCreatorPayoutSummary(resolvedCreatorPayoutSummary);
         setCreatorMonetizationSummary(resolvedCreatorMonetizationSummary);
         setCreatorMoneyAuditSourceRows(resolvedCreatorMoneyAuditSourceRows);
+        setCreatorTipSettings(resolvedCreatorTipSettings);
+        setCreatorTipTransactions(resolvedCreatorTipTransactions);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
@@ -1337,6 +1357,9 @@ export function ChannelStudioScreen() {
         setCreatorMonetizationSummary(null);
         setCreatorMoneyAuditSourceRows([]);
         setSelectedCreatorMoneyAuditEvent(null);
+        setCreatorTipSettings(null);
+        setCreatorTipTransactions([]);
+        setTipSettingsNotice(null);
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
         setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
         setPlatformRoleMemberships([]);
@@ -1362,6 +1385,59 @@ export function ChannelStudioScreen() {
     });
     setCreatorPayoutSummary(nextSummary);
   }, [user?.id]);
+
+  const refreshCreatorTips = useCallback(async () => {
+    if (!user?.id) {
+      setCreatorTipSettings(null);
+      setCreatorTipTransactions([]);
+      return;
+    }
+
+    const [nextSettings, nextTransactions] = await Promise.all([
+      readMyCreatorTipSettings().catch(() => null),
+      listMyCreatorTipTransactions(25).catch(() => []),
+    ]);
+    setCreatorTipSettings(nextSettings);
+    setCreatorTipTransactions(nextTransactions);
+  }, [user?.id]);
+
+  const handleSaveTipSettings = useCallback(async (tipsEnabled: boolean) => {
+    if (tipSettingsBusy) return;
+
+    setTipSettingsBusy(true);
+    setTipSettingsNotice(null);
+    trackEvent(tipsEnabled ? "money_feature_enabled" : "money_feature_paused", {
+      creator_id: user?.id ?? null,
+      feature_key: "tips",
+      route_name: "channel-studio",
+      source_surface: "money_center",
+    });
+
+    try {
+      const current = creatorTipSettings;
+      const nextSettings = await saveMyCreatorTipSettings({
+        currency: current?.currency ?? "usd",
+        defaultAmountCents: current?.defaultAmountCents ?? 300,
+        maxAmountCents: current?.maxAmountCents ?? 50000,
+        minAmountCents: current?.minAmountCents ?? 100,
+        suggestedAmountsCents: current?.suggestedAmountsCents?.length ? current.suggestedAmountsCents : [100, 300, 500, 1000],
+        tipsEnabled,
+      });
+      setCreatorTipSettings(nextSettings);
+      setTipSettingsNotice(
+        nextSettings.status === "active"
+          ? "Tips are active. Fans can tip you from your channel."
+          : tipsEnabled
+            ? "Tips are saved, but payout provider setup still needs attention."
+            : "Tips are paused. Fans cannot tip you right now.",
+      );
+      await refreshCreatorTips();
+    } catch {
+      setTipSettingsNotice("Tip settings could not be saved. Try again later.");
+    } finally {
+      setTipSettingsBusy(false);
+    }
+  }, [creatorTipSettings, refreshCreatorTips, tipSettingsBusy, user?.id]);
 
   const handleStartPayoutProviderSetup = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
@@ -1412,12 +1488,13 @@ export function ChannelStudioScreen() {
       await Linking.openURL(onboardingUrl);
       setPayoutSetupNotice("Payout setup opened. Withdrawals are not active yet.");
       await refreshCreatorPayouts();
+      await refreshCreatorTips();
     } catch {
       setPayoutSetupNotice("Payout setup could not be started. No payout or transfer was created.");
     } finally {
       setPayoutSetupBusy(null);
     }
-  }, [payoutSetupBusy, refreshCreatorPayouts, user?.id]);
+  }, [payoutSetupBusy, refreshCreatorPayouts, refreshCreatorTips, user?.id]);
 
   const handleRefreshPayoutProviderStatus = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
@@ -1432,12 +1509,13 @@ export function ChannelStudioScreen() {
         syncPayload.message || "Payout provider status was checked. Withdrawals are not active yet.",
       );
       await refreshCreatorPayouts();
+      await refreshCreatorTips();
     } catch {
       setPayoutSetupNotice("Payout provider status could not be refreshed. No money action was created.");
     } finally {
       setPayoutSetupBusy(null);
     }
-  }, [payoutSetupBusy, refreshCreatorPayouts, user?.id]);
+  }, [payoutSetupBusy, refreshCreatorPayouts, refreshCreatorTips, user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -5894,6 +5972,7 @@ export function ChannelStudioScreen() {
     const stripeWebhookReadiness = readiness("stripe", "stripe_webhook_signature");
     const payoutSetupReadiness = readiness("stripe_connect", "payout_setup");
     const payoutReleaseReadiness = readiness("stripe_connect", "payout_release");
+    const tipsProviderReadiness = readiness("stripe", "tips");
     const paidContentReadiness = readiness("google_play", "paid_content");
     const commerceReadiness = readiness("stripe", "platform_commerce");
     const policyReadiness = readiness("internal_policy", "creator_monetization_policy");
@@ -5962,6 +6041,46 @@ export function ChannelStudioScreen() {
         ? "Sandbox ready"
         : "Setup needed";
     const canStartStripeSetup = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state) && payoutsFlag.state === "on";
+    const paidTipTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "paid");
+    const tipGrossCents = paidTipTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
+    const tipPendingTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "pending" || transaction.status === "checkout_started");
+    const tipFeatureStatus: MonetizationFeatureStatus = (() => {
+      if (tipsFlag.state === "locked") return "Blocked";
+      if (!creatorTipSettings) return "Not set up";
+      if (creatorTipSettings.status === "active") return "Active";
+      if (creatorTipSettings.status === "paused") return "Paused";
+      if (creatorTipSettings.status === "blocked") return "Blocked";
+      return "Needs attention";
+    })();
+    const tipProviderReady = creatorTipSettings?.providerChargesEnabled === true && creatorTipSettings?.providerPayoutsEnabled === true;
+    const tipSetupCards: readonly SummaryMetricCard[] = [
+      {
+        label: "Tips",
+        value: tipFeatureStatus,
+        body: creatorTipSettings?.tipsEnabled
+          ? "Tips are saved as pure contributions. They do not unlock content, badges, room access, VIP, or perks."
+          : "Turn on Tips after payout provider setup is ready.",
+        tone: tipFeatureStatus === "Active" ? "default" : "unavailable",
+      },
+      {
+        label: "Provider",
+        value: tipProviderReady ? "Ready" : "Setup needed",
+        body: "Connect payouts before fans can send tips. Test mode stays separate from live money.",
+        tone: tipProviderReady ? "default" : "unavailable",
+      },
+      {
+        label: "Tip total",
+        value: formatMonetizationCurrency(tipGrossCents, creatorTipSettings?.currency ?? "usd"),
+        body: paidTipTransactions.length ? `${paidTipTransactions.length} verified test tip${paidTipTransactions.length === 1 ? "" : "s"}.` : "No verified tips yet.",
+        tone: paidTipTransactions.length ? "default" : "unavailable",
+      },
+      {
+        label: "Pending tips",
+        value: String(tipPendingTransactions.length),
+        body: "Pending checkout rows are not creator earnings until the Stripe webhook verifies payment.",
+        tone: "unavailable",
+      },
+    ];
     const payoutCards: readonly SummaryMetricCard[] = [
       {
         label: "Payout setup",
@@ -6044,6 +6163,12 @@ export function ChannelStudioScreen() {
         value: stripeStatus,
         body: "Stripe Connect is payout setup only. It does not charge Android users for digital goods.",
         tone: sectionTone(stripeStatus) === "default" ? "default" : "unavailable",
+      },
+      {
+        label: "Tips checkout",
+        value: providerStatusLabel(tipsProviderReadiness, tipFeatureStatus === "Active" ? "Test ready" : "Setup needed"),
+        body: summarizeProviderReadiness(tipsProviderReadiness, "Tips V1 uses server-side Stripe test-mode checkout and webhook verification only."),
+        tone: getProviderReadinessTone(tipsProviderReadiness),
       },
       {
         label: "Stripe webhook",
@@ -6164,7 +6289,7 @@ export function ChannelStudioScreen() {
       },
     ];
     const featureStatusByKey: Record<MonetizationFeatureKey, MonetizationFeatureStatus> = {
-      tips: tipsFlag.state === "locked" ? "Blocked" : tipsFlag.state === "on" && monetizationActive ? "Active" : tipsFlag.state === "maintenance" ? "Paused" : tipsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
+      tips: tipFeatureStatus,
       paid_videos: paidContentFlag.state === "locked" ? "Blocked" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : paidContentFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : watchPartyTicketsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       channel_subscriptions: "Blocked",
@@ -6172,7 +6297,7 @@ export function ChannelStudioScreen() {
       paid_events: digitalSalesStatus === "Blocked" ? "Blocked" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
     };
     const featureBlockedReasonByKey: Partial<Record<MonetizationFeatureKey, string>> = {
-      tips: tipsFlag.state === "locked" ? tipsFlag.displaySummary : undefined,
+      tips: tipsFlag.state === "locked" ? tipsFlag.displaySummary : creatorTipSettings?.status === "setup_incomplete" ? "Connect payouts before fans can send tips." : undefined,
       paid_videos: paidContentFlag.state === "locked" ? paidContentFlag.displaySummary : undefined,
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? watchPartyTicketsFlag.displaySummary : undefined,
       channel_subscriptions: "Creator channel subscriptions are separate from Chi'llywood Premium and are not backed yet.",
@@ -6259,6 +6384,33 @@ export function ChannelStudioScreen() {
       return true;
     };
     const filteredTransactionEvents = creatorMoneyAuditEvents.filter(transactionMatchesFilter);
+    const visibleTipTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "tips"
+      ? creatorTipTransactions
+      : [];
+    const renderTipTransactionRows = () => {
+      if (!visibleTipTransactions.length) return null;
+      return (
+        <View style={styles.eventList}>
+          {visibleTipTransactions.map((transaction) => (
+            <View key={transaction.id} style={styles.eventEmptyCard}>
+              <View style={styles.eventCardHeader}>
+                <Text style={styles.eventEmptyTitle}>
+                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} tip
+                </Text>
+                {renderStudioStatusPill(transaction.status === "paid" ? "Paid" : transaction.status, transaction.status === "paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "disputed" ? "warning" : "muted")}
+              </View>
+              <Text style={styles.eventEmptyBody}>
+                {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.providerEnvironment === "test" ? "Test mode" : transaction.providerEnvironment}
+              </Text>
+              {transaction.messagePrivate ? <Text style={styles.noticeText}>{transaction.messagePrivate}</Text> : null}
+              <Text style={styles.eventEmptyBody}>
+                Tips do not unlock content, badges, room access, VIP, subscriptions, or perks. Payout status: {transaction.payoutStatus}.
+              </Text>
+            </View>
+          ))}
+        </View>
+      );
+    };
 
     if (moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "locked" || moneyCenterFeatureFlag.state === "maintenance") {
       const unavailableStatus = moneyCenterFeatureFlag.state === "locked" ? "Blocked" : "Disabled";
@@ -6348,10 +6500,10 @@ export function ChannelStudioScreen() {
             children: (
               <>
                 {renderSummaryMetricCards([
-                  { label: "Available balance", value: "No verified earnings yet", body: "No dollar amount is shown until verified ledger entries exist.", tone: "unavailable" },
-                  { label: "Pending balance", value: "No verified earnings yet", body: "Pending, available, paid, refunded, reversed, and blocked balances stay separate.", tone: "unavailable" },
-                  { label: "This month", value: "No verified earnings yet", body: "Monthly earnings need verified transactions before they can appear.", tone: "unavailable" },
-                  { label: "Lifetime earnings", value: "No verified earnings yet", body: "Lifetime totals are hidden until supported by verified ledger rows.", tone: "unavailable" },
+                  { label: "Available balance", value: "Not payable", body: "Tips V1 is test mode. No dollar amount is withdrawable until live money and payouts are approved.", tone: "unavailable" },
+                  { label: "Pending balance", value: tipPendingTransactions.length ? `${tipPendingTransactions.length} pending` : "None", body: "Pending checkout rows are not creator earnings until the Stripe webhook verifies payment.", tone: "unavailable" },
+                  { label: "This month", value: paidTipTransactions.length ? formatMonetizationCurrency(tipGrossCents, creatorTipSettings?.currency ?? "usd") : "No verified tips yet", body: "Verified test tips appear here, but payouts remain unavailable.", tone: paidTipTransactions.length ? "default" : "unavailable" },
+                  { label: "Lifetime earnings", value: paidTipTransactions.length ? formatMonetizationCurrency(tipGrossCents, creatorTipSettings?.currency ?? "usd") : "No verified tips yet", body: "This is test-mode tip history, not a withdrawable live balance.", tone: paidTipTransactions.length ? "default" : "unavailable" },
                   { label: "Pending payout", value: "Not active", body: "No payout, cash-out, withdrawal, transfer, or payout release action is available.", tone: "unavailable" },
                   { label: "Payout status", value: payoutsStatus === "Disabled" ? "Not active" : payoutsStatus, body: "Set up payouts before you can receive creator earnings.", tone: sectionTone(payoutsStatus) === "default" && creatorPayoutSummary.providerReady ? "default" : "unavailable" },
                   { label: "Monetization status", value: topStatus, body: "Creator earnings are temporarily disabled until live money and provider checks pass.", tone: monetizationActive ? "default" : "unavailable" },
@@ -6390,6 +6542,58 @@ export function ChannelStudioScreen() {
                 <View style={styles.summaryGrid}>
                   {monetizationFeatureCards.map(renderFeatureCard)}
                 </View>
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Tips setup</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Tips do not unlock perks or content. Fans can only send a contribution when tips are enabled and the Stripe test-mode payout provider is ready.
+                  </Text>
+                </View>
+                {renderSummaryMetricCards(tipSetupCards)}
+                <View style={styles.eventActionRow}>
+                  {creatorTipSettings?.status !== "active" ? (
+                    <TouchableOpacity
+                      style={[styles.eventPrimaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
+                      activeOpacity={0.88}
+                      disabled={tipSettingsBusy}
+                      onPress={() => handleSaveTipSettings(true)}
+                    >
+                      {tipSettingsBusy ? (
+                        <View style={styles.eventPrimaryButtonBusyRow}>
+                          <ActivityIndicator color="#fff" />
+                          <Text style={styles.eventPrimaryButtonText}>Saving tips</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.eventPrimaryButtonText}>Enable Tips</Text>
+                      )}
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.eventSecondaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
+                      activeOpacity={0.88}
+                      disabled={tipSettingsBusy}
+                      onPress={() => handleSaveTipSettings(false)}
+                    >
+                      <Text style={styles.eventSecondaryButtonText}>Pause Tips</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.eventSecondaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={payoutSetupBusy !== null}
+                    onPress={handleStartPayoutProviderSetup}
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Connect payouts</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={payoutSetupBusy !== null}
+                    onPress={handleRefreshPayoutProviderStatus}
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
+                  </TouchableOpacity>
+                </View>
+                {tipSettingsNotice ? <Text style={styles.noticeText}>{tipSettingsNotice}</Text> : null}
               </>
             ),
           })}
@@ -6439,6 +6643,7 @@ export function ChannelStudioScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {renderTipTransactionRows()}
                 {renderCreatorMoneyEventRows(
                   filteredTransactionEvents,
                   "No transactions yet",

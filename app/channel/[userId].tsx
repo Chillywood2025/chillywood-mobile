@@ -25,6 +25,10 @@ import {
   readCreatorMiniPlatformCommerceSurface,
   type CreatorMiniPlatformCommerceSurface,
 } from "../../_lib/creatorMonetization";
+import {
+  readCreatorTipPublicStatus,
+  type CreatorTipPublicStatus,
+} from "../../_lib/creatorTips";
 import { formatClipStudioTemplateLabel, type ClipStudioTemplatePreset } from "../../_lib/clipStudio";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
@@ -41,6 +45,7 @@ import {
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { TipSheet } from "../../components/monetization/tip-sheet";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 
 const SKYLINE_SOURCE = require("../../assets/images/chicago-skyline.jpg");
@@ -142,6 +147,8 @@ export default function PublicChannelScreen() {
   const [videos, setVideos] = useState<CreatorVideo[]>([]);
   const [events, setEvents] = useState<CreatorEventSummary[]>([]);
   const [commerceSurface, setCommerceSurface] = useState<CreatorMiniPlatformCommerceSurface | null>(null);
+  const [tipStatus, setTipStatus] = useState<CreatorTipPublicStatus | null>(null);
+  const [tipSheetVisible, setTipSheetVisible] = useState(false);
   const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -161,6 +168,7 @@ export default function PublicChannelScreen() {
       setVideos([]);
       setEvents([]);
       setCommerceSurface(null);
+      setTipStatus(null);
       setPlatformBranding(null);
 
       if (!routeUserId) {
@@ -200,10 +208,11 @@ export default function PublicChannelScreen() {
       const brandPromise = showDraftBranding
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
-      const [publicVideos, publicEvents, nextCommerceSurface, nextPlatformBranding] = await Promise.all([
+      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextPlatformBranding] = await Promise.all([
         readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
+        readCreatorTipPublicStatus(routeUserId).catch(() => null),
         brandPromise,
       ]);
 
@@ -212,6 +221,7 @@ export default function PublicChannelScreen() {
       setVideos(publicVideos);
       setEvents(publicEvents.filter((event) => event.isLiveNow || event.isUpcoming));
       setCommerceSurface(nextCommerceSurface);
+      setTipStatus(nextTipStatus);
       setPlatformBranding(nextPlatformBranding);
       setLoadState("ready");
     };
@@ -456,6 +466,7 @@ export default function PublicChannelScreen() {
     if (!channel) return null;
     const followLabel = viewerFollowState === "following" ? "Following" : "Follow";
     const canRenderFollow = !isOwner && viewerFollowState !== "unavailable";
+    const canRenderTip = !isOwner && tipStatus?.canTip === true;
 
     return (
       <View style={styles.hero}>
@@ -507,6 +518,14 @@ export default function PublicChannelScreen() {
               onPress={toggleFollow}
               style={styles.actionButtonWide}
               variant={viewerFollowState === "following" ? "secondary" : "primary"}
+            />
+          ) : null}
+          {canRenderTip ? (
+            <AppActionButton
+              label="Tip"
+              onPress={() => setTipSheetVisible(true)}
+              style={styles.actionButtonWide}
+              variant="success"
             />
           ) : null}
           <AppActionButton label="Share" onPress={shareChannel} />
@@ -829,6 +848,17 @@ export default function PublicChannelScreen() {
           setReportVisible(false);
         }}
       />
+      {channel ? (
+        <TipSheet
+          visible={tipSheetVisible}
+          creatorId={channel.id}
+          creatorName={channel.displayName}
+          creatorAvatarUrl={brandAvatarSource}
+          sourceSurface="creator_channel_header"
+          tipStatus={tipStatus}
+          onClose={() => setTipSheetVisible(false)}
+        />
+      ) : null}
     </View>
   );
 }

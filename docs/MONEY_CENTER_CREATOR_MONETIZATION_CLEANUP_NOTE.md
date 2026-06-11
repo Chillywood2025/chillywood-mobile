@@ -29,3 +29,11 @@
 ## Became Shared Components/Catalog
 - The six creator monetization flows now come from `_lib/creatorMonetizationFeatures.ts`.
 - Money Center Ways to Earn renders from that shared catalog instead of hardcoded duplicate label sets.
+
+## Tips V1 Follow-Up
+- Tips is now implemented as the first end-to-end creator contribution path in test/sandbox mode.
+- Money Center remains the setup/management home: creator enable/pause, payout connection, provider readiness, and verified tip transaction readout all live there.
+- Fan Tip CTA is limited to the creator channel header for V1.
+- Tips do not unlock content, badges, VIP, rooms, paid videos, subscriptions, event access, Watch-Party seats, public rewards, Premium, LiveKit authority, or payout access.
+- Stripe checkout and webhook verification are server-side only; mobile never stores provider secrets and never marks a tip paid.
+- Other creator monetization flows remain readiness-only or blocked unless separately built.

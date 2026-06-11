@@ -793,6 +793,7 @@ export const createStripeConnectAccount = async (secret: string, user: Authentic
     "controller[requirement_collection]": "stripe",
     "controller[stripe_dashboard][type]": "express",
     default_currency: accountCurrency(),
+    "capabilities[card_payments][requested]": true,
     "capabilities[transfers][requested]": true,
     "metadata[chillywood_provider]": DB_PROVIDER,
     "metadata[chillywood_provider_environment]": PROVIDER_ENVIRONMENT,
