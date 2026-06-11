@@ -46,7 +46,7 @@ June 6 SMTP follow-up was completed with sender change to `no-reply@chillywoodst
 
 ## Paid Videos V1 Sandbox Proof Follow-Up
 
-Paid Videos V1 is implemented and Supabase-applied for sandbox testing, but not yet sandbox-proven end to end. Do not claim live Paid Videos and do not build Paid Watch-Parties, Channel Subscriptions, VIP Passes, or Paid Events until this proof is complete or explicitly reprioritized.
+Paid Videos V1 happy-path sandbox purchase proof passed on a Play-installed internal tester runtime. Do not claim live Paid Videos and do not build Paid Watch-Parties, Channel Subscriptions, VIP Passes, or Paid Events until the remaining Paid Videos proof gaps are closed or explicitly reprioritized.
 
 Closed on June 11, 2026:
 
@@ -64,18 +64,16 @@ Closed on June 11, 2026:
 - A trigger mirrors verified paid-content `access_grants` into legacy `content_access_grants` so the current player resolver can unlock paid creator videos.
 - Money Center Offers and Transactions now show Paid Video rows separately from Tips.
 - Premium remains separate; Paid Video copy says it unlocks only that creator video and does not include Premium, subscriptions, VIP, rooms, Watch-Party seats, or other content.
+- Play/internal v37 proof passed on `R5CR120QCBF`: package `com.chillywood.mobile`, versionCode `37`, installer `com.android.vending`.
+- Manual fan purchase through Google Play / RevenueCat sandbox showed `Payment successful` and created verified backend rows: purchase intent `949b076d-81dd-44f0-b2d8-ce514ebb7348`, provider event `f0006ba1-495f-4353-875e-40db2c9e7a5f`, access grant `71967fff-b913-4390-8b3d-aef4f4e77726`, mirrored content grant `1b6cf126-bb80-4dd6-b724-7b804765c3f9`, and ledger event `7f237e32-bdfc-4394-9bb3-f8537cae8e38`.
+- Ledger row is sandbox/not-payable; `live_money_enabled` remains off.
+- Separation proof showed no Tips transaction was created for the paid-video purchase window.
 
 Remaining proof:
 
-- Wait for Play internal testing propagation for versionCode `35` submitted by explicit submission `19a77260-4f23-4a24-887c-1730790b7b98`. The June 11 proof attempt found attached device `R5CR120QCBF` on `com.chillywood.mobile` versionCode `32` with `installer=null`, so it is not acceptable for Google Play Billing proof and cannot prove the new Paid Videos code.
-- Confirm package readback shows installer `com.android.vending`, package `com.chillywood.mobile`, and a build/update that includes the Paid Videos V1 implementation.
-- Use a Play-installed/internal tester runtime with RevenueCat configured.
-- Creator marks an existing uploaded video as Paid Unlock and saves a valid sandbox price.
-- Fan opens the video, sees the locked Player and `Unlock Video`.
-- Fan completes Google Play / RevenueCat sandbox purchase.
-- Confirm `revenuecat-webhook` verifies the provider event.
-- Record the Paid Video transaction id, shared access grant id, mirrored `content_access_grants` id, and Money Center readback.
-- Confirm paid fan can play, a different unpaid fan cannot play, and direct deep link cannot bypass the gate.
+- Capture Money Center visual transaction readback for this exact purchase.
+- Confirm paid fan can play through a fresh reload/direct link.
+- Confirm a different unpaid fan cannot play and direct deep link cannot bypass the gate.
 - Confirm no Tips transaction, Premium entitlement, VIP, room access, subscription, event access, payout, cash-out, withdrawal, transfer, or LiveKit authority is created.
 - If provider tooling allows, prove refund/revoke removes playback access; otherwise document it as deferred.
 

@@ -4,7 +4,7 @@ Last updated: June 11, 2026
 
 ## Real Status
 
-Paid Videos V1 is repo-side implemented and the Supabase migration is remote-applied for sandbox testing. It is not live money and is not yet sandbox-proven end to end on a Play-installed device.
+Paid Videos V1 is repo-side implemented, the Supabase migration is remote-applied, and the first Google Play / RevenueCat sandbox purchase is proven end to end on a Play-installed internal tester runtime. It is not live money.
 
 Paid Videos are digital content access. They use the existing RevenueCat / Google Play sandbox digital product rail, not Stripe Tips. Tips remain pure contribution only and separate from Paid Videos.
 
@@ -37,26 +37,47 @@ Paid Videos are digital content access. They use the existing RevenueCat / Googl
 
 ## Proof Status
 
-Not complete yet:
+Happy-path sandbox purchase proof passed on June 11, 2026:
 
-- June 11, 2026 provider proof attempt stopped before purchase because the attached Android device `R5CR120QCBF` has `com.chillywood.mobile` installed as versionCode `32` with `installer=null`, not `com.android.vending`. That does not satisfy the Play/internal tester runtime requirement for Google Play Billing proof.
-- The local Paid Videos V1 code has not yet been published into a Play/internal tester build or EAS Update consumed by a Play-installed runtime, so the installed app cannot prove the new creator setup, locked Player, or purchase helper.
-- No successful Paid Video transaction id is available yet.
-- No Paid Video access grant id is available yet.
-- No unpaid-user and direct-deep-link device proof is captured yet.
-- No provider refund/revoke proof is claimed yet.
+- Device: `R5CR120QCBF`.
+- Runtime: Google Play internal testing install, package `com.chillywood.mobile`, versionCode `37`, installer `com.android.vending`.
+- Fan tester app user id: `4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f`.
+- Creator id: `0f53ad26-0b27-4f7f-9d6f-000000000001`.
+- Video id: `6e1c3405-7db8-4cb2-98f3-5a7642e82126`.
+- Product key: `paid_content_access_sandbox_099`.
+- Provider product id: `cw_paid_content_access_sandbox_099`.
+- Purchase intent id: `949b076d-81dd-44f0-b2d8-ce514ebb7348`.
+- Provider event row id: `f0006ba1-495f-4353-875e-40db2c9e7a5f`.
+- RevenueCat provider event id: `E86C4FA9-2B73-4D8F-9D6C-2C5A19BFA283`.
+- Access grant id: `71967fff-b913-4390-8b3d-aef4f4e77726`.
+- Mirrored `content_access_grants` id: `1b6cf126-bb80-4dd6-b724-7b804765c3f9`.
+- Money ledger event id: `7f237e32-bdfc-4394-9bb3-f8537cae8e38`.
+
+Observed proof:
+
+- Locked Player showed `Unlock Video` and copy separating this creator-video purchase from Premium, subscriptions, VIP, live rooms, Watch-Party seats, and other creator content.
+- Manual device tap opened the Google Play / RevenueCat sandbox purchase sheet.
+- Google Play displayed `Payment successful`. The same Play sheet also displayed a Play Points status message, `Something went wrong`; this was Play Store UI, not Chi'llwood purchase copy.
+- The source-bound purchase intent moved from `pending` to `consumed` at `2026-06-11 22:06:02.375+00`.
+- Verified provider event `NON_RENEWING_PURCHASE` was processed in `sandbox`.
+- Shared `access_grants` row was created with `grant_type=paid_content_access`, provider `revenuecat_google_play`, environment `sandbox`, status `sandbox_only`.
+- Mirrored `content_access_grants` row was created for `content_type=creator_video`, `active=true`.
+- Money ledger row was created with `amount_minor=99`, `currency=usd`, `environment=sandbox`, `payable_state=not_payable`, `status=sandbox_only`, and `source_type=paid_content`.
+- After dismissing the Play dialog, the locked paywall text was gone from the device hierarchy, consistent with playback access being active for the paying fan.
+- Separation readback showed `0` creator tip transactions for the paid-video purchase window and `1` active paid-content grant for the fan/video.
+
+Still not complete:
+
+- A second unpaid-fan device proof has not been captured yet.
+- Provider refund/revoke proof is not claimed yet.
+- Money Center visual transaction readback after this exact purchase still needs a device screenshot/manual proof pass.
+- Live money remains disabled; sandbox rows are not payable.
 
 ## Current Blocker
 
-Paid Videos V1 cannot be called sandbox-proven until a tester installs or updates Chi'llwood from Google Play internal testing and the installed package readback shows:
+The first happy-path sandbox purchase is proven. Remaining blockers before calling Paid Videos V1 fully proof-complete are unpaid-second-fan/direct-link proof, Money Center visual readback proof, and provider refund/revoke proof.
 
-- package `com.chillywood.mobile`
-- installer `com.android.vending`
-- a version/build or OTA payload that includes the Paid Videos V1 code
-- RevenueCat public Android SDK key configured in that runtime
-- Google Play tester account allowed to buy `cw_paid_content_access_sandbox_099`
-
-Do not sideload an APK for the Paid Videos purchase proof. Sideloaded builds can validate UI/code smoke, but they cannot close the Google Play Billing sandbox proof required for this flow.
+Do not sideload an APK for future Paid Videos purchase proof. Sideloaded builds can validate UI/code smoke, but they cannot close Google Play Billing sandbox proof.
 
 ## Play/Internal Runtime Preparation
 
@@ -75,9 +96,16 @@ June 11, 2026:
 - Artifact type requested: Android App Bundle (`app-bundle` / AAB).
 - Final readback during this pass: build status `FINISHED`, AAB artifact URL `https://expo.dev/artifacts/eas/jr8n0pSiAERN5zPsyqoaBWpmNk-zDHkoAGEzVVkKYCg.aab`.
 
-Paid Videos V1 purchase proof is still pending until Play internal processing reaches tester devices and the tester installs/updates from Google Play with `installer=com.android.vending`.
+Additional June 11, 2026 Play/internal updates:
 
-Expected sandbox proof:
+- Commit `403fa07ed5d386c1325ae4ed6703d0fb9d7707d7` fixed the first paid-video lock touch target issue and shipped as v36.
+- Commit `da403ce79a77000560b9ebba2ad350b4fe62fdb0` moved the paid-video unlock button above the player surface and shipped as v37.
+- EAS build `6507576b-ab9b-4983-be92-8a9a57277bd0` produced v37 AAB artifact `https://expo.dev/artifacts/eas/wqjLzC1QTV5uFSRh7_lxN8kA1hBor4n4VDXiUNWpLT4.aab`.
+- Google Play internal submission `698fb4a7-a5d5-4cd4-9da6-24bfe08bea7d` completed.
+- Device readback after Play update: versionCode `37`, installer `com.android.vending`.
+- Commit `7dae44b` adds stable proof hooks for future builds: `testID="unlock-paid-video-button"`, `accessibilityLabel="Unlock Video"`, and dev-only sanitized debug markers. No extra AAB was built from that commit during this proof pass.
+
+Sandbox proof checklist:
 
 1. Creator marks an uploaded video as Paid Unlock and saves a test price.
 2. Fan opens the creator video and sees locked Player state with `Unlock Video`.

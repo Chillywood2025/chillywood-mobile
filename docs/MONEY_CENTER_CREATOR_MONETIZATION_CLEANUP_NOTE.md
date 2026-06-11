@@ -39,11 +39,12 @@
 - Other creator monetization flows remain readiness-only or blocked unless separately built.
 
 ## Paid Videos V1 Follow-Up
-- Paid Videos V1 is now implemented for RevenueCat / Google Play sandbox testing, but not yet Play-installed sandbox-proven end to end.
-- June 11 proof attempt stopped before checkout because attached device `R5CR120QCBF` had `com.chillywood.mobile` versionCode `32` installed with `installer=null`; a Play/internal tester runtime with installer `com.android.vending` and the Paid Videos V1 code is required.
-- EAS production Android AAB build `cc38dd8a-59a9-4aad-9641-71862b7f5075` was started from commit `c4fe47d5ddc3ec94ba9cd024f7bf479ebbbb2167` for versionCode `35`; build readback finished with AAB artifact `https://expo.dev/artifacts/eas/jr8n0pSiAERN5zPsyqoaBWpmNk-zDHkoAGEzVVkKYCg.aab`. EAS initially scheduled Google Play internal submission `73665297-db15-46f9-b9fd-a9495125dea3`, and explicit confirmed submission `19a77260-4f23-4a24-887c-1730790b7b98` completed. Install proof and purchase proof remain pending.
+- Paid Videos V1 is now implemented and happy-path sandbox-proven through RevenueCat / Google Play on a Play-installed internal tester runtime.
+- June 11 proof used attached device `R5CR120QCBF` with `com.chillywood.mobile` versionCode `37` and installer `com.android.vending`.
+- Manual Google Play sandbox purchase consumed purchase intent `949b076d-81dd-44f0-b2d8-ce514ebb7348`, processed provider event `f0006ba1-495f-4353-875e-40db2c9e7a5f`, created access grant `71967fff-b913-4390-8b3d-aef4f4e77726`, mirrored content grant `1b6cf126-bb80-4dd6-b724-7b804765c3f9`, and wrote ledger event `7f237e32-bdfc-4394-9bb3-f8537cae8e38` as sandbox/not-payable.
 - Creator setup stays in the existing creator video upload/edit flow: Free or Paid Unlock plus price.
 - Money Center remains the consolidated readout: Paid Video offers appear in Offers and verified sandbox unlock rows appear in Transactions.
 - Paid Video purchases use the Android digital product path, not Stripe Tips.
 - Verified RevenueCat webhook events create shared access grants, mirrored content access grants, and sandbox/not-payable ledger rows.
 - Paid Videos unlock only the purchased creator video. They do not include Premium, subscriptions, VIP, live rooms, Watch-Party seats, Tips, events, other creator content, payout access, or LiveKit authority.
+- Remaining proof gaps: Money Center visual transaction readback, paid-fan fresh direct-link playback, second unpaid-fan/direct-link denial, and provider refund/revoke status.
