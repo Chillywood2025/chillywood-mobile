@@ -4,6 +4,8 @@ Date: 2026-06-10
 
 This file records the source and license proof for every bundled Chi'lly Chat notification/ringtone sound committed under `assets/sounds/chilly-chat/`.
 
+The same files are mirrored under `android/app/src/main/res/raw/` with Android-safe filenames so checked-in native Android builds include the notification sound resources. The Android raw copies carry the same source and license as the app asset copies.
+
 Source pack used for all sounds:
 
 - Official source URL: https://www.kenney.nl/assets/ui-audio
@@ -22,7 +24,7 @@ The local source pack license states that these assets may be used in personal a
 ## Chi'lly Ring
 
 - Display name in app: Chi'lly Ring
-- Local filename: `assets/sounds/chilly-chat/chilly-ring.wav`
+- Local filename: `assets/sounds/chilly-chat/chilly_ring.wav`
 - Source URL: https://www.kenney.nl/assets/ui-audio
 - Source title: UI Audio
 - Author/creator: Kenney Vleugels / Kenney
@@ -37,7 +39,7 @@ The local source pack license states that these assets may be used in personal a
 ## Skyline Pulse
 
 - Display name in app: Skyline Pulse
-- Local filename: `assets/sounds/chilly-chat/skyline-pulse.wav`
+- Local filename: `assets/sounds/chilly-chat/skyline_pulse.wav`
 - Source URL: https://www.kenney.nl/assets/ui-audio
 - Source title: UI Audio
 - Author/creator: Kenney Vleugels / Kenney
@@ -52,7 +54,7 @@ The local source pack license states that these assets may be used in personal a
 ## Theater Bell
 
 - Display name in app: Theater Bell
-- Local filename: `assets/sounds/chilly-chat/theater-bell.wav`
+- Local filename: `assets/sounds/chilly-chat/theater_bell.wav`
 - Source URL: https://www.kenney.nl/assets/ui-audio
 - Source title: UI Audio
 - Author/creator: Kenney Vleugels / Kenney
@@ -67,7 +69,7 @@ The local source pack license states that these assets may be used in personal a
 ## Velvet Knock
 
 - Display name in app: Velvet Knock
-- Local filename: `assets/sounds/chilly-chat/velvet-knock.wav`
+- Local filename: `assets/sounds/chilly-chat/velvet_knock.wav`
 - Source URL: https://www.kenney.nl/assets/ui-audio
 - Source title: UI Audio
 - Author/creator: Kenney Vleugels / Kenney
@@ -82,7 +84,7 @@ The local source pack license states that these assets may be used in personal a
 ## Quiet Buzz
 
 - Display name in app: Quiet Buzz
-- Local filename: `assets/sounds/chilly-chat/quiet-buzz.wav`
+- Local filename: `assets/sounds/chilly-chat/quiet_buzz.wav`
 - Source URL: https://www.kenney.nl/assets/ui-audio
 - Source title: UI Audio
 - Author/creator: Kenney Vleugels / Kenney
@@ -97,7 +99,7 @@ The local source pack license states that these assets may be used in personal a
 ## Classic Phone
 
 - Display name in app: Classic Phone
-- Local filename: `assets/sounds/chilly-chat/classic-phone.wav`
+- Local filename: `assets/sounds/chilly-chat/classic_phone.wav`
 - Source URL: https://www.kenney.nl/assets/ui-audio
 - Source title: UI Audio
 - Author/creator: Kenney Vleugels / Kenney

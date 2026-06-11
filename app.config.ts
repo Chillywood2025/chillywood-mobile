@@ -17,12 +17,12 @@ const DEPLOYED_ACCOUNT_DELETION_URL = "https://chillywoodstream.com/account-dele
 const DEPLOYED_COPYRIGHT_REPORT_URL = "https://chillywoodstream.com/copyright-report";
 const DEPLOYED_SUPPORT_EMAIL = "support@chillywoodstream.com";
 const CHILLY_CHAT_NOTIFICATION_SOUND_FILES = [
-  "./assets/sounds/chilly-chat/chilly-ring.wav",
-  "./assets/sounds/chilly-chat/skyline-pulse.wav",
-  "./assets/sounds/chilly-chat/theater-bell.wav",
-  "./assets/sounds/chilly-chat/velvet-knock.wav",
-  "./assets/sounds/chilly-chat/quiet-buzz.wav",
-  "./assets/sounds/chilly-chat/classic-phone.wav",
+  "./assets/sounds/chilly-chat/chilly_ring.wav",
+  "./assets/sounds/chilly-chat/skyline_pulse.wav",
+  "./assets/sounds/chilly-chat/theater_bell.wav",
+  "./assets/sounds/chilly-chat/velvet_knock.wav",
+  "./assets/sounds/chilly-chat/quiet_buzz.wav",
+  "./assets/sounds/chilly-chat/classic_phone.wav",
 ] as const;
 
 const resolveExistingFile = (...candidates: Array<string | undefined>) => {

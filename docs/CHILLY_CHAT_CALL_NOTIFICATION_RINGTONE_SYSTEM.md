@@ -30,6 +30,7 @@ Files touched:
 - `app/chat/[threadId].tsx`
 - `app/settings.tsx`
 - `assets/sounds/chilly-chat/*.wav`
+- `android/app/src/main/res/raw/*.wav`
 - `docs/CHILLY_CHAT_SOUND_LICENSES.md`
 
 ## Data Model
@@ -91,12 +92,14 @@ Native-build requirement:
 
 Bundled sound files:
 
-- `assets/sounds/chilly-chat/chilly-ring.wav`
-- `assets/sounds/chilly-chat/skyline-pulse.wav`
-- `assets/sounds/chilly-chat/theater-bell.wav`
-- `assets/sounds/chilly-chat/velvet-knock.wav`
-- `assets/sounds/chilly-chat/quiet-buzz.wav`
-- `assets/sounds/chilly-chat/classic-phone.wav`
+- `assets/sounds/chilly-chat/chilly_ring.wav`
+- `assets/sounds/chilly-chat/skyline_pulse.wav`
+- `assets/sounds/chilly-chat/theater_bell.wav`
+- `assets/sounds/chilly-chat/velvet_knock.wav`
+- `assets/sounds/chilly-chat/quiet_buzz.wav`
+- `assets/sounds/chilly-chat/classic_phone.wav`
+
+Because this repo has a checked-in Android native project, the same bundled sounds are also committed under `android/app/src/main/res/raw/` with Android-safe underscore filenames. This avoids relying on config-plugin resource copying during native builds that use the existing `android/` directory.
 
 ## Push Notification Readiness
 
@@ -106,7 +109,7 @@ The app now creates Android channels:
 - `chilly_chat_calls_v2`
 - `chilly_chat_missed_calls`
 
-`chilly_chat_calls_v2` uses `chilly-ring.wav` as its bundled native sound where Android and the installed native build support it. Messages and missed-call channels stay calmer and do not use the call ringtone.
+`chilly_chat_calls_v2` uses `chilly_ring.wav` as its bundled native sound where Android and the installed native build support it. Messages and missed-call channels stay calmer and do not use the call ringtone.
 
 Notification tap routing already accepts `/chat/...` deep links, including an `openCall` query if the server dispatch path sends it later. This pass does not add service-role secrets to mobile code and does not log push tokens. The existing `notification-dispatch` Edge Function is still a discovery/activity dispatcher and does not yet dispatch Chi'lly Chat call pushes; a future call-push dispatcher should use `chilly_chat_calls_v2`.
 
