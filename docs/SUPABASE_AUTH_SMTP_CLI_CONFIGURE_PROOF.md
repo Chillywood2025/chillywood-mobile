@@ -114,6 +114,26 @@ Related route targets:
 
 ## EAS/device proof
 
+Follow-up app-origin delivery proof after commit `09f3ebc Fix forgot password reset request flow`:
+
+- update group: `4392c7c6-7766-41b6-8f70-e75d6dc4b1db`
+- Android update: `019eb456-1e9f-7186-a1eb-1a53f89dde86`
+- runtime: `1.0.0`
+- commit: `09f3ebcc467fc272169aedd790be19cb01e9b5dd`
+- proof path: `/tmp/chillywood-auth-email-device-proof-20260610-app-origin-final/`
+
+Play-installed device proof:
+
+- device: `R3CXA0DS5JV` / `SM_S928U1`
+- package: `com.chillywood.mobile`
+- installer: `com.android.vending`
+- versionName/versionCode: `1.0.0` / `25`
+- `11-dedicated-forgot-screen.png`: Forgot password opens a dedicated Reset password screen with its own email input and send action.
+- `13-dedicated-send-result.png`: The Play-installed app submits the reset request and shows `Check your email for a password reset link`.
+- `14-brevo-latest-events-redacted.txt`: Brevo reports the matching app-origin reset email requested at `2026-06-10T20:43:20.442-05:00` and delivered at `2026-06-10T20:43:21.000-05:00` to `rob2037gn@gmail.com`, subject `Reset Your Password`, from `no-reply@chillywoodstream.com`, with message id present.
+
+This closes the app-origin send and provider-delivered proof. The remaining user-side action is to open the newest Gmail message and tap the real provider token link.
+
 After commit `7adfb01 Fix auth email reset and verification routing`, an Android EAS Update was published to the `production` branch:
 
 - update group: `172b48a1-1b58-45f0-ac93-c7b878cfb940`
@@ -135,7 +155,7 @@ Captured proof:
 - `04-reset-deeplink-screen.png`: `chillywoodmobile://reset-password?type=recovery` opens the app Reset Password screen, not Chrome/policy/auth-callback. Synthetic no-token probe correctly shows missing/expired link copy.
 - `07-auth-callback-to-login-screen.png`: `chillywoodmobile://auth/callback?type=signup` returns to Login instead of policy page.
 
-The remaining real-user proof is to open the newest real reset email sent after `2026-06-11T01:10:42Z`, tap its provider token link, set the password, and confirm sign-in.
+The earlier `7adfb01` proof established deep-link routing. The later `09f3ebc` proof above establishes app-origin reset dispatch and Brevo delivery.
 
 ## DNS and mail-route diagnostics
 
@@ -157,8 +177,10 @@ Latest observed DNS status:
 
 - In-app recovery and signup link routing are corrected repo-side.
 - SMTP transport is restored after key rotation.
-- The next proof must:
-  - confirm the newest email reaches `rob2037gn@gmail.com`,
+- The Play-installed app can now request the reset from the dedicated Reset password screen.
+- Brevo reports the app-origin message delivered to Gmail.
+- The next proof is user-side click-through:
+  - open the newest delivered reset email in Gmail,
   - tap the reset link on the Play/internal app runtime,
   - prove it opens reset-password instead of policy/auth-callback/Chrome,
   - update the password,
@@ -178,15 +200,10 @@ Latest observed DNS status:
 
 Next manual verification step:
 
-1. Open only the newest recovery email sent after `2026-06-11T01:10:42Z`.
+1. Open only the newest recovery email sent after `2026-06-10T20:43:21-05:00`.
 2. Confirm sender is `Chi'llywood <no-reply@chillywoodstream.com>`.
 3. Tap the reset link on the Play/internal runtime.
 4. Confirm reset-password opens, password update succeeds, and login works.
-
-If the message still never appears after SMTP auth and recover dispatch pass, the highest-confidence unblockers are:
-
-- supply a valid Brevo REST API key (not the SMTP login token) to continue provider trail lookup,
-- capture inbox logs from a direct mailbox API (Gmail API or mail test inbox).
 
 ## Safety
 
