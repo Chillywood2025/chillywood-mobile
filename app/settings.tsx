@@ -59,6 +59,7 @@ import {
   isProfileMediaActive,
   readMyProfileVisibility,
   readUserProfile,
+  updateMyDisplayName,
   updateMyProfileVisibility,
   type ProfileAppearanceFitMode,
   type UserProfile,
@@ -402,6 +403,9 @@ export default function SettingsScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
+  const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [displayNameSaving, setDisplayNameSaving] = useState(false);
+  const [displayNameNotice, setDisplayNameNotice] = useState<string | null>(null);
   const [usernameDraft, setUsernameDraft] = useState("");
   const [usernameSaving, setUsernameSaving] = useState(false);
   const [usernameNotice, setUsernameNotice] = useState<string | null>(null);
@@ -517,6 +521,7 @@ export default function SettingsScreen() {
     void readUserProfile()
       .then((profile) => {
         if (active) setMyProfile(profile);
+        if (active) setDisplayNameDraft(profile.displayName ?? "");
         if (active) setUsernameDraft(normalizeUsernameHandle(profile.username));
       })
       .catch(() => {
@@ -925,20 +930,61 @@ export default function SettingsScreen() {
     }
   }, [confirmPassword, newPassword, passwordSaving]);
 
+  const onPressSaveDisplayName = useCallback(async () => {
+    if (displayNameSaving) return;
+
+    const normalizedDisplayName = displayNameDraft.trim().replace(/\s+/g, " ");
+    const currentDisplayName = (myProfile?.displayName ?? "").trim().replace(/\s+/g, " ");
+    setDisplayNameNotice(null);
+
+    if (!normalizedDisplayName) {
+      const message = "Enter a display name.";
+      setDisplayNameNotice(message);
+      Alert.alert("Display Name", message);
+      return;
+    }
+    if (normalizedDisplayName.length > 60) {
+      const message = "Display name must be 60 characters or less.";
+      setDisplayNameNotice(message);
+      Alert.alert("Display Name", message);
+      return;
+    }
+    if (normalizedDisplayName === currentDisplayName) {
+      setDisplayNameDraft(normalizedDisplayName);
+      setDisplayNameNotice("Display name is current.");
+      return;
+    }
+
+    setDisplayNameSaving(true);
+    try {
+      const result = await updateMyDisplayName(normalizedDisplayName);
+      setMyProfile(result);
+      setDisplayNameDraft(result.displayName ?? "");
+      setDisplayNameNotice("Display name updated.");
+      Alert.alert("Display Name", "Display name updated.");
+    } catch (error) {
+      const message = getUserFacingErrorMessage(error, "Unable to update your display name right now.");
+      setDisplayNameNotice(message);
+      Alert.alert("Display Name", message);
+    } finally {
+      setDisplayNameSaving(false);
+    }
+  }, [displayNameDraft, displayNameSaving, myProfile?.displayName]);
+
   const onPressSaveUsername = useCallback(async () => {
     if (usernameSaving) return;
 
     const normalizedUsername = normalizeUsernameHandle(usernameDraft);
     const currentUsername = normalizeUsernameHandle(myProfile?.username);
     if (normalizedUsername === currentUsername) {
-      setUsernameNotice("Username updated");
+      setUsernameNotice("Handle is current.");
       return;
     }
 
     if (!usernameAvailability.available || usernameAvailability.username !== normalizedUsername) {
       const message = usernameAvailability.message || "Choose an available username.";
       setUsernameNotice(message);
-      Alert.alert("Choose your username", message);
+      Alert.alert("Choose your handle", message);
       return;
     }
 
@@ -948,12 +994,12 @@ export default function SettingsScreen() {
       const result = await updateMyUsername(normalizedUsername);
       setMyProfile((current) => current ? { ...current, username: result.username } : current);
       setUsernameDraft(result.username);
-      setUsernameNotice("Username updated");
-      Alert.alert("Username", "Username updated");
+      setUsernameNotice("Handle updated.");
+      Alert.alert("Handle", "Handle updated.");
     } catch (error) {
       const message = getUsernameErrorMessage(error);
       setUsernameNotice(message);
-      Alert.alert("Username", message);
+      Alert.alert("Handle", message);
     } finally {
       setUsernameSaving(false);
     }
@@ -1372,13 +1418,65 @@ export default function SettingsScreen() {
         onToggle={toggleSection}
       >
         <InlineAccordion
+          id="account-display-name"
+          title="Display name"
+          summary={`Current name: ${myProfile?.displayName || "Not set"}`}
+          expandedSections={expandedSections}
+          onToggle={toggleSection}
+        >
+          <Text style={styles.statusNote}>
+            This is the name people see on your Profile, posts, comments, and rooms. It can be different from your @handle.
+          </Text>
+          <View style={styles.usernameEditorCard}>
+            <TextInput
+              style={styles.input}
+              value={displayNameDraft}
+              onChangeText={(value) => {
+                setDisplayNameDraft(value);
+                setDisplayNameNotice(null);
+              }}
+              placeholder="Display name"
+              placeholderTextColor="#788196"
+              autoCapitalize="words"
+              autoCorrect={false}
+              maxLength={60}
+              editable={!displayNameSaving}
+            />
+            <View style={styles.usernameStatusRow}>
+              <View style={styles.usernameStatusPill}>
+                <Text style={styles.usernameStatusText}>
+                  {(myProfile?.displayName ?? "").trim() ? "Current display name" : "Not set yet"}
+                </Text>
+              </View>
+              <Text style={styles.usernamePreview} numberOfLines={1}>
+                {displayNameDraft.trim() || "Display name"}
+              </Text>
+            </View>
+            {displayNameNotice ? <Text style={styles.inlineNotice}>{displayNameNotice}</Text> : null}
+            <TouchableOpacity
+              style={[
+                styles.inlinePrimaryButton,
+                (displayNameSaving || !displayNameDraft.trim() || displayNameDraft.trim().replace(/\s+/g, " ") === (myProfile?.displayName ?? "").trim().replace(/\s+/g, " ")) && styles.inlinePrimaryButtonDisabled,
+              ]}
+              activeOpacity={0.86}
+              disabled={displayNameSaving || !displayNameDraft.trim() || displayNameDraft.trim().replace(/\s+/g, " ") === (myProfile?.displayName ?? "").trim().replace(/\s+/g, " ")}
+              onPress={onPressSaveDisplayName}
+            >
+              <Text style={styles.inlinePrimaryButtonText}>{displayNameSaving ? "Saving..." : "Save Display Name"}</Text>
+            </TouchableOpacity>
+          </View>
+        </InlineAccordion>
+
+        <InlineAccordion
           id="account-username"
-          title="Username"
+          title="Handle"
           summary={`Current handle: ${formatUsernameHandle(myProfile?.username) || "Not set"}`}
           expandedSections={expandedSections}
           onToggle={toggleSection}
         >
-          <Text style={styles.statusNote}>This is how people find you.</Text>
+          <Text style={styles.statusNote}>
+            Your @handle is how people find you and tag you. It can be different from your display name.
+          </Text>
           <View style={styles.usernameEditorCard}>
             <View style={styles.usernameInputWrap}>
               <Text style={styles.usernameAtPrefix}>@</Text>
@@ -1404,7 +1502,7 @@ export default function SettingsScreen() {
                   (usernameAvailability.status === "taken" || usernameAvailability.status === "reserved" || usernameAvailability.status === "not_allowed") && styles.usernameStatusTextBlocked,
                 ]}>
                   {normalizeUsernameHandle(myProfile?.username) === normalizeUsernameHandle(usernameDraft)
-                    ? "Current username"
+                    ? "Current handle"
                     : usernameAvailability.message}
                 </Text>
               </View>
@@ -1420,7 +1518,7 @@ export default function SettingsScreen() {
               disabled={usernameSaving || normalizeUsernameHandle(myProfile?.username) === normalizeUsernameHandle(usernameDraft) || !usernameAvailability.available}
               onPress={onPressSaveUsername}
             >
-              <Text style={styles.inlinePrimaryButtonText}>{usernameSaving ? "Saving..." : "Save Username"}</Text>
+              <Text style={styles.inlinePrimaryButtonText}>{usernameSaving ? "Saving..." : "Save Handle"}</Text>
             </TouchableOpacity>
           </View>
         </InlineAccordion>

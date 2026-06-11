@@ -1079,6 +1079,23 @@ export async function updateMyProfileVisibility(visibility: ProfileVisibility): 
   return normalizedVisibility;
 }
 
+export async function updateMyDisplayName(displayName: string): Promise<UserProfile> {
+  const normalizedDisplayName = normalizeTextValue(displayName);
+  if (!normalizedDisplayName) throw new Error("Display name is required.");
+  if (normalizedDisplayName.length > 60) throw new Error("Display name must be 60 characters or less.");
+
+  const userId = await getSignedInUserId();
+  if (!userId) throw new Error("Sign in before updating your display name.");
+
+  const existingProfile = await readUserProfile();
+  const updatedProfile = normalizeUserProfile({
+    ...existingProfile,
+    displayName: normalizedDisplayName,
+  });
+  await saveUserProfile(updatedProfile);
+  return updatedProfile;
+}
+
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
   const normalized = normalizeUserProfile(profile);
   logChatProfile("local_profile_save", {

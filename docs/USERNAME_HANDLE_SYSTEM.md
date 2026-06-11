@@ -76,7 +76,7 @@ Post-migration proof:
 
 Signup now asks for display name and username before account creation. These are intentionally separate: display name is the public name people see, while `@username` is the searchable handle people use to find the account, and they can be different. Username availability is debounced and shows `Available`, `Already taken`, `This username is reserved`, `Too short`, `Invalid characters`, or `Not allowed`.
 
-Settings > Account has a compact username editor with current `@username`, live availability, and one Save Username action. It maps backend errors to product copy and does not expose raw constraint/RLS errors.
+Settings > Account now has separate controls for Display name and Handle. Display name updates `user_profiles.display_name` through the existing profile sync path. Handle edits remain backed by `user_profiles.username`, live availability, and the same guarded `update_my_username(...)` path. Settings copy calls the handle a handle, not a username, so users can understand that the visible display name and searchable `@handle` can be different.
 
 Existing `/profile/[userId]` and `/channel/[userId]` routes remain user-id based and unchanged. Username-based routing is deferred.
 
