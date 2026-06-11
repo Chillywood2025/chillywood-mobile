@@ -34,14 +34,24 @@ for (const file of requiredTemplates) {
 for (const file of requiredTemplates.filter((file) => file.endsWith(".html") || file.endsWith(".txt"))) {
   const relativePath = `${templateDir}/${file}`;
   const contents = read(relativePath);
-  const hasBrandingWithY = /Chi['\u2019]lywood/.test(contents);
-  if (!hasBrandingWithY) fail(`${relativePath} must use Chi’llywood branding`);
+  const hasCorrectBranding = /Chi['\u2019]llywood/.test(contents);
+  if (!hasCorrectBranding) fail(`${relativePath} must use Chi'llywood branding`);
   if (!contents.includes("support@chillywoodstream.com")) fail(`${relativePath} must include support contact`);
   if (/\bSupabase\b/u.test(contents)) fail(`${relativePath} must not show provider branding in user-facing copy`);
   if (/password\s*[:=]|smtp|service_role|secret|api[_-]?key/i.test(contents)) {
     fail(`${relativePath} contains secret-like operational copy`);
   }
-  if (file !== "reauthentication.html" && file !== "reauthentication.txt" && !contents.includes("{{ .ConfirmationURL }}")) {
+  const isResetTemplate = file === "reset-password.html" || file === "reset-password.txt";
+  const isSignupTemplate = file === "confirm-signup.html" || file === "confirm-signup.txt";
+  const isDirectTokenTemplate = isResetTemplate || isSignupTemplate;
+
+  if (isResetTemplate && !contents.includes("chillywoodmobile://reset-password?token_hash={{ .TokenHash }}")) {
+    fail(`${relativePath} must build a direct reset-password TokenHash app link`);
+  }
+  if (isSignupTemplate && !contents.includes("chillywoodmobile://auth/callback?token_hash={{ .TokenHash }}")) {
+    fail(`${relativePath} must build a direct auth callback TokenHash app link`);
+  }
+  if (!isDirectTokenTemplate && file !== "reauthentication.html" && file !== "reauthentication.txt" && !contents.includes("{{ .ConfirmationURL }}")) {
     fail(`${relativePath} must use {{ .ConfirmationURL }}`);
   }
 }
@@ -52,7 +62,7 @@ const SIGNUP_REDIRECT_OK = [
   "chillywoodmobile://auth/callback",
 ].some((token) => signup.includes(token));
 if (!SIGNUP_REDIRECT_OK) {
-  fail("signup must pass a Chi’llwood confirm redirect");
+  fail("signup must pass a Chi'llywood confirm redirect");
 }
 if (!signup.includes("emailRedirectTo")) {
   fail("signup must use emailRedirectTo");

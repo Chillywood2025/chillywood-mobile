@@ -1,6 +1,6 @@
-# Chi’lywood Auth Email Templates
+# Chi'llywood Auth Email Templates
 
-These files are the Chi’lywood-ready Supabase Auth templates for dashboard copy/paste. They do not configure SMTP by themselves and contain no credentials.
+These files are the Chi'llywood-ready Supabase Auth templates for dashboard copy/paste. They do not configure SMTP by themselves and contain no credentials.
 
 ## Templates
 
@@ -15,7 +15,12 @@ These files are the Chi’lywood-ready Supabase Auth templates for dashboard cop
 
 ## Variables
 
-Use `{{ .ConfirmationURL }}` for confirmation, reset, magic-link, invite, and email-change action links. Use `{{ .Token }}` only for reauthentication code templates.
+Use direct TokenHash app links for active mobile auth flows:
+
+- Confirm signup: `chillywoodmobile://auth/callback?token_hash={{ .TokenHash }}&type=email`
+- Reset password: `chillywoodmobile://reset-password?token_hash={{ .TokenHash }}&type=recovery`
+
+Use `{{ .ConfirmationURL }}` for magic-link, invite, and email-change action links unless a route-specific mobile contract is implemented. Use `{{ .Token }}` only for reauthentication code templates.
 
 ## Redirects
 
@@ -29,7 +34,7 @@ All mobile URLs used in Auth templates must be allowlisted in Supabase Authentic
 
 ## Sender
 
-Recommended sender name: `Chi’lywood`
+Recommended sender name: `Chi'llywood`
 
 Recommended sender address: `no-reply@chillywoodstream.com` or `auth@chillywoodstream.com` after the domain has provider-approved SPF, DKIM, and DMARC.
 

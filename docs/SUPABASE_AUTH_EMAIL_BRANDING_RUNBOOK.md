@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Chi’llywood Auth emails should look and read like official Chi’llywood account emails, not generic provider messages. This runbook prepares the sender, templates, redirect allowlist, test plan, and rollback path for Supabase Auth email branding without committing secrets and without weakening email confirmation or password reset security.
+Chi'llywood Auth emails should look and read like official Chi'llywood account emails, not generic provider messages. This runbook prepares the sender, templates, redirect allowlist, test plan, and rollback path for Supabase Auth email branding without committing secrets and without weakening email confirmation or password reset security.
 
 Latest external status: `docs/SUPABASE_AUTH_SMTP_CLI_CONFIGURE_PROOF.md` and `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` record the sender branding and the current transport blocker. Supabase Auth was previously reconfigured for project `bmkkhihfbmsnnmcqkoly`, with readback confirming:
 
 - host: `smtp-relay.brevo.com`
-- sender name: `Chi’llywood`
+- sender name: `Chi'llywood`
 - verified sender email: `no-reply@chillywoodstream.com`
-The latest 2026-06-10 rerun first reproduced a stale SMTP-key failure (`535 Authentication failed` plus Supabase Auth recovery `500 unexpected_failure` / `Error sending recovery email`). The Brevo SMTP key was then rotated locally, Supabase Auth SMTP was patched/read back with secrets redacted, direct SMTP auth passed, and `POST /auth/v1/recover` for `rob2037gn@gmail.com` returned `200 {}`. The app route contract is corrected; remaining proof is newest-message inbox arrival and Play/internal app click-through.
+The latest 2026-06-10 rerun first reproduced a stale SMTP-key failure (`535 Authentication failed` plus Supabase Auth recovery `500 unexpected_failure` / `Error sending recovery email`). The Brevo SMTP key was then rotated locally, Supabase Auth SMTP was patched/read back with secrets redacted, direct SMTP auth passed, and `POST /auth/v1/recover` for `rob2037gn@gmail.com` returned `200 {}`. Direct Brevo smoke email then delivered and was opened, proving Brevo/domain/Gmail delivery outside Supabase Auth. The remaining app-path issue was hosted Supabase Auth template configuration: first stale generic `Reset Your Password` recovery subject/content, then a branded template that still used `{{ .ConfirmationURL }}`. User screenshot proved that generated a Supabase verify link with `redirect_to=https://chillywoodstream.com` and opened the public policy site. The hosted recovery and confirmation templates are now patched/read-backed with `Chi'llywood` branding plus direct TokenHash app links. The latest post-fix Supabase Auth resend delivered with subject `Reset your Chi'llywood password`. The app route contract is corrected; remaining proof is newest-message Play/internal app click-through.
 
 This is account email only. It is not marketing email, newsletter email, production money activation, payout activation, LiveKit work, or a replacement for Supabase Auth.
 
@@ -27,7 +27,7 @@ This is account email only. It is not marketing email, newsletter email, product
 
 ## Sender Recommendation
 
-Sender name: `Chi’llywood`
+Sender name: `Chi'llywood`
 
 Proved sender address:
 
@@ -35,7 +35,7 @@ Proved sender address:
 
 Notes:
 
-- Brevo sender verification is confirmed for `Chi’llywood <no-reply@chillywoodstream.com>`.
+- Brevo sender verification is confirmed for `Chi'llywood <no-reply@chillywoodstream.com>`.
 - `no-reply@auth.chillywoodstream.com` can be used only after separate verified sender setup and DNS allowlist for that subdomain.
 
 Support address: `support@chillywoodstream.com`
@@ -78,7 +78,7 @@ Current Brevo dashboard truth from June 6, 2026 asks for exact host records unde
 - CNAME `brevo2._domainkey.chillywood`
 - TXT `_dmarc.chillywood`
 
-If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appends the zone name, those hosts become `chillywood.chillywoodstream.com`, `brevo1._domainkey.chillywood.chillywoodstream.com`, `brevo2._domainkey.chillywood.chillywoodstream.com`, and `_dmarc.chillywood.chillywoodstream.com`. Those exact current Brevo hosts must resolve and authenticate before Chi’llywood can claim complete branded Auth sender deliverability.
+If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appends the zone name, those hosts become `chillywood.chillywoodstream.com`, `brevo1._domainkey.chillywood.chillywoodstream.com`, `brevo2._domainkey.chillywood.chillywoodstream.com`, and `_dmarc.chillywood.chillywoodstream.com`. Those exact current Brevo hosts must resolve and authenticate before Chi'llywood can claim complete branded Auth sender deliverability.
 
 ## Supabase Dashboard Steps
 
@@ -87,7 +87,7 @@ If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appe
 3. Go to Authentication.
 4. Open SMTP settings.
 5. Enable custom SMTP.
-6. Set sender name to `Chi’llywood`.
+6. Set sender name to `Chi'llywood`.
 7. Set sender email to `no-reply@chillywoodstream.com` (current validated auth sender) or the approved auth sender for your approved domain path.
 8. Enter SMTP host, port, username, and password from the provider.
 9. Save and send a test email.
@@ -99,8 +99,9 @@ If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appe
 2. For each template, set the subject from `docs/auth-email-templates/SUBJECTS.md`.
 3. Paste the matching HTML body from `docs/auth-email-templates/*.html`.
 4. Paste the matching text fallback from `docs/auth-email-templates/*.txt` if the dashboard surface supports it.
-5. Preserve `{{ .ConfirmationURL }}` for action links and `{{ .Token }}` for reauthentication codes.
-6. Save one template at a time and send a test where Supabase supports it.
+5. For Confirm signup and Reset password, preserve the direct `chillywoodmobile://...token_hash={{ .TokenHash }}` app links instead of `{{ .ConfirmationURL }}`. The generated ConfirmationURL can fall back to `https://chillywoodstream.com` and land on the public policy site if the redirect is missing or rejected.
+6. Preserve `{{ .ConfirmationURL }}` for other action links unless a route-specific mobile contract is explicitly implemented, and preserve `{{ .Token }}` for reauthentication codes.
+7. Save one template at a time and send a test where Supabase supports it.
 
 ## Redirect Allowlist
 
@@ -128,16 +129,17 @@ Do not commit `$SUPABASE_MANAGEMENT_TOKEN`, SMTP credentials, service-role keys,
 
 ## Test Checklist
 
-- Signup email is from `Chi’llywood`.
-- Signup subject is `Confirm your Chi’llywood account`.
-- Signup CTA opens the app through `chillywoodmobile://auth/callback`.
+- Signup email is from `Chi'llywood`.
+- Signup subject is `Confirm your Chi'llywood account`.
+- Signup CTA opens the app through `chillywoodmobile://auth/callback?token_hash=...&type=email`.
 - Confirmed signup returns to login or signed-in state according to app behavior.
-- Forgot-password email is from `Chi’llywood` (`no-reply@chillywoodstream.com` in the current config).
-- Reset subject is `Reset your Chi’llywood password`.
-- Signup copy is set to `Chi’llywood`.
-- Reset CTA opens `chillywoodmobile://reset-password`.
+- Forgot-password email is from `Chi'llywood` (`no-reply@chillywoodstream.com` in the current config).
+- Reset subject is `Reset your Chi'llywood password`.
+- Signup copy is set to `Chi'llywood`.
+- Reset CTA opens `chillywoodmobile://reset-password?token_hash=...&type=recovery`.
+- Reset email does not show a Supabase verify link with `redirect_to=https://chillywoodstream.com`.
 - Reset success returns to login.
-- Expired/invalid links show safe Chi’llywood copy.
+- Expired/invalid links show safe Chi'llywood copy.
 - No raw tokens, provider payloads, SMTP credentials, or secrets appear in UI/logs.
 
 ## SMTP Key Rotation Checklist

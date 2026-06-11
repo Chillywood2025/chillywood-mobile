@@ -1,8 +1,8 @@
-Chi’lywood
+Chi'llywood
 
 Confirm your email change
 
-Use this secure link to confirm the email address for your Chi’lywood account:
+Use this secure link to confirm the email address for your Chi'llywood account:
 
 {{ .ConfirmationURL }}
 

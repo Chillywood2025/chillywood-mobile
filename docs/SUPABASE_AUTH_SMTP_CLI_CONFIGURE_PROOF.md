@@ -4,7 +4,7 @@ Date: 2026-06-07
 
 Latest recovery check: 2026-06-10
 
-Status: Supabase Auth SMTP is configured to Brevo (`smtp-relay.brevo.com`) with sender identity `Chi'llywood <no-reply@chillywoodstream.com>`. The Brevo SMTP key was rotated locally after a temporary `535 Authentication failed` blocker, direct SMTP auth now passes, Supabase Auth SMTP patch/readback returns `200` with secrets redacted, and `POST /auth/v1/recover` to the safe test inbox returns `200 {}` again. The app-side route/callback handling has been tightened so recovery links target `reset-password` before `auth-callback`, signup verification returns to login, and policy/support pages no longer intercept auth links.
+Status: Supabase Auth SMTP is configured to Brevo (`smtp-relay.brevo.com`) with sender identity `Chi'llywood <no-reply@chillywoodstream.com>`. The Brevo SMTP key was rotated locally after a temporary `535 Authentication failed` blocker, direct SMTP auth now passes, Supabase Auth SMTP patch/readback returns `200` with secrets redacted, and `POST /auth/v1/recover` to the safe test inbox returns `200 {}` again. Direct Brevo smoke email delivery/open proof passed. The app-side route/callback handling has been tightened so recovery links target `reset-password` before `auth-callback`, signup verification returns to login, and policy/support pages no longer intercept auth links. A later user screenshot found the remaining app-path issue: hosted Supabase Auth recovery used `{{ .ConfirmationURL }}`, which generated `redirect_to=https://chillywoodstream.com` and opened the public policy site. The hosted recovery and confirmation templates are now patched/read-backed to use direct `chillywoodmobile://` TokenHash app links.
 
 ## Scope
 
@@ -58,6 +58,15 @@ Result:
 - `GET_STATUS=200`
 - Redacted readback matches expected sender and relay values.
 
+Hosted Auth template readback after the final template patch:
+
+- recovery subject: `Reset your Chi'llywood password`
+- confirmation subject: `Confirm your Chi'llywood account`
+- recovery template includes `chillywoodmobile://reset-password?token_hash={{ .TokenHash }}&type=recovery`
+- confirmation template includes `chillywoodmobile://auth/callback?token_hash={{ .TokenHash }}&type=email`
+- recovery and confirmation templates do not include `{{ .ConfirmationURL }}`
+- recovery template includes correct `Chi'llywood` branding and does not include the short misspelling.
+
 ## Forgot-password recovery checks
 
 Executed using project anon key:
@@ -79,6 +88,12 @@ Observed results:
   - Supabase Auth SMTP readback: `HTTP:200`, secrets redacted
   - `POST /auth/v1/recover`: `HTTP:200` with `{}`
   - send timestamp: `2026-06-11T01:10:42Z`
+- Direct Brevo smoke proof at `/tmp/chillywood-brevo-direct-smoke-20260610-205808/` delivered and was opened by the recipient. This isolated the remaining issue away from Brevo SMTP/domain/Gmail and toward Supabase Auth email content/template behavior.
+- Hosted Supabase Auth template readback at `/tmp/chillywood-supabase-auth-template-brand-readback-20260610-212804/` showed the previous hosted recovery subject was still `Reset Your Password`. After patch, readback showed `Reset your Chi'llywood password`.
+- Branded Supabase Auth recovery resend at `/tmp/chillywood-supabase-recovery-branded-resend-20260610-213217/` returned `HTTP:200` with `{}`. Brevo events show the branded message requested at `2026-06-10T21:32:19.777-05:00` and delivered at `2026-06-10T21:32:20.000-05:00` to `rob2037gn@gmail.com`, subject `Reset your Chi'llywood password`, from `no-reply@chillywoodstream.com`.
+- User screenshot proved the 21:32 email still contained a Supabase verify fallback with `redirect_to=https://chillywoodstream.com` and opened the public policy site.
+- Direct TokenHash template fix was applied after that screenshot. Hosted readback confirms recovery/confirmation now use direct app links and no longer use `{{ .ConfirmationURL }}`.
+- Post-fix recovery request at `2026-06-10T21:40:41-05:00` returned `HTTP:200` with `{}`. Brevo events show the post-fix message requested at `2026-06-10T21:40:43.604-05:00` and delivered at `2026-06-10T21:40:44.000-05:00`, subject `Reset your Chi'llywood password`, from `no-reply@chillywoodstream.com`.
 - immediate repeated request can return:
   - `HTTP:429` with `over_email_send_rate_limit` (security cooldown).
 - unknown email probe (`nonexistent_user_zzztest@example.com`) returns:
@@ -130,9 +145,9 @@ Play-installed device proof:
 - versionName/versionCode: `1.0.0` / `25`
 - `11-dedicated-forgot-screen.png`: Forgot password opens a dedicated Reset password screen with its own email input and send action.
 - `13-dedicated-send-result.png`: The Play-installed app submits the reset request and shows `Check your email for a password reset link`.
-- `14-brevo-latest-events-redacted.txt`: Brevo reports the matching app-origin reset email requested at `2026-06-10T20:43:20.442-05:00` and delivered at `2026-06-10T20:43:21.000-05:00` to `rob2037gn@gmail.com`, subject `Reset Your Password`, from `no-reply@chillywoodstream.com`, with message id present.
+- `14-brevo-latest-events-redacted.txt`: Brevo reports the matching app-origin reset email requested at `2026-06-10T20:43:20.442-05:00` and delivered at `2026-06-10T20:43:21.000-05:00` to `rob2037gn@gmail.com`, subject `Reset Your Password`, from `no-reply@chillywoodstream.com`, with message id present. This proved app-origin dispatch but also showed the hosted recovery subject was still the generic Supabase Auth template.
 
-This closes the app-origin send and provider-delivered proof. The remaining user-side action is to open the newest Gmail message and tap the real provider token link.
+This closes the app-origin send and provider-delivered proof. The hosted template was then corrected to avoid Supabase's web `redirect_to` fallback and the post-fix Supabase Auth resend delivered as `Reset your Chi'llywood password`. The remaining user-side action is to open the newest Gmail message delivered after `2026-06-10T21:40:44-05:00` and tap the direct app token link.
 
 After commit `7adfb01 Fix auth email reset and verification routing`, an Android EAS Update was published to the `production` branch:
 
@@ -200,8 +215,8 @@ Latest observed DNS status:
 
 Next manual verification step:
 
-1. Open only the newest recovery email sent after `2026-06-10T20:43:21-05:00`.
-2. Confirm sender is `Chi'llywood <no-reply@chillywoodstream.com>`.
+1. Open only the newest recovery email delivered after `2026-06-10T21:40:44-05:00`.
+2. Confirm sender is `Chi'llywood <no-reply@chillywoodstream.com>` and subject is `Reset your Chi'llywood password`.
 3. Tap the reset link on the Play/internal runtime.
 4. Confirm reset-password opens, password update succeeds, and login works.
 

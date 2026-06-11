@@ -146,6 +146,14 @@ export default function ResetPasswordScreen() {
     && newPassword === confirmPassword
   ), [confirmPassword, newPassword, saving, status]);
 
+  const passwordValidationMessage = useMemo(() => {
+    if (status !== "ready") return "";
+    if (!newPassword || !confirmPassword) return "Enter and confirm your new password.";
+    if (newPassword.length < PASSWORD_MIN_LENGTH) return `Use at least ${PASSWORD_MIN_LENGTH} characters.`;
+    if (newPassword !== confirmPassword) return "Passwords do not match yet.";
+    return "Ready to update.";
+  }, [confirmPassword, newPassword, status]);
+
   const routeRecoveryParams = useMemo(() => (
     parseRecoveryRouteParams(routeParams)
   ), [routeParams]);
@@ -333,6 +341,11 @@ export default function ResetPasswordScreen() {
   const updatePassword = useCallback(async () => {
     if (saving) return;
 
+    if (status !== "ready") {
+      Alert.alert("Reset password", "Open the newest reset email again, then choose a new password.");
+      return;
+    }
+
     if (newPassword.length < PASSWORD_MIN_LENGTH) {
       Alert.alert("Reset password", "Use at least 8 characters for your new password.");
       return;
@@ -376,7 +389,7 @@ export default function ResetPasswordScreen() {
     } finally {
       setSaving(false);
     }
-  }, [confirmPassword, newPassword, router, saving]);
+  }, [confirmPassword, newPassword, router, saving, status]);
 
   return (
     <KeyboardAvoidingView
@@ -412,15 +425,24 @@ export default function ResetPasswordScreen() {
                 style={styles.input}
                 placeholder="New password"
                 placeholderTextColor="#7A859A"
+                autoCapitalize="none"
+                autoCorrect={false}
+                passwordRules="minlength: 8;"
+                returnKeyType="next"
                 secureTextEntry
                 textContentType="newPassword"
                 value={newPassword}
                 onChangeText={setNewPassword}
+                accessibilityLabel="New password"
               />
               <TextInput
                 style={styles.input}
                 placeholder="Confirm new password"
                 placeholderTextColor="#7A859A"
+                autoCapitalize="none"
+                autoCorrect={false}
+                passwordRules="minlength: 8;"
+                returnKeyType="done"
                 secureTextEntry
                 textContentType="newPassword"
                 value={confirmPassword}
@@ -428,11 +450,24 @@ export default function ResetPasswordScreen() {
                 onSubmitEditing={() => {
                   void updatePassword();
                 }}
+                accessibilityLabel="Confirm new password"
               />
+              <Text
+                style={[
+                  styles.validationText,
+                  canSubmit ? styles.validationTextReady : styles.validationTextMuted,
+                ]}
+                testID="reset-password-validation-message"
+              >
+                {passwordValidationMessage}
+              </Text>
               <Pressable
                 style={[styles.button, !canSubmit && styles.buttonDisabled]}
                 onPress={updatePassword}
-                disabled={!canSubmit}
+                accessibilityRole="button"
+                accessibilityLabel="Update password"
+                accessibilityState={{ disabled: !canSubmit, busy: saving }}
+                testID="reset-password-update-button"
               >
                 <Text style={styles.buttonText}>{saving ? "Updating..." : "Update password"}</Text>
               </Pressable>
@@ -536,5 +571,18 @@ const styles = StyleSheet.create({
     color: "#D7DEEC",
     fontSize: 13,
     fontWeight: "700",
+  },
+  validationText: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    lineHeight: 18,
+    marginBottom: 10,
+    marginTop: -2,
+  },
+  validationTextMuted: {
+    color: "#9AA5BA",
+  },
+  validationTextReady: {
+    color: "#8BE4A7",
   },
 });
