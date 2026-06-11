@@ -112,6 +112,31 @@ Related route targets:
 - `app/reset-password.tsx` consumes `code`, `token_hash`, `token + email`, or session tokens for recovery, updates the password through Supabase Auth, signs out, and routes immediately to `/(auth)/login`.
 - Compatibility shims route `/auth/callback`, `/auth/verify`, `/auth/v1/verify`, `/callback`, and `/verify` into `auth-callback` when Supabase or old links use those paths.
 
+## EAS/device proof
+
+After commit `7adfb01 Fix auth email reset and verification routing`, an Android EAS Update was published to the `production` branch:
+
+- update group: `172b48a1-1b58-45f0-ac93-c7b878cfb940`
+- Android update: `019eb441-ce6b-768e-a484-5782e89d6895`
+- runtime: `1.0.0`
+- manifest: `https://u.expo.dev/update/019eb441-ce6b-768e-a484-5782e89d6895`
+
+Play-installed device proof:
+
+- device: `R3CXA0DS5JV` / `SM_S928U1`
+- package: `com.chillywood.mobile`
+- installer: `com.android.vending`
+- versionName/versionCode: `1.0.0` / `25`
+- proof path: `/tmp/chillywood-auth-email-device-proof-20260610-final/`
+
+Captured proof:
+
+- `01-app-open-after-ota.png`: Play-installed app opens to Chi'llywood login, not Expo Dev Launcher.
+- `04-reset-deeplink-screen.png`: `chillywoodmobile://reset-password?type=recovery` opens the app Reset Password screen, not Chrome/policy/auth-callback. Synthetic no-token probe correctly shows missing/expired link copy.
+- `07-auth-callback-to-login-screen.png`: `chillywoodmobile://auth/callback?type=signup` returns to Login instead of policy page.
+
+The remaining real-user proof is to open the newest real reset email sent after `2026-06-11T01:10:42Z`, tap its provider token link, set the password, and confirm sign-in.
+
 ## DNS and mail-route diagnostics
 
 Captured at:
