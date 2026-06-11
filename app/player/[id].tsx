@@ -8488,7 +8488,7 @@ export default function PlayerScreen() {
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
             <Animated.View
-              pointerEvents="none"
+              pointerEvents={creatorVideoPaidContentLocked ? "auto" : "none"}
               style={[
                 styles.videoAnimatedWrap,
                 {
@@ -8598,7 +8598,7 @@ export default function PlayerScreen() {
               )}
             </Animated.View>
 
-            {shouldUseSharedAndroidVideoSurface ? (
+            {shouldUseSharedAndroidVideoSurface && !creatorVideoPaidContentLocked ? (
               <View
                 collapsable={false}
                 pointerEvents="auto"
