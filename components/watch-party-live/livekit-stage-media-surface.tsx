@@ -533,15 +533,14 @@ function LiveKitStageMediaContent({
 
       return (
         <View style={styles.bubbleGridSurface} collapsable={false}>
-          {bubbleGridItems.length > 10 ? (
-            <ScrollView
-              style={styles.bubbleGridScroll}
-              showsVerticalScrollIndicator
-              nestedScrollEnabled
-            >
-              {bubbleGridContent}
-            </ScrollView>
-          ) : bubbleGridContent}
+          <ScrollView
+            style={styles.bubbleGridScroll}
+            contentContainerStyle={styles.bubbleGridScrollContent}
+            showsVerticalScrollIndicator={bubbleGridItems.length > 1}
+            nestedScrollEnabled
+          >
+            {bubbleGridContent}
+          </ScrollView>
         </View>
       );
     }
@@ -983,6 +982,9 @@ const styles = StyleSheet.create({
   },
   bubbleGridScroll: {
     flex: 1,
+  },
+  bubbleGridScrollContent: {
+    flexGrow: 1,
   },
   bubbleGridContent: {
     flexDirection: "row",
