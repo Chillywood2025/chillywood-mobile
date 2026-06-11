@@ -131,6 +131,27 @@ Native proof captured:
 
 This closes the native resource/channel proof for bundled background call notification sound configuration. It does not prove two-user call delivery or server-side background call push dispatch.
 
+## Play Internal Rollout
+
+Google Play internal rollout preparation is complete for the bundled Chi'lly Chat sound runtime:
+
+- EAS AAB build: `1c36c8e1-f52d-4b6b-acb1-1602a9f8e99d`
+- Commit: `e12d4d2454c1605eebd923f50679f05a7afab3e0`
+- Profile: `production`
+- Distribution: `STORE`
+- Channel: `production`
+- Runtime: `1.0.0`
+- App version: `1.0.0`
+- Android versionCode: `34`
+- Artifact type: AAB
+- Artifact URL: `https://expo.dev/artifacts/eas/e6rlbxaDLRAPBrEuwLen8vGrUJ-c9TVgrVa4kGnYpJw.aab`
+- EAS submit profile: `production`
+- Google Play track: `internal`
+- EAS submission: `3a430e53-4ff2-4455-b041-4646a615ff1a`
+- Submit result: `Submitted your app to Google Play Store`
+
+This is not yet Play-installed runtime proof. The remaining proof must install or update through Google Play internal testing, confirm installer `com.android.vending`, confirm versionCode `34`, and then re-check `chilly_chat_calls_v2` on the Play-installed app.
+
 ## Safety
 
 The implementation does not:
@@ -154,12 +175,15 @@ Passed:
 
 Required before production claim:
 
+- Play/internal installed runtime proof for versionCode `34`
 - two-user Android proof with both users in Chi'lly Chat
 - background notification proof after backend dispatch wiring is available
+- BrowserStack proof if required for cross-device release evidence
 
 ## Remaining Gaps
 
-- Bundled notification sounds are configured and native Android channel creation is proved on the EAS internal APK runtime, but Google Play internal tester pickup still requires a Play/internal AAB rollout.
+- Bundled notification sounds are configured and native Android channel creation is proved on the EAS internal APK runtime. Google Play internal AAB build and submit are complete, but Play-installed tester pickup still needs device proof from installer `com.android.vending`.
 - Background call push dispatch is channel-ready but still needs the approved server dispatch path for call invites.
 - Two-user device proof is required to prove recipient incoming sheet, accept/decline, and missed-card behavior.
+- BrowserStack proof remains pending.
 - Dynamic downloaded sounds are intentionally not promised for Android background push notifications in V1.

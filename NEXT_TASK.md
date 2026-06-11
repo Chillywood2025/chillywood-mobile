@@ -12,7 +12,13 @@ Run two-user Android proof for the Supabase-applied Chi'lly Chat call invite/rin
 - Settings > Notifications exposes Chi'lly Chat call alerts, vibration, and ringtone preference.
 - Bundled CC0 call sounds are present under `assets/sounds/chilly-chat/`, with provenance in `docs/CHILLY_CHAT_SOUND_LICENSES.md`; Settings preview should play the selected bundled in-app sound.
 - Background call push proof still needs the approved server dispatch path and Play/internal push-token setup.
-- Bundled background push ringtone native channel proof is closed for the EAS internal APK runtime: build `4110adeb-260d-41fa-841b-33a24ef15869` from `cc87743`, versionCode `32`, installed on `R5CR120QCBF`, and Android created `chilly_chat_calls_v2` with `android.resource://com.chillywood.mobile/raw/chilly_ring`. Google Play/internal AAB rollout remains needed for tester pickup because OTA alone cannot add native sound resources.
+- Bundled background push ringtone native channel proof is closed for the EAS internal APK runtime: build `4110adeb-260d-41fa-841b-33a24ef15869` from `cc87743`, versionCode `32`, installed on `R5CR120QCBF`, and Android created `chilly_chat_calls_v2` with `android.resource://com.chillywood.mobile/raw/chilly_ring`.
+- Google Play internal AAB rollout is prepared and submitted: EAS AAB build `1c36c8e1-f52d-4b6b-acb1-1602a9f8e99d` from `e12d4d2`, app version `1.0.0`, versionCode `34`, runtime `1.0.0`, artifact type `AAB`, submitted to Google Play internal testing through EAS submission `3a430e53-4ff2-4455-b041-4646a615ff1a`.
+- Play-installed proof is still required before claiming tester pickup: install/update through Google Play internal testing, confirm installer `com.android.vending`, package `com.chillywood.mobile`, version `1.0.0`, versionCode `34`, then confirm Android channels `chilly_chat_messages`, `chilly_chat_calls_v2`, and `chilly_chat_missed_calls`.
+- Confirm `chilly_chat_calls_v2` sound from the Play-installed runtime is `android.resource://com.chillywood.mobile/raw/chilly_ring`.
+- After the approved backend call-push dispatch path exists, trigger/receive a background Chi'lly Chat call notification and confirm the bundled sound plays unless Android system notification settings silence it.
+- Capture Play/internal sound proof under a new `/tmp/chillywood-play-internal-sounds-proof-*` path.
+- BrowserStack proof remains pending and must not be claimed from the EAS APK or Play submission alone.
 
 Do not change LiveKit token issuer, communication room authority, Watch-Party route ownership, Player behavior, auth, Premium gates, content safety, money state, payouts, or admin authority.
 
