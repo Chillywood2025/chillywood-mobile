@@ -6053,6 +6053,11 @@ export default function PlayerScreen() {
     )
     : "";
   const handlePaidVideoUnlock = useCallback(async () => {
+    debugLog("paid-video", "paid_video_unlock_pressed", {
+      hasCreatorVideo: !!creatorVideo,
+      busy: paidVideoUnlockBusy,
+      signedIn: isSignedIn,
+    });
     if (!creatorVideo || paidVideoUnlockBusy) return;
     if (!isSignedIn) {
       setPaidVideoUnlockMessage("Sign in before unlocking this creator video.");
@@ -6070,6 +6075,11 @@ export default function PlayerScreen() {
     setPaidVideoUnlockBusy(true);
     setPaidVideoUnlockMessage("Opening sandbox checkout...");
     try {
+      debugLog("paid-video", "paid_video_checkout_start", {
+        videoId: creatorVideo.id,
+        creatorId,
+        priceBucket: creatorVideoPaidContentPriceLabel || "unknown",
+      });
       const result = await purchasePaidVideoAccess({
         videoId: creatorVideo.id,
         creatorId,
@@ -6086,7 +6096,10 @@ export default function PlayerScreen() {
           setIsVideoReady(false);
         }
       }
-    } catch {
+    } catch (error) {
+      debugLog("paid-video", "paid_video_checkout_error", {
+        message: error instanceof Error ? error.message : "unknown_error",
+      });
       setPaidVideoUnlockMessage("Unable to unlock this video right now.");
     } finally {
       setPaidVideoUnlockBusy(false);
@@ -8592,6 +8605,7 @@ export default function PlayerScreen() {
                   onPress={() => {
                     void handlePaidVideoUnlock();
                   }}
+                  testID="unlock-paid-video-button"
                   accessibilityRole="button"
                   accessibilityLabel="Unlock Video"
                 >
