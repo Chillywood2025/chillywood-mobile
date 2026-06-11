@@ -1,8 +1,10 @@
 # Money Center Product Policy
 
-Last updated: June 5, 2026
+Last updated: June 11, 2026
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
+
+June 11, 2026 creator-money hub cleanup: Platform Studio Money Center is the single creator-facing money hub. It now has exactly seven creator sections: Overview, Ways to Earn, Offers, Transactions, Payouts, Tax & Legal, and Provider Status. The six creator monetization flows are cataloged in `_lib/creatorMonetizationFeatures.ts`: Tips, Paid Videos, Paid Watch-Parties, Channel Subscriptions, VIP Passes, and Paid Events. Money Center renders Ways to Earn from that shared catalog and must not hardcode a second label set elsewhere. Duplicate creator-facing sections for Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Future Tools, and Technical checks are removed or folded into the seven-section structure. `/creator-monetization-setup` is compatibility-only and redirects to Money Center Offers; old `/monetize`, `/revenue`, `/payouts`, and legacy focus params should continue mapping into the correct Money Center section instead of creating new dashboards. Premium remains separate from creator purchases. This cleanup does not activate production money, checkout, tips, paid videos, ticketed rooms, creator subscriptions, VIP, paid events, merch checkout, payable balances, payout execution, cash-out, withdrawal, transfer, LiveKit authority, room routing changes, or admin controls.
 
 June 5, 2026 production policy operations readiness update: `docs/PRODUCTION_MONEY_POLICY_OPERATIONS_READINESS.md` and `docs/PRODUCTION_MONEY_READINESS_INDEX.md` add the future-production legal, tax, fraud/risk, support, refund/return, merch fulfillment, payout operations, and Owner/Admin approval-gate framework. Money Center/Admin copy may reference these documents as readiness/draft status only: legal review needed, tax review needed, fraud/support workflows prepared for review, refund/return drafts ready for review, merch fulfillment plan ready for review, payout terms draft ready for review, production activation locked, payouts not active, and no payable balance. Do not add or imply live activation buttons from this packet.
 

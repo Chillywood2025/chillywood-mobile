@@ -28,6 +28,8 @@ const providerReadiness = read("_lib/providerReadiness.ts");
 const paymentRailPolicy = read("_lib/paymentRailPolicy.ts");
 const moneyFeatureFlags = read("_lib/moneyFeatureFlags.ts");
 const moneyAuditEvents = read("_lib/moneyAuditEvents.ts");
+const monetizationFeatureCatalog = read("_lib/creatorMonetizationFeatures.ts");
+const creatorMonetizationSetupRoute = read("app/creator-monetization-setup.tsx");
 const admin = read("app/admin.tsx");
 const moneyKillSwitchMigration = read("supabase/migrations/202605270001_platform_money_kill_switches.sql");
 const operatorTabsBlock = admin.match(/const operatorTabs:[\s\S]*?\n\];/)?.[0] ?? "";
@@ -36,31 +38,52 @@ assertIncludes(packageJson, "guard:money-center-policy", "package guard script")
 
 [
   "Money Center",
-  "Digital Sales",
-  "Tips",
-  "Watch-Party Seats",
-  "Paid Content",
-  "Merch",
-  "Creator Balance",
+  "Overview",
+  "Ways to Earn",
+  "Offers",
+  "Transactions",
   "Payouts",
   "Tax & Legal",
   "Provider Status",
-  "Future Tools",
-  "Technical checks",
 ].forEach((section) => {
   assertIncludes(channelSettings, section, `Money Center section ${section}`);
 });
 
-assertIncludes(channelSettings, "Digital Sales", "digital sales readiness section");
+[
+  "Accept tips from fans.",
+  "Charge fans to unlock selected videos.",
+  "Sell access to hosted Watch-Party rooms.",
+  "Offer monthly creator membership.",
+  "Sell special access and perks.",
+  "Sell tickets to live events and premieres.",
+].forEach((label) => {
+  assertIncludes(monetizationFeatureCatalog, label, `shared monetization feature catalog ${label}`);
+});
+assertIncludes(monetizationFeatureCatalog, "type MonetizationFeatureKey", "shared feature key type");
+assertIncludes(channelSettings, "CREATOR_MONETIZATION_FEATURE_CATALOG", "Money Center uses shared feature catalog");
+assertIncludes(channelSettings, "Premium is separate from creator purchases.", "Premium separation warning");
+assertIncludes(channelSettings, "Fans do not buy Chi'llywood Premium", "creator purchase separation copy");
+assertIncludes(channelSettings, "Available balance", "overview available balance");
+assertIncludes(channelSettings, "Pending balance", "overview pending balance");
+assertIncludes(channelSettings, "This month", "overview monthly earnings");
+assertIncludes(channelSettings, "Lifetime earnings", "overview lifetime earnings");
+assertIncludes(channelSettings, "Pending payout", "overview pending payout");
+assertIncludes(channelSettings, "Set up payouts before you can receive creator earnings.", "payout setup warning");
+assertIncludes(channelSettings, "Payments are unavailable right now.", "payments unavailable warning");
+assertIncludes(channelSettings, "Creator earnings are temporarily disabled.", "earnings disabled warning");
+assertIncludes(channelSettings, "Offer type: paid_video", "paid video offer row");
+assertIncludes(channelSettings, "Offer type: paid_watch_party", "paid watch-party offer row");
+assertIncludes(channelSettings, "Offer type: channel_subscription", "channel subscription offer row");
+assertIncludes(channelSettings, "Offer type: vip_pass", "VIP offer row");
+assertIncludes(channelSettings, "Offer type: paid_event", "paid event offer row");
+assertIncludes(channelSettings, "Offer type: merch", "merch offer row");
+assertIncludes(channelSettings, "moneyTransactionFilter", "single filtered transactions list");
+assertIncludes(creatorMonetizationSetupRoute, "focus=offers", "creator setup compatibility redirect");
 assertIncludes(channelSettings, "Sandbox proved", "sandbox-proved digital sales copy");
-assertIncludes(channelSettings, "Your balance will appear after verified sales.", "ledger-first balance copy");
 assertIncludes(channelSettings, "No verified earnings yet", "no fake earnings copy");
-assertIncludes(channelSettings, "Tips will unlock after store products and payout rules are verified.", "tips readiness copy");
-assertIncludes(channelSettings, "No tip totals, tip balance, or tip checkout is available here.", "no fake tips copy");
-assertIncludes(channelSettings, "Stripe is not used to charge Android users for in-app digital access.", "Android digital Stripe block");
+assertIncludes(channelSettings, "It is not used to charge Android users for digital access.", "Android digital Stripe block");
 assertIncludes(channelSettings, "Stripe Connect is for creator payouts only.", "Stripe Connect payout boundary");
-assertIncludes(channelSettings, "Physical merch stays separate from Android digital access", "merch separation copy");
-assertIncludes(channelSettings, "Digital app access stays separate from merch", "digital merch separation");
+assertIncludes(channelSettings, "Physical goods stay separate from Android digital access.", "merch separation copy");
 assertIncludes(channelSettings, "Provider checks are the source of readiness truth.", "provider readiness visible source");
 assertIncludes(channelSettings, "readProviderReadinessSummary", "provider readiness integration");
 assertIncludes(providerReadiness, "readProviderReadinessSummary", "provider readiness helper");
@@ -79,7 +102,7 @@ assertIncludes(channelSettings, "Sandbox testing is complete for digital access.
 assertIncludes(channelSettings, "Sandbox activity is inspection-only and not payable.", "creator sandbox-only not-payable copy");
 assertIncludes(channelSettings, "Real provider refund/revoke and delayed-payment pending proof still need provider/device support.", "creator provider-tooling gap copy");
 assertIncludes(channelSettings, "Tips, paid content, tickets, seats, and event passes have real Google Play / RevenueCat sandbox proof.", "creator sandbox proof product copy");
-assertIncludes(channelSettings, "Setup and sandbox money rows cannot become payable earnings.", "creator setup/sandbox not-payable proof copy");
+assertIncludes(channelSettings, "Sandbox rows are inspection records only and stay not payable.", "creator setup/sandbox not-payable proof copy");
 assertIncludes(channelSettings, "money_center_visible", "Money Center visibility switch");
 assertIncludes(channelSettings, "digital_sales_enabled", "Digital sales switch");
 assertIncludes(channelSettings, "payouts_enabled", "Payouts switch");
