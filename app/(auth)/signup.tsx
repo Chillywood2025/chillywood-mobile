@@ -368,8 +368,10 @@ export default function Signup() {
           {"."}
         </Text>
         <View style={styles.usernameCard}>
-          <Text style={styles.usernameTitle}>Choose your username</Text>
-          <Text style={styles.usernameHelper}>This is how people find you.</Text>
+          <Text style={styles.usernameTitle}>Choose your name and handle</Text>
+          <Text style={styles.usernameHelper}>
+            Your display name is what people see. Your @username is how they find you, and it can be different.
+          </Text>
           <TextInput
             style={styles.input}
             placeholder="Display name"

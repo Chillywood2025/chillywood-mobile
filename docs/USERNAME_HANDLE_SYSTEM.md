@@ -74,7 +74,7 @@ Post-migration proof:
 
 ## App Behavior
 
-Signup now asks for display name and username before account creation. Username availability is debounced and shows `Available`, `Already taken`, `This username is reserved`, `Too short`, `Invalid characters`, or `Not allowed`.
+Signup now asks for display name and username before account creation. These are intentionally separate: display name is the public name people see, while `@username` is the searchable handle people use to find the account, and they can be different. Username availability is debounced and shows `Available`, `Already taken`, `This username is reserved`, `Too short`, `Invalid characters`, or `Not allowed`.
 
 Settings > Account has a compact username editor with current `@username`, live availability, and one Save Username action. It maps backend errors to product copy and does not expose raw constraint/RLS errors.
 
