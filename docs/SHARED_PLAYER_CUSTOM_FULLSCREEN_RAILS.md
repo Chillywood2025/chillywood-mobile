@@ -1,6 +1,6 @@
 # Shared Player Custom Fullscreen Rails
 
-Updated: June 6, 2026
+Updated: June 10, 2026
 
 ## Intent
 
@@ -38,6 +38,8 @@ The fullscreen rail is guarded by `shouldRenderWatchPartyLiveKit && watchPartyLi
 
 Fullscreen does not show explanatory fallback text in the rail. No fake participants or fake LiveKit state are added.
 
+June 10 scroll stabilization: `LiveKitStageMediaSurface` now always wraps the bubble-grid content in its own vertical `ScrollView`. This keeps participant overflow inside the right rail instead of letting extra tiles clip, push the center shared player, move the comments rail, or disturb the bottom player controls. The same backed roster still drives the list: the current user resolves to `You`, joined participants without camera tracks still render as avatar/initial/status placeholders, and ordering remains controlled upstream by `liveBubbleParticipants`.
+
 ## Regular Shared Player
 
 Regular portrait shared player remains separate. The normal shared player still uses its existing video surface, compact Share / Report / speed controls, comments section, participant area, touch play/pause path, and fullscreen button.
@@ -60,6 +62,14 @@ This layout change does not alter:
 ## Proof Status
 
 Repo-side validation passed. EAS production candidate update group `40b451bc-f4fc-4929-9052-46baa8cff145` downloaded and applied on the Play-installed `R5CR120QCBF` runtime `1.0.0`; user visual confirmation reported the shared-player fullscreen view works after the final right-rail reuse fix.
+
+June 10 scroll-stabilization update:
+
+- commit: `b4ffd6b Stabilize shared player participant rail scrolling`
+- EAS update group: `28f14786-d65a-4751-a9d8-db399140a6ac`
+- Android update ID: `019eb4c5-4263-7ba2-9f25-09f6570b1762`
+- validation: `npm run typecheck`, `npm run validate:runtime`, `git diff --check`, `git diff --cached --check`
+- device availability: one attached device, `R5CR120QCBF`; true 2-user and overflow screenshots still need a second joined participant/device and were not faked
 
 Proof path:
 

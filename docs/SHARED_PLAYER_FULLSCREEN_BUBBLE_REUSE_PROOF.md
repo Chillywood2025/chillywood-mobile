@@ -1,6 +1,6 @@
 # Shared Player Fullscreen Bubble Reuse Proof
 
-Updated: June 6, 2026
+Updated: June 10, 2026
 
 ## Scope
 
@@ -51,6 +51,8 @@ That prior non-LiveKit rail path could show initials while portrait showed a rea
 
 The fullscreen right rail now renders the exact portrait LiveKit bubble surface when `shouldRenderWatchPartyLiveKit && watchPartyLiveKitJoinContract` is true. If that condition is false, the rail renders no participant fallback card, so it cannot show the old `Shared Player` card or `Shared playback stays here if the room drops back from live camera.` copy.
 
+June 10 scroll stabilization keeps that same bubble surface but removes the previous threshold that only enabled vertical scrolling after more than 10 participants. The bubble-grid surface now always owns a vertical `ScrollView`, so narrow right-rail overflow scrolls inside the rail. This preserves the shared player size, left comments rail, bottom progress/player controls, roster ordering, and LiveKit participant fallback behavior.
+
 ## Boundaries Unchanged
 
 - LiveKit token issuer / token flow
@@ -88,3 +90,11 @@ Device status:
 Remaining gap:
 
 - The device later locked behind PIN during automated screenshot capture, so repo-side closeout relies on the user visual confirmation for the final fullscreen avatar result rather than a committed screenshot.
+- June 10 rail-scroll proof had one attached Android device (`R5CR120QCBF`) available. Real 2-user and overflow screenshots still require a second joined participant/device; no fake participants or fake room state were created.
+
+June 10 scroll-stabilization update:
+
+- commit: `b4ffd6b Stabilize shared player participant rail scrolling`
+- EAS update group: `28f14786-d65a-4751-a9d8-db399140a6ac`
+- Android update ID: `019eb4c5-4263-7ba2-9f25-09f6570b1762`
+- validation: `npm run typecheck`, `npm run validate:runtime`, `git diff --check`, `git diff --cached --check`
