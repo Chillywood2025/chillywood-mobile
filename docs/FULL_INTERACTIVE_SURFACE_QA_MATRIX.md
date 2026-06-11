@@ -142,8 +142,8 @@ Do not mark a row complete unless it has route proof, action proof, and no unsaf
 | Platform Studio | Content tab, Brand tab, upload/edit/publish/delete, Money Center links, Premium gates | Gate proved | Current proof account gets Premium-required Studio gate; no Premium bypass attempted |
 | Player | Share, Report, Watch-Party Live, speed, fullscreen, Back, comments, replies, attachments, gates | Partially proved | Creator-video Player Share/Report/Watch-Party Live visible, Report sheet canceled, Discussion visible; comment keyboard bug fixed in source; fullscreen/speed/back still need post-update proof |
 | Comments/replies | Comment field, submit, reply, cancel reply, attachment, report/delete | Partially proved | Comment input focus exposed keyboard bug; source adds test IDs and keyboard-safe compact state; no fake comment submitted |
-| Watch-Party Live | Join, create, code entry, gates, composer, controls, leave/rejoin | Partially proved | Live tab Watch-Party Live entry card/button visible; full two-session proof unavailable because emulator did not attach |
-| Live Stage | Access/seat gates, request/reserve, composer, reactions, mic/camera disabled states, leave/rejoin | Partially proved | Live tab Live Watch-Party/Open Live action visible; full two-session proof unavailable because emulator did not attach |
+| Watch-Party Live | Join, create, code entry, gates, composer, controls, leave/rejoin | Partially proved | Live tab Watch-Party Live entry card/button visible; June 10 repo fix adds focused wake-lock and room-context Back/leave/error returns; full two-session proof unavailable because emulator did not attach |
+| Live Stage | Access/seat gates, request/reserve, composer, reactions, mic/camera disabled states, leave/rejoin | Partially proved | Live tab Live Watch-Party/Open Live action visible; June 10 repo fix adds focused wake-lock, room-context Back handling, and locked-control overlay behavior; full two-session proof unavailable because emulator did not attach |
 | Party Room old-room | Old/stale/ended denial, route ownership, recovery actions | Not started in this lane | Guards/prior route proof exist; not full button sweep |
 | Chi'lly Chat | Inbox, thread, compose, send, empty states, keyboard | Not started | Needs device proof |
 | Creator monetization setup | Product tier cards, save buttons, readiness sections, payout read-only, merch readiness | Partially proved | Monetization Setup route shows sandbox safety state, live money off, payouts off, cash-out/withdraw/transfer absent, no Stripe Android digital checkout, arbitrary prices blocked |
@@ -163,7 +163,7 @@ Do not mark a row complete unless it has route proof, action proof, and no unsaf
 6. Platform/Profile/Studio pass.
 7. Monetization/sandbox/Money Center pass.
 8. Owner/Admin pass with approved session.
-9. Live-room two-session pass with a Premium-capable host and stable second session.
+9. Live-room two-session pass with a Premium-capable host and stable second session; also prove the June 10 wake-lock/back/overlay fix on a Play/internal runtime that contains native `expo-keep-awake`.
 
 ## Safety Boundaries
 

@@ -73,6 +73,8 @@ Proof path:
 
 ## Bugs Found
 
+June 10 follow-up: live-room idle/back/overlay stabilization is tracked separately in `docs/LIVE_ROOM_WAKE_LOCK_BACK_OVERLAY_PROOF.md`. Watch-Party Live and Live Stage now use focused-screen `expo-keep-awake`, route Back/leave/error actions to Watch-Party / Party Room context instead of stack-history Home fallthrough, and keep Live Stage locked controls visible without arming auto-hide. This follow-up still needs Play/internal runtime proof with a binary that contains the native module.
+
 1. Signed-in Premium-gated Platform Studio showed a primary action labeled `Sign In to Continue`. The tester was already signed in, so the action was confusing and looked like an auth regression. It now shows `Manage Premium` for the Platform Studio Premium gate and routes to `/subscribe`.
 
 2. Route-backed monetization fixture routes for Watch-Party Live ticket, Live Watch-Party access pass, and Live Watch-Party seat pass could render `Room not found` / `Live room unavailable` without the existing sandbox proof card when the backing room fixture was unavailable. The backend proof config existed, but the unavailable branches did not render it. Those branches now show the same route-backed proof card as the access-denial branches, preserving no-production/no-payout/no-publish/no-host-authority copy.
@@ -98,6 +100,7 @@ Full guard sweep pending final pre-commit validation.
 
 ## Remaining Internal Testing Issues
 
+- June 10 live-room wake-lock/back/overlay source fix is pushed, but runtime proof requires a Play/internal build containing native `expo-keep-awake`; an OTA alone may not prove screen wake-lock on an older binary.
 - The dedicated device-plus-emulator room sweep is now documented in `docs/DEVICE_EMULATOR_LIVE_ROOM_TEST_SWEEP.md`. Physical-device route/gate proof passed, but true two-session host/viewer LiveKit proof remains blocked by unavailable Premium host access and emulator instability/current-debug install failure.
 - Full logged-out login/logout credential cycle was not rerun during this pass.
 - Fullscreen Player was not rerun because this sweep focused on route health and previously fixed standalone Player proof remains documented separately.

@@ -1,5 +1,15 @@
 # NEXT TASK
 
+## Immediate Live Room Follow-Up
+
+The newest code change is `686024a Fix live room wake lock and back behavior`. Before claiming tester-visible closure, produce Play/internal runtime proof for `docs/LIVE_ROOM_WAKE_LOCK_BACK_OVERLAY_PROOF.md`:
+
+- Use a Play/internal build/runtime that includes native `expo-keep-awake`; if the current installed binary does not include it, create/install a new internal build rather than relying only on OTA.
+- On `R5CR120QCBF` or another approved Play-installed device, capture Watch-Party Live and Live Stage idle behavior staying awake.
+- Prove Live Stage overlay auto-hides after 10 seconds for viewer/host where reachable, tap brings it back, and locked controls do not auto-hide.
+- Prove Android Back from Stage returns to Live Room, and Back from the room context returns to Party Room / Watch-Party entry instead of Home.
+- Keep LiveKit token issuer, publish authority, host approval, route ownership, Party Room behavior, old-room handling, Premium/content safety, production money, payouts, cash-out, and Stripe Android digital checkout unchanged.
+
 ## Immediate Auth Email Follow-Up
 
 Run the remaining Auth Email Recovery click-through proof: open the newest reset email delivered after `2026-06-10T21:40:44-05:00` to `rob2037gn@gmail.com`, confirm it is from `Chi'llywood <no-reply@chillywoodstream.com>` with subject `Reset your Chi'llywood password`, tap the reset link on the Play/internal runtime, confirm it opens `reset-password` instead of the public policy site/auth-callback/Chrome, update the password, confirm it returns to login, and sign in. The repo-side route contract is fixed to send forgot-password links to `chillywoodmobile://reset-password`, signup verification to `chillywoodmobile://auth/callback`, and both successful flows back to login. Do not commit SMTP passwords, Supabase management tokens, service-role keys, `.env` files, screenshots containing private headers, or provider secrets.
