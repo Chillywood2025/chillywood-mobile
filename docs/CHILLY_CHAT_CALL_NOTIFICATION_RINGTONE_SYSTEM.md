@@ -113,6 +113,24 @@ The app now creates Android channels:
 
 Notification tap routing already accepts `/chat/...` deep links, including an `openCall` query if the server dispatch path sends it later. This pass does not add service-role secrets to mobile code and does not log push tokens. The existing `notification-dispatch` Edge Function is still a discovery/activity dispatcher and does not yet dispatch Chi'lly Chat call pushes; a future call-push dispatcher should use `chilly_chat_calls_v2`.
 
+## Native Android Proof
+
+Proof path: `/tmp/chillywood-chilly-chat-sounds-native-proof-20260611/`
+
+EAS cloud build `4110adeb-260d-41fa-841b-33a24ef15869` finished from commit `cc877432cbfca5ff29bd29996b72bd6f406c6273`, profile `production-apk`, channel `production`, runtime `1.0.0`, app version `1.0.0`, and Android versionCode `32`.
+
+The cloud APK was installed on physical device `R5CR120QCBF` after removing the previous Google Play-signed install because Android rejected an in-place APK update with a signature mismatch. This proof therefore verifies the EAS internal APK runtime directly; tester distribution through Google Play internal testing still requires an AAB/internal-track rollout signed by Play.
+
+Native proof captured:
+
+- APK contains bundled `.wav` resources under release `res/*.wav` resource entries.
+- Installed package reports `com.chillywood.mobile`, versionName `1.0.0`, versionCode `32`.
+- Installer reports `null` for this proof install because it was a direct EAS APK install, not Google Play.
+- Android notification service created `chilly_chat_messages`, `chilly_chat_calls_v2`, `chilly_chat_missed_calls`, and `default`.
+- `chilly_chat_calls_v2` reports importance `5`, vibration `[0, 400, 180, 400]`, and sound `android.resource://com.chillywood.mobile/raw/chilly_ring`.
+
+This closes the native resource/channel proof for bundled background call notification sound configuration. It does not prove two-user call delivery or server-side background call push dispatch.
+
 ## Safety
 
 The implementation does not:
@@ -138,11 +156,10 @@ Required before production claim:
 
 - two-user Android proof with both users in Chi'lly Chat
 - background notification proof after backend dispatch wiring is available
-- native/internal Android build proof for the bundled background push channel sound
 
 ## Remaining Gaps
 
-- Bundled notification sounds are configured, but background push ringtone behavior is not proven until a new native/internal Android build is installed.
+- Bundled notification sounds are configured and native Android channel creation is proved on the EAS internal APK runtime, but Google Play internal tester pickup still requires a Play/internal AAB rollout.
 - Background call push dispatch is channel-ready but still needs the approved server dispatch path for call invites.
 - Two-user device proof is required to prove recipient incoming sheet, accept/decline, and missed-card behavior.
 - Dynamic downloaded sounds are intentionally not promised for Android background push notifications in V1.

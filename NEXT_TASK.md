@@ -12,7 +12,7 @@ Run two-user Android proof for the Supabase-applied Chi'lly Chat call invite/rin
 - Settings > Notifications exposes Chi'lly Chat call alerts, vibration, and ringtone preference.
 - Bundled CC0 call sounds are present under `assets/sounds/chilly-chat/`, with provenance in `docs/CHILLY_CHAT_SOUND_LICENSES.md`; Settings preview should play the selected bundled in-app sound.
 - Background call push proof still needs the approved server dispatch path and Play/internal push-token setup.
-- Bundled background push ringtone sound proof requires a native/internal Android build with local sound files and the versioned `chilly_chat_calls_v2` channel; OTA alone is not enough.
+- Bundled background push ringtone native channel proof is closed for the EAS internal APK runtime: build `4110adeb-260d-41fa-841b-33a24ef15869` from `cc87743`, versionCode `32`, installed on `R5CR120QCBF`, and Android created `chilly_chat_calls_v2` with `android.resource://com.chillywood.mobile/raw/chilly_ring`. Google Play/internal AAB rollout remains needed for tester pickup because OTA alone cannot add native sound resources.
 
 Do not change LiveKit token issuer, communication room authority, Watch-Party route ownership, Player behavior, auth, Premium gates, content safety, money state, payouts, or admin authority.
 
