@@ -57,6 +57,7 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
+import { purchasePaidVideoAccess } from "../../_lib/creatorPaidVideos";
 import {
     getRuntimeControlBlockedCopy,
     isRuntimeControlBlockedAccess,
@@ -1041,6 +1042,8 @@ export default function PlayerScreen() {
   const [creatorVideoCommentReportBusy, setCreatorVideoCommentReportBusy] = useState(false);
   const [creatorVideoCommentUserId, setCreatorVideoCommentUserId] = useState("");
   const [creatorVideoCommentKeyboardOpen, setCreatorVideoCommentKeyboardOpen] = useState(false);
+  const [paidVideoUnlockBusy, setPaidVideoUnlockBusy] = useState(false);
+  const [paidVideoUnlockMessage, setPaidVideoUnlockMessage] = useState<string | null>(null);
   const [watchPartyCommentKeyboardOpen, setWatchPartyCommentKeyboardOpen] = useState(false);
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -6049,6 +6052,46 @@ export default function PlayerScreen() {
       creatorVideo.paidContentAccess.currency ?? "usd",
     )
     : "";
+  const handlePaidVideoUnlock = useCallback(async () => {
+    if (!creatorVideo || paidVideoUnlockBusy) return;
+    if (!isSignedIn) {
+      setPaidVideoUnlockMessage("Sign in before unlocking this creator video.");
+      router.push("/login" as Parameters<typeof router.push>[0]);
+      return;
+    }
+    const access = creatorVideo.paidContentAccess;
+    const amountCents = access?.priceCents ?? 0;
+    const creatorId = access?.creatorId ?? creatorVideo.ownerId;
+    if (!creatorId || amountCents <= 0) {
+      setPaidVideoUnlockMessage("This paid video offer is not ready yet.");
+      return;
+    }
+
+    setPaidVideoUnlockBusy(true);
+    setPaidVideoUnlockMessage("Opening sandbox checkout...");
+    try {
+      const result = await purchasePaidVideoAccess({
+        videoId: creatorVideo.id,
+        creatorId,
+        amountCents,
+        currency: access?.currency ?? "usd",
+      });
+      setPaidVideoUnlockMessage(result.message);
+      if (result.ok) {
+        const refreshed = await readCreatorVideoForPlayer(creatorVideo.id);
+        if (refreshed) {
+          setCreatorVideo(refreshed);
+          setItem(buildCreatorPlayerTitle(refreshed));
+          setPlaybackLoadError(null);
+          setIsVideoReady(false);
+        }
+      }
+    } catch {
+      setPaidVideoUnlockMessage("Unable to unlock this video right now.");
+    } finally {
+      setPaidVideoUnlockBusy(false);
+    }
+  }, [creatorVideo, isSignedIn, paidVideoUnlockBusy]);
   const source = useMemo(() => {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     if (isCreatorVideoPlayback) return null;
@@ -8507,11 +8550,35 @@ export default function PlayerScreen() {
                   {isCreatorVideoPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>
                       {creatorVideoPaidContentLocked
-                        ? `Checkout is not active yet${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. Buying creator-paid content does not require Premium. Payment setup still needs to be ready.`
+                        ? `Unlock ${creatorVideo?.title ?? "this creator video"}${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. This purchase unlocks this creator video only. It does not include Premium, subscriptions, VIP, live rooms, Watch-Party seats, or other creator content.`
                         : playbackLoadError
                         ? "This upload could not be loaded. Re-upload or repair the video file."
                         : "This upload does not have a playable source yet."}
                     </Text>
+                  ) : null}
+                  {creatorVideoPaidContentLocked ? (
+                    <View style={styles.paidVideoUnlockCard}>
+                      <TouchableOpacity
+                        style={[styles.playerAccessPrimaryBtn, paidVideoUnlockBusy && styles.secondaryBtnDisabled]}
+                        activeOpacity={0.86}
+                        disabled={paidVideoUnlockBusy}
+                        onPress={() => {
+                          void handlePaidVideoUnlock();
+                        }}
+                      >
+                        {paidVideoUnlockBusy ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Text style={styles.playerAccessPrimaryText}>Unlock Video</Text>
+                        )}
+                      </TouchableOpacity>
+                      <Text style={styles.videoLoadingSubtext}>
+                        Google Play / RevenueCat sandbox test only. Premium is separate from creator video purchases.
+                      </Text>
+                      {paidVideoUnlockMessage ? (
+                        <Text style={styles.videoLoadingSubtext}>{paidVideoUnlockMessage}</Text>
+                      ) : null}
+                    </View>
                   ) : null}
                   {isSpectatorPlaybackUnavailable ? (
                     <Text style={styles.videoLoadingSubtext}>
@@ -9429,6 +9496,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     maxWidth: 260,
     textAlign: "center",
+  },
+  paidVideoUnlockCard: {
+    width: "86%",
+    maxWidth: 360,
+    alignItems: "center",
+    gap: 10,
   },
   video: {
     width: "100%",

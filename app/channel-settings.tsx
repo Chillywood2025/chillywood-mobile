@@ -55,6 +55,13 @@ import {
   type CreatorMonetizationFoundationSummary,
 } from "../_lib/creatorMonetization";
 import {
+  listMyPaidVideoOffers,
+  listMyPaidVideoTransactions,
+  savePaidVideoOffer,
+  type CreatorPaidVideoOffer,
+  type CreatorPaidVideoTransaction,
+} from "../_lib/creatorPaidVideos";
+import {
   listMyCreatorTipTransactions,
   readMyCreatorTipSettings,
   saveMyCreatorTipSettings,
@@ -289,6 +296,8 @@ type ChannelVideoEditorState = {
   description: string;
   thumbUrl: string;
   visibility: CreatorVideoVisibility;
+  accessMode: "free" | "paid";
+  priceDollars: string;
 };
 
 type ClipStudioEditorState = {
@@ -334,6 +343,8 @@ const createEmptyVideoEditorState = (): ChannelVideoEditorState => ({
   description: "",
   thumbUrl: "",
   visibility: "draft",
+  accessMode: "free",
+  priceDollars: "0.99",
 });
 
 const createEmptyClipStudioEditorState = (): ClipStudioEditorState => ({
@@ -440,6 +451,17 @@ const formatJoinPolicyLabel = (value: "open" | "locked") => (value === "locked" 
 const formatReactionsPolicyLabel = (value: "enabled" | "muted") => (value === "muted" ? "Muted" : "Enabled");
 const formatCapturePolicyLabel = (value: "best_effort" | "host_managed") => (
   value === "host_managed" ? "Host Managed" : "Best Effort"
+);
+
+const parseDollarInputToCents = (value: string) => {
+  const normalized = String(value ?? "").replace(/[^0-9.]/g, "");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.round(parsed * 100));
+};
+
+const formatCentsAsDollarInput = (value: number) => (
+  (Math.max(0, Math.trunc(value || 0)) / 100).toFixed(2)
 );
 
 const toDatetimeLocalValue = (value: string | null) => {
@@ -1100,6 +1122,8 @@ export function ChannelStudioScreen() {
   const [moneyTransactionFilter, setMoneyTransactionFilter] = useState<MoneyTransactionFilter>("all");
   const [creatorTipSettings, setCreatorTipSettings] = useState<CreatorTipSettings | null>(null);
   const [creatorTipTransactions, setCreatorTipTransactions] = useState<CreatorTipTransaction[]>([]);
+  const [creatorPaidVideoOffers, setCreatorPaidVideoOffers] = useState<CreatorPaidVideoOffer[]>([]);
+  const [creatorPaidVideoTransactions, setCreatorPaidVideoTransactions] = useState<CreatorPaidVideoTransaction[]>([]);
   const [tipSettingsBusy, setTipSettingsBusy] = useState(false);
   const [tipSettingsNotice, setTipSettingsNotice] = useState<string | null>(null);
   const [providerReadinessSummary, setProviderReadinessSummary] = useState<ProviderReadinessSummaryRow[]>(
@@ -1269,6 +1293,8 @@ export function ChannelStudioScreen() {
       setSelectedCreatorMoneyAuditEvent(null);
       setCreatorTipSettings(null);
       setCreatorTipTransactions([]);
+      setCreatorPaidVideoOffers([]);
+      setCreatorPaidVideoTransactions([]);
       setTipSettingsNotice(null);
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
       setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
@@ -1296,6 +1322,8 @@ export function ChannelStudioScreen() {
       readCreatorMoneyAuditSourceRows(String(user?.id ?? "")).catch(() => []),
       readMyCreatorTipSettings().catch(() => null),
       listMyCreatorTipTransactions(25).catch(() => []),
+      listMyPaidVideoOffers().catch(() => []),
+      listMyPaidVideoTransactions(50).catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
@@ -1314,6 +1342,8 @@ export function ChannelStudioScreen() {
         resolvedCreatorMoneyAuditSourceRows,
         resolvedCreatorTipSettings,
         resolvedCreatorTipTransactions,
+        resolvedCreatorPaidVideoOffers,
+        resolvedCreatorPaidVideoTransactions,
         resolvedProviderReadinessSummary,
         resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
@@ -1336,6 +1366,8 @@ export function ChannelStudioScreen() {
         setCreatorMoneyAuditSourceRows(resolvedCreatorMoneyAuditSourceRows);
         setCreatorTipSettings(resolvedCreatorTipSettings);
         setCreatorTipTransactions(resolvedCreatorTipTransactions);
+        setCreatorPaidVideoOffers(resolvedCreatorPaidVideoOffers);
+        setCreatorPaidVideoTransactions(resolvedCreatorPaidVideoTransactions);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
@@ -1359,6 +1391,8 @@ export function ChannelStudioScreen() {
         setSelectedCreatorMoneyAuditEvent(null);
         setCreatorTipSettings(null);
         setCreatorTipTransactions([]);
+        setCreatorPaidVideoOffers([]);
+        setCreatorPaidVideoTransactions([]);
         setTipSettingsNotice(null);
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
         setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
@@ -1399,6 +1433,21 @@ export function ChannelStudioScreen() {
     ]);
     setCreatorTipSettings(nextSettings);
     setCreatorTipTransactions(nextTransactions);
+  }, [user?.id]);
+
+  const refreshPaidVideos = useCallback(async () => {
+    if (!user?.id) {
+      setCreatorPaidVideoOffers([]);
+      setCreatorPaidVideoTransactions([]);
+      return;
+    }
+
+    const [nextOffers, nextTransactions] = await Promise.all([
+      listMyPaidVideoOffers().catch(() => []),
+      listMyPaidVideoTransactions(50).catch(() => []),
+    ]);
+    setCreatorPaidVideoOffers(nextOffers);
+    setCreatorPaidVideoTransactions(nextTransactions);
   }, [user?.id]);
 
   const handleSaveTipSettings = useCallback(async (tipsEnabled: boolean) => {
@@ -2368,12 +2417,15 @@ export function ChannelStudioScreen() {
   };
 
   const onEditVideo = (video: CreatorVideo) => {
+    const paidOffer = paidVideoOfferByVideoId.get(video.id);
     setVideoEditor({
       editingVideoId: video.id,
       title: video.title,
       description: video.description,
       thumbUrl: video.thumbnailUrl,
       visibility: video.visibility,
+      accessMode: paidOffer?.isPaid && (paidOffer.status === "sandbox" || paidOffer.status === "active") ? "paid" : "free",
+      priceDollars: paidOffer?.priceCents ? formatCentsAsDollarInput(paidOffer.priceCents) : "0.99",
     });
     setSelectedVideoFile(null);
     setVideoLifecycleState("idle");
@@ -2422,6 +2474,7 @@ export function ChannelStudioScreen() {
         visibility: videoEditor.visibility,
       });
 
+      let savedVideoId = videoEditor.editingVideoId ?? "";
       if (videoEditor.editingVideoId) {
         const updatedVideo = await updateCreatorVideoMetadata(videoEditor.editingVideoId, {
           title: videoEditor.title,
@@ -2429,6 +2482,7 @@ export function ChannelStudioScreen() {
           thumbUrl: videoEditor.thumbUrl,
           visibility: videoEditor.visibility,
         });
+        savedVideoId = updatedVideo.id;
         setVideoNotice("Creator video updated.");
       } else {
         const uploadedVideo = await uploadCreatorVideo({
@@ -2439,10 +2493,34 @@ export function ChannelStudioScreen() {
           visibility: videoEditor.visibility,
           maxUploadSizeMb,
         });
+        savedVideoId = uploadedVideo.id;
         setVideoNotice(`Creator video uploaded: ${uploadedVideo.title}.`);
       }
 
+      if (savedVideoId) {
+        const paidVideoPriceCents = parseDollarInputToCents(videoEditor.priceDollars);
+        const paidVideoEnabled = videoEditor.accessMode === "paid";
+        if (paidVideoEnabled && paidVideoPriceCents < 99) {
+          setVideoNotice("Video saved. Paid video price must be at least $0.99 before sandbox unlock can be enabled.");
+        } else {
+          const result = await savePaidVideoOffer({
+            videoId: savedVideoId,
+            isPaid: paidVideoEnabled,
+            priceCents: paidVideoPriceCents,
+            currency: "usd",
+          });
+          const status = String((result as Record<string, unknown> | null)?.status ?? "");
+          const reason = String((result as Record<string, unknown> | null)?.reason ?? "");
+          if (status === "blocked") {
+            setVideoNotice(`Video saved. Paid video setup is blocked: ${reason || "provider not ready"}.`);
+          } else if (paidVideoEnabled) {
+            setVideoNotice(`Video saved as a sandbox paid video at ${formatMonetizationCurrency(paidVideoPriceCents, "usd")}.`);
+          }
+        }
+      }
+
       await loadCreatorVideos();
+      await refreshPaidVideos();
       resetVideoEditor(videoEditor.editingVideoId ? "idle" : "succeeded");
     } catch (error) {
       logCreatorVideoUploadUi("submit_failed", {
@@ -3510,6 +3588,13 @@ export function ChannelStudioScreen() {
     () => [...creatorVideos].sort((a, b) => getCreatorVideoCreatedTimestamp(b) - getCreatorVideoCreatedTimestamp(a))[0] ?? null,
     [creatorVideos],
   );
+  const paidVideoOfferByVideoId = useMemo(() => {
+    const map = new Map<string, CreatorPaidVideoOffer>();
+    creatorPaidVideoOffers.forEach((offer) => {
+      if (offer.videoId) map.set(offer.videoId, offer);
+    });
+    return map;
+  }, [creatorPaidVideoOffers]);
   const filteredCreatorVideos = useMemo(() => {
     const query = contentSearchQuery.trim().toLowerCase();
     return creatorVideos
@@ -3749,6 +3834,12 @@ export function ChannelStudioScreen() {
               mode="owner"
               clipEdit={creatorVideoClipEdits[video.id] ?? null}
               featured={activeBrandProfile?.spotlightVideoId === video.id}
+              accessLabel={(() => {
+                const offer = paidVideoOfferByVideoId.get(video.id);
+                return offer?.isPaid && (offer.status === "sandbox" || offer.status === "active")
+                  ? "Paid Video"
+                  : null;
+              })()}
               busy={videoSaving || brandSaving}
               onOpen={() => router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } })}
               onEdit={() => onEditVideo(video)}
@@ -3836,6 +3927,36 @@ export function ChannelStudioScreen() {
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={styles.sectionLabel}>Access</Text>
+          <View style={styles.chipRow}>
+            {(["free", "paid"] as const).map((value) => (
+              <TouchableOpacity
+                key={value}
+                style={[styles.chip, videoEditor.accessMode === value && styles.chipActive]}
+                onPress={() => updateVideoEditor({ accessMode: value })}
+                disabled={videoSaving}
+              >
+                <Text style={[styles.chipText, videoEditor.accessMode === value && styles.chipTextActive]}>
+                  {value === "paid" ? "PAID UNLOCK" : "FREE"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {videoEditor.accessMode === "paid" ? (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Paid unlock price, for example 0.99"
+                placeholderTextColor="#8d8d8d"
+                value={videoEditor.priceDollars}
+                onChangeText={(text) => updateVideoEditor({ priceDollars: text })}
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.noticeText}>
+                Paid Videos use Google Play / RevenueCat sandbox testing. This unlocks this creator video only and does not include Premium, subscriptions, VIP, live rooms, Watch-Party seats, or other creator content.
+              </Text>
+            </>
+          ) : null}
           {videoSubmitRequirement ? (
             <Text style={styles.videoRequirementText}>{videoSubmitRequirement}</Text>
           ) : null}
@@ -6044,6 +6165,8 @@ export function ChannelStudioScreen() {
     const paidTipTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "paid");
     const tipGrossCents = paidTipTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const tipPendingTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "pending" || transaction.status === "checkout_started");
+    const paidVideoPaidTransactions = creatorPaidVideoTransactions.filter((transaction) => transaction.status === "paid");
+    const paidVideoGrossCents = paidVideoPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const tipFeatureStatus: MonetizationFeatureStatus = (() => {
       if (tipsFlag.state === "locked") return "Blocked";
       if (!creatorTipSettings) return "Not set up";
@@ -6290,7 +6413,7 @@ export function ChannelStudioScreen() {
     ];
     const featureStatusByKey: Record<MonetizationFeatureKey, MonetizationFeatureStatus> = {
       tips: tipFeatureStatus,
-      paid_videos: paidContentFlag.state === "locked" ? "Blocked" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : paidContentFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
+      paid_videos: paidContentFlag.state === "locked" ? "Blocked" : creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Active" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : paidContentFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : watchPartyTicketsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       channel_subscriptions: "Blocked",
       vip_passes: "Blocked",
@@ -6354,7 +6477,7 @@ export function ChannelStudioScreen() {
       </View>
     );
     const offerRows: readonly SummaryMetricCard[] = [
-      { label: "Paid video unlocks", value: paidContentStatus, body: "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
+      { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
       { label: "Paid Watch-Party tickets", value: watchPartyTicketsStatus, body: "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: "unavailable" },
       { label: "Channel subscriptions", value: "Blocked", body: "Offer type: channel_subscription. Separate from Chi'llywood Premium and not backed yet.", tone: "unavailable" },
       { label: "VIP passes", value: "Blocked", body: "Offer type: vip_pass. Disabled until VIP unlocks real access or perks.", tone: "unavailable" },
@@ -6387,6 +6510,9 @@ export function ChannelStudioScreen() {
     const visibleTipTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "tips"
       ? creatorTipTransactions
       : [];
+    const visiblePaidVideoTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "videos"
+      ? creatorPaidVideoTransactions
+      : [];
     const renderTipTransactionRows = () => {
       if (!visibleTipTransactions.length) return null;
       return (
@@ -6405,6 +6531,29 @@ export function ChannelStudioScreen() {
               {transaction.messagePrivate ? <Text style={styles.noticeText}>{transaction.messagePrivate}</Text> : null}
               <Text style={styles.eventEmptyBody}>
                 Tips do not unlock content, badges, room access, VIP, subscriptions, or perks. Payout status: {transaction.payoutStatus}.
+              </Text>
+            </View>
+          ))}
+        </View>
+      );
+    };
+    const renderPaidVideoTransactionRows = () => {
+      if (!visiblePaidVideoTransactions.length) return null;
+      return (
+        <View style={styles.eventList}>
+          {visiblePaidVideoTransactions.map((transaction) => (
+            <View key={transaction.id} style={styles.eventEmptyCard}>
+              <View style={styles.eventCardHeader}>
+                <Text style={styles.eventEmptyTitle}>
+                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} video unlock
+                </Text>
+                {renderStudioStatusPill(transaction.status === "paid" ? "Paid" : transaction.status, transaction.status === "paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "chargeback" ? "warning" : "muted")}
+              </View>
+              <Text style={styles.eventEmptyBody}>
+                {transaction.videoTitle} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
+              </Text>
+              <Text style={styles.eventEmptyBody}>
+                Paid Videos unlock only this creator video. Premium and Tips stay separate. Payout status: {transaction.payoutStatus}.
               </Text>
             </View>
           ))}
@@ -6607,6 +6756,31 @@ export function ChannelStudioScreen() {
             children: (
               <>
                 {renderSummaryMetricCards(offerRows)}
+                {creatorPaidVideoOffers.length ? (
+                  <View style={styles.eventList}>
+                    {creatorPaidVideoOffers.map((offer) => (
+                      <View key={offer.id} style={styles.eventEmptyCard}>
+                        <View style={styles.eventCardHeader}>
+                          <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
+                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.isPaid ? "default" : "muted")}
+                        </View>
+                        <Text style={styles.eventEmptyBody}>
+                          paid_video · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.salesCount} sale{offer.salesCount === 1 ? "" : "s"} · {formatMonetizationCurrency(offer.totalRevenueCents, offer.currency)} sandbox gross
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.eventSecondaryButton}
+                          activeOpacity={0.86}
+                          onPress={() => {
+                            const video = creatorVideos.find((entry) => entry.id === offer.videoId);
+                            if (video) onEditVideo(video);
+                          }}
+                        >
+                          <Text style={styles.eventSecondaryButtonText}>Manage</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
                 {renderCreatorMoneyEventRows(
                   [...digitalEvents, ...merchEvents],
                   "No offers yet",
@@ -6644,6 +6818,7 @@ export function ChannelStudioScreen() {
                   ))}
                 </View>
                 {renderTipTransactionRows()}
+                {renderPaidVideoTransactionRows()}
                 {renderCreatorMoneyEventRows(
                   filteredTransactionEvents,
                   "No transactions yet",

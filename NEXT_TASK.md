@@ -44,9 +44,40 @@ June 6 SMTP follow-up was completed with sender change to `no-reply@chillywoodst
 
 ## Current Recommendation
 
+## Paid Videos V1 Sandbox Proof Follow-Up
+
+Paid Videos V1 is implemented and Supabase-applied for sandbox testing, but not yet sandbox-proven end to end. Do not claim live Paid Videos and do not build Paid Watch-Parties, Channel Subscriptions, VIP Passes, or Paid Events until this proof is complete or explicitly reprioritized.
+
+Closed on June 11, 2026:
+
+- Migration `20260611182509_paid_videos_v1_sandbox_bridge.sql` is remote-applied to project `bmkkhihfbmsnnmcqkoly`.
+- Creator video upload/edit now supports Free vs Paid Unlock plus price.
+- Paid Video offers are stored in existing `creator_content_prices` with RevenueCat / Google Play sandbox provider metadata.
+- Player locked state hides paid creator-video media URLs before access and shows `Unlock Video`.
+- Paid Video checkout uses RevenueCat / Google Play sandbox product `cw_paid_content_access_sandbox_099`, not Stripe Tips.
+- The client creates source-bound `money_purchase_intents`, starts RevenueCat non-subscription purchase, then waits for server-verified access instead of trusting client success.
+- Existing `revenuecat-webhook` remains the signed/verified provider path and creates shared `access_grants` plus sandbox/not-payable ledger rows.
+- A trigger mirrors verified paid-content `access_grants` into legacy `content_access_grants` so the current player resolver can unlock paid creator videos.
+- Money Center Offers and Transactions now show Paid Video rows separately from Tips.
+- Premium remains separate; Paid Video copy says it unlocks only that creator video and does not include Premium, subscriptions, VIP, rooms, Watch-Party seats, or other content.
+
+Remaining proof:
+
+- Publish or install a Play/internal tester runtime that contains the Paid Videos V1 code. The June 11 proof attempt found attached device `R5CR120QCBF` on `com.chillywood.mobile` versionCode `32` with `installer=null`, so it is not acceptable for Google Play Billing proof and cannot prove the new Paid Videos code.
+- Confirm package readback shows installer `com.android.vending`, package `com.chillywood.mobile`, and a build/update that includes the Paid Videos V1 implementation.
+- Use a Play-installed/internal tester runtime with RevenueCat configured.
+- Creator marks an existing uploaded video as Paid Unlock and saves a valid sandbox price.
+- Fan opens the video, sees the locked Player and `Unlock Video`.
+- Fan completes Google Play / RevenueCat sandbox purchase.
+- Confirm `revenuecat-webhook` verifies the provider event.
+- Record the Paid Video transaction id, shared access grant id, mirrored `content_access_grants` id, and Money Center readback.
+- Confirm paid fan can play, a different unpaid fan cannot play, and direct deep link cannot bypass the gate.
+- Confirm no Tips transaction, Premium entitlement, VIP, room access, subscription, event access, payout, cash-out, withdrawal, transfer, or LiveKit authority is created.
+- If provider tooling allows, prove refund/revoke removes playback access; otherwise document it as deferred.
+
 ## Tips V1 Test-Mode Proof Follow-Up
 
-Tips V1 is implemented, deployed, and sandbox-proven as pure creator contribution only, not a live-money launch. Do not build Paid Videos, Paid Watch-Parties, Channel Subscriptions, VIP Passes, or Paid Events until the owner explicitly approves the next monetization build.
+Tips V1 is implemented, deployed, and sandbox-proven as pure creator contribution only, not a live-money launch. Paid Videos V1 is now the approved next build and is implemented but still needs Play-installed sandbox proof; do not build Paid Watch-Parties, Channel Subscriptions, VIP Passes, or Paid Events until the owner explicitly approves the next monetization build.
 
 Closed on June 11, 2026:
 
@@ -104,8 +135,8 @@ The June 11, 2026 Money Center cleanup is a clean hub and readiness surface. Tip
 - Tips, paid videos, paid Watch-Parties, channel subscriptions, VIP passes, and paid events must not be called live unless creator setup, fan checkout, server-side verification, access/transaction records, payout tracking, and admin/safety handling are all proved.
 - Tips V1 must remain pure contribution only and cannot unlock content, badges, VIP, rooms, subscriptions, paid videos, event access, Watch-Party seats, public ranking rewards, or any other digital benefit.
 - Paid Watch-Party seats are not sellable end-to-end today: no creator ticketed-room setup UI with price/capacity/date/status, no public `Buy Room Ticket` checkout before Party Waiting Room, no Party Room paid-ticket recheck, no creator transaction/net payout path, and no admin refund/review path for live paid seats.
-- Paid videos are the closest backed access model because `creator_content_prices`, `content_access_grants`, `resolve_creator_content_access`, and the locked Player state exist, but checkout is still preflight/readiness only.
-- The next real monetization build after Tips should still avoid route/room authority. Recommended next candidate is paid videos only after provider rail choice, refund handling, and access grant enforcement are proved without mixing Premium copy.
+- Paid videos now have repo-side setup, locked Player, RevenueCat / Google Play sandbox purchase-intent wiring, verified webhook access-grant bridge, and Money Center readback. They still need Play-installed sandbox purchase proof before being called sandbox-proven.
+- The next real monetization proof should complete Paid Videos V1 device/provider proof, not start paid Watch-Party seats yet.
 
 Finish and verify Search, Typeahead And Social Discovery Polish for Chi’lly Chat, Chi’lly Circle, and Home Explore, then capture Android proof at `/tmp/chillywood-search-typeahead-social-discovery-proof-20260605/` for:
 

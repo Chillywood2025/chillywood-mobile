@@ -23,6 +23,7 @@ type CreatorVideoCardProps = {
   mode: CreatorVideoCardMode;
   clipEdit?: ClipStudioEdit | null;
   featured?: boolean;
+  accessLabel?: string | null;
   busy?: boolean;
   onOpen: () => void;
   onEdit?: () => void;
@@ -127,6 +128,7 @@ export function CreatorVideoCard({
   mode,
   clipEdit,
   featured = false,
+  accessLabel = null,
   busy = false,
   onOpen,
   onEdit,
@@ -211,6 +213,11 @@ export function CreatorVideoCard({
               <Text style={styles.badgeText}>Featured</Text>
             </View>
           ) : null}
+          {accessLabel ? (
+            <View style={[styles.badge, styles.badgeTemplate]}>
+              <Text style={styles.badgeText}>{accessLabel}</Text>
+            </View>
+          ) : null}
           {publicTemplateLabel ? (
             <View style={[styles.badge, styles.badgeTemplate]}>
               <Text style={styles.badgeText}>{publicTemplateLabel}</Text>
@@ -286,6 +293,11 @@ export function CreatorVideoCard({
         {ownerClipEdit ? (
           <Text style={styles.ownerGuidance}>
             {`Clip Studio: ${hasOwnerTitleOverlay ? "Title Card" : "No Title Card"} · ${ownerTemplateLabel}`}
+          </Text>
+        ) : null}
+        {ownerMode && accessLabel ? (
+          <Text style={styles.ownerGuidance}>
+            {accessLabel === "Paid Video" ? "Fans must unlock this video before playback. Sandbox sales are not payable." : accessLabel}
           </Text>
         ) : null}
 
