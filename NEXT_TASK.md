@@ -22,10 +22,12 @@ Current truth:
 - v41 build `9fe1e661-a56e-45ed-9a32-64627062f610` was canceled before install because it did not include the inline ticket-gate patch.
 - v42 build `bf2d363f-91e5-4b4c-911a-47b1caf6005c` finished, but it does not include the later Join Now handler-path relookup/logging patch and was not submitted for proof.
 - The latest handler-path patch re-reads the room before premium/ticket checks, logs the exact Join Now branch, shows `This room is no longer active.` for expired rooms, and keeps the paid-ticket CTA visible in the preview card.
+- v43 build `a96b3f80-0804-4b21-a108-97c3e9cb4bb3` targeted commit `a3c8e81` but stayed `IN_PROGRESS` with no artifact and was canceled.
+- v44 build `46456ea4-6d5f-4098-8f05-de84e182e423` targets commit `a3c8e81` / versionCode `44`; latest readback is still `IN_PROGRESS` with no artifact URL.
 
 Next proof:
 
-- Build a new Play/internal runtime that includes the Join Now handler-path relookup/logging patch, then submit/install/update from Google Play.
+- Wait for v44 to finish, then submit/install/update from Google Play. If v44 remains stuck, start a later replacement build from commit `a3c8e81` or newer.
 - Confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
 - Use fresh active room code `X75JHC`, or create a new room/offer if `X75JHC` expires before proof continues.
 - Retry `Find Room`, confirm the preview appears, tap `Join Now`, and confirm `Room ticket required` plus `Buy Room Ticket` appears inside the preview card.

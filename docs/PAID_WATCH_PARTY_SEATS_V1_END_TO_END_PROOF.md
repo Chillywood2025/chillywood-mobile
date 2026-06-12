@@ -95,6 +95,8 @@ Remote readback confirmed:
 - v40 build `c2021b08-cacd-4a37-87f6-99c260d426c8` targets commit `2ffbbce` and versionCode `40`; it was submitted and installed from Google Play internal testing.
 - v41 build `9fe1e661-a56e-45ed-9a32-64627062f610` was canceled because fresh device proof showed the next blocker was ticket-gate visibility, not room lookup.
 - v42 build `bf2d363f-91e5-4b4c-911a-47b1caf6005c` finished with artifact `https://expo.dev/artifacts/eas/b7yuw-t842YFN37SxgYOut1aTeShtDKNT1raeKnTOGc.aab`, but it does not include the later Join Now handler-path relookup/logging patch. It was not submitted for proof.
+- v43 build `a96b3f80-0804-4b21-a108-97c3e9cb4bb3` targeted commit `a3c8e81` but stayed `IN_PROGRESS` with no artifact and was canceled.
+- v44 build `46456ea4-6d5f-4098-8f05-de84e182e423` also targets commit `a3c8e81` and versionCode `44`; latest readback is still `IN_PROGRESS` with no artifact URL. It has not been submitted or installed.
 
 ## Proof Status
 
@@ -114,6 +116,6 @@ Passed so far:
 Blocked/pending proof:
 
 - v40 `Join Now` did not visibly surface the ticket-gate CTA because the buy action lived below the current viewport; unpaid fan gate, purchase checkout, ticket creation, paid fan entry, second unpaid denial, seat-limit device proof, Money Center transaction readback, and refund/revoke proof remain pending.
-- A new build that includes the Join Now handler-path relookup/logging patch must be submitted and installed from Google Play internal testing before retrying the fan ticket gate and purchase proof.
+- v44 or a later successful build that includes the Join Now handler-path relookup/logging patch must be submitted and installed from Google Play internal testing before retrying the fan ticket gate and purchase proof.
 
 BrowserStack remains deferred until final regression after all monetization flows are implemented and locally/manual proved.
