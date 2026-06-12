@@ -88,6 +88,24 @@ Remote readback confirmed:
 
 Not run yet on a Play/internal build containing this code.
 
+## Play/Internal Build Attempt
+
+June 12, 2026:
+
+- Commit: `79dbec2cb4a5fad195b2b068ebf1fd7a9b8ae4ea`
+- EAS build id: `685b4d11-a23c-4f1f-add8-13b04fe22f48`
+- App version: `1.0.0`
+- VersionCode: `46`
+- Runtime version: `1.0.0`
+- Build profile: `production`
+- Distribution: `STORE`
+- Artifact type requested: AAB
+- Internal-track submission id scheduled: `3d4c4556-006f-4fb8-9dfc-c68d160dbf74`
+- Current status at last readback: `IN_PROGRESS`
+- Artifact URL: pending
+
+Proof has not started because the Play/internal runtime is not available yet. Do not claim Paid Events V1 sandbox proof until the build finishes, the AAB is accepted on the internal track, and the attached device installs it from Google Play with installer `com.android.vending`.
+
 Required proof before calling Paid Events V1 sandbox-proven:
 
 1. Build and install a Play/internal runtime with installer `com.android.vending`.

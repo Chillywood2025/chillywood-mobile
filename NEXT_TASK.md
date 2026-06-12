@@ -17,10 +17,12 @@ Current truth:
 - Money Center reads Paid Event offers and transactions separately from Tips, Paid Videos, Paid Watch-Party tickets, and Premium.
 - Live money remains off, rows are sandbox/not-payable, and event passes do not grant Premium, Tips, Paid Videos, Paid Watch-Party rooms, VIP, subscriptions, LiveKit authority, host authority, payouts, cash-out, withdrawal, or transfer.
 - No Tips, Paid Videos, Paid Watch-Party Seats, Channel Subscriptions, VIP, LiveKit token logic, Watch-Party routing, Party Room routing, Live Stage routing, or Premium gates changed.
+- Play/internal build `685b4d11-a23c-4f1f-add8-13b04fe22f48` from commit `79dbec2cb4a5fad195b2b068ebf1fd7a9b8ae4ea` targets versionCode `46`; EAS scheduled internal-track submission `3d4c4556-006f-4fb8-9dfc-c68d160dbf74`.
+- Last build readback: `IN_PROGRESS`, no artifact URL yet. Proof is blocked until v46 finishes, is processed by Play internal testing, and the attached phone installs it from Google Play.
 
 Next proof:
 
-- Build and submit a Play/internal AAB containing Paid Events V1.
+- Wait for v46 build/submission completion, then install/update from Google Play.
 - Install/update from Google Play and confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
 - Creator creates or opens a real `creator_events` row and taps `Set Paid Event`.
 - Confirm Money Center Offers shows the Paid Event as sandbox/test/not payable.
