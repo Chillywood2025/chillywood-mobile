@@ -20,10 +20,11 @@ Current truth:
 - The original `XWAKVC` room expired under the 15-minute active-room window. Fresh room `X75JHC` and offer `ca9b34b8-8815-4d9e-8a2e-34643769a29c` were created through creator-authenticated room insert plus guarded offer RPC.
 - v40 `Find Room` on `X75JHC` rendered the preview, but `Join Now` appeared unchanged because the ticket-gate CTA rendered lower in the setup shell instead of inside the preview card.
 - v41 build `9fe1e661-a56e-45ed-9a32-64627062f610` was canceled before install because it did not include the inline ticket-gate patch.
+- v42 build `bf2d363f-91e5-4b4c-911a-47b1caf6005c` targets the inline ticket-gate patch and versionCode `42`; latest readback was still `IN_PROGRESS` with no artifact URL.
 
 Next proof:
 
-- Build and install the next Play/internal runtime containing the inline preview ticket-gate patch.
+- Wait for v42 to finish, submit it to Play internal testing, and install/update from Google Play.
 - Confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
 - Use fresh active room code `X75JHC`, or create a new room/offer if `X75JHC` expires before proof continues.
 - Retry `Find Room`, confirm the preview appears, tap `Join Now`, and confirm `Room ticket required` plus `Buy Room Ticket` appears inside the preview card.
