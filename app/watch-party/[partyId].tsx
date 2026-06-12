@@ -459,6 +459,12 @@ export default function WatchPartyRoomScreen() {
   const liveBubbleOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
+  const roomEntryConfirmed = !!room
+    && !loading
+    && !notFound
+    && !accessGate
+    && !blockedRoomAccess
+    && !paidTicketGate;
 
   useEffect(() => {
     if (Platform.OS === "android" && !isReactNativeNewArchitecture() && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -1506,13 +1512,15 @@ export default function WatchPartyRoomScreen() {
 
   useEffect(() => {
     if (!isNativeCameraPlatform) return;
+    if (!roomEntryConfirmed) return;
     if (!myUserId) return;
     if (cameraPermission?.granted) return;
     if (cameraPermission && !cameraPermission.canAskAgain) return;
     requestCameraPermission().catch(() => {});
-  }, [myUserId, cameraPermission, requestCameraPermission, isNativeCameraPlatform]);
+  }, [myUserId, cameraPermission, requestCameraPermission, isNativeCameraPlatform, roomEntryConfirmed]);
 
   useEffect(() => {
+    if (!roomEntryConfirmed) return;
     if (!myUserId || !isFocused) return;
 
     let cancelled = false;
@@ -1629,7 +1637,7 @@ export default function WatchPartyRoomScreen() {
         recording.stopAndUnloadAsync().catch(() => {});
       }
     };
-  }, [isFocused, myUserId, emitParticipantSpeaking]);
+  }, [isFocused, myUserId, emitParticipantSpeaking, roomEntryConfirmed]);
 
   // ── Share / invite ───────────────────────────────────────────────────────────
   const displayRoomCode = String(room?.roomCode ?? "").trim().toUpperCase() || roomCodeHint;

@@ -1,18 +1,12 @@
 # Paid Watch-Party Seats V1 End-to-End Proof
 
-Last updated: June 11, 2026
+Last updated: June 12, 2026
 
 ## Status
 
-Paid Watch-Party Seats / Room Tickets V1 is implemented repo-side and remote-applied to Supabase project `bmkkhihfbmsnnmcqkoly`, but it is not sandbox-proven through a Play/internal build yet.
+Paid Watch-Party Seats / Room Tickets V1 is implemented repo-side and remote-applied to Supabase project `bmkkhihfbmsnnmcqkoly`. Play/internal v44 proved the RevenueCat / Google Play sandbox purchase path, provider-created ticket/transaction rows, paid-fan Party Room entry, seat-limit sold-out state, second authenticated unpaid normal-route denial, and Money Center RPC transaction readback.
 
-Play/internal versionCode `38` was installed from Google Play internal testing on device `R5CR120QCBF` with installer `com.android.vending`. That proof run found and fixed two backend setup blockers plus one device UI blocker:
-
-- `set_paid_watch_party_offer` initially failed on uuid/text host comparison.
-- The ticket metadata safety constraint rejected false-valued LiveKit safety keys.
-- The Watch-Party preview `Join Now` action did not fire on the Play-installed device, blocking the fan ticket gate and purchase proof.
-
-The backend blockers were fixed by remote-applied migrations, and the `Join Now` button hitbox/layering fix is committed in `2ffbbce`. Play/internal versionCode `40` was installed, and a fresh active room proved `Find Room` can render the preview. `Join Now` still appeared visually unchanged because the ticket-gate CTA rendered lower in the setup shell instead of inside the preview card; the follow-up patch makes the `Room ticket required` / `Buy Room Ticket` state visible directly inside the preview and adds sanitized proof logs.
+Paid Watch-Party Seats V1 is not fully sandbox-proven yet because direct Party Room deep-link denial failed on v44. A second authenticated unpaid tester with no active ticket and resolver readback `allowed=false`, `reason=sold_out` could still reach the Party Room route far enough to trigger the native camera permission prompt. The repo-side fix now delays local camera/mic permission startup until room entry is confirmed, but this must be built into a new Play/internal runtime and proved before direct-link proof is marked passed.
 
 Live money remains disabled. Room tickets are sandbox/not-payable only.
 
@@ -43,8 +37,7 @@ Live money remains disabled. Room tickets are sandbox/not-payable only.
   - Seat-limit oversell guard blocks active ticket creation when the offer is sold out.
 - Client:
   - Party Waiting Room checks paid-ticket access before routing to Party Room.
-  - Party Room re-checks paid-ticket access before membership/session/presence setup.
-  - Direct deep links to Party Room cannot bypass the paid ticket check.
+  - Party Room has intended ticket re-check logic. v44 proof found a direct deep-link bypass for an unpaid sold-out user before the gate visibly blocks; the repo-side fix gates local camera/mic permission startup behind confirmed room entry and is pending Play/internal proof.
   - Host can create a sandbox $0.99 room-ticket offer from Party Waiting Room after a Party Room code exists.
   - Fan CTA is `Buy Room Ticket`.
   - Money Center Offers and Transactions read Paid Watch-Party rows separately from Tips and Paid Videos.
@@ -100,7 +93,7 @@ Remote readback confirmed:
 
 ## Proof Status
 
-Partial proof has run on Play/internal v38 and v40, but sandbox purchase proof is still blocked until a new Play/internal build includes the inline ticket-gate preview state.
+Partial proof ran on Play/internal v38 and v40. Play/internal v44 ran the real ticket purchase proof.
 
 Passed so far:
 
@@ -130,8 +123,47 @@ v44 Join Now handler proof:
 - DB readback for `N3CXJD` showed offer status `sandbox`, price `99`, currency `usd`, seat limit `1`, seats sold `0`, product key `watch_party_live_ticket_sandbox_099`, provider product id `cw_watch_party_live_ticket_sandbox_099`, and resolver access `allowed=false`, `reason=ticket_required`, `requiresPurchase=true`.
 - Proof files: `/tmp/chillywood-watch-party-ticket-proof-v44/01-after-join-now-ticket-gate.png`, `/tmp/chillywood-watch-party-ticket-proof-v44/02-ticket-gate-buy-button-visible.png`, `/tmp/chillywood-watch-party-ticket-proof-v44/03-join-now-branch-logs.txt`, `/tmp/chillywood-watch-party-ticket-proof-v44/04-room-offer-readback.json`.
 
-Blocked/pending proof:
+v44 purchase proof:
 
-- Purchase checkout, provider-created ticket, paid fan entry, active-ticket routing, second unpaid denial, seat-limit device proof, Money Center transaction readback, and refund/revoke proof remain pending.
+- Device install proof: package `com.chillywood.mobile`, versionCode `44`, installer `com.android.vending`.
+- Original purchase fixture `N3CXJD` / offer `0b7f955e-5898-4204-a370-51f0d5a04533` launched Google Play Billing and completed a sandbox purchase. The app returned to `Room not found` because the room aged out under the Watch-Party active-window lookup before paid-fan entry could be completed. Server proof still passed for that purchase:
+  - Ticket `6708d1bc-7022-4c65-96a7-eb37bfaa5cc1`
+  - Transaction `55c3ca26-ed71-4ddf-8eb9-8a674bed3fb6`
+  - Provider transaction `B62F3435-5652-4EBD-BB2A-51CF615C89A6`
+  - Offer moved to `sold_out`, `seats_sold=1`
+  - Resolver returned `allowed=true`, `reason=ticket_confirmed`
+- Fresh purchase fixture `ZT5MWV` / offer `143fdf4e-e235-4f98-81a4-e22194a8550a` was created to finish entry proof before expiration.
+- Google Play Billing sheet opened for `Watch-Party ticket sandbox` / `$0.99` / test card.
+- Purchase intent `60cac129-dbc3-43c3-9300-4d654ce12f8a` moved to `consumed`.
+- Provider event id recorded on the transaction: `f3016f01-2514-40d7-b29d-103d3ced6fc2`.
+- Creator room-ticket transaction `fff398a9-59f6-452a-81f7-1c8e7ad04e50` was created as `paid`, `environment=sandbox`, `payout_status=not_payable`.
+- Active ticket `a2108d63-8b84-4dd1-8f60-ef485ce5efdc` was created for the paid fan.
+- Offer moved to `sold_out`, `seats_sold=1`, `seat_limit=1`.
+- Resolver for the paid fan returned `allowed=true`, `reason=ticket_confirmed`.
+- Paid fan entered Party Room as viewer for `ZT5MWV`. The visible route was Party Room, not Live Stage.
+- No Tips rows and no Paid Video content grants were created in the proof window.
 
-BrowserStack remains deferred until final regression after all monetization flows are implemented and locally/manual proved.
+Second unpaid / seat-limit proof:
+
+- Authenticated second unpaid tester `c2afa6cc-52f2-4714-b972-89863582d05a` had zero active tickets for offer `143fdf4e-e235-4f98-81a4-e22194a8550a`.
+- Resolver returned `allowed=false`, `reason=sold_out`, `requiresPurchase=false`.
+- Normal Find Room -> Join Now path stayed blocked with `This room ticket is not available right now.`
+- Logs showed `join_now_ticket_missing` and `join_now_route_waiting_room` with reason `sold_out`.
+- Server seat-limit state stayed `seats_sold=1` / `seat_limit=1`; no oversell occurred.
+
+Money Center readback:
+
+- Creator RPC `list_my_paid_watch_party_transactions` returned the `ZT5MWV` transaction as `paid`, `environment=sandbox`, `payoutStatus=not_payable`, provider `revenuecat_google_play`, product `cw_watch_party_live_ticket_sandbox_099`.
+- Creator RPC `list_my_paid_watch_party_offers` returned the offer as `sold_out`, `seatLimit=1`, `seatsSold=1`.
+- Visual Money Center transaction screenshot remains pending.
+
+Current blocker / fix status:
+
+- Direct Party Room deep-link denial did not pass on v44. A second authenticated unpaid tester with no ticket could open `chillywoodmobile://watch-party/ZT5MWV?roomCode=ZT5MWV` and reach the Party Room permission path. DB proof still showed zero tickets and resolver denial for that user.
+- Repo-side fix implemented after v44 proof: camera/mic permission startup now waits for confirmed room entry, so the paid-ticket gate should render before permissions for users without an active ticket, including sold-out rooms.
+- Proof required next: build this fix into a new Play/internal runtime and re-run unpaid direct Party Room deep link, paid fan entry, and normal second-unpaid denial.
+
+Deferred proof:
+
+- Provider refund/revoke remains deferred because safe RevenueCat / Google Play refund tooling and a safe order id are not available here. Do not fake refund by manual DB mutation.
+- BrowserStack remains deferred until final regression after all monetization flows are implemented and locally/manual proved.
