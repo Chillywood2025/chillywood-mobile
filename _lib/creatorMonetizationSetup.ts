@@ -13,6 +13,7 @@ export type CreatorMonetizationSetupSourceType =
   | "live_watch_party_access"
   | "live_watch_party_seat"
   | "creator_tip"
+  | "channel_subscription"
   | "event"
   | "merch_physical_good";
 
@@ -107,6 +108,17 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     providerRail: "revenuecat_google_play",
     unlocks: "Records sandbox creator support activity only.",
     safety: "Tips do not create access grants, payable balance, payout, cash-out, withdrawal, or transfer.",
+  },
+  {
+    key: "channel_subscription_sandbox_monthly_499",
+    label: "Channel subscription",
+    sourceType: "channel_subscription",
+    productType: "channel_subscription",
+    providerProductId: "cw_channel_subscription_sandbox_monthly_499",
+    priceLabel: "$4.99/month sandbox/test",
+    providerRail: "revenuecat_google_play",
+    unlocks: "Creates subscriber status for this creator channel only.",
+    safety: "Does not unlock Chi'llwood Premium, VIP, paid videos, Watch-Party tickets, paid events, LiveKit authority, or other creators.",
   },
   {
     key: "event_pass_sandbox_099",

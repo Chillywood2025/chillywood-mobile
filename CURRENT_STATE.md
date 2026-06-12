@@ -764,6 +764,31 @@ Profile Viewer State Runtime Proof Closeout ran on Android device `R5CR120QCBF` 
 - Never stage `supabase/.temp/`.
 - Stage only task-pure files for the active lane.
 
+## Channel Subscriptions V1 Sandbox Implementation
+
+June 12, 2026 Channel Subscriptions V1 is implemented and deployed in sandbox mode, but the Play/RevenueCat subscription purchase proof is still pending. Migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied remotely to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` was redeployed so `channel_subscription` products use the verified RevenueCat / Google Play purchase-intent bridge. EAS Play/internal build `da86b3e9-145f-45a4-9f84-d713d906dc98` was started for versionCode `48`, but remained `IN_PROGRESS` with no AAB artifact after repeated polling, so Play submission/device proof is not complete.
+
+Current implemented truth:
+
+- Money Center can enable/pause one creator Channel Subscription offer.
+- Fan channel surfaces can show `Subscribe` for backed sandbox offers.
+- `/channel-subscription/[creatorId]` is the subscriber-only proof route and checks server access before rendering subscriber content.
+- Verified provider access grants mirror into `creator_channel_subscriptions`, `channel_subscribers`, and `creator_channel_subscription_transactions`.
+- Money Center reads Channel Subscription offers and transactions separately from Premium, Tips, Paid Videos, Paid Watch-Party tickets, Paid Events, and VIP.
+- Product key/id: `channel_subscription_sandbox_monthly_499` / `cw_channel_subscription_sandbox_monthly_499`.
+- RevenueCat entitlement id: `creator_channel_subscription`.
+- Live money remains off and sandbox rows remain `not_payable`.
+
+Not yet proved:
+
+- Play/internal build purchase sheet for `cw_channel_subscription_sandbox_monthly_499`.
+- Completion/submission/install of EAS build `da86b3e9-145f-45a4-9f84-d713d906dc98`, or a fresh committed build if traceable commit metadata is required.
+- Signed RevenueCat subscription event for this product.
+- Verified active subscription row and Money Center visual transaction readback from a real sandbox purchase.
+- Cancellation/expiration/revoke proof.
+
+Channel Subscriptions do not unlock Chi'llwood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, Live Stage, LiveKit authority, payouts, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators' channels.
+
 ## Full Interactive Surface QA Sweep
 
 June 5, 2026 full interactive QA is in progress from a tester point of view. The static inventory lives in `docs/FULL_INTERACTIVE_SURFACE_QA_INVENTORY.md`; the live matrix lives in `docs/FULL_INTERACTIVE_SURFACE_QA_MATRIX.md`; proof is outside the repo at `/tmp/chillywood-full-interactive-surface-qa-20260605/`.

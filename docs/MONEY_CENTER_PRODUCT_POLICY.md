@@ -257,6 +257,8 @@ Normal mobile clients must not write ledger rows, payout paid states, provider p
 
 ## Android Proof
 
+June 12, 2026 Channel Subscriptions V1 policy update: creator channel subscriptions are recurring digital access and must use the RevenueCat / Google Play subscription path, not Stripe Tips. The sandbox product is `channel_subscription_sandbox_monthly_499` / `cw_channel_subscription_sandbox_monthly_499` with RevenueCat entitlement `creator_channel_subscription`. The implementation is deployed in sandbox mode, but sandbox purchase proof is still pending. EAS Play/internal build `da86b3e9-145f-45a4-9f84-d713d906dc98` was started for versionCode `48`, but remained `IN_PROGRESS` with no AAB artifact after repeated polling; Play submission and device proof are still pending. Channel subscriptions unlock only subscriber state for that creator channel and do not include Chi'llwood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payout access, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators' channels. Money Center must label subscription rows as sandbox/not_payable until live money is explicitly approved.
+
 Money Center Android proof should capture Platform Studio tab row, first view, each collapsed/expanded Money Center section, Provider Status, Technical Checks hidden or owner/dev-only, old Monetize/Revenue/Payouts route redirects, locked/setup-needed states, no fake money, and no secrets.
 
 Screenshots must stay outside the repo.

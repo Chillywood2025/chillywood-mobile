@@ -75,6 +75,14 @@ import {
   type PaidCreatorEventTransaction,
 } from "../_lib/paidCreatorEvents";
 import {
+  formatChannelSubscriptionPrice,
+  listMyChannelSubscriptionOffers,
+  listMyChannelSubscriptionTransactions,
+  saveChannelSubscriptionOffer,
+  type ChannelSubscriptionOffer,
+  type ChannelSubscriptionTransaction,
+} from "../_lib/channelSubscriptions";
+import {
   listMyCreatorTipTransactions,
   readMyCreatorTipSettings,
   saveMyCreatorTipSettings,
@@ -1141,6 +1149,10 @@ export function ChannelStudioScreen() {
   const [creatorPaidWatchPartyTransactions, setCreatorPaidWatchPartyTransactions] = useState<PaidWatchPartyTransaction[]>([]);
   const [creatorPaidEventOffers, setCreatorPaidEventOffers] = useState<PaidCreatorEventOffer[]>([]);
   const [creatorPaidEventTransactions, setCreatorPaidEventTransactions] = useState<PaidCreatorEventTransaction[]>([]);
+  const [creatorChannelSubscriptionOffers, setCreatorChannelSubscriptionOffers] = useState<ChannelSubscriptionOffer[]>([]);
+  const [creatorChannelSubscriptionTransactions, setCreatorChannelSubscriptionTransactions] = useState<ChannelSubscriptionTransaction[]>([]);
+  const [channelSubscriptionSaving, setChannelSubscriptionSaving] = useState(false);
+  const [channelSubscriptionNotice, setChannelSubscriptionNotice] = useState<string | null>(null);
   const [paidEventSavingId, setPaidEventSavingId] = useState<string | null>(null);
   const [tipSettingsBusy, setTipSettingsBusy] = useState(false);
   const [tipSettingsNotice, setTipSettingsNotice] = useState<string | null>(null);
@@ -1317,6 +1329,10 @@ export function ChannelStudioScreen() {
       setCreatorPaidWatchPartyTransactions([]);
       setCreatorPaidEventOffers([]);
       setCreatorPaidEventTransactions([]);
+      setCreatorChannelSubscriptionOffers([]);
+      setCreatorChannelSubscriptionTransactions([]);
+      setChannelSubscriptionSaving(false);
+      setChannelSubscriptionNotice(null);
       setPaidEventSavingId(null);
       setTipSettingsNotice(null);
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
@@ -1351,6 +1367,8 @@ export function ChannelStudioScreen() {
       listMyPaidWatchPartyTransactions(50).catch(() => []),
       listMyPaidCreatorEventOffers().catch(() => []),
       listMyPaidCreatorEventTransactions(50).catch(() => []),
+      listMyChannelSubscriptionOffers().catch(() => []),
+      listMyChannelSubscriptionTransactions(50).catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
@@ -1375,6 +1393,8 @@ export function ChannelStudioScreen() {
         resolvedCreatorPaidWatchPartyTransactions,
         resolvedCreatorPaidEventOffers,
         resolvedCreatorPaidEventTransactions,
+        resolvedCreatorChannelSubscriptionOffers,
+        resolvedCreatorChannelSubscriptionTransactions,
         resolvedProviderReadinessSummary,
         resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
@@ -1403,6 +1423,8 @@ export function ChannelStudioScreen() {
         setCreatorPaidWatchPartyTransactions(resolvedCreatorPaidWatchPartyTransactions);
         setCreatorPaidEventOffers(resolvedCreatorPaidEventOffers);
         setCreatorPaidEventTransactions(resolvedCreatorPaidEventTransactions);
+        setCreatorChannelSubscriptionOffers(resolvedCreatorChannelSubscriptionOffers);
+        setCreatorChannelSubscriptionTransactions(resolvedCreatorChannelSubscriptionTransactions);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
@@ -1432,6 +1454,10 @@ export function ChannelStudioScreen() {
         setCreatorPaidWatchPartyTransactions([]);
         setCreatorPaidEventOffers([]);
         setCreatorPaidEventTransactions([]);
+        setCreatorChannelSubscriptionOffers([]);
+        setCreatorChannelSubscriptionTransactions([]);
+        setChannelSubscriptionSaving(false);
+        setChannelSubscriptionNotice(null);
         setPaidEventSavingId(null);
         setTipSettingsNotice(null);
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
@@ -1505,6 +1531,21 @@ export function ChannelStudioScreen() {
     setCreatorPaidEventTransactions(nextTransactions);
   }, [user?.id]);
 
+  const refreshChannelSubscriptions = useCallback(async () => {
+    if (!user?.id) {
+      setCreatorChannelSubscriptionOffers([]);
+      setCreatorChannelSubscriptionTransactions([]);
+      return;
+    }
+
+    const [nextOffers, nextTransactions] = await Promise.all([
+      listMyChannelSubscriptionOffers().catch(() => []),
+      listMyChannelSubscriptionTransactions(50).catch(() => []),
+    ]);
+    setCreatorChannelSubscriptionOffers(nextOffers);
+    setCreatorChannelSubscriptionTransactions(nextTransactions);
+  }, [user?.id]);
+
   const handleSaveTipSettings = useCallback(async (tipsEnabled: boolean) => {
     if (tipSettingsBusy) return;
 
@@ -1542,6 +1583,38 @@ export function ChannelStudioScreen() {
       setTipSettingsBusy(false);
     }
   }, [creatorTipSettings, refreshCreatorTips, tipSettingsBusy, user?.id]);
+
+  const handleSaveChannelSubscription = useCallback(async (enabled: boolean) => {
+    if (channelSubscriptionSaving) return;
+
+    setChannelSubscriptionSaving(true);
+    setChannelSubscriptionNotice(null);
+    trackEvent(enabled ? "money_feature_enabled" : "money_feature_paused", {
+      creator_id: user?.id ?? null,
+      feature_key: "channel_subscriptions",
+      route_name: "channel-studio",
+      source_surface: "money_center",
+    });
+
+    try {
+      await saveChannelSubscriptionOffer({
+        description:
+          "Subscribe to this creator's channel. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.",
+        status: enabled ? "sandbox" : "paused",
+        title: "Channel subscription",
+      });
+      setChannelSubscriptionNotice(
+        enabled
+          ? "Channel Subscription saved in sandbox mode. Fans can subscribe only through verified Google Play / RevenueCat checkout."
+          : "Channel Subscription paused. Fans cannot start a new subscription right now.",
+      );
+      await refreshChannelSubscriptions();
+    } catch {
+      setChannelSubscriptionNotice("Channel Subscription settings could not be saved right now.");
+    } finally {
+      setChannelSubscriptionSaving(false);
+    }
+  }, [channelSubscriptionSaving, refreshChannelSubscriptions, user?.id]);
 
   const handleStartPayoutProviderSetup = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
@@ -6262,6 +6335,8 @@ export function ChannelStudioScreen() {
     const paidWatchPartyGrossCents = paidWatchPartyPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const paidEventPaidTransactions = creatorPaidEventTransactions.filter((transaction) => transaction.status === "paid");
     const paidEventGrossCents = paidEventPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
+    const channelSubscriptionPaidTransactions = creatorChannelSubscriptionTransactions.filter((transaction) => transaction.status === "paid" || transaction.status === "renewal_paid");
+    const channelSubscriptionGrossCents = channelSubscriptionPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const tipFeatureStatus: MonetizationFeatureStatus = (() => {
       if (tipsFlag.state === "locked") return "Blocked";
       if (!creatorTipSettings) return "Not set up";
@@ -6510,7 +6585,7 @@ export function ChannelStudioScreen() {
       tips: tipFeatureStatus,
       paid_videos: paidContentFlag.state === "locked" ? "Blocked" : creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Active" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : paidContentFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : watchPartyTicketsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
-      channel_subscriptions: "Blocked",
+      channel_subscriptions: digitalSalesStatus === "Blocked" ? "Blocked" : creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
       vip_passes: "Blocked",
       paid_events: digitalSalesStatus === "Blocked" ? "Blocked" : creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
     };
@@ -6518,7 +6593,7 @@ export function ChannelStudioScreen() {
       tips: tipsFlag.state === "locked" ? tipsFlag.displaySummary : creatorTipSettings?.status === "setup_incomplete" ? "Connect payouts before fans can send tips." : undefined,
       paid_videos: paidContentFlag.state === "locked" ? paidContentFlag.displaySummary : undefined,
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? watchPartyTicketsFlag.displaySummary : undefined,
-      channel_subscriptions: "Creator channel subscriptions are separate from Chi'llywood Premium and are not backed yet.",
+      channel_subscriptions: digitalSalesStatus === "Blocked" ? "Payments are unavailable right now." : undefined,
       vip_passes: "VIP stays disabled until it unlocks real access or perks.",
       paid_events: digitalSalesStatus === "Blocked" ? "Payments are unavailable right now." : undefined,
     };
@@ -6574,7 +6649,7 @@ export function ChannelStudioScreen() {
     const offerRows: readonly SummaryMetricCard[] = [
       { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
       { label: "Paid Watch-Party tickets", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox ticket${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
-      { label: "Channel subscriptions", value: "Blocked", body: "Offer type: channel_subscription. Separate from Chi'llywood Premium and not backed yet.", tone: "unavailable" },
+      { label: "Channel subscriptions", value: creatorChannelSubscriptionOffers.length ? `${creatorChannelSubscriptionOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: channelSubscriptionPaidTransactions.length ? `${channelSubscriptionPaidTransactions.length} verified sandbox subscription transaction${channelSubscriptionPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(channelSubscriptionGrossCents, "usd")}. Channel subscriptions unlock only this creator's subscriber area.` : "Offer type: channel_subscription. Separate from Chi'llwood Premium, VIP, paid videos, Watch-Party tickets, and paid events.", tone: creatorChannelSubscriptionOffers.length ? "default" : "unavailable" },
       { label: "VIP passes", value: "Blocked", body: "Offer type: vip_pass. Disabled until VIP unlocks real access or perks.", tone: "unavailable" },
       { label: "Paid event passes", value: creatorPaidEventOffers.length ? `${creatorPaidEventOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: paidEventPaidTransactions.length ? `${paidEventPaidTransactions.length} verified sandbox event pass${paidEventPaidTransactions.length === 1 ? "" : "es"} totaling ${formatMonetizationCurrency(paidEventGrossCents, "usd")}. Event passes unlock only the linked creator event.` : "Offer type: paid_event. Event passes unlock only the linked creator event and stay separate from Premium, VIP, paid videos, and Watch-Party tickets.", tone: creatorPaidEventOffers.length ? "default" : "unavailable" },
       { label: "Physical merch", value: merchStatus, body: "Offer type: merch. Physical goods stay separate from Android digital access.", tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable" },
@@ -6613,6 +6688,9 @@ export function ChannelStudioScreen() {
       : [];
     const visiblePaidEventTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "events"
       ? creatorPaidEventTransactions
+      : [];
+    const visibleChannelSubscriptionTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "subscriptions"
+      ? creatorChannelSubscriptionTransactions
       : [];
     const renderTipTransactionRows = () => {
       if (!visibleTipTransactions.length) return null;
@@ -6678,6 +6756,29 @@ export function ChannelStudioScreen() {
               </Text>
               <Text style={styles.eventEmptyBody}>
                 Paid Watch-Party tickets unlock only this Party Waiting Room and Party Room. Premium, Tips, Paid Videos, VIP, subscriptions, events, and Live Stage stay separate. Payout status: {transaction.payoutStatus}.
+              </Text>
+            </View>
+          ))}
+        </View>
+      );
+    };
+    const renderChannelSubscriptionTransactionRows = () => {
+      if (!visibleChannelSubscriptionTransactions.length) return null;
+      return (
+        <View style={styles.eventList}>
+          {visibleChannelSubscriptionTransactions.map((transaction) => (
+            <View key={transaction.id} style={styles.eventEmptyCard}>
+              <View style={styles.eventCardHeader}>
+                <Text style={styles.eventEmptyTitle}>
+                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} channel subscription
+                </Text>
+                {renderStudioStatusPill(transaction.status === "paid" || transaction.status === "renewal_paid" ? "Paid" : transaction.status, transaction.status === "paid" || transaction.status === "renewal_paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "revoked" || transaction.status === "expired" ? "warning" : "muted")}
+              </View>
+              <Text style={styles.eventEmptyBody}>
+                {transaction.title} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
+              </Text>
+              <Text style={styles.eventEmptyBody}>
+                Channel subscriptions unlock only this creator channel subscriber area. Premium, VIP, Paid Videos, Watch-Party tickets, Paid Events, and Tips stay separate. Payout status: {transaction.payoutStatus}.
               </Text>
             </View>
           ))}
@@ -6890,6 +6991,42 @@ export function ChannelStudioScreen() {
                   </TouchableOpacity>
                 </View>
                 {tipSettingsNotice ? <Text style={styles.noticeText}>{tipSettingsNotice}</Text> : null}
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Channel Subscription setup</Text>
+	                  <Text style={styles.eventEmptyBody}>
+	                    {"Channel Subscriptions are monthly creator memberships in sandbox mode. They do not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels."}
+	                  </Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Product: cw_channel_subscription_sandbox_monthly_499 · Price: $4.99/month sandbox/test.
+                  </Text>
+                </View>
+                <View style={styles.eventActionRow}>
+                  <TouchableOpacity
+                    style={[styles.eventPrimaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={channelSubscriptionSaving}
+                    onPress={() => handleSaveChannelSubscription(true)}
+                  >
+                    {channelSubscriptionSaving ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.eventPrimaryButtonText}>
+                        {creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Manage Channel Subscription" : "Enable Channel Subscription"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  {creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? (
+                    <TouchableOpacity
+                      style={[styles.eventSecondaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
+                      activeOpacity={0.88}
+                      disabled={channelSubscriptionSaving}
+                      onPress={() => handleSaveChannelSubscription(false)}
+                    >
+                      <Text style={styles.eventSecondaryButtonText}>Pause Subscription</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                {channelSubscriptionNotice ? <Text style={styles.noticeText}>{channelSubscriptionNotice}</Text> : null}
               </>
             ),
           })}
@@ -6941,6 +7078,24 @@ export function ChannelStudioScreen() {
                         </Text>
                         <Text style={styles.eventEmptyBody}>
                           Purchases happen before Party Waiting Room and route to Party Room, not Live Stage. Sandbox rows are not payable.
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {creatorChannelSubscriptionOffers.length ? (
+                  <View style={styles.eventList}>
+                    {creatorChannelSubscriptionOffers.map((offer) => (
+                      <View key={offer.id} style={styles.eventEmptyCard}>
+                        <View style={styles.eventCardHeader}>
+                          <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
+                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" ? "default" : "muted")}
+                        </View>
+                        <Text style={styles.eventEmptyBody}>
+                          channel_subscription · {formatChannelSubscriptionPrice(offer.priceCents, offer.currency)} · {offer.subscriberCount} active subscriber{offer.subscriberCount === 1 ? "" : "s"}
+                        </Text>
+                        <Text style={styles.eventEmptyBody}>
+                          Channel subscriptions unlock only this creator channel subscriber area. Premium, VIP, Paid Videos, Watch-Party tickets, Paid Events, and Tips stay separate.
                         </Text>
                       </View>
                     ))}
@@ -7013,6 +7168,7 @@ export function ChannelStudioScreen() {
                 {renderTipTransactionRows()}
                 {renderPaidVideoTransactionRows()}
                 {renderPaidWatchPartyTransactionRows()}
+                {renderChannelSubscriptionTransactionRows()}
                 {renderPaidEventTransactionRows()}
                 {renderCreatorMoneyEventRows(
                   filteredTransactionEvents,

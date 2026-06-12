@@ -1,8 +1,18 @@
 # NEXT TASK
 
-## Next Creator Monetization Build
+## Next Creator Monetization Proof
 
-Paid Events V1 is now implemented, Supabase-applied, and Play/internal sandbox-proven. The next unbuilt creator monetization flows are Channel Subscriptions and VIP Passes.
+Channel Subscriptions V1 is now implemented, Supabase-applied, and webhook-deployed in sandbox mode. Do not build VIP Passes until Channel Subscriptions sandbox proof is closed or explicitly deferred.
+
+Immediate next proof:
+
+- Wait for EAS build `da86b3e9-145f-45a4-9f84-d713d906dc98` / versionCode `48` to finish or fail.
+- If it finishes, submit the AAB to Google Play internal testing, install from Play, and confirm `installer=com.android.vending`.
+- If traceable commit metadata is required, commit the Channel Subscriptions changes first and run a fresh AAB build instead of using the uncommitted local archive build.
+- Confirm RevenueCat / Google Play subscription product and package availability for `channel_subscription_sandbox_monthly_499` / `cw_channel_subscription_sandbox_monthly_499`.
+- Run creator setup, unsubscribed gate, sandbox subscription purchase, signed webhook, active subscription row, Money Center readback, second-unsubscribed denial, and cancellation/expiration/revoke proof if safe provider tooling allows.
+
+Closed Paid Events truth:
 
 Closed Paid Events truth:
 
@@ -916,6 +926,29 @@ Recommended next lane:
 - On `R5CR120QCBF`, capture screenshots for the live-stage eligible Spectator CTA, resulting child Live Watch-Party room, source attribution, no original controls/member list, no original token exposure, and child-room speaker/publish rules.
 - Re-run the targeted token/private-source greps and the new `npm run guard:spectator-child-room-policy` after any proof-only fixes.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
+
+## Next Lane: Prove Channel Subscriptions V1 Sandbox Purchase
+
+Channel Subscriptions V1 is implemented and deployed, but not yet sandbox-purchase-proven.
+
+Before building VIP Passes:
+
+1. Confirm Google Play / RevenueCat product and offering/package exist:
+   - product key `channel_subscription_sandbox_monthly_499`
+   - provider product id `cw_channel_subscription_sandbox_monthly_499`
+   - entitlement id `creator_channel_subscription`
+2. Build or install a Play/internal runtime that includes the Channel Subscriptions V1 code.
+3. Confirm device installer is `com.android.vending`.
+4. Creator enables Channel Subscription in Money Center.
+5. Unsubscribed fan sees `Subscribe` and cannot open `/channel-subscription/[creatorId]` without access.
+6. Fan completes RevenueCat / Google Play sandbox subscription purchase.
+7. Confirm signed webhook creates provider event, access grant, active channel subscription row, mirrored `channel_subscribers` row, and transaction row.
+8. Confirm subscribed fan can open subscriber-only route after app reload.
+9. Confirm second unsubscribed fan remains blocked by normal route and direct link.
+10. Confirm Money Center Transactions shows Channel Subscription as sandbox/not_payable and separate from Premium, Tips, Paid Videos, Paid Watch-Party tickets, Paid Events, and VIP.
+11. Try cancellation/expiration/revoke only if safe RevenueCat / Google Play tooling and order identifiers are available.
+
+Do not claim live money. Do not build VIP before this proof is complete or explicitly deferred by product decision.
 
 ## Previous Recommended Lane: Profile Media Runtime Proof And Blocked/Private Fixtures
 

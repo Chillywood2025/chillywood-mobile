@@ -336,6 +336,7 @@ const accessGrantTypeForProductType = (productType: string) => {
   if (productType === "live_watch_party_access_pass") return "live_watch_party_access_pass";
   if (productType === "live_watch_party_seat_pass") return "live_watch_party_seat_pass";
   if (productType === "event_pass") return "event_pass";
+  if (productType === "channel_subscription") return "channel_subscription";
   return null;
 };
 
@@ -444,6 +445,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
       metadata: {
         provider_payload_stored: false,
         provider_product_id: input.productId,
+        original_transaction_id: toText(input.event.original_transaction_id) || null,
         dynamic_product: true,
         sandbox_only: environment === "sandbox",
         live_money_action: false,
@@ -530,12 +532,17 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
         environment,
         status: grantStatus,
         starts_at: occurredAt,
+        expires_at: toIsoFromMs(input.event.expiration_at_ms),
         metadata: {
           product_key: product.product_key,
           purchase_intent_id: intent.id,
+          original_transaction_id: toText(input.event.original_transaction_id) || null,
           viewer_access_only: true,
           payment_authority: false,
           payout_access: false,
+          premium_unlock: false,
+          vip_unlock: false,
+          platform_wide_badge: false,
         },
       })
       .select("id")
@@ -624,6 +631,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
       metadata: {
         provider_payload_stored: false,
         provider_product_id: input.productId,
+        original_transaction_id: toText(input.event.original_transaction_id) || null,
         dynamic_product: true,
         purchase_intent_id: intent.id,
         sandbox_only: true,

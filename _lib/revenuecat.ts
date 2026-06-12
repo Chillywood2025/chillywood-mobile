@@ -11,6 +11,8 @@ import Purchases, {
   type PurchasesStoreProduct,
 } from "react-native-purchases";
 
+export type { PurchasesPackage } from "react-native-purchases";
+
 import { debugLog, reportRuntimeError } from "./logger";
 import { getRuntimeConfig } from "./runtimeConfig";
 

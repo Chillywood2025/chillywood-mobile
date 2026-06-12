@@ -16,7 +16,8 @@ export type MonetizationProductType =
   | "live_watch_party_seat_pass"
   | "creator_tip"
   | "merch_physical_good"
-  | "event_pass";
+  | "event_pass"
+  | "channel_subscription";
 
 export type MonetizationProductStatus = "setup" | "sandbox" | "active" | "disabled" | "retired";
 export type AccessGrantStatus = "active" | "pending" | "expired" | "revoked" | "refunded" | "blocked" | "sandbox_only" | "setup_only";

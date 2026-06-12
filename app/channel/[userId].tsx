@@ -29,6 +29,12 @@ import {
   readCreatorTipPublicStatus,
   type CreatorTipPublicStatus,
 } from "../../_lib/creatorTips";
+import {
+  formatChannelSubscriptionPrice,
+  purchaseChannelSubscription,
+  resolveChannelSubscriptionAccess,
+  type ChannelSubscriptionAccess,
+} from "../../_lib/channelSubscriptions";
 import { formatClipStudioTemplateLabel, type ClipStudioTemplatePreset } from "../../_lib/clipStudio";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
@@ -149,6 +155,9 @@ export default function PublicChannelScreen() {
   const [commerceSurface, setCommerceSurface] = useState<CreatorMiniPlatformCommerceSurface | null>(null);
   const [tipStatus, setTipStatus] = useState<CreatorTipPublicStatus | null>(null);
   const [tipSheetVisible, setTipSheetVisible] = useState(false);
+  const [subscriptionAccess, setSubscriptionAccess] = useState<ChannelSubscriptionAccess | null>(null);
+  const [subscriptionBusy, setSubscriptionBusy] = useState(false);
+  const [subscriptionNotice, setSubscriptionNotice] = useState<string | null>(null);
   const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -169,6 +178,8 @@ export default function PublicChannelScreen() {
       setEvents([]);
       setCommerceSurface(null);
       setTipStatus(null);
+      setSubscriptionAccess(null);
+      setSubscriptionNotice(null);
       setPlatformBranding(null);
 
       if (!routeUserId) {
@@ -208,11 +219,12 @@ export default function PublicChannelScreen() {
       const brandPromise = showDraftBranding
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
-      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextPlatformBranding] = await Promise.all([
+      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextPlatformBranding] = await Promise.all([
         readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
+        resolveChannelSubscriptionAccess(routeUserId).catch(() => null),
         brandPromise,
       ]);
 
@@ -222,6 +234,7 @@ export default function PublicChannelScreen() {
       setEvents(publicEvents.filter((event) => event.isLiveNow || event.isUpcoming));
       setCommerceSurface(nextCommerceSurface);
       setTipStatus(nextTipStatus);
+      setSubscriptionAccess(nextSubscriptionAccess);
       setPlatformBranding(nextPlatformBranding);
       setLoadState("ready");
     };
@@ -327,6 +340,63 @@ export default function PublicChannelScreen() {
       pathname: "/profile/[userId]",
       params: { userId: routeUserId },
     });
+  };
+
+  const refreshSubscriptionAccess = async () => {
+    if (!routeUserId) return null;
+    const nextAccess = await resolveChannelSubscriptionAccess(routeUserId).catch(() => null);
+    setSubscriptionAccess(nextAccess);
+    return nextAccess;
+  };
+
+  const openSubscriberArea = () => {
+    if (!routeUserId) return;
+    router.push({
+      pathname: "/channel-subscription/[creatorId]",
+      params: { creatorId: routeUserId },
+    } as unknown as Parameters<typeof router.push>[0]);
+  };
+
+  const handleSubscribe = async () => {
+    if (!routeUserId || subscriptionBusy || isOwner) return;
+    if (!viewerUserId) {
+      Alert.alert("Subscribe", "Sign in to subscribe to this creator's channel.");
+      return;
+    }
+    if (subscriptionAccess?.allowed) {
+      openSubscriberArea();
+      return;
+    }
+    if (!subscriptionAccess?.requiresPurchase) {
+      Alert.alert("Subscribe", "This creator subscription is not available right now.");
+      return;
+    }
+
+    try {
+      setSubscriptionBusy(true);
+      setSubscriptionNotice(null);
+      const result = await purchaseChannelSubscription({
+        creatorId: routeUserId,
+        sourceSurface: "creator_channel_header",
+      });
+      setSubscriptionAccess(result.access);
+      setSubscriptionNotice(result.message);
+      if (result.ok) {
+        openSubscriberArea();
+      } else {
+        Alert.alert("Subscribe", result.message);
+      }
+    } catch (error) {
+      Alert.alert(
+        "Subscribe",
+        error instanceof Error && error.message
+          ? error.message
+          : "Channel Subscription checkout is not available right now.",
+      );
+      await refreshSubscriptionAccess();
+    } finally {
+      setSubscriptionBusy(false);
+    }
   };
 
   const shareChannel = async () => {
@@ -467,6 +537,12 @@ export default function PublicChannelScreen() {
     const followLabel = viewerFollowState === "following" ? "Following" : "Follow";
     const canRenderFollow = !isOwner && viewerFollowState !== "unavailable";
     const canRenderTip = !isOwner && tipStatus?.canTip === true;
+    const canRenderSubscribe = !isOwner && !!subscriptionAccess?.offer && (subscriptionAccess.requiresPurchase || subscriptionAccess.allowed);
+    const subscribeLabel = subscriptionAccess?.allowed
+      ? "Subscribed"
+      : subscriptionBusy
+        ? "Subscribing"
+        : "Subscribe";
 
     return (
       <View style={styles.hero}>
@@ -495,7 +571,7 @@ export default function PublicChannelScreen() {
                 {channel.handle}
               </Text>
             ) : null}
-            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>Official Chi'llwood</Text> : null}
+	            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>{"Official Chi'llwood"}</Text> : null}
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
             {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
@@ -526,6 +602,15 @@ export default function PublicChannelScreen() {
               onPress={() => setTipSheetVisible(true)}
               style={styles.actionButtonWide}
               variant="success"
+            />
+          ) : null}
+          {canRenderSubscribe ? (
+            <AppActionButton
+              label={subscribeLabel}
+              loading={subscriptionBusy}
+              onPress={subscriptionAccess?.allowed ? openSubscriberArea : handleSubscribe}
+              style={styles.actionButtonWide}
+              variant={subscriptionAccess?.allowed ? "secondary" : "primary"}
             />
           ) : null}
           <AppActionButton label="Share" onPress={shareChannel} />
@@ -770,6 +855,41 @@ export default function PublicChannelScreen() {
     );
   };
 
+  const renderChannelSubscription = () => {
+    const offer = subscriptionAccess?.offer ?? null;
+    if (!offer) return null;
+    const subscribed = subscriptionAccess?.allowed === true;
+    const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
+    return (
+      <AppSection
+        title="Channel Subscription"
+        statusLabel={subscribed ? "Subscribed" : unavailable ? "Unavailable" : "Sandbox"}
+        statusTone={subscribed ? "success" : unavailable ? "muted" : "warning"}
+      >
+        <View style={styles.programmingCard}>
+          <Text style={styles.cardKicker}>Creator membership</Text>
+          <Text style={styles.cardTitle}>{offer.title}</Text>
+	          <Text style={styles.cardBody}>
+	            {`Subscribe to this creator's channel for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.`}
+	          </Text>
+          {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
+          <TouchableOpacity
+            style={[styles.playButton, (subscriptionBusy || unavailable) && styles.actionButtonDisabled]}
+            activeOpacity={0.86}
+            disabled={subscriptionBusy || unavailable}
+            onPress={subscribed ? openSubscriberArea : handleSubscribe}
+          >
+            {subscriptionBusy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.playButtonText}>{subscribed ? "Open Subscriber Area" : "Subscribe"}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </AppSection>
+    );
+  };
+
   const renderAbout = () => (
     <AppSection title="About" statusLabel={aboutItems.length ? "Public" : "Empty"} statusTone={aboutItems.length ? "success" : "muted"}>
       {aboutItems.length ? (
@@ -834,6 +954,7 @@ export default function PublicChannelScreen() {
         {renderLatestUploads()}
         {renderLiveNow()}
         {renderUpcomingEvents()}
+        {renderChannelSubscription()}
         {renderMiniPlatformCommerce()}
         {renderAbout()}
       </ScrollView>

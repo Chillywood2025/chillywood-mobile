@@ -72,11 +72,10 @@ export const CREATOR_MONETIZATION_FEATURE_CATALOG: readonly MonetizationFeatureC
     creatorDescription: "Offer monthly creator membership.",
     fanActionLabel: "Subscribe",
     creatorActionLabel: "Set up",
-    status: "Blocked",
-    requiredSetup: ["creator subscription entitlement model", "monthly product", "subscriber access rules"],
+    status: "Not set up",
+    requiredSetup: ["creator subscription offer", "monthly product", "subscriber access rules"],
     manageTarget: "ways_to_earn",
     allowedSurfaces: ["channel_header"],
-    blockedReason: "Creator channel subscriptions are separate from Chi'llywood Premium and are not backed yet.",
   },
   {
     key: "vip_passes",

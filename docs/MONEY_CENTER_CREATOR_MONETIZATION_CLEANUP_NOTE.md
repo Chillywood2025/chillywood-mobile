@@ -77,3 +77,15 @@
 - Play/internal v46 proof on `R5CR120QCBF` created event `a100f88d-6bf5-4272-838d-2d0d83f800eb` and offer `85b2a1ae-90cd-4b75-a91f-39c42c3dad43`; Google Play / RevenueCat sandbox purchase processed provider event `95c22a83-85a1-4f5a-b6e4-e6f2cb72ad10`, consumed purchase intent `d9076cf4-cd98-4480-af0a-690f5bcc06df`, created access grant `bce269bc-7469-484f-b82f-992437a7c7f6`, active pass `3a9b2d07-d04b-45ad-b7cd-9766566e9a04`, and paid/not-payable transaction `0dc99303-baeb-489c-b5a5-8e608b63f583`.
 - Unpaid/direct-link gate, paid-fan access, authenticated second-unpaid denial, Money Center visual readback, and direct client write denial passed.
 - Remaining proof gaps: capacity proof is deferred because creator UI does not expose `capacity_limit`; provider refund/revoke remains deferred until safe RevenueCat/Google Play tooling or order identifiers exist.
+
+## Channel Subscriptions V1 Follow-Up
+
+- Channel Subscriptions V1 is implemented, Supabase-applied, and webhook-deployed in sandbox mode, but Play/RevenueCat sandbox purchase proof is still pending.
+- Provider path is RevenueCat / Google Play subscription product `channel_subscription_sandbox_monthly_499` / `cw_channel_subscription_sandbox_monthly_499`; Stripe Tips is not used.
+- RevenueCat entitlement id is `creator_channel_subscription`.
+- Money Center remains the consolidated setup/readout: creators can enable/pause one sandbox monthly Channel Subscription offer in Ways to Earn, offers appear in Offers, and verified subscription rows appear in Transactions after provider proof.
+- Fan surface is the creator channel header/card with `Subscribe`; subscriber-only proof route is `/channel-subscription/[creatorId]`.
+- Channel Subscriptions unlock only subscriber state for that creator channel. They do not include Chi'llwood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payout access, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators.
+- Remote migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied and `revenuecat-webhook` is redeployed.
+- EAS Play/internal build `da86b3e9-145f-45a4-9f84-d713d906dc98` was started for versionCode `48`, but remained `IN_PROGRESS` with no AAB artifact after repeated polling; Play submission and device purchase proof are still pending.
+- Remaining proof gaps: Play/internal subscription purchase sheet, signed webhook event, active subscription row, Money Center visual transaction readback, second-unsubscribed denial after purchase, and cancellation/expiration/revoke if safe provider tooling allows.
