@@ -673,41 +673,92 @@ export default function WatchPartyIndexScreen() {
 
   const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {
     setJoinError(null);
+    setPaidTicketNotice(null);
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
-    console.log("[watch-party-proof] join attempt started", {
+    console.log("join_now_room_lookup_start", {
       partyId: nextPartyId,
       roomType: nextPreview.room.roomType,
     });
     if (!nextPartyId) {
+      console.log("join_now_blocked_reason", {
+        reason: "missing_party_id",
+      });
       setJoinError("Room is missing an id. Try another code.");
       return;
     }
 
+    const latestRoom = await getPartyRoom(nextPartyId).catch((error) => {
+      console.log("join_now_error", {
+        partyId: nextPartyId,
+        stage: "room_lookup",
+        message: error instanceof Error ? error.message : "room_lookup_failed",
+      });
+      return null;
+    });
+
+    if (!latestRoom) {
+      console.log("join_now_room_expired", {
+        partyId: nextPartyId,
+      });
+      setPaidTicketGate(null);
+      setJoinError("This room is no longer active.");
+      return;
+    }
+
+    const currentPreview = { ...nextPreview, room: latestRoom };
+    console.log("join_now_room_lookup_success", {
+      partyId: latestRoom.partyId,
+      roomType: latestRoom.roomType,
+    });
+
     if (!(await requirePremiumRoomEntry(
-      nextPreview.room.roomType,
-      nextPreview.room.sourceId ?? nextPreview.room.titleId ?? nextPartyId,
+      currentPreview.room.roomType,
+      currentPreview.room.sourceId ?? currentPreview.room.titleId ?? nextPartyId,
     ))) {
-      console.log("[watch-party-proof] join blocked before ticket check", {
+      console.log("join_now_blocked_reason", {
         partyId: nextPartyId,
         reason: "premium_or_runtime_gate",
       });
       return;
     }
 
-    if (nextPreview.room.roomType !== "live") {
-      const ticketAccess = await resolvePaidWatchPartyTicketAccess(nextPartyId).catch(() => null);
-      if (!ticketAccess) {
-        console.log("[watch-party-proof] ticket access unavailable", {
+    if (currentPreview.room.roomType !== "live") {
+      console.log("join_now_ticket_check_start", {
+        partyId: nextPartyId,
+      });
+      const ticketAccess = await resolvePaidWatchPartyTicketAccess(nextPartyId).catch((error) => {
+        console.log("join_now_error", {
           partyId: nextPartyId,
+          stage: "ticket_check",
+          message: error instanceof Error ? error.message : "ticket_check_failed",
+        });
+        return null;
+      });
+      if (!ticketAccess) {
+        console.log("join_now_blocked_reason", {
+          partyId: nextPartyId,
+          reason: "ticket_check_unavailable",
         });
         setJoinError("Unable to confirm room ticket access right now.");
         return;
       }
+      if (ticketAccess.offer?.id) {
+        console.log("join_now_paid_offer_detected", {
+          partyId: nextPartyId,
+          offerId: ticketAccess.offer.id,
+          status: ticketAccess.offer.status,
+          requiresPurchase: ticketAccess.requiresPurchase,
+        });
+      }
       if (!ticketAccess.allowed) {
-        console.log("[watch-party-proof] ticket gate shown", {
+        console.log("join_now_ticket_missing", {
           partyId: nextPartyId,
           reason: ticketAccess.reason,
           requiresPurchase: ticketAccess.requiresPurchase,
+        });
+        console.log("join_now_route_waiting_room", {
+          partyId: nextPartyId,
+          reason: ticketAccess.requiresPurchase ? "ticket_purchase_required" : ticketAccess.reason,
         });
         setPaidTicketGate(ticketAccess);
         setPaidTicketNotice(
@@ -717,6 +768,12 @@ export default function WatchPartyIndexScreen() {
         );
         return;
       }
+      if (ticketAccess.ticketId) {
+        console.log("join_now_ticket_active", {
+          partyId: nextPartyId,
+          ticketId: ticketAccess.ticketId,
+        });
+      }
     }
 
     const userId = await getSafePartyUserId().catch(() => "");
@@ -724,10 +781,14 @@ export default function WatchPartyIndexScreen() {
       roomSurface: "watch_party",
       partyId: nextPartyId,
       userId,
-      room: nextPreview.room,
+      room: currentPreview.room,
     }).catch(() => null);
 
     if (!access) {
+      console.log("join_now_blocked_reason", {
+        partyId: nextPartyId,
+        reason: "access_unknown",
+      });
       trackEvent("room_join_failure", {
         surface: "watch-party-lobby",
         reason: "access_unknown",
@@ -738,39 +799,53 @@ export default function WatchPartyIndexScreen() {
     }
 
     if (access.isAllowed) {
-      console.log("[watch-party-proof] join access allowed", {
+      console.log("join_now_route_party_room", {
         partyId: nextPartyId,
       });
       trackEvent("room_join_success", {
         surface: "watch-party-lobby",
         roomId: nextPartyId,
       });
-      navigateToPreviewRoom(nextPreview);
+      navigateToPreviewRoom(currentPreview);
       return;
     }
 
     if (isAccessSheetReason(access.reason)) {
+      console.log("join_now_blocked_reason", {
+        partyId: nextPartyId,
+        reason: access.reason,
+      });
       trackEvent("monetization_gate_shown", {
         surface: "watch-party-lobby",
         reason: access.reason,
         roomId: nextPartyId,
       });
-      setPendingAccessPreview(nextPreview);
+      setPendingAccessPreview(currentPreview);
       setPendingAccessDecision(access);
       setAccessSheetReason(access.reason);
       setAccessSheetVisible(true);
       return;
     }
 
+    console.log("join_now_blocked_reason", {
+      partyId: nextPartyId,
+      reason: access.reason,
+    });
     setJoinError(getWatchPartyRoomAccessMessage(access));
   }, [navigateToPreviewRoom, requirePremiumRoomEntry]);
 
   const onConfirmJoin = async () => {
-    console.log("[watch-party-proof] join now pressed", {
+    console.log("join_now_pressed", {
       hasPreview: Boolean(preview),
       partyId: preview?.room.partyId ?? null,
     });
-    if (!preview) return;
+    if (!preview) {
+      console.log("join_now_blocked_reason", {
+        reason: "missing_preview",
+      });
+      setJoinError("Find the room again before joining.");
+      return;
+    }
     await attemptJoinRoom(preview);
   };
 
