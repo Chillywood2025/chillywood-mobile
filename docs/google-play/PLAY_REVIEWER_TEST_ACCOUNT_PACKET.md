@@ -39,6 +39,10 @@ Access-product sandbox proof addendum: the original owner/operator internal-test
 
 Do not commit real reviewer passwords, recovery codes, OTP seeds, service accounts, owner/admin credentials, Play Console credentials, or provider secrets. Put the live test credential values only in Google Play Console App access.
 
+June 12, 2026 App Access safety update: Google Play automated app-access/pre-launch crawling can tap the forgot-password flow and trigger real Supabase Auth recovery emails for the App Access account. The Play Console Sign in details switch "Allow Android to use your sign in details for performance and app compatibility testing" is now turned off and saved, with Play Console showing "Change saved. Send for review in Publishing overview." Do not use the owner's personal/internal tester inbox for Play Console App Access. Use a disposable non-admin reviewer account whose inbox can safely receive automated reset, signup, and transactional auth emails.
+
+June 12, 2026 disposable reviewer account update: Play Console App Access is now configured with the non-admin disposable reviewer email `play-reviewer-app-access@chillywoodstream.com`, replacing the prior owner/internal tester email. The Supabase auth user is `cb8c7b5f-6003-479a-887e-29644e677dca`, has a confirmed email and a `user_profiles` row (`username=playreviewer`, `display_name=Play Reviewer`), and has zero active platform-role memberships. The password is stored only in the local macOS Keychain item `chillywood-play-reviewer-app-access` for account `play-reviewer-app-access@chillywoodstream.com`; do not write it in docs, env files, screenshots, chat, or git. Play Console saved the Sign in details change and may still require sending the App content update from Publishing overview.
+
 June 4, 2026 internal tester sandbox purchase mode note: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md` adds a bounded tester-only sandbox mode with Owner/Admin controls. Public/default users still see Premium and digital purchases unavailable. Approved testers may see clearly labeled Google Play / RevenueCat sandbox purchase surfaces with `Sandbox test`, `Not production`, and `Not payable` copy. Owner/Admin Money Center shows `Internal Sandbox Testing` and tester-tool routing. Stripe physical merch sandbox checkout is physical goods only. Payout readiness is read-only; reviewers/testers cannot request, trigger, simulate, cash out, withdraw, transfer, or activate payouts. Do not describe this as production commerce, public live Premium, public paid content, public tickets/seats/tips/event passes, payouts, cash-out, or Stripe Android digital checkout.
 
 June 1 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` records App access as packet-ready but not externally completed in this repo lane. No reviewer username/password was entered, saved, screenshotted, or committed here. Owner/operator must enter safe non-admin credentials only in Play Console App access.
@@ -50,7 +54,7 @@ June 1 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER
 | App name | Chi'llywood |
 | Package | `com.chillywood.mobile` |
 | Requires sign-in? | Yes for account features. Public browsing and legal pages are available without sign-in. |
-| Test username/email | `[OWNER ENTERS SAFE NON-ADMIN TEST EMAIL IN PLAY CONSOLE ONLY]` |
+| Test username/email | `play-reviewer-app-access@chillywoodstream.com` |
 | Test password | `[OWNER ENTERS PASSWORD IN PLAY CONSOLE ONLY. DO NOT COMMIT.]` |
 | 2FA / OTP | Use a reviewer account that does not require 2FA, one-time codes, geo-dependent passwords, or recovery prompts. |
 | Account role | Normal non-admin user. Do not provide Owner/Admin unless Google specifically requests admin-only legal/moderation proof. |
@@ -61,7 +65,7 @@ June 1 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER
 Chi'llywood can be opened without signing in for public browsing and legal/support surfaces. Account features require a test account.
 
 Test account:
-- Email: [enter safe non-admin reviewer email here in Play Console only]
+- Email: play-reviewer-app-access@chillywoodstream.com
 - Password: [enter password here in Play Console only]
 
 Please do not use an owner/admin account for standard review. Admin, payout, live-money, and provider tools are restricted and are not part of normal user review.

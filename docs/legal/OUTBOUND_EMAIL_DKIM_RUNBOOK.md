@@ -41,7 +41,7 @@ June 6, 2026 Auth SMTP CLI follow-up: Supabase Auth custom SMTP is now confirmed
 - sender name: `Chi’llywood`
 - verified sender email: `no-reply@chillywoodstream.com`
 
-The same run confirms `POST /auth/v1/recover` returns HTTP `200` with `rob2037gn@gmail.com` using `chillywoodmobile://reset-password` redirect.
+The same run confirms `POST /auth/v1/recover` returns HTTP `200` using `chillywoodmobile://reset-password` redirect. Future recovery proof must use a disposable non-admin recovery-test inbox, not the owner's personal/internal tester inbox.
 
 Inbox-level delivery and click confirmation remain pending:
 

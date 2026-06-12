@@ -195,7 +195,6 @@ function GatedSmartReplySuggestions(_: {
   otherMemberName?: string;
 }) {
   // Smart replies are nonessential for the live invite/call proof lane.
-  // Keep the thread path free of PostHog React hooks until runtime proof is closed.
   return null;
 }
 

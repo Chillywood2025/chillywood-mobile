@@ -5,6 +5,10 @@ Status: copy package prepared; credentials must be entered only in Play Console
 
 Do not commit real reviewer passwords, recovery codes, service accounts, or admin credentials. Put live test credentials only in Play Console App access.
 
+June 12, 2026 App Access safety update: Google Play automated app-access/pre-launch crawling can trigger the app's forgot-password flow for the App Access account. The Play Console Sign in details switch "Allow Android to use your sign in details for performance and app compatibility testing" is now turned off and saved, with Play Console showing "Change saved. Send for review in Publishing overview." Do not use the owner's personal/internal tester inbox. Use a disposable non-admin reviewer account whose inbox can safely receive automated reset, signup, and transactional auth emails.
+
+June 12, 2026 disposable reviewer account update: Play Console App Access is configured with `play-reviewer-app-access@chillywoodstream.com`, not the owner's personal/internal tester email. The Supabase auth user id is `cb8c7b5f-6003-479a-887e-29644e677dca`, email confirmation is complete, the normal profile row exists, and active platform-role memberships are `0`. The password lives only in the local macOS Keychain item `chillywood-play-reviewer-app-access`; never write it in this repo or in Play reviewer docs. Play Console saved the Sign in details change and may still require sending the App content update from Publishing overview.
+
 June 1 external acceptance update: `docs/google-play/EXTERNAL_ACCEPTANCE_TRACKER.md` is now the source of truth for whether App access/reviewer instructions have actually been entered in Play Console. In this repo lane they remain prepared only; no password was entered, saved, screenshotted, or committed.
 
 ## Play Console App Access Copy
@@ -16,7 +20,7 @@ Package: com.chillywood.mobile
 Chi'llywood can be opened without signing in for public browsing surfaces, but account features require a test account.
 
 Test account:
-- Email: [OWNER ENTERS SAFE NON-ADMIN TEST EMAIL IN PLAY CONSOLE ONLY]
+- Email: play-reviewer-app-access@chillywoodstream.com
 - Password: [OWNER ENTERS PASSWORD IN PLAY CONSOLE ONLY]
 
 Do not use an owner/admin account for review unless Google specifically requests admin-only legal/moderation proof.
@@ -59,8 +63,8 @@ Support/legal:
 
 | Requirement | Status |
 | --- | --- |
-| Non-admin account | Owner must create/confirm |
-| Stable password | Owner enters in Play Console only |
+| Non-admin account | Created and verified: `play-reviewer-app-access@chillywoodstream.com`; zero active platform roles |
+| Stable password | Stored only in local macOS Keychain and entered in Play Console App Access |
 | No 2FA/recovery challenge blocking reviewer | Owner confirms |
 | Does not expose private personal data | Owner confirms |
 | Can access representative signed-in areas | Owner confirms |

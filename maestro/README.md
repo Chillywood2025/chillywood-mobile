@@ -21,7 +21,7 @@ cp maestro/.env.example maestro/.env
 ## Runtime contract
 
 - `CHILLYWOOD_APP_ID` defaults to Expo Go (`host.exp.exponent`).
-- `EXPO_URL` should match the currently running Expo / Metro session. The latest proved PostHog-enabled checkpoint used `exp://127.0.0.1:8084`.
+- `EXPO_URL` should match the currently running Expo / Metro session.
 - `SELF_PROFILE_USER_ID` is only needed for `09-title-actions-to-self-profile-rails.yaml`.
 
 ## Running the tests
@@ -34,7 +34,7 @@ export JAVA_HOME="$(brew --prefix openjdk)/libexec/openjdk.jdk/Contents/Home"
 maestro test maestro/run-all.yaml --env EXPO_URL=exp://127.0.0.1:8084
 ```
 
-`run-all.yaml` is the baseline smoke lane only. It does not replace the full Stage 4 or PostHog proof checkpoint.
+`run-all.yaml` is the baseline smoke lane only. It does not replace the full manual/device proof checkpoint.
 
 ### Run a single flow
 ```bash
