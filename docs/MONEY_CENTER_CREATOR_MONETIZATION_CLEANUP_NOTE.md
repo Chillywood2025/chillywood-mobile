@@ -51,11 +51,11 @@
 - Remaining provider proof gap: refund/revoke status waits on RevenueCat/Google Play refund tooling and safe order identifiers.
 
 ## Paid Watch-Party Seats V1 Follow-Up
-- Paid Watch-Party Seats / Room Tickets V1 is implemented, Supabase-applied, and partially Play/internal sandbox-proven, but not end-to-end sandbox-proven until the direct Party Room deep-link fix is built and proved.
+- Paid Watch-Party Seats / Room Tickets V1 is implemented, Supabase-applied, and Play/internal sandbox-proven for purchase, active ticket creation, paid fan entry, unpaid direct-link gate, normal sold-out denial, seat-limit, and Money Center RPC readback.
 - Provider path is RevenueCat / Google Play dynamic sandbox product `watch_party_live_ticket_sandbox_099` / `cw_watch_party_live_ticket_sandbox_099`; Stripe Tips is not used.
 - Money Center remains the consolidated readout: Paid Watch-Party offers appear in Offers and verified room-ticket rows appear in Transactions.
 - Party Waiting Room checks paid-ticket access before routing to Party Room.
-- Party Room has intended paid-ticket re-check logic. v44 proof found a direct deep-link bypass for an unpaid sold-out tester before the gate visibly blocks; the repo-side fix now delays camera/mic permission startup until room entry is confirmed, pending Play/internal proof.
+- Party Room blocks unpaid paid-room direct links before camera/mic permission startup after the v45 proof build.
 - Paid Watch-Party tickets unlock only the linked Party Waiting Room and Party Room. They do not include Premium, Tips, Paid Videos, VIP, subscriptions, events, Live Stage, payout access, or LiveKit authority.
 - Remote proof so far is schema/RPC/readback only: ticket switches are sandbox-only, live money is off, oversell guard exists, and direct authenticated offer writes are closed.
 - Play/internal v38 installed from Google Play internal testing on `R5CR120QCBF`, and creator offer setup now passes after remote backend fixes.
@@ -63,5 +63,6 @@
 - v40 Play/internal install proved fresh room lookup works. The original `XWAKVC` room expired under the active-room window, so fresh room `X75JHC` and offer `ca9b34b8-8815-4d9e-8a2e-34643769a29c` were created through creator-authenticated room insert plus guarded offer RPC.
 - v40 `Join Now` appeared idle because the ticket-gate CTA rendered lower in the setup shell; the follow-up patch moves `Room ticket required` / `Buy Room Ticket` into the preview card.
 - v44 Play/internal proof passed real Google Play sandbox ticket purchase on room `ZT5MWV` / offer `143fdf4e-e235-4f98-81a4-e22194a8550a`: transaction `fff398a9-59f6-452a-81f7-1c8e7ad04e50`, active ticket `a2108d63-8b84-4dd1-8f60-ef485ce5efdc`, seat limit `1`, seats sold `1`, paid fan Party Room entry, and normal second-unpaid denial as sold out.
+- v45 Play/internal proof passed the direct-link fix and a fresh sandbox purchase on room `WNFUUF` / offer `ba02fbe7-97a7-4871-86f3-9ca62a141d76`: transaction `912a9d0a-3621-4070-826d-be2035856e47`, active ticket `8c2906da-8d02-43b2-afb9-9a7ba514fba2`, provider event `f768e840-3208-4251-ac84-95358987eb8b`, seat limit `1`, seats sold `1`, unpaid direct-link gate before permissions, and paid fan Party Room entry.
 - Money Center RPC readback passed for the paid room-ticket transaction as sandbox/not-payable and separate from Tips/Paid Videos/Premium; visual Money Center screenshot remains pending.
-- Remaining proof gaps: build/reprove direct Party Room deep-link denial, capture visual Money Center readback, and provider refund/revoke if safe tooling allows.
+- Remaining proof gaps: capture visual Money Center readback and provider refund/revoke if safe tooling allows.

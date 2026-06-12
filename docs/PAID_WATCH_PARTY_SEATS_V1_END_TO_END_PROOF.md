@@ -4,9 +4,9 @@ Last updated: June 12, 2026
 
 ## Status
 
-Paid Watch-Party Seats / Room Tickets V1 is implemented repo-side and remote-applied to Supabase project `bmkkhihfbmsnnmcqkoly`. Play/internal v44 proved the RevenueCat / Google Play sandbox purchase path, provider-created ticket/transaction rows, paid-fan Party Room entry, seat-limit sold-out state, second authenticated unpaid normal-route denial, and Money Center RPC transaction readback.
+Paid Watch-Party Seats / Room Tickets V1 is implemented repo-side and remote-applied to Supabase project `bmkkhihfbmsnnmcqkoly`. Play/internal v44 proved the first RevenueCat / Google Play sandbox purchase path, provider-created ticket/transaction rows, paid-fan Party Room entry, seat-limit sold-out state, second authenticated unpaid normal-route denial, and Money Center RPC transaction readback. Play/internal v45 proved the direct Party Room deep-link gate fix and a fresh paid-ticket purchase/entry path.
 
-Paid Watch-Party Seats V1 is not fully sandbox-proven yet because direct Party Room deep-link denial failed on v44. A second authenticated unpaid tester with no active ticket and resolver readback `allowed=false`, `reason=sold_out` could still reach the Party Room route far enough to trigger the native camera permission prompt. The repo-side fix now delays local camera/mic permission startup until room entry is confirmed, but this must be built into a new Play/internal runtime and proved before direct-link proof is marked passed.
+Visual Money Center screenshot and provider refund/revoke proof remain deferred. Money Center RPC readback passed for the exact v45 transaction.
 
 Live money remains disabled. Room tickets are sandbox/not-payable only.
 
@@ -37,7 +37,7 @@ Live money remains disabled. Room tickets are sandbox/not-payable only.
   - Seat-limit oversell guard blocks active ticket creation when the offer is sold out.
 - Client:
   - Party Waiting Room checks paid-ticket access before routing to Party Room.
-  - Party Room has intended ticket re-check logic. v44 proof found a direct deep-link bypass for an unpaid sold-out user before the gate visibly blocks; the repo-side fix gates local camera/mic permission startup behind confirmed room entry and is pending Play/internal proof.
+  - Party Room blocks unpaid paid-room direct links before camera/mic permission startup after v45 proof.
   - Host can create a sandbox $0.99 room-ticket offer from Party Waiting Room after a Party Room code exists.
   - Fan CTA is `Buy Room Ticket`.
   - Money Center Offers and Transactions read Paid Watch-Party rows separately from Tips and Paid Videos.
@@ -157,13 +157,28 @@ Money Center readback:
 - Creator RPC `list_my_paid_watch_party_offers` returned the offer as `sold_out`, `seatLimit=1`, `seatsSold=1`.
 - Visual Money Center transaction screenshot remains pending.
 
-Current blocker / fix status:
+v45 direct-link fix and purchase proof:
 
-- Direct Party Room deep-link denial did not pass on v44. A second authenticated unpaid tester with no ticket could open `chillywoodmobile://watch-party/ZT5MWV?roomCode=ZT5MWV` and reach the Party Room permission path. DB proof still showed zero tickets and resolver denial for that user.
-- Repo-side fix implemented after v44 proof: camera/mic permission startup now waits for confirmed room entry, so the paid-ticket gate should render before permissions for users without an active ticket, including sold-out rooms.
-- Proof required next: build this fix into a new Play/internal runtime and re-run unpaid direct Party Room deep link, paid fan entry, and normal second-unpaid denial.
+- Commit: `541dafd`
+- EAS build: `8f923a8f-4efd-4412-bac8-f4eb3c1b900d`
+- VersionCode: `45`
+- Artifact type: AAB
+- Artifact URL: `https://expo.dev/artifacts/eas/Jtf8Ehq4E39-MYPem8hdr2D434LSSxeVAG7f303Vxik.aab`
+- Play internal submission: `50f966fb-1c05-49f7-8ebe-32d1f0c1d6c2`
+- Device install: `R5CR120QCBF`, package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `45`
+- Fresh fixture: room `WNFUUF`, offer `ba02fbe7-97a7-4871-86f3-9ca62a141d76`, product `cw_watch_party_live_ticket_sandbox_099`, product key `watch_party_live_ticket_sandbox_099`, seat limit `1`
+- Unpaid direct-link proof: tester `c2afa6cc-52f2-4714-b972-89863582d05a` had resolver `allowed=false`, `reason=ticket_required`; direct link rendered `Buy Room Ticket` and no-Premium/no-other-access copy before camera permission, membership, presence, or room controls.
+- Google Play Billing sheet opened for `Watch-Party ticket sandbox`, `$0.99`, test card.
+- Provider event `f768e840-3208-4251-ac84-95358987eb8b` created transaction `912a9d0a-3621-4070-826d-be2035856e47` as `paid`, `payout_status=not_payable`, provider `revenuecat_google_play`.
+- Active ticket `8c2906da-8d02-43b2-afb9-9a7ba514fba2` was created with provider transaction `9CDB9B27-362C-478B-BCA3-8241C876D10D`.
+- Offer moved to `sold_out`, `seats_sold=1`, `seat_limit=1`; no oversell occurred.
+- Paid fan entered Party Room for `WNFUUF` as viewer with active membership; route did not go to Live Stage.
+- No Tips rows and no Paid Video content grants were created in the v45 proof window.
+- Creator Money Center RPC readback returned transaction `912a9d0a-3621-4070-826d-be2035856e47` as `paid`, `environment=sandbox`, `payoutStatus=not_payable`, provider `revenuecat_google_play`, product `cw_watch_party_live_ticket_sandbox_099`, and metadata `tipsPath=false`, `premiumUnlock=false`, `paidVideoUnlock=false`, `liveStageAccess=false`.
+- Proof files: `/tmp/chillywood-watch-party-ticket-proof-v45/`
 
 Deferred proof:
 
 - Provider refund/revoke remains deferred because safe RevenueCat / Google Play refund tooling and a safe order id are not available here. Do not fake refund by manual DB mutation.
+- Visual Money Center Transactions screenshot remains deferred; RPC readback for the exact transaction passed.
 - BrowserStack remains deferred until final regression after all monetization flows are implemented and locally/manual proved.
