@@ -19,6 +19,7 @@ import {
     type ImageSourcePropType,
     KeyboardAvoidingView,
     Platform,
+    Pressable,
     ScrollView,
     Share,
     StyleSheet,
@@ -1600,29 +1601,27 @@ export default function WatchPartyIndexScreen() {
                   {getWaitingRoomPreviewTitle(preview)}
                 </Text>
                 <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
-                <View style={styles.previewActions}>
-                  <TouchableOpacity
-                    style={styles.joinNowBtn}
+                <View style={styles.previewActions} pointerEvents="box-none">
+                  <Pressable
+                    style={({ pressed }) => [styles.joinNowBtn, pressed && styles.previewActionPressed]}
                     onPress={onConfirmJoin}
-                    activeOpacity={0.88}
                     accessibilityRole="button"
                     accessibilityLabel="Join Now"
                     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     testID="watch-party-preview-join"
                   >
                     <Text style={styles.joinNowBtnText}>Join Now →</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.cancelBtn}
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.cancelBtn, pressed && styles.previewActionPressed]}
                     onPress={onClearPreview}
-                    activeOpacity={0.75}
                     accessibilityRole="button"
                     accessibilityLabel="Cancel room preview"
                     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     testID="watch-party-preview-cancel"
                   >
                     <Text style={styles.cancelBtnText}>Cancel</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
                 {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
               </View>
@@ -2000,7 +1999,8 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 4,
     position: "relative",
-    zIndex: 3,
+    zIndex: 20,
+    elevation: 20,
   },
   joinNowBtn: {
     flex: 1,
@@ -2010,7 +2010,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
-    elevation: 4,
+    position: "relative",
+    zIndex: 21,
+    elevation: 21,
   },
   joinNowBtnText: { color: "#fff", fontSize: 14, fontWeight: "900" },
   cancelBtn: {
@@ -2022,8 +2024,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
-    elevation: 4,
+    position: "relative",
+    zIndex: 21,
+    elevation: 21,
   },
+  previewActionPressed: { opacity: 0.72 },
   cancelBtnText: { color: "#888", fontSize: 14, fontWeight: "700" },
 
   liveContextCard: {
