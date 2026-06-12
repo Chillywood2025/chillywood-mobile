@@ -358,7 +358,7 @@ begin
       'paid_watch_party_ticket_unlock', false,
       'vip_unlock', false,
       'subscription_unlock', false,
-      'grants_livekit_publish', false,
+      'room_media_controls', false,
       'grants_host_authority', false,
       'live_money_enabled_at_save', coalesce((select "state" = 'on' from public."platform_money_kill_switches" where "key" = 'live_money_enabled'), false)
     )
@@ -556,7 +556,7 @@ begin
       'paid_watch_party_ticket_unlock', false,
       'vip_unlock', false,
       'subscription_unlock', false,
-      'grants_livekit_publish', false,
+      'room_media_controls', false,
       'grants_host_authority', false
     )
   );
@@ -715,7 +715,7 @@ begin
       'paid_watch_party_ticket_unlock', false,
       'vip_unlock', false,
       'subscription_unlock', false,
-      'grants_livekit_publish', false,
+      'room_media_controls', false,
       'grants_host_authority', false
     )
   )
@@ -798,7 +798,7 @@ begin
       jsonb_build_object(
         'sandbox_only', new."environment" = 'sandbox',
         'viewer_access_only', true,
-        'grants_livekit_publish', false,
+        'room_media_controls', false,
         'grants_host_authority', false
       )
     )

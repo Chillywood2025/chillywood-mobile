@@ -4,7 +4,7 @@ Last updated: June 12, 2026
 
 ## Status
 
-Paid Events V1 is repo-side implemented and remote-applied to Supabase project `bmkkhihfbmsnnmcqkoly`, but it is not sandbox-proven end to end yet.
+Paid Events V1 is sandbox-proven end to end on a Play/internal runtime.
 
 The flow is sandbox-only. Live money remains disabled.
 
@@ -67,9 +67,13 @@ Paid Events V1 does not route Watch-Party rooms, does not route to Live Stage, a
 
 ## Remote Apply Status
 
-Applied remotely:
+Applied remotely and migration history repaired:
 
 - `20260612201011_paid_events_v1_sandbox.sql`
+- `20260612213500_paid_events_metadata_safe_keys.sql`
+- `20260612215000_paid_events_access_grant_trigger_schema_fix.sql`
+
+During proof, the first two RevenueCat provider events reached Supabase but stayed `received` because the deployed event-pass access-grant trigger still referenced an old `NEW.access_type` field. The fix replaced `sync_paid_creator_event_pass_from_access_grant()` so it uses the current `access_grants.grant_type/source_id` schema. A rolled-back test insert proved the corrected trigger no longer throws before the final successful purchase proof.
 
 Remote readback confirmed:
 
@@ -84,11 +88,7 @@ Remote readback confirmed:
 - `list_my_paid_creator_event_transactions`
 - `sync_paid_creator_event_pass_from_access_grant`
 
-## Proof Status
-
-Not run yet on a Play/internal build containing this code.
-
-## Play/Internal Build Attempt
+## Play/Internal Runtime
 
 June 12, 2026:
 
@@ -100,32 +100,36 @@ June 12, 2026:
 - Build profile: `production`
 - Distribution: `STORE`
 - Artifact type requested: AAB
-- Internal-track submission id scheduled: `3d4c4556-006f-4fb8-9dfc-c68d160dbf74`
-- Current status at last readback: `IN_PROGRESS`
-- Artifact URL: pending
+- Internal-track submission id: `3d4c4556-006f-4fb8-9dfc-c68d160dbf74`
+- Device: `R5CR120QCBF`
+- Package: `com.chillywood.mobile`
+- Installer: `com.android.vending`
 
-Proof has not started because the Play/internal runtime is not available yet. Do not claim Paid Events V1 sandbox proof until the build finishes, the AAB is accepted on the internal track, and the attached device installs it from Google Play with installer `com.android.vending`.
+## Sandbox Proof
 
-Required proof before calling Paid Events V1 sandbox-proven:
+Passed on June 12, 2026:
 
-1. Build and install a Play/internal runtime with installer `com.android.vending`.
-2. Creator creates or opens a real `creator_events` row.
-3. Creator taps `Set Paid Event` and saves a sandbox paid event offer.
-4. Money Center Offers shows the Paid Event.
-5. Unpaid fan opens `/event/[eventId]` and sees `Buy Event Pass`.
-6. Direct event link remains gated for unpaid/logged-out users.
-7. Fan completes Google Play / RevenueCat sandbox purchase.
-8. Verified webhook creates provider event, consumed purchase intent, active `event_pass` grant, `paid_creator_event_passes` row, and `creator_event_transactions` row.
-9. Paid fan can access the event page after refresh.
-10. Second unpaid fan remains blocked.
-11. Capacity limit proof passes or is honestly deferred with blocker.
-12. Money Center Transactions shows the Paid Event transaction as sandbox/not-payable.
+1. Creator setup passed using creator account `TIPS_FAN_TEST`.
+2. Event id: `a100f88d-6bf5-4272-838d-2d0d83f800eb`.
+3. Paid event offer id: `85b2a1ae-90cd-4b75-a91f-39c42c3dad43`.
+4. Product key/id: `event_pass_sandbox_099` / `cw_event_pass_sandbox_099`.
+5. Unpaid direct-link gate passed before purchase: `/event/[eventId]` showed `Event pass required` and `Buy Event Pass`.
+6. Google Play Billing launched and showed `Event pass sandbox`, `$0.99`, and test-card copy.
+7. RevenueCat/Supabase webhook processed provider event `95c22a83-85a1-4f5a-b6e4-e6f2cb72ad10` / provider transaction `6EC95995-6308-4A2F-9962-6A1CF9BBFDBA`.
+8. Purchase intent `d9076cf4-cd98-4480-af0a-690f5bcc06df` was consumed.
+9. Shared `event_pass` access grant `bce269bc-7469-484f-b82f-992437a7c7f6` was created with `environment=sandbox`, `status=sandbox_only`.
+10. Paid event pass `3a9b2d07-d04b-45ad-b7cd-9766566e9a04` was created as `active`.
+11. Creator event transaction `0dc99303-baeb-489c-b5a5-8e608b63f583` was created as `paid`, `payout_status=not_payable`, amount `$0.99`.
+12. Paid fan access passed: app showed `Passes: 1`, `Event pass confirmed`, and no Premium/VIP/Watch-Party/LiveKit authority copy.
+13. Second authenticated unpaid tester `PAID_EVENTS_UNPAID_GENERATED` was created for proof, confirmed in Supabase Auth, and direct-linked to the same event. It remained blocked with `Event pass required`, `Buy Event Pass`, and zero active passes.
+14. Money Center Transactions visual readback passed: creator saw `$0.99 event pass`, `Paid`, `Sandbox`, and `Payout status: not_payable`, separate from Tips.
+15. RLS safety passed: authenticated client writes to `paid_creator_event_passes`, `creator_event_transactions`, and `paid_creator_events.passes_sold` were denied with `42501`.
+
+Proof screenshots/logs are under `/tmp/chillywood-paid-events-v1-proof/`.
 
 ## Deferred
 
-- Play/internal runtime proof.
-- Successful sandbox purchase proof.
-- Money Center visual transaction screenshot.
+- Capacity proof is deferred because the current creator UI does not expose `capacity_limit`; the DB model and oversell guard exist, but no UI-safe fixture can set capacity yet.
 - Provider refund/revoke proof until RevenueCat / Google Play tooling and safe order identifiers are available.
 - BrowserStack final regression remains deferred until all creator monetization flows have local/manual proof.
 

@@ -68,10 +68,12 @@
 - Remaining proof gaps: capture visual Money Center readback and provider refund/revoke if safe tooling allows.
 
 ## Paid Events V1 Follow-Up
-- Paid Events V1 is implemented and Supabase-applied, but not Play/internal sandbox-proven yet.
+- Paid Events V1 is implemented, Supabase-applied, and Play/internal sandbox-proven end to end.
 - Provider path is RevenueCat / Google Play dynamic sandbox product `event_pass_sandbox_099` / `cw_event_pass_sandbox_099`; Stripe Tips is not used.
 - Existing `creator_events` remains the event source of truth. Platform Studio event cards can save a sandbox Paid Event offer, creator profile event cards open `/event/[eventId]`, and `/event/[eventId]` gates unpaid users with `Buy Event Pass`.
 - Money Center remains the consolidated readout: Paid Event offers appear in Offers and verified event-pass rows appear in Transactions.
 - Paid Event passes unlock only the linked creator event. They do not include Premium, Tips, Paid Videos, Paid Watch-Party rooms, VIP, subscriptions, payout access, LiveKit authority, or live money.
-- Remote migration `20260612201011_paid_events_v1_sandbox.sql` is applied and readback confirms the new tables/RPCs exist.
-- Required next proof: Play/internal runtime, creator setup, unpaid/direct-link gate, Google Play / RevenueCat sandbox purchase, provider-created pass/transaction, paid-fan access, second unpaid denial, capacity proof, Money Center visual readback, and refund/revoke only if safe provider tooling exists.
+- Remote migrations `20260612201011_paid_events_v1_sandbox.sql`, `20260612213500_paid_events_metadata_safe_keys.sql`, and `20260612215000_paid_events_access_grant_trigger_schema_fix.sql` are applied/recorded.
+- Play/internal v46 proof on `R5CR120QCBF` created event `a100f88d-6bf5-4272-838d-2d0d83f800eb` and offer `85b2a1ae-90cd-4b75-a91f-39c42c3dad43`; Google Play / RevenueCat sandbox purchase processed provider event `95c22a83-85a1-4f5a-b6e4-e6f2cb72ad10`, consumed purchase intent `d9076cf4-cd98-4480-af0a-690f5bcc06df`, created access grant `bce269bc-7469-484f-b82f-992437a7c7f6`, active pass `3a9b2d07-d04b-45ad-b7cd-9766566e9a04`, and paid/not-payable transaction `0dc99303-baeb-489c-b5a5-8e608b63f583`.
+- Unpaid/direct-link gate, paid-fan access, authenticated second-unpaid denial, Money Center visual readback, and direct client write denial passed.
+- Remaining proof gaps: capacity proof is deferred because creator UI does not expose `capacity_limit`; provider refund/revoke remains deferred until safe RevenueCat/Google Play tooling or order identifiers exist.
