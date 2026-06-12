@@ -68,6 +68,13 @@ import {
   type PaidWatchPartyTransaction,
 } from "../_lib/paidWatchPartyTickets";
 import {
+  listMyPaidCreatorEventOffers,
+  listMyPaidCreatorEventTransactions,
+  savePaidCreatorEventOffer,
+  type PaidCreatorEventOffer,
+  type PaidCreatorEventTransaction,
+} from "../_lib/paidCreatorEvents";
+import {
   listMyCreatorTipTransactions,
   readMyCreatorTipSettings,
   saveMyCreatorTipSettings,
@@ -1132,6 +1139,9 @@ export function ChannelStudioScreen() {
   const [creatorPaidVideoTransactions, setCreatorPaidVideoTransactions] = useState<CreatorPaidVideoTransaction[]>([]);
   const [creatorPaidWatchPartyOffers, setCreatorPaidWatchPartyOffers] = useState<PaidWatchPartyOffer[]>([]);
   const [creatorPaidWatchPartyTransactions, setCreatorPaidWatchPartyTransactions] = useState<PaidWatchPartyTransaction[]>([]);
+  const [creatorPaidEventOffers, setCreatorPaidEventOffers] = useState<PaidCreatorEventOffer[]>([]);
+  const [creatorPaidEventTransactions, setCreatorPaidEventTransactions] = useState<PaidCreatorEventTransaction[]>([]);
+  const [paidEventSavingId, setPaidEventSavingId] = useState<string | null>(null);
   const [tipSettingsBusy, setTipSettingsBusy] = useState(false);
   const [tipSettingsNotice, setTipSettingsNotice] = useState<string | null>(null);
   const [providerReadinessSummary, setProviderReadinessSummary] = useState<ProviderReadinessSummaryRow[]>(
@@ -1305,6 +1315,9 @@ export function ChannelStudioScreen() {
       setCreatorPaidVideoTransactions([]);
       setCreatorPaidWatchPartyOffers([]);
       setCreatorPaidWatchPartyTransactions([]);
+      setCreatorPaidEventOffers([]);
+      setCreatorPaidEventTransactions([]);
+      setPaidEventSavingId(null);
       setTipSettingsNotice(null);
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
       setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
@@ -1336,6 +1349,8 @@ export function ChannelStudioScreen() {
       listMyPaidVideoTransactions(50).catch(() => []),
       listMyPaidWatchPartyOffers().catch(() => []),
       listMyPaidWatchPartyTransactions(50).catch(() => []),
+      listMyPaidCreatorEventOffers().catch(() => []),
+      listMyPaidCreatorEventTransactions(50).catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
@@ -1358,6 +1373,8 @@ export function ChannelStudioScreen() {
         resolvedCreatorPaidVideoTransactions,
         resolvedCreatorPaidWatchPartyOffers,
         resolvedCreatorPaidWatchPartyTransactions,
+        resolvedCreatorPaidEventOffers,
+        resolvedCreatorPaidEventTransactions,
         resolvedProviderReadinessSummary,
         resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
@@ -1384,6 +1401,8 @@ export function ChannelStudioScreen() {
         setCreatorPaidVideoTransactions(resolvedCreatorPaidVideoTransactions);
         setCreatorPaidWatchPartyOffers(resolvedCreatorPaidWatchPartyOffers);
         setCreatorPaidWatchPartyTransactions(resolvedCreatorPaidWatchPartyTransactions);
+        setCreatorPaidEventOffers(resolvedCreatorPaidEventOffers);
+        setCreatorPaidEventTransactions(resolvedCreatorPaidEventTransactions);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
@@ -1411,6 +1430,9 @@ export function ChannelStudioScreen() {
         setCreatorPaidVideoTransactions([]);
         setCreatorPaidWatchPartyOffers([]);
         setCreatorPaidWatchPartyTransactions([]);
+        setCreatorPaidEventOffers([]);
+        setCreatorPaidEventTransactions([]);
+        setPaidEventSavingId(null);
         setTipSettingsNotice(null);
         setProviderReadinessSummary(getProviderReadinessFallbackSummary());
         setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
@@ -1466,6 +1488,21 @@ export function ChannelStudioScreen() {
     ]);
     setCreatorPaidVideoOffers(nextOffers);
     setCreatorPaidVideoTransactions(nextTransactions);
+  }, [user?.id]);
+
+  const refreshPaidEvents = useCallback(async () => {
+    if (!user?.id) {
+      setCreatorPaidEventOffers([]);
+      setCreatorPaidEventTransactions([]);
+      return;
+    }
+
+    const [nextOffers, nextTransactions] = await Promise.all([
+      listMyPaidCreatorEventOffers().catch(() => []),
+      listMyPaidCreatorEventTransactions(50).catch(() => []),
+    ]);
+    setCreatorPaidEventOffers(nextOffers);
+    setCreatorPaidEventTransactions(nextTransactions);
   }, [user?.id]);
 
   const handleSaveTipSettings = useCallback(async (tipsEnabled: boolean) => {
@@ -3059,6 +3096,35 @@ export function ChannelStudioScreen() {
     }
   };
 
+  const onSavePaidEventOffer = async (event: CreatorEventSummary) => {
+    if (paidEventSavingId) return;
+    setPaidEventSavingId(event.id);
+    setEventNotice(null);
+    try {
+      const saved = await savePaidCreatorEventOffer({
+        creatorEventId: event.id,
+        description: "Sandbox paid creator event pass.",
+        priceCents: 99,
+        capacityLimit: null,
+        status: "sandbox",
+      });
+      trackEvent("money_offer_created", {
+        creator_id: user?.id ?? null,
+        feature_key: "paid_events",
+        offer_type: "paid_event",
+        price_bucket: formatMonetizationCurrency(saved.priceCents, saved.currency),
+        route_name: "channel-studio",
+        source_surface: "live_events",
+      });
+      await refreshPaidEvents();
+      setEventNotice("Paid Event saved in sandbox mode. Fans can buy an Event Pass only through verified Google Play / RevenueCat checkout.");
+    } catch {
+      setEventNotice("Unable to save Paid Event settings right now.");
+    } finally {
+      setPaidEventSavingId(null);
+    }
+  };
+
   const onSave = async () => {
     if (!profile) return;
 
@@ -3613,6 +3679,13 @@ export function ChannelStudioScreen() {
     });
     return map;
   }, [creatorPaidVideoOffers]);
+  const paidEventOfferByCreatorEventId = useMemo(() => {
+    const map = new Map<string, PaidCreatorEventOffer>();
+    creatorPaidEventOffers.forEach((offer) => {
+      if (offer.creatorEventId) map.set(offer.creatorEventId, offer);
+    });
+    return map;
+  }, [creatorPaidEventOffers]);
   const filteredCreatorVideos = useMemo(() => {
     const query = contentSearchQuery.trim().toLowerCase();
     return creatorVideos
@@ -6187,6 +6260,8 @@ export function ChannelStudioScreen() {
     const paidVideoGrossCents = paidVideoPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const paidWatchPartyPaidTransactions = creatorPaidWatchPartyTransactions.filter((transaction) => transaction.status === "paid");
     const paidWatchPartyGrossCents = paidWatchPartyPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
+    const paidEventPaidTransactions = creatorPaidEventTransactions.filter((transaction) => transaction.status === "paid");
+    const paidEventGrossCents = paidEventPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const tipFeatureStatus: MonetizationFeatureStatus = (() => {
       if (tipsFlag.state === "locked") return "Blocked";
       if (!creatorTipSettings) return "Not set up";
@@ -6437,7 +6512,7 @@ export function ChannelStudioScreen() {
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : watchPartyTicketsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       channel_subscriptions: "Blocked",
       vip_passes: "Blocked",
-      paid_events: digitalSalesStatus === "Blocked" ? "Blocked" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
+      paid_events: digitalSalesStatus === "Blocked" ? "Blocked" : creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
     };
     const featureBlockedReasonByKey: Partial<Record<MonetizationFeatureKey, string>> = {
       tips: tipsFlag.state === "locked" ? tipsFlag.displaySummary : creatorTipSettings?.status === "setup_incomplete" ? "Connect payouts before fans can send tips." : undefined,
@@ -6501,7 +6576,7 @@ export function ChannelStudioScreen() {
       { label: "Paid Watch-Party tickets", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox ticket${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
       { label: "Channel subscriptions", value: "Blocked", body: "Offer type: channel_subscription. Separate from Chi'llywood Premium and not backed yet.", tone: "unavailable" },
       { label: "VIP passes", value: "Blocked", body: "Offer type: vip_pass. Disabled until VIP unlocks real access or perks.", tone: "unavailable" },
-      { label: "Paid event passes", value: digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: "Offer type: paid_event. Live Events route to Live Waiting Room; Watch-Party Events route to Party Waiting Room.", tone: "unavailable" },
+      { label: "Paid event passes", value: creatorPaidEventOffers.length ? `${creatorPaidEventOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: paidEventPaidTransactions.length ? `${paidEventPaidTransactions.length} verified sandbox event pass${paidEventPaidTransactions.length === 1 ? "" : "es"} totaling ${formatMonetizationCurrency(paidEventGrossCents, "usd")}. Event passes unlock only the linked creator event.` : "Offer type: paid_event. Event passes unlock only the linked creator event and stay separate from Premium, VIP, paid videos, and Watch-Party tickets.", tone: creatorPaidEventOffers.length ? "default" : "unavailable" },
       { label: "Physical merch", value: merchStatus, body: "Offer type: merch. Physical goods stay separate from Android digital access.", tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable" },
     ];
     const transactionFilters: readonly { id: MoneyTransactionFilter; label: string }[] = [
@@ -6535,6 +6610,9 @@ export function ChannelStudioScreen() {
       : [];
     const visiblePaidWatchPartyTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "rooms"
       ? creatorPaidWatchPartyTransactions
+      : [];
+    const visiblePaidEventTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "events"
+      ? creatorPaidEventTransactions
       : [];
     const renderTipTransactionRows = () => {
       if (!visibleTipTransactions.length) return null;
@@ -6600,6 +6678,29 @@ export function ChannelStudioScreen() {
               </Text>
               <Text style={styles.eventEmptyBody}>
                 Paid Watch-Party tickets unlock only this Party Waiting Room and Party Room. Premium, Tips, Paid Videos, VIP, subscriptions, events, and Live Stage stay separate. Payout status: {transaction.payoutStatus}.
+              </Text>
+            </View>
+          ))}
+        </View>
+      );
+    };
+    const renderPaidEventTransactionRows = () => {
+      if (!visiblePaidEventTransactions.length) return null;
+      return (
+        <View style={styles.eventList}>
+          {visiblePaidEventTransactions.map((transaction) => (
+            <View key={transaction.id} style={styles.eventEmptyCard}>
+              <View style={styles.eventCardHeader}>
+                <Text style={styles.eventEmptyTitle}>
+                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} event pass
+                </Text>
+                {renderStudioStatusPill(transaction.status === "paid" ? "Paid" : transaction.status, transaction.status === "paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "revoked" ? "warning" : "muted")}
+              </View>
+              <Text style={styles.eventEmptyBody}>
+                {transaction.eventTitle} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
+              </Text>
+              <Text style={styles.eventEmptyBody}>
+                Paid Events unlock only this creator event. Premium, Tips, Paid Videos, Watch-Party tickets, VIP, and subscriptions stay separate. Payout status: {transaction.payoutStatus}.
               </Text>
             </View>
           ))}
@@ -6845,6 +6946,34 @@ export function ChannelStudioScreen() {
                     ))}
                   </View>
                 ) : null}
+                {creatorPaidEventOffers.length ? (
+                  <View style={styles.eventList}>
+                    {creatorPaidEventOffers.map((offer) => (
+                      <View key={offer.id} style={styles.eventEmptyCard}>
+                        <View style={styles.eventCardHeader}>
+                          <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
+                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                        </View>
+                        <Text style={styles.eventEmptyBody}>
+                          paid_event · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.passesSold}{offer.capacityLimit ? ` / ${offer.capacityLimit}` : ""} passes sold · {formatEventTypeLabel(offer.eventType as CreatorEventType)}
+                        </Text>
+                        <Text style={styles.eventEmptyBody}>
+                          Event passes unlock only this creator event. Premium, VIP, Paid Videos, Watch-Party tickets, Tips, and subscriptions stay separate.
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.eventSecondaryButton}
+                          activeOpacity={0.86}
+                          onPress={() => {
+                            const event = creatorEvents.find((entry) => entry.id === offer.creatorEventId);
+                            if (event) onEditEvent(event);
+                          }}
+                        >
+                          <Text style={styles.eventSecondaryButtonText}>Manage</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
                 {renderCreatorMoneyEventRows(
                   [...digitalEvents, ...merchEvents],
                   "No offers yet",
@@ -6884,6 +7013,7 @@ export function ChannelStudioScreen() {
                 {renderTipTransactionRows()}
                 {renderPaidVideoTransactionRows()}
                 {renderPaidWatchPartyTransactionRows()}
+                {renderPaidEventTransactionRows()}
                 {renderCreatorMoneyEventRows(
                   filteredTransactionEvents,
                   "No transactions yet",
@@ -7111,6 +7241,8 @@ export function ChannelStudioScreen() {
 
   const renderCreatorEventCard = (event: CreatorEventSummary) => {
     const reminderSummary = creatorReminderSummaryByEventId.get(event.id);
+    const paidEventOffer = paidEventOfferByCreatorEventId.get(event.id);
+    const paidEventBusy = paidEventSavingId === event.id;
 
     return (
       <View key={event.id} style={styles.eventCard}>
@@ -7139,6 +7271,34 @@ export function ChannelStudioScreen() {
             : ""}
           {event.linkedTitleId ? `\nLinked title: ${event.linkedTitleId}` : ""}
         </Text>
+        <View style={styles.eventActionRow}>
+          <TouchableOpacity
+            style={styles.eventSecondaryButton}
+            activeOpacity={0.86}
+            onPress={() => router.push(`/event/${event.id}`)}
+          >
+            <Text style={styles.eventSecondaryButtonText}>Open Event</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.eventPrimaryButton, paidEventBusy && styles.eventPrimaryButtonDisabled]}
+            activeOpacity={0.86}
+            onPress={() => onSavePaidEventOffer(event)}
+            disabled={paidEventBusy}
+          >
+            {paidEventBusy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.eventPrimaryButtonText}>
+                {paidEventOffer ? "Manage Paid Event" : "Set Paid Event"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+        {paidEventOffer ? (
+          <Text style={styles.eventCardBody}>
+            Paid Event: {paidEventOffer.status === "sandbox" ? "Sandbox" : paidEventOffer.status} · {formatMonetizationCurrency(paidEventOffer.priceCents, paidEventOffer.currency)} · {paidEventOffer.passesSold}{paidEventOffer.capacityLimit ? ` / ${paidEventOffer.capacityLimit}` : ""} passes sold. Premium, Tips, Paid Videos, Watch-Party tickets, VIP, and subscriptions stay separate.
+          </Text>
+        ) : null}
       </View>
     );
   };

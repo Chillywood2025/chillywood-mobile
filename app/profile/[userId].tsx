@@ -4379,8 +4379,16 @@ export default function ProfileScreen() {
                         {event.linkedTitleId ? `\nWatch title: ${event.linkedTitleId}` : ""}
                       </Text>
                       <Text style={styles.actionFootnote}>{getEventReminderEnrollmentBody(enrollment)}</Text>
-                      {event.reminder.canSetReminder ? (
-                        <View style={styles.secondaryActionRow}>
+                      <View style={styles.secondaryActionRow}>
+                        <TouchableOpacity
+                          style={[styles.actionChip, styles.actionChipConnected]}
+                          onPress={() => router.push(`/event/${event.id}`)}
+                          activeOpacity={0.86}
+                        >
+                          <Text style={[styles.actionChipText, styles.actionChipTextConnected]}>Open Event</Text>
+                        </TouchableOpacity>
+                        {event.reminder.canSetReminder ? (
+                          <>
                           {currentUserId ? (
                             <TouchableOpacity
                               style={[
@@ -4407,8 +4415,9 @@ export default function ProfileScreen() {
                               </Text>
                             </TouchableOpacity>
                           ) : null}
-                        </View>
-                      ) : null}
+                          </>
+                        ) : null}
+                      </View>
                     </View>
                   );
                 })

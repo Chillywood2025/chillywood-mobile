@@ -66,3 +66,12 @@
 - v45 Play/internal proof passed the direct-link fix and a fresh sandbox purchase on room `WNFUUF` / offer `ba02fbe7-97a7-4871-86f3-9ca62a141d76`: transaction `912a9d0a-3621-4070-826d-be2035856e47`, active ticket `8c2906da-8d02-43b2-afb9-9a7ba514fba2`, provider event `f768e840-3208-4251-ac84-95358987eb8b`, seat limit `1`, seats sold `1`, unpaid direct-link gate before permissions, and paid fan Party Room entry.
 - Money Center RPC readback passed for the paid room-ticket transaction as sandbox/not-payable and separate from Tips/Paid Videos/Premium; visual Money Center screenshot remains pending.
 - Remaining proof gaps: capture visual Money Center readback and provider refund/revoke if safe tooling allows.
+
+## Paid Events V1 Follow-Up
+- Paid Events V1 is implemented and Supabase-applied, but not Play/internal sandbox-proven yet.
+- Provider path is RevenueCat / Google Play dynamic sandbox product `event_pass_sandbox_099` / `cw_event_pass_sandbox_099`; Stripe Tips is not used.
+- Existing `creator_events` remains the event source of truth. Platform Studio event cards can save a sandbox Paid Event offer, creator profile event cards open `/event/[eventId]`, and `/event/[eventId]` gates unpaid users with `Buy Event Pass`.
+- Money Center remains the consolidated readout: Paid Event offers appear in Offers and verified event-pass rows appear in Transactions.
+- Paid Event passes unlock only the linked creator event. They do not include Premium, Tips, Paid Videos, Paid Watch-Party rooms, VIP, subscriptions, payout access, LiveKit authority, or live money.
+- Remote migration `20260612201011_paid_events_v1_sandbox.sql` is applied and readback confirms the new tables/RPCs exist.
+- Required next proof: Play/internal runtime, creator setup, unpaid/direct-link gate, Google Play / RevenueCat sandbox purchase, provider-created pass/transaction, paid-fan access, second unpaid denial, capacity proof, Money Center visual readback, and refund/revoke only if safe provider tooling exists.

@@ -1,5 +1,41 @@
 # NEXT TASK
 
+## Paid Events V1 Play/Internal Sandbox Proof
+
+Paid Events V1 is implemented and remote-applied, but it is not Play/internal sandbox-proven yet.
+
+Current truth:
+
+- Remote migration applied: `20260612201011_paid_events_v1_sandbox.sql`.
+- New remote tables: `paid_creator_events`, `paid_creator_event_passes`, `creator_event_transactions`, `paid_event_events`.
+- New remote RPCs: `set_paid_creator_event_offer`, `resolve_paid_creator_event_pass_access`, `create_paid_creator_event_pass_purchase_intent`, `list_my_paid_creator_event_offers`, and `list_my_paid_creator_event_transactions`.
+- Provider path is RevenueCat / Google Play dynamic sandbox product `event_pass_sandbox_099` / `cw_event_pass_sandbox_099`.
+- Existing `creator_events` remains the event schedule/source of truth.
+- Platform Studio event cards can save a sandbox Paid Event offer.
+- Creator profile event cards open `/event/[eventId]`.
+- `/event/[eventId]` is now the paid-event gate with `Buy Event Pass`.
+- Money Center reads Paid Event offers and transactions separately from Tips, Paid Videos, Paid Watch-Party tickets, and Premium.
+- Live money remains off, rows are sandbox/not-payable, and event passes do not grant Premium, Tips, Paid Videos, Paid Watch-Party rooms, VIP, subscriptions, LiveKit authority, host authority, payouts, cash-out, withdrawal, or transfer.
+- No Tips, Paid Videos, Paid Watch-Party Seats, Channel Subscriptions, VIP, LiveKit token logic, Watch-Party routing, Party Room routing, Live Stage routing, or Premium gates changed.
+
+Next proof:
+
+- Build and submit a Play/internal AAB containing Paid Events V1.
+- Install/update from Google Play and confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
+- Creator creates or opens a real `creator_events` row and taps `Set Paid Event`.
+- Confirm Money Center Offers shows the Paid Event as sandbox/test/not payable.
+- Unpaid fan opens the creator event and sees `Buy Event Pass`.
+- Direct event deep link remains gated for unpaid/logged-out users.
+- Fan completes RevenueCat / Google Play sandbox purchase.
+- Confirm verified webhook creates provider event, consumed purchase intent, active `event_pass` grant, active `paid_creator_event_passes` row, and `creator_event_transactions` row.
+- Confirm paid fan can access the event after refresh.
+- Confirm second unpaid fan remains blocked.
+- Capacity limit proof passes or is honestly deferred with blocker.
+- Money Center Transactions visually shows the Paid Event transaction as sandbox/not_payable and separate from Tips/Paid Videos/Paid Watch-Party/Premium.
+- Refund/revoke proof is attempted only if RevenueCat / Google Play tooling gives a safe order id/path; otherwise document the exact blocker.
+
+Reference doc: `docs/PAID_EVENTS_V1_END_TO_END_PROOF.md`.
+
 ## Paid Watch-Party Seats V1 Sandbox Proof
 
 Paid Watch-Party Seats / Room Tickets V1 is implemented, remote-applied, and Play/internal sandbox-proven for purchase, active ticket creation, paid fan entry, unpaid direct-link gate, normal sold-out denial, seat-limit, and Money Center RPC readback. Visual Money Center screenshot and provider refund/revoke proof remain deferred.
