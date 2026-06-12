@@ -58,4 +58,7 @@
 - Party Room re-checks paid-ticket access before membership/session/presence setup so direct deep links cannot bypass the ticket gate.
 - Paid Watch-Party tickets unlock only the linked Party Waiting Room and Party Room. They do not include Premium, Tips, Paid Videos, VIP, subscriptions, events, Live Stage, payout access, or LiveKit authority.
 - Remote proof so far is schema/RPC/readback only: ticket switches are sandbox-only, live money is off, oversell guard exists, and direct authenticated offer writes are closed.
-- Remaining proof gaps: Play/internal build install, creator offer setup, unpaid gate, real RevenueCat/Google Play sandbox ticket purchase, provider-created transaction/ticket, paid fan entry, second unpaid denial, Money Center visual readback, seat-limit proof, and provider refund/revoke if tooling allows.
+- Play/internal v38 installed from Google Play internal testing on `R5CR120QCBF`, and creator offer setup now passes after remote backend fixes.
+- Current fixture state: room code `XWAKVC`, paid offer `eab7c92b-ee11-4d27-b222-fbcc8d74df71`, status `sandbox`, seat limit `1`, product key `watch_party_live_ticket_sandbox_099`, provider product id `cw_watch_party_live_ticket_sandbox_099`.
+- v38 fan proof is blocked because `Join Now` did not fire on device. Commit `2ffbbce` fixes the button hitbox/layering; v40 Play/internal install is required before retrying the fan gate and purchase proof.
+- Remaining proof gaps: v40 Play/internal install, unpaid gate, real RevenueCat/Google Play sandbox ticket purchase, provider-created transaction/ticket, paid fan entry, second unpaid denial, Money Center visual readback, seat-limit proof, and provider refund/revoke if tooling allows.

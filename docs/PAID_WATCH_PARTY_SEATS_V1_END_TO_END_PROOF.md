@@ -6,6 +6,14 @@ Last updated: June 11, 2026
 
 Paid Watch-Party Seats / Room Tickets V1 is implemented repo-side and remote-applied to Supabase project `bmkkhihfbmsnnmcqkoly`, but it is not sandbox-proven through a Play/internal build yet.
 
+Play/internal versionCode `38` was installed from Google Play internal testing on device `R5CR120QCBF` with installer `com.android.vending`. That proof run found and fixed two backend setup blockers plus one device UI blocker:
+
+- `set_paid_watch_party_offer` initially failed on uuid/text host comparison.
+- The ticket metadata safety constraint rejected false-valued LiveKit safety keys.
+- The Watch-Party preview `Join Now` action did not fire on the Play-installed device, blocking the fan ticket gate and purchase proof.
+
+The backend blockers were fixed by remote-applied migrations, and the `Join Now` button hitbox/layering fix is committed in `2ffbbce`. A Play/internal versionCode `40` build containing that fix is pending before ticket purchase proof can continue.
+
 Live money remains disabled. Room tickets are sandbox/not-payable only.
 
 ## Provider Path
@@ -66,6 +74,8 @@ Applied remotely:
 - `20260611231512_paid_watch_party_seats_v1_sandbox.sql`
 - `20260611232455_paid_watch_party_seat_limit_verification_guard.sql`
 - `20260611232545_paid_watch_party_offer_direct_write_tightening.sql`
+- `20260612001337_fix_paid_watch_party_host_uuid_comparisons.sql`
+- `20260612001448_fix_paid_watch_party_metadata_safe_flags.sql`
 
 Remote readback confirmed:
 
@@ -78,20 +88,27 @@ Remote readback confirmed:
 - Oversell trigger exists.
 - Authenticated direct grants on `paid_watch_party_offers` are `SELECT` only.
 
+## Play/Internal Build Status
+
+- v38 build `710b9c52-5158-4e56-8ccf-fbc41576aa50`, submission `11c21df8-6e12-4bb5-a3db-e1d60c5fc7ee`, installed from Google Play internal testing on `R5CR120QCBF` with versionCode `38` and installer `com.android.vending`.
+- v39 build `115a42f1-107a-4eab-a4cb-7f7131a8fce4` was canceled because it did not produce a useful new artifact.
+- v40 build `c2021b08-cacd-4a37-87f6-99c260d426c8` targets commit `2ffbbce` and versionCode `40`; it was still in progress with no artifact at last readback.
+
 ## Proof Status
 
-Not yet run on Play/internal runtime with this code.
+Partial proof has run on Play/internal v38, but sandbox purchase proof is still blocked until v40 is available and installed from Google Play.
 
-Pending proof:
+Passed so far:
 
-- Creator creates a paid Watch-Party ticket offer.
-- Unpaid fan is blocked before Party Waiting Room / Party Room.
-- Fan completes RevenueCat / Google Play sandbox ticket purchase.
-- Signed provider event creates a transaction and active room ticket.
-- Paid fan enters Party Waiting Room and Party Room.
-- Second unpaid fan remains blocked by normal route and direct link.
-- Money Center visually shows Paid Watch-Party transaction.
-- Seat limit proof.
-- Provider refund/revoke proof, if tooling allows.
+- Creator fixture created Party Room code `XWAKVC`.
+- Creator offer setup passed after the backend fixes.
+- Paid Watch-Party offer `eab7c92b-ee11-4d27-b222-fbcc8d74df71` exists for party `XWAKVC`, product `cw_watch_party_live_ticket_sandbox_099`, product key `watch_party_live_ticket_sandbox_099`, status `sandbox`, and seat limit `1`.
+- Resolver readback for the host returned `allowed=true`, `reason=host_or_admin`.
+- Resolver readback for the paid-fan fixture returned `allowed=false`, `reason=ticket_required`, with the correct offer/product.
+
+Blocked/pending proof:
+
+- v38 `Join Now` did not fire on device, so unpaid fan gate, purchase checkout, ticket creation, paid fan entry, second unpaid denial, seat-limit device proof, Money Center transaction readback, and refund/revoke proof remain pending.
+- v40 must be installed from Google Play internal testing before retrying the fan ticket gate and purchase proof.
 
 BrowserStack remains deferred until final regression after all monetization flows are implemented and locally/manual proved.

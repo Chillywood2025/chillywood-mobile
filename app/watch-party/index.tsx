@@ -1645,15 +1645,20 @@ export default function WatchPartyIndexScreen() {
 
                 {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
 
-                <TouchableOpacity
-                  style={[styles.primaryButton, (joinLookupBusy || !joinCode.trim()) && styles.primaryButtonDisabled]}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    styles.joinLookupButton,
+                    (joinLookupBusy || !joinCode.trim()) && styles.primaryButtonDisabled,
+                    pressed && styles.previewActionPressed,
+                  ]}
                   onPress={onLookup}
-                  activeOpacity={0.85}
                   disabled={joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled}
                   accessibilityRole="button"
                   accessibilityLabel={joinLookupBusy ? "Looking up room" : "Find Room"}
                   accessibilityState={{ disabled: joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled, busy: joinLookupBusy }}
                   hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+                  testID="watch-party-find-room-button"
                 >
                   {joinLookupBusy ? (
                     <View style={styles.lookingRow}>
@@ -1663,7 +1668,7 @@ export default function WatchPartyIndexScreen() {
                   ) : (
                     <Text style={styles.primaryButtonText}>Find Room</Text>
                   )}
-                </TouchableOpacity>
+                </Pressable>
               </>
             )}
           </View>
@@ -1972,6 +1977,11 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
+  },
+  joinLookupButton: {
+    position: "relative",
+    zIndex: 20,
+    elevation: 20,
   },
   primaryButtonDisabled: { opacity: 0.45 },
   primaryButtonText: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },

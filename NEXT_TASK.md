@@ -6,17 +6,23 @@ Paid Watch-Party Seats / Room Tickets V1 is implemented and remote-applied, but 
 
 Current truth:
 
-- Remote migrations applied: `20260611231512_paid_watch_party_seats_v1_sandbox.sql`, `20260611232455_paid_watch_party_seat_limit_verification_guard.sql`, and `20260611232545_paid_watch_party_offer_direct_write_tightening.sql`.
+- Remote migrations applied: `20260611231512_paid_watch_party_seats_v1_sandbox.sql`, `20260611232455_paid_watch_party_seat_limit_verification_guard.sql`, `20260611232545_paid_watch_party_offer_direct_write_tightening.sql`, `20260612001337_fix_paid_watch_party_host_uuid_comparisons.sql`, and `20260612001448_fix_paid_watch_party_metadata_safe_flags.sql`.
 - Provider path is RevenueCat / Google Play dynamic sandbox product `watch_party_live_ticket_sandbox_099` / `cw_watch_party_live_ticket_sandbox_099`.
 - Party Waiting Room checks ticket access before routing to Party Room.
 - Party Room re-checks ticket access before membership/session/presence setup.
 - Money Center reads Paid Watch-Party offers and transactions separately from Tips and Paid Videos.
 - Direct offer table writes are closed to authenticated clients; offer management is RPC-only.
 - Live money remains off, rows are sandbox/not-payable, and tickets do not grant Premium, Tips, Paid Videos, VIP, subscriptions, events, Live Stage, LiveKit authority, payouts, cash-out, withdrawal, or transfer.
+- Play/internal v38 installed from Google Play on device `R5CR120QCBF` with installer `com.android.vending`.
+- v38 proof created Party Room code `XWAKVC`; after backend fixes, offer `eab7c92b-ee11-4d27-b222-fbcc8d74df71` exists with seat limit `1`, status `sandbox`, product key `watch_party_live_ticket_sandbox_099`, and provider product id `cw_watch_party_live_ticket_sandbox_099`.
+- v38 resolver proof passed for host (`host_or_admin`) and unpaid fan (`ticket_required`), but `Join Now` did not fire on device, blocking the fan gate and purchase proof.
+- Commit `2ffbbce` fixes the `Join Now` hitbox/layering and the two backend setup blockers; v40 build `c2021b08-cacd-4a37-87f6-99c260d426c8` is pending.
 
 Next proof:
 
-- Build/install a Play/internal runtime containing this code.
+- Wait for v40 to finish, submit it to Play internal testing, and install/update from Google Play.
+- Confirm package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `40` or newer.
+- Retry `Join Now` on room code `XWAKVC`; if it still does not fire manually, add only sanitized UI logging around that handler and stop before purchase changes.
 - Creator creates a sandbox paid Watch-Party ticket offer from Party Waiting Room after a Party Room code exists.
 - Unpaid fan is blocked before Party Room and direct link stays blocked.
 - Fan completes RevenueCat / Google Play sandbox ticket purchase.
