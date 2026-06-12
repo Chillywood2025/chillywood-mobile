@@ -15,14 +15,18 @@ Current truth:
 - Live money remains off, rows are sandbox/not-payable, and tickets do not grant Premium, Tips, Paid Videos, VIP, subscriptions, events, Live Stage, LiveKit authority, payouts, cash-out, withdrawal, or transfer.
 - Play/internal v38 installed from Google Play on device `R5CR120QCBF` with installer `com.android.vending`.
 - v38 proof created Party Room code `XWAKVC`; after backend fixes, offer `eab7c92b-ee11-4d27-b222-fbcc8d74df71` exists with seat limit `1`, status `sandbox`, product key `watch_party_live_ticket_sandbox_099`, and provider product id `cw_watch_party_live_ticket_sandbox_099`.
-- v38 resolver proof passed for host (`host_or_admin`) and unpaid fan (`ticket_required`), but `Join Now` did not fire on device, blocking the fan gate and purchase proof.
-- Commit `2ffbbce` fixes the `Join Now` hitbox/layering and the two backend setup blockers; v40 build `c2021b08-cacd-4a37-87f6-99c260d426c8` is pending.
+- v38 resolver proof passed for host (`host_or_admin`) and unpaid fan (`ticket_required`).
+- Commit `2ffbbce` fixed the preview `Join Now` hitbox/layering and the two backend setup blockers. Play/internal v40 installed successfully from Google Play.
+- The original `XWAKVC` room expired under the 15-minute active-room window. Fresh room `X75JHC` and offer `ca9b34b8-8815-4d9e-8a2e-34643769a29c` were created through creator-authenticated room insert plus guarded offer RPC.
+- v40 `Find Room` on `X75JHC` rendered the preview, but `Join Now` appeared unchanged because the ticket-gate CTA rendered lower in the setup shell instead of inside the preview card.
+- v41 build `9fe1e661-a56e-45ed-9a32-64627062f610` was canceled before install because it did not include the inline ticket-gate patch.
 
 Next proof:
 
-- Wait for v40 to finish, submit it to Play internal testing, and install/update from Google Play.
-- Confirm package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `40` or newer.
-- Retry `Join Now` on room code `XWAKVC`; if it still does not fire manually, add only sanitized UI logging around that handler and stop before purchase changes.
+- Build and install the next Play/internal runtime containing the inline preview ticket-gate patch.
+- Confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
+- Use fresh active room code `X75JHC`, or create a new room/offer if `X75JHC` expires before proof continues.
+- Retry `Find Room`, confirm the preview appears, tap `Join Now`, and confirm `Room ticket required` plus `Buy Room Ticket` appears inside the preview card.
 - Creator creates a sandbox paid Watch-Party ticket offer from Party Waiting Room after a Party Room code exists.
 - Unpaid fan is blocked before Party Room and direct link stays blocked.
 - Fan completes RevenueCat / Google Play sandbox ticket purchase.

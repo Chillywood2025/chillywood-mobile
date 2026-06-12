@@ -524,6 +524,11 @@ export default function WatchPartyIndexScreen() {
   }, [canUseBetaRooms, configReady, createPreparedWaitingRoom, features.watchPartyEnabled, isLiveEntryMode, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId]);
 
   const onLookup = async () => {
+    console.log("[watch-party-proof] find room pressed", {
+      hasJoinCode: Boolean(joinCode.trim()),
+      watchPartyEnabled: features.watchPartyEnabled,
+      joinLookupBusy,
+    });
     if (!features.watchPartyEnabled) {
       setJoinError("Watch Party is disabled in the current app configuration.");
       return;
@@ -567,7 +572,13 @@ export default function WatchPartyIndexScreen() {
         return;
       }
 
-      setPreview(await buildRoomPreview(room));
+      const nextPreview = await buildRoomPreview(room);
+      console.log("[watch-party-proof] room lookup preview ready", {
+        partyId: nextPreview.room.partyId,
+        roomType: nextPreview.room.roomType,
+        hasTitle: Boolean(nextPreview.titleName),
+      });
+      setPreview(nextPreview);
     } catch (error) {
       reportRuntimeError("watch-party-lookup", error, {
         roomCode: code,
@@ -663,6 +674,10 @@ export default function WatchPartyIndexScreen() {
   const attemptJoinRoom = useCallback(async (nextPreview: RoomPreview) => {
     setJoinError(null);
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
+    console.log("[watch-party-proof] join attempt started", {
+      partyId: nextPartyId,
+      roomType: nextPreview.room.roomType,
+    });
     if (!nextPartyId) {
       setJoinError("Room is missing an id. Try another code.");
       return;
@@ -672,16 +687,28 @@ export default function WatchPartyIndexScreen() {
       nextPreview.room.roomType,
       nextPreview.room.sourceId ?? nextPreview.room.titleId ?? nextPartyId,
     ))) {
+      console.log("[watch-party-proof] join blocked before ticket check", {
+        partyId: nextPartyId,
+        reason: "premium_or_runtime_gate",
+      });
       return;
     }
 
     if (nextPreview.room.roomType !== "live") {
       const ticketAccess = await resolvePaidWatchPartyTicketAccess(nextPartyId).catch(() => null);
       if (!ticketAccess) {
+        console.log("[watch-party-proof] ticket access unavailable", {
+          partyId: nextPartyId,
+        });
         setJoinError("Unable to confirm room ticket access right now.");
         return;
       }
       if (!ticketAccess.allowed) {
+        console.log("[watch-party-proof] ticket gate shown", {
+          partyId: nextPartyId,
+          reason: ticketAccess.reason,
+          requiresPurchase: ticketAccess.requiresPurchase,
+        });
         setPaidTicketGate(ticketAccess);
         setPaidTicketNotice(
           ticketAccess.requiresPurchase
@@ -711,6 +738,9 @@ export default function WatchPartyIndexScreen() {
     }
 
     if (access.isAllowed) {
+      console.log("[watch-party-proof] join access allowed", {
+        partyId: nextPartyId,
+      });
       trackEvent("room_join_success", {
         surface: "watch-party-lobby",
         roomId: nextPartyId,
@@ -736,6 +766,10 @@ export default function WatchPartyIndexScreen() {
   }, [navigateToPreviewRoom, requirePremiumRoomEntry]);
 
   const onConfirmJoin = async () => {
+    console.log("[watch-party-proof] join now pressed", {
+      hasPreview: Boolean(preview),
+      partyId: preview?.room.partyId ?? null,
+    });
     if (!preview) return;
     await attemptJoinRoom(preview);
   };
@@ -1601,7 +1635,7 @@ export default function WatchPartyIndexScreen() {
                   {getWaitingRoomPreviewTitle(preview)}
                 </Text>
                 <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
-                <View style={styles.previewActions} pointerEvents="box-none">
+                <View style={styles.previewActions}>
                   <Pressable
                     style={({ pressed }) => [styles.joinNowBtn, pressed && styles.previewActionPressed]}
                     onPress={onConfirmJoin}
@@ -1624,6 +1658,33 @@ export default function WatchPartyIndexScreen() {
                   </Pressable>
                 </View>
                 {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+                {paidTicketGate?.requiresPurchase ? (
+                  <View style={styles.inlineTicketGate}>
+                    <Text style={styles.inlineTicketGateTitle}>Room ticket required</Text>
+                    <Text style={styles.inlineTicketGateBody}>
+                      This ticket unlocks access to this Watch-Party room only. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.
+                    </Text>
+                    {paidTicketNotice ? <Text style={styles.errorText}>{paidTicketNotice}</Text> : null}
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.joinNowBtn,
+                        paidTicketBusy && styles.primaryButtonDisabled,
+                        pressed && styles.previewActionPressed,
+                      ]}
+                      onPress={onBuyPaidTicketAndJoin}
+                      disabled={paidTicketBusy}
+                      accessibilityRole="button"
+                      accessibilityLabel="Buy Room Ticket"
+                      accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
+                      hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+                      testID="buy-room-ticket-preview-button"
+                    >
+                      <Text style={styles.joinNowBtnText}>
+                        {paidTicketBusy ? "Opening Checkout" : `Buy Room Ticket ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             ) : (
               <>
@@ -2040,6 +2101,17 @@ const styles = StyleSheet.create({
   },
   previewActionPressed: { opacity: 0.72 },
   cancelBtnText: { color: "#888", fontSize: 14, fontWeight: "700" },
+  inlineTicketGate: {
+    marginTop: 8,
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.28)",
+    backgroundColor: "rgba(220,20,60,0.09)",
+    padding: 12,
+  },
+  inlineTicketGateTitle: { color: "#FFE7EC", fontSize: 14, fontWeight: "900" },
+  inlineTicketGateBody: { color: "#C8D0E3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
 
   liveContextCard: {
     backgroundColor: "rgba(15,16,22,0.95)",

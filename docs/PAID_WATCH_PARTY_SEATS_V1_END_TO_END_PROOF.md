@@ -12,7 +12,7 @@ Play/internal versionCode `38` was installed from Google Play internal testing o
 - The ticket metadata safety constraint rejected false-valued LiveKit safety keys.
 - The Watch-Party preview `Join Now` action did not fire on the Play-installed device, blocking the fan ticket gate and purchase proof.
 
-The backend blockers were fixed by remote-applied migrations, and the `Join Now` button hitbox/layering fix is committed in `2ffbbce`. A Play/internal versionCode `40` build containing that fix is pending before ticket purchase proof can continue.
+The backend blockers were fixed by remote-applied migrations, and the `Join Now` button hitbox/layering fix is committed in `2ffbbce`. Play/internal versionCode `40` was installed, and a fresh active room proved `Find Room` can render the preview. `Join Now` still appeared visually unchanged because the ticket-gate CTA rendered lower in the setup shell instead of inside the preview card; the follow-up patch makes the `Room ticket required` / `Buy Room Ticket` state visible directly inside the preview and adds sanitized proof logs.
 
 Live money remains disabled. Room tickets are sandbox/not-payable only.
 
@@ -92,11 +92,12 @@ Remote readback confirmed:
 
 - v38 build `710b9c52-5158-4e56-8ccf-fbc41576aa50`, submission `11c21df8-6e12-4bb5-a3db-e1d60c5fc7ee`, installed from Google Play internal testing on `R5CR120QCBF` with versionCode `38` and installer `com.android.vending`.
 - v39 build `115a42f1-107a-4eab-a4cb-7f7131a8fce4` was canceled because it did not produce a useful new artifact.
-- v40 build `c2021b08-cacd-4a37-87f6-99c260d426c8` targets commit `2ffbbce` and versionCode `40`; it was still in progress with no artifact at last readback.
+- v40 build `c2021b08-cacd-4a37-87f6-99c260d426c8` targets commit `2ffbbce` and versionCode `40`; it was submitted and installed from Google Play internal testing.
+- v41 build `9fe1e661-a56e-45ed-9a32-64627062f610` was canceled because fresh device proof showed the next blocker was ticket-gate visibility, not room lookup.
 
 ## Proof Status
 
-Partial proof has run on Play/internal v38, but sandbox purchase proof is still blocked until v40 is available and installed from Google Play.
+Partial proof has run on Play/internal v38 and v40, but sandbox purchase proof is still blocked until a new Play/internal build includes the inline ticket-gate preview state.
 
 Passed so far:
 
@@ -105,10 +106,13 @@ Passed so far:
 - Paid Watch-Party offer `eab7c92b-ee11-4d27-b222-fbcc8d74df71` exists for party `XWAKVC`, product `cw_watch_party_live_ticket_sandbox_099`, product key `watch_party_live_ticket_sandbox_099`, status `sandbox`, and seat limit `1`.
 - Resolver readback for the host returned `allowed=true`, `reason=host_or_admin`.
 - Resolver readback for the paid-fan fixture returned `allowed=false`, `reason=ticket_required`, with the correct offer/product.
+- The original `XWAKVC` room expired under the 15-minute active-room window, which made later lookup attempts flash loading and then fail closed.
+- Fresh active room `X75JHC` with paid offer `ca9b34b8-8815-4d9e-8a2e-34643769a29c` was created through the creator-authenticated room path plus guarded offer RPC.
+- v40 `Find Room` on `X75JHC` rendered the room preview.
 
 Blocked/pending proof:
 
-- v38 `Join Now` did not fire on device, so unpaid fan gate, purchase checkout, ticket creation, paid fan entry, second unpaid denial, seat-limit device proof, Money Center transaction readback, and refund/revoke proof remain pending.
-- v40 must be installed from Google Play internal testing before retrying the fan ticket gate and purchase proof.
+- v40 `Join Now` did not visibly surface the ticket-gate CTA because the buy action lived below the current viewport; unpaid fan gate, purchase checkout, ticket creation, paid fan entry, second unpaid denial, seat-limit device proof, Money Center transaction readback, and refund/revoke proof remain pending.
+- A new Play/internal build must be installed before retrying the fan ticket gate and purchase proof.
 
 BrowserStack remains deferred until final regression after all monetization flows are implemented and locally/manual proved.
