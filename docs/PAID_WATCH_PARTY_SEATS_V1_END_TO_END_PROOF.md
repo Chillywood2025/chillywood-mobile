@@ -96,7 +96,7 @@ Remote readback confirmed:
 - v41 build `9fe1e661-a56e-45ed-9a32-64627062f610` was canceled because fresh device proof showed the next blocker was ticket-gate visibility, not room lookup.
 - v42 build `bf2d363f-91e5-4b4c-911a-47b1caf6005c` finished with artifact `https://expo.dev/artifacts/eas/b7yuw-t842YFN37SxgYOut1aTeShtDKNT1raeKnTOGc.aab`, but it does not include the later Join Now handler-path relookup/logging patch. It was not submitted for proof.
 - v43 build `a96b3f80-0804-4b21-a108-97c3e9cb4bb3` targeted commit `a3c8e81` but stayed `IN_PROGRESS` with no artifact and was canceled.
-- v44 build `46456ea4-6d5f-4098-8f05-de84e182e423` also targets commit `a3c8e81` and versionCode `44`; latest readback is still `IN_PROGRESS` with no artifact URL. It has not been submitted or installed.
+- v44 build `46456ea4-6d5f-4098-8f05-de84e182e423` targets commit `a3c8e81` and versionCode `44`; artifact `https://expo.dev/artifacts/eas/fP9vNUu_BoJ_atkgTnJd9VCIyWnWGP_3phrfCRkr4nE.aab` was submitted to Play internal through EAS submission `b84b4e4c-46da-4717-82bc-062201ed3d7c` and installed from Google Play on `R5CR120QCBF`.
 
 ## Proof Status
 
@@ -113,9 +113,25 @@ Passed so far:
 - Fresh active room `X75JHC` with paid offer `ca9b34b8-8815-4d9e-8a2e-34643769a29c` was created through the creator-authenticated room path plus guarded offer RPC.
 - v40 `Find Room` on `X75JHC` rendered the room preview.
 
+v44 Join Now handler proof:
+
+- Fresh active room `N3CXJD` with paid offer `0b7f955e-5898-4204-a370-51f0d5a04533` was created through the creator-authenticated room path plus guarded offer RPC because `X75JHC` expired.
+- Device install proof: package `com.chillywood.mobile`, versionCode `44`, installer `com.android.vending`.
+- `Find Room` rendered the room preview.
+- `Join Now` no longer silently failed for a paid room without a ticket. Log branch:
+  - `join_now_pressed`
+  - `join_now_room_lookup_start`
+  - `join_now_room_lookup_success`
+  - `join_now_ticket_check_start`
+  - `join_now_paid_offer_detected`
+  - `join_now_ticket_missing`
+  - `join_now_route_waiting_room`
+- Visible UI showed `Room ticket required`, the no-Premium/no-other-access copy, and reachable `Buy Room Ticket`.
+- DB readback for `N3CXJD` showed offer status `sandbox`, price `99`, currency `usd`, seat limit `1`, seats sold `0`, product key `watch_party_live_ticket_sandbox_099`, provider product id `cw_watch_party_live_ticket_sandbox_099`, and resolver access `allowed=false`, `reason=ticket_required`, `requiresPurchase=true`.
+- Proof files: `/tmp/chillywood-watch-party-ticket-proof-v44/01-after-join-now-ticket-gate.png`, `/tmp/chillywood-watch-party-ticket-proof-v44/02-ticket-gate-buy-button-visible.png`, `/tmp/chillywood-watch-party-ticket-proof-v44/03-join-now-branch-logs.txt`, `/tmp/chillywood-watch-party-ticket-proof-v44/04-room-offer-readback.json`.
+
 Blocked/pending proof:
 
-- v40 `Join Now` did not visibly surface the ticket-gate CTA because the buy action lived below the current viewport; unpaid fan gate, purchase checkout, ticket creation, paid fan entry, second unpaid denial, seat-limit device proof, Money Center transaction readback, and refund/revoke proof remain pending.
-- v44 or a later successful build that includes the Join Now handler-path relookup/logging patch must be submitted and installed from Google Play internal testing before retrying the fan ticket gate and purchase proof.
+- Purchase checkout, provider-created ticket, paid fan entry, active-ticket routing, second unpaid denial, seat-limit device proof, Money Center transaction readback, and refund/revoke proof remain pending.
 
 BrowserStack remains deferred until final regression after all monetization flows are implemented and locally/manual proved.

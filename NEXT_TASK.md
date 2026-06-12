@@ -23,11 +23,16 @@ Current truth:
 - v42 build `bf2d363f-91e5-4b4c-911a-47b1caf6005c` finished, but it does not include the later Join Now handler-path relookup/logging patch and was not submitted for proof.
 - The latest handler-path patch re-reads the room before premium/ticket checks, logs the exact Join Now branch, shows `This room is no longer active.` for expired rooms, and keeps the paid-ticket CTA visible in the preview card.
 - v43 build `a96b3f80-0804-4b21-a108-97c3e9cb4bb3` targeted commit `a3c8e81` but stayed `IN_PROGRESS` with no artifact and was canceled.
-- v44 build `46456ea4-6d5f-4098-8f05-de84e182e423` targets commit `a3c8e81` / versionCode `44`; latest readback is still `IN_PROGRESS` with no artifact URL.
+- v44 build `46456ea4-6d5f-4098-8f05-de84e182e423` targets commit `a3c8e81` / versionCode `44`; it was submitted to Play internal and installed from Google Play on `R5CR120QCBF`.
+- Fresh active paid room `N3CXJD` and offer `0b7f955e-5898-4204-a370-51f0d5a04533` were created because `X75JHC` expired.
+- v44 Join Now proof passed for the paid-room-without-ticket branch: logs show `join_now_pressed -> join_now_room_lookup_start -> join_now_room_lookup_success -> join_now_ticket_check_start -> join_now_paid_offer_detected -> join_now_ticket_missing -> join_now_route_waiting_room`, and visible UI shows `Room ticket required` plus reachable `Buy Room Ticket`.
 
 Next proof:
 
-- Wait for v44 to finish, then submit/install/update from Google Play. If v44 remains stuck, start a later replacement build from commit `a3c8e81` or newer.
+- Continue from v44 Play/internal runtime.
+- Use `N3CXJD` only if still active; otherwise create a new fresh paid room/offer.
+- Tap `Buy Room Ticket`, complete RevenueCat / Google Play sandbox purchase, and verify provider-created transaction/ticket rows.
+- Prove paid fan entry to Party Waiting Room and Party Room, then second unpaid denial and seat-limit behavior.
 - Confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
 - Use fresh active room code `X75JHC`, or create a new room/offer if `X75JHC` expires before proof continues.
 - Retry `Find Room`, confirm the preview appears, tap `Join Now`, and confirm `Room ticket required` plus `Buy Room Ticket` appears inside the preview card.
