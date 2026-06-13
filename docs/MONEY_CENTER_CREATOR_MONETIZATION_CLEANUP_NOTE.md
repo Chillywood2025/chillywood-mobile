@@ -80,10 +80,11 @@
 
 ## Channel Subscriptions V1 Follow-Up
 
-- Channel Subscriptions V1 is implemented, Supabase-applied, and webhook-deployed in sandbox mode, but Play/RevenueCat sandbox purchase proof is still pending.
+- Channel Subscriptions V1 is implemented, Supabase-applied, webhook-deployed, and core Play/RevenueCat sandbox-purchase-proven.
 - Provider path is RevenueCat / Google Play subscription product `channel_subscription_sandbox_monthly_499`; Stripe Tips is not used.
 - RevenueCat entitlement id is `creator_channel_subscription`.
-- Money Center remains the consolidated setup/readout: creators can enable/pause one sandbox monthly Channel Subscription offer in Ways to Earn, offers appear in Offers, and verified subscription rows appear in Transactions after provider proof.
+- Google Play product `channel_subscription_sandbox_monthly_499` has active monthly base plan `monthly`; RevenueCat product `channel_subscription_sandbox_monthly_499:monthly` is published and attached to entitlement `creator_channel_subscription`.
+- Money Center remains the consolidated setup/readout: creators can enable/pause one sandbox monthly Channel Subscription offer in Ways to Earn, offers appear in Offers, and verified subscription rows appear in Transactions.
 - Fan surface is the creator channel header/card with `Subscribe`; subscriber-only proof route is `/channel-subscription/[creatorId]`.
 - Channel Subscriptions unlock only subscriber state for that creator channel. They do not include Chi'llwood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payout access, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators.
 - Remote migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied and `revenuecat-webhook` is redeployed.
@@ -91,6 +92,9 @@
 - Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` installed on `R5CR120QCBF` with `installer=com.android.vending` and versionCode `49`; it proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate.
 - v49 purchase proof found backend `unsupported_purchase_intent_product`; remote migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql` fixes the central purchase-intent allowlist.
 - v49 app retry then found the RevenueCat offering-only lookup blocker; commit `54c9f5c11b9a67f366c97a7b8b6718fe76704f43` adds direct RevenueCat subscription product lookup fallback.
-- Official v50 and v51 builds installed from Google Play internal, but purchase still failed before the provider sheet with `Channel Subscription sandbox product is not available on this device yet.`
-- Provider audit found the original provider product id `cw_channel_subscription_sandbox_monthly_499` is too long for Google Play. Use `channel_subscription_sandbox_monthly_499`; complete an active Play base plan and matching RevenueCat product/base-plan mapping before retrying purchase proof.
-- Remaining proof gaps: Play/internal subscription purchase sheet, signed webhook event, active subscription row, Money Center visual transaction readback, second-unsubscribed denial after purchase, and cancellation/expiration/revoke if safe provider tooling allows.
+- Official v50 and early v51 proof showed product unavailable until the valid Play base plan and RevenueCat product/base-plan mapping were completed.
+- Provider audit found the original provider product id `cw_channel_subscription_sandbox_monthly_499` is too long for Google Play. The valid id is `channel_subscription_sandbox_monthly_499`.
+- After a cold app restart on Play/internal v51, Google Play Billing opened for the sandbox subscription and the purchase completed.
+- Provider event `9dabc47f-61f7-49f7-a169-3adb0ebbac30` processed, creating active subscription `436f2acc-ec46-4977-ba51-958452ea2f2e`, paid/not-payable transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`, and sandbox access grant `1a5492fe-c135-435e-878c-5e21a7638322`.
+- The subscribed fan saw `SUBSCRIBED` on `/channel-subscription/[creatorId]`.
+- Remaining proof gaps: creator Money Center visual transaction readback, second authenticated unsubscribed-fan UI denial after purchase, and cancellation/expiration/revoke if safe provider tooling allows.

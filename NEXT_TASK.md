@@ -2,18 +2,31 @@
 
 ## Next Creator Monetization Proof
 
-Channel Subscriptions V1 is now implemented, Supabase-applied, and webhook-deployed in sandbox mode. Do not build VIP Passes until Channel Subscriptions sandbox proof is closed or explicitly deferred.
+Channel Subscriptions V1 is now implemented, Supabase-applied, webhook-deployed, and core Play/RevenueCat sandbox-purchase-proven. Do not build VIP Passes until the remaining Channel Subscriptions proof gaps are captured or explicitly deferred.
 
-Immediate next proof:
+Closed Channel Subscriptions truth:
 
-- Fix the provider catalog blocker before any new app build: Google Play product `channel_subscription_sandbox_monthly_499` exists, but it still needs an active base plan, preferably `monthly`, and RevenueCat must map the matching product/base-plan id, expected `channel_subscription_sandbox_monthly_499:monthly`, to entitlement `creator_channel_subscription`.
-- Do not use the old provider product id `cw_channel_subscription_sandbox_monthly_499` for new proof; it is 43 characters and invalid for Google Play subscription products.
-- Migration `20260613021940_channel_subscription_valid_play_product_id.sql` is applied remotely; it moves the app/backend sandbox id to `channel_subscription_sandbox_monthly_499`.
-- After the Play base plan and RevenueCat mapping are active, build a new traceable Play/internal runtime from the committed SHA, install/update from Play, and confirm `installer=com.android.vending`.
-- Do not use uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` for official proof; it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
-- v49 already proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate; v50 and v51 installed from Google Play internal but still failed before the provider sheet with `Channel Subscription sandbox product is not available on this device yet.`
-- Rerun creator setup and unsubscribed gate quickly on the next build before purchase.
-- Run creator setup, unsubscribed gate, sandbox subscription purchase, signed webhook, active subscription row, Money Center readback, second-unsubscribed denial, and cancellation/expiration/revoke proof if safe provider tooling allows.
+- Google Play subscription product `channel_subscription_sandbox_monthly_499` has active monthly base plan `monthly`.
+- RevenueCat product `channel_subscription_sandbox_monthly_499:monthly` is published and attached to entitlement `creator_channel_subscription`.
+- The old provider product id `cw_channel_subscription_sandbox_monthly_499` is not used because it is too long for Google Play subscription product ids.
+- Play/internal v51 installed on `R5CR120QCBF` with package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `51`.
+- After a cold app restart, the app saw the product and Google Play Billing opened for the sandbox subscription.
+- Subscriber `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5` completed sandbox subscription purchase for creator `c2afa6cc-52f2-4714-b972-89863582d05a` / offer `c7f74157-421d-41c6-8562-161965bab031`.
+- Signed provider event `9dabc47f-61f7-49f7-a169-3adb0ebbac30` processed through `revenuecat-webhook`.
+- Supabase created active subscription `436f2acc-ec46-4977-ba51-958452ea2f2e`, paid/not-payable transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`, and sandbox access grant `1a5492fe-c135-435e-878c-5e21a7638322`.
+- The subscriber route showed `SUBSCRIBED` and subscription copy stayed separate from Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payouts, and other creators' channels.
+- Live money remains off and sandbox rows are not payable.
+
+Remaining Channel Subscriptions proof:
+
+- Capture creator Money Center Transactions visual readback for transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
+- Capture second authenticated unsubscribed-fan UI denial after the successful purchase.
+- Attempt cancellation/expiration/revoke only if safe RevenueCat / Google Play tooling or a safe test order path is available; otherwise keep it deferred.
+
+Recommended next build after those proof gaps are closed or explicitly deferred:
+
+- Build VIP Passes V1 next as the final creator monetization flow.
+- Keep VIP separate from creator channel subscriptions, Premium, paid videos, paid Watch-Party tickets, Paid Events, and Tips.
 
 Closed Paid Events truth:
 

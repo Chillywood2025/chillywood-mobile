@@ -2,44 +2,69 @@
 
 ## Status
 
-Channel Subscriptions V1 is implemented and deployed in sandbox mode, but it is not yet Play/RevenueCat sandbox-purchase-proven.
+Channel Subscriptions V1 is implemented, deployed in sandbox mode, and core Play / RevenueCat sandbox purchase proof passed on June 13, 2026.
 
-Implemented:
+This is not live money. Subscription rows are sandbox/not-payable and `live_money_enabled` remains off.
 
-- Creator can enable or pause one monthly Channel Subscription offer from Money Center.
-- Fan channel surface can show `Subscribe` when a creator has a sandbox subscription offer.
-- Subscriber-only route `/channel-subscription/[creatorId]` checks server access before showing subscriber content.
-- RevenueCat / Google Play subscription package path is used.
-- Stripe Tips path is not used.
-- Verified RevenueCat webhook can create a `channel_subscription` access grant through the existing purchase-intent bridge.
-- Supabase trigger mirrors verified access into `creator_channel_subscriptions`, `channel_subscribers`, and `creator_channel_subscription_transactions`.
-- Money Center reads Channel Subscription offers and transactions separately from Tips, Paid Videos, Paid Watch-Party tickets, Paid Events, VIP, and Premium.
+Passed:
 
-Not yet proved:
+- Google Play subscription product `channel_subscription_sandbox_monthly_499` has active base plan `monthly`.
+- RevenueCat product `channel_subscription_sandbox_monthly_499:monthly` exists, is published, and is attached to entitlement `creator_channel_subscription`.
+- Play/internal runtime v51 was installed from Google Play on device `R5CR120QCBF` with package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `51`.
+- App product lookup became available after a cold app restart.
+- Google Play Billing sheet opened for the sandbox subscription.
+- Fan completed a RevenueCat / Google Play sandbox subscription purchase.
+- Signed provider event reached the deployed `revenuecat-webhook` path and was processed.
+- Server created an active channel subscription row, sandbox access grant, and paid/not-payable transaction.
+- Subscribed fan saw `SUBSCRIBED` and could access `/channel-subscription/[creatorId]`.
+- Subscription copy remained separate from Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payouts, and other creators' channels.
 
-- Google Play / RevenueCat sandbox subscription sheet opens for product `channel_subscription_sandbox_monthly_499`.
-- Signed RevenueCat sandbox subscription event reaches the deployed webhook for this product.
-- Verified provider event creates a live test subscription row.
-- Money Center visual readback of an actual subscription transaction.
+Still not claimed:
+
+- Creator Money Center visual screenshot for the exact subscription transaction.
+- Second authenticated unsubscribed-fan UI denial after the purchase.
 - Cancellation/expiration/revoke proof.
-- v49 proof reached the creator setup, fan CTA, and unsubscribed direct-route gate. It then exposed two blockers: the central purchase-intent function did not allow `channel_subscription`, and the app only searched RevenueCat offerings instead of falling back to direct subscription product lookup.
-- Backend blocker is fixed by remote-applied migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql`.
-- App fallback is fixed in commit `54c9f5c11b9a67f366c97a7b8b6718fe76704f43`, which adds direct RevenueCat subscription product lookup before purchase.
-- v50 and v51 were installed from Google Play internal and still failed before the provider sheet with `Channel Subscription sandbox product is not available on this device yet.`
-- Provider dashboard audit found the original provider product id `cw_channel_subscription_sandbox_monthly_499` cannot be created in Google Play because it is 43 characters. Google Play subscription product ids are capped at 40 characters.
-- The valid Play subscription product id is now `channel_subscription_sandbox_monthly_499`; a local migration updates existing sandbox product/offer rows to that id.
-- Google Play product `channel_subscription_sandbox_monthly_499` was created, but no active base plan exists yet. Play Console rejected multiple valid-looking base plan ids in the browser UI, and local Android Publisher API credentials were not authorized to create the base plan.
+- Live-money approval.
+
+Server readback did prove transaction/subscription creation and grant scoping for the subscribed fan. A separate visual proof pass should capture Money Center Transactions and a second authenticated unsubscribed fan before closing those UI proof gaps.
+
+## Provider Setup
+
+Google Play:
+
+- Package: `com.chillywood.mobile`
+- Subscription product id: `channel_subscription_sandbox_monthly_499`
+- Base plan id: `monthly`
+- Base plan type: auto-renewing monthly subscription
+- Base plan status: `ACTIVE`
+- Price: USD 4.99
+- Legacy-compatible flag was enabled through the Android Publisher API after the Play UI path stayed unreliable.
+
+RevenueCat:
+
+- Product identifier: `channel_subscription_sandbox_monthly_499:monthly`
+- Store status: `Published`
+- Product group: `channel_subscription_sandbox_monthly_499`
+- Entitlement id: `creator_channel_subscription`
+- Entitlement attachment: active
+
+Earlier invalid mapping:
+
+- `cw_channel_subscription_sandbox_monthly_499:monthly` remains the old invalid RevenueCat/Play mapping candidate.
+- It is not used for new proof because `cw_channel_subscription_sandbox_monthly_499` is too long for Google Play subscription product ids.
 
 ## Provider Path
 
 - Product key: `channel_subscription_sandbox_monthly_499`
 - Provider product id: `channel_subscription_sandbox_monthly_499`
-- RevenueCat product/base-plan identifier candidate: `channel_subscription_sandbox_monthly_499:monthly`
+- RevenueCat product/base-plan id: `channel_subscription_sandbox_monthly_499:monthly`
 - RevenueCat entitlement id: `creator_channel_subscription`
 - Provider rail: RevenueCat / Google Play subscription package
 - Environment: sandbox/test only
 - Payout status: `not_payable`
 - Live money: off
+
+Stripe Tips is not used for Channel Subscriptions.
 
 ## Product Separation
 
@@ -61,19 +86,17 @@ It does not unlock:
 
 ## Backend
 
-Migration applied remotely:
+Migrations applied remotely:
 
 - `20260612224536_channel_subscriptions_v1_sandbox.sql`
 - `20260613004804_channel_subscription_purchase_intent_allowlist.sql`
 - `20260613021940_channel_subscription_valid_play_product_id.sql`
 
-`20260613021940_channel_subscription_valid_play_product_id.sql` updates the sandbox product and existing sandbox offer from the invalid 43-character Play id to `channel_subscription_sandbox_monthly_499`.
-
 Updated function deployed:
 
 - `revenuecat-webhook`
 
-New tables:
+Tables:
 
 - `creator_channel_subscription_offers`
 - `creator_channel_subscriptions`
@@ -84,7 +107,7 @@ Existing mirror/read-model table used:
 
 - `channel_subscribers`
 
-New/updated RPCs:
+RPCs:
 
 - `set_creator_channel_subscription_offer`
 - `resolve_creator_channel_subscription_access`
@@ -101,59 +124,85 @@ RLS posture:
 - Clients cannot directly write paid transaction rows.
 - Clients cannot directly update provider status fields.
 
-## App Surfaces
+## Runtime Proof
 
-Creator setup:
+Play/internal runtime:
 
-- Platform Studio / Money Center / Ways to Earn
-- Money Center / Offers
-- Money Center / Transactions
+- Device: `R5CR120QCBF`
+- Package: `com.chillywood.mobile`
+- Installer: `com.android.vending`
+- VersionCode: `51`
+- Proof path: `/tmp/chillywood-channel-subscription-proof-v51/`
 
-Fan surfaces:
+Creator/channel proof target:
 
-- Creator channel header: `Subscribe`
-- Creator channel subscription card
-- Subscriber-only route: `/channel-subscription/[creatorId]`
+- Creator id: `c2afa6cc-52f2-4714-b972-89863582d05a`
+- Offer id: `c7f74157-421d-41c6-8562-161965bab031`
 
-Gate behavior:
+Subscriber proof target:
 
-- Logged-out users are blocked and asked to sign in.
-- Unsubscribed users see subscription-required copy and `Subscribe`.
-- Subscribed users see subscriber-only content only after server resolver returns active access.
-- Direct deep link to `/channel-subscription/[creatorId]` cannot bypass the resolver.
+- Subscriber id: `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5`
 
-## Proof Checklist
+Purchase proof:
 
-Pending Play/internal proof:
+- RevenueCat / provider event row id: `9dabc47f-61f7-49f7-a169-3adb0ebbac30`
+- Provider transaction id: `CD64CA3D-4264-4871-8C10-74270C1D1E1F`
+- Event type: `INITIAL_PURCHASE`
+- Provider: `revenuecat_google_play`
+- Environment: `sandbox`
+- Product key: `channel_subscription_sandbox_monthly_499`
+- Status: `processed`
 
-1. Install Play/internal build containing Channel Subscriptions V1.
-2. Confirm installer is `com.android.vending`.
-3. Confirm Google Play product `channel_subscription_sandbox_monthly_499` has an active base plan, preferably `monthly`.
-4. Confirm RevenueCat product `channel_subscription_sandbox_monthly_499:monthly` exists and is attached to entitlement `creator_channel_subscription`.
-5. Creator enables Channel Subscription in Money Center.
-6. Unsubscribed fan sees `Subscribe`.
-7. Unsubscribed fan cannot open subscriber-only route.
-8. Fan completes Google Play / RevenueCat sandbox subscription purchase.
-9. Signed webhook creates provider event, access grant, subscription row, and transaction.
-10. Fan refresh shows `Subscribed` and can open subscriber-only route.
-11. Second unsubscribed fan remains blocked.
-12. Money Center shows Channel Subscription transaction as sandbox/not_payable.
-13. Cancellation/expiration/revoke proof if provider tooling/order id is available.
+Created rows:
 
-## Current Blocker
+- Subscription id: `436f2acc-ec46-4977-ba51-958452ea2f2e`
+- Transaction id: `e49cddea-cd6d-4097-b70c-a07abaa24823`
+- Access grant id: `1a5492fe-c135-435e-878c-5e21a7638322`
+- Transaction status: `paid`
+- Payout status: `not_payable`
+- Amount: `499` cents
+- Currency: `usd`
+- Subscription status: `active`
 
-Sandbox purchase proof is blocked by provider catalog setup, not by the app install:
+App result:
 
-- Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because its metadata points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
-- Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` reached installed proof on attached device `R5CR120QCBF` with package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `49`.
-- v49 creator setup passed: offer `c7f74157-421d-41c6-8562-161965bab031` was saved as `sandbox`, product key `channel_subscription_sandbox_monthly_499`, original provider product id `cw_channel_subscription_sandbox_monthly_499`, price `499`, subscriber count `0`.
-- v49 unsubscribed fan proof passed: creator channel showed `Subscribe`, and direct `/channel-subscription/[creatorId]` showed `Subscriber access required`.
-- v49 purchase attempt first failed at RPC with `unsupported_purchase_intent_product`; migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql` fixed this and the same subscriber RPC created intent `f808996c-b543-42ca-9a6e-e4f1f6fa083b`.
-- v49 app retry then failed at RevenueCat package lookup with `Channel Subscription sandbox product is not available on this device yet.` Commit `54c9f5c` adds direct subscription product lookup fallback, so official purchase proof requires v50.
-- Official v50 build `c6859970-89a9-470b-882d-eeb848bb2fe9` installed from Google Play internal and still showed the product-unavailable alert.
-- Official v51 build `d75e5146-6a07-4dcc-a3dc-35229112c9c2` installed from Google Play internal on `R5CR120QCBF` with package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `51`. It proved the subscriber gate still renders correctly, but `Subscribe` still showed `Channel Subscription sandbox product is not available on this device yet.`
-- RevenueCat product catalog initially had no Channel Subscription product. A RevenueCat product mapping for the original `cw_channel_subscription_sandbox_monthly_499:monthly` showed Store Status `Not found`.
-- Google Play Console initially had only `premium_subscription`. The original `cw_channel_subscription_sandbox_monthly_499` id is too long for Play, so the valid Google Play subscription product `channel_subscription_sandbox_monthly_499` was created.
-- The remaining blocker is creating and activating a base plan for `channel_subscription_sandbox_monthly_499`, then mapping the matching RevenueCat product, expected `channel_subscription_sandbox_monthly_499:monthly`, to entitlement `creator_channel_subscription`.
-- No live money is enabled.
-- BrowserStack remains deferred until final full regression after all monetization flows are built.
+- Google Play sandbox subscription sheet opened for `$4.99/5 min`.
+- Google Play showed test subscription copy and did not charge real money.
+- After purchase, `/channel-subscription/[creatorId]` showed `SUBSCRIBED`.
+- The subscriber-only copy explicitly stated the subscription is for this creator channel only and does not unlock Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators' channels.
+
+## Prior Blockers Closed
+
+- v48 was abandoned for official proof because its build metadata pointed to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
+- v49 proved creator setup, `Subscribe` CTA, and unsubscribed direct-route gate, then exposed backend `unsupported_purchase_intent_product`.
+- `20260613004804_channel_subscription_purchase_intent_allowlist.sql` fixed the purchase-intent allowlist.
+- v49 then exposed RevenueCat offering-only lookup failure.
+- Commit `54c9f5c11b9a67f366c97a7b8b6718fe76704f43` added direct RevenueCat subscription product lookup.
+- v50/v51 still showed product unavailable until the Google Play base plan and corrected RevenueCat product/base-plan mapping were completed.
+- After base plan/mapping completion and a cold app restart, v51 opened the Google Play Billing sheet and completed the sandbox subscription.
+
+## Remaining Proof Gaps
+
+Money Center visual readback:
+
+- Server readback proves transaction `e49cddea-cd6d-4097-b70c-a07abaa24823` exists as `paid`, sandbox, and `not_payable`.
+- A creator-side app screenshot of Money Center Transactions for this exact row is still pending.
+
+Second unsubscribed fan:
+
+- v49 previously proved unsubscribed route gating before purchase.
+- A post-purchase second authenticated unsubscribed-fan UI denial proof is still pending.
+- Server rows show the active grant/subscription is scoped to subscriber `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5`, not globally public.
+
+Cancellation/expiration/revoke:
+
+- Deferred until safe RevenueCat / Google Play tooling or a safe test order path is available.
+- Do not fake cancellation/expiration/revoke by manual DB mutation.
+
+## Next Steps
+
+- Capture creator Money Center Transactions visual readback for transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
+- Capture second authenticated unsubscribed-fan UI denial after the successful purchase.
+- Attempt cancellation/expiration/revoke only when safe RevenueCat / Google Play tooling is available.
+- Keep live money disabled until explicit production approval.
+- BrowserStack remains deferred until final full monetization regression.
