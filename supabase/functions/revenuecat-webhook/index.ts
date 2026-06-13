@@ -76,6 +76,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 
 const normalizeEventType = (value: unknown) => toText(value).toUpperCase();
 
+const providerProductIdCandidates = (productId: string) => {
+  const normalized = toText(productId);
+  const withoutBasePlan = normalized.includes(":") ? normalized.split(":")[0] : normalized;
+  return Array.from(new Set([
+    normalized,
+    withoutBasePlan,
+    `${withoutBasePlan}:monthly`,
+  ].map(toText).filter(Boolean)));
+};
+
 const toStringArray = (value: unknown) => {
   if (Array.isArray(value)) return value.map(toText).filter(Boolean);
   const normalized = toText(value);
@@ -417,10 +427,11 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
     };
   }
 
+  const productIdCandidates = providerProductIdCandidates(input.productId);
   const { data: product, error: productError } = await adminClient
     .from("monetization_products")
     .select("id, product_key, product_type, provider, provider_product_id, environment, status, is_android_digital")
-    .eq("provider_product_id", input.productId)
+    .in("provider_product_id", productIdCandidates)
     .neq("product_type", "premium_subscription")
     .limit(1)
     .maybeSingle();
@@ -505,7 +516,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
     .select("id, product_id, product_type, source_type, source_id, creator_id, platform_id, status, expires_at")
     .eq("user_id", input.userId)
     .eq("product_id", product.id)
-    .eq("provider_product_id", input.productId)
+    .eq("provider_product_id", product.provider_product_id)
     .eq("status", "pending")
     .gt("expires_at", nowIso)
     .order("created_at", { ascending: false })

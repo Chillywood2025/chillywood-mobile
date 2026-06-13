@@ -11,6 +11,7 @@ import { supabase } from "./supabase";
 
 export const CHANNEL_SUBSCRIPTION_SANDBOX_PRODUCT_KEY = "channel_subscription_sandbox_monthly_499";
 export const CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_ID = "cw_channel_subscription_sandbox_monthly_499";
+export const CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_BASE_PLAN_ID = "cw_channel_subscription_sandbox_monthly_499:monthly";
 export const CHANNEL_SUBSCRIPTION_POLL_ATTEMPTS = 12;
 export const CHANNEL_SUBSCRIPTION_POLL_DELAY_MS = 1500;
 
@@ -202,15 +203,29 @@ const extractPackages = (offerings: unknown): PurchasesPackage[] => {
   return packages;
 };
 
+const buildSubscriptionProductIdentifierCandidates = (productId: string) => {
+  const normalized = toText(productId);
+  const withoutBasePlan = normalized.includes(":") ? normalized.split(":")[0] : normalized;
+  return Array.from(new Set([
+    normalized,
+    withoutBasePlan,
+    `${withoutBasePlan}:monthly`,
+    CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_ID,
+    CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_BASE_PLAN_ID,
+  ].map(toText).filter(Boolean)));
+};
+
 const findSubscriptionPackage = async (productId: string) => {
   const offerings = await readRevenueCatOfferings();
   const packages = extractPackages(offerings);
-  return packages.find((pkg) => toText(pkg.product.identifier) === productId) ?? null;
+  const productIds = buildSubscriptionProductIdentifierCandidates(productId);
+  return packages.find((pkg) => productIds.includes(toText(pkg.product.identifier))) ?? null;
 };
 
 const findSubscriptionStoreProduct = async (productId: string) => {
-  const products = await readRevenueCatSubscriptionProducts([productId]);
-  return products.find((product) => toText(product.identifier) === productId) ?? null;
+  const productIds = buildSubscriptionProductIdentifierCandidates(productId);
+  const products = await readRevenueCatSubscriptionProducts(productIds);
+  return products.find((product) => productIds.includes(toText(product.identifier))) ?? null;
 };
 
 export const formatChannelSubscriptionPrice = (amountCents: number, currency = "usd") =>
