@@ -87,7 +87,7 @@
 - Money Center remains the consolidated setup/readout: creators can enable/pause one sandbox monthly Channel Subscription offer in Ways to Earn, offers appear in Offers, and verified subscription rows appear in Transactions.
 - Fan surface is the creator channel header/card with `Subscribe`; subscriber-only proof route is `/channel-subscription/[creatorId]`.
 - Channel Subscriptions unlock only subscriber state for that creator channel. They do not include Chi'llwood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payout access, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators.
-- Remote migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied and `revenuecat-webhook` is redeployed.
+- Remote migrations `20260612224536_channel_subscriptions_v1_sandbox.sql`, `20260613091417_channel_subscription_lifecycle_handling.sql`, and `20260613092100_channel_subscription_cancel_pending_unique.sql` are applied and `revenuecat-webhook` is redeployed.
 - Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
 - Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` installed on `R5CR120QCBF` with `installer=com.android.vending` and versionCode `49`; it proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate.
 - v49 purchase proof found backend `unsupported_purchase_intent_product`; remote migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql` fixes the central purchase-intent allowlist.
@@ -99,4 +99,5 @@
 - The subscribed fan saw `SUBSCRIBED` on `/channel-subscription/[creatorId]`.
 - Creator Money Center visual transaction readback passed for the exact subscription transaction as sandbox/not-payable and separate from Tips, Paid Videos, Paid Watch-Party, Paid Events, Premium, and VIP.
 - Authenticated non-subscriber route denial passed after purchase.
-- Remaining backend gap: RevenueCat/Google renewal, cancellation, and expiration events reach Supabase but are currently stored as `ignored`, so lifecycle handling must be added before cancellation/revoke proof is claimed.
+- Lifecycle handling now covers RevenueCat/Google `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`, `UNCANCELLATION`, `PRODUCT_CHANGE`, `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED`.
+- Historical ignored lifecycle rows were not manually rewritten. Cancellation/expiration/revoke proof still requires a fresh or safely replayed signed RevenueCat event before it can be claimed.

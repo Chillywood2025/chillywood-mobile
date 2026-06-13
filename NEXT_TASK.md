@@ -2,7 +2,7 @@
 
 ## Next Creator Monetization Proof
 
-Channel Subscriptions V1 is now implemented, Supabase-applied, webhook-deployed, and Play/RevenueCat sandbox-proven for purchase, Money Center visual readback, and authenticated non-subscriber denial. Do not build VIP Passes until the remaining Channel Subscriptions lifecycle handling gap is either fixed or explicitly deferred.
+Channel Subscriptions V1 is now implemented, Supabase-applied, webhook-deployed, and Play/RevenueCat sandbox-proven for purchase, Money Center visual readback, and authenticated non-subscriber denial. Channel Subscription lifecycle handling is also implemented and deployed, but still needs fresh provider-event proof before cancellation/expiration/revoke is claimed. Do not build VIP Passes until that lifecycle proof is either completed or explicitly deferred.
 
 Closed Channel Subscriptions truth:
 
@@ -22,9 +22,10 @@ Closed Channel Subscriptions truth:
 Remaining Channel Subscriptions work:
 
 - RevenueCat dashboard refund for the exact sandbox entitlement failed with `Refunding the transaction was unsuccessful`.
-- Supabase received provider `RENEWAL`, `CANCELLATION`, and `EXPIRATION` events for the same app user/product, but `revenuecat-webhook` stored them as `ignored`.
-- The original subscription row still reads `active`; access is nevertheless expired because `current_period_end` and the access grant `expires_at` are in the past.
-- Implement Channel Subscription lifecycle handling for RevenueCat renewal, cancellation, and expiration events before claiming revoke/cancel proof.
+- Supabase received provider `RENEWAL`, `CANCELLATION`, and `EXPIRATION` events for the same app user/product before the lifecycle handler was deployed; those historical rows remain `ignored` and were not manually rewritten.
+- New migrations `20260613091417_channel_subscription_lifecycle_handling.sql` and `20260613092100_channel_subscription_cancel_pending_unique.sql` are applied, and `revenuecat-webhook` now handles `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`, `UNCANCELLATION`, `PRODUCT_CHANGE`, `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED`.
+- The next proof must trigger or safely replay fresh signed RevenueCat lifecycle events and confirm subscription status, access grant status, subscriber route behavior, and Money Center readback update correctly.
+- Do not fake cancellation/expiration/revoke by manual DB mutation.
 
 Recommended next build after those proof gaps are closed or explicitly deferred:
 

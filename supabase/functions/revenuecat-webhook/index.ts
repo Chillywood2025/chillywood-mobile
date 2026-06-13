@@ -49,6 +49,7 @@ type DynamicMoneyAccessResult = {
   providerEventId: string | null;
   accessGrantId: string | null;
   ledgerEventId: string | null;
+  subscriptionId?: string | null;
   purchaseIntentId: string | null;
   environment: "setup" | "sandbox" | "production";
   payableState: "not_payable" | "refunded" | "reversed" | "chargeback";
@@ -68,7 +69,9 @@ const ACTIVE_EVENT_TYPES = new Set([
 ]);
 const CANCELED_EVENT_TYPES = new Set(["CANCELLATION"]);
 const EXPIRED_EVENT_TYPES = new Set(["EXPIRATION"]);
-const REVOKED_EVENT_TYPES = new Set(["REFUND", "SUBSCRIPTION_PAUSED"]);
+const BILLING_ISSUE_EVENT_TYPES = new Set(["BILLING_ISSUE"]);
+const REVOKED_EVENT_TYPES = new Set(["REFUND", "REVOCATION", "SUBSCRIPTION_PAUSED"]);
+const CHANNEL_SUBSCRIPTION_PRODUCT_TYPE = "channel_subscription";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   !!value && typeof value === "object" && !Array.isArray(value)
@@ -184,6 +187,68 @@ const resolveLedgerState = (eventType: string) => {
     return { payableState: "reversed" as const, ledgerStatus: "reversed" as const };
   }
   return { payableState: "not_payable" as const, ledgerStatus: "sandbox_only" as const };
+};
+
+const resolveChannelSubscriptionLifecycleState = (
+  eventType: string,
+  expiresAt: string | null,
+  status: EntitlementWriteResult["status"],
+) => {
+  const expiresInFuture = !!expiresAt && Date.parse(expiresAt) > Date.now();
+  if (REVOKED_EVENT_TYPES.has(eventType)) {
+    return {
+      subscriptionStatus: "revoked" as const,
+      grantStatus: "revoked" as const,
+      transactionStatus: eventType === "REFUND" ? "refunded" as const : "revoked" as const,
+      payableState: "refunded" as const,
+      ledgerStatus: "refunded" as const,
+      channelSubscriberStatus: "revoked" as const,
+      retainAccess: false,
+    };
+  }
+  if (EXPIRED_EVENT_TYPES.has(eventType)) {
+    return {
+      subscriptionStatus: "expired" as const,
+      grantStatus: "expired" as const,
+      transactionStatus: "expired" as const,
+      payableState: "reversed" as const,
+      ledgerStatus: "reversed" as const,
+      channelSubscriberStatus: "expired" as const,
+      retainAccess: false,
+    };
+  }
+  if (CANCELED_EVENT_TYPES.has(eventType)) {
+    return {
+      subscriptionStatus: expiresInFuture ? "cancel_pending" as const : "canceled" as const,
+      grantStatus: expiresInFuture ? "sandbox_only" as const : "expired" as const,
+      transactionStatus: "canceled" as const,
+      payableState: "not_payable" as const,
+      ledgerStatus: "sandbox_only" as const,
+      channelSubscriberStatus: expiresInFuture ? "active" as const : "canceled" as const,
+      retainAccess: expiresInFuture,
+    };
+  }
+  if (BILLING_ISSUE_EVENT_TYPES.has(eventType)) {
+    const retainAccess = status === "grace_period" && expiresInFuture;
+    return {
+      subscriptionStatus: retainAccess ? "grace_period" as const : "paused" as const,
+      grantStatus: retainAccess ? "sandbox_only" as const : "blocked" as const,
+      transactionStatus: "failed" as const,
+      payableState: "not_payable" as const,
+      ledgerStatus: "pending" as const,
+      channelSubscriberStatus: retainAccess ? "grace_period" as const : "expired" as const,
+      retainAccess,
+    };
+  }
+  return {
+    subscriptionStatus: status === "trialing" ? "trialing" as const : "active" as const,
+    grantStatus: "sandbox_only" as const,
+    transactionStatus: eventType === "RENEWAL" ? "renewal_paid" as const : "paid" as const,
+    payableState: "not_payable" as const,
+    ledgerStatus: "sandbox_only" as const,
+    channelSubscriberStatus: "active" as const,
+    retainAccess: true,
+  };
 };
 
 const mirrorRevenueCatPremiumMoneyAccess = async (
@@ -350,6 +415,376 @@ const accessGrantTypeForProductType = (productType: string) => {
   return null;
 };
 
+const syncChannelSubscriptionLifecycle = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    event: RevenueCatEvent;
+    eventType: string;
+    eventId: string;
+    userId: string;
+    productId: string;
+    environment: "setup" | "sandbox" | "production";
+    status: EntitlementWriteResult["status"];
+    rawEventHash: string;
+    product: Record<string, unknown>;
+    providerEventId: string;
+    occurredAt: string;
+  },
+): Promise<DynamicMoneyAccessResult> => {
+  const productIdCandidates = providerProductIdCandidates(input.productId);
+  const startsAt = toIsoFromMs(input.event.purchased_at_ms || input.event.event_timestamp_ms) || input.occurredAt;
+  const expiresAt = toIsoFromMs(input.event.expiration_at_ms);
+  const originalTransactionId = toText(input.event.original_transaction_id) || null;
+  const providerProductId = toText(input.product.provider_product_id) || input.productId;
+  const state = resolveChannelSubscriptionLifecycleState(input.eventType, expiresAt, input.status);
+
+  const { data: offer, error: offerError } = await adminClient
+    .from("creator_channel_subscription_offers")
+    .select("id, creator_id, price_cents, currency, provider_product_id, provider_product_key")
+    .eq("provider_product_key", toText(input.product.product_key))
+    .in("provider_product_id", productIdCandidates)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (offerError) throw new Error(`Channel subscription offer lookup failed: ${offerError.message}`);
+
+  const ignoreLifecycle = async (reason: string): Promise<DynamicMoneyAccessResult> => {
+    await adminClient
+      .from("provider_events")
+      .update({
+        status: "ignored",
+        metadata: {
+          provider_payload_stored: false,
+          provider_product_id: input.productId,
+          original_transaction_id: originalTransactionId,
+          dynamic_product: true,
+          channel_subscription_lifecycle: true,
+          sandbox_only: input.environment === "sandbox",
+          ignored_reason: reason,
+          access_granted: false,
+          ledger_created: false,
+          live_money_action: false,
+          payout_ready: false,
+        },
+      })
+      .eq("id", input.providerEventId);
+
+    return {
+      status: "ignored",
+      productKey: toText(input.product.product_key) || null,
+      providerEventId: input.providerEventId,
+      accessGrantId: null,
+      ledgerEventId: null,
+      subscriptionId: null,
+      purchaseIntentId: null,
+      environment: input.environment,
+      payableState: state.payableState,
+      grantStatus: state.grantStatus,
+      reason,
+      duplicateProviderEvent: false,
+      duplicateAccessGrant: false,
+      duplicateLedgerEvent: false,
+    };
+  };
+
+  if (!offer?.id) return ignoreLifecycle("channel_subscription_offer_missing");
+
+  let subscription: Record<string, unknown> | null = null;
+  if (originalTransactionId) {
+    const { data: subscriptionByOriginal, error: subscriptionByOriginalError } = await adminClient
+      .from("creator_channel_subscriptions")
+      .select("id, access_grant_id, provider_original_transaction_id")
+      .eq("offer_id", offer.id)
+      .eq("subscriber_id", input.userId)
+      .eq("provider_original_transaction_id", originalTransactionId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (subscriptionByOriginalError) throw new Error(`Channel subscription original transaction lookup failed: ${subscriptionByOriginalError.message}`);
+    subscription = subscriptionByOriginal ?? null;
+  }
+
+  if (!subscription?.id) {
+    const { data: latestSubscription, error: latestSubscriptionError } = await adminClient
+      .from("creator_channel_subscriptions")
+      .select("id, access_grant_id, provider_original_transaction_id")
+      .eq("offer_id", offer.id)
+      .eq("subscriber_id", input.userId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestSubscriptionError) throw new Error(`Channel subscription row lookup failed: ${latestSubscriptionError.message}`);
+    subscription = latestSubscription ?? null;
+  }
+
+  if (!subscription?.id) return ignoreLifecycle("channel_subscription_row_missing");
+
+  let accessGrantId = toText(subscription.access_grant_id) || null;
+  if (!accessGrantId) {
+    const { data: latestGrant, error: latestGrantError } = await adminClient
+      .from("access_grants")
+      .select("id")
+      .eq("user_id", input.userId)
+      .eq("grant_type", "channel_subscription")
+      .eq("source_id", offer.id)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestGrantError) throw new Error(`Channel subscription access grant lookup failed: ${latestGrantError.message}`);
+    accessGrantId = latestGrant?.id ?? null;
+  }
+
+  if (!accessGrantId) return ignoreLifecycle("channel_subscription_access_grant_missing");
+
+  const originalTransactionForWrite = originalTransactionId ?? (toText(subscription.provider_original_transaction_id) || null);
+
+  /*
+   * From this point on the event is tied to a real provider-delivered
+   * subscription row. No client or manual DB path can create the paid state.
+   */
+  const { data: existingLedger, error: existingLedgerError } = await adminClient
+    .from("money_access_ledger_events")
+    .select("id")
+    .eq("provider_event_id", input.providerEventId)
+    .maybeSingle();
+  if (existingLedgerError) throw new Error(`Channel subscription lifecycle ledger lookup failed: ${existingLedgerError.message}`);
+
+  let ledgerEventId = existingLedger?.id ?? null;
+  if (!ledgerEventId) {
+    const { data: ledger, error: ledgerError } = await adminClient
+      .from("money_access_ledger_events")
+      .insert({
+        user_id: input.userId,
+        creator_id: offer.creator_id,
+        product_id: input.product.id,
+        provider_event_id: input.providerEventId,
+        event_type: input.eventType,
+        amount_minor: resolveAmountMinor(input.event) || offer.price_cents || 0,
+        currency: resolveCurrency(input.event) || offer.currency || "usd",
+        environment: input.environment,
+        payable_state: state.payableState,
+        status: state.ledgerStatus,
+        source_type: "channel_subscription",
+        source_id: offer.id,
+        metadata: {
+          product_key: toText(input.product.product_key),
+          channel_subscription_lifecycle: true,
+          original_transaction_id: originalTransactionForWrite,
+          sandbox_only: input.environment === "sandbox",
+          not_payable: state.payableState === "not_payable",
+          production_money: false,
+          payout_readiness_proved: false,
+          live_money_enabled_at_verification: false,
+        },
+      })
+      .select("id")
+      .single();
+    if (ledgerError) throw new Error(`Channel subscription lifecycle ledger sync failed: ${ledgerError.message}`);
+    ledgerEventId = ledger.id;
+  }
+
+  const accessGrantPatch = {
+    provider_event_id: input.providerEventId,
+    status: state.grantStatus,
+    starts_at: startsAt,
+    expires_at: expiresAt,
+    refunded_at: state.transactionStatus === "refunded" ? input.occurredAt : null,
+    revoked_at: state.retainAccess ? null : (state.transactionStatus === "refunded" || state.transactionStatus === "revoked" ? input.occurredAt : null),
+    revoke_reason: state.retainAccess ? null : `RevenueCat ${input.eventType.toLowerCase()} event.`,
+    metadata: {
+      product_key: toText(input.product.product_key),
+      channel_subscription_lifecycle: true,
+      original_transaction_id: originalTransactionForWrite,
+      viewer_access_only: true,
+      payment_authority: false,
+      payout_access: false,
+      premium_unlock: false,
+      vip_unlock: false,
+      paid_video_unlock: false,
+      paid_watch_party_ticket_unlock: false,
+      paid_event_unlock: false,
+      platform_wide_badge: false,
+    },
+  };
+
+  const { data: accessGrant, error: grantError } = await adminClient
+    .from("access_grants")
+    .update(accessGrantPatch)
+    .eq("id", accessGrantId)
+    .eq("user_id", input.userId)
+    .eq("grant_type", "channel_subscription")
+    .select("id")
+    .maybeSingle();
+  if (grantError) throw new Error(`Channel subscription lifecycle access sync failed: ${grantError.message}`);
+  if (!accessGrant?.id) return ignoreLifecycle("channel_subscription_access_grant_missing");
+
+  const timestampPatch = {
+    canceled_at: CANCELED_EVENT_TYPES.has(input.eventType) ? input.occurredAt : null,
+    expired_at: EXPIRED_EVENT_TYPES.has(input.eventType) ? input.occurredAt : null,
+    revoked_at: REVOKED_EVENT_TYPES.has(input.eventType) ? input.occurredAt : null,
+  };
+
+  const { error: subscriptionUpdateError } = await adminClient
+    .from("creator_channel_subscriptions")
+    .update({
+      access_grant_id: accessGrant.id,
+      provider_original_transaction_id: originalTransactionForWrite,
+      provider_latest_transaction_id: input.eventId,
+      status: state.subscriptionStatus,
+      current_period_start: startsAt,
+      current_period_end: expiresAt,
+      canceled_at: timestampPatch.canceled_at,
+      expired_at: timestampPatch.expired_at,
+      revoked_at: timestampPatch.revoked_at,
+      metadata: {
+        sandbox_only: input.environment === "sandbox",
+        viewer_access_only: true,
+        channel_subscription_lifecycle: true,
+        latest_event_type: input.eventType,
+        cancellation_pending: state.subscriptionStatus === "cancel_pending",
+        platform_wide_badge: false,
+      },
+    })
+    .eq("id", subscription.id);
+  if (subscriptionUpdateError) throw new Error(`Channel subscription lifecycle subscription update failed: ${subscriptionUpdateError.message}`);
+
+  const { error: subscriberUpdateError } = await adminClient
+    .from("channel_subscribers")
+    .update({
+      status: state.channelSubscriberStatus,
+      expires_at: expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("channel_user_id", toText(offer.creator_id))
+    .eq("subscriber_user_id", input.userId)
+    .eq("source", "billing_sync");
+  if (subscriberUpdateError) throw new Error(`Channel subscription lifecycle subscriber read-model update failed: ${subscriberUpdateError.message}`);
+
+  const transactionPatch = {
+    offer_id: offer.id,
+    creator_id: offer.creator_id,
+    subscriber_id: input.userId,
+    subscription_id: subscription.id,
+    amount_cents: resolveAmountMinor(input.event) || offer.price_cents || 0,
+    currency: resolveCurrency(input.event) || offer.currency || "usd",
+    provider: "revenuecat_google_play",
+    provider_product_id: providerProductId,
+    provider_transaction_id: input.eventId,
+    provider_original_transaction_id: originalTransactionForWrite,
+    provider_event_id: input.providerEventId,
+    ledger_event_id: ledgerEventId,
+    status: state.transactionStatus,
+    payout_status: state.payableState,
+    paid_at: state.transactionStatus === "paid" || state.transactionStatus === "renewal_paid" ? input.occurredAt : null,
+    metadata: {
+      sandbox_only: input.environment === "sandbox",
+      channel_subscription_lifecycle: true,
+      premium_unlock: false,
+      vip_unlock: false,
+      paid_video_unlock: false,
+      paid_watch_party_ticket_unlock: false,
+      paid_event_unlock: false,
+      tips_path: false,
+      platform_wide_badge: false,
+    },
+  };
+  const { data: existingTransaction, error: existingTransactionError } = await adminClient
+    .from("creator_channel_subscription_transactions")
+    .select("id")
+    .eq("provider_event_id", input.providerEventId)
+    .maybeSingle();
+  if (existingTransactionError) throw new Error(`Channel subscription lifecycle transaction lookup failed: ${existingTransactionError.message}`);
+
+  const { data: transaction, error: transactionError } = existingTransaction?.id
+    ? await adminClient
+      .from("creator_channel_subscription_transactions")
+      .update(transactionPatch)
+      .eq("id", existingTransaction.id)
+      .select("id")
+      .single()
+    : await adminClient
+      .from("creator_channel_subscription_transactions")
+      .insert(transactionPatch)
+      .select("id")
+      .single();
+  if (transactionError) throw new Error(`Channel subscription lifecycle transaction sync failed: ${transactionError.message}`);
+
+  const { error: eventLogError } = await adminClient
+    .from("creator_channel_subscription_events")
+    .insert({
+      offer_id: offer.id,
+      subscription_id: subscription.id,
+      transaction_id: transaction.id,
+      actor_id: input.userId,
+      event_type: `provider_${input.eventType.toLowerCase()}`,
+      metadata: {
+        provider_event_id: input.providerEventId,
+        channel_subscription_lifecycle: true,
+        subscription_status: state.subscriptionStatus,
+        grant_status: state.grantStatus,
+        sandbox_only: input.environment === "sandbox",
+      },
+    });
+  if (eventLogError) throw new Error(`Channel subscription lifecycle event log failed: ${eventLogError.message}`);
+
+  const { count: subscriberCount, error: subscriberCountError } = await adminClient
+    .from("creator_channel_subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("offer_id", offer.id)
+    .in("status", ["active", "trialing", "grace_period", "cancel_pending"])
+    .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
+    .is("revoked_at", null)
+    .is("expired_at", null);
+  if (subscriberCountError) throw new Error(`Channel subscription lifecycle subscriber count failed: ${subscriberCountError.message}`);
+
+  const { error: offerCountError } = await adminClient
+    .from("creator_channel_subscription_offers")
+    .update({
+      subscriber_count: subscriberCount ?? 0,
+    })
+    .eq("id", offer.id);
+  if (offerCountError) throw new Error(`Channel subscription lifecycle offer count update failed: ${offerCountError.message}`);
+
+  const { error: providerUpdateError } = await adminClient
+    .from("provider_events")
+    .update({
+      status: state.ledgerStatus === "refunded" ? "refunded" : state.ledgerStatus === "reversed" ? "reversed" : "processed",
+      metadata: {
+        provider_payload_stored: false,
+        provider_product_id: input.productId,
+        original_transaction_id: originalTransactionForWrite,
+        dynamic_product: true,
+        channel_subscription_lifecycle: true,
+        subscription_id: subscription.id,
+        access_grant_id: accessGrant.id,
+        ledger_event_id: ledgerEventId,
+        transaction_id: transaction.id,
+        sandbox_only: input.environment === "sandbox",
+        live_money_action: false,
+        payout_ready: false,
+      },
+    })
+    .eq("id", input.providerEventId);
+  if (providerUpdateError) throw new Error(`Channel subscription lifecycle provider event finalize failed: ${providerUpdateError.message}`);
+
+  return {
+    status: "processed",
+    productKey: toText(input.product.product_key) || null,
+    providerEventId: input.providerEventId,
+    accessGrantId: accessGrant.id,
+    ledgerEventId,
+    subscriptionId: toText(subscription.id),
+    purchaseIntentId: null,
+    environment: input.environment,
+    payableState: state.payableState,
+    grantStatus: state.grantStatus,
+    reason: `channel_subscription_${input.eventType.toLowerCase()}_synced`,
+    duplicateProviderEvent: false,
+    duplicateAccessGrant: true,
+    duplicateLedgerEvent: !!existingLedger?.id,
+  };
+};
+
 const mirrorRevenueCatDynamicMoneyAccess = async (
   adminClient: SupabaseClientLike,
   input: {
@@ -396,6 +831,35 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   if (existingProviderError) throw new Error(`Dynamic provider event duplicate check failed: ${existingProviderError.message}`);
 
   if (existingProviderEvent?.id) {
+    if (
+      existingProviderEvent.status === "ignored"
+      && toText(existingProviderEvent.product_key) === "channel_subscription_sandbox_monthly_499"
+      && input.productId
+    ) {
+      const { data: lifecycleProduct, error: lifecycleProductError } = await adminClient
+        .from("monetization_products")
+        .select("id, product_key, product_type, provider, provider_product_id, environment, status, is_android_digital")
+        .eq("product_key", existingProviderEvent.product_key)
+        .eq("product_type", CHANNEL_SUBSCRIPTION_PRODUCT_TYPE)
+        .maybeSingle();
+      if (lifecycleProductError) throw new Error(`Channel subscription duplicate lifecycle product lookup failed: ${lifecycleProductError.message}`);
+      if (lifecycleProduct?.id && existingProviderEvent.environment === "sandbox") {
+        return syncChannelSubscriptionLifecycle(adminClient, {
+          event: input.event,
+          eventType: input.eventType,
+          eventId: input.eventId,
+          userId: input.userId,
+          productId: input.productId,
+          environment,
+          status: input.status,
+          rawEventHash: input.rawEventHash,
+          product: lifecycleProduct,
+          providerEventId: existingProviderEvent.id,
+          occurredAt,
+        });
+      }
+    }
+
     const { data: existingLedger, error: existingLedgerError } = await adminClient
       .from("money_access_ledger_events")
       .select("id")
@@ -506,8 +970,24 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   if (!product?.id) return ignored("product_mapping_missing");
   if (environment !== "sandbox") return ignored("production_or_setup_event_blocked");
   if (product.environment !== "sandbox" || product.status !== "sandbox") return ignored("product_not_sandbox_enabled");
-  if (!ACTIVE_EVENT_TYPES.has(input.eventType) && !REVOKED_EVENT_TYPES.has(input.eventType) && !CANCELED_EVENT_TYPES.has(input.eventType) && !EXPIRED_EVENT_TYPES.has(input.eventType)) {
+  if (!ACTIVE_EVENT_TYPES.has(input.eventType) && !REVOKED_EVENT_TYPES.has(input.eventType) && !CANCELED_EVENT_TYPES.has(input.eventType) && !EXPIRED_EVENT_TYPES.has(input.eventType) && !BILLING_ISSUE_EVENT_TYPES.has(input.eventType)) {
     return ignored("unsupported_event_type");
+  }
+
+  if (product.product_type === CHANNEL_SUBSCRIPTION_PRODUCT_TYPE && input.eventType !== "INITIAL_PURCHASE") {
+    return syncChannelSubscriptionLifecycle(adminClient, {
+      event: input.event,
+      eventType: input.eventType,
+      eventId: input.eventId,
+      userId: input.userId,
+      productId: input.productId,
+      environment,
+      status: input.status,
+      rawEventHash: input.rawEventHash,
+      product,
+      providerEventId: providerEvent.id,
+      occurredAt,
+    });
   }
 
   const nowIso = new Date().toISOString();

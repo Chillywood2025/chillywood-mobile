@@ -25,9 +25,16 @@ Follow-up proof passed:
 - Authenticated non-subscriber UI denial on `/channel-subscription/[creatorId]` after the purchase.
 - Provider lifecycle delivery reached Supabase for renewal, cancellation, and expiration events.
 
+Lifecycle handling update:
+
+- `revenuecat-webhook` now handles Channel Subscription `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`, `UNCANCELLATION`, `PRODUCT_CHANGE`, `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED` events.
+- Migrations `20260613091417_channel_subscription_lifecycle_handling.sql` and `20260613092100_channel_subscription_cancel_pending_unique.sql` are applied remotely.
+- Existing ignored lifecycle rows were not manually rewritten because they do not contain the original raw provider payload. Lifecycle proof now requires a fresh or safely replayed signed RevenueCat event.
+- Post-deploy Supabase readback found no fresh lifecycle event yet; the latest lifecycle rows remain the historical ignored `RENEWAL`, `CANCELLATION`, and `EXPIRATION` rows from before this handler deployment.
+
 Still not claimed:
 
-- Cancellation/expiration/revoke handling is not complete because the current `revenuecat-webhook` stores those lifecycle events as `ignored`.
+- Provider-driven lifecycle proof after the new handler.
 - Live-money approval.
 
 ## Provider Setup
@@ -93,6 +100,8 @@ Migrations applied remotely:
 - `20260612224536_channel_subscriptions_v1_sandbox.sql`
 - `20260613004804_channel_subscription_purchase_intent_allowlist.sql`
 - `20260613021940_channel_subscription_valid_play_product_id.sql`
+- `20260613091417_channel_subscription_lifecycle_handling.sql`
+- `20260613092100_channel_subscription_cancel_pending_unique.sql`
 
 Updated function deployed:
 
@@ -199,12 +208,25 @@ Provider lifecycle investigation found a real backend follow-up.
 - RevenueCat dashboard exposed a `Refund` action for the exact sandbox entitlement, but the action returned `Refunding the transaction was unsuccessful.`
 - Screenshot: `/tmp/chillywood-channel-subscription-proof-v51-followup/09_revenuecat_refund_unsuccessful.png`.
 - Google Play order dashboard inspection through Chrome could not be completed safely in this environment because the Play order page repeatedly timed out during automation reads, and no local Google Play service-account order tooling was available.
-- Supabase did receive provider lifecycle events for the same app user/product:
+- Before lifecycle handling was added, Supabase did receive provider lifecycle events for the same app user/product:
   - `RENEWAL` events were stored as `ignored`.
   - `CANCELLATION` events `31065f73-bcb7-45ee-976b-6323ef856cc0` and `50b85cc0-af9d-4214-b333-dae7952cc811` were stored as `ignored`.
   - `EXPIRATION` event `e85db1fa-deb4-40ae-8278-51aa70fbfbb6` was stored as `ignored`.
 - The original subscription row still reads `active`, but `current_period_end` and the access grant `expires_at` are in the past, so resolver-style active-access checks now return zero active access.
-- Cancellation/expiration/revoke is therefore provider-delivery-proven but not backend-handling-proven.
+- Cancellation/expiration/revoke delivery is provider-delivery-proven; post-fix backend handling still needs a fresh or safely replayed signed RevenueCat event.
+
+## Lifecycle Handling
+
+Implemented and deployed on June 13, 2026:
+
+- `INITIAL_PURCHASE` remains the verified purchase path that creates the original channel subscription, transaction, and access grant.
+- `RENEWAL` keeps the subscription active, updates provider transaction/period metadata when supplied, keeps the channel-subscription access grant active, and writes a renewal transaction/event without duplicating replayed provider events.
+- `CANCELLATION` marks the subscription `cancel_pending` when RevenueCat still reports future access, keeps access only until `current_period_end`, records `canceled_at`, and writes audit/readback rows.
+- `EXPIRATION` marks the subscription expired, deactivates the channel-subscription access grant, updates `channel_subscribers`, and makes the subscriber-only route block after refresh.
+- `BILLING_ISSUE` moves the subscription to `grace_period` while an unexpired period exists, otherwise to `paused`, and keeps access only when the period remains valid.
+- `UNCANCELLATION` and `PRODUCT_CHANGE` restore/update active subscription state when provider entitlement remains active.
+- `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED` mark subscription/access inactive according to provider state and keep Money Center readback separate from Premium, Tips, Paid Videos, Paid Watch-Party tickets, Paid Events, and VIP.
+- `cancel_pending` is allowed by the active-subscription resolver only until the provider period expires. Premium and VIP do not bypass the creator channel subscription gate.
 
 ## Prior Blockers Closed
 
@@ -218,15 +240,16 @@ Provider lifecycle investigation found a real backend follow-up.
 
 ## Remaining Proof Gaps
 
-Cancellation/expiration/revoke handling:
+Provider lifecycle proof:
 
-- Provider lifecycle events now reach Supabase, but `revenuecat-webhook` ignores renewal, cancellation, and expiration events for Channel Subscriptions V1.
-- Implement webhook handling for subscription lifecycle events before claiming cancellation/revoke proof.
+- The lifecycle handler is implemented and deployed, but old ignored provider rows were not rewritten.
+- Post-deploy Supabase readback found no fresh lifecycle event to process yet.
+- A fresh or safely replayed signed RevenueCat lifecycle event must prove `RENEWAL`, `CANCELLATION`, and `EXPIRATION` are processed as handled, not ignored.
 - Do not fake cancellation/expiration/revoke by manual DB mutation.
 
 ## Next Steps
 
-- Add Channel Subscription lifecycle handling for RevenueCat `RENEWAL`, `CANCELLATION`, and `EXPIRATION` events.
-- Re-run provider-driven cancellation/expiration proof after webhook lifecycle handling exists.
+- Trigger or wait for a fresh signed RevenueCat `RENEWAL`, `CANCELLATION`, and `EXPIRATION` event after the lifecycle handler deployment.
+- Confirm the webhook marks those events handled, updates subscription/access-grant state, and updates Money Center readback.
 - Keep live money disabled until explicit production approval.
 - BrowserStack remains deferred until final full monetization regression.
