@@ -6,6 +6,8 @@ Last updated: June 13, 2026
 
 Public-v1 is not launch-approved by this checklist yet. This document separates launch blockers, safe deferred provider-tooling gaps, and post-v1 enhancements.
 
+Launch-candidate polish pass: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. This pass made small copy/logging clarity fixes only and did not run BrowserStack or approve launch.
+
 ## 1. Auth
 
 - [ ] Forgot-password reset email proof on Play/internal runtime.
@@ -45,6 +47,7 @@ Public-v1 is not launch-approved by this checklist yet. This document separates 
 - [x] Copy says sandbox/not-payable.
 - [x] No live earnings, cash-out, withdrawal, transfer, payout release, or payable balance claim.
 - [x] Premium separation copy present.
+- [x] Creator Channel Subscription and VIP unavailable states explain the sandbox blocker instead of leaving a disabled CTA unexplained.
 
 ## 5. Brand Studio
 
@@ -74,6 +77,7 @@ Public-v1 is not launch-approved by this checklist yet. This document separates 
 - [ ] Expired room fails closed.
 - [ ] Paid Watch-Party direct link blocks before camera/mic/membership/presence.
 - [ ] Paid Watch-Party stays Party Waiting Room -> Party Room, not Live Stage.
+- [x] Join Now proof logs are sanitized dev-only logs, not raw production console logs.
 
 ## 8. Player / Video
 

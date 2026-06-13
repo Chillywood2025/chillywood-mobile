@@ -1,5 +1,13 @@
 # NEXT TASK
 
+## Launch-Candidate Polish Pass
+
+`docs/LAUNCH_CANDIDATE_POLISH_PASS.md` records the scoped launch-candidate polish pass before final QA. The pass fixed only small trust/proof issues: Watch-Party Join Now branch proof logs now use sanitized dev-only `debugLog`, creator Channel Subscription and VIP cards show visible unavailable-state reasons, and the creator channel loading state is clearer.
+
+No new monetization features were added. Live money, payouts, cash-out, withdrawal, transfer, payable balances, LiveKit token authority, Watch-Party route ownership, Party Room routing, Premium gates, RLS, and admin authority were not changed.
+
+Next task recommendation: execute `docs/FINAL_PUBLIC_V1_QA_PLAN.md` on the latest Play/internal launch-candidate runtime, then run BrowserStack final regression after local/manual proof is captured.
+
 ## Monetization Closeout / Final Regression
 
 The six planned creator monetization flows are now sandbox-proven for their core paths and consolidated in Money Center:

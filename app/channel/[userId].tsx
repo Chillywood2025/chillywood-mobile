@@ -930,6 +930,7 @@ export default function PublicChannelScreen() {
     if (!offer) return null;
     const subscribed = subscriptionAccess?.allowed === true;
     const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
+    const unavailableCopy = "Channel Subscription is not available for this creator in sandbox right now. Premium, VIP, paid videos, paid rooms, and paid events stay separate.";
     return (
       <AppSection
         title="Channel Subscription"
@@ -943,6 +944,7 @@ export default function PublicChannelScreen() {
 	            {`Subscribe to this creator's channel for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.`}
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
+          {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
           <TouchableOpacity
             style={[styles.playButton, (subscriptionBusy || unavailable) && styles.actionButtonDisabled]}
             activeOpacity={0.86}
@@ -965,6 +967,7 @@ export default function PublicChannelScreen() {
     if (!offer) return null;
     const isVip = vipAccess?.allowed === true;
     const unavailable = !isVip && !vipAccess?.requiresPurchase;
+    const unavailableCopy = "VIP is not available for this creator in sandbox right now. Premium, channel subscriptions, paid videos, paid rooms, and paid events stay separate.";
     return (
       <AppSection
         title="VIP Pass"
@@ -978,6 +981,7 @@ export default function PublicChannelScreen() {
             {`Get VIP for this creator's channel for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.`}
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
+          {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
           <TouchableOpacity
             style={[styles.playButton, (vipBusy || unavailable) && styles.actionButtonDisabled]}
             activeOpacity={0.86}
@@ -1024,7 +1028,7 @@ export default function PublicChannelScreen() {
         {renderBackHeader()}
         <View style={styles.loadingCard}>
           <ActivityIndicator color="#DC143C" />
-          <Text style={styles.loadingText}>Loading platform…</Text>
+          <Text style={styles.loadingText}>Loading creator channel…</Text>
         </View>
       </View>
     );

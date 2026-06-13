@@ -8,6 +8,8 @@ This plan is the final public-v1 launch-readiness QA pass after creator monetiza
 
 Canonical monetization closeout truth: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md`.
 
+Launch-candidate polish record: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. That pass made small copy/logging clarity fixes only; it did not run BrowserStack, enable live money, add features, or change route/payment authority.
+
 ## Current Launch Blockers
 
 - BrowserStack final multi-device regression has not run.
@@ -139,6 +141,7 @@ Proof steps:
 6. Join/leave/reconnect smoke passes.
 7. Old/expired room fails closed.
 8. Paid Watch-Party direct Party Room link stays gated before camera/mic/membership/presence setup.
+9. Join Now blocked states show an explicit expired/ticket/free/active-ticket outcome and do not silently fail.
 
 Do not change route ownership or reroute to Live Stage.
 
@@ -159,6 +162,7 @@ Global checks:
 - live money off
 - no cash-out/withdrawal/transfer/payout release
 - no mixing between Tips, Premium, Paid Videos, rooms, events, subscriptions, or VIP
+- unavailable Subscribe/Get VIP cards explain the sandbox/provider blocker instead of showing a dead disabled CTA
 
 ### Google Play / Provider Readiness
 

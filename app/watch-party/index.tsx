@@ -675,12 +675,12 @@ export default function WatchPartyIndexScreen() {
     setJoinError(null);
     setPaidTicketNotice(null);
     const nextPartyId = String(nextPreview.room.partyId ?? "").trim();
-    console.log("join_now_room_lookup_start", {
+    debugLog("watch-party", "join_now_room_lookup_start", {
       partyId: nextPartyId,
       roomType: nextPreview.room.roomType,
     });
     if (!nextPartyId) {
-      console.log("join_now_blocked_reason", {
+      debugLog("watch-party", "join_now_blocked_reason", {
         reason: "missing_party_id",
       });
       setJoinError("Room is missing an id. Try another code.");
@@ -688,7 +688,7 @@ export default function WatchPartyIndexScreen() {
     }
 
     const latestRoom = await getPartyRoom(nextPartyId).catch((error) => {
-      console.log("join_now_error", {
+      debugLog("watch-party", "join_now_error", {
         partyId: nextPartyId,
         stage: "room_lookup",
         message: error instanceof Error ? error.message : "room_lookup_failed",
@@ -697,7 +697,7 @@ export default function WatchPartyIndexScreen() {
     });
 
     if (!latestRoom) {
-      console.log("join_now_room_expired", {
+      debugLog("watch-party", "join_now_room_expired", {
         partyId: nextPartyId,
       });
       setPaidTicketGate(null);
@@ -706,7 +706,7 @@ export default function WatchPartyIndexScreen() {
     }
 
     const currentPreview = { ...nextPreview, room: latestRoom };
-    console.log("join_now_room_lookup_success", {
+    debugLog("watch-party", "join_now_room_lookup_success", {
       partyId: latestRoom.partyId,
       roomType: latestRoom.roomType,
     });
@@ -715,7 +715,7 @@ export default function WatchPartyIndexScreen() {
       currentPreview.room.roomType,
       currentPreview.room.sourceId ?? currentPreview.room.titleId ?? nextPartyId,
     ))) {
-      console.log("join_now_blocked_reason", {
+      debugLog("watch-party", "join_now_blocked_reason", {
         partyId: nextPartyId,
         reason: "premium_or_runtime_gate",
       });
@@ -723,11 +723,11 @@ export default function WatchPartyIndexScreen() {
     }
 
     if (currentPreview.room.roomType !== "live") {
-      console.log("join_now_ticket_check_start", {
+      debugLog("watch-party", "join_now_ticket_check_start", {
         partyId: nextPartyId,
       });
       const ticketAccess = await resolvePaidWatchPartyTicketAccess(nextPartyId).catch((error) => {
-        console.log("join_now_error", {
+        debugLog("watch-party", "join_now_error", {
           partyId: nextPartyId,
           stage: "ticket_check",
           message: error instanceof Error ? error.message : "ticket_check_failed",
@@ -735,7 +735,7 @@ export default function WatchPartyIndexScreen() {
         return null;
       });
       if (!ticketAccess) {
-        console.log("join_now_blocked_reason", {
+        debugLog("watch-party", "join_now_blocked_reason", {
           partyId: nextPartyId,
           reason: "ticket_check_unavailable",
         });
@@ -743,7 +743,7 @@ export default function WatchPartyIndexScreen() {
         return;
       }
       if (ticketAccess.offer?.id) {
-        console.log("join_now_paid_offer_detected", {
+        debugLog("watch-party", "join_now_paid_offer_detected", {
           partyId: nextPartyId,
           offerId: ticketAccess.offer.id,
           status: ticketAccess.offer.status,
@@ -751,12 +751,12 @@ export default function WatchPartyIndexScreen() {
         });
       }
       if (!ticketAccess.allowed) {
-        console.log("join_now_ticket_missing", {
+        debugLog("watch-party", "join_now_ticket_missing", {
           partyId: nextPartyId,
           reason: ticketAccess.reason,
           requiresPurchase: ticketAccess.requiresPurchase,
         });
-        console.log("join_now_route_waiting_room", {
+        debugLog("watch-party", "join_now_route_waiting_room", {
           partyId: nextPartyId,
           reason: ticketAccess.requiresPurchase ? "ticket_purchase_required" : ticketAccess.reason,
         });
@@ -769,7 +769,7 @@ export default function WatchPartyIndexScreen() {
         return;
       }
       if (ticketAccess.ticketId) {
-        console.log("join_now_ticket_active", {
+        debugLog("watch-party", "join_now_ticket_active", {
           partyId: nextPartyId,
           ticketId: ticketAccess.ticketId,
         });
@@ -785,7 +785,7 @@ export default function WatchPartyIndexScreen() {
     }).catch(() => null);
 
     if (!access) {
-      console.log("join_now_blocked_reason", {
+      debugLog("watch-party", "join_now_blocked_reason", {
         partyId: nextPartyId,
         reason: "access_unknown",
       });
@@ -799,7 +799,7 @@ export default function WatchPartyIndexScreen() {
     }
 
     if (access.isAllowed) {
-      console.log("join_now_route_party_room", {
+      debugLog("watch-party", "join_now_route_party_room", {
         partyId: nextPartyId,
       });
       trackEvent("room_join_success", {
@@ -811,7 +811,7 @@ export default function WatchPartyIndexScreen() {
     }
 
     if (isAccessSheetReason(access.reason)) {
-      console.log("join_now_blocked_reason", {
+      debugLog("watch-party", "join_now_blocked_reason", {
         partyId: nextPartyId,
         reason: access.reason,
       });
@@ -827,7 +827,7 @@ export default function WatchPartyIndexScreen() {
       return;
     }
 
-    console.log("join_now_blocked_reason", {
+    debugLog("watch-party", "join_now_blocked_reason", {
       partyId: nextPartyId,
       reason: access.reason,
     });
@@ -835,12 +835,12 @@ export default function WatchPartyIndexScreen() {
   }, [navigateToPreviewRoom, requirePremiumRoomEntry]);
 
   const onConfirmJoin = async () => {
-    console.log("join_now_pressed", {
+    debugLog("watch-party", "join_now_pressed", {
       hasPreview: Boolean(preview),
       partyId: preview?.room.partyId ?? null,
     });
     if (!preview) {
-      console.log("join_now_blocked_reason", {
+      debugLog("watch-party", "join_now_blocked_reason", {
         reason: "missing_preview",
       });
       setJoinError("Find the room again before joining.");
