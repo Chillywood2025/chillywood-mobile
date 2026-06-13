@@ -4,7 +4,7 @@ Last updated: June 13, 2026
 
 ## Status
 
-VIP Passes V1 is repo-side implemented, Supabase-applied, webhook-deployed, and Play/internal v52 creator-setup/gate-proven in sandbox mode. It is not yet sandbox purchase-proven because the Google Play / RevenueCat one-time product is not available on the device.
+VIP Passes V1 is repo-side implemented, Supabase-applied, webhook-deployed, and Play/internal v52 sandbox-proven for provider setup, purchase, verified VIP pass/access creation, VIP route access, second non-VIP denial, and Money Center readback.
 
 Live money remains disabled. VIP rows are sandbox/not-payable until a later live-money approval lane passes.
 
@@ -33,6 +33,8 @@ VIP V1 does not unlock:
 - Provider: RevenueCat / Google Play sandbox-compatible digital product path.
 - Product key: `vip_pass_sandbox_499`
 - Provider product id: `cw_vip_pass_sandbox_499`
+- Google Play setup: one-time product `cw_vip_pass_sandbox_499`, purchase option `vip-pass-sandbox`, active, USD 4.99 base price.
+- RevenueCat setup: Play Store non-consumable product `cw_vip_pass_sandbox_499`, store status `Published`; not attached to Premium entitlement or a Premium offering.
 - Stripe Tips path: not used.
 - Premium path: separate.
 
@@ -126,36 +128,62 @@ Passed:
 6. Non-VIP direct route gate passed:
    - `/vip-pass/[creatorId]` showed `VIP ACCESS REQUIRED`
    - route did not show VIP-only area before purchase
-7. Provider lookup blocked before checkout:
+7. Provider lookup initially blocked before checkout:
    - tapping `Get VIP` showed `VIP Pass sandbox product is not available on this device yet.`
    - Play Console One-time products search for `cw_vip_pass_sandbox_499` returned `No results`
    - no VIP transaction row was created
    - no VIP pass row was created
    - no VIP access grant was created
+8. Provider setup passed:
+   - Google Play one-time product `cw_vip_pass_sandbox_499` was created and activated.
+   - purchase option `vip-pass-sandbox` is active.
+   - RevenueCat product `cw_vip_pass_sandbox_499` is published as a Play Store non-consumable.
+   - product is not attached to Premium entitlement.
+9. Product availability passed on the same v52 Play/internal runtime after app restart:
+   - tapping `Get VIP` opened the Google Play test purchase sheet.
+   - sheet showed `Chi'llwood VIP Pass Sandbox`, `$4.99`, and `Test card, always approves`.
+10. Sandbox purchase passed:
+   - VIP fan tester: `tips_fan_test` / `c2afa6cc-52f2-4714-b972-89863582d05a`
+   - creator: `tips_creator_test` / `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5`
+   - offer: `7edc7696-b371-4d76-9c07-8c160c0b82b2`
+   - provider event id: `1e81db62-4b17-45b1-8369-004302d41108`
+   - provider transaction id: `73EFF539-6E60-4CAA-8A87-1395E35992B6`
+   - transaction id: `829f230f-7734-4fad-a88b-bd674c1daa8e`
+   - VIP pass id: `b19d3a26-1431-4033-bf70-5f3e5311e719`
+   - access grant id: `3b051689-7879-4e39-9712-efab1d1d783c`
+   - transaction status: `paid`
+   - payout status: `not_payable`
+   - access grant status: `sandbox_only`
+11. VIP fan access passed:
+   - `/vip-pass/ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5` showed `VIP` / `VIP is active for this creator channel only`.
+   - copy confirmed VIP does not unlock Premium, paid videos, Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, payouts, or other creators' channels.
+12. Separation readback passed for the proof window:
+   - Tips created: `0`
+   - Paid Video grants created: `0`
+   - Paid Watch-Party tickets created: `0`
+   - Paid Event passes created: `0`
+   - Channel Subscription rows created: `0`
+   - Premium/user entitlement rows created or updated by the VIP purchase: `0`
+   - VIP grants created: `1`
+13. Second authenticated non-VIP denial passed:
+   - fresh proof tester `vip-non-vip-20260613@chillywood.test` / `d860574d-38a0-4452-a1e4-2d01b97bd397` was created with local-only ignored credentials.
+   - `/vip-pass/[creatorId]` showed `VIP ACCESS REQUIRED`, `VIP Pass`, and `Get VIP`.
+   - Supabase readback showed zero active VIP passes and zero active VIP access grants for that fan/creator.
+14. Creator Money Center readback passed:
+   - a short-lived `test_grant` Premium entitlement was added only to open the existing Platform Studio gate for creator readback, then revoked after capture.
+   - Money Center > Transactions > VIP showed `$4.99 VIP pass`, `Paid`, `VIP Pass · 6/13/2026, 9:46:06 AM · Sandbox`, and `Payout status: not_payable`.
+   - Money Center copy kept VIP separate from Premium, Tips, Paid Videos, Watch-Party tickets, Paid Events, Channel Subscriptions, LiveKit authority, and room permissions.
 
-Pending:
+Proof files:
 
-1. Create/activate Google Play one-time product `cw_vip_pass_sandbox_499`.
-2. Map/import the product in RevenueCat so `readRevenueCatNonSubscriptionProducts(["cw_vip_pass_sandbox_499"])` returns a product to the Play-installed app.
-3. Retry sandbox purchase on Play/internal v52 or newer.
-4. VIP fan completes RevenueCat / Google Play sandbox purchase.
-5. Signed provider event creates:
-   - VIP transaction id: pending
-   - VIP pass id: pending
-   - access grant id: pending
-6. VIP fan can access VIP route.
-7. Second non-VIP fan remains blocked.
-8. Creator Money Center Transactions shows the VIP row as sandbox/not_payable.
-9. Direct client active-VIP writes are denied.
-10. Refund/revoke proof runs only if safe provider tooling/order id exists; otherwise it remains deferred.
+- `/tmp/chillywood-vip-v1-proof-20260613/second-non-vip-denial.png`
+- `/tmp/chillywood-vip-v1-proof-20260613/fresh-second-non-vip-denial.png`
+- `/tmp/chillywood-vip-v1-proof-20260613/money-center-vip-filter.png`
 
 ## Current Blockers
 
-- Google Play product availability is blocked: One-time products search returned `No results` for `cw_vip_pass_sandbox_499`.
-- RevenueCat product availability is blocked until the Google Play one-time product exists/imports/maps.
-- Play/internal v52 is installed and valid, but checkout cannot start until product setup is complete.
-- No sandbox VIP purchase has been run.
-- No provider refund/revoke proof is available yet.
+- Provider refund/revoke proof is deferred. The verified provider event exposes the RevenueCat transaction id, but no safe Google Play order id was available in Supabase readback for a targeted provider refund/revoke. Do not fake refund/revoke by manual DB mutation.
+- Direct client active-VIP write-denial remains a follow-up hardening proof if required; access and transaction creation were provider/webhook-created in this proof.
 
 ## BrowserStack
 

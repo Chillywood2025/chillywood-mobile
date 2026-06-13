@@ -1,8 +1,10 @@
 # Monetization Stack Final Truth
 
-Updated: June 5, 2026
+Updated: June 13, 2026
 
 This document is the canonical repo truth for Chi'llwood monetization readiness after the completed Google Play / RevenueCat, Stripe merch, and Stripe Connect sandbox proof lanes. It consolidates proof status only. It does not activate production money.
+
+June 13 creator-money update: the six Money Center creator monetization flows now have local/manual sandbox proof for their core purchase/access or contribution paths: Tips V1, Paid Videos V1, Paid Watch-Party Seats V1, Paid Events V1, Channel Subscriptions V1, and VIP Passes V1. VIP Passes V1 completed after Google Play one-time product `cw_vip_pass_sandbox_499` was activated and mapped in RevenueCat as a published non-consumable; Play/internal v52 verified provider event `1e81db62-4b17-45b1-8369-004302d41108`, VIP transaction `829f230f-7734-4fad-a88b-bd674c1daa8e`, VIP pass `b19d3a26-1431-4033-bf70-5f3e5311e719`, access grant `3b051689-7879-4e39-9712-efab1d1d783c`, VIP route access, authenticated second non-VIP denial, and Money Center VIP readback as sandbox/not payable. Live money remains off, sandbox rows are not payable, and provider refund/revoke proof remains deferred where safe Google Play order tooling is unavailable.
 
 Production policy operations update: `docs/PRODUCTION_MONEY_POLICY_OPERATIONS_READINESS.md` and `docs/PRODUCTION_MONEY_READINESS_INDEX.md` now prepare future-production legal, tax, fraud/risk, support, refund/return, merch fulfillment, payout operations, and Owner/Admin approval-gate readiness. These are policy and operations readiness artifacts only. They do not enable production checkout, production merch launch, payout execution, cash-out, withdrawal, transfer, payable balances, Stripe Android digital checkout, LiveKit authority, route ownership changes, or safety bypass.
 
@@ -39,6 +41,11 @@ Sandbox-proved product classes:
 
 - Premium subscription
 - Creator tip
+- Paid video unlock
+- Paid Watch-Party room ticket
+- Paid event pass
+- Channel subscription
+- VIP pass
 - Watch-Party Live ticket
 - Live Watch-Party access pass
 - Live Watch-Party seat pass
