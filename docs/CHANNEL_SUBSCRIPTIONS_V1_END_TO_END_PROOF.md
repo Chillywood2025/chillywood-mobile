@@ -19,14 +19,16 @@ Passed:
 - Subscribed fan saw `SUBSCRIBED` and could access `/channel-subscription/[creatorId]`.
 - Subscription copy remained separate from Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payouts, and other creators' channels.
 
+Follow-up proof passed:
+
+- Creator Money Center visual screenshot/readback for exact transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
+- Authenticated non-subscriber UI denial on `/channel-subscription/[creatorId]` after the purchase.
+- Provider lifecycle delivery reached Supabase for renewal, cancellation, and expiration events.
+
 Still not claimed:
 
-- Creator Money Center visual screenshot for the exact subscription transaction.
-- Second authenticated unsubscribed-fan UI denial after the purchase.
-- Cancellation/expiration/revoke proof.
+- Cancellation/expiration/revoke handling is not complete because the current `revenuecat-webhook` stores those lifecycle events as `ignored`.
 - Live-money approval.
-
-Server readback did prove transaction/subscription creation and grant scoping for the subscribed fan. A separate visual proof pass should capture Money Center Transactions and a second authenticated unsubscribed fan before closing those UI proof gaps.
 
 ## Provider Setup
 
@@ -133,6 +135,7 @@ Play/internal runtime:
 - Installer: `com.android.vending`
 - VersionCode: `51`
 - Proof path: `/tmp/chillywood-channel-subscription-proof-v51/`
+- Follow-up proof path: `/tmp/chillywood-channel-subscription-proof-v51-followup/`
 
 Creator/channel proof target:
 
@@ -171,6 +174,38 @@ App result:
 - After purchase, `/channel-subscription/[creatorId]` showed `SUBSCRIBED`.
 - The subscriber-only copy explicitly stated the subscription is for this creator channel only and does not unlock Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators' channels.
 
+## Follow-Up Proof
+
+Creator Money Center visual readback passed on June 13, 2026.
+
+- Creator logged into the Play/internal v51 app.
+- Platform Studio / Money Center / Transactions visually showed exact transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
+- Visible row copy showed `$4.99 channel subscription`, `Paid`, `Channel subscription`, `Sandbox`, and `payout status: not_payable`.
+- The row was not shown as Tips, Paid Videos, Paid Watch-Party, Paid Events, Premium, or VIP.
+- Money Center still showed no withdrawable/live payout claim.
+- Screenshot/XML: `/tmp/chillywood-channel-subscription-proof-v51-followup/08_creator_money_center_channel_subscription_transaction.png` and `.xml`.
+
+Authenticated non-subscriber denial passed.
+
+- A signed-in app session without an active subscription opened `/channel-subscription/c2afa6cc-52f2-4714-b972-89863582d05a`.
+- The route showed `SUBSCRIBER ACCESS REQUIRED`, `Channel subscription`, and `Subscribe`.
+- The route copy kept Premium, VIP, paid videos, Watch-Party tickets, Paid Events, and other creator purchases separate.
+- Supabase readback showed zero active subscription rows and zero active channel-subscription access grants for users other than subscriber `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5`.
+- Screenshot/XML: `/tmp/chillywood-channel-subscription-proof-v51-followup/01_current_user_subscriber_route.png` and `.xml`.
+
+Provider lifecycle investigation found a real backend follow-up.
+
+- RevenueCat customer history showed the exact sandbox subscription and later renewals for product `channel_subscription_sandbox_monthly_499:monthly`.
+- RevenueCat dashboard exposed a `Refund` action for the exact sandbox entitlement, but the action returned `Refunding the transaction was unsuccessful.`
+- Screenshot: `/tmp/chillywood-channel-subscription-proof-v51-followup/09_revenuecat_refund_unsuccessful.png`.
+- Google Play order dashboard inspection through Chrome could not be completed safely in this environment because the Play order page repeatedly timed out during automation reads, and no local Google Play service-account order tooling was available.
+- Supabase did receive provider lifecycle events for the same app user/product:
+  - `RENEWAL` events were stored as `ignored`.
+  - `CANCELLATION` events `31065f73-bcb7-45ee-976b-6323ef856cc0` and `50b85cc0-af9d-4214-b333-dae7952cc811` were stored as `ignored`.
+  - `EXPIRATION` event `e85db1fa-deb4-40ae-8278-51aa70fbfbb6` was stored as `ignored`.
+- The original subscription row still reads `active`, but `current_period_end` and the access grant `expires_at` are in the past, so resolver-style active-access checks now return zero active access.
+- Cancellation/expiration/revoke is therefore provider-delivery-proven but not backend-handling-proven.
+
 ## Prior Blockers Closed
 
 - v48 was abandoned for official proof because its build metadata pointed to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
@@ -183,26 +218,15 @@ App result:
 
 ## Remaining Proof Gaps
 
-Money Center visual readback:
+Cancellation/expiration/revoke handling:
 
-- Server readback proves transaction `e49cddea-cd6d-4097-b70c-a07abaa24823` exists as `paid`, sandbox, and `not_payable`.
-- A creator-side app screenshot of Money Center Transactions for this exact row is still pending.
-
-Second unsubscribed fan:
-
-- v49 previously proved unsubscribed route gating before purchase.
-- A post-purchase second authenticated unsubscribed-fan UI denial proof is still pending.
-- Server rows show the active grant/subscription is scoped to subscriber `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5`, not globally public.
-
-Cancellation/expiration/revoke:
-
-- Deferred until safe RevenueCat / Google Play tooling or a safe test order path is available.
+- Provider lifecycle events now reach Supabase, but `revenuecat-webhook` ignores renewal, cancellation, and expiration events for Channel Subscriptions V1.
+- Implement webhook handling for subscription lifecycle events before claiming cancellation/revoke proof.
 - Do not fake cancellation/expiration/revoke by manual DB mutation.
 
 ## Next Steps
 
-- Capture creator Money Center Transactions visual readback for transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
-- Capture second authenticated unsubscribed-fan UI denial after the successful purchase.
-- Attempt cancellation/expiration/revoke only when safe RevenueCat / Google Play tooling is available.
+- Add Channel Subscription lifecycle handling for RevenueCat `RENEWAL`, `CANCELLATION`, and `EXPIRATION` events.
+- Re-run provider-driven cancellation/expiration proof after webhook lifecycle handling exists.
 - Keep live money disabled until explicit production approval.
 - BrowserStack remains deferred until final full monetization regression.

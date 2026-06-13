@@ -2,7 +2,7 @@
 
 ## Next Creator Monetization Proof
 
-Channel Subscriptions V1 is now implemented, Supabase-applied, webhook-deployed, and core Play/RevenueCat sandbox-purchase-proven. Do not build VIP Passes until the remaining Channel Subscriptions proof gaps are captured or explicitly deferred.
+Channel Subscriptions V1 is now implemented, Supabase-applied, webhook-deployed, and Play/RevenueCat sandbox-proven for purchase, Money Center visual readback, and authenticated non-subscriber denial. Do not build VIP Passes until the remaining Channel Subscriptions lifecycle handling gap is either fixed or explicitly deferred.
 
 Closed Channel Subscriptions truth:
 
@@ -13,15 +13,18 @@ Closed Channel Subscriptions truth:
 - After a cold app restart, the app saw the product and Google Play Billing opened for the sandbox subscription.
 - Subscriber `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5` completed sandbox subscription purchase for creator `c2afa6cc-52f2-4714-b972-89863582d05a` / offer `c7f74157-421d-41c6-8562-161965bab031`.
 - Signed provider event `9dabc47f-61f7-49f7-a169-3adb0ebbac30` processed through `revenuecat-webhook`.
-- Supabase created active subscription `436f2acc-ec46-4977-ba51-958452ea2f2e`, paid/not-payable transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`, and sandbox access grant `1a5492fe-c135-435e-878c-5e21a7638322`.
+- Supabase created subscription `436f2acc-ec46-4977-ba51-958452ea2f2e`, paid/not-payable transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`, and sandbox access grant `1a5492fe-c135-435e-878c-5e21a7638322`.
 - The subscriber route showed `SUBSCRIBED` and subscription copy stayed separate from Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payouts, and other creators' channels.
+- Creator Money Center Transactions visually showed exact transaction `e49cddea-cd6d-4097-b70c-a07abaa24823` as `$4.99 channel subscription`, `Paid`, `Sandbox`, and `payout status: not_payable`, separate from Tips, Paid Videos, Paid Watch-Party, Paid Events, Premium, and VIP.
+- Authenticated non-subscriber route denial passed after purchase: `/channel-subscription/[creatorId]` showed `SUBSCRIBER ACCESS REQUIRED` and `Subscribe`, while Supabase readback showed zero active other-user subscription rows and zero active channel-subscription grants.
 - Live money remains off and sandbox rows are not payable.
 
-Remaining Channel Subscriptions proof:
+Remaining Channel Subscriptions work:
 
-- Capture creator Money Center Transactions visual readback for transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
-- Capture second authenticated unsubscribed-fan UI denial after the successful purchase.
-- Attempt cancellation/expiration/revoke only if safe RevenueCat / Google Play tooling or a safe test order path is available; otherwise keep it deferred.
+- RevenueCat dashboard refund for the exact sandbox entitlement failed with `Refunding the transaction was unsuccessful`.
+- Supabase received provider `RENEWAL`, `CANCELLATION`, and `EXPIRATION` events for the same app user/product, but `revenuecat-webhook` stored them as `ignored`.
+- The original subscription row still reads `active`; access is nevertheless expired because `current_period_end` and the access grant `expires_at` are in the past.
+- Implement Channel Subscription lifecycle handling for RevenueCat renewal, cancellation, and expiration events before claiming revoke/cancel proof.
 
 Recommended next build after those proof gaps are closed or explicitly deferred:
 

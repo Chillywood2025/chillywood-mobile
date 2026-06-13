@@ -97,4 +97,6 @@
 - After a cold app restart on Play/internal v51, Google Play Billing opened for the sandbox subscription and the purchase completed.
 - Provider event `9dabc47f-61f7-49f7-a169-3adb0ebbac30` processed, creating active subscription `436f2acc-ec46-4977-ba51-958452ea2f2e`, paid/not-payable transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`, and sandbox access grant `1a5492fe-c135-435e-878c-5e21a7638322`.
 - The subscribed fan saw `SUBSCRIBED` on `/channel-subscription/[creatorId]`.
-- Remaining proof gaps: creator Money Center visual transaction readback, second authenticated unsubscribed-fan UI denial after purchase, and cancellation/expiration/revoke if safe provider tooling allows.
+- Creator Money Center visual transaction readback passed for the exact subscription transaction as sandbox/not-payable and separate from Tips, Paid Videos, Paid Watch-Party, Paid Events, Premium, and VIP.
+- Authenticated non-subscriber route denial passed after purchase.
+- Remaining backend gap: RevenueCat/Google renewal, cancellation, and expiration events reach Supabase but are currently stored as `ignored`, so lifecycle handling must be added before cancellation/revoke proof is claimed.
