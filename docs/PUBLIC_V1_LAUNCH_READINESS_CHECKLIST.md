@@ -8,6 +8,8 @@ Public-v1 is not launch-approved by this checklist yet. This document separates 
 
 Launch-candidate polish pass: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. This pass made small copy/logging clarity fixes only and did not run BrowserStack or approve launch.
 
+June 13, 2026 final Play/internal QA execution status is recorded in `docs/FINAL_PUBLIC_V1_QA_PLAN.md`. The traceable v53 AAB from commit `361e1d5` was submitted to Play internal and installed on `R5CR120QCBF` with installer `com.android.vending`; app launch, main navigation, invalid Watch-Party deep-link fail-closed behavior, reset-route app handling, Settings, and a non-Premium Platform Studio gate smoke passed. BrowserStack, auth email end-to-end, two-user chat/call, two-user Watch-Party/LiveKit, Brand Studio edit/save, and Money Center current-session visual readback remain open.
+
 ## 1. Auth
 
 - [ ] Forgot-password reset email proof on Play/internal runtime.
@@ -51,7 +53,7 @@ Launch-candidate polish pass: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. This pass 
 
 ## 5. Brand Studio
 
-- [ ] Creator can load Brand Studio.
+- [ ] Creator can load Brand Studio. Current v53 smoke is blocked by Premium/operator gate for the signed-in tester.
 - [ ] Creator can update safe test logo/banner/color.
 - [ ] Preview updates.
 - [ ] Save succeeds.
@@ -76,6 +78,7 @@ Launch-candidate polish pass: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. This pass 
 - [ ] Join/leave/reconnect smoke.
 - [ ] Expired room fails closed.
 - [ ] Paid Watch-Party direct link blocks before camera/mic/membership/presence.
+- [x] Invalid Watch-Party direct link fails closed on Play/internal v53 with `Room not found`.
 - [ ] Paid Watch-Party stays Party Waiting Room -> Party Room, not Live Stage.
 - [x] Join Now proof logs are sanitized dev-only logs, not raw production console logs.
 
@@ -136,11 +139,11 @@ Launch-candidate polish pass: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. This pass 
 
 ## 14. Google Play Internal Release
 
-- [ ] Latest committed SHA built.
-- [ ] AAB submitted to internal testing.
-- [ ] Internal versionCode recorded.
-- [ ] Device install proves installer `com.android.vending`.
-- [ ] App is not Expo Dev Launcher.
+- [x] Latest committed SHA built. v53 build `f7a0612b-acdc-40ad-91bd-c7870dbe573a` used commit `361e1d5`.
+- [x] AAB submitted to internal testing. EAS submission `5237ae16-2efa-41ab-9768-02c437361515`.
+- [x] Internal versionCode recorded: `53`.
+- [x] Device install proves installer `com.android.vending`.
+- [x] App is not Expo Dev Launcher.
 - [ ] App access reviewer account current and non-admin.
 - [ ] Automated compatibility testing setting remains intentional.
 

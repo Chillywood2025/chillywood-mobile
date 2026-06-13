@@ -1,5 +1,20 @@
 # NEXT TASK
 
+## Final Play/Internal QA Continuation
+
+Traceable Play/internal v53 is installed on `R5CR120QCBF` from commit `361e1d5`:
+
+- EAS build `f7a0612b-acdc-40ad-91bd-c7870dbe573a`
+- EAS submission `5237ae16-2efa-41ab-9768-02c437361515`
+- package `com.chillywood.mobile`
+- installer `com.android.vending`
+- versionCode `53`
+- app version/runtime `1.0.0`
+
+Completed v53 smoke: launch/Home, Live hub, Library, invalid Watch-Party direct-link fail-closed, reset route opens inside the installed app, Settings, and visible non-Premium Platform Studio gate. Proof artifacts are under `/tmp/chillywood-final-qa-proof-20260613/`.
+
+Next task recommendation: continue `docs/FINAL_PUBLIC_V1_QA_PLAN.md` with the required accounts/devices. Start with a Premium/operator-capable creator session for Brand Studio and Money Center, a disposable inbox for auth reset/signup, and a second signed-in device/account for Chi'lly Chat and Watch-Party/LiveKit. BrowserStack should start only after this local/manual QA pass is complete or explicitly accepted as blocked.
+
 ## Launch-Candidate Polish Pass
 
 `docs/LAUNCH_CANDIDATE_POLISH_PASS.md` records the scoped launch-candidate polish pass before final QA. The pass fixed only small trust/proof issues: Watch-Party Join Now branch proof logs now use sanitized dev-only `debugLog`, creator Channel Subscription and VIP cards show visible unavailable-state reasons, and the creator channel loading state is clearer.

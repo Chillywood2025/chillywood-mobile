@@ -10,6 +10,36 @@ Canonical monetization closeout truth: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEO
 
 Launch-candidate polish record: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. That pass made small copy/logging clarity fixes only; it did not run BrowserStack, enable live money, add features, or change route/payment authority.
 
+## June 13, 2026 Play/Internal QA Execution Status
+
+Runtime delivery:
+
+- Latest main includes polish commit `361e1d5`.
+- EAS Update was published to branch `production`, runtime `1.0.0`, update group `c285901c-1489-4342-81be-53b20c9505f8`, Android update `019ec209-c5d9-7b1e-8709-e48bda72d67d`.
+- The previously installed v52 Play/internal app checked for updates but reported `CheckCompleteUnavailable`; OTA delivery of the polish update could not be confirmed on that binary.
+- A traceable Play/internal AAB was built from commit `361e1d5555b5b8dce4251aff10f3a14a2944dcf4`: EAS build `f7a0612b-acdc-40ad-91bd-c7870dbe573a`, versionCode `53`, app version `1.0.0`, runtime `1.0.0`, artifact type AAB.
+- EAS submit `5237ae16-2efa-41ab-9768-02c437361515` submitted v53 to Google Play internal testing.
+- Device `R5CR120QCBF` installed the update from Google Play: package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `53`, versionName `1.0.0`, not Expo Dev Launcher.
+
+Proof artifacts are local-only under `/tmp/chillywood-final-qa-proof-20260613/`.
+
+| Suite | Status | Result / blocker |
+| --- | --- | --- |
+| Runtime install | Passed | Play/internal v53 installed from Google Play with installer `com.android.vending`. |
+| App launch / main shell | Passed | Home opened without crash or blank state. |
+| Bottom navigation smoke | Passed | Home, Live hub, and Library rendered stable visible states on the Samsung device. |
+| Watch-Party invalid direct link | Passed | `chillywoodmobile://watch-party/INVALIDQA` failed closed with `Room not found` and did not enter Party Room. |
+| Reset route no-token smoke | Passed with limitation | `chillywoodmobile://reset-password` opened the installed app reset route, not the public legal/support site. Real email/token reset proof was not run. |
+| Settings / Premium gate smoke | Passed | Settings opened; Platform Studio entry for the current non-Premium tester showed an explicit `Premium required` gate instead of silently failing. |
+| Brand Studio | Blocked | Current signed-in tester is not Premium/operator-authorized for Platform Studio; no Brand Studio edit/save was attempted. |
+| Money Center six-flow visual readback | Blocked | Same Platform Studio Premium gate blocks Money Center for the current session. Existing six-flow proof docs remain canonical. |
+| Auth reset/signup end to end | Not run | Requires dedicated disposable inbox and fresh reset/signup links; no owner/personal inbox was used. |
+| Chi'lly Chat two-user calls | Not run | Requires a second signed-in device/account. |
+| Watch-Party / LiveKit two-user flow | Not run | Requires a second signed-in device/account and a fresh valid room fixture. |
+| Premium purchase/gate full proof | Not run | Only non-Premium gate visibility was checked. |
+| Paid purchase regressions | Not run | Avoided running paid provider purchases during this launch-candidate smoke without explicit fresh fixture/account setup. Existing sandbox proof docs remain canonical. |
+| BrowserStack | Deferred | Not started in this task. |
+
 ## Current Launch Blockers
 
 - BrowserStack final multi-device regression has not run.

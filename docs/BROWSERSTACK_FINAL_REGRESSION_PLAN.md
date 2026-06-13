@@ -26,7 +26,9 @@ Before starting BrowserStack, record:
 - device model and Android version
 - tester account labels only
 
-Latest monetization proof runtime documented before this plan: versionCode `52`. Recheck the Play internal track before final execution.
+Latest launch-candidate runtime documented before BrowserStack: versionCode `53`, EAS build `f7a0612b-acdc-40ad-91bd-c7870dbe573a`, EAS submission `5237ae16-2efa-41ab-9768-02c437361515`, commit `361e1d5`, installed on physical device `R5CR120QCBF` from Google Play internal testing with installer `com.android.vending`.
+
+BrowserStack has not started. It should use the v53-or-newer Play/internal runtime, not Expo Dev Launcher and not an unsubmitted local APK.
 
 ## Device Matrix
 
