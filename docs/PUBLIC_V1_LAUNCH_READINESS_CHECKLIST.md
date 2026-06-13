@@ -10,6 +10,8 @@ Launch-candidate polish pass: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. This pass 
 
 June 13, 2026 final Play/internal QA execution status is recorded in `docs/FINAL_PUBLIC_V1_QA_PLAN.md`. The traceable v53 AAB from commit `361e1d5` was submitted to Play internal and installed on `R5CR120QCBF` with installer `com.android.vending`; app launch, main navigation, invalid Watch-Party deep-link fail-closed behavior, reset-route app handling, Settings, and a non-Premium Platform Studio gate smoke passed. BrowserStack, auth email end-to-end, two-user chat/call, two-user Watch-Party/LiveKit, Brand Studio edit/save, and Money Center current-session visual readback remain open.
 
+June 13 blocker-clearing update: a short-lived Premium `test_grant` let `tips_creator_test` open Platform Studio, Brand Studio, and Money Center on Play/internal v53. Brand Studio safe-state save/reload passed, wrong-user Brand Studio write was denied by RLS using `paid_videos_second_unpaid`, and Money Center showed sandbox/not-payable/live-money-off/payout-disabled truth. Auth email proof remains blocked on a disposable readable inbox, and two-user Chi'lly Chat / Watch-Party proof remains blocked on a second attached device/account.
+
 ## 1. Auth
 
 - [ ] Forgot-password reset email proof on Play/internal runtime.
@@ -53,13 +55,13 @@ June 13, 2026 final Play/internal QA execution status is recorded in `docs/FINAL
 
 ## 5. Brand Studio
 
-- [ ] Creator can load Brand Studio. Current v53 smoke is blocked by Premium/operator gate for the signed-in tester.
-- [ ] Creator can update safe test logo/banner/color.
-- [ ] Preview updates.
-- [ ] Save succeeds.
-- [ ] Reload persists.
-- [ ] Public channel/profile reflects update.
-- [ ] Wrong-user edit denied.
+- [x] Creator can load Brand Studio.
+- [x] Creator can update/save safe Brand Studio state without media upload.
+- [x] Preview/state loads with published `City Night`.
+- [x] Save succeeds.
+- [x] Reload persists.
+- [ ] Public channel/profile reflects update. Not separately re-opened as a public viewer in this pass.
+- [x] Wrong-user edit denied by RLS proof.
 
 ## 6. Chi'lly Chat
 
@@ -175,9 +177,10 @@ Launch blockers until explicitly closed:
 - payouts/cash-out/withdrawal/transfer not enabled.
 - external Play/legal/Data Safety/account-deletion acceptance not fully closed where applicable.
 - final auth reset/signup proof on Play/internal runtime not closed in this QA pass.
-- Brand Studio final proof not closed in this QA pass.
+- Brand Studio public-viewer readback remains open after creator save/reload proof.
 - Chi'lly Chat two-user call proof not closed in this QA pass.
 - Watch-Party/LiveKit two-user final proof not closed in this QA pass.
+- Auth reset/signup proof still needs a disposable readable inbox.
 
 ## 17. Go / No-Go Decision
 

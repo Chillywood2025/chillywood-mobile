@@ -13,7 +13,9 @@ Traceable Play/internal v53 is installed on `R5CR120QCBF` from commit `361e1d5`:
 
 Completed v53 smoke: launch/Home, Live hub, Library, invalid Watch-Party direct-link fail-closed, reset route opens inside the installed app, Settings, and visible non-Premium Platform Studio gate. Proof artifacts are under `/tmp/chillywood-final-qa-proof-20260613/`.
 
-Next task recommendation: continue `docs/FINAL_PUBLIC_V1_QA_PLAN.md` with the required accounts/devices. Start with a Premium/operator-capable creator session for Brand Studio and Money Center, a disposable inbox for auth reset/signup, and a second signed-in device/account for Chi'lly Chat and Watch-Party/LiveKit. BrowserStack should start only after this local/manual QA pass is complete or explicitly accepted as blocked.
+Blocker-clearing update: `tips_creator_test` now has a short-lived Premium `test_grant` for creator-tool QA only, expiring June 14, 2026 at 06:13 UTC. Platform Studio, Brand Studio creator save/reload, Brand Studio wrong-user RLS denial, and Money Center truth-copy proof passed on Play/internal v53. Proof artifacts are under `/tmp/chillywood-final-qa-clear-blockers-20260613/`.
+
+Next task recommendation: continue `docs/FINAL_PUBLIC_V1_QA_PLAN.md` with the remaining required accounts/devices. Start with a disposable readable inbox for auth reset/signup, a second signed-in device/account for Chi'lly Chat and Watch-Party/LiveKit, and Brand Studio public-viewer readback. Repair stale local credentials for `tips_fan_test` and the Channel Subscription subscriber only through secure handoff. BrowserStack should start only after these local/manual blockers are cleared or explicitly accepted as blocked.
 
 ## Launch-Candidate Polish Pass
 

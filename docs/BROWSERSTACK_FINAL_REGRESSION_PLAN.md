@@ -30,6 +30,8 @@ Latest launch-candidate runtime documented before BrowserStack: versionCode `53`
 
 BrowserStack has not started. It should use the v53-or-newer Play/internal runtime, not Expo Dev Launcher and not an unsubmitted local APK.
 
+Local blocker-clearing status before BrowserStack: Platform Studio, Brand Studio creator save/reload, Brand Studio wrong-user denial, and Money Center truth-copy proof passed on Play/internal v53. BrowserStack should not start until the remaining local blockers are either cleared or explicitly accepted: disposable inbox auth reset/signup proof, two-device Chi'lly Chat call proof, two-device Watch-Party/LiveKit proof, and Brand Studio public-viewer readback.
+
 ## Device Matrix
 
 Minimum:

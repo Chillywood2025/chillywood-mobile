@@ -40,6 +40,32 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-proof-20260613/`.
 | Paid purchase regressions | Not run | Avoided running paid provider purchases during this launch-candidate smoke without explicit fresh fixture/account setup. Existing sandbox proof docs remain canonical. |
 | BrowserStack | Deferred | Not started in this task. |
 
+## June 13, 2026 Local Blocker-Clearing Pass
+
+Persona readiness:
+
+- Valid local sign-in labels confirmed through the normal anon auth path: `tips_creator_test`, `tips_blocked_test`, `paid_videos_fixture_creator`, `paid_videos_second_unpaid`, and `vip_non_vip`.
+- Stale local credentials: `tips_fan_test` and the local Channel Subscription subscriber credential failed with `invalid_credentials`; do not use those local files for future proof until repaired through a secure handoff.
+- `tips_creator_test` received a short-lived Premium `test_grant` for creator-tool QA only, expiring June 14, 2026 at 06:13 UTC. The metadata marks `live_money_enabled=false` and `creator_purchase_unlock=false`; this is not live money and does not grant creator purchase access.
+
+Proof artifacts are local-only under `/tmp/chillywood-final-qa-clear-blockers-20260613/`.
+
+| Suite | Status | Result / blocker |
+| --- | --- | --- |
+| Premium/operator creator access | Passed | `tips_creator_test` opened Platform Studio on Play/internal v53 after the short-lived proof entitlement. |
+| Brand Studio load | Passed | Brand Studio loaded for `tips_creator_test` with the published `City Night` state. |
+| Brand Studio save/reload | Passed with limitation | Saved/published the existing safe Brand Studio state without media upload; reload persisted `Published` / `City Night`. |
+| Brand Studio wrong-user denial | Passed | Signed-in `paid_videos_second_unpaid` attempted to update `tips_creator_test` Brand Studio profile and received zero updated rows through RLS. |
+| Money Center load | Passed | Money Center opened for `tips_creator_test`. |
+| Money Center truth copy | Passed | UI showed live money inactive, sandbox activity inspection-only/not payable, no payout/cash-out/withdrawal/transfer, Premium separate from creator purchases, and six creator flows visible. |
+| Money Center sections | Passed | Ways to Earn, Offers, Transactions, Payouts, Tax & Legal, and Provider Status were visible; Payouts showed `Disabled`, provider rows showed `Not payable`. |
+| Non-Premium Platform Studio gate | Passed from v53 prior proof | The v53 run before the proof entitlement showed explicit `Premium required` copy instead of silent failure. A fresh second-user device login was not performed in this pass. |
+| Auth reset/signup end to end | Blocked | No disposable inbox with readable reset/signup emails was available in this environment. No owner/personal inbox was used. |
+| Chi'lly Chat two-user calls | Blocked | Only one attached Android device was available (`R5CR120QCBF`). |
+| Watch-Party / LiveKit two-user flow | Blocked | Only one attached Android device was available; a fresh two-user room fixture was not created. |
+| Paid purchase smoke | Deferred | Existing six-flow sandbox proof docs remain canonical; this pass verified Money Center truth labels and did not rerun paid purchases. |
+| BrowserStack | Deferred | Still not started because local two-user/email blockers remain. |
+
 ## Current Launch Blockers
 
 - BrowserStack final multi-device regression has not run.
