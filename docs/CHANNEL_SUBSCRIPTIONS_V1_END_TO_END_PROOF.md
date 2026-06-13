@@ -31,6 +31,7 @@ Lifecycle handling update:
 - Migrations `20260613091417_channel_subscription_lifecycle_handling.sql` and `20260613092100_channel_subscription_cancel_pending_unique.sql` are applied remotely.
 - Existing ignored lifecycle rows were not manually rewritten because they do not contain the original raw provider payload. Lifecycle proof now requires a fresh or safely replayed signed RevenueCat event.
 - Post-deploy Supabase readback found no fresh lifecycle event yet; the latest lifecycle rows remain the historical ignored `RENEWAL`, `CANCELLATION`, and `EXPIRATION` rows from before this handler deployment.
+- Fresh lifecycle proof attempt: Google Play Console safely identified exact sandbox order `GPA.3353-3923-8017-31040..4` for `channel_subscription_sandbox_monthly_499`, accepted a sandbox refund with `Remove entitlement` selected, and showed `1 order refunded`. RevenueCat did not emit a fresh signed webhook during the proof window, so no post-deploy lifecycle row was available to process.
 
 Still not claimed:
 
@@ -215,6 +216,16 @@ Provider lifecycle investigation found a real backend follow-up.
 - The original subscription row still reads `active`, but `current_period_end` and the access grant `expires_at` are in the past, so resolver-style active-access checks now return zero active access.
 - Cancellation/expiration/revoke delivery is provider-delivery-proven; post-fix backend handling still needs a fresh or safely replayed signed RevenueCat event.
 
+Post-handler lifecycle proof attempt on June 13, 2026:
+
+- Starting row: subscription `436f2acc-ec46-4977-ba51-958452ea2f2e` still had `status=active`, but `current_period_end=2026-06-13 08:21:40.039+00` and access grant `1a5492fe-c135-435e-878c-5e21a7638322` had `expires_at=2026-06-13 08:21:40.039+00`, so active-access readback returned `0` active subscription rows and `0` active access grants.
+- RevenueCat customer page still showed the entitlement inactive/expired and did not expose a safe resend/retry control for the old ignored lifecycle events.
+- RevenueCat event detail exposed exact Google Play order id `GPA.3353-3923-8017-31040..4` for the sandbox channel subscription cancellation.
+- Google Play Console order management opened the exact sandbox order, showed product `channel_subscription_sandbox_monthly_499`, and accepted a sandbox `Refund` with `Remove entitlement` selected.
+- Google Play displayed `1 order refunded`.
+- Supabase polling after the Google Play refund/revoke found no new `revenuecat_google_play` provider event. The latest channel-subscription lifecycle rows remained the pre-handler ignored `RENEWAL`, `CANCELLATION`, and `EXPIRATION` rows.
+- Result: provider-driven lifecycle proof remains blocked by RevenueCat/Google propagation or lack of a fresh signed webhook. No Supabase row was manually mutated, and old ignored events were not rewritten as proof.
+
 ## Lifecycle Handling
 
 Implemented and deployed on June 13, 2026:
@@ -243,7 +254,7 @@ Implemented and deployed on June 13, 2026:
 Provider lifecycle proof:
 
 - The lifecycle handler is implemented and deployed, but old ignored provider rows were not rewritten.
-- Post-deploy Supabase readback found no fresh lifecycle event to process yet.
+- Post-deploy Supabase readback found no fresh lifecycle event to process yet, even after a Google Play sandbox refund/revoke attempt on exact order `GPA.3353-3923-8017-31040..4`.
 - A fresh or safely replayed signed RevenueCat lifecycle event must prove `RENEWAL`, `CANCELLATION`, and `EXPIRATION` are processed as handled, not ignored.
 - Do not fake cancellation/expiration/revoke by manual DB mutation.
 

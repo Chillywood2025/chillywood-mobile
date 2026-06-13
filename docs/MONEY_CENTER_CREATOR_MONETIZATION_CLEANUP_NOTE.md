@@ -100,4 +100,4 @@
 - Creator Money Center visual transaction readback passed for the exact subscription transaction as sandbox/not-payable and separate from Tips, Paid Videos, Paid Watch-Party, Paid Events, Premium, and VIP.
 - Authenticated non-subscriber route denial passed after purchase.
 - Lifecycle handling now covers RevenueCat/Google `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`, `UNCANCELLATION`, `PRODUCT_CHANGE`, `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED`.
-- Historical ignored lifecycle rows were not manually rewritten. Cancellation/expiration/revoke proof still requires a fresh or safely replayed signed RevenueCat event before it can be claimed.
+- Historical ignored lifecycle rows were not manually rewritten. A Google Play sandbox refund with entitlement removal was accepted for exact order `GPA.3353-3923-8017-31040..4`, but RevenueCat did not emit a fresh signed webhook during the proof window. Cancellation/expiration/revoke proof still requires a fresh or safely replayed signed RevenueCat event before it can be claimed.
