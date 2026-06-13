@@ -2,7 +2,7 @@
 
 ## Next Creator Monetization Proof
 
-Channel Subscriptions V1 is now implemented, Supabase-applied, webhook-deployed, and Play/RevenueCat sandbox-proven for purchase, Money Center visual readback, and authenticated non-subscriber denial. Channel Subscription lifecycle handling is also implemented and deployed, but still needs fresh provider-event proof before cancellation/expiration/revoke is claimed. Do not build VIP Passes until that lifecycle proof is either completed or explicitly deferred.
+Channel Subscriptions V1 is now implemented, Supabase-applied, webhook-deployed, and Play/RevenueCat sandbox-proven for purchase, Money Center visual readback, authenticated non-subscriber denial, and effective-access stale-row safety. Channel Subscription lifecycle handling is implemented and deployed, but fresh provider-event proof remains deferred/provider-blocked because RevenueCat did not emit a signed post-deploy lifecycle webhook after Google Play accepted the sandbox refund.
 
 Closed Channel Subscriptions truth:
 
@@ -17,6 +17,8 @@ Closed Channel Subscriptions truth:
 - The subscriber route showed `SUBSCRIBED` and subscription copy stayed separate from Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payouts, and other creators' channels.
 - Creator Money Center Transactions visually showed exact transaction `e49cddea-cd6d-4097-b70c-a07abaa24823` as `$4.99 channel subscription`, `Paid`, `Sandbox`, and `payout status: not_payable`, separate from Tips, Paid Videos, Paid Watch-Party, Paid Events, Premium, and VIP.
 - Authenticated non-subscriber route denial passed after purchase: `/channel-subscription/[creatorId]` showed `SUBSCRIBER ACCESS REQUIRED` and `Subscribe`, while Supabase readback showed zero active other-user subscription rows and zero active channel-subscription grants.
+- Effective-access fallback passed: the subscriber route and creator channel header use `resolve_creator_channel_subscription_access`, which requires an unexpired provider period and non-revoked/non-expired state. The stale original `status=active` row does not unlock access after the provider period/access grant expires.
+- Money Center/readback safety now labels expired provider periods as expired effective access and avoids claiming stale provider rows are current active subscribers.
 - Live money remains off and sandbox rows are not payable.
 
 Remaining Channel Subscriptions work:
@@ -25,10 +27,10 @@ Remaining Channel Subscriptions work:
 - Supabase received provider `RENEWAL`, `CANCELLATION`, and `EXPIRATION` events for the same app user/product before the lifecycle handler was deployed; those historical rows remain `ignored` and were not manually rewritten.
 - New migrations `20260613091417_channel_subscription_lifecycle_handling.sql` and `20260613092100_channel_subscription_cancel_pending_unique.sql` are applied, and `revenuecat-webhook` now handles `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`, `UNCANCELLATION`, `PRODUCT_CHANGE`, `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED`.
 - Fresh lifecycle proof attempt: Google Play Console exact sandbox order `GPA.3353-3923-8017-31040..4` accepted a refund with `Remove entitlement` selected and showed `1 order refunded`, but RevenueCat did not emit a fresh signed webhook during the proof window. Supabase still has no post-deploy lifecycle row to process.
-- The next proof must trigger or safely replay fresh signed RevenueCat lifecycle events and confirm subscription status, access grant status, subscriber route behavior, and Money Center readback update correctly.
+- Future lifecycle proof must trigger or safely replay fresh signed RevenueCat lifecycle events and confirm subscription status, access grant status, subscriber route behavior, and Money Center readback update correctly.
 - Do not fake cancellation/expiration/revoke by manual DB mutation.
 
-Recommended next build after those proof gaps are closed or explicitly deferred:
+Recommended next build:
 
 - Build VIP Passes V1 next as the final creator monetization flow.
 - Keep VIP separate from creator channel subscriptions, Premium, paid videos, paid Watch-Party tickets, Paid Events, and Tips.

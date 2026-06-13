@@ -24,6 +24,8 @@ Follow-up proof passed:
 - Creator Money Center visual screenshot/readback for exact transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
 - Authenticated non-subscriber UI denial on `/channel-subscription/[creatorId]` after the purchase.
 - Provider lifecycle delivery reached Supabase for renewal, cancellation, and expiration events.
+- Effective-access fallback/readback safety: the subscriber route and creator channel header use `resolve_creator_channel_subscription_access`, which requires an unexpired provider period and non-revoked/non-expired state. A stale `creator_channel_subscriptions.status=active` row is not enough to unlock the subscriber route.
+- Money Center readback now labels paid/renewal rows with expired provider periods as expired effective access instead of presenting them as current active subscriber access.
 
 Lifecycle handling update:
 
@@ -32,6 +34,7 @@ Lifecycle handling update:
 - Existing ignored lifecycle rows were not manually rewritten because they do not contain the original raw provider payload. Lifecycle proof now requires a fresh or safely replayed signed RevenueCat event.
 - Post-deploy Supabase readback found no fresh lifecycle event yet; the latest lifecycle rows remain the historical ignored `RENEWAL`, `CANCELLATION`, and `EXPIRATION` rows from before this handler deployment.
 - Fresh lifecycle proof attempt: Google Play Console safely identified exact sandbox order `GPA.3353-3923-8017-31040..4` for `channel_subscription_sandbox_monthly_499`, accepted a sandbox refund with `Remove entitlement` selected, and showed `1 order refunded`. RevenueCat did not emit a fresh signed webhook during the proof window, so no post-deploy lifecycle row was available to process.
+- Effective access safety follow-up: no Supabase row was manually mutated. The old subscription row still reads `active`, but the provider period and channel-subscription access grant are expired. App gating relies on effective access, so stale row status alone does not unlock `/channel-subscription/[creatorId]`.
 
 Still not claimed:
 
@@ -257,6 +260,13 @@ Provider lifecycle proof:
 - Post-deploy Supabase readback found no fresh lifecycle event to process yet, even after a Google Play sandbox refund/revoke attempt on exact order `GPA.3353-3923-8017-31040..4`.
 - A fresh or safely replayed signed RevenueCat lifecycle event must prove `RENEWAL`, `CANCELLATION`, and `EXPIRATION` are processed as handled, not ignored.
 - Do not fake cancellation/expiration/revoke by manual DB mutation.
+
+Effective access/readback safety:
+
+- Passed by code path and current-state readback: `app/channel/[userId].tsx` and `app/channel-subscription/[creatorId].tsx` both use `resolveChannelSubscriptionAccess`, backed by `resolve_creator_channel_subscription_access`.
+- That resolver only returns subscriber access when the subscription is in an active access state, has not expired, and is not revoked/expired. Premium, VIP, paid videos, paid Watch-Party tickets, Paid Events, and Tips do not satisfy the gate.
+- Money Center transaction rows now show expired provider periods as expired effective access and avoid claiming stale subscription rows are current active subscriber access.
+- Read-only Supabase proof after the Google Play refund attempt: subscription `436f2acc-ec46-4977-ba51-958452ea2f2e` still has raw `status=active`, but `current_period_end=2026-06-13 08:21:40.039+00`; access grant `1a5492fe-c135-435e-878c-5e21a7638322` has `status=sandbox_only` and `expires_at=2026-06-13 08:21:40.039+00`. The computed readback returned `subscription_effective_active=false` and `grant_effective_active=false`.
 
 ## Next Steps
 

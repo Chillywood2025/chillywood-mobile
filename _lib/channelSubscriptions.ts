@@ -71,6 +71,12 @@ export type ChannelSubscriptionTransaction = {
   paidAt: string | null;
 };
 
+export type ChannelSubscriptionReadbackStatus = {
+  label: string;
+  tone: "default" | "muted" | "warning";
+  accessCopy: string;
+};
+
 export type ChannelSubscriptionPurchaseResult = {
   ok: boolean;
   message: string;
@@ -230,6 +236,45 @@ const findSubscriptionStoreProduct = async (productId: string) => {
 
 export const formatChannelSubscriptionPrice = (amountCents: number, currency = "usd") =>
   `${formatMonetizationCurrency(amountCents, currency)}/month`;
+
+export const isChannelSubscriptionPeriodCurrent = (periodEnd: string | null) => {
+  if (!periodEnd) return true;
+  const periodEndMs = Date.parse(periodEnd);
+  if (!Number.isFinite(periodEndMs)) return false;
+  return periodEndMs > Date.now();
+};
+
+export const getChannelSubscriptionReadbackStatus = (
+  transaction: ChannelSubscriptionTransaction,
+): ChannelSubscriptionReadbackStatus => {
+  const status = transaction.status.toLowerCase();
+  if (status === "refunded" || status === "revoked" || status === "expired") {
+    return {
+      label: status === "expired" ? "Expired" : status === "refunded" ? "Refunded" : "Revoked",
+      tone: "warning",
+      accessCopy: "Effective subscriber access is inactive.",
+    };
+  }
+  if ((status === "paid" || status === "renewal_paid") && !isChannelSubscriptionPeriodCurrent(transaction.periodEnd)) {
+    return {
+      label: "Expired",
+      tone: "warning",
+      accessCopy: "The provider period has ended. Subscriber access uses effective access and is not treated as active from this stale row.",
+    };
+  }
+  if (status === "paid" || status === "renewal_paid") {
+    return {
+      label: status === "renewal_paid" ? "Renewed" : "Paid",
+      tone: "default",
+      accessCopy: "Subscriber access still depends on the effective access gate.",
+    };
+  }
+  return {
+    label: transaction.status || "Pending",
+    tone: status === "failed" || status === "canceled" ? "warning" : "muted",
+    accessCopy: "Subscriber access is not granted unless the effective access gate is active.",
+  };
+};
 
 export async function listMyChannelSubscriptionOffers(): Promise<ChannelSubscriptionOffer[]> {
   const { data, error } = await rpcClient.rpc("list_my_creator_channel_subscription_offers");

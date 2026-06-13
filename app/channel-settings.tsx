@@ -76,6 +76,7 @@ import {
 } from "../_lib/paidCreatorEvents";
 import {
   formatChannelSubscriptionPrice,
+  getChannelSubscriptionReadbackStatus,
   listMyChannelSubscriptionOffers,
   listMyChannelSubscriptionTransactions,
   saveChannelSubscriptionOffer,
@@ -6766,22 +6767,28 @@ export function ChannelStudioScreen() {
       if (!visibleChannelSubscriptionTransactions.length) return null;
       return (
         <View style={styles.eventList}>
-          {visibleChannelSubscriptionTransactions.map((transaction) => (
-            <View key={transaction.id} style={styles.eventEmptyCard}>
-              <View style={styles.eventCardHeader}>
-                <Text style={styles.eventEmptyTitle}>
-                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} channel subscription
+          {visibleChannelSubscriptionTransactions.map((transaction) => {
+            const readbackStatus = getChannelSubscriptionReadbackStatus(transaction);
+            return (
+              <View key={transaction.id} style={styles.eventEmptyCard}>
+                <View style={styles.eventCardHeader}>
+                  <Text style={styles.eventEmptyTitle}>
+                    {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} channel subscription
+                  </Text>
+                  {renderStudioStatusPill(readbackStatus.label, readbackStatus.tone)}
+                </View>
+                <Text style={styles.eventEmptyBody}>
+                  {transaction.title} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
                 </Text>
-                {renderStudioStatusPill(transaction.status === "paid" || transaction.status === "renewal_paid" ? "Paid" : transaction.status, transaction.status === "paid" || transaction.status === "renewal_paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "revoked" || transaction.status === "expired" ? "warning" : "muted")}
+                <Text style={styles.eventEmptyBody}>
+                  {readbackStatus.accessCopy}
+                </Text>
+                <Text style={styles.eventEmptyBody}>
+                  Channel subscriptions unlock only this creator channel subscriber area. Premium, VIP, Paid Videos, Watch-Party tickets, Paid Events, and Tips stay separate. Payout status: {transaction.payoutStatus}.
+                </Text>
               </View>
-              <Text style={styles.eventEmptyBody}>
-                {transaction.title} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
-              </Text>
-              <Text style={styles.eventEmptyBody}>
-                Channel subscriptions unlock only this creator channel subscriber area. Premium, VIP, Paid Videos, Watch-Party tickets, Paid Events, and Tips stay separate. Payout status: {transaction.payoutStatus}.
-              </Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
       );
     };
@@ -7092,10 +7099,10 @@ export function ChannelStudioScreen() {
                           {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" ? "default" : "muted")}
                         </View>
                         <Text style={styles.eventEmptyBody}>
-                          channel_subscription · {formatChannelSubscriptionPrice(offer.priceCents, offer.currency)} · {offer.subscriberCount} active subscriber{offer.subscriberCount === 1 ? "" : "s"}
+                          channel_subscription · {formatChannelSubscriptionPrice(offer.priceCents, offer.currency)} · {offer.subscriberCount} recorded subscriber signal{offer.subscriberCount === 1 ? "" : "s"}
                         </Text>
                         <Text style={styles.eventEmptyBody}>
-                          Channel subscriptions unlock only this creator channel subscriber area. Premium, VIP, Paid Videos, Watch-Party tickets, Paid Events, and Tips stay separate.
+                          Subscriber access is decided by the effective access gate, not by stale provider rows. Premium, VIP, Paid Videos, Watch-Party tickets, Paid Events, and Tips stay separate.
                         </Text>
                       </View>
                     ))}

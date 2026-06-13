@@ -101,3 +101,4 @@
 - Authenticated non-subscriber route denial passed after purchase.
 - Lifecycle handling now covers RevenueCat/Google `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`, `UNCANCELLATION`, `PRODUCT_CHANGE`, `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED`.
 - Historical ignored lifecycle rows were not manually rewritten. A Google Play sandbox refund with entitlement removal was accepted for exact order `GPA.3353-3923-8017-31040..4`, but RevenueCat did not emit a fresh signed webhook during the proof window. Cancellation/expiration/revoke proof still requires a fresh or safely replayed signed RevenueCat event before it can be claimed.
+- Effective-access safety is closed: stale `creator_channel_subscriptions.status=active` rows with expired provider periods do not unlock `/channel-subscription/[creatorId]`, and Money Center readback labels expired provider periods instead of presenting them as current active subscriber access.
