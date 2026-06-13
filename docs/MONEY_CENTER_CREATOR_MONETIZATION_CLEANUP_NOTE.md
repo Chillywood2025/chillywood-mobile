@@ -102,3 +102,14 @@
 - Lifecycle handling now covers RevenueCat/Google `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`, `UNCANCELLATION`, `PRODUCT_CHANGE`, `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED`.
 - Historical ignored lifecycle rows were not manually rewritten. A Google Play sandbox refund with entitlement removal was accepted for exact order `GPA.3353-3923-8017-31040..4`, but RevenueCat did not emit a fresh signed webhook during the proof window. Cancellation/expiration/revoke proof still requires a fresh or safely replayed signed RevenueCat event before it can be claimed.
 - Effective-access safety is closed: stale `creator_channel_subscriptions.status=active` rows with expired provider periods do not unlock `/channel-subscription/[creatorId]`, and Money Center readback labels expired provider periods instead of presenting them as current active subscriber access.
+
+## VIP Passes V1 Follow-Up
+
+- VIP Passes V1 is repo-side implemented, Supabase-applied, and webhook-deployed, but not yet Play/internal sandbox purchase-proven.
+- Provider path is RevenueCat / Google Play dynamic sandbox product `vip_pass_sandbox_499` / `cw_vip_pass_sandbox_499`; Stripe Tips is not used.
+- Migration `20260613104442_vip_passes_v1_sandbox.sql` is applied to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` is ACTIVE version 17.
+- The migration adds sandbox VIP pass offers, verified VIP passes, VIP transactions, VIP events, RLS, creator/fan-safe RPCs, purchase-intent allowlisting, and provider-grant sync from verified `vip_pass` access grants.
+- Money Center remains the setup/readout home: creators can enable/pause VIP Pass in Ways to Earn, offers appear in Offers, and verified VIP purchases appear in Transactions after provider proof.
+- Fan surface is the creator channel VIP card and `/vip-pass/[creatorId]` with `Get VIP` copy.
+- VIP unlocks only creator-specific VIP status/area for that creator. It does not include Chi'llwood Premium, Paid Videos, Paid Watch-Party tickets, Paid Events, Channel Subscriptions, Tips, LiveKit authority, room permissions, speaker/host privileges, payout access, platform-wide status, or other creators' channels.
+- Remaining proof: confirm Google Play/RevenueCat product setup, install a Play/internal build, complete sandbox purchase, prove verified VIP pass/transaction creation, non-VIP/direct-link denial, Money Center readback, and direct client write denial.

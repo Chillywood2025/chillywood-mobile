@@ -75,6 +75,14 @@ import {
   type PaidCreatorEventTransaction,
 } from "../_lib/paidCreatorEvents";
 import {
+  formatCreatorVipPassPrice,
+  listMyCreatorVipPassOffers,
+  listMyCreatorVipTransactions,
+  saveCreatorVipPassOffer,
+  type CreatorVipPassOffer,
+  type CreatorVipTransaction,
+} from "../_lib/creatorVipPasses";
+import {
   formatChannelSubscriptionPrice,
   getChannelSubscriptionReadbackStatus,
   listMyChannelSubscriptionOffers,
@@ -1150,6 +1158,10 @@ export function ChannelStudioScreen() {
   const [creatorPaidWatchPartyTransactions, setCreatorPaidWatchPartyTransactions] = useState<PaidWatchPartyTransaction[]>([]);
   const [creatorPaidEventOffers, setCreatorPaidEventOffers] = useState<PaidCreatorEventOffer[]>([]);
   const [creatorPaidEventTransactions, setCreatorPaidEventTransactions] = useState<PaidCreatorEventTransaction[]>([]);
+  const [creatorVipPassOffers, setCreatorVipPassOffers] = useState<CreatorVipPassOffer[]>([]);
+  const [creatorVipTransactions, setCreatorVipTransactions] = useState<CreatorVipTransaction[]>([]);
+  const [vipPassSaving, setVipPassSaving] = useState(false);
+  const [vipPassNotice, setVipPassNotice] = useState<string | null>(null);
   const [creatorChannelSubscriptionOffers, setCreatorChannelSubscriptionOffers] = useState<ChannelSubscriptionOffer[]>([]);
   const [creatorChannelSubscriptionTransactions, setCreatorChannelSubscriptionTransactions] = useState<ChannelSubscriptionTransaction[]>([]);
   const [channelSubscriptionSaving, setChannelSubscriptionSaving] = useState(false);
@@ -1330,6 +1342,10 @@ export function ChannelStudioScreen() {
       setCreatorPaidWatchPartyTransactions([]);
       setCreatorPaidEventOffers([]);
       setCreatorPaidEventTransactions([]);
+      setCreatorVipPassOffers([]);
+      setCreatorVipTransactions([]);
+      setVipPassSaving(false);
+      setVipPassNotice(null);
       setCreatorChannelSubscriptionOffers([]);
       setCreatorChannelSubscriptionTransactions([]);
       setChannelSubscriptionSaving(false);
@@ -1368,6 +1384,8 @@ export function ChannelStudioScreen() {
       listMyPaidWatchPartyTransactions(50).catch(() => []),
       listMyPaidCreatorEventOffers().catch(() => []),
       listMyPaidCreatorEventTransactions(50).catch(() => []),
+      listMyCreatorVipPassOffers().catch(() => []),
+      listMyCreatorVipTransactions(50).catch(() => []),
       listMyChannelSubscriptionOffers().catch(() => []),
       listMyChannelSubscriptionTransactions(50).catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
@@ -1394,6 +1412,8 @@ export function ChannelStudioScreen() {
         resolvedCreatorPaidWatchPartyTransactions,
         resolvedCreatorPaidEventOffers,
         resolvedCreatorPaidEventTransactions,
+        resolvedCreatorVipPassOffers,
+        resolvedCreatorVipTransactions,
         resolvedCreatorChannelSubscriptionOffers,
         resolvedCreatorChannelSubscriptionTransactions,
         resolvedProviderReadinessSummary,
@@ -1424,6 +1444,8 @@ export function ChannelStudioScreen() {
         setCreatorPaidWatchPartyTransactions(resolvedCreatorPaidWatchPartyTransactions);
         setCreatorPaidEventOffers(resolvedCreatorPaidEventOffers);
         setCreatorPaidEventTransactions(resolvedCreatorPaidEventTransactions);
+        setCreatorVipPassOffers(resolvedCreatorVipPassOffers);
+        setCreatorVipTransactions(resolvedCreatorVipTransactions);
         setCreatorChannelSubscriptionOffers(resolvedCreatorChannelSubscriptionOffers);
         setCreatorChannelSubscriptionTransactions(resolvedCreatorChannelSubscriptionTransactions);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
@@ -1455,6 +1477,8 @@ export function ChannelStudioScreen() {
         setCreatorPaidWatchPartyTransactions([]);
         setCreatorPaidEventOffers([]);
         setCreatorPaidEventTransactions([]);
+        setCreatorVipPassOffers([]);
+        setCreatorVipTransactions([]);
         setCreatorChannelSubscriptionOffers([]);
         setCreatorChannelSubscriptionTransactions([]);
         setChannelSubscriptionSaving(false);
@@ -1530,6 +1554,21 @@ export function ChannelStudioScreen() {
     ]);
     setCreatorPaidEventOffers(nextOffers);
     setCreatorPaidEventTransactions(nextTransactions);
+  }, [user?.id]);
+
+  const refreshVipPasses = useCallback(async () => {
+    if (!user?.id) {
+      setCreatorVipPassOffers([]);
+      setCreatorVipTransactions([]);
+      return;
+    }
+
+    const [nextOffers, nextTransactions] = await Promise.all([
+      listMyCreatorVipPassOffers().catch(() => []),
+      listMyCreatorVipTransactions(50).catch(() => []),
+    ]);
+    setCreatorVipPassOffers(nextOffers);
+    setCreatorVipTransactions(nextTransactions);
   }, [user?.id]);
 
   const refreshChannelSubscriptions = useCallback(async () => {
@@ -1616,6 +1655,38 @@ export function ChannelStudioScreen() {
       setChannelSubscriptionSaving(false);
     }
   }, [channelSubscriptionSaving, refreshChannelSubscriptions, user?.id]);
+
+  const handleSaveVipPass = useCallback(async (enabled: boolean) => {
+    if (vipPassSaving) return;
+
+    setVipPassSaving(true);
+    setVipPassNotice(null);
+    trackEvent(enabled ? "money_feature_enabled" : "money_feature_paused", {
+      creator_id: user?.id ?? null,
+      feature_key: "vip_passes",
+      route_name: "channel-studio",
+      source_surface: "money_center",
+    });
+
+    try {
+      await saveCreatorVipPassOffer({
+        description:
+          "VIP is a creator-specific status for this channel only. It does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, or other creators' channels.",
+        status: enabled ? "sandbox" : "paused",
+        title: "VIP Pass",
+      });
+      setVipPassNotice(
+        enabled
+          ? "VIP Pass saved in sandbox mode. Fans can get VIP only through verified Google Play / RevenueCat checkout."
+          : "VIP Pass paused. Fans cannot get VIP right now.",
+      );
+      await refreshVipPasses();
+    } catch {
+      setVipPassNotice("VIP Pass settings could not be saved right now.");
+    } finally {
+      setVipPassSaving(false);
+    }
+  }, [refreshVipPasses, user?.id, vipPassSaving]);
 
   const handleStartPayoutProviderSetup = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
@@ -6336,6 +6407,8 @@ export function ChannelStudioScreen() {
     const paidWatchPartyGrossCents = paidWatchPartyPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const paidEventPaidTransactions = creatorPaidEventTransactions.filter((transaction) => transaction.status === "paid");
     const paidEventGrossCents = paidEventPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
+    const vipPaidTransactions = creatorVipTransactions.filter((transaction) => transaction.status === "paid");
+    const vipGrossCents = vipPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const channelSubscriptionPaidTransactions = creatorChannelSubscriptionTransactions.filter((transaction) => transaction.status === "paid" || transaction.status === "renewal_paid");
     const channelSubscriptionGrossCents = channelSubscriptionPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const tipFeatureStatus: MonetizationFeatureStatus = (() => {
@@ -6587,7 +6660,7 @@ export function ChannelStudioScreen() {
       paid_videos: paidContentFlag.state === "locked" ? "Blocked" : creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Active" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : paidContentFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : watchPartyTicketsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
       channel_subscriptions: digitalSalesStatus === "Blocked" ? "Blocked" : creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
-      vip_passes: "Blocked",
+      vip_passes: digitalSalesStatus === "Blocked" ? "Blocked" : creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
       paid_events: digitalSalesStatus === "Blocked" ? "Blocked" : creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
     };
     const featureBlockedReasonByKey: Partial<Record<MonetizationFeatureKey, string>> = {
@@ -6595,7 +6668,7 @@ export function ChannelStudioScreen() {
       paid_videos: paidContentFlag.state === "locked" ? paidContentFlag.displaySummary : undefined,
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? watchPartyTicketsFlag.displaySummary : undefined,
       channel_subscriptions: digitalSalesStatus === "Blocked" ? "Payments are unavailable right now." : undefined,
-      vip_passes: "VIP stays disabled until it unlocks real access or perks.",
+      vip_passes: digitalSalesStatus === "Blocked" ? "Payments are unavailable right now." : undefined,
       paid_events: digitalSalesStatus === "Blocked" ? "Payments are unavailable right now." : undefined,
     };
     const featureActionForStatus = (status: MonetizationFeatureStatus): MonetizationFeatureAction => {
@@ -6651,7 +6724,7 @@ export function ChannelStudioScreen() {
       { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
       { label: "Paid Watch-Party tickets", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox ticket${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
       { label: "Channel subscriptions", value: creatorChannelSubscriptionOffers.length ? `${creatorChannelSubscriptionOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: channelSubscriptionPaidTransactions.length ? `${channelSubscriptionPaidTransactions.length} verified sandbox subscription transaction${channelSubscriptionPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(channelSubscriptionGrossCents, "usd")}. Channel subscriptions unlock only this creator's subscriber area.` : "Offer type: channel_subscription. Separate from Chi'llwood Premium, VIP, paid videos, Watch-Party tickets, and paid events.", tone: creatorChannelSubscriptionOffers.length ? "default" : "unavailable" },
-      { label: "VIP passes", value: "Blocked", body: "Offer type: vip_pass. Disabled until VIP unlocks real access or perks.", tone: "unavailable" },
+      { label: "VIP passes", value: creatorVipPassOffers.length ? `${creatorVipPassOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: vipPaidTransactions.length ? `${vipPaidTransactions.length} verified sandbox VIP purchase${vipPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(vipGrossCents, "usd")}. VIP unlocks only this creator channel VIP area.` : "Offer type: vip_pass. VIP stays separate from Chi'llwood Premium, paid videos, Watch-Party tickets, paid events, channel subscriptions, and Tips.", tone: creatorVipPassOffers.length ? "default" : "unavailable" },
       { label: "Paid event passes", value: creatorPaidEventOffers.length ? `${creatorPaidEventOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: paidEventPaidTransactions.length ? `${paidEventPaidTransactions.length} verified sandbox event pass${paidEventPaidTransactions.length === 1 ? "" : "es"} totaling ${formatMonetizationCurrency(paidEventGrossCents, "usd")}. Event passes unlock only the linked creator event.` : "Offer type: paid_event. Event passes unlock only the linked creator event and stay separate from Premium, VIP, paid videos, and Watch-Party tickets.", tone: creatorPaidEventOffers.length ? "default" : "unavailable" },
       { label: "Physical merch", value: merchStatus, body: "Offer type: merch. Physical goods stay separate from Android digital access.", tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable" },
     ];
@@ -6689,6 +6762,9 @@ export function ChannelStudioScreen() {
       : [];
     const visiblePaidEventTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "events"
       ? creatorPaidEventTransactions
+      : [];
+    const visibleVipTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "vip"
+      ? creatorVipTransactions
       : [];
     const visibleChannelSubscriptionTransactions = moneyTransactionFilter === "all" || moneyTransactionFilter === "subscriptions"
       ? creatorChannelSubscriptionTransactions
@@ -6789,6 +6865,29 @@ export function ChannelStudioScreen() {
               </View>
             );
           })}
+        </View>
+      );
+    };
+    const renderVipTransactionRows = () => {
+      if (!visibleVipTransactions.length) return null;
+      return (
+        <View style={styles.eventList}>
+          {visibleVipTransactions.map((transaction) => (
+            <View key={transaction.id} style={styles.eventEmptyCard}>
+              <View style={styles.eventCardHeader}>
+                <Text style={styles.eventEmptyTitle}>
+                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} VIP pass
+                </Text>
+                {renderStudioStatusPill(transaction.status === "paid" ? "Paid" : transaction.status, transaction.status === "paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "revoked" ? "warning" : "muted")}
+              </View>
+              <Text style={styles.eventEmptyBody}>
+                {transaction.title} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
+              </Text>
+              <Text style={styles.eventEmptyBody}>
+                VIP unlocks only this creator channel VIP state. Premium, Tips, Paid Videos, Watch-Party tickets, Paid Events, Channel Subscriptions, LiveKit authority, and room permissions stay separate. Payout status: {transaction.payoutStatus}.
+              </Text>
+            </View>
+          ))}
         </View>
       );
     };
@@ -7034,6 +7133,42 @@ export function ChannelStudioScreen() {
                   ) : null}
                 </View>
                 {channelSubscriptionNotice ? <Text style={styles.noticeText}>{channelSubscriptionNotice}</Text> : null}
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>VIP Pass setup</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    VIP Passes are sandbox-only until live money is approved. VIP is creator-specific and does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.
+                  </Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Product: vip_pass_sandbox_499 · Price: $4.99 sandbox/test.
+                  </Text>
+                </View>
+                <View style={styles.eventActionRow}>
+                  <TouchableOpacity
+                    style={[styles.eventPrimaryButton, vipPassSaving && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={vipPassSaving}
+                    onPress={() => handleSaveVipPass(true)}
+                  >
+                    {vipPassSaving ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.eventPrimaryButtonText}>
+                        {creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Manage VIP Pass" : "Enable VIP Pass"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  {creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? (
+                    <TouchableOpacity
+                      style={[styles.eventSecondaryButton, vipPassSaving && styles.eventPrimaryButtonDisabled]}
+                      activeOpacity={0.88}
+                      disabled={vipPassSaving}
+                      onPress={() => handleSaveVipPass(false)}
+                    >
+                      <Text style={styles.eventSecondaryButtonText}>Pause VIP Pass</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                {vipPassNotice ? <Text style={styles.noticeText}>{vipPassNotice}</Text> : null}
               </>
             ),
           })}
@@ -7108,6 +7243,24 @@ export function ChannelStudioScreen() {
                     ))}
                   </View>
                 ) : null}
+                {creatorVipPassOffers.length ? (
+                  <View style={styles.eventList}>
+                    {creatorVipPassOffers.map((offer) => (
+                      <View key={offer.id} style={styles.eventEmptyCard}>
+                        <View style={styles.eventCardHeader}>
+                          <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
+                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" ? "default" : "muted")}
+                        </View>
+                        <Text style={styles.eventEmptyBody}>
+                          vip_pass · {formatCreatorVipPassPrice(offer.priceCents, offer.currency)} · {offer.vipCount} VIP fan signal{offer.vipCount === 1 ? "" : "s"}
+                        </Text>
+                        <Text style={styles.eventEmptyBody}>
+                          VIP unlocks only this creator channel VIP area. Premium, Paid Videos, Watch-Party tickets, Paid Events, Channel Subscriptions, Tips, LiveKit authority, and room permissions stay separate.
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
                 {creatorPaidEventOffers.length ? (
                   <View style={styles.eventList}>
                     {creatorPaidEventOffers.map((offer) => (
@@ -7144,7 +7297,7 @@ export function ChannelStudioScreen() {
                 )}
                 {renderStudioActionRow({
                   title: "Configure supported sandbox offers",
-                  body: "Use only approved sandbox tiers for backed paid videos, Watch-Party tickets, event passes, tips, and physical merch. Unsupported subscriptions and VIP stay blocked.",
+                  body: "Use only approved sandbox tiers for backed paid videos, Watch-Party tickets, channel subscriptions, VIP passes, event passes, tips, and physical merch. Live money stays disabled.",
                   value: "Offers",
                   onPress: () => setExpandedMonetizationSections((current) => new Set([...current, "offers"])),
                 })}
@@ -7176,6 +7329,7 @@ export function ChannelStudioScreen() {
                 {renderPaidVideoTransactionRows()}
                 {renderPaidWatchPartyTransactionRows()}
                 {renderChannelSubscriptionTransactionRows()}
+                {renderVipTransactionRows()}
                 {renderPaidEventTransactionRows()}
                 {renderCreatorMoneyEventRows(
                   filteredTransactionEvents,

@@ -2,6 +2,38 @@
 
 ## Next Creator Monetization Proof
 
+VIP Passes V1 is repo-side implemented, Supabase-applied, and webhook-deployed, but not yet Play/internal built or sandbox purchase-proven.
+
+VIP V1 current truth:
+
+- Migration applied remotely: `20260613104442_vip_passes_v1_sandbox.sql`.
+- `revenuecat-webhook` deployed: ACTIVE version 17.
+- Provider path is RevenueCat / Google Play dynamic sandbox product `vip_pass_sandbox_499` / `cw_vip_pass_sandbox_499`; Stripe Tips is not used.
+- `revenuecat-webhook` maps `vip_pass` products to verified `vip_pass` access grants.
+- Creator setup lives in Platform Studio Money Center > Ways to Earn and Offers.
+- Fan surface is the creator channel VIP card and `/vip-pass/[creatorId]`.
+- VIP V1 unlocks only creator-specific VIP state/area for that creator.
+- VIP does not include Chi'llwood Premium, Paid Videos, Paid Watch-Party tickets, Paid Events, Channel Subscriptions, Tips, LiveKit authority, room permissions, speaker/host privileges, payouts, platform-wide status, or other creators' channels.
+- Live money remains off and sandbox rows are not payable.
+
+Next VIP proof steps:
+
+- Confirm Google Play product `cw_vip_pass_sandbox_499` exists and is available to internal/license testers.
+- Confirm RevenueCat product/key `vip_pass_sandbox_499` is mapped for the Android app.
+- Build and submit a Play/internal runtime from the committed VIP SHA.
+- Install/update from Google Play and confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
+- Creator enables VIP Pass in Money Center and confirms the offer persists.
+- Non-VIP fan sees `Get VIP`, is blocked from `/vip-pass/[creatorId]`, and direct link cannot bypass the gate.
+- VIP fan completes RevenueCat / Google Play sandbox purchase.
+- Verified provider path creates a paid/not-payable VIP transaction and active VIP pass.
+- VIP fan can access the VIP route; second non-VIP fan remains blocked.
+- Creator Money Center Transactions shows the VIP row as sandbox/not-payable and separate from Tips, Paid Videos, Paid Watch-Party, Paid Events, Channel Subscriptions, Premium, and live money.
+- Refund/revoke proof remains deferred unless safe RevenueCat / Google Play tooling and order id are available.
+
+Reference doc: `docs/VIP_PASSES_V1_END_TO_END_PROOF.md`.
+
+## Channel Subscription Lifecycle Follow-Up
+
 Channel Subscriptions V1 is now implemented, Supabase-applied, webhook-deployed, and Play/RevenueCat sandbox-proven for purchase, Money Center visual readback, authenticated non-subscriber denial, and effective-access stale-row safety. Channel Subscription lifecycle handling is implemented and deployed, but fresh provider-event proof remains deferred/provider-blocked because RevenueCat did not emit a signed post-deploy lifecycle webhook after Google Play accepted the sandbox refund.
 
 Closed Channel Subscriptions truth:
@@ -29,11 +61,6 @@ Remaining Channel Subscriptions work:
 - Fresh lifecycle proof attempt: Google Play Console exact sandbox order `GPA.3353-3923-8017-31040..4` accepted a refund with `Remove entitlement` selected and showed `1 order refunded`, but RevenueCat did not emit a fresh signed webhook during the proof window. Supabase still has no post-deploy lifecycle row to process.
 - Future lifecycle proof must trigger or safely replay fresh signed RevenueCat lifecycle events and confirm subscription status, access grant status, subscriber route behavior, and Money Center readback update correctly.
 - Do not fake cancellation/expiration/revoke by manual DB mutation.
-
-Recommended next build:
-
-- Build VIP Passes V1 next as the final creator monetization flow.
-- Keep VIP separate from creator channel subscriptions, Premium, paid videos, paid Watch-Party tickets, Paid Events, and Tips.
 
 Closed Paid Events truth:
 

@@ -412,6 +412,7 @@ const accessGrantTypeForProductType = (productType: string) => {
   if (productType === "live_watch_party_seat_pass") return "live_watch_party_seat_pass";
   if (productType === "event_pass") return "event_pass";
   if (productType === "channel_subscription") return "channel_subscription";
+  if (productType === "vip_pass") return "vip_pass";
   return null;
 };
 
@@ -1032,7 +1033,8 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
           payment_authority: false,
           payout_access: false,
           premium_unlock: false,
-          vip_unlock: false,
+          vip_unlock: product.product_type === "vip_pass",
+          creator_specific_vip_only: product.product_type === "vip_pass",
           platform_wide_badge: false,
         },
       })

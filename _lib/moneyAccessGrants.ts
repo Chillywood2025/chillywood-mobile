@@ -17,7 +17,8 @@ export type MonetizationProductType =
   | "creator_tip"
   | "merch_physical_good"
   | "event_pass"
-  | "channel_subscription";
+  | "channel_subscription"
+  | "vip_pass";
 
 export type MonetizationProductStatus = "setup" | "sandbox" | "active" | "disabled" | "retired";
 export type AccessGrantStatus = "active" | "pending" | "expired" | "revoked" | "refunded" | "blocked" | "sandbox_only" | "setup_only";

@@ -30,6 +30,12 @@ import {
   type CreatorTipPublicStatus,
 } from "../../_lib/creatorTips";
 import {
+  formatCreatorVipPassPrice,
+  purchaseCreatorVipPass,
+  resolveCreatorVipPassAccess,
+  type CreatorVipPassAccess,
+} from "../../_lib/creatorVipPasses";
+import {
   formatChannelSubscriptionPrice,
   purchaseChannelSubscription,
   resolveChannelSubscriptionAccess,
@@ -158,6 +164,9 @@ export default function PublicChannelScreen() {
   const [subscriptionAccess, setSubscriptionAccess] = useState<ChannelSubscriptionAccess | null>(null);
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
   const [subscriptionNotice, setSubscriptionNotice] = useState<string | null>(null);
+  const [vipAccess, setVipAccess] = useState<CreatorVipPassAccess | null>(null);
+  const [vipBusy, setVipBusy] = useState(false);
+  const [vipNotice, setVipNotice] = useState<string | null>(null);
   const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -180,6 +189,8 @@ export default function PublicChannelScreen() {
       setTipStatus(null);
       setSubscriptionAccess(null);
       setSubscriptionNotice(null);
+      setVipAccess(null);
+      setVipNotice(null);
       setPlatformBranding(null);
 
       if (!routeUserId) {
@@ -219,12 +230,13 @@ export default function PublicChannelScreen() {
       const brandPromise = showDraftBranding
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
-      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextPlatformBranding] = await Promise.all([
+      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextPlatformBranding] = await Promise.all([
         readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
         resolveChannelSubscriptionAccess(routeUserId).catch(() => null),
+        resolveCreatorVipPassAccess(routeUserId).catch(() => null),
         brandPromise,
       ]);
 
@@ -235,6 +247,7 @@ export default function PublicChannelScreen() {
       setCommerceSurface(nextCommerceSurface);
       setTipStatus(nextTipStatus);
       setSubscriptionAccess(nextSubscriptionAccess);
+      setVipAccess(nextVipAccess);
       setPlatformBranding(nextPlatformBranding);
       setLoadState("ready");
     };
@@ -357,6 +370,21 @@ export default function PublicChannelScreen() {
     } as unknown as Parameters<typeof router.push>[0]);
   };
 
+  const refreshVipAccess = async () => {
+    if (!routeUserId) return null;
+    const nextAccess = await resolveCreatorVipPassAccess(routeUserId).catch(() => null);
+    setVipAccess(nextAccess);
+    return nextAccess;
+  };
+
+  const openVipArea = () => {
+    if (!routeUserId) return;
+    router.push({
+      pathname: "/vip-pass/[creatorId]",
+      params: { creatorId: routeUserId },
+    } as unknown as Parameters<typeof router.push>[0]);
+  };
+
   const handleSubscribe = async () => {
     if (!routeUserId || subscriptionBusy || isOwner) return;
     if (!viewerUserId) {
@@ -396,6 +424,48 @@ export default function PublicChannelScreen() {
       await refreshSubscriptionAccess();
     } finally {
       setSubscriptionBusy(false);
+    }
+  };
+
+  const handleGetVip = async () => {
+    if (!routeUserId || vipBusy || isOwner) return;
+    if (!viewerUserId) {
+      Alert.alert("Get VIP", "Sign in to get VIP for this creator's channel.");
+      return;
+    }
+    if (vipAccess?.allowed) {
+      openVipArea();
+      return;
+    }
+    if (!vipAccess?.requiresPurchase) {
+      Alert.alert("Get VIP", "VIP is not available for this creator right now.");
+      return;
+    }
+
+    try {
+      setVipBusy(true);
+      setVipNotice(null);
+      const result = await purchaseCreatorVipPass({
+        creatorId: routeUserId,
+        sourceSurface: "creator_channel_vip_card",
+      });
+      setVipAccess(result.access);
+      setVipNotice(result.message);
+      if (result.ok) {
+        openVipArea();
+      } else {
+        Alert.alert("Get VIP", result.message);
+      }
+    } catch (error) {
+      Alert.alert(
+        "Get VIP",
+        error instanceof Error && error.message
+          ? error.message
+          : "VIP Pass checkout is not available right now.",
+      );
+      await refreshVipAccess();
+    } finally {
+      setVipBusy(false);
     }
   };
 
@@ -890,6 +960,41 @@ export default function PublicChannelScreen() {
     );
   };
 
+  const renderVipPass = () => {
+    const offer = vipAccess?.offer ?? null;
+    if (!offer) return null;
+    const isVip = vipAccess?.allowed === true;
+    const unavailable = !isVip && !vipAccess?.requiresPurchase;
+    return (
+      <AppSection
+        title="VIP Pass"
+        statusLabel={isVip ? "VIP" : unavailable ? "Unavailable" : "Sandbox"}
+        statusTone={isVip ? "success" : unavailable ? "muted" : "warning"}
+      >
+        <View style={styles.programmingCard}>
+          <Text style={styles.cardKicker}>Creator-specific VIP</Text>
+          <Text style={styles.cardTitle}>{offer.title}</Text>
+          <Text style={styles.cardBody}>
+            {`Get VIP for this creator's channel for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.`}
+          </Text>
+          {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
+          <TouchableOpacity
+            style={[styles.playButton, (vipBusy || unavailable) && styles.actionButtonDisabled]}
+            activeOpacity={0.86}
+            disabled={vipBusy || unavailable}
+            onPress={isVip ? openVipArea : handleGetVip}
+          >
+            {vipBusy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.playButtonText}>{isVip ? "Open VIP Area" : "Get VIP"}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </AppSection>
+    );
+  };
+
   const renderAbout = () => (
     <AppSection title="About" statusLabel={aboutItems.length ? "Public" : "Empty"} statusTone={aboutItems.length ? "success" : "muted"}>
       {aboutItems.length ? (
@@ -955,6 +1060,7 @@ export default function PublicChannelScreen() {
         {renderLiveNow()}
         {renderUpcomingEvents()}
         {renderChannelSubscription()}
+        {renderVipPass()}
         {renderMiniPlatformCommerce()}
         {renderAbout()}
       </ScrollView>
