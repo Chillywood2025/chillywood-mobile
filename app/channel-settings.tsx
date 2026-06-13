@@ -6997,7 +6997,7 @@ export function ChannelStudioScreen() {
 	                    {"Channel Subscriptions are monthly creator memberships in sandbox mode. They do not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels."}
 	                  </Text>
                   <Text style={styles.eventEmptyBody}>
-                    Product: cw_channel_subscription_sandbox_monthly_499 · Price: $4.99/month sandbox/test.
+                    Product: channel_subscription_sandbox_monthly_499 · Price: $4.99/month sandbox/test.
                   </Text>
                 </View>
                 <View style={styles.eventActionRow}>

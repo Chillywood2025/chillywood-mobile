@@ -6,11 +6,13 @@ Channel Subscriptions V1 is now implemented, Supabase-applied, and webhook-deplo
 
 Immediate next proof:
 
-- Wait for EAS build `c6859970-89a9-470b-882d-eeb848bb2fe9` / versionCode `50` from committed SHA `54c9f5c11b9a67f366c97a7b8b6718fe76704f43` to finish.
-- Submit v50 to Google Play internal, install/update from Play, and confirm `installer=com.android.vending` and `versionCode=50`.
+- Fix the provider catalog blocker before any new app build: Google Play product `channel_subscription_sandbox_monthly_499` exists, but it still needs an active base plan, preferably `monthly`, and RevenueCat must map the matching product/base-plan id, expected `channel_subscription_sandbox_monthly_499:monthly`, to entitlement `creator_channel_subscription`.
+- Do not use the old provider product id `cw_channel_subscription_sandbox_monthly_499` for new proof; it is 43 characters and invalid for Google Play subscription products.
+- Migration `20260613021940_channel_subscription_valid_play_product_id.sql` is applied remotely; it moves the app/backend sandbox id to `channel_subscription_sandbox_monthly_499`.
+- After the Play base plan and RevenueCat mapping are active, build a new traceable Play/internal runtime from the committed SHA, install/update from Play, and confirm `installer=com.android.vending`.
 - Do not use uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` for official proof; it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
-- v49 already proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate; rerun quickly on v50 before purchase.
-- Confirm RevenueCat / Google Play subscription product availability for `channel_subscription_sandbox_monthly_499` / `cw_channel_subscription_sandbox_monthly_499`. v50 includes fallback from RevenueCat offerings to direct subscription product lookup.
+- v49 already proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate; v50 and v51 installed from Google Play internal but still failed before the provider sheet with `Channel Subscription sandbox product is not available on this device yet.`
+- Rerun creator setup and unsubscribed gate quickly on the next build before purchase.
 - Run creator setup, unsubscribed gate, sandbox subscription purchase, signed webhook, active subscription row, Money Center readback, second-unsubscribed denial, and cancellation/expiration/revoke proof if safe provider tooling allows.
 
 Closed Paid Events truth:
@@ -936,7 +938,8 @@ Before building VIP Passes:
 
 1. Confirm Google Play / RevenueCat product and offering/package exist:
    - product key `channel_subscription_sandbox_monthly_499`
-   - provider product id `cw_channel_subscription_sandbox_monthly_499`
+   - provider product id `channel_subscription_sandbox_monthly_499`
+   - active Play base plan and RevenueCat product/base-plan mapping, expected `channel_subscription_sandbox_monthly_499:monthly`
    - entitlement id `creator_channel_subscription`
 2. Build or install a Play/internal runtime that includes the Channel Subscriptions V1 code.
 3. Confirm device installer is `com.android.vending`.

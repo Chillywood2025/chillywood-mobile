@@ -114,7 +114,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     label: "Channel subscription",
     sourceType: "channel_subscription",
     productType: "channel_subscription",
-    providerProductId: "cw_channel_subscription_sandbox_monthly_499",
+    providerProductId: "channel_subscription_sandbox_monthly_499",
     priceLabel: "$4.99/month sandbox/test",
     providerRail: "revenuecat_google_play",
     unlocks: "Creates subscriber status for this creator channel only.",

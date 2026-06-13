@@ -10,8 +10,8 @@ import {
 import { supabase } from "./supabase";
 
 export const CHANNEL_SUBSCRIPTION_SANDBOX_PRODUCT_KEY = "channel_subscription_sandbox_monthly_499";
-export const CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_ID = "cw_channel_subscription_sandbox_monthly_499";
-export const CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_BASE_PLAN_ID = "cw_channel_subscription_sandbox_monthly_499:monthly";
+export const CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_ID = "channel_subscription_sandbox_monthly_499";
+export const CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_BASE_PLAN_ID = "channel_subscription_sandbox_monthly_499:monthly";
 export const CHANNEL_SUBSCRIPTION_POLL_ATTEMPTS = 12;
 export const CHANNEL_SUBSCRIPTION_POLL_DELAY_MS = 1500;
 

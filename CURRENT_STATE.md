@@ -766,7 +766,7 @@ Profile Viewer State Runtime Proof Closeout ran on Android device `R5CR120QCBF` 
 
 ## Channel Subscriptions V1 Sandbox Implementation
 
-June 12, 2026 Channel Subscriptions V1 is implemented and deployed in sandbox mode, but the Play/RevenueCat subscription purchase proof is still pending. Migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied remotely to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` was redeployed so `channel_subscription` products use the verified RevenueCat / Google Play purchase-intent bridge. Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`. Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` installed on attached device `R5CR120QCBF` with `installer=com.android.vending` and versionCode `49`. v49 proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate. Purchase proof then found two blockers: the central purchase-intent function returned `unsupported_purchase_intent_product`, and the app only searched RevenueCat offerings before reporting the sandbox product unavailable. Remote-applied migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql` fixed the backend allowlist; commit `54c9f5c11b9a67f366c97a7b8b6718fe76704f43` adds direct RevenueCat subscription product lookup fallback. Official v50 build `c6859970-89a9-470b-882d-eeb848bb2fe9` is in progress for versionCode `50`; device purchase proof must wait for that build.
+June 12, 2026 Channel Subscriptions V1 is implemented and deployed in sandbox mode, but the Play/RevenueCat subscription purchase proof is still pending. Migrations `20260612224536_channel_subscriptions_v1_sandbox.sql`, `20260613004804_channel_subscription_purchase_intent_allowlist.sql`, and `20260613021940_channel_subscription_valid_play_product_id.sql` are applied remotely to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` was redeployed so `channel_subscription` products use the verified RevenueCat / Google Play purchase-intent bridge. Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`. v49 proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate, then exposed a backend `unsupported_purchase_intent_product` blocker fixed by remote-applied migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql`. v50 and v51 installed from Google Play internal, but purchase still failed before the provider sheet because the Channel Subscription product is not available on the device. Provider audit found the original provider product id `cw_channel_subscription_sandbox_monthly_499` is invalid for Google Play because it is 43 characters; the valid product id is `channel_subscription_sandbox_monthly_499`. Google Play product `channel_subscription_sandbox_monthly_499` now exists, but purchase proof remains blocked until an active base plan is created and RevenueCat maps the matching product/base-plan id to entitlement `creator_channel_subscription`.
 
 Current implemented truth:
 
@@ -775,14 +775,14 @@ Current implemented truth:
 - `/channel-subscription/[creatorId]` is the subscriber-only proof route and checks server access before rendering subscriber content.
 - Verified provider access grants mirror into `creator_channel_subscriptions`, `channel_subscribers`, and `creator_channel_subscription_transactions`.
 - Money Center reads Channel Subscription offers and transactions separately from Premium, Tips, Paid Videos, Paid Watch-Party tickets, Paid Events, and VIP.
-- Product key/id: `channel_subscription_sandbox_monthly_499` / `cw_channel_subscription_sandbox_monthly_499`.
+- Product key/id: `channel_subscription_sandbox_monthly_499` / `channel_subscription_sandbox_monthly_499`.
 - RevenueCat entitlement id: `creator_channel_subscription`.
 - Live money remains off and sandbox rows remain `not_payable`.
 
 Not yet proved:
 
-- Play/internal build purchase sheet for `cw_channel_subscription_sandbox_monthly_499`.
-- Play/internal install of official v50 build `c6859970-89a9-470b-882d-eeb848bb2fe9`.
+- Play/internal build purchase sheet for `channel_subscription_sandbox_monthly_499`.
+- Google Play active base plan and RevenueCat product/base-plan mapping, expected `channel_subscription_sandbox_monthly_499:monthly`.
 - Signed RevenueCat subscription event for this product.
 - Verified active subscription row and Money Center visual transaction readback from a real sandbox purchase.
 - Cancellation/expiration/revoke proof.
