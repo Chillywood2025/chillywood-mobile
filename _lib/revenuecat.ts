@@ -428,6 +428,28 @@ export async function readRevenueCatNonSubscriptionProducts(productIdentifiers: 
   }
 }
 
+export async function readRevenueCatSubscriptionProducts(productIdentifiers: string[]) {
+  const state = configureRevenueCatOnce();
+  if (!state.shouldConfigure) return [] as PurchasesStoreProduct[];
+
+  const safeIdentifiers = Array.from(new Set(
+    productIdentifiers
+      .map((entry) => normalizeText(entry))
+      .filter(Boolean),
+  ));
+  if (!safeIdentifiers.length) return [] as PurchasesStoreProduct[];
+
+  try {
+    return await Purchases.getProducts(safeIdentifiers, PRODUCT_CATEGORY.SUBSCRIPTION);
+  } catch (error) {
+    reportRuntimeError("revenuecat-subscription-products", error, {
+      mode: state.mode,
+      productCount: safeIdentifiers.length,
+    });
+    return [] as PurchasesStoreProduct[];
+  }
+}
+
 export async function purchaseRevenueCatStoreProduct(product: PurchasesStoreProduct): Promise<MakePurchaseResult> {
   const state = configureRevenueCatOnce();
   if (!state.shouldConfigure) {

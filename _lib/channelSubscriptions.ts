@@ -2,7 +2,9 @@ import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
   purchaseRevenueCatPackage,
+  purchaseRevenueCatStoreProduct,
   readRevenueCatOfferings,
+  readRevenueCatSubscriptionProducts,
   type PurchasesPackage,
 } from "./revenuecat";
 import { supabase } from "./supabase";
@@ -206,6 +208,11 @@ const findSubscriptionPackage = async (productId: string) => {
   return packages.find((pkg) => toText(pkg.product.identifier) === productId) ?? null;
 };
 
+const findSubscriptionStoreProduct = async (productId: string) => {
+  const products = await readRevenueCatSubscriptionProducts([productId]);
+  return products.find((product) => toText(product.identifier) === productId) ?? null;
+};
+
 export const formatChannelSubscriptionPrice = (amountCents: number, currency = "usd") =>
   `${formatMonetizationCurrency(amountCents, currency)}/month`;
 
@@ -316,7 +323,8 @@ export async function purchaseChannelSubscription(input: {
 
   const productId = intent.providerProductId || access.providerProductId || CHANNEL_SUBSCRIPTION_SANDBOX_PROVIDER_PRODUCT_ID;
   const pkg = await findSubscriptionPackage(productId);
-  if (!pkg) {
+  const storeProduct = pkg ? null : await findSubscriptionStoreProduct(productId);
+  if (!pkg && !storeProduct) {
     return {
       ok: false,
       message: "Channel Subscription sandbox product is not available on this device yet.",
@@ -335,7 +343,11 @@ export async function purchaseChannelSubscription(input: {
     source_surface: input.sourceSurface,
   });
 
-  await purchaseRevenueCatPackage(pkg);
+  if (pkg) {
+    await purchaseRevenueCatPackage(pkg);
+  } else if (storeProduct) {
+    await purchaseRevenueCatStoreProduct(storeProduct);
+  }
   const verifiedAccess = await waitForChannelSubscriptionAccess(input.creatorId);
   if (!verifiedAccess.allowed) {
     return {
