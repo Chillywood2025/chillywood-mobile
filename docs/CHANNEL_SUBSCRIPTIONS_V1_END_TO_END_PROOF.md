@@ -22,7 +22,7 @@ Not yet proved:
 - Verified provider event creates a live test subscription row.
 - Money Center visual readback of an actual subscription transaction.
 - Cancellation/expiration/revoke proof.
-- Play/internal build `da86b3e9-145f-45a4-9f84-d713d906dc98` was started for versionCode `48`, but it remained `IN_PROGRESS` with no AAB artifact after repeated polling, so Play submission and device purchase proof are still blocked on EAS completion.
+- Official traceable Play/internal build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` finished for committed SHA `12b0f65f82bb571276346748ee2a13334690b68c` and versionCode `49`, and was submitted to Google Play internal testing. The attached phone still reports versionCode `46`, so device proof is blocked until Play delivers the v49 update.
 
 ## Provider Path
 
@@ -132,8 +132,9 @@ Pending Play/internal proof:
 
 Sandbox purchase proof is pending provider/runtime setup, not app schema implementation:
 
-- EAS build `da86b3e9-145f-45a4-9f84-d713d906dc98` / versionCode `48` is still `IN_PROGRESS` and has not produced an AAB artifact yet.
-- The build metadata reports git commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f` because the Channel Subscriptions changes are not committed yet; do not treat the build as a traceable committed proof runtime until a committed build is produced or this local archive is explicitly accepted.
+- Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because its metadata points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
+- Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` points to committed SHA `12b0f65f82bb571276346748ee2a13334690b68c`, produced an AAB, and was submitted to Google Play internal testing.
+- Attached device `R5CR120QCBF` still reports package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `46`; official proof must wait until Google Play delivers versionCode `49`.
 - Google Play subscription product and RevenueCat offering/package availability for `cw_channel_subscription_sandbox_monthly_499` still need dashboard/device proof.
 - No live money is enabled.
 - BrowserStack remains deferred until final full regression after all monetization flows are built.

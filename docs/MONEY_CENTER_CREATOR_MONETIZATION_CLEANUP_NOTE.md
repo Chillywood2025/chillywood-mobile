@@ -87,5 +87,6 @@
 - Fan surface is the creator channel header/card with `Subscribe`; subscriber-only proof route is `/channel-subscription/[creatorId]`.
 - Channel Subscriptions unlock only subscriber state for that creator channel. They do not include Chi'llwood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payout access, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators.
 - Remote migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied and `revenuecat-webhook` is redeployed.
-- EAS Play/internal build `da86b3e9-145f-45a4-9f84-d713d906dc98` was started for versionCode `48`, but remained `IN_PROGRESS` with no AAB artifact after repeated polling; Play submission and device purchase proof are still pending.
+- Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
+- Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` points to committed SHA `12b0f65f82bb571276346748ee2a13334690b68c`, produced an AAB, and was submitted to Google Play internal testing; attached device `R5CR120QCBF` still reports Play-installed versionCode `46`.
 - Remaining proof gaps: Play/internal subscription purchase sheet, signed webhook event, active subscription row, Money Center visual transaction readback, second-unsubscribed denial after purchase, and cancellation/expiration/revoke if safe provider tooling allows.
