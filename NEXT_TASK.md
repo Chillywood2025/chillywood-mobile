@@ -8,6 +8,7 @@ VIP V1 current truth:
 
 - Migration applied remotely: `20260613104442_vip_passes_v1_sandbox.sql`.
 - `revenuecat-webhook` deployed: ACTIVE version 17.
+- Traceable Play/internal AAB build started from commit `95c7966482f6f76637dd17a3bdf66afad2f711c6`: EAS build `96a2542d-1687-4de1-8ab5-1ec22e6660fd`, versionCode `52`, status `IN_PROGRESS` at handoff, artifact pending.
 - Provider path is RevenueCat / Google Play dynamic sandbox product `vip_pass_sandbox_499` / `cw_vip_pass_sandbox_499`; Stripe Tips is not used.
 - `revenuecat-webhook` maps `vip_pass` products to verified `vip_pass` access grants.
 - Creator setup lives in Platform Studio Money Center > Ways to Earn and Offers.
@@ -21,6 +22,7 @@ Next VIP proof steps:
 - Confirm Google Play product `cw_vip_pass_sandbox_499` exists and is available to internal/license testers.
 - Confirm RevenueCat product/key `vip_pass_sandbox_499` is mapped for the Android app.
 - Build and submit a Play/internal runtime from the committed VIP SHA.
+- If EAS build `96a2542d-1687-4de1-8ab5-1ec22e6660fd` finishes successfully, submit that AAB to Google Play internal testing. Do not start another build unless v52 fails or points to the wrong commit.
 - Install/update from Google Play and confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
 - Creator enables VIP Pass in Money Center and confirms the offer persists.
 - Non-VIP fan sees `Get VIP`, is blocked from `/vip-pass/[creatorId]`, and direct link cannot bypass the gate.

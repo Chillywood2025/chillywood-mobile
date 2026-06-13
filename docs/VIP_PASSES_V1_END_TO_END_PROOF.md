@@ -66,6 +66,22 @@ Deployment readback:
 - `revenuecat-webhook`: ACTIVE version 17
 - Post-apply dry run: remote database is up to date
 
+## Play/Internal Build
+
+Started:
+
+- Commit: `95c7966482f6f76637dd17a3bdf66afad2f711c6`
+- EAS build id: `96a2542d-1687-4de1-8ab5-1ec22e6660fd`
+- Build profile: `production`
+- Platform: Android
+- Artifact type: AAB / STORE
+- App version: `1.0.0`
+- VersionCode: `52`
+- Runtime version: `1.0.0`
+- EAS status at closeout: `IN_PROGRESS`
+- Artifact URL: pending
+- Play internal submission: pending
+
 ## Implemented App Surfaces
 
 Creator:
@@ -112,7 +128,8 @@ Pending:
 ## Current Blockers
 
 - Google Play / RevenueCat product availability is not yet proved.
-- No Play/internal runtime containing VIP Passes V1 has been built or installed.
+- Play/internal v52 build is in progress and has not produced an artifact yet.
+- No Play/internal runtime containing VIP Passes V1 has been installed.
 - No sandbox VIP purchase has been run.
 - No provider refund/revoke proof is available yet.
 
