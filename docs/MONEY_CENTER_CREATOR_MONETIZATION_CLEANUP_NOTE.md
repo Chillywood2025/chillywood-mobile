@@ -1,5 +1,7 @@
 # Money Center Creator Monetization Cleanup Note
 
+Closeout audit: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md` now consolidates the current six-flow sandbox truth, refund/revoke/lifecycle deferrals, RLS/security posture, route/deep-link gates, Premium separation, and final BrowserStack regression plan.
+
 ## Duplicate Cards Found
 - Platform Studio Home had separate Creator Balance, Payouts, and Provider Status rows outside the Money Center tab.
 - Money Center had separate Digital Sales, Tips, Watch-Party Seats, Paid Content, Merch, Creator Balance, Future Tools, and Technical checks sections.

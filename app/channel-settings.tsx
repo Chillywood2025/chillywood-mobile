@@ -6629,7 +6629,7 @@ export function ChannelStudioScreen() {
       {
         label: "Creator purchases",
         value: "Sandbox proved",
-        body: "Tips, paid content, tickets, seats, and event passes have real Google Play / RevenueCat sandbox proof.",
+        body: "All six creator money flows have local/manual sandbox proof. Live money and payouts remain off.",
       },
       {
         label: "Sandbox Activity",
@@ -6651,7 +6651,7 @@ export function ChannelStudioScreen() {
       {
         label: "Remaining checks",
         value: "Provider-tooling gaps",
-        body: "Real provider refund/revoke and delayed-payment pending proof still need provider/device support.",
+        body: "Provider refund/revoke and subscription lifecycle delivery proof still need safe provider tooling.",
         tone: "unavailable",
       },
     ];
@@ -6950,7 +6950,7 @@ export function ChannelStudioScreen() {
           </View>
           <Text style={styles.permissionCopy}>
             {monetizationActive
-              ? "Money tools are active. Keep store, payment, refund, tax, safety, and payout checks reviewed before adding new tools."
+              ? "Sandbox money tools are configured. Keep store, payment, refund, tax, safety, and payout checks reviewed before any live approval."
               : "Sandbox activity is inspection-only and not payable. No verified payable earnings, payout, cash-out, withdrawal, or transfer action is available."}
           </Text>
           {renderSummaryMetricCards(launchReadinessCards)}
@@ -7009,7 +7009,7 @@ export function ChannelStudioScreen() {
                   { label: "Lifetime earnings", value: paidTipTransactions.length ? formatMonetizationCurrency(tipGrossCents, creatorTipSettings?.currency ?? "usd") : "No verified tips yet", body: "This is test-mode tip history, not a withdrawable live balance.", tone: paidTipTransactions.length ? "default" : "unavailable" },
                   { label: "Pending payout", value: "Not active", body: "No payout, cash-out, withdrawal, transfer, or payout release action is available.", tone: "unavailable" },
                   { label: "Payout status", value: payoutsStatus === "Disabled" ? "Not active" : payoutsStatus, body: "Set up payouts before you can receive creator earnings.", tone: sectionTone(payoutsStatus) === "default" && creatorPayoutSummary.providerReady ? "default" : "unavailable" },
-                  { label: "Monetization status", value: topStatus, body: "Creator earnings are temporarily disabled until live money and provider checks pass.", tone: monetizationActive ? "default" : "unavailable" },
+                  { label: "Monetization status", value: topStatus, body: "Creator earnings are sandbox/readback only until live money and payout approvals pass.", tone: monetizationActive ? "default" : "unavailable" },
                   { label: "Setup progress", value: providerOverallStatus, body: "Provider checks are the source of readiness truth.", tone: providerOverallStatus === "Sandbox ready" ? "default" : "unavailable" },
                 ])}
                 <View style={styles.eventEmptyCard}>

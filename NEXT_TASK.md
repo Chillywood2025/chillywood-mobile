@@ -1,5 +1,24 @@
 # NEXT TASK
 
+## Monetization Closeout / Final Regression
+
+The six planned creator monetization flows are now sandbox-proven for their core paths and consolidated in Money Center:
+
+- Tips V1
+- Paid Videos V1
+- Paid Watch-Party Seats V1
+- Paid Events V1
+- Channel Subscriptions V1
+- VIP Passes V1
+
+Current truth lives in `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md`.
+
+Next monetization work should not add new creator-money flows. The next production-money tasks are closeout hardening, provider refund/revoke/lifecycle proof when safe tooling/order ids exist, and final BrowserStack regression on a Play/internal launch-candidate runtime.
+
+Final BrowserStack regression must cover: auth email reset/signup, Brand Studio, Chi'lly Chat calls, Watch-Party participant rail, Tips, Paid Videos, Paid Watch-Party Seats, Paid Events, Channel Subscriptions, VIP Passes, Premium separation, direct-link denials, and Money Center readbacks. BrowserStack remains final regression, not first proof, and must use a Play/internal runtime rather than Expo Dev Launcher.
+
+Live money remains off. Payouts, cash-out, withdrawal, transfer, and payable creator balances remain unavailable.
+
 ## Current Creator Monetization Proof
 
 VIP Passes V1 is repo-side implemented, Supabase-applied, webhook-deployed, and Play/internal v52 sandbox-proven for provider setup, purchase, verified VIP pass/access creation, VIP route access, authenticated second non-VIP denial, and Money Center readback.
@@ -63,8 +82,6 @@ Remaining Channel Subscriptions work:
 - Fresh lifecycle proof attempt: Google Play Console exact sandbox order `GPA.3353-3923-8017-31040..4` accepted a refund with `Remove entitlement` selected and showed `1 order refunded`, but RevenueCat did not emit a fresh signed webhook during the proof window. Supabase still has no post-deploy lifecycle row to process.
 - Future lifecycle proof must trigger or safely replay fresh signed RevenueCat lifecycle events and confirm subscription status, access grant status, subscriber route behavior, and Money Center readback update correctly.
 - Do not fake cancellation/expiration/revoke by manual DB mutation.
-
-Closed Paid Events truth:
 
 Closed Paid Events truth:
 
@@ -978,29 +995,11 @@ Recommended next lane:
 - Re-run the targeted token/private-source greps and the new `npm run guard:spectator-child-room-policy` after any proof-only fixes.
 - Keep screenshots outside the repo and leave `artifacts/` plus `supabase/.temp/` untouched.
 
-## Next Lane: Prove Channel Subscriptions V1 Sandbox Purchase
+## Closed Lane: Channel Subscriptions V1 Sandbox Purchase
 
-Channel Subscriptions V1 is implemented and deployed, but not yet sandbox-purchase-proven.
+Channel Subscriptions V1 purchase proof is closed. The current remaining subscription gap is fresh provider lifecycle delivery after the lifecycle handler deployment; do not manually rewrite old ignored events or mutate Supabase rows to fake cancellation, expiration, refund, or revoke.
 
-Before building VIP Passes:
-
-1. Confirm Google Play / RevenueCat product and offering/package exist:
-   - product key `channel_subscription_sandbox_monthly_499`
-   - provider product id `channel_subscription_sandbox_monthly_499`
-   - active Play base plan and RevenueCat product/base-plan mapping, expected `channel_subscription_sandbox_monthly_499:monthly`
-   - entitlement id `creator_channel_subscription`
-2. Build or install a Play/internal runtime that includes the Channel Subscriptions V1 code.
-3. Confirm device installer is `com.android.vending`.
-4. Creator enables Channel Subscription in Money Center.
-5. Unsubscribed fan sees `Subscribe` and cannot open `/channel-subscription/[creatorId]` without access.
-6. Fan completes RevenueCat / Google Play sandbox subscription purchase.
-7. Confirm signed webhook creates provider event, access grant, active channel subscription row, mirrored `channel_subscribers` row, and transaction row.
-8. Confirm subscribed fan can open subscriber-only route after app reload.
-9. Confirm second unsubscribed fan remains blocked by normal route and direct link.
-10. Confirm Money Center Transactions shows Channel Subscription as sandbox/not_payable and separate from Premium, Tips, Paid Videos, Paid Watch-Party tickets, Paid Events, and VIP.
-11. Try cancellation/expiration/revoke only if safe RevenueCat / Google Play tooling and order identifiers are available.
-
-Do not claim live money. Do not build VIP before this proof is complete or explicitly deferred by product decision.
+Current truth is summarized at the top of this file and in `docs/CHANNEL_SUBSCRIPTIONS_V1_END_TO_END_PROOF.md` plus `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md`.
 
 ## Previous Recommended Lane: Profile Media Runtime Proof And Blocked/Private Fixtures
 

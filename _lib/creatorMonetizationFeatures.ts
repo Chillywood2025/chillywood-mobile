@@ -40,7 +40,7 @@ export const CREATOR_MONETIZATION_FEATURE_CATALOG: readonly MonetizationFeatureC
     fanActionLabel: "Tip",
     creatorActionLabel: "Set up",
     status: "Not set up",
-    requiredSetup: ["Store product", "payout readiness", "tax/legal readiness"],
+    requiredSetup: ["Stripe Connect test payouts", "provider readiness", "tax/legal readiness"],
     manageTarget: "tips",
     allowedSurfaces: ["channel_header", "video_player", "live_host_area", "party_room_host_area", "recap"],
   },
@@ -80,7 +80,7 @@ export const CREATOR_MONETIZATION_FEATURE_CATALOG: readonly MonetizationFeatureC
   {
     key: "vip_passes",
     title: "VIP Passes",
-    creatorDescription: "Sell special access and perks.",
+    creatorDescription: "Sell creator-specific VIP status and access.",
     fanActionLabel: "Get VIP",
     creatorActionLabel: "Set up",
     status: "Not set up",

@@ -54,7 +54,7 @@ assertIncludes(packageJson, "guard:money-center-policy", "package guard script")
   "Charge fans to unlock selected videos.",
   "Sell access to hosted Watch-Party rooms.",
   "Offer monthly creator membership.",
-  "Sell special access and perks.",
+  "Sell creator-specific VIP status and access.",
   "Sell tickets to live events and premieres.",
 ].forEach((label) => {
   assertIncludes(monetizationFeatureCatalog, label, `shared monetization feature catalog ${label}`);
@@ -100,8 +100,8 @@ assertIncludes(channelSettings, "Not payable", "creator non-payable labeling");
 assertIncludes(channelSettings, "Sandbox only", "creator sandbox labeling");
 assertIncludes(channelSettings, "Sandbox testing is complete for digital access. Live money is not active.", "creator launch summary copy");
 assertIncludes(channelSettings, "Sandbox activity is inspection-only and not payable.", "creator sandbox-only not-payable copy");
-assertIncludes(channelSettings, "Real provider refund/revoke and delayed-payment pending proof still need provider/device support.", "creator provider-tooling gap copy");
-assertIncludes(channelSettings, "Tips, paid content, tickets, seats, and event passes have real Google Play / RevenueCat sandbox proof.", "creator sandbox proof product copy");
+assertIncludes(channelSettings, "Provider refund/revoke and subscription lifecycle delivery proof still need safe provider tooling.", "creator provider-tooling gap copy");
+assertIncludes(channelSettings, "All six creator money flows have local/manual sandbox proof. Live money and payouts remain off.", "creator sandbox proof product copy");
 assertIncludes(channelSettings, "Sandbox rows are inspection records only and stay not payable.", "creator setup/sandbox not-payable proof copy");
 assertIncludes(channelSettings, "money_center_visible", "Money Center visibility switch");
 assertIncludes(channelSettings, "digital_sales_enabled", "Digital sales switch");

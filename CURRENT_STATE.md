@@ -768,9 +768,17 @@ Profile Viewer State Runtime Proof Closeout ran on Android device `R5CR120QCBF` 
 - Never stage `supabase/.temp/`.
 - Stage only task-pure files for the active lane.
 
+## Creator Monetization Sandbox Closeout Audit
+
+June 13, 2026 closeout audit confirms all six Money Center creator monetization flows now have accurate sandbox status and local/manual proof for their core contribution, purchase, access, and readback paths: Tips V1, Paid Videos V1, Paid Watch-Party Seats V1, Paid Events V1, Channel Subscriptions V1, and VIP Passes V1. `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md` is the consolidated current truth for flow status, deferred provider-tooling gaps, RLS posture, route/deep-link gates, Premium separation, live-money state, payout state, and the final BrowserStack regression plan.
+
+Global truth remains unchanged: `live_money_enabled=off`, `payouts_enabled=off`, sandbox rows are not payable, no payout/cash-out/withdrawal/transfer is available, and no creator monetization flow should be described as launch-live earnings. Premium remains separate from creator purchases. Tips remain pure contributions with no digital unlock. Digital creator purchases use RevenueCat / Google Play sandbox paths; Stripe Tips is not used for paid digital access. Paid Watch-Party routing remains Party Waiting Room -> Party Room and does not route to Live Stage. LiveKit token/authority behavior was not changed.
+
+Safe deferred provider-tooling gaps are Paid Videos refund/revoke, Paid Watch-Party refund/revoke plus visual Money Center screenshot, Paid Events refund/revoke plus capacity UI proof, Channel Subscription fresh lifecycle webhook delivery, and VIP refund/revoke plus optional direct client active-VIP write-denial hardening proof. BrowserStack is final regression only and remains deferred until the Play/internal launch-candidate runtime is ready.
+
 ## Channel Subscriptions V1 Sandbox Implementation
 
-June 13, 2026 Channel Subscriptions V1 is implemented, deployed in sandbox mode, and core Play/RevenueCat sandbox purchase proof has passed. Migrations `20260612224536_channel_subscriptions_v1_sandbox.sql`, `20260613004804_channel_subscription_purchase_intent_allowlist.sql`, and `20260613021940_channel_subscription_valid_play_product_id.sql` are applied remotely to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` is deployed so `channel_subscription` products use the verified RevenueCat / Google Play purchase-intent bridge. Google Play product `channel_subscription_sandbox_monthly_499` now has active monthly base plan `monthly`; RevenueCat product `channel_subscription_sandbox_monthly_499:monthly` is published and attached to entitlement `creator_channel_subscription`. Play/internal v51 installed on `R5CR120QCBF` with package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `51`. After a cold app restart, Google Play Billing opened for the sandbox subscription, the fan completed purchase, signed provider event `9dabc47f-61f7-49f7-a169-3adb0ebbac30` processed, and Supabase created active subscription `436f2acc-ec46-4977-ba51-958452ea2f2e`, paid/not-payable transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`, and sandbox access grant `1a5492fe-c135-435e-878c-5e21a7638322`.
+June 13, 2026 Channel Subscriptions V1 is implemented, deployed in sandbox mode, and Play/RevenueCat sandbox purchase proof has passed. Migrations `20260612224536_channel_subscriptions_v1_sandbox.sql`, `20260613004804_channel_subscription_purchase_intent_allowlist.sql`, `20260613021940_channel_subscription_valid_play_product_id.sql`, `20260613091417_channel_subscription_lifecycle_handling.sql`, and `20260613092100_channel_subscription_cancel_pending_unique.sql` are applied remotely to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` is deployed so `channel_subscription` products use the verified RevenueCat / Google Play purchase-intent bridge. Google Play product `channel_subscription_sandbox_monthly_499` has active monthly base plan `monthly`; RevenueCat product `channel_subscription_sandbox_monthly_499:monthly` is published and attached to entitlement `creator_channel_subscription`. Play/internal v51 installed on `R5CR120QCBF` with package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `51`. After a cold app restart, Google Play Billing opened for the sandbox subscription, the fan completed purchase, signed provider event `9dabc47f-61f7-49f7-a169-3adb0ebbac30` processed, and Supabase created active subscription `436f2acc-ec46-4977-ba51-958452ea2f2e`, paid/not-payable transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`, and sandbox access grant `1a5492fe-c135-435e-878c-5e21a7638322`.
 
 Current implemented truth:
 
@@ -783,11 +791,12 @@ Current implemented truth:
 - RevenueCat entitlement id: `creator_channel_subscription`.
 - Live money remains off and sandbox rows remain `not_payable`.
 
-Remaining proof gaps:
+Follow-up proof status:
 
-- Creator Money Center visual transaction readback for transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
-- Second authenticated unsubscribed-fan UI denial after the successful purchase.
-- Cancellation/expiration/revoke proof.
+- Creator Money Center visual transaction readback passed for transaction `e49cddea-cd6d-4097-b70c-a07abaa24823`.
+- Authenticated non-subscriber UI denial passed after the successful purchase.
+- Effective-access fallback passed: stale `status=active` subscription rows do not unlock when the provider period/access grant is expired.
+- Lifecycle handling is implemented for Renewal, Cancellation, Expiration, Billing Issue, Uncancellation, Product Change, Refund, Revocation, and Subscription Paused, but fresh signed provider lifecycle delivery remains deferred/provider-blocked because RevenueCat did not emit a fresh post-deploy webhook after Google Play accepted a sandbox refund/removal.
 
 Channel Subscriptions do not unlock Chi'llwood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, Live Stage, LiveKit authority, payouts, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators' channels.
 
