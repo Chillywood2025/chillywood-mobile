@@ -88,5 +88,8 @@
 - Channel Subscriptions unlock only subscriber state for that creator channel. They do not include Chi'llwood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payout access, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators.
 - Remote migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied and `revenuecat-webhook` is redeployed.
 - Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
-- Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` points to committed SHA `12b0f65f82bb571276346748ee2a13334690b68c`, produced an AAB, and was submitted to Google Play internal testing; attached device `R5CR120QCBF` still reports Play-installed versionCode `46`.
+- Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` installed on `R5CR120QCBF` with `installer=com.android.vending` and versionCode `49`; it proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate.
+- v49 purchase proof found backend `unsupported_purchase_intent_product`; remote migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql` fixes the central purchase-intent allowlist.
+- v49 app retry then found the RevenueCat offering-only lookup blocker; commit `54c9f5c11b9a67f366c97a7b8b6718fe76704f43` adds direct RevenueCat subscription product lookup fallback.
+- Official v50 build `c6859970-89a9-470b-882d-eeb848bb2fe9` is in progress for versionCode `50` and must be installed before retrying purchase proof.
 - Remaining proof gaps: Play/internal subscription purchase sheet, signed webhook event, active subscription row, Money Center visual transaction readback, second-unsubscribed denial after purchase, and cancellation/expiration/revoke if safe provider tooling allows.

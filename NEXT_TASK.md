@@ -6,10 +6,11 @@ Channel Subscriptions V1 is now implemented, Supabase-applied, and webhook-deplo
 
 Immediate next proof:
 
-- Wait for Google Play internal testing to deliver versionCode `49` from traceable EAS build `67995a33-6b4c-4e0a-afa2-02f95cff47c1`, committed SHA `12b0f65f82bb571276346748ee2a13334690b68c`.
-- Install/update from Play and confirm `installer=com.android.vending` and `versionCode=49`.
+- Wait for EAS build `c6859970-89a9-470b-882d-eeb848bb2fe9` / versionCode `50` from committed SHA `54c9f5c11b9a67f366c97a7b8b6718fe76704f43` to finish.
+- Submit v50 to Google Play internal, install/update from Play, and confirm `installer=com.android.vending` and `versionCode=50`.
 - Do not use uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` for official proof; it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
-- Confirm RevenueCat / Google Play subscription product and package availability for `channel_subscription_sandbox_monthly_499` / `cw_channel_subscription_sandbox_monthly_499`.
+- v49 already proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate; rerun quickly on v50 before purchase.
+- Confirm RevenueCat / Google Play subscription product availability for `channel_subscription_sandbox_monthly_499` / `cw_channel_subscription_sandbox_monthly_499`. v50 includes fallback from RevenueCat offerings to direct subscription product lookup.
 - Run creator setup, unsubscribed gate, sandbox subscription purchase, signed webhook, active subscription row, Money Center readback, second-unsubscribed denial, and cancellation/expiration/revoke proof if safe provider tooling allows.
 
 Closed Paid Events truth:

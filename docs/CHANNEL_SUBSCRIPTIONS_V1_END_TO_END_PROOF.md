@@ -22,7 +22,9 @@ Not yet proved:
 - Verified provider event creates a live test subscription row.
 - Money Center visual readback of an actual subscription transaction.
 - Cancellation/expiration/revoke proof.
-- Official traceable Play/internal build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` finished for committed SHA `12b0f65f82bb571276346748ee2a13334690b68c` and versionCode `49`, and was submitted to Google Play internal testing. The attached phone still reports versionCode `46`, so device proof is blocked until Play delivers the v49 update.
+- v49 proof reached the creator setup, fan CTA, and unsubscribed direct-route gate. It then exposed two blockers: the central purchase-intent function did not allow `channel_subscription`, and the app only searched RevenueCat offerings instead of falling back to direct subscription product lookup.
+- Backend blocker is fixed by remote-applied migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql`.
+- App fallback is fixed in commit `54c9f5c11b9a67f366c97a7b8b6718fe76704f43`, which adds direct RevenueCat subscription product lookup before purchase. Official v50 build `c6859970-89a9-470b-882d-eeb848bb2fe9` is in progress and must be installed before retrying purchase proof.
 
 ## Provider Path
 
@@ -57,6 +59,7 @@ It does not unlock:
 Migration applied remotely:
 
 - `20260612224536_channel_subscriptions_v1_sandbox.sql`
+- `20260613004804_channel_subscription_purchase_intent_allowlist.sql`
 
 Updated function deployed:
 
@@ -130,11 +133,15 @@ Pending Play/internal proof:
 
 ## Current Blocker
 
-Sandbox purchase proof is pending provider/runtime setup, not app schema implementation:
+Sandbox purchase proof is pending the v50 runtime:
 
 - Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because its metadata points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
-- Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` points to committed SHA `12b0f65f82bb571276346748ee2a13334690b68c`, produced an AAB, and was submitted to Google Play internal testing.
-- Attached device `R5CR120QCBF` still reports package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `46`; official proof must wait until Google Play delivers versionCode `49`.
-- Google Play subscription product and RevenueCat offering/package availability for `cw_channel_subscription_sandbox_monthly_499` still need dashboard/device proof.
+- Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` reached installed proof on attached device `R5CR120QCBF` with package `com.chillywood.mobile`, installer `com.android.vending`, and versionCode `49`.
+- v49 creator setup passed: offer `c7f74157-421d-41c6-8562-161965bab031` was saved as `sandbox`, product key `channel_subscription_sandbox_monthly_499`, provider product id `cw_channel_subscription_sandbox_monthly_499`, price `499`, subscriber count `0`.
+- v49 unsubscribed fan proof passed: creator channel showed `Subscribe`, and direct `/channel-subscription/[creatorId]` showed `Subscriber access required`.
+- v49 purchase attempt first failed at RPC with `unsupported_purchase_intent_product`; migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql` fixed this and the same subscriber RPC created intent `f808996c-b543-42ca-9a6e-e4f1f6fa083b`.
+- v49 app retry then failed at RevenueCat package lookup with `Channel Subscription sandbox product is not available on this device yet.` Commit `54c9f5c` adds direct subscription product lookup fallback, so official purchase proof requires v50.
+- Official v50 build `c6859970-89a9-470b-882d-eeb848bb2fe9` points to committed SHA `54c9f5c11b9a67f366c97a7b8b6718fe76704f43`, versionCode `50`, and is still `IN_PROGRESS` with no AAB artifact yet.
+- Google Play subscription product and RevenueCat product availability for `cw_channel_subscription_sandbox_monthly_499` still need device proof after v50 installs.
 - No live money is enabled.
 - BrowserStack remains deferred until final full regression after all monetization flows are built.

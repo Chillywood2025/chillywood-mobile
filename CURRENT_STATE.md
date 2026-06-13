@@ -766,7 +766,7 @@ Profile Viewer State Runtime Proof Closeout ran on Android device `R5CR120QCBF` 
 
 ## Channel Subscriptions V1 Sandbox Implementation
 
-June 12, 2026 Channel Subscriptions V1 is implemented and deployed in sandbox mode, but the Play/RevenueCat subscription purchase proof is still pending. Migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied remotely to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` was redeployed so `channel_subscription` products use the verified RevenueCat / Google Play purchase-intent bridge. Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`. Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` points to committed SHA `12b0f65f82bb571276346748ee2a13334690b68c`, produced an AAB, and was submitted to Google Play internal testing. Attached device `R5CR120QCBF` still reports Play-installed versionCode `46`, so device proof is blocked until Play delivers v49.
+June 12, 2026 Channel Subscriptions V1 is implemented and deployed in sandbox mode, but the Play/RevenueCat subscription purchase proof is still pending. Migration `20260612224536_channel_subscriptions_v1_sandbox.sql` is applied remotely to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` was redeployed so `channel_subscription` products use the verified RevenueCat / Google Play purchase-intent bridge. Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`. Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` installed on attached device `R5CR120QCBF` with `installer=com.android.vending` and versionCode `49`. v49 proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate. Purchase proof then found two blockers: the central purchase-intent function returned `unsupported_purchase_intent_product`, and the app only searched RevenueCat offerings before reporting the sandbox product unavailable. Remote-applied migration `20260613004804_channel_subscription_purchase_intent_allowlist.sql` fixed the backend allowlist; commit `54c9f5c11b9a67f366c97a7b8b6718fe76704f43` adds direct RevenueCat subscription product lookup fallback. Official v50 build `c6859970-89a9-470b-882d-eeb848bb2fe9` is in progress for versionCode `50`; device purchase proof must wait for that build.
 
 Current implemented truth:
 
@@ -782,7 +782,7 @@ Current implemented truth:
 Not yet proved:
 
 - Play/internal build purchase sheet for `cw_channel_subscription_sandbox_monthly_499`.
-- Play/internal install of official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1`.
+- Play/internal install of official v50 build `c6859970-89a9-470b-882d-eeb848bb2fe9`.
 - Signed RevenueCat subscription event for this product.
 - Verified active subscription row and Money Center visual transaction readback from a real sandbox purchase.
 - Cancellation/expiration/revoke proof.
