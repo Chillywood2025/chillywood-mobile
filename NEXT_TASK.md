@@ -19,6 +19,18 @@ Final BrowserStack regression must cover: auth email reset/signup, Brand Studio,
 
 Live money remains off. Payouts, cash-out, withdrawal, transfer, and payable creator balances remain unavailable.
 
+## Final Public V1 QA Plan
+
+Final public-v1 QA planning is now documented:
+
+- `docs/FINAL_PUBLIC_V1_QA_PLAN.md`
+- `docs/BROWSERSTACK_FINAL_REGRESSION_PLAN.md`
+- `docs/PUBLIC_V1_LAUNCH_READINESS_CHECKLIST.md`
+
+Next task recommendation: execute the final Play/internal launch-candidate proof pass, then BrowserStack final regression. Start with runtime verification (`package=com.chillywood.mobile`, `installer=com.android.vending`, latest internal versionCode, not Expo Dev Launcher), then close auth reset/signup, Brand Studio, Chi'lly Chat calls, Watch-Party/LiveKit two-user smoke, Money Center six-flow readbacks, Premium separation, direct-link denial, and Google Play/RevenueCat product readiness. Do not add new monetization features.
+
+Current go/no-go: no-go for broad public launch until BrowserStack final regression, external launch governance, and listed launch blockers are closed; go for continued Play/internal QA with live money and payouts off.
+
 ## Current Creator Monetization Proof
 
 VIP Passes V1 is repo-side implemented, Supabase-applied, webhook-deployed, and Play/internal v52 sandbox-proven for provider setup, purchase, verified VIP pass/access creation, VIP route access, authenticated second non-VIP denial, and Money Center readback.
