@@ -2,30 +2,29 @@
 
 ## Next Creator Monetization Proof
 
-VIP Passes V1 is repo-side implemented, Supabase-applied, and webhook-deployed, but not yet Play/internal built or sandbox purchase-proven.
+VIP Passes V1 is repo-side implemented, Supabase-applied, webhook-deployed, and Play/internal v52 creator-setup/gate-proven, but not yet sandbox purchase-proven.
 
 VIP V1 current truth:
 
-- Migration applied remotely: `20260613104442_vip_passes_v1_sandbox.sql`.
+- Migrations applied remotely: `20260613104442_vip_passes_v1_sandbox.sql` and `20260613114528_vip_pass_metadata_safe_keys.sql`.
 - `revenuecat-webhook` deployed: ACTIVE version 17.
-- Traceable Play/internal AAB build started from commit `95c7966482f6f76637dd17a3bdf66afad2f711c6`: EAS build `96a2542d-1687-4de1-8ab5-1ec22e6660fd`, versionCode `52`, status `IN_PROGRESS` at handoff, artifact pending.
+- Traceable Play/internal AAB build from commit `95c7966482f6f76637dd17a3bdf66afad2f711c6`: EAS build `96a2542d-1687-4de1-8ab5-1ec22e6660fd`, submission `9cae0461-801a-4bec-b0e8-148565a5ee41`, versionCode `52`, installed on `R5CR120QCBF` with installer `com.android.vending`.
 - Provider path is RevenueCat / Google Play dynamic sandbox product `vip_pass_sandbox_499` / `cw_vip_pass_sandbox_499`; Stripe Tips is not used.
 - `revenuecat-webhook` maps `vip_pass` products to verified `vip_pass` access grants.
 - Creator setup lives in Platform Studio Money Center > Ways to Earn and Offers.
 - Fan surface is the creator channel VIP card and `/vip-pass/[creatorId]`.
+- Creator setup passed after the DB-only metadata validator fix: Money Center showed `Manage VIP Pass` / `Pause VIP Pass` and persisted offer `4769cf60-3b32-42c5-ac68-c7cc3384c0a4`.
+- Non-owner fan gate passed against `tips_creator_test` offer `7edc7696-b371-4d76-9c07-8c160c0b82b2`: creator channel showed `Get VIP`, direct `/vip-pass/[creatorId]` showed `VIP ACCESS REQUIRED`, and the VIP-only area was not exposed before purchase.
+- Current blocker: Play Console One-time products search for `cw_vip_pass_sandbox_499` returns `No results`; the app shows `VIP Pass sandbox product is not available on this device yet.` No VIP transaction, VIP pass, or VIP access grant was created.
 - VIP V1 unlocks only creator-specific VIP state/area for that creator.
 - VIP does not include Chi'llwood Premium, Paid Videos, Paid Watch-Party tickets, Paid Events, Channel Subscriptions, Tips, LiveKit authority, room permissions, speaker/host privileges, payouts, platform-wide status, or other creators' channels.
 - Live money remains off and sandbox rows are not payable.
 
 Next VIP proof steps:
 
-- Confirm Google Play product `cw_vip_pass_sandbox_499` exists and is available to internal/license testers.
-- Confirm RevenueCat product/key `vip_pass_sandbox_499` is mapped for the Android app.
-- Build and submit a Play/internal runtime from the committed VIP SHA.
-- If EAS build `96a2542d-1687-4de1-8ab5-1ec22e6660fd` finishes successfully, submit that AAB to Google Play internal testing. Do not start another build unless v52 fails or points to the wrong commit.
-- Install/update from Google Play and confirm package `com.chillywood.mobile`, installer `com.android.vending`, and the new versionCode.
-- Creator enables VIP Pass in Money Center and confirms the offer persists.
-- Non-VIP fan sees `Get VIP`, is blocked from `/vip-pass/[creatorId]`, and direct link cannot bypass the gate.
+- Create/activate Google Play one-time product `cw_vip_pass_sandbox_499` for package `com.chillywood.mobile`.
+- Import/map the product in RevenueCat so `vip_pass_sandbox_499` / `cw_vip_pass_sandbox_499` is available to the Android app.
+- Retry `Get VIP` on Play/internal v52 or newer.
 - VIP fan completes RevenueCat / Google Play sandbox purchase.
 - Verified provider path creates a paid/not-payable VIP transaction and active VIP pass.
 - VIP fan can access the VIP route; second non-VIP fan remains blocked.

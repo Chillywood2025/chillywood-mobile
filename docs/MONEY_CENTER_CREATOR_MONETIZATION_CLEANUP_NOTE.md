@@ -105,11 +105,17 @@
 
 ## VIP Passes V1 Follow-Up
 
-- VIP Passes V1 is repo-side implemented, Supabase-applied, and webhook-deployed, but not yet Play/internal sandbox purchase-proven.
+- VIP Passes V1 is repo-side implemented, Supabase-applied, webhook-deployed, and Play/internal v52 creator-setup/gate-proven, but not yet sandbox purchase-proven.
 - Provider path is RevenueCat / Google Play dynamic sandbox product `vip_pass_sandbox_499` / `cw_vip_pass_sandbox_499`; Stripe Tips is not used.
-- Migration `20260613104442_vip_passes_v1_sandbox.sql` is applied to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` is ACTIVE version 17.
-- The migration adds sandbox VIP pass offers, verified VIP passes, VIP transactions, VIP events, RLS, creator/fan-safe RPCs, purchase-intent allowlisting, and provider-grant sync from verified `vip_pass` access grants.
+- Migrations `20260613104442_vip_passes_v1_sandbox.sql` and `20260613114528_vip_pass_metadata_safe_keys.sql` are applied to Supabase project `bmkkhihfbmsnnmcqkoly`, and `revenuecat-webhook` is ACTIVE version 17.
+- The first migration adds sandbox VIP pass offers, verified VIP passes, VIP transactions, VIP events, RLS, creator/fan-safe RPCs, purchase-intent allowlisting, and provider-grant sync from verified `vip_pass` access grants.
+- The follow-up migration fixes the VIP metadata safe-key constraint so `livekit_authority=false` can be stored as an explicit negative marker while secrets, tokens, authorization, publish markers, host controls, admin power, and other LiveKit metadata remain blocked.
 - Money Center remains the setup/readout home: creators can enable/pause VIP Pass in Ways to Earn, offers appear in Offers, and verified VIP purchases appear in Transactions after provider proof.
 - Fan surface is the creator channel VIP card and `/vip-pass/[creatorId]` with `Get VIP` copy.
 - VIP unlocks only creator-specific VIP status/area for that creator. It does not include Chi'llwood Premium, Paid Videos, Paid Watch-Party tickets, Paid Events, Channel Subscriptions, Tips, LiveKit authority, room permissions, speaker/host privileges, payout access, platform-wide status, or other creators' channels.
-- Remaining proof: confirm Google Play/RevenueCat product setup, install a Play/internal build, complete sandbox purchase, prove verified VIP pass/transaction creation, non-VIP/direct-link denial, Money Center readback, and direct client write denial.
+- Play/internal v52 build `96a2542d-1687-4de1-8ab5-1ec22e6660fd` / submission `9cae0461-801a-4bec-b0e8-148565a5ee41` installed from Google Play on `R5CR120QCBF` with installer `com.android.vending`.
+- Creator setup passed after the DB-only validator fix, with Money Center showing `Manage VIP Pass` / `Pause VIP Pass` and a persisted sandbox offer.
+- Non-owner fan gate passed: `/vip-pass/[creatorId]` showed `VIP ACCESS REQUIRED`, separation copy, and `Get VIP` without showing the VIP-only area.
+- Purchase proof is blocked at provider product lookup: tapping `Get VIP` shows `VIP Pass sandbox product is not available on this device yet`, and Play Console One-time products search for `cw_vip_pass_sandbox_499` returned `No results`.
+- No VIP transaction, VIP pass, or VIP access grant was created while the product was unavailable.
+- Remaining proof: create/activate Google Play one-time product `cw_vip_pass_sandbox_499`, import/map it in RevenueCat, complete sandbox purchase, prove verified VIP pass/transaction creation, VIP access, Money Center readback, second non-VIP/direct-link denial, and direct client write denial.
