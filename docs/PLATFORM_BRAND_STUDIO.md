@@ -23,13 +23,14 @@ No migration, RLS weakening, storage policy change, malware scan bypass, public 
 
 OTA publication for tester pickup:
 
-- Code commit: `f998cbb`
+- Code commit: `1f3cb80`
 - EAS branch: `production`
 - Runtime version: `1.0.0`
-- Update group: `9d728443-d566-4e30-a6f3-19a6deb64f1c`
-- Android update: `019ec745-6813-7bfc-b03f-10d2231608fa`
-- iOS update: `019ec745-6813-78e7-a058-5cbeb49f02d1`
-- Supersedes earlier closeout OTA groups `86cf5f80-c746-453b-a495-27c0d99843ec`, `bb3143da-c3e6-46be-acde-9c609c171fb3`, and `c509979c-98f3-4043-bfe1-0a0052e02a64`.
+- Update group: `c382be3e-b17a-473f-bdfd-38101e8edadc`
+- Android update: `019ec762-ce39-711c-a6db-a4264a552ffd`
+- iOS update: `019ec762-ce39-763b-b692-802db8543d02`
+- Message: `Remove creator Brand Studio review wording 1f3cb80`
+- Supersedes earlier closeout OTA groups `86cf5f80-c746-453b-a495-27c0d99843ec`, `bb3143da-c3e6-46be-acde-9c609c171fb3`, `c509979c-98f3-4043-bfe1-0a0052e02a64`, and `9d728443-d566-4e30-a6f3-19a6deb64f1c`.
 
 Validation passed locally:
 

@@ -2,9 +2,9 @@
 
 ## Brand Studio Closeout Proof / OTA Pickup
 
-Latest repo-side follow-up removes the creator-facing `Needs review` state from normal owned Brand Studio uploads. In tester proof, the Brand tab should now show `Ready to publish`, `Checking`, `Blocked`, `Approved`, or `Published` instead of sending the creator to a review workflow. Public gates remain unchanged: only published, moderation-safe, scan-safe, not-deleted Brand assets can render publicly.
+Latest repo-side follow-up removes the creator-facing `Needs review` state from normal owned Brand Studio uploads and is OTA-published from code commit `1f3cb80` to branch `production`, runtime `1.0.0`, update group `c382be3e-b17a-473f-bdfd-38101e8edadc`, Android update `019ec762-ce39-711c-a6db-a4264a552ffd`. In tester proof, the Brand tab should now show `Ready to publish`, `Checking`, `Blocked`, `Approved`, or `Published` instead of sending the creator to a review workflow. Public gates remain unchanged: only published, moderation-safe, scan-safe, not-deleted Brand assets can render publicly.
 
-Brand Studio production closeout is repo-side complete and the latest EAS Update has been published from code commit `f998cbb` to branch `production`, runtime `1.0.0`, update group `9d728443-d566-4e30-a6f3-19a6deb64f1c`, Android update `019ec745-6813-7bfc-b03f-10d2231608fa`. Earlier Brand Studio closeout OTA groups `86cf5f80-c746-453b-a495-27c0d99843ec`, `bb3143da-c3e6-46be-acde-9c609c171fb3`, and `c509979c-98f3-4043-bfe1-0a0052e02a64` are superseded. Next proof is to confirm the installed Play/internal runtime actually picks up the `f998cbb` OTA, then run the updated Brand Studio contract:
+Brand Studio production closeout is repo-side complete and the latest EAS Update has been published from code commit `1f3cb80` to branch `production`, runtime `1.0.0`, update group `c382be3e-b17a-473f-bdfd-38101e8edadc`, Android update `019ec762-ce39-711c-a6db-a4264a552ffd`. Earlier Brand Studio closeout OTA groups `86cf5f80-c746-453b-a495-27c0d99843ec`, `bb3143da-c3e6-46be-acde-9c609c171fb3`, `050500c` group `c509979c-98f3-4043-bfe1-0a0052e02a64`, and `f998cbb` group `9d728443-d566-4e30-a6f3-19a6deb64f1c` are superseded. Next proof is to confirm the installed Play/internal runtime actually picks up the `1f3cb80` OTA, then run the updated Brand Studio contract:
 
 - Open Platform Studio.
 - Open Brand Studio.
@@ -17,7 +17,7 @@ Brand Studio production closeout is repo-side complete and the latest EAS Update
 - Confirm rejected, removed, scan-blocked, deleted, and pending assets stay hidden.
 - Confirm Profile photo/background remain separate from Platform hero/background/avatar/logo.
 
-This lane did not add a Supabase migration or native dependency. Publish a fresh OTA from the latest commit before retesting this follow-up. OTA is acceptable only if the installed Play/internal app actually receives the update; otherwise create a new Play/internal build for deterministic tester proof.
+This lane did not add a Supabase migration or native dependency. OTA is acceptable only if the installed Play/internal app actually receives the update; otherwise create a new Play/internal build for deterministic tester proof.
 
 ## BrowserStack Final Regression Prep
 
