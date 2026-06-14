@@ -74,7 +74,8 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20
 - Corrected the Brand Studio public-viewer proof assertion. The public Platform renders the display name `Tips Creator Test`, handle `@tips_creator_test`, and viewer state `Viewer`, not the raw username without `@`.
 - Brand Studio public-viewer readback passed on Play/internal v53 using the corrected assertion. Screenshot: `/tmp/chillywood-final-qa-second-account-20260613/brand-public-viewer-assert-current.png`.
 - Disposable inbox proof used `mail.tm` domain `web-library.net`. Signup confirmation and password reset emails arrived from `no-reply@chillywoodstream.com` with auth links present. Result: `/tmp/chillywood-final-qa-second-account-20260613/auth-disposable-proof-result.json`.
-- Installed-app auth link completion is still not fully closed. A second no-token app-open attempt could not safely capture and open usable auth links without exposing token-bearing URLs, so password update/sign-in-after-reset and signup verification completion remain BrowserStack/manual-device proof items.
+- Installed-app signup verification passed on Play/internal v53 with a disposable `mail.tm` inbox opened from the phone. The signup request came from the installed app, the verification email arrived, the phone opened the email link without printing a token URL, and `com.chillywood.mobile` returned to login after verification. Proof artifacts: `/var/folders/n0/x_0xwyw50md5spq0_mqvrx_00000gn/T/chillywood-auth-installed-app-ui-proof-kdjMV8/`.
+- Installed-app forgot-password email delivery and route handoff partially passed in the same proof: the reset request came from the installed app, the reset email arrived, and the phone-opened link launched `com.chillywood.mobile` on the reset-password route. Password update/sign-in-after-reset remains blocked because the route received a recovery link and showed `This reset link could not be opened. Request a fresh link.` No token-bearing URLs were printed, documented, or committed.
 - A local AVD (`Chillywood_API_34`) was available and booted, but installing the current 284 MB debug APK hung; the emulator was shut down. This is not a Play/internal proof surface and does not replace BrowserStack or a second physical device.
 
 | Suite | Status | Result / blocker |
@@ -82,8 +83,8 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20
 | Final QA proof account | Passed | `final_qa_simulator_test@chillywood.test` exists, has a profile, and normal anon sign-in was verified. |
 | Brand Studio public-viewer readback | Passed | Public Platform showed `Tips Creator Test`, `@tips_creator_test`, and `Viewer` on Play/internal v53. |
 | Disposable inbox delivery | Passed | Signup confirmation and reset emails arrived in a disposable readable inbox. |
-| Signup verification completion | Blocked | Email arrived with link present, but installed-app token completion was not safely completed in this pass. |
-| Password reset completion | Blocked | Reset email arrived with link present, but password update/sign-in-after-reset was not safely completed in this pass. |
+| Signup verification completion | Passed | Installed app requested signup, phone-opened verification link launched `com.chillywood.mobile`, and the app returned to login after verification. |
+| Password reset completion | Blocked | Installed app requested reset and phone-opened reset link launched `com.chillywood.mobile`, but reset-password route failed to open the recovery session before password update. |
 | Chi'lly Chat two-user calls | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
 | Watch-Party / LiveKit two-user flow | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
 | BrowserStack | Prepared / deferred | Persona and flow contracts are documented in `docs/BROWSERSTACK_FINAL_REGRESSION_PLAN.md`; BrowserStack was not run. |

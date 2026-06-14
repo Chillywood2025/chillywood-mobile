@@ -12,17 +12,17 @@ June 13, 2026 final Play/internal QA execution status is recorded in `docs/FINAL
 
 June 13 blocker-clearing update: a short-lived Premium `test_grant` let `tips_creator_test` open Platform Studio, Brand Studio, and Money Center on Play/internal v53. Brand Studio safe-state save/reload passed, wrong-user Brand Studio write was denied by RLS using `paid_videos_second_unpaid`, and Money Center showed sandbox/not-payable/live-money-off/payout-disabled truth. Auth email proof remains blocked on a disposable readable inbox, and two-user Chi'lly Chat / Watch-Party proof remains blocked on a second attached device/account.
 
-June 13 final persona repair update: `final_qa_simulator_test@chillywood.test` was created/repaired as an internal QA proof account with credentials stored only in ignored `.env.final-qa-proof.local`. Brand Studio public-viewer readback passed on Play/internal v53 with corrected assertions for `Tips Creator Test`, `@tips_creator_test`, and `Viewer`. Disposable inbox delivery passed for signup and reset emails using `mail.tm`; installed-app verification/reset completion remains open because token-bearing auth links were not safely opened and completed in this pass. BrowserStack personas and flow contracts are prepared, but BrowserStack has not run.
+June 13 final persona repair update: `final_qa_simulator_test@chillywood.test` was created/repaired as an internal QA proof account with credentials stored only in ignored `.env.final-qa-proof.local`. Brand Studio public-viewer readback passed on Play/internal v53 with corrected assertions for `Tips Creator Test`, `@tips_creator_test`, and `Viewer`. Disposable inbox delivery passed for signup and reset emails using `mail.tm`; installed-app signup verification now passes from phone-opened email link without exposing token URLs. Installed-app forgot-password email delivery and reset-route app handoff passed, but password update/sign-in-after-reset remains blocked because the reset route could not open the recovery session. BrowserStack personas and flow contracts are prepared, but BrowserStack has not run.
 
 ## 1. Auth
 
-- [ ] Forgot-password reset email proof on Play/internal runtime.
+- [x] Forgot-password reset email proof on Play/internal runtime.
 - [x] Forgot-password reset email arrives in disposable readable inbox.
-- [ ] Reset link opens installed app, not legal/support.
+- [x] Reset link opens installed app, not legal/support.
 - [ ] Password update succeeds and sign-in works.
-- [ ] Signup confirmation email proof on Play/internal runtime.
+- [x] Signup confirmation email proof on Play/internal runtime.
 - [x] Signup confirmation email arrives in disposable readable inbox.
-- [ ] Signup link opens installed app and verifies account.
+- [x] Signup link opens installed app and verifies account.
 - [ ] No tokens or passwords in logs/artifacts.
 - [ ] Owner/internal personal inbox is not used for routine proof.
 
@@ -181,7 +181,7 @@ Launch blockers until explicitly closed:
 - live money approval not complete.
 - payouts/cash-out/withdrawal/transfer not enabled.
 - external Play/legal/Data Safety/account-deletion acceptance not fully closed where applicable.
-- auth reset/signup email delivery passed with a disposable inbox, but installed-app link completion and password-update/sign-in-after-reset remain open.
+- auth signup verification passed and forgot-password reset link opens the installed app, but password-update/sign-in-after-reset remains blocked by reset recovery-session handling.
 - Chi'lly Chat two-user call proof not closed in this QA pass.
 - Watch-Party/LiveKit two-user final proof not closed in this QA pass.
 - BrowserStack final regression must wait for either a second local device/session or explicit approval to use BrowserStack for the remaining two-user proofs.
