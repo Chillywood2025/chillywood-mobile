@@ -2394,6 +2394,49 @@ export function ChannelStudioScreen() {
 
   const getCurrentBrandDraft = () => brandDraft ?? platformBranding?.profile ?? null;
 
+  const getBrandSelectedAssetIds = (bundle: PlatformBrandingBundle | null | undefined) => (
+    [
+      bundle?.profile.heroImageAssetId,
+      bundle?.profile.heroVideoAssetId,
+      bundle?.profile.heroPosterAssetId,
+      bundle?.profile.backgroundImageAssetId,
+      bundle?.profile.avatarAssetId,
+      bundle?.profile.logoAssetId,
+      bundle?.profile.watermarkAssetId,
+    ].filter(Boolean) as string[]
+  );
+
+  const getBrandPublishReadiness = (bundle: PlatformBrandingBundle | null | undefined) => {
+    const selectedAssetIds = new Set(getBrandSelectedAssetIds(bundle));
+    const selectedAssets = (bundle?.assets ?? []).filter((asset) => selectedAssetIds.has(asset.id));
+    const publicReadyAssets = selectedAssets.filter((asset) => (
+      asset.assetState === "published"
+      && ["clean", "reported"].includes(asset.moderationStatus)
+      && ["clean", "manual_review"].includes(asset.scanStatus)
+      && !asset.deletedAt
+    ));
+    return {
+      selectedCount: selectedAssets.length,
+      publicReadyCount: publicReadyAssets.length,
+      waitingCount: Math.max(0, selectedAssets.length - publicReadyAssets.length),
+    };
+  };
+
+  const getBrandPublishNotice = (
+    bundle: PlatformBrandingBundle | null | undefined,
+    profileSaved: boolean,
+  ) => {
+    const readiness = getBrandPublishReadiness(bundle);
+    const profileCopy = profileSaved ? "Platform name and tagline saved." : "Platform name or tagline still needs retry.";
+    if (readiness.selectedCount > 0 && readiness.publicReadyCount === 0) {
+      return `Brand Studio settings published. ${profileCopy} Selected media is still waiting for review or safety clearance before public display.`;
+    }
+    if (readiness.waitingCount > 0) {
+      return `Brand Studio published. ${profileCopy} ${readiness.publicReadyCount} media asset${readiness.publicReadyCount === 1 ? "" : "s"} can appear publicly; ${readiness.waitingCount} still need review or safety clearance.`;
+    }
+    return `Brand Studio published. ${profileCopy} Approved, scan-safe media can now appear publicly.`;
+  };
+
   const getNormalizedProfileForSave = () => {
     if (!profile) return null;
     return normalizeUserProfile({
@@ -2465,9 +2508,9 @@ export function ChannelStudioScreen() {
 
     const savedProfile = await publishPlatformBrandProfile(ownerUserId, draft);
     setBrandDraft(savedProfile);
-    await loadPlatformBranding();
+    const bundle = await loadPlatformBranding();
     await loadPlatformBrandReviewQueue();
-    return savedProfile;
+    return bundle;
   };
 
   const publishBrandDraft = async () => {
@@ -2476,8 +2519,8 @@ export function ChannelStudioScreen() {
     setBrandSaving(true);
     setBrandNotice(null);
     try {
-      await persistBrandPublish();
-      setBrandNotice("Brand Studio published. Approved, scan-safe media can now appear on your public Platform.");
+      const bundle = await persistBrandPublish();
+      setBrandNotice(getBrandPublishNotice(bundle, true));
     } catch {
       setBrandNotice("Unable to publish Brand Studio changes right now. Check the selected media and try again.");
     } finally {
@@ -2522,8 +2565,9 @@ export function ChannelStudioScreen() {
     setSaving(true);
     setBrandNotice(null);
     setNotice(null);
+    let publishedBundle: PlatformBrandingBundle | null = null;
     try {
-      await persistBrandPublish();
+      publishedBundle = await persistBrandPublish();
     } catch {
       setBrandNotice("Unable to publish Brand Studio changes. Platform name and tagline were not saved from this action.");
       brandProfileSaveInFlightRef.current = false;
@@ -2534,9 +2578,9 @@ export function ChannelStudioScreen() {
 
     try {
       await saveCurrentProfileSettings();
-      setBrandNotice("Brand Studio published. Platform name and tagline saved. Approved, scan-safe media can now appear publicly.");
+      setBrandNotice(getBrandPublishNotice(publishedBundle, true));
     } catch {
-      setBrandNotice("Brand Studio published, but Platform name or tagline changes could not be saved. Retry Save Draft for profile details.");
+      setBrandNotice(getBrandPublishNotice(publishedBundle, false));
     } finally {
       brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
