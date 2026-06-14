@@ -34,6 +34,8 @@ Local blocker-clearing status before BrowserStack: Platform Studio, Brand Studio
 
 Final local prep update before BrowserStack: Brand Studio public-viewer readback passed with corrected public assertions. Disposable inbox email delivery passed for signup and reset, but installed-app auth link completion is still open. A local AVD booted but could not be made into a reliable second app runtime because current debug APK install hung; it is not a Play/internal runtime and does not replace BrowserStack. BrowserStack remains prepared but not run.
 
+Route-contract preflight before BrowserStack: run `npm run guard:route-contracts` with the standard local guards. This static check protects Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid Watch-Party ticket buyers staying out of Live Stage, `/channel-studio` preferred Platform Studio route vs `/channel-settings` compatibility, canonical Chi'lly Chat `/chat` and `/chat/[threadId]`, and Premium separation from creator purchases. BrowserStack still needs runtime route smoke on Play/internal.
+
 ## Device Matrix
 
 Minimum:
@@ -100,6 +102,7 @@ These are the BrowserStack contracts to execute once BrowserStack starts:
 | Brand Studio | Creator save/reload stays passed; public viewer sees public Platform state without owner controls. |
 | Chi'lly Chat | User A sends to User B; User B receives; voice decline and video accept/end produce visible call states. |
 | Watch-Party / LiveKit | Host and joiner appear in participant rail; join/leave works; old room fails closed; paid direct room link gates before camera/mic/presence. |
+| Route contracts | Local `npm run guard:route-contracts` passes before BrowserStack; BrowserStack confirms runtime route smoke for the same doctrine. |
 | Money Center | Six-flow readback remains sandbox/not_payable; live money and payout actions remain disabled. |
 | Premium separation | Premium does not unlock creator purchases; creator purchases do not unlock Premium. |
 | Direct-link denial | Paid Video, paid Watch-Party, Paid Event, Channel Subscription, and VIP direct links remain gated for unpaid/logged-out users. |

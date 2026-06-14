@@ -10,6 +10,8 @@ Canonical monetization closeout truth: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEO
 
 Launch-candidate polish record: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. That pass made small copy/logging clarity fixes only; it did not run BrowserStack, enable live money, add features, or change route/payment authority.
 
+Route-contract preflight: `npm run guard:route-contracts` is the local static check for core route doctrine before BrowserStack. It verifies Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid room-ticket buyers staying out of Live Stage, preferred Platform Studio route vs compatibility wrapper, canonical Chi'lly Chat routes, and Premium separation from creator purchases. It does not replace device/browser proof.
+
 ## June 13, 2026 Play/Internal QA Execution Status
 
 Runtime delivery:
@@ -88,6 +90,20 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20
 | Chi'lly Chat two-user calls | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
 | Watch-Party / LiveKit two-user flow | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
 | BrowserStack | Prepared / deferred | Persona and flow contracts are documented in `docs/BROWSERSTACK_FINAL_REGRESSION_PLAN.md`; BrowserStack was not run. |
+
+## Route Contract Preflight
+
+Before BrowserStack, run `npm run guard:route-contracts` with the standard local validation set. The guard is local-only and does not use Supabase, Google Play, RevenueCat, BrowserStack, devices, or emulators.
+
+Protected route doctrine:
+
+- Party Waiting Room routes to Party Room at `/watch-party/[partyId]`.
+- Live Waiting Room routes to Live Stage at `/watch-party/live-stage/[partyId]`.
+- Player/Title handoff into Watch-Party Live remains content-first through the waiting-room route.
+- Paid Watch-Party ticket buyers do not route to Live Stage.
+- `/channel-studio` is the preferred Platform Studio route and `/channel-settings` remains compatibility.
+- Chi'lly Chat canonical routes remain `/chat` and `/chat/[threadId]`.
+- Premium route/gates remain separate from creator purchases.
 
 ## Current Launch Blockers
 

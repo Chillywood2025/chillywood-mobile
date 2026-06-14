@@ -1,5 +1,9 @@
 # NEXT TASK
 
+## Route Safety Cleanup Before BrowserStack
+
+Route safety cleanup is complete. `/channel-studio` remains the preferred Platform Studio route, `/channel-settings` remains the compatibility wrapper/implementation route, and the new local `npm run guard:route-contracts` check protects Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid Watch-Party ticket buyers staying out of Live Stage, canonical Chi'lly Chat routes, and Premium separation from creator purchases. BrowserStack remains deferred.
+
 ## Final Play/Internal QA Continuation
 
 Traceable Play/internal v53 is installed on `R5CR120QCBF` from commit `361e1d5`:

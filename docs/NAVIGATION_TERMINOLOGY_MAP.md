@@ -246,6 +246,7 @@ Guardrails:
 - Public Platform is viewer-facing creator surface at `/channel/[userId]`.
 - Platform Studio is owner-only creator management at `/channel-studio`.
 - `/channel-settings` stays compatibility only.
+- Implementation note: `/channel-studio` is the preferred owner-facing route; `app/channel-studio/index.tsx` is a thin wrapper over the existing `ChannelStudioScreen` implementation in `app/channel-settings.tsx` so legacy deep links keep resolving without creating a second product surface.
 - Profile `View Platform` and Platform Studio `Preview Platform` map to `/channel/[userId]` with public-preview safeguards.
 - Brand Studio edits Platform branding, not Profile photo/background.
 - Settings and support copy should say Platform when the product means the public creator surface.
@@ -338,6 +339,7 @@ Deferred route work:
 - Player now has scoped mode labels/resolution without a full component rewrite.
 - Watch-Party waiting room now has a UI-only host preflight for title-linked Watch-Party Live entries.
 - Navigation terminology guard now pins backed Explore/Library readers, Player mode labels, host preflight copy, bottom nav, top Profile entry, and no obvious fake/mock/sample/dummy rows in Explore/Library.
+- Route contract guard now pins core route doctrine: Party Waiting Room to Party Room, Live Waiting Room to Live Stage, Player/Title content-first Watch-Party Live handoff, paid room-ticket buyers staying out of Live Stage, preferred Platform Studio route vs compatibility wrapper, Chi'lly Chat canonical routes, and Premium separation from creator purchases.
 - Android proof was captured on `R5CR120QCBF` at `/tmp/chillywood-public-v1-blocker-burndown-proof-20260529/`.
 
 ## Deferred
@@ -355,6 +357,7 @@ Run:
 - `npm run typecheck`
 - `npm run validate:runtime`
 - `npm run guard:navigation-terminology-policy`
+- `npm run guard:route-contracts`
 - `npm run guard:refresh-policy`
 - `npm run guard:payment-rail-policy`
 - `npm run guard:creator-monetization-policy`
