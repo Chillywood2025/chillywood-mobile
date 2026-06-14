@@ -75,3 +75,29 @@ June 1, 2026 external acceptance tracker update: `docs/google-play/EXTERNAL_ACCE
 June 1, 2026 API readiness check: Google Play API edit/read access is available through the external service-account credential at `/Users/loverslane/secrets/chillywood/revenuecat-google-play-service-account.json` and legacy ADC for `chillywood-revenuecat-play@chillywood-app.iam.gserviceaccount.com`; no credential values were printed or committed. The active user gcloud token still lacks Android Publisher scope, but the service-account path can create/read/delete edits. Internal track currently reports completed release `1.0.0` with versionCode `12`. Do not upload the current repo-built AAB because it is debug-signed; a prior non-debug signed candidate exists at `artifacts/google-play-proof/chillywood-v12.aab`. No upload, edit commit, track change, or tester change was performed. Do not commit service account JSON, OAuth tokens, keystores, or tester passwords.
 
 P0 remains **closed-testing production access / Publishing overview / Google review acceptance / legal acceptance**. App Content/Data Safety/account-deletion URL/App Access/Content Rating/store listing are saved/actioned in Play Console, signed v14 internal and v15 closed alpha draft uploads are complete, but Google review acceptance is not complete. The repo-side execution package is ready.
+
+## June 13, 2026 Launch-Candidate External Readiness Freeze
+
+Final local QA is still pre-BrowserStack. Do not change Google Play production/live monetization posture until final regression and owner/legal approval are complete.
+
+Current external launch-readiness truth:
+
+- Data Safety evidence is repo-prepared in `docs/google-play/DATA_SAFETY_EVIDENCE_MAP.md` and field answers are prepared in `docs/google-play/PLAY_CONSOLE_FIELD_BY_FIELD_ANSWERS.md`.
+- Privacy URL remains `https://chillywoodstream.com/privacy`.
+- Terms URL remains `https://chillywoodstream.com/terms`.
+- Support URL/copy remains `https://chillywoodstream.com/support` with support contact `support@chillywoodstream.com`.
+- Account deletion URL remains `https://chillywoodstream.com/account-deletion`; in-app Settings deletion route is the app-side proof path.
+- App access must use a non-admin reviewer/test account only. Do not put owner/internal tester credentials in Play Console App Access.
+- Google Play internal runtime proof currently uses package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `53`.
+- Live money remains disabled. Payouts, cash-out, withdrawal, transfers, and payable balances remain disabled.
+- Creator monetization remains sandbox/not_payable; do not describe creator sales as live.
+- BrowserStack final regression has not run.
+
+External launch blockers that remain:
+
+- Google Play review/production acceptance is not complete.
+- Closed-testing production-access requirements remain external-governance blockers unless separately accepted as complete in Play Console.
+- Data Safety, App Access, Account Deletion, Privacy Policy, Terms, Support, and Store Listing must be rechecked in Play Console against the current v53-or-newer runtime before production submission.
+- BrowserStack final regression must pass or its failures must be explicitly accepted as launch blockers.
+
+Freeze rule: monetization and UI changes are frozen unless QA finds a real blocker. Any change after this point needs a focused proof note and must not enable live money or payouts.

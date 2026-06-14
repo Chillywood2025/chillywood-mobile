@@ -32,6 +32,8 @@ BrowserStack has not started. It should use the v53-or-newer Play/internal runti
 
 Local blocker-clearing status before BrowserStack: Platform Studio, Brand Studio creator save/reload, Brand Studio wrong-user denial, and Money Center truth-copy proof passed on Play/internal v53. BrowserStack should not start until the remaining local blockers are either cleared or explicitly accepted: disposable inbox auth reset/signup proof, two-device Chi'lly Chat call proof, two-device Watch-Party/LiveKit proof, and Brand Studio public-viewer readback.
 
+Final local prep update before BrowserStack: Brand Studio public-viewer readback passed with corrected public assertions. Disposable inbox email delivery passed for signup and reset, but installed-app auth link completion is still open. A local AVD booted but could not be made into a reliable second app runtime because current debug APK install hung; it is not a Play/internal runtime and does not replace BrowserStack. BrowserStack remains prepared but not run.
+
 ## Device Matrix
 
 Minimum:
@@ -73,6 +75,34 @@ Use test labels only:
 - `nonpremium_test_user` if available
 
 Passwords must come from local secure handoff only and must not be committed, logged, or placed in BrowserStack public artifacts.
+
+Prepared local persona notes:
+
+| Persona | Current prepared label | BrowserStack use |
+| --- | --- | --- |
+| Creator / Brand Studio / Money Center | `tips_creator_test` | Positive creator-tool proof while short-lived Premium/operator-equivalent proof access is active or freshly regranted. |
+| Public viewer / non-owner | `final_qa_simulator_test` | Brand Studio public-viewer, non-owner denial, logged-in viewer smoke. |
+| Blocked/safety fan | `tips_blocked_test` | Blocked-user smoke if fixture relation is needed. |
+| Paid Video creator fixture | `paid_videos_fixture_creator` | Existing Paid Video fixture readback only. |
+| Second unpaid paid-video fan | `paid_videos_second_unpaid` | Existing non-owner/RLS denial and unpaid-flow smoke. |
+| VIP non-VIP fan | `vip_non_vip` | Existing VIP denial smoke. |
+
+Stale credentials that must not be used until secure handoff repair: `tips_fan_test` local env credential and the local Channel Subscription subscriber credential.
+
+## Flow Contracts
+
+These are the BrowserStack contracts to execute once BrowserStack starts:
+
+| Contract | Required result |
+| --- | --- |
+| Auth reset | Disposable reset email arrives, token link opens installed app, password update succeeds, sign-in with new password succeeds. |
+| Auth signup | Disposable signup email arrives, token link opens installed app, account verifies, user lands in a clear login/auth state. |
+| Brand Studio | Creator save/reload stays passed; public viewer sees public Platform state without owner controls. |
+| Chi'lly Chat | User A sends to User B; User B receives; voice decline and video accept/end produce visible call states. |
+| Watch-Party / LiveKit | Host and joiner appear in participant rail; join/leave works; old room fails closed; paid direct room link gates before camera/mic/presence. |
+| Money Center | Six-flow readback remains sandbox/not_payable; live money and payout actions remain disabled. |
+| Premium separation | Premium does not unlock creator purchases; creator purchases do not unlock Premium. |
+| Direct-link denial | Paid Video, paid Watch-Party, Paid Event, Channel Subscription, and VIP direct links remain gated for unpaid/logged-out users. |
 
 ## Test Suites
 

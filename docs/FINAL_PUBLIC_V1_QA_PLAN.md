@@ -66,6 +66,28 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-clear-blockers-20
 | Paid purchase smoke | Deferred | Existing six-flow sandbox proof docs remain canonical; this pass verified Money Center truth labels and did not rerun paid purchases. |
 | BrowserStack | Deferred | Still not started because local two-user/email blockers remain. |
 
+## June 13, 2026 Final Persona Repair And Link Proof
+
+Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20260613/`.
+
+- Created/repaired `final_qa_simulator_test@chillywood.test` as an internal QA proof account through Supabase Auth admin tooling. The password is stored only in ignored `.env.final-qa-proof.local`; no password or service-role value is committed or documented.
+- Corrected the Brand Studio public-viewer proof assertion. The public Platform renders the display name `Tips Creator Test`, handle `@tips_creator_test`, and viewer state `Viewer`, not the raw username without `@`.
+- Brand Studio public-viewer readback passed on Play/internal v53 using the corrected assertion. Screenshot: `/tmp/chillywood-final-qa-second-account-20260613/brand-public-viewer-assert-current.png`.
+- Disposable inbox proof used `mail.tm` domain `web-library.net`. Signup confirmation and password reset emails arrived from `no-reply@chillywoodstream.com` with auth links present. Result: `/tmp/chillywood-final-qa-second-account-20260613/auth-disposable-proof-result.json`.
+- Installed-app auth link completion is still not fully closed. A second no-token app-open attempt could not safely capture and open usable auth links without exposing token-bearing URLs, so password update/sign-in-after-reset and signup verification completion remain BrowserStack/manual-device proof items.
+- A local AVD (`Chillywood_API_34`) was available and booted, but installing the current 284 MB debug APK hung; the emulator was shut down. This is not a Play/internal proof surface and does not replace BrowserStack or a second physical device.
+
+| Suite | Status | Result / blocker |
+| --- | --- | --- |
+| Final QA proof account | Passed | `final_qa_simulator_test@chillywood.test` exists, has a profile, and normal anon sign-in was verified. |
+| Brand Studio public-viewer readback | Passed | Public Platform showed `Tips Creator Test`, `@tips_creator_test`, and `Viewer` on Play/internal v53. |
+| Disposable inbox delivery | Passed | Signup confirmation and reset emails arrived in a disposable readable inbox. |
+| Signup verification completion | Blocked | Email arrived with link present, but installed-app token completion was not safely completed in this pass. |
+| Password reset completion | Blocked | Reset email arrived with link present, but password update/sign-in-after-reset was not safely completed in this pass. |
+| Chi'lly Chat two-user calls | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
+| Watch-Party / LiveKit two-user flow | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
+| BrowserStack | Prepared / deferred | Persona and flow contracts are documented in `docs/BROWSERSTACK_FINAL_REGRESSION_PLAN.md`; BrowserStack was not run. |
+
 ## Current Launch Blockers
 
 - BrowserStack final multi-device regression has not run.
