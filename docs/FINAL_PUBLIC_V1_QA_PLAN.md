@@ -29,7 +29,7 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-proof-20260613/`.
 | App launch / main shell | Passed | Home opened without crash or blank state. |
 | Bottom navigation smoke | Passed | Home, Live hub, and Library rendered stable visible states on the Samsung device. |
 | Watch-Party invalid direct link | Passed | `chillywoodmobile://watch-party/INVALIDQA` failed closed with `Room not found` and did not enter Party Room. |
-| Reset route no-token smoke | Passed with limitation | `chillywoodmobile://reset-password` opened the installed app reset route, not the public legal/support site. Real email/token reset proof was not run. |
+| Reset route no-token smoke | Superseded by full pass | `chillywoodmobile://reset-password` opened the installed app reset route, not the public legal/support site; the later disposable-inbox proof completed recovery-session password reset end to end. |
 | Settings / Premium gate smoke | Passed | Settings opened; Platform Studio entry for the current non-Premium tester showed an explicit `Premium required` gate instead of silently failing. |
 | Brand Studio | Blocked | Current signed-in tester is not Premium/operator-authorized for Platform Studio; no Brand Studio edit/save was attempted. |
 | Money Center six-flow visual readback | Blocked | Same Platform Studio Premium gate blocks Money Center for the current session. Existing six-flow proof docs remain canonical. |
@@ -75,7 +75,7 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20
 - Brand Studio public-viewer readback passed on Play/internal v53 using the corrected assertion. Screenshot: `/tmp/chillywood-final-qa-second-account-20260613/brand-public-viewer-assert-current.png`.
 - Disposable inbox proof used `mail.tm` domain `web-library.net`. Signup confirmation and password reset emails arrived from `no-reply@chillywoodstream.com` with auth links present. Result: `/tmp/chillywood-final-qa-second-account-20260613/auth-disposable-proof-result.json`.
 - Installed-app signup verification passed on Play/internal v53 with a disposable `mail.tm` inbox opened from the phone. The signup request came from the installed app, the verification email arrived, the phone opened the email link without printing a token URL, and `com.chillywood.mobile` returned to login after verification. Proof artifacts: `/var/folders/n0/x_0xwyw50md5spq0_mqvrx_00000gn/T/chillywood-auth-installed-app-ui-proof-kdjMV8/`.
-- Installed-app forgot-password email delivery and route handoff partially passed in the same proof: the reset request came from the installed app, the reset email arrived, and the phone-opened link launched `com.chillywood.mobile` on the reset-password route. Password update/sign-in-after-reset remains blocked because the route received a recovery link and showed `This reset link could not be opened. Request a fresh link.` No token-bearing URLs were printed, documented, or committed.
+- Installed-app forgot-password proof passed after the reset route recovery-session fix: the reset request came from the installed app, the reset email arrived, the phone-opened link launched `com.chillywood.mobile` on the reset-password route, the recovery session opened, password update succeeded, the app returned to login, and sign-in with the new password reached Home. No token-bearing URLs were printed, documented, or committed. The hosted reset email template was also hardened to present the app recovery link as plain text to reduce email click-tracking prefetch risk.
 - A local AVD (`Chillywood_API_34`) was available and booted, but installing the current 284 MB debug APK hung; the emulator was shut down. This is not a Play/internal proof surface and does not replace BrowserStack or a second physical device.
 
 | Suite | Status | Result / blocker |
@@ -84,7 +84,7 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20
 | Brand Studio public-viewer readback | Passed | Public Platform showed `Tips Creator Test`, `@tips_creator_test`, and `Viewer` on Play/internal v53. |
 | Disposable inbox delivery | Passed | Signup confirmation and reset emails arrived in a disposable readable inbox. |
 | Signup verification completion | Passed | Installed app requested signup, phone-opened verification link launched `com.chillywood.mobile`, and the app returned to login after verification. |
-| Password reset completion | Blocked | Installed app requested reset and phone-opened reset link launched `com.chillywood.mobile`, but reset-password route failed to open the recovery session before password update. |
+| Password reset completion | Passed | Installed app requested reset, phone-opened reset link launched `com.chillywood.mobile`, recovery session opened, password update succeeded, and sign-in with the new password reached Home. |
 | Chi'lly Chat two-user calls | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
 | Watch-Party / LiveKit two-user flow | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
 | BrowserStack | Prepared / deferred | Persona and flow contracts are documented in `docs/BROWSERSTACK_FINAL_REGRESSION_PLAN.md`; BrowserStack was not run. |
@@ -98,7 +98,7 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20
 - Channel Subscription lifecycle webhook delivery is still provider-blocked until a fresh signed RevenueCat lifecycle event is received after the handler deployment.
 - Paid Watch-Party visual Money Center screenshot remains a follow-up; RPC readback passed.
 - Paid Events capacity UI proof remains deferred because creator UI does not expose `capacity_limit`.
-- Final auth/signup/reset, Brand Studio, Chi'lly Chat, Watch-Party/LiveKit, Premium separation, and direct-link gates still need release-candidate regression proof.
+- Chi'lly Chat, Watch-Party/LiveKit, Premium separation, direct-link gates, and BrowserStack still need release-candidate regression proof; installed-app signup verification and forgot-password reset completion passed on Play/internal v53 with a disposable inbox.
 - External Google Play / legal / Data Safety / account-deletion acceptance and operational signoff remain launch-governance blockers where not separately closed.
 
 ## Safe Deferred Provider-Tooling Gaps
