@@ -17,6 +17,15 @@ Closeout fixes:
 
 No migration, RLS weakening, storage policy change, malware scan bypass, public RPC weakening, LiveKit change, Premium gate change, monetization change, or unrelated route change was made. The change is JS/TS plus docs/guard only and is OTA-eligible for an installed Play/internal binary on the same runtime, but tester proof must confirm the device actually receives the OTA before treating it as launch-candidate evidence.
 
+OTA publication for tester pickup:
+
+- Code commit: `b58f614`
+- EAS branch: `production`
+- Runtime version: `1.0.0`
+- Update group: `86cf5f80-c746-453b-a495-27c0d99843ec`
+- Android update: `019ec575-83e2-7993-b8e9-dcfb3fc9046a`
+- iOS update: `019ec575-83e2-71c9-bb9a-4861d5016a99`
+
 Validation passed locally:
 
 - `npm run typecheck`
