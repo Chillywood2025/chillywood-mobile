@@ -80,6 +80,8 @@ assertIncludes(ownerPublishReviewRepairMigration, `v_before."scan_status" in ('m
 assertIncludes(ownerPublishReviewRepairMigration, `'self_review', v_is_asset_owner`, "Brand Studio self-review audit marker");
 assertIncludes(platformBranding, `Approved by the creator during Brand Studio publish.`, "creator publish approves selected owned assets");
 assertIncludes(platformBranding, `selectedReviewAssetIds`, "creator publish filters selected self-review assets");
+assertIncludes(platformBranding, `).catch(() => undefined);`, "Brand Studio publish must not fail fully when one asset cannot self-review");
+assertIncludes(platformBranding, `return savePlatformBrandProfileDraft(normalizedOwnerId, {\n    ...profile,\n    publishedAt,`, "Brand Studio publish marks profile published after asset repair");
 assertNotIncludes(platformBranding, `...assetIds,\n    ...((waitingAssetRows`, "Brand Studio publish self-review must not include unfiltered selected assets");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('reports_review')`, "review queue reports access");

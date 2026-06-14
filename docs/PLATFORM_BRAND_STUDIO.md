@@ -13,6 +13,7 @@ Closeout fixes:
 - The button path uses one in-flight guard so duplicate concurrent Brand/Profile mutations are not launched and `brandSaving` / `saving` state clears on every handled path.
 - Preview copy is explicit: `Preview Platform` is the reviewed public visitor view, while `Preview Brand Draft` is the owner-only draft route with `preview=brand-draft`.
 - Client publish filtering now matches the public-safe intent more closely: self-review and publish attempts are limited to owner-owned, not-deleted, moderation-eligible, scan-safe Brand Studio assets. Pending scan, malware-detected, scan-failed, quarantined, rejected, hidden, removed, deleted, and wrong-owner assets remain ineligible.
+- Publish repair saves the draft before review repair and marks the profile published after eligible asset repair. If one pending asset cannot be self-reviewed yet, the whole publish action should not fail; that asset remains hidden until review/safety eligibility is resolved.
 - The public Platform path still uses `readPublicPlatformBranding`; owner draft preview still requires `preview=brand-draft` plus owner check through `/channel/[userId]`.
 
 No migration, RLS weakening, storage policy change, malware scan bypass, public RPC weakening, LiveKit change, Premium gate change, monetization change, or unrelated route change was made. The change is JS/TS plus docs/guard only and is OTA-eligible for an installed Play/internal binary on the same runtime, but tester proof must confirm the device actually receives the OTA before treating it as launch-candidate evidence.

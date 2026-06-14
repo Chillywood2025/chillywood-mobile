@@ -692,10 +692,7 @@ export async function publishPlatformBrandProfile(
 ): Promise<PlatformBrandProfile> {
   const normalizedOwnerId = toText(ownerUserId);
   const publishedAt = new Date().toISOString();
-  const profile = await savePlatformBrandProfileDraft(normalizedOwnerId, {
-    ...patch,
-    publishedAt,
-  });
+  const profile = await savePlatformBrandProfileDraft(normalizedOwnerId, patch);
   const assetIds = Array.from(new Set([
     profile.heroImageAssetId,
     profile.heroVideoAssetId,
@@ -742,12 +739,12 @@ export async function publishPlatformBrandProfile(
         assetId,
         "approve",
         "Approved by the creator during Brand Studio publish.",
-      );
+      ).catch(() => undefined);
     }
   }
 
   if (assetIds.length) {
-    await supabase
+    const { error } = await supabase
       .from("platform_brand_assets")
       .update({ asset_state: "published" } satisfies PlatformBrandAssetUpdate)
       .eq("owner_user_id", normalizedOwnerId)
@@ -755,9 +752,13 @@ export async function publishPlatformBrandProfile(
       .in("moderation_status", ["clean", "reported"])
       .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
       .is("deleted_at", null);
+    if (error) throw error;
   }
 
-  return profile;
+  return savePlatformBrandProfileDraft(normalizedOwnerId, {
+    ...profile,
+    publishedAt,
+  });
 }
 
 export async function uploadPlatformBrandAsset(input: {
