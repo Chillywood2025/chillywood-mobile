@@ -1,5 +1,11 @@
 # NEXT TASK
 
+## BrowserStack Final Regression Prep
+
+Whole-app BrowserStack readiness is prepared in `qa/browserstack/` and BrowserStack remains deferred until explicit approval. The package includes a coverage map, persona labels without secrets, env placeholders, approval-gated runbook, and 15 flow contracts covering runtime install, auth, Home/Explore/Library, Profile/Platform, Brand Studio, Chi'lly Chat, Watch-Party Live, Live Watch-Party/Live Stage, Player/Paid Video, Money Center, Premium, Settings/Legal, direct-link denials, Admin/Owner, and final smoke. No BrowserStack session was started, no app was uploaded, and no BrowserStack minutes were spent. Use Play/internal runtime only; Expo Dev Launcher is not accepted.
+
+Next recommended action remains: use a second physical device/session or explicitly approved BrowserStack session for Chi'lly Chat and Watch-Party/LiveKit two-user proof.
+
 ## Route Safety Cleanup Before BrowserStack
 
 Owner/admin integration audit after issues #1-#7 is complete in `docs/OWNER_ADMIN_INTEGRATION_AUDIT.md`. It found no route/product integration blocker before BrowserStack prep. The only code cleanup was replacing raw Watch-Party proof `console.log` calls with sanitized dev-only `debugLog` labels in `app/watch-party/index.tsx`; join, payment, LiveKit, Premium, RLS, backend, and route behavior were not changed.

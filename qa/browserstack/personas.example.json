@@ -1,0 +1,166 @@
+{
+  "status": "example_only_no_passwords",
+  "secret_policy": "Populate real credentials only through local secure handoff. Do not commit passwords, tokens, auth links, BrowserStack keys, Google credentials, or provider secrets.",
+  "personas": {
+    "creator_operator": {
+      "purpose": "Owner/creator Platform Studio, Brand Studio, Money Center, creator setup smoke.",
+      "required_account_state": "Internal creator account with Platform Studio access.",
+      "required_entitlements": ["creator_tools_or_premium_operator_test_grant"],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "primary_creator_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_CREATOR_OPERATOR"
+    },
+    "normal_viewer": {
+      "purpose": "Public viewer, profile/platform readback, non-owner denial.",
+      "required_account_state": "Normal non-admin viewer.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "viewer_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_NORMAL_VIEWER"
+    },
+    "premium_creator": {
+      "purpose": "Positive Premium-gated creator-tool route smoke.",
+      "required_account_state": "Creator with active Premium/operator-capable proof access.",
+      "required_entitlements": ["premium_or_operator_test_grant"],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "creator_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_PREMIUM_CREATOR"
+    },
+    "nonpremium_user": {
+      "purpose": "Premium gate negative proof.",
+      "required_account_state": "Normal user without Premium.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "negative_gate_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_NONPREMIUM_USER"
+    },
+    "chat_user_a": {
+      "purpose": "Chi'lly Chat sender/caller.",
+      "required_account_state": "Normal signed-in user with a thread to chat_user_b.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "device_a",
+      "secret_source": "LOCAL_SECURE_HANDOFF_CHAT_A"
+    },
+    "chat_user_b": {
+      "purpose": "Chi'lly Chat receiver/callee.",
+      "required_account_state": "Normal signed-in user with a thread to chat_user_a.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "device_b",
+      "secret_source": "LOCAL_SECURE_HANDOFF_CHAT_B"
+    },
+    "watch_party_host": {
+      "purpose": "Watch-Party host and room creator.",
+      "required_account_state": "Premium/operator-capable host if current room policy requires it.",
+      "required_entitlements": ["watch_party_host_access"],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "host_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_WATCH_HOST"
+    },
+    "watch_party_joiner": {
+      "purpose": "Watch-Party second participant and participant rail proof.",
+      "required_account_state": "Signed-in non-host user.",
+      "required_entitlements": ["watch_party_join_access_if_required"],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "joiner_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_WATCH_JOINER"
+    },
+    "paid_video_fan": {
+      "purpose": "Paid Video positive access smoke.",
+      "required_account_state": "Fan with existing paid-video access grant or purchase fixture.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": ["paid_content_access_for_fixture_video"],
+      "required_device_session_role": "buyer_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_PAID_VIDEO_FAN"
+    },
+    "unpaid_video_fan": {
+      "purpose": "Paid Video locked/direct-link denial.",
+      "required_account_state": "Fan without paid-video access grant.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "negative_gate_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_UNPAID_VIDEO_FAN"
+    },
+    "paid_room_fan": {
+      "purpose": "Paid Watch-Party ticket positive access smoke.",
+      "required_account_state": "Fan with active room ticket for current fixture if reusing existing proof.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": ["active_paid_watch_party_ticket_for_fixture_room"],
+      "required_device_session_role": "ticket_buyer_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_PAID_ROOM_FAN"
+    },
+    "unpaid_room_fan": {
+      "purpose": "Paid Watch-Party locked/direct-link denial.",
+      "required_account_state": "Fan with no active room ticket.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "negative_gate_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_UNPAID_ROOM_FAN"
+    },
+    "paid_event_fan": {
+      "purpose": "Paid Event positive access smoke.",
+      "required_account_state": "Fan with active event pass fixture.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": ["active_paid_event_pass"],
+      "required_device_session_role": "event_buyer_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_PAID_EVENT_FAN"
+    },
+    "unpaid_event_fan": {
+      "purpose": "Paid Event locked/direct-link denial.",
+      "required_account_state": "Fan without paid event pass.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "negative_gate_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_UNPAID_EVENT_FAN"
+    },
+    "subscriber_fan": {
+      "purpose": "Channel Subscription positive effective-access smoke.",
+      "required_account_state": "Fan with active effective channel subscription.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": ["active_creator_channel_subscription_effective_access"],
+      "required_device_session_role": "subscriber_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_SUBSCRIBER_FAN"
+    },
+    "nonsubscriber_fan": {
+      "purpose": "Subscriber-only denial.",
+      "required_account_state": "Fan without active effective channel subscription.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "negative_gate_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_NONSUBSCRIBER_FAN"
+    },
+    "vip_fan": {
+      "purpose": "VIP positive access smoke.",
+      "required_account_state": "Fan with active creator-specific VIP pass.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": ["active_creator_vip_pass"],
+      "required_device_session_role": "vip_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_VIP_FAN"
+    },
+    "nonvip_fan": {
+      "purpose": "VIP denial.",
+      "required_account_state": "Fan without active VIP pass.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "negative_gate_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_NONVIP_FAN"
+    },
+    "blocked_user": {
+      "purpose": "Blocked-user safety smoke where fixtures exist.",
+      "required_account_state": "Blocked or restricted test user.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "blocked_session",
+      "secret_source": "LOCAL_SECURE_HANDOFF_BLOCKED_USER"
+    },
+    "play_reviewer": {
+      "purpose": "Google Play app access review smoke only.",
+      "required_account_state": "Disposable non-admin reviewer account.",
+      "required_entitlements": [],
+      "required_purchases_or_access_grants": [],
+      "required_device_session_role": "reviewer_session",
+      "secret_source": "PLAY_CONSOLE_APP_ACCESS_OR_LOCAL_KEYCHAIN"
+    }
+  }
+}

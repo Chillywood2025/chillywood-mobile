@@ -1,10 +1,12 @@
 # BrowserStack Final Regression Plan
 
-Last updated: June 13, 2026
+Last updated: June 14, 2026
 
 ## Purpose
 
 BrowserStack is the final multi-device regression pass after cheap local/manual proof. It is not the first proof for creator monetization, purchases, LiveKit, auth, or Brand Studio.
+
+Preparation status: whole-app BrowserStack readiness contracts are prepared under `qa/browserstack/`. BrowserStack has not been started, no app has been uploaded to BrowserStack, and no BrowserStack minutes have been spent.
 
 ## Required Runtime
 
@@ -32,7 +34,20 @@ BrowserStack has not started. It should use the v53-or-newer Play/internal runti
 
 Local blocker-clearing status before BrowserStack: Platform Studio, Brand Studio creator save/reload, Brand Studio wrong-user denial, and Money Center truth-copy proof passed on Play/internal v53. BrowserStack should not start until the remaining local blockers are either cleared or explicitly accepted: disposable inbox auth reset/signup proof, two-device Chi'lly Chat call proof, two-device Watch-Party/LiveKit proof, and Brand Studio public-viewer readback.
 
-Final local prep update before BrowserStack: Brand Studio public-viewer readback passed with corrected public assertions. Disposable inbox email delivery passed for signup and reset, but installed-app auth link completion is still open. A local AVD booted but could not be made into a reliable second app runtime because current debug APK install hung; it is not a Play/internal runtime and does not replace BrowserStack. BrowserStack remains prepared but not run.
+Final local prep update before BrowserStack: Brand Studio public-viewer readback passed with corrected public assertions. Disposable inbox email delivery passed for signup and reset. Installed-app signup verification and forgot-password reset completion passed on Play/internal v53 without retaining token-bearing URLs. A local AVD booted but could not be made into a reliable second app runtime because current debug APK install hung; it is not a Play/internal runtime and does not replace BrowserStack. BrowserStack remains prepared but not run.
+
+June 14 readiness update: `qa/browserstack/README.md`, `qa/browserstack/coverage-map.md`, `qa/browserstack/personas.example.json`, `qa/browserstack/env.example`, `qa/browserstack/runbook.md`, and `qa/browserstack/flows/*.contract.md` define the future BrowserStack regression system. These files are contracts only and do not contain passwords, BrowserStack keys, app uploads, or executable cloud invocations. Chi'lly Chat and Watch-Party/LiveKit two-user proof remain deferred until a second physical session or explicit BrowserStack approval.
+
+## Prepared Contract Package
+
+The prepared BrowserStack package lives in `qa/browserstack/`:
+
+- `README.md`: scope, runtime rule, and no-execution boundary.
+- `coverage-map.md`: whole-app coverage matrix and known blockers.
+- `personas.example.json`: persona labels, account-state requirements, and secret-source placeholders only.
+- `env.example`: placeholder env names only; no keys.
+- `runbook.md`: approval-gated execution order.
+- `flows/00-runtime-install.contract.md` through `flows/14-final-smoke.contract.md`: flow contracts for runtime, auth, Home/Explore/Library, Profile/Platform, Brand Studio, Chi'lly Chat, Watch-Party Live, Live Watch-Party/Live Stage, Player/Paid Video, Money Center, Premium, Settings/Legal, direct-link denials, Admin/Owner, and final smoke.
 
 Route-contract preflight before BrowserStack: run `npm run guard:route-contracts` with the standard local guards. This static check protects Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid Watch-Party ticket buyers staying out of Live Stage, `/channel-studio` preferred Platform Studio route vs `/channel-settings` compatibility, canonical Chi'lly Chat `/chat` and `/chat/[threadId]`, and Premium separation from creator purchases. BrowserStack still needs runtime route smoke on Play/internal.
 

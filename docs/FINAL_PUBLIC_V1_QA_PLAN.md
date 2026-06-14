@@ -1,6 +1,6 @@
 # Final Public V1 QA Plan
 
-Last updated: June 13, 2026
+Last updated: June 14, 2026
 
 ## Scope
 
@@ -11,6 +11,8 @@ Canonical monetization closeout truth: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEO
 Launch-candidate polish record: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. That pass made small copy/logging clarity fixes only; it did not run BrowserStack, enable live money, add features, or change route/payment authority.
 
 Route-contract preflight: `npm run guard:route-contracts` is the local static check for core route doctrine before BrowserStack. It verifies Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid room-ticket buyers staying out of Live Stage, preferred Platform Studio route vs compatibility wrapper, canonical Chi'lly Chat routes, and Premium separation from creator purchases. It does not replace device/browser proof.
+
+BrowserStack preparation package: `qa/browserstack/` now contains the whole-app final regression coverage map, persona template, env placeholder file, runbook, and flow contracts. BrowserStack is prepared, not run; no sessions were started, no app was uploaded, and no BrowserStack minutes were spent. Final execution still requires Play/internal runtime, not Expo Dev Launcher.
 
 ## June 13, 2026 Play/Internal QA Execution Status
 
@@ -89,7 +91,7 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20
 | Password reset completion | Passed | Installed app requested reset, phone-opened reset link launched `com.chillywood.mobile`, recovery session opened, password update succeeded, and sign-in with the new password reached Home. |
 | Chi'lly Chat two-user calls | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
 | Watch-Party / LiveKit two-user flow | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
-| BrowserStack | Prepared / deferred | Persona and flow contracts are documented in `docs/BROWSERSTACK_FINAL_REGRESSION_PLAN.md`; BrowserStack was not run. |
+| BrowserStack | Prepared / deferred | Persona and flow contracts are documented in `docs/BROWSERSTACK_FINAL_REGRESSION_PLAN.md` and `qa/browserstack/`; BrowserStack was not run. |
 
 ## Route Contract Preflight
 

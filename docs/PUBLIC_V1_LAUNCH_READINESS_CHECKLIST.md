@@ -1,6 +1,6 @@
 # Public V1 Launch Readiness Checklist
 
-Last updated: June 13, 2026
+Last updated: June 14, 2026
 
 ## Status
 
@@ -15,6 +15,8 @@ June 13 blocker-clearing update: a short-lived Premium `test_grant` let `tips_cr
 June 13 final persona repair update: `final_qa_simulator_test@chillywood.test` was created/repaired as an internal QA proof account with credentials stored only in ignored `.env.final-qa-proof.local`. Brand Studio public-viewer readback passed on Play/internal v53 with corrected assertions for `Tips Creator Test`, `@tips_creator_test`, and `Viewer`. Disposable inbox delivery passed for signup and reset emails using `mail.tm`; installed-app signup verification now passes from a phone-opened email link without exposing token URLs. Installed-app forgot-password proof also passed after the reset recovery-session fix: the phone-opened reset link launched `com.chillywood.mobile`, opened the recovery session, allowed password update, returned to login, and sign-in with the new password reached Home. BrowserStack personas and flow contracts are prepared, but BrowserStack has not run.
 
 June 14 owner/admin integration audit after route cleanup is recorded in `docs/OWNER_ADMIN_INTEGRATION_AUDIT.md`. The audit found no route/product blocker for BrowserStack prep, kept BrowserStack deferred, and made only sanitized Watch-Party proof logging cleanup.
+
+June 14 BrowserStack readiness package is prepared under `qa/browserstack/`. It includes coverage map, persona labels without secrets, placeholder env names, approval-gated runbook, and 15 whole-app flow contracts. BrowserStack has not run, no app has been uploaded to BrowserStack, and no BrowserStack minutes have been spent.
 
 ## 1. Auth
 
@@ -139,6 +141,7 @@ June 14 owner/admin integration audit after route cleanup is recorded in `docs/O
 
 ## 13. BrowserStack Final Regression
 
+- [x] BrowserStack readiness contracts prepared in `qa/browserstack/`.
 - [ ] BrowserStack account/tooling ready.
 - [ ] Play/internal install path available.
 - [ ] Required device matrix selected.
