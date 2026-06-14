@@ -449,8 +449,8 @@ assertIncludes(
 );
 assertIncludes(
   liveWatchPartyCreateHandler,
-  "stale prepared live room ignored",
-  "Live Watch-Party lobby must log and ignore stale prepared rooms instead of entering as viewer",
+  "watch_party_prepared_room_ignored",
+  "Live Watch-Party lobby must emit a sanitized dev log and ignore stale prepared rooms instead of entering as viewer",
 );
 assertBefore(
   liveWatchPartyCreateHandler,

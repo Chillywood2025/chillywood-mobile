@@ -524,7 +524,7 @@ export default function WatchPartyIndexScreen() {
   }, [canUseBetaRooms, configReady, createPreparedWaitingRoom, features.watchPartyEnabled, isLiveEntryMode, isPlayerWatchPartyLiveFlow, params.partyId, params.roomCode, params.roomId]);
 
   const onLookup = async () => {
-    console.log("[watch-party-proof] find room pressed", {
+    debugLog("watch-party", "watch_party_find_room_pressed", {
       hasJoinCode: Boolean(joinCode.trim()),
       watchPartyEnabled: features.watchPartyEnabled,
       joinLookupBusy,
@@ -573,8 +573,8 @@ export default function WatchPartyIndexScreen() {
       }
 
       const nextPreview = await buildRoomPreview(room);
-      console.log("[watch-party-proof] room lookup preview ready", {
-        partyId: nextPreview.room.partyId,
+      debugLog("watch-party", "watch_party_room_lookup_preview_ready", {
+        hasPartyId: Boolean(nextPreview.room.partyId),
         roomType: nextPreview.room.roomType,
         hasTitle: Boolean(nextPreview.titleName),
       });
@@ -634,11 +634,12 @@ export default function WatchPartyIndexScreen() {
       query.set("partyId", options.partyId);
       const queryString = query.toString();
       const liveStageRoute = `/watch-party/live-stage${queryString ? `?${queryString}` : ""}`;
-      console.log("[watch-party-proof] pushing live-stage route", {
-        route: liveStageRoute,
+      debugLog("watch-party", "watch_party_live_stage_route_prepared", {
+        hasRoute: Boolean(liveStageRoute),
+        hasPartyId: Boolean(options.partyId),
       });
-      console.log("[watch-party-proof] opening embedded live-stage route", {
-        partyId: options.partyId,
+      debugLog("watch-party", "watch_party_live_stage_embedded_open", {
+        hasPartyId: Boolean(options.partyId),
         source: isPlayerWatchPartyLiveFlow ? PLAYER_WATCH_PARTY_SOURCE : "watch-party-index-proof",
       });
       setEmbeddedLiveStageEntry({
@@ -1021,7 +1022,7 @@ export default function WatchPartyIndexScreen() {
   }, [accessSheetReason, navigateToPreviewRoom, pendingAccessDecision, pendingAccessPreview, requirePremiumRoomEntry]);
 
   const onCreateRoom = async () => {
-    console.log("[watch-party-proof] create room pressed", {
+    debugLog("watch-party", "watch_party_create_room_pressed", {
       roomType: inferredWaitingRoomType,
       hasPreparedRoom: Boolean(preparedRoom?.room.partyId),
       isPreparingInitialCode,
@@ -1073,9 +1074,9 @@ export default function WatchPartyIndexScreen() {
         const preparedRoomBelongsToCurrentUser = !!preparedHostUserId && preparedHostUserId === hostUserId;
 
         if (!preparedRoomBelongsToCurrentUser) {
-          console.log("[watch-party-proof] stale prepared live room ignored", {
+          debugLog("watch-party", "watch_party_prepared_room_ignored", {
             roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
-            partyId: preparedTargetPartyId,
+            hasPartyId: Boolean(preparedTargetPartyId),
             hostMatchesCurrentUser: false,
           });
           setPreparedRoom(null);
@@ -1083,10 +1084,11 @@ export default function WatchPartyIndexScreen() {
         } else {
           const nextPartyId = preparedTargetPartyId;
           if (nextPartyId) {
-            console.log("[watch-party-proof] navigating to prepared room", {
+            debugLog("watch-party", "watch_party_navigate_prepared_room", {
               roomType: preparedRoom?.room.roomType ?? activeWaitingRoomType,
-              partyId: nextPartyId,
-              roomCode: preparedTargetRoomCode,
+              hasPartyId: Boolean(nextPartyId),
+              hasRoomCode: Boolean(preparedTargetRoomCode),
+              hasTitleId: Boolean(preparedTargetTitleId),
               sourceType: defaultSourceType ?? null,
             });
             navigateToRoom({
@@ -1665,7 +1667,7 @@ export default function WatchPartyIndexScreen() {
             <TouchableOpacity
               style={[styles.primaryButton, createActionDisabled && styles.primaryButtonDisabled]}
               onPressIn={() => {
-                console.log("[watch-party-proof] create room press-in", {
+                debugLog("watch-party", "watch_party_create_room_press_in", {
                   roomType: inferredWaitingRoomType,
                   createActionBusy,
                   watchPartyEnabled: features.watchPartyEnabled,

@@ -14,6 +14,8 @@ June 13 blocker-clearing update: a short-lived Premium `test_grant` let `tips_cr
 
 June 13 final persona repair update: `final_qa_simulator_test@chillywood.test` was created/repaired as an internal QA proof account with credentials stored only in ignored `.env.final-qa-proof.local`. Brand Studio public-viewer readback passed on Play/internal v53 with corrected assertions for `Tips Creator Test`, `@tips_creator_test`, and `Viewer`. Disposable inbox delivery passed for signup and reset emails using `mail.tm`; installed-app signup verification now passes from a phone-opened email link without exposing token URLs. Installed-app forgot-password proof also passed after the reset recovery-session fix: the phone-opened reset link launched `com.chillywood.mobile`, opened the recovery session, allowed password update, returned to login, and sign-in with the new password reached Home. BrowserStack personas and flow contracts are prepared, but BrowserStack has not run.
 
+June 14 owner/admin integration audit after route cleanup is recorded in `docs/OWNER_ADMIN_INTEGRATION_AUDIT.md`. The audit found no route/product blocker for BrowserStack prep, kept BrowserStack deferred, and made only sanitized Watch-Party proof logging cleanup.
+
 ## 1. Auth
 
 - [x] Forgot-password reset email proof on Play/internal runtime.
@@ -127,7 +129,8 @@ June 13 final persona repair update: `final_qa_simulator_test@chillywood.test` w
 
 ## 12. Admin / Safety
 
-- [ ] Admin/owner route smoke.
+- [x] Owner/admin route/product integration audit after issues #1-#7.
+- [ ] Admin/owner runtime route smoke.
 - [ ] Normal user denied from Admin.
 - [ ] Blocked-user fixture smoke where available.
 - [ ] Report/support/legal surfaces smoke.
