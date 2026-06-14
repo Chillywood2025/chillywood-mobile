@@ -22,13 +22,13 @@ No migration, RLS weakening, storage policy change, malware scan bypass, public 
 
 OTA publication for tester pickup:
 
-- Code commit: `050500c`
+- Code commit: `f998cbb`
 - EAS branch: `production`
 - Runtime version: `1.0.0`
-- Update group: `c509979c-98f3-4043-bfe1-0a0052e02a64`
-- Android update: `019ec5a4-bcbf-7385-a629-9614c87d331d`
-- iOS update: `019ec5a4-bcbf-79c3-ae4f-19b9cad19825`
-- Supersedes earlier closeout OTA groups `86cf5f80-c746-453b-a495-27c0d99843ec` from `b58f614` and `bb3143da-c3e6-46be-acde-9c609c171fb3` from `92eeac1`.
+- Update group: `9d728443-d566-4e30-a6f3-19a6deb64f1c`
+- Android update: `019ec745-6813-7bfc-b03f-10d2231608fa`
+- iOS update: `019ec745-6813-78e7-a058-5cbeb49f02d1`
+- Supersedes earlier closeout OTA groups `86cf5f80-c746-453b-a495-27c0d99843ec`, `bb3143da-c3e6-46be-acde-9c609c171fb3`, and `c509979c-98f3-4043-bfe1-0a0052e02a64`.
 
 Validation passed locally:
 
