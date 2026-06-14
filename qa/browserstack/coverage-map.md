@@ -2,7 +2,14 @@
 
 Status: prepared, not run.
 
-BrowserStack final regression is a runtime proof pass on Play/internal. It does not replace the existing local/manual sandbox proof docs and must not claim live money.
+BrowserStack final regression is a runtime proof pass on Play/internal for the active Android lane. It does not replace the existing local/manual sandbox proof docs and must not claim live money.
+
+Platform lanes:
+
+| Platform | Status | Runtime rule | Notes |
+| --- | --- | --- | --- |
+| Android | Active proof lane | Google Play internal install; package `com.chillywood.mobile`; installer `com.android.vending`; not Expo Dev Launcher | Use for final public-v1 regression when approved. |
+| iOS | Planned/deferred placeholder | No iOS build, signing, App Store Connect, App Store IAP, or RevenueCat Apple proof exists in this lane | Do not run until Android final regression is closed and user explicitly approves iOS. |
 
 | Area | Coverage target | Flow contract | Device/session need | Purchase need | Local preflight |
 | --- | --- | --- | --- | --- | --- |
@@ -30,6 +37,16 @@ BrowserStack final regression is a runtime proof pass on Play/internal. It does 
 - Provider refund/revoke/lifecycle gaps remain deferred by provider tooling/order identifiers.
 - Live money and payouts remain disabled.
 - Google Play external launch governance remains separate from BrowserStack prep.
+- iOS BrowserStack remains a future placeholder and requires future Apple signing, App Store Connect, App Store IAP, and RevenueCat Apple product proof.
+
+## Future iOS Placeholder Device Ideas
+
+Do not run these yet. They are placeholders for a later approved iOS lane:
+
+- current iPhone standard screen
+- small iPhone screen
+- larger iPhone Pro/Max class
+- current iPad class, optional
 
 ## Safe Deferred Provider-Tooling Gaps
 

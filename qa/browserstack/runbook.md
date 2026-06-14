@@ -33,6 +33,11 @@ Do not proceed until the user explicitly approves BrowserStack execution. Approv
 4. Confirm test persona credentials are available only through secure local handoff.
 5. Confirm no auth links, passwords, provider secrets, or BrowserStack keys are in docs/logs.
 
+Platform lane rule:
+
+- Android is the active BrowserStack proof lane and must use Play/internal.
+- iOS is deferred. Do not create iOS builds, change signing, configure App Store Connect, add Apple IAP products, change RevenueCat products, or start iOS BrowserStack sessions in this runbook.
+
 ## 3. Device Matrix
 
 Minimum:
@@ -48,6 +53,15 @@ Optional:
 - foldable
 - low-memory profile
 - newest Android image available
+
+Future iOS placeholders, not for this run:
+
+- current iPhone standard screen
+- small iPhone screen
+- larger iPhone Pro/Max class
+- iPad class if later approved
+
+iOS execution requires a separate approved lane after Android final regression closes, plus Apple signing, App Store Connect, App Store IAP, and RevenueCat Apple product proof.
 
 ## 4. Execution Order
 

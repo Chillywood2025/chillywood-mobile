@@ -18,6 +18,8 @@ June 14 owner/admin integration audit after route cleanup is recorded in `docs/O
 
 June 14 BrowserStack readiness package is prepared under `qa/browserstack/`. It includes coverage map, persona labels without secrets, placeholder env names, approval-gated runbook, and 15 whole-app flow contracts. BrowserStack has not run, no app has been uploaded to BrowserStack, and no BrowserStack minutes have been spent.
 
+Android remains the active proof lane. iOS BrowserStack is a planned/deferred future lane only and requires later Apple signing, App Store Connect, App Store IAP, and RevenueCat Apple product proof before it can run.
+
 ## 1. Auth
 
 - [x] Forgot-password reset email proof on Play/internal runtime.
@@ -142,6 +144,8 @@ June 14 BrowserStack readiness package is prepared under `qa/browserstack/`. It 
 ## 13. BrowserStack Final Regression
 
 - [x] BrowserStack readiness contracts prepared in `qa/browserstack/`.
+- [x] Android marked as active proof lane.
+- [x] iOS marked as deferred future lane.
 - [ ] BrowserStack account/tooling ready.
 - [ ] Play/internal install path available.
 - [ ] Required device matrix selected.

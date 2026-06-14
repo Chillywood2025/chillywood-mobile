@@ -6,7 +6,7 @@ This folder contains whole-app BrowserStack regression contracts for the launch-
 
 ## Runtime Rule
 
-Final proof must use a Google Play internal testing install:
+Android is the active proof lane. Final Android proof must use a Google Play internal testing install:
 
 - package `com.chillywood.mobile`
 - installer `com.android.vending`
@@ -15,6 +15,8 @@ Final proof must use a Google Play internal testing install:
 - not Expo Dev Launcher
 
 Do not run paid purchase regression from Expo Dev Launcher or a local debug APK.
+
+iOS is a planned/deferred future lane only. Do not run iOS BrowserStack until Android final regression is closed and the user explicitly approves iOS work. iOS will require future Apple signing, App Store Connect setup, App Store IAP product setup, and RevenueCat Apple product proof before any iOS purchase or install proof can be claimed.
 
 ## Files
 

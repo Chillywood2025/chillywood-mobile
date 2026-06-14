@@ -8,6 +8,8 @@ BrowserStack is the final multi-device regression pass after cheap local/manual 
 
 Preparation status: whole-app BrowserStack readiness contracts are prepared under `qa/browserstack/`. BrowserStack has not been started, no app has been uploaded to BrowserStack, and no BrowserStack minutes have been spent.
 
+Platform scope: Android is the active proof lane. iOS is a planned/deferred future lane only; do not run iOS BrowserStack until Android final regression is closed and the user explicitly approves iOS work. iOS requires future Apple signing, App Store Connect setup, App Store IAP products, and RevenueCat Apple product proof before install or purchase proof can be claimed.
+
 ## Required Runtime
 
 Use a Google Play internal testing runtime:
@@ -53,6 +55,8 @@ Route-contract preflight before BrowserStack: run `npm run guard:route-contracts
 
 ## Device Matrix
 
+Android active lane:
+
 Minimum:
 
 | Device class | Purpose |
@@ -68,6 +72,15 @@ Optional if budget allows:
 - foldable
 - low-memory profile
 - Android 15/16 newest image when available in BrowserStack
+
+Future iOS placeholders, deferred:
+
+- current iPhone standard screen
+- small iPhone screen
+- larger iPhone Pro/Max class
+- iPad class if later approved
+
+Do not run the iOS placeholders in the current Android-first final regression lane.
 
 ## Personas
 

@@ -14,6 +14,8 @@ Route-contract preflight: `npm run guard:route-contracts` is the local static ch
 
 BrowserStack preparation package: `qa/browserstack/` now contains the whole-app final regression coverage map, persona template, env placeholder file, runbook, and flow contracts. BrowserStack is prepared, not run; no sessions were started, no app was uploaded, and no BrowserStack minutes were spent. Final execution still requires Play/internal runtime, not Expo Dev Launcher.
 
+Platform scope: Android is the active proof lane. iOS is planned/deferred and must not start until Android final regression is closed and the user explicitly approves iOS work. Future iOS proof requires Apple signing, App Store Connect, App Store IAP products, and RevenueCat Apple product proof.
+
 ## June 13, 2026 Play/Internal QA Execution Status
 
 Runtime delivery:
