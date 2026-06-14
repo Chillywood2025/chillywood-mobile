@@ -85,8 +85,12 @@ assertIncludes(platformBranding, `return savePlatformBrandProfileDraft(normalize
 assertNotIncludes(platformBranding, `...assetIds,\n    ...((waitingAssetRows`, "Brand Studio publish self-review must not include unfiltered selected assets");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('reports_review')`, "review queue reports access");
-assertIncludes(channelSettings, `canReviewPlatformBrandAssets ? (`, "review queue role gate");
-assertIncludes(channelSettings, `title: "Review & Publish"`, "review accordion title");
+assertIncludes(channelSettings, `Publishing Status`, "creator Brand Studio publishing status panel");
+assertNotIncludes(channelSettings, `title: "Review & Publish"`, "creator Brand Studio must not expose review queue sheet");
+assertNotIncludes(channelSettings, `readPlatformBrandReviewQueue`, "creator Brand Studio must not load reviewer queue");
+assertNotIncludes(channelSettings, `reviewPlatformBrandAsset`, "creator Brand Studio must not call reviewer mutation");
+assertNotIncludes(channelSettings, `handleReviewPlatformBrandAsset`, "creator Brand Studio must not render reviewer actions");
+assertNotIncludes(channelSettings, `brandReviewQueueAssets`, "creator Brand Studio must not hold reviewer queue state");
 assertIncludes(channelSettings, `createInitialBrandSections(routeParams.tab, routeParams.focus)`, "collapsed Brand Studio first view");
 assertIncludes(channelSettings, `activeBrandSheetSection`, "Brand Studio bottom sheet state");
 assertIncludes(channelSettings, `styles.assetManagerSheet`, "Brand Studio modal bottom sheet");

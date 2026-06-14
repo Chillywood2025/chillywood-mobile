@@ -33,11 +33,12 @@ Play/internal runtime only.
 14. Confirm the reviewed public visitor view does not show pending draft media.
 15. Tap `Publish Changes`.
 16. Confirm one clear success/error notice appears after the publish path completes.
-17. Tap `Preview Platform` again and confirm eligible approved, scan-safe, published media appears publicly after review/publish path.
-18. Log in as `normal_viewer`.
-19. Open creator public Platform and confirm public brand state with no owner controls.
-20. Confirm rejected, removed, scan-blocked, deleted, and pending assets stay hidden if fixtures are available.
-21. Confirm Profile photo/background remain unchanged and separate from Platform hero/background/avatar/logo.
+17. Confirm the creator Brand tab does not show `Approve`, `Reject`, or `Archive` review controls.
+18. Tap `Preview Platform` again and confirm eligible approved, scan-safe, published media appears publicly after review/publish path.
+19. Log in as `normal_viewer`.
+20. Open creator public Platform and confirm public brand state with no owner controls.
+21. Confirm rejected, removed, scan-blocked, deleted, and pending assets stay hidden if fixtures are available.
+22. Confirm Profile photo/background remain unchanged and separate from Platform hero/background/avatar/logo.
 
 ## Expected Result
 Brand Studio is owner-only, Save Draft persists owner draft state without public exposure, Preview Brand Draft shows saved owner-only media, Preview Platform shows only reviewed public visitor state, Publish Changes exposes only eligible approved/scan-safe published media, and Profile media remains separate.
@@ -60,6 +61,7 @@ Brand Studio is owner-only, Save Draft persists owner draft state without public
 - Non-Premium gate is clear.
 - Save Draft, draft preview, public preview, publish, reload, and public readback pass.
 - Wrong-user edit unavailable or denied.
+- Creator Brand Studio does not expose reviewer queue actions.
 - Pending, rejected, removed, scan-blocked, and deleted assets stay hidden publicly.
 - Profile photo/background remain separate from Platform Brand Studio media.
 
