@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Href, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -34,6 +34,7 @@ type RecoveryParams = {
 type RecoveryStatus = "checking" | "ready" | "missing" | "failed";
 
 const PASSWORD_MIN_LENGTH = 8;
+const RECOVERY_LINK_OPEN_ERROR = "This reset link expired or could not be opened. Request a fresh link.";
 const RECOVERY_PARAM_KEYS = [
   "access_token",
   "code",
@@ -61,6 +62,44 @@ function getPasswordUpdateErrorMessage(error: unknown) {
     return "This reset link expired. Request a fresh link.";
   }
   return "Unable to update your password right now.";
+}
+
+function getSanitizedRecoveryErrorReason(error: unknown) {
+  const raw = String(
+    (error as { message?: unknown; code?: unknown; name?: unknown } | null)?.message
+    ?? (error as { code?: unknown } | null)?.code
+    ?? (error as { name?: unknown } | null)?.name
+    ?? "",
+  ).toLowerCase();
+
+  if (raw.includes("expired") || raw.includes("invalid") || raw.includes("token")) {
+    return "expired_or_invalid";
+  }
+  if (raw.includes("rate") || raw.includes("limit")) {
+    return "rate_limited";
+  }
+  if (raw.includes("network") || raw.includes("fetch")) {
+    return "network_error";
+  }
+  return "auth_error";
+}
+
+type VerifiedRecoveryData = {
+  session?: {
+    access_token?: string | null;
+    refresh_token?: string | null;
+  } | null;
+} | null;
+
+function getRecoveryParamsKey(recovery: RecoveryParams) {
+  if (recovery.accessToken && recovery.refreshToken) {
+    return `url_session:${recovery.accessToken}:${recovery.refreshToken}`;
+  }
+  if (recovery.code) return `code:${recovery.code}`;
+  if (recovery.tokenHash) return `token_hash:${recovery.tokenHash}`;
+  if (recovery.token && recovery.email) return `email_token:${recovery.email}:${recovery.token}`;
+  if (recovery.error || recovery.errorCode) return `error:${recovery.errorCode || recovery.error}`;
+  return null;
 }
 
 const readParam = (params: URLSearchParams, key: string) => {
@@ -132,7 +171,7 @@ export default function ResetPasswordScreen() {
     Partial<Record<(typeof RECOVERY_PARAM_KEYS)[number], string | string[]>>
   >();
   const insets = useSafeAreaInsets();
-  const handledRecoveryRef = useRef(false);
+  const handledRecoveryKeyRef = useRef<string | null>(null);
   const [status, setStatus] = useState<RecoveryStatus>("checking");
   const [statusMessage, setStatusMessage] = useState("Checking your reset link...");
   const [newPassword, setNewPassword] = useState("");
@@ -158,35 +197,80 @@ export default function ResetPasswordScreen() {
     parseRecoveryRouteParams(routeParams)
   ), [routeParams]);
 
+  const markRecoveryReady = useCallback((flow: string) => {
+    setStatus("ready");
+    setStatusMessage("Choose a new password for this account.");
+    trackEvent("auth_password_recovery_link_opened", {
+      flow,
+    });
+  }, []);
+
+  const markRecoveryFailed = useCallback((error: unknown, flow: string) => {
+    setStatus("failed");
+    setStatusMessage(RECOVERY_LINK_OPEN_ERROR);
+    trackEvent("auth_password_recovery_link_failed", {
+      flow,
+      reason: getSanitizedRecoveryErrorReason(error),
+    });
+  }, []);
+
+  const establishVerifiedRecoverySession = useCallback(async (
+    data: VerifiedRecoveryData,
+    flow: string,
+  ) => {
+    const verifiedSession = data?.session;
+
+    if (verifiedSession?.access_token && verifiedSession.refresh_token) {
+      const { error } = await supabase.auth.setSession({
+        access_token: verifiedSession.access_token,
+        refresh_token: verifiedSession.refresh_token,
+      });
+
+      if (error) throw error;
+
+      markRecoveryReady(flow);
+      return true;
+    }
+
+    const { data: currentSession } = await supabase.auth.getSession();
+
+    if (currentSession.session) {
+      markRecoveryReady(flow);
+      return true;
+    }
+
+    return false;
+  }, [markRecoveryReady]);
+
   const markReadyFromExistingSession = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
 
     if (data.session) {
-      setStatus("ready");
-      setStatusMessage("Choose a new password for this account.");
+      markRecoveryReady("existing_session");
       return;
     }
 
     setStatus("missing");
     setStatusMessage("This reset link is missing or expired. Request a fresh password reset email.");
-  }, []);
+  }, [markRecoveryReady]);
 
   const consumeRecoveryParams = useCallback(async (recovery: RecoveryParams | null) => {
-    if (handledRecoveryRef.current) return true;
     if (!recovery) return false;
 
+    const recoveryKey = getRecoveryParamsKey(recovery);
+    if (recoveryKey && handledRecoveryKeyRef.current === recoveryKey) return true;
+    handledRecoveryKeyRef.current = recoveryKey;
+
     if (recovery.error || recovery.errorCode) {
-      handledRecoveryRef.current = true;
       setStatus("failed");
-      setStatusMessage(recovery.errorDescription || "This reset link could not be used. Request a fresh link.");
+      setStatusMessage(RECOVERY_LINK_OPEN_ERROR);
       trackEvent("auth_password_recovery_link_failed", {
-        reason: recovery.errorCode || recovery.error || "unknown",
+        reason: getSanitizedRecoveryErrorReason(recovery.errorCode || recovery.error),
       });
       return true;
     }
 
     if (recovery.accessToken && recovery.refreshToken) {
-      handledRecoveryRef.current = true;
       setStatus("checking");
       setStatusMessage("Opening your reset session...");
 
@@ -196,107 +280,91 @@ export default function ResetPasswordScreen() {
       });
 
       if (error) {
-        setStatus("failed");
-        setStatusMessage("This reset link could not be opened. Request a fresh link.");
-        trackEvent("auth_password_recovery_link_failed", {
-          reason: error.message,
-        });
+        markRecoveryFailed(error, "url_session");
         return true;
       }
 
-      setStatus("ready");
-      setStatusMessage("Choose a new password for this account.");
-      trackEvent("auth_password_recovery_link_opened", {
-        flow: "token",
-      });
+      markRecoveryReady("url_session");
       return true;
     }
 
     if (recovery.code) {
-      handledRecoveryRef.current = true;
       setStatus("checking");
       setStatusMessage("Opening your reset session...");
 
       const { error } = await supabase.auth.exchangeCodeForSession(recovery.code);
 
       if (error) {
-        setStatus("failed");
-        setStatusMessage("This reset link could not be opened. Request a fresh link.");
-        trackEvent("auth_password_recovery_link_failed", {
-          reason: error.message,
-        });
+        markRecoveryFailed(error, "code");
         return true;
       }
 
-      setStatus("ready");
-      setStatusMessage("Choose a new password for this account.");
-      trackEvent("auth_password_recovery_link_opened", {
-        flow: "code",
-      });
+      markRecoveryReady("code");
       return true;
     }
 
     if (recovery.tokenHash) {
-      handledRecoveryRef.current = true;
       setStatus("checking");
       setStatusMessage("Opening your reset session...");
 
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         token_hash: recovery.tokenHash,
         type: "recovery",
       });
 
       if (error) {
-        setStatus("failed");
-        setStatusMessage("This reset link could not be opened. Request a fresh link.");
-        trackEvent("auth_password_recovery_link_failed", {
-          reason: error.message,
-        });
+        markRecoveryFailed(error, "token_hash");
         return true;
       }
 
-      setStatus("ready");
-      setStatusMessage("Choose a new password for this account.");
-      trackEvent("auth_password_recovery_link_opened", {
-        flow: "token_hash",
-      });
+      const established = await establishVerifiedRecoverySession(data, "token_hash");
+      if (!established) {
+        markRecoveryFailed(new Error("no_recovery_session"), "token_hash");
+      }
       return true;
     }
 
     if (recovery.token && recovery.email) {
-      handledRecoveryRef.current = true;
       setStatus("checking");
       setStatusMessage("Opening your reset session...");
 
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email: recovery.email,
         token: recovery.token,
         type: "recovery",
       });
 
       if (error) {
-        setStatus("failed");
-        setStatusMessage("This reset link could not be opened. Request a fresh link.");
-        trackEvent("auth_password_recovery_link_failed", {
-          reason: error.message,
-        });
+        markRecoveryFailed(error, "email_token");
         return true;
       }
 
-      setStatus("ready");
-      setStatusMessage("Choose a new password for this account.");
-      trackEvent("auth_password_recovery_link_opened", {
-        flow: "token",
-      });
+      const established = await establishVerifiedRecoverySession(data, "email_token");
+      if (!established) {
+        markRecoveryFailed(new Error("no_recovery_session"), "email_token");
+      }
       return true;
     }
 
     return false;
-  }, []);
+  }, [establishVerifiedRecoverySession, markRecoveryFailed, markRecoveryReady]);
 
   const consumeRecoveryUrl = useCallback(async (url: string | null) => (
     consumeRecoveryParams(parseRecoveryUrl(url))
   ), [consumeRecoveryParams]);
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== "PASSWORD_RECOVERY" || !session) return;
+
+      handledRecoveryKeyRef.current = "password_recovery_event";
+      markRecoveryReady("password_recovery_event");
+    });
+
+    return () => {
+      data.subscription.unsubscribe();
+    };
+  }, [markRecoveryReady]);
 
   useEffect(() => {
     let active = true;
@@ -475,12 +543,22 @@ export default function ResetPasswordScreen() {
           ) : null}
 
           {status === "missing" || status === "failed" ? (
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={() => router.replace("/(auth)/login")}
-            >
-              <Text style={styles.secondaryButtonText}>Back to sign in</Text>
-            </Pressable>
+            <>
+              <Pressable
+                style={styles.button}
+                onPress={() => router.replace("/forgot-password" as Href)}
+                accessibilityRole="button"
+                accessibilityLabel="Request new reset email"
+              >
+                <Text style={styles.buttonText}>Request new reset email</Text>
+              </Pressable>
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => router.replace("/(auth)/login")}
+              >
+                <Text style={styles.secondaryButtonText}>Back to sign in</Text>
+              </Pressable>
+            </>
           ) : null}
         </View>
       </ScrollView>
@@ -555,6 +633,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.14)",
     borderRadius: 14,
     borderWidth: 1,
+    marginTop: 12,
     padding: 15,
   },
   secondaryButtonText: {
