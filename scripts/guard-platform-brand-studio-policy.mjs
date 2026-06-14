@@ -19,6 +19,10 @@ const assertNotIncludes = (source, needle, label) => {
   if (source.includes(needle)) fail(`${label} must not include ${needle}`);
 };
 
+const assertNotMatches = (source, pattern, label) => {
+  if (pattern.test(source)) fail(`${label} matched forbidden pattern ${pattern}`);
+};
+
 const brandAssetsMigration = read("supabase/migrations/202605240001_platform_brand_studio_assets.sql");
 const reviewMigration = read("supabase/migrations/202605240002_platform_brand_studio_review_workflow.sql");
 const reviewQueueMigration = read("supabase/migrations/202605240004_platform_brand_studio_review_queue_access.sql");
@@ -54,6 +58,8 @@ assertIncludes(reviewMigration, `and profile."published_at" is not null`, "publi
 assertIncludes(reviewMigration, `video."id"::text = profile."spotlight_video_id"`, "public profile spotlight video public-safe check");
 assertIncludes(platformBranding, `.eq("asset_state", "published")`, "client public asset state filter");
 assertIncludes(platformBranding, `.in("moderation_status", ["clean", "reported"])`, "client public moderation filter");
+assertIncludes(platformBranding, `PLATFORM_BRAND_PUBLIC_SCAN_STATUSES`, "client public scan-safe status constant");
+assertIncludes(platformBranding, `.in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)`, "client public scan-safe filter");
 assertIncludes(platformBranding, `.is("deleted_at", null)`, "client public deleted filter");
 assertIncludes(platformBranding, `spotlight_video_id: patch.spotlightVideoId === undefined ? undefined : patch.spotlightVideoId`, "Brand Studio spotlight clear support");
 assertIncludes(publicChannel, `readCreatorVideos(routeUserId, { includeDrafts: false`, "public Platform draft exclusion");
@@ -73,6 +79,8 @@ assertIncludes(ownerPublishReviewRepairMigration, `raise exception 'brand_review
 assertIncludes(ownerPublishReviewRepairMigration, `v_before."scan_status" in ('malware_detected', 'scan_failed', 'quarantined')`, "scan-blocked owner approval denial");
 assertIncludes(ownerPublishReviewRepairMigration, `'self_review', v_is_asset_owner`, "Brand Studio self-review audit marker");
 assertIncludes(platformBranding, `Approved by the creator during Brand Studio publish.`, "creator publish approves selected owned assets");
+assertIncludes(platformBranding, `selectedReviewAssetIds`, "creator publish filters selected self-review assets");
+assertNotIncludes(platformBranding, `...assetIds,\n    ...((waitingAssetRows`, "Brand Studio publish self-review must not include unfiltered selected assets");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('reports_review')`, "review queue reports access");
 assertIncludes(channelSettings, `canReviewPlatformBrandAssets ? (`, "review queue role gate");
@@ -90,6 +98,24 @@ assertIncludes(channelSettings, `These appear on your public Platform, separate 
 assertIncludes(channelSettings, `formatPlatformBrandScanStatus`, "Brand Studio scan status readout");
 assertIncludes(channelSettings, `Preview Brand Draft`, "owner-only Brand Studio draft preview action");
 assertIncludes(channelSettings, `preview: "brand-draft"`, "Brand Studio draft preview route");
+assertIncludes(channelSettings, `Preview Platform is the reviewed visitor view`, "Brand Studio public preview copy");
+assertIncludes(channelSettings, `Save Draft keeps media owner-only`, "Brand Studio draft/public separation copy");
+assertIncludes(channelSettings, `saveBrandStudioDraftAndProfile`, "Brand Studio controlled draft/profile save handler");
+assertIncludes(channelSettings, `publishBrandStudioAndProfile`, "Brand Studio controlled publish/profile save handler");
+assertIncludes(channelSettings, `await persistBrandDraftPatch();`, "Brand Studio draft save is awaited");
+assertIncludes(channelSettings, `await persistBrandPublish();`, "Brand Studio publish is awaited");
+assertIncludes(channelSettings, `await saveCurrentProfileSettings();`, "Brand Studio profile save is awaited");
+assertIncludes(channelSettings, `brandProfileSaveInFlightRef`, "Brand Studio duplicate mutation guard");
+assertNotMatches(
+  channelSettings,
+  /void\s+saveBrandDraftPatch\([^)]*\);\s*void\s+onSave\(\)/s,
+  "Brand Studio Save Draft must not fire unawaited parallel brand/profile mutations",
+);
+assertNotMatches(
+  channelSettings,
+  /void\s+publishBrandDraft\([^)]*\);\s*void\s+onSave\(\)/s,
+  "Brand Studio Publish Changes must not fire unawaited parallel brand/profile mutations",
+);
 assertIncludes(publicChannel, `brandDraftPreviewMode`, "public Platform owner draft preview mode");
 assertIncludes(publicChannel, `showDraftBranding = isOwner && brandDraftPreviewMode`, "draft preview owner guard");
 assertIncludes(publicChannel, `readPlatformBrandStudio(routeUserId)`, "owner draft preview Brand Studio reader");

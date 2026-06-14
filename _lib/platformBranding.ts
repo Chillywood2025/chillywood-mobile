@@ -137,6 +137,7 @@ const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const PLATFORM_BRAND_UPLOAD_TIMEOUT_MS = 120000;
 const PLATFORM_BRAND_REVIEW_PUBLISH_BATCH_LIMIT = 50;
+const PLATFORM_BRAND_PUBLIC_SCAN_STATUSES: PlatformBrandScanStatus[] = ["clean", "manual_review"];
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -628,6 +629,7 @@ export async function readPublicPlatformBranding(ownerUserId: string): Promise<P
     .in("id", assetIds)
     .eq("asset_state", "published")
     .in("moderation_status", ["clean", "reported"])
+    .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
     .is("deleted_at", null)
     .returns<PlatformBrandAssetRow[]>();
 
@@ -704,19 +706,33 @@ export async function publishPlatformBrandProfile(
     profile.watermarkAssetId,
   ].filter(Boolean))) as string[];
 
+  let selectedReviewAssetIds: string[] = [];
+  if (assetIds.length) {
+    const { data: selectedReviewAssetRows } = await supabase
+      .from("platform_brand_assets")
+      .select("id")
+      .eq("owner_user_id", normalizedOwnerId)
+      .in("id", assetIds)
+      .eq("moderation_status", "pending_review")
+      .is("deleted_at", null)
+      .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
+      .returns<Array<Pick<PlatformBrandAssetRow, "id">>>();
+    selectedReviewAssetIds = (selectedReviewAssetRows ?? []).map((row) => toText(row.id)).filter(Boolean);
+  }
+
   const { data: waitingAssetRows } = await supabase
     .from("platform_brand_assets")
     .select("id")
     .eq("owner_user_id", normalizedOwnerId)
     .eq("moderation_status", "pending_review")
     .is("deleted_at", null)
-    .not("scan_status", "in", "(malware_detected,scan_failed,quarantined)")
+    .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
     .order("updated_at", { ascending: false })
     .limit(PLATFORM_BRAND_REVIEW_PUBLISH_BATCH_LIMIT)
     .returns<Array<Pick<PlatformBrandAssetRow, "id">>>();
 
   const reviewAssetIds = Array.from(new Set([
-    ...assetIds,
+    ...selectedReviewAssetIds,
     ...((waitingAssetRows ?? []).map((row) => toText(row.id)).filter(Boolean)),
   ]));
 
@@ -737,6 +753,7 @@ export async function publishPlatformBrandProfile(
       .eq("owner_user_id", normalizedOwnerId)
       .in("id", assetIds)
       .in("moderation_status", ["clean", "reported"])
+      .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
       .is("deleted_at", null);
   }
 

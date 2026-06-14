@@ -1,5 +1,22 @@
 # NEXT TASK
 
+## Brand Studio Closeout Proof / OTA Pickup
+
+Brand Studio production closeout is repo-side complete. Next proof is to publish/pick up the JS-only update on the same Play/internal runtime if using OTA, then run the updated Brand Studio contract:
+
+- Open Platform Studio.
+- Open Brand Studio.
+- Choose a supported Hero Image.
+- Tap `Save Draft` and confirm one honest notice.
+- Open `Preview Brand Draft` and confirm owner-only saved draft media appears with normal owner controls hidden.
+- Open `Preview Platform` and confirm pending media does not appear publicly.
+- Tap `Publish Changes` and confirm one honest notice after the publish path completes.
+- Reopen `Preview Platform` and confirm only eligible approved, scan-safe, published media appears.
+- Confirm rejected, removed, scan-blocked, deleted, and pending assets stay hidden.
+- Confirm Profile photo/background remain separate from Platform hero/background/avatar/logo.
+
+This lane did not add a Supabase migration or native dependency. OTA is acceptable only if the installed Play/internal app actually receives the update; otherwise create a new Play/internal build for deterministic tester proof.
+
 ## BrowserStack Final Regression Prep
 
 Whole-app BrowserStack readiness is prepared in `qa/browserstack/` and BrowserStack remains deferred until explicit approval. The package includes a coverage map, persona labels without secrets, env placeholders, approval-gated runbook, and 15 flow contracts covering runtime install, auth, Home/Explore/Library, Profile/Platform, Brand Studio, Chi'lly Chat, Watch-Party Live, Live Watch-Party/Live Stage, Player/Paid Video, Money Center, Premium, Settings/Legal, direct-link denials, Admin/Owner, and final smoke. No BrowserStack session was started, no app was uploaded, and no BrowserStack minutes were spent. Android is the active proof lane and must use Play/internal runtime; Expo Dev Launcher is not accepted. iOS is deferred until Android final regression is closed and the user explicitly approves a later iOS lane.

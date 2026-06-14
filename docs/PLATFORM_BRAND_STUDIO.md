@@ -1,6 +1,30 @@
 # Platform Brand Studio
 
-Updated: 2026-05-31
+Updated: 2026-06-14
+
+## June 14, 2026 Production Closeout Audit
+
+Brand Studio remains inside Platform Studio and continues to customize the creator's public Platform visuals, not Profile Appearance. Profile photo/background stay separate from Platform hero/background/avatar/logo.
+
+Closeout fixes:
+
+- Brand Studio `Save Draft` now runs Brand draft save first, then intentionally saves Platform name/tagline/profile settings. It no longer fires unawaited Brand and Profile mutations from the same button.
+- Brand Studio `Publish Changes` now runs Brand publish first, then intentionally saves Platform name/tagline/profile settings. Success and partial-failure notices are single and honest.
+- The button path uses one in-flight guard so duplicate concurrent Brand/Profile mutations are not launched and `brandSaving` / `saving` state clears on every handled path.
+- Preview copy is explicit: `Preview Platform` is the reviewed public visitor view, while `Preview Brand Draft` is the owner-only draft route with `preview=brand-draft`.
+- Client publish filtering now matches the public-safe intent more closely: self-review and publish attempts are limited to owner-owned, not-deleted, moderation-eligible, scan-safe Brand Studio assets. Pending scan, malware-detected, scan-failed, quarantined, rejected, hidden, removed, deleted, and wrong-owner assets remain ineligible.
+- The public Platform path still uses `readPublicPlatformBranding`; owner draft preview still requires `preview=brand-draft` plus owner check through `/channel/[userId]`.
+
+No migration, RLS weakening, storage policy change, malware scan bypass, public RPC weakening, LiveKit change, Premium gate change, monetization change, or unrelated route change was made. The change is JS/TS plus docs/guard only and is OTA-eligible for an installed Play/internal binary on the same runtime, but tester proof must confirm the device actually receives the OTA before treating it as launch-candidate evidence.
+
+Validation passed locally:
+
+- `npm run typecheck`
+- `npm run guard:platform-brand-studio-policy`
+- `npm run guard:route-contracts`
+- `git diff --check`
+
+Remaining proof: run the updated `qa/browserstack/flows/04-brand-studio.contract.md` on a Play/internal runtime. Prove Save Draft, Preview Brand Draft, Preview Platform with pending media hidden, Publish Changes, public viewer readback, blocked asset hiding, and Profile media separation.
 
 ## May 31, 2026 Public Preview Clarification
 

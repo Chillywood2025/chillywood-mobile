@@ -1202,6 +1202,7 @@ export function ChannelStudioScreen() {
   const [clipNotice, setClipNotice] = useState<string | null>(null);
   const [clipSaving, setClipSaving] = useState(false);
   const clipSaveInFlightRef = useRef(false);
+  const brandProfileSaveInFlightRef = useRef(false);
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
   const [selectedClipVideoFile, setSelectedClipVideoFile] = useState<CreatorVideoFile | null>(null);
   const [selectedClipCoverFile, setSelectedClipCoverFile] = useState<CreatorVideoFile | null>(null);
@@ -2393,12 +2394,34 @@ export function ChannelStudioScreen() {
 
   const getCurrentBrandDraft = () => brandDraft ?? platformBranding?.profile ?? null;
 
-  const saveBrandDraftPatch = async (patch?: Partial<PlatformBrandProfile>) => {
+  const getNormalizedProfileForSave = () => {
+    if (!profile) return null;
+    return normalizeUserProfile({
+      ...profile,
+      defaultWatchPartyContentAccessRule: sanitizeCreatorRoomAccessRule(
+        profile.defaultWatchPartyContentAccessRule,
+        creatorPermissions,
+      ),
+      defaultCommunicationContentAccessRule: sanitizeCreatorRoomAccessRule(
+        profile.defaultCommunicationContentAccessRule,
+        creatorPermissions,
+      ),
+    });
+  };
+
+  const saveCurrentProfileSettings = async () => {
+    const normalized = getNormalizedProfileForSave();
+    if (!normalized) throw new Error("Platform profile unavailable.");
+    await saveUserProfile(normalized);
+    setProfile(normalized);
+    return normalized;
+  };
+
+  const persistBrandDraftPatch = async (patch?: Partial<PlatformBrandProfile>) => {
     const ownerUserId = String(user?.id ?? "").trim();
     const draft = getCurrentBrandDraft();
     if (!ownerUserId || !draft) {
-      setBrandNotice("Sign in before saving Brand Studio changes.");
-      return null;
+      throw new Error("Sign in before saving Brand Studio changes.");
     }
 
     const nextDraft = {
@@ -2409,40 +2432,115 @@ export function ChannelStudioScreen() {
       themePreset: normalizePlatformBrandThemePreset(patch?.themePreset ?? draft.themePreset),
     };
 
+    const savedProfile = await savePlatformBrandProfileDraft(ownerUserId, nextDraft);
+    setBrandDraft(savedProfile);
+    await loadPlatformBranding();
+    return savedProfile;
+  };
+
+  const saveBrandDraftPatch = async (patch?: Partial<PlatformBrandProfile>) => {
+    if (brandProfileSaveInFlightRef.current) return null;
+    brandProfileSaveInFlightRef.current = true;
     setBrandSaving(true);
+    setBrandNotice(null);
     try {
-      const savedProfile = await savePlatformBrandProfileDraft(ownerUserId, nextDraft);
-      setBrandDraft(savedProfile);
-      await loadPlatformBranding();
-      setBrandNotice("Draft changes saved. Public media appears only after review and publish.");
+      const savedProfile = await persistBrandDraftPatch(patch);
+      setBrandNotice("Draft changes saved. Public media appears only after review and Publish Changes.");
       return savedProfile;
     } catch {
       setBrandNotice("Unable to save Brand Studio changes right now.");
       return null;
     } finally {
+      brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
     }
   };
 
-  const publishBrandDraft = async () => {
+  const persistBrandPublish = async () => {
     const ownerUserId = String(user?.id ?? "").trim();
     const draft = getCurrentBrandDraft();
     if (!ownerUserId || !draft) {
-      setBrandNotice("Sign in before publishing Brand Studio changes.");
-      return;
+      throw new Error("Sign in before publishing Brand Studio changes.");
     }
 
+    const savedProfile = await publishPlatformBrandProfile(ownerUserId, draft);
+    setBrandDraft(savedProfile);
+    await loadPlatformBranding();
+    await loadPlatformBrandReviewQueue();
+    return savedProfile;
+  };
+
+  const publishBrandDraft = async () => {
+    if (brandProfileSaveInFlightRef.current) return;
+    brandProfileSaveInFlightRef.current = true;
     setBrandSaving(true);
+    setBrandNotice(null);
     try {
-      const savedProfile = await publishPlatformBrandProfile(ownerUserId, draft);
-      setBrandDraft(savedProfile);
-      await loadPlatformBranding();
-      await loadPlatformBrandReviewQueue();
-      setBrandNotice("Brand Studio published. Selected approved media can now appear on your public Platform.");
+      await persistBrandPublish();
+      setBrandNotice("Brand Studio published. Approved, scan-safe media can now appear on your public Platform.");
     } catch {
       setBrandNotice("Unable to publish Brand Studio changes right now. Check the selected media and try again.");
     } finally {
+      brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
+    }
+  };
+
+  const saveBrandStudioDraftAndProfile = async () => {
+    if (brandProfileSaveInFlightRef.current) return;
+    brandProfileSaveInFlightRef.current = true;
+    setBrandSaving(true);
+    setSaving(true);
+    setBrandNotice(null);
+    setNotice(null);
+    try {
+      await persistBrandDraftPatch();
+    } catch {
+      setBrandNotice("Unable to save Brand Studio changes. Platform name and tagline were not saved from this action.");
+      brandProfileSaveInFlightRef.current = false;
+      setBrandSaving(false);
+      setSaving(false);
+      return;
+    }
+
+    try {
+      await saveCurrentProfileSettings();
+      setBrandNotice("Draft changes saved. Platform name and tagline saved. Public media appears only after review and Publish Changes.");
+    } catch {
+      setBrandNotice("Brand Studio draft saved, but Platform name or tagline changes could not be saved. Retry Save Draft to finish profile details.");
+    } finally {
+      brandProfileSaveInFlightRef.current = false;
+      setBrandSaving(false);
+      setSaving(false);
+    }
+  };
+
+  const publishBrandStudioAndProfile = async () => {
+    if (brandProfileSaveInFlightRef.current) return;
+    brandProfileSaveInFlightRef.current = true;
+    setBrandSaving(true);
+    setSaving(true);
+    setBrandNotice(null);
+    setNotice(null);
+    try {
+      await persistBrandPublish();
+    } catch {
+      setBrandNotice("Unable to publish Brand Studio changes. Platform name and tagline were not saved from this action.");
+      brandProfileSaveInFlightRef.current = false;
+      setBrandSaving(false);
+      setSaving(false);
+      return;
+    }
+
+    try {
+      await saveCurrentProfileSettings();
+      setBrandNotice("Brand Studio published. Platform name and tagline saved. Approved, scan-safe media can now appear publicly.");
+    } catch {
+      setBrandNotice("Brand Studio published, but Platform name or tagline changes could not be saved. Retry Save Draft for profile details.");
+    } finally {
+      brandProfileSaveInFlightRef.current = false;
+      setBrandSaving(false);
+      setSaving(false);
     }
   };
 
@@ -3275,19 +3373,7 @@ export function ChannelStudioScreen() {
 
     try {
       setSaving(true);
-      const normalized = normalizeUserProfile({
-        ...profile,
-        defaultWatchPartyContentAccessRule: sanitizeCreatorRoomAccessRule(
-          profile.defaultWatchPartyContentAccessRule,
-          creatorPermissions,
-        ),
-        defaultCommunicationContentAccessRule: sanitizeCreatorRoomAccessRule(
-          profile.defaultCommunicationContentAccessRule,
-          creatorPermissions,
-        ),
-      });
-      await saveUserProfile(normalized);
-      setProfile(normalized);
+      await saveCurrentProfileSettings();
       setNotice("Platform Studio saved.");
     } catch {
       setNotice("Unable to save Platform Studio changes right now.");
@@ -4909,21 +4995,25 @@ export function ChannelStudioScreen() {
     value,
     onPress,
     tone = "default",
+    disabled = false,
   }: {
     title: string;
     body: string;
     value?: string;
     onPress: () => void;
     tone?: "default" | "muted" | "warning";
+    disabled?: boolean;
   }) => (
     <TouchableOpacity
       style={[
         styles.studioActionRow,
         tone === "warning" && styles.studioActionRowWarning,
         tone === "muted" && styles.studioActionRowMuted,
+        disabled && styles.eventPrimaryButtonDisabled,
       ]}
       activeOpacity={0.86}
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={`${title}. ${body}`}
     >
@@ -6130,11 +6220,11 @@ export function ChannelStudioScreen() {
                   </View>
                 </View>
                 <Text style={styles.permissionCopy}>
-                  Draft and pending-review media stay off the public Platform. Media is saved as draft while safety checks run.
+                  Save Draft keeps media owner-only. Preview Platform is the reviewed visitor view; use Preview Brand Draft to check saved draft media before review. Publish Changes is required before eligible approved, scan-safe assets can appear publicly.
                 </Text>
                 {renderStudioActionRow({
                   title: "Preview Platform",
-                  body: "Opens as visitors see it. Draft and pending-review assets stay hidden.",
+                  body: "Reviewed public visitor view. Draft, pending-review, and scan-pending media stay hidden.",
                   value: "Preview",
                   onPress: () => {
                     const previewUserId = String(user?.id ?? "").trim();
@@ -6147,26 +6237,28 @@ export function ChannelStudioScreen() {
                 })}
                 {renderStudioActionRow({
                   title: "Preview Brand Draft",
-                  body: "Owner-only view for saved Brand Studio media before review.",
+                  body: "Owner-only draft view with saved Brand Studio media before public review.",
                   value: "Draft",
                   tone: brandHasPendingReview ? "warning" : "default",
                   onPress: openDraftBrandPreview,
                 })}
                 {renderStudioActionRow({
                   title: "Save Draft",
-                  body: "Save current Brand Studio choices without publishing them.",
+                  body: "Save Brand Studio choices and Platform name/tagline without publishing media.",
                   value: brandSaving ? "Saving" : "Draft",
+                  disabled: brandSaving || saving,
                   onPress: () => {
-                    void saveBrandDraftPatch();
+                    void saveBrandStudioDraftAndProfile();
                   },
                 })}
                 {renderStudioActionRow({
-                  title: "Submit / Publish Reviewed Changes",
-                  body: "Publish reviewed assets and current theme settings to the public Platform.",
+                  title: "Publish Changes",
+                  body: "Publish current settings; only approved, scan-safe Brand Studio media can appear publicly.",
                   value: brandSaving ? "Publishing" : "Publish",
                   tone: brandHasPendingReview ? "warning" : "default",
+                  disabled: brandSaving || saving,
                   onPress: () => {
-                    void publishBrandDraft();
+                    void publishBrandStudioAndProfile();
                   },
                 })}
                 {canReviewPlatformBrandAssets ? (
@@ -6204,26 +6296,24 @@ export function ChannelStudioScreen() {
 
         <View style={styles.brandActionRow}>
           <TouchableOpacity
-            style={[styles.eventSecondaryButton, brandSaving && styles.eventPrimaryButtonDisabled]}
+            style={[styles.eventSecondaryButton, (brandSaving || saving) && styles.eventPrimaryButtonDisabled]}
             activeOpacity={0.88}
-            disabled={brandSaving}
+            disabled={brandSaving || saving}
             onPress={() => {
-              void saveBrandDraftPatch();
-              void onSave();
+              void saveBrandStudioDraftAndProfile();
             }}
           >
             <Text style={styles.eventSecondaryButtonText}>Save Draft</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.saveButton, brandSaving && styles.eventPrimaryButtonDisabled]}
+            style={[styles.saveButton, (brandSaving || saving) && styles.eventPrimaryButtonDisabled]}
             onPress={() => {
-              void publishBrandDraft();
-              void onSave();
+              void publishBrandStudioAndProfile();
             }}
             activeOpacity={0.88}
-            disabled={brandSaving}
+            disabled={brandSaving || saving}
           >
-            {brandSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Publish Changes</Text>}
+            {brandSaving || saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Publish Changes</Text>}
           </TouchableOpacity>
         </View>
       </>
