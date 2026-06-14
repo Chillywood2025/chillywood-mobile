@@ -2,7 +2,7 @@
 
 ## Brand Studio Closeout Proof / OTA Pickup
 
-Brand Studio production closeout is repo-side complete and EAS Update has been published from code commit `b58f614` to branch `production`, runtime `1.0.0`, update group `86cf5f80-c746-453b-a495-27c0d99843ec`, Android update `019ec575-83e2-7993-b8e9-dcfb3fc9046a`. Next proof is to confirm the installed Play/internal runtime actually picks up that OTA, then run the updated Brand Studio contract:
+Brand Studio production closeout is repo-side complete and the corrected EAS Update has been published from code commit `92eeac1` to branch `production`, runtime `1.0.0`, update group `bb3143da-c3e6-46be-acde-9c609c171fb3`, Android update `019ec59c-b631-714a-9b4b-bea5e6751fef`. The earlier Brand Studio closeout OTA group `86cf5f80-c746-453b-a495-27c0d99843ec` from `b58f614` is superseded. Next proof is to confirm the installed Play/internal runtime actually picks up the `92eeac1` OTA, then run the updated Brand Studio contract:
 
 - Open Platform Studio.
 - Open Brand Studio.
