@@ -15,7 +15,8 @@ Closeout fixes:
 - Preview copy is explicit: `Preview Platform` is the reviewed public visitor view, while `Preview Brand Draft` is the owner-only draft route with `preview=brand-draft`.
 - Client publish filtering now matches the public-safe intent more closely: self-review and publish attempts are limited to owner-owned, not-deleted, moderation-eligible, scan-safe Brand Studio assets. Pending scan, malware-detected, scan-failed, quarantined, rejected, hidden, removed, deleted, and wrong-owner assets remain ineligible.
 - Publish repair saves the draft before review repair and marks the profile published after eligible asset repair. If one pending asset cannot be self-reviewed yet, the whole publish action should not fail; that asset remains hidden until review/safety eligibility is resolved.
-- Publish notices are state-aware: the UI claims selected media can appear publicly only when the post-publish Brand Studio readback shows selected assets are published, moderation-safe, scan-safe, and not deleted. If selected media is still `Needs review`, the notice says settings published but media is still waiting for review or safety clearance.
+- Creator-facing Brand Studio no longer labels normal owned uploads as `Needs review`. Draft media is shown as `Ready to publish`, `Checking`, `Blocked`, `Approved`, or `Published` so creators use the bottom `Publish Changes` path instead of a reviewer-only queue.
+- Publish notices are state-aware: the UI claims selected media can appear publicly only when the post-publish Brand Studio readback shows selected assets are published, moderation-safe, scan-safe, and not deleted. If selected media is not public-ready, the notice says settings published but media is still waiting for safety clearance.
 - The public Platform path still uses `readPublicPlatformBranding`; owner draft preview still requires `preview=brand-draft` plus owner check through `/channel/[userId]`.
 
 No migration, RLS weakening, storage policy change, malware scan bypass, public RPC weakening, LiveKit change, Premium gate change, monetization change, or unrelated route change was made. The change is JS/TS plus docs/guard only and is OTA-eligible for an installed Play/internal binary on the same runtime, but tester proof must confirm the device actually receives the OTA before treating it as launch-candidate evidence.
@@ -41,12 +42,12 @@ Remaining proof: run the updated `qa/browserstack/flows/04-brand-studio.contract
 
 ## May 31, 2026 Public Preview Clarification
 
-The public Platform still renders only Brand Studio assets that are published, moderation-safe, scan-safe, and not deleted. A saved asset marked `Needs review` is not supposed to appear on the visitor-facing Platform yet.
+The public Platform still renders only Brand Studio assets that are published, moderation-safe, scan-safe, and not deleted. A saved asset marked `Ready to publish` is owner-visible draft state until `Publish Changes` applies the eligible safe asset.
 
 To make that product boundary clear, Platform Studio now separates the two preview actions:
 
 - `Preview Platform` opens the reviewed public view that visitors see. Draft and pending-review assets stay hidden.
-- `Preview Brand Draft` opens an owner-only draft preview route with `preview=brand-draft`. It can show saved Brand Studio media before review to the signed-in owner, but it hides normal owner controls and never changes public viewer access.
+- `Preview Brand Draft` opens an owner-only draft preview route with `preview=brand-draft`. It can show saved Brand Studio media before public publish to the signed-in owner, but it hides normal owner controls and never changes public viewer access.
 
 Draft preview is for visual checking only. It does not approve media, publish draft creator videos, bypass malware scan blocks, weaken the public RPC, or expose Brand Studio assets to non-owners.
 
@@ -92,7 +93,7 @@ Asset model mapping for the current schema:
 Status model:
 
 - Current database state uses `asset_state` values `draft`, `published`, and `archived`, plus moderation values `pending_review`, `clean`, `reported`, `hidden`, `removed`, and `rejected`.
-- User-facing Brand Studio groups these into Draft, Needs review, Approved, Live, Needs changes, and Removed.
+- User-facing Brand Studio groups these into Draft, Ready to publish, Checking, Blocked, Approved, Live, Needs changes, and Removed.
 - Malware scanning adds `scan_status` values including `pending_scan`, `scanning`, `clean`, `malware_detected`, `scan_failed`, `manual_review`, and `quarantined`; the UI summarizes them as Safety pending/checking/clear/reviewed/blocked/failed.
 
 Brand Studio is the creator-facing Stage Design area inside Platform Studio. It customizes the public look of a creator's Platform while keeping Profile settings separate.
@@ -108,7 +109,7 @@ Brand Studio is the creator-facing Stage Design area inside Platform Studio. It 
 - Public Platform fallback to the Chi'llwood city look when no published brand media exists.
 - Public Platform rendering through `readPublicPlatformBranding`, which only resolves published moderation-safe assets.
 - Owner/operator/moderation review RPC for approve, reject, and archive actions.
-- Creator-owned Brand Studio publish repair: `Publish Changes` now approves the creator's owned safe waiting Brand Studio assets before publishing selected profile assets, so creator uploads no longer stay stuck in `Needs review` after the creator publishes. A creator can review only assets they own; non-owners still receive `brand_review_forbidden`.
+- Creator-owned Brand Studio publish repair: `Publish Changes` now approves the creator's owned safe waiting Brand Studio assets before publishing selected profile assets, so creator uploads no longer stay stuck before public publish after the creator publishes. A creator can review only assets they own through the publish repair path; non-owners still receive `brand_review_forbidden`.
 - Reviewer-only Brand Studio queue access for pending/rejected assets without exposing review controls to normal creators.
 - Public profile RPC now nulls any asset id that is not currently published and moderation-safe.
 
@@ -179,11 +180,11 @@ Backed/source-checked friendly states:
 
 - Permission denied: review RPC returns `brand_review_forbidden`; normal UI hides review controls when the account lacks owner/operator/moderation access.
 - Wrong-account asset review: a signed-in user who does not own the asset and does not hold Owner/Operator/moderation permission still receives `brand_review_forbidden`.
-- Owner publish repair: `Publish Changes` first approves owned waiting assets that are not scan-blocked, then publishes the profile and selected safe assets. Older draft assets can leave `Needs review` without all becoming public. If an asset is scan-blocked or the update cannot complete, the app shows safe retry copy and does not claim publish success.
+- Owner publish repair: `Publish Changes` first approves owned waiting assets that are not scan-blocked, then publishes the profile and selected safe assets. Older draft assets can leave `Ready to publish` without all becoming public. If an asset is scan-blocked or the update cannot complete, the app shows safe retry copy and does not claim publish success.
 - Unsupported file type: Brand Studio file validation accepts JPG, PNG, and WebP for images and returns creator-facing copy for unsupported files.
 - Oversize image/file: image uploads are capped at 20 MB and Hero Reel helper validation is capped at 250 MB, but Hero Reel remains unavailable in normal UI.
 - Upload failure/no network/storage failure: UI shows "Unable to choose or save that Platform media right now."
-- Pending review: asset cards say the asset is waiting for review before public display.
+- Pending safe draft: asset cards say the asset is ready for the creator to publish through `Publish Changes`.
 - Rejected/hidden/removed: asset cards say changes are needed before public display.
 - Public fallback: public Platform uses the Chi'llwood city fallback when no approved published hero/background/avatar/logo exists.
 

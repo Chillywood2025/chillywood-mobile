@@ -61,6 +61,8 @@ assertIncludes(platformBranding, `.in("moderation_status", ["clean", "reported"]
 assertIncludes(platformBranding, `PLATFORM_BRAND_PUBLIC_SCAN_STATUSES`, "client public scan-safe status constant");
 assertIncludes(platformBranding, `.in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)`, "client public scan-safe filter");
 assertIncludes(platformBranding, `.is("deleted_at", null)`, "client public deleted filter");
+assertIncludes(platformBranding, `return "Ready to publish";`, "creator-facing pending Brand Studio status copy");
+assertNotIncludes(platformBranding, `return "Needs review";`, "creator Brand Studio must not label owned pending assets as Needs review");
 assertIncludes(platformBranding, `spotlight_video_id: patch.spotlightVideoId === undefined ? undefined : patch.spotlightVideoId`, "Brand Studio spotlight clear support");
 assertIncludes(publicChannel, `readCreatorVideos(routeUserId, { includeDrafts: false`, "public Platform draft exclusion");
 assertIncludes(publicChannel, `spotlightVideoId ? videos.find`, "public Platform preferred Spotlight video");
@@ -86,6 +88,11 @@ assertNotIncludes(platformBranding, `...assetIds,\n    ...((waitingAssetRows`, "
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('reports_review')`, "review queue reports access");
 assertIncludes(channelSettings, `Publishing Status`, "creator Brand Studio publishing status panel");
+assertIncludes(channelSettings, `Ready to publish`, "creator Brand Studio ready-to-publish copy");
+assertIncludes(channelSettings, `Draft, safety, and public state`, "creator Brand Studio non-review publishing status copy");
+assertNotIncludes(channelSettings, `waiting for review before public display`, "creator Brand Studio must not send creators into a review waiting state");
+assertNotIncludes(channelSettings, `Public media appears only after review`, "creator Brand Studio save copy must not require creator-facing review");
+assertNotIncludes(channelSettings, `Draft, safety, review, and public state`, "creator Brand Studio publishing panel must not mention review as a creator step");
 assertNotIncludes(channelSettings, `title: "Review & Publish"`, "creator Brand Studio must not expose review queue sheet");
 assertNotIncludes(channelSettings, `readPlatformBrandReviewQueue`, "creator Brand Studio must not load reviewer queue");
 assertNotIncludes(channelSettings, `reviewPlatformBrandAsset`, "creator Brand Studio must not call reviewer mutation");

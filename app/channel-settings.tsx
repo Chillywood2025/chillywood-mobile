@@ -653,7 +653,7 @@ const getBrandAssetReviewCopy = (asset?: PlatformBrandAsset | null) => {
     return "Approved. Publish changes to show it on the public Platform.";
   }
   if (asset.moderationStatus === "pending_review") {
-    return "Saved as draft and waiting for review before public display.";
+    return "Saved as draft. Publish Changes applies eligible safe media to the public Platform.";
   }
   if (asset.moderationStatus === "rejected" || asset.moderationStatus === "hidden" || asset.moderationStatus === "removed") {
     return "This asset needs changes before it can appear publicly.";
@@ -2370,10 +2370,10 @@ export function ChannelStudioScreen() {
     const readiness = getBrandPublishReadiness(bundle);
     const profileCopy = profileSaved ? "Platform name and tagline saved." : "Platform name or tagline still needs retry.";
     if (readiness.selectedCount > 0 && readiness.publicReadyCount === 0) {
-      return `Brand Studio settings published. ${profileCopy} Selected media is still waiting for review or safety clearance before public display.`;
+      return `Brand Studio settings published. ${profileCopy} Selected media is still waiting for safety clearance before public display.`;
     }
     if (readiness.waitingCount > 0) {
-      return `Brand Studio published. ${profileCopy} ${readiness.publicReadyCount} media asset${readiness.publicReadyCount === 1 ? "" : "s"} can appear publicly; ${readiness.waitingCount} still need review or safety clearance.`;
+      return `Brand Studio published. ${profileCopy} ${readiness.publicReadyCount} media asset${readiness.publicReadyCount === 1 ? "" : "s"} can appear publicly; ${readiness.waitingCount} still need safety clearance.`;
     }
     return `Brand Studio published. ${profileCopy} Approved, scan-safe media can now appear publicly.`;
   };
@@ -2429,7 +2429,7 @@ export function ChannelStudioScreen() {
     setBrandNotice(null);
     try {
       const savedProfile = await persistBrandDraftPatch(patch);
-      setBrandNotice("Draft changes saved. Public media appears only after review and Publish Changes.");
+      setBrandNotice("Draft changes saved. Public media appears only after safety clearance and Publish Changes.");
       return savedProfile;
     } catch {
       setBrandNotice("Unable to save Brand Studio changes right now.");
@@ -2488,7 +2488,7 @@ export function ChannelStudioScreen() {
 
     try {
       await saveCurrentProfileSettings();
-      setBrandNotice("Draft changes saved. Platform name and tagline saved. Public media appears only after review and Publish Changes.");
+      setBrandNotice("Draft changes saved. Platform name and tagline saved. Public media appears only after safety clearance and Publish Changes.");
     } catch {
       setBrandNotice("Brand Studio draft saved, but Platform name or tagline changes could not be saved. Retry Save Draft to finish profile details.");
     } finally {
@@ -2614,7 +2614,7 @@ export function ChannelStudioScreen() {
       if (assetType === "watermark") assetPatch.watermarkAssetId = uploadedAsset.id;
 
       await saveBrandDraftPatch(assetPatch);
-      setBrandNotice("Platform media saved as draft. Review is required before it can appear publicly.");
+      setBrandNotice("Platform media saved as draft. Use Preview Brand Draft now; Publish Changes applies eligible safe media publicly.");
     } catch {
       setBrandNotice("Unable to choose or save that Platform media right now.");
     } finally {
@@ -3824,15 +3824,26 @@ export function ChannelStudioScreen() {
   const brandHeroStatus = formatPlatformBrandAssetStatus(platformBranding?.heroImage);
   const brandBackgroundStatus = formatPlatformBrandAssetStatus(platformBranding?.backgroundImage);
   const brandKitReady = !!(platformBranding?.avatar || platformBranding?.logo);
-  const brandHasPendingReview = (platformBranding?.assets ?? []).some((asset) => asset.moderationStatus === "pending_review");
-  const brandReviewAssets = (platformBranding?.assets ?? []).filter((asset) => (
+  const brandStudioAssets = (platformBranding?.assets ?? []).filter((asset) => (
     !asset.deletedAt
     && asset.assetState !== "archived"
     && ["hero_image", "background_image", "avatar", "logo"].includes(asset.assetType)
   ));
-  const brandPendingReviewCount = brandReviewAssets.filter((asset) => asset.moderationStatus === "pending_review").length;
+  const brandCheckingCount = brandStudioAssets.filter((asset) => asset.scanStatus === "pending_scan" || asset.scanStatus === "scanning").length;
+  const brandBlockedCount = brandStudioAssets.filter((asset) => asset.scanStatus === "malware_detected" || asset.scanStatus === "scan_failed" || asset.scanStatus === "quarantined").length;
+  const brandReadyToPublishCount = brandStudioAssets.filter((asset) => (
+    asset.assetState === "draft"
+    && (asset.moderationStatus === "pending_review" || ["clean", "reported"].includes(asset.moderationStatus))
+    && ["clean", "manual_review"].includes(asset.scanStatus)
+  )).length;
   const brandPublished = !!activeBrandProfile?.publishedAt;
-  const brandStatusLabel = brandHasPendingReview ? "Needs review" : brandPublished ? "Published" : "Draft changes";
+  const brandStatusLabel = brandBlockedCount
+    ? "Blocked"
+    : brandCheckingCount
+      ? "Checking"
+      : brandReadyToPublishCount
+        ? "Ready to publish"
+        : brandPublished ? "Published" : "Draft changes";
   const approvedClipBrandAsset = useMemo(
     () => [platformBranding?.logo, platformBranding?.avatar, platformBranding?.watermark].find((asset) => (
       !!asset
@@ -5598,7 +5609,7 @@ export function ChannelStudioScreen() {
           title: "Brand Studio",
           summary: "Hero Media, Background, Brand Kit, theme, and preview.",
           status: brandStatusLabel,
-          statusTone: brandHasPendingReview ? "warning" : brandPublished ? "default" : "muted",
+          statusTone: brandBlockedCount || brandCheckingCount ? "warning" : brandPublished || brandReadyToPublishCount ? "default" : "muted",
           children: (
             <>
               {renderStudioActionRow({
@@ -5611,7 +5622,7 @@ export function ChannelStudioScreen() {
                 title: "Edit Hero",
                 body: brandHeroSource ? "Adjust Hero Media, fit, overlay, and safe area." : "Add Hero Media for your public Platform.",
                 value: brandHeroStatus,
-                tone: brandHasPendingReview ? "warning" : "default",
+                tone: platformBranding?.heroImage && (platformBranding.heroImage.scanStatus === "pending_scan" || platformBranding.heroImage.scanStatus === "scanning" || platformBranding.heroImage.scanStatus === "malware_detected" || platformBranding.heroImage.scanStatus === "scan_failed" || platformBranding.heroImage.scanStatus === "quarantined") ? "warning" : "default",
                 onPress: () => {
                   openStudioTab("brand", { focus: "hero" });
                   setActiveBrandSheetSection("hero");
@@ -5632,9 +5643,9 @@ export function ChannelStudioScreen() {
               })}
               {renderStudioActionRow({
                 title: "Preview Brand Draft",
-                body: "Owner-only preview with saved Brand Studio media before review.",
+                body: "Owner-only preview with saved Brand Studio media before public publish.",
                 value: "Draft",
-                tone: brandHasPendingReview ? "warning" : "default",
+                tone: brandBlockedCount || brandCheckingCount ? "warning" : "default",
                 onPress: openDraftBrandPreview,
               })}
               {renderStudioActionRow({
@@ -5682,7 +5693,7 @@ export function ChannelStudioScreen() {
               <Text style={styles.panelTitle}>Brand Studio</Text>
               <Text style={styles.panelSubtitle}>Design your public Platform.</Text>
               <View style={styles.previewChipRow}>
-                {renderStudioStatusPill(brandStatusLabel, brandHasPendingReview ? "warning" : brandPublished ? "default" : "muted")}
+                {renderStudioStatusPill(brandStatusLabel, brandBlockedCount || brandCheckingCount ? "warning" : brandPublished || brandReadyToPublishCount ? "default" : "muted")}
                 {renderStudioStatusPill(`${formatBrandThemeLabel(draft?.themePreset)}`, "muted")}
               </View>
             </View>
@@ -5719,7 +5730,7 @@ export function ChannelStudioScreen() {
             title: "Hero Media",
             summary: platformBranding?.heroImage ? "Adjust image framing and overlay." : "Choose a public Platform hero image.",
             status: brandHeroStatus,
-            statusTone: platformBranding?.heroImage?.moderationStatus === "pending_review" ? "warning" : "muted",
+            statusTone: platformBranding?.heroImage && (platformBranding.heroImage.scanStatus === "pending_scan" || platformBranding.heroImage.scanStatus === "scanning" || platformBranding.heroImage.scanStatus === "malware_detected" || platformBranding.heroImage.scanStatus === "scan_failed" || platformBranding.heroImage.scanStatus === "quarantined") ? "warning" : platformBranding?.heroImage ? "default" : "muted",
             thumbnailAsset: platformBranding?.heroImage,
             thumbnailLabel: "Hero",
             children: (
@@ -5813,7 +5824,7 @@ export function ChannelStudioScreen() {
             title: "Background",
             summary: platformBranding?.backgroundImage ? "Adjust fit and readability." : "Choose a Platform background.",
             status: brandBackgroundStatus,
-            statusTone: platformBranding?.backgroundImage?.moderationStatus === "pending_review" ? "warning" : "muted",
+            statusTone: platformBranding?.backgroundImage && (platformBranding.backgroundImage.scanStatus === "pending_scan" || platformBranding.backgroundImage.scanStatus === "scanning" || platformBranding.backgroundImage.scanStatus === "malware_detected" || platformBranding.backgroundImage.scanStatus === "scan_failed" || platformBranding.backgroundImage.scanStatus === "quarantined") ? "warning" : platformBranding?.backgroundImage ? "default" : "muted",
             thumbnailAsset: platformBranding?.backgroundImage,
             thumbnailLabel: "Bg",
             children: (
@@ -6066,14 +6077,18 @@ export function ChannelStudioScreen() {
               <View style={styles.eventCardCopy}>
                 <Text style={styles.eventEmptyTitle}>Publishing Status</Text>
                 <Text style={styles.eventEmptyBody}>
-                  Draft, safety, review, and public state. Use the bottom buttons to save or publish Brand Studio changes.
+                  Draft, safety, and public state. Use the bottom buttons to save or publish Brand Studio changes.
                 </Text>
               </View>
               {renderStudioStatusPill(
-                brandPendingReviewCount
-                  ? `${brandPendingReviewCount} waiting`
+                brandBlockedCount
+                  ? `${brandBlockedCount} blocked`
+                  : brandCheckingCount
+                    ? `${brandCheckingCount} checking`
+                    : brandReadyToPublishCount
+                      ? `${brandReadyToPublishCount} ready`
                   : brandPublished ? "Live" : "Draft",
-                brandPendingReviewCount ? "warning" : "default",
+                brandBlockedCount || brandCheckingCount ? "warning" : "default",
               )}
             </View>
             <View style={styles.brandStatusGrid}>
@@ -6096,12 +6111,12 @@ export function ChannelStudioScreen() {
                 </Text>
               </View>
               <View style={styles.homeSnapshotCard}>
-                <Text style={styles.homeSnapshotLabel}>Review</Text>
-                <Text style={styles.homeSnapshotBody}>{brandPendingReviewCount ? `${brandPendingReviewCount} asset${brandPendingReviewCount === 1 ? "" : "s"} waiting.` : "No owner-visible asset waiting."}</Text>
+                <Text style={styles.homeSnapshotLabel}>Publish</Text>
+                <Text style={styles.homeSnapshotBody}>{brandReadyToPublishCount ? `${brandReadyToPublishCount} asset${brandReadyToPublishCount === 1 ? "" : "s"} ready.` : brandPublished ? "No draft asset waiting." : "Use Publish Changes when ready."}</Text>
               </View>
             </View>
             <Text style={styles.permissionCopy}>
-              Save Draft keeps media owner-only. Preview Platform is the reviewed visitor view; use Preview Brand Draft to check saved draft media before review. Publish Changes is required before eligible approved, scan-safe assets can appear publicly.
+              Save Draft keeps media owner-only. Preview Platform is the reviewed visitor view; use Preview Brand Draft to check saved draft media before publish. Publish Changes is required before eligible safe assets can appear publicly.
             </Text>
           </View>
         </View>

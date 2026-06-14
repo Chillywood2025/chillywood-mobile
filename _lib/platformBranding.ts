@@ -303,9 +303,11 @@ export const getPlatformBrandAssetValidationMessage = (
 export const formatPlatformBrandAssetStatus = (asset?: PlatformBrandAsset | null) => {
   if (!asset) return "Not set";
   if (asset.deletedAt) return "Removed";
+  if (asset.scanStatus === "pending_scan" || asset.scanStatus === "scanning") return "Checking";
+  if (asset.scanStatus === "malware_detected" || asset.scanStatus === "scan_failed" || asset.scanStatus === "quarantined") return "Blocked";
   if (asset.assetState === "published" && ["clean", "reported"].includes(asset.moderationStatus)) return "Published";
   if (asset.assetState === "draft" && ["clean", "reported"].includes(asset.moderationStatus)) return "Approved";
-  if (asset.moderationStatus === "pending_review") return "Needs review";
+  if (asset.moderationStatus === "pending_review") return "Ready to publish";
   if (asset.moderationStatus === "rejected" || asset.moderationStatus === "removed" || asset.moderationStatus === "hidden") {
     return "Needs changes";
   }
