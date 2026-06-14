@@ -181,7 +181,7 @@ export default function WatchPartyIndexScreen() {
   const [joinCode, setJoinCode] = useState(() => (!isPlayerWatchPartyLiveFlow ? initialRouteRoomCode : ""));
   const [joinLookupBusy, setJoinLookupBusy] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
-  const [createTitleId, setCreateTitleId] = useState("");
+  const createTitleId = "";
   const [entryTitleName, setEntryTitleName] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [refreshingCode, setRefreshingCode] = useState(false);
@@ -869,7 +869,7 @@ export default function WatchPartyIndexScreen() {
       });
       setPaidTicketGate(null);
       setPaidTicketNotice(
-        `Room tickets are sandbox-only at ${formatPaidWatchPartyTicketPrice(offer.priceCents, offer.currency)}. Live money is not active.`,
+        `Room tickets are sandbox/test only at ${formatPaidWatchPartyTicketPrice(offer.priceCents, offer.currency)} and not payable. Live money is not active.`,
       );
       trackEvent("money_offer_created", {
         creator_id: targetRoom.hostUserId,
@@ -1052,7 +1052,7 @@ export default function WatchPartyIndexScreen() {
     if (creating || shouldGuardCreateDuringInitialPrep) return;
 
     if (activeWaitingRoomType !== "live" && !effectiveTitleId && !effectiveSourceId && !preparedTargetPartyId) {
-      setCreateError("Open Watch-Party Live from a Player, or enter a linked title id before creating a Party Room.");
+      setCreateError("Choose content first to start Watch-Party Live.");
       return;
     }
 
@@ -1196,7 +1196,7 @@ export default function WatchPartyIndexScreen() {
       const roomType: WatchPartyRoomType = preparedRoom?.room.roomType ?? activeRoomType;
 
       if (roomType !== "live" && !requestedTitleId && !requestedSourceId) {
-        setCreateError("Open Watch-Party Live from a Player before generating a party-room code.");
+        setCreateError("Choose content first to generate a Party Room code.");
         return;
       }
 
@@ -1224,6 +1224,10 @@ export default function WatchPartyIndexScreen() {
     setJoinCode("");
     setJoinError(null);
   };
+
+  const onBrowseTitles = useCallback(() => {
+    router.push("/(tabs)/explore");
+  }, [router]);
 
   const inferredWaitingRoomType: WatchPartyRoomType = preview?.room.roomType
     ?? preparedRoom?.room.roomType
@@ -1253,7 +1257,9 @@ export default function WatchPartyIndexScreen() {
   const trimmedCreateTitleId = createTitleId.trim();
   const preparedTargetPartyId = String(preparedRoom?.room.partyId ?? incomingHandoff?.partyId ?? initialRoutePartyId ?? "").trim();
   const shouldGuardCreateDuringInitialPrep = !trimmedCreateTitleId && isPreparingInitialCode && !preparedTargetPartyId;
+  const isMissingWatchPartyContent = !isLiveWaitingRoom && !partyTitleLocked && !preparedTargetPartyId;
   const createActionBusy = creating || shouldGuardCreateDuringInitialPrep;
+  const createActionDisabled = createActionBusy || isMissingWatchPartyContent || !features.watchPartyEnabled;
   const topHostLabel = preparedRoom
     ? hostLabel
     : incomingHandoff
@@ -1343,7 +1349,7 @@ export default function WatchPartyIndexScreen() {
     ? "Live Watch-Party starts without a title source."
     : partyTitleId || partySourceId
       ? `${partyTitleName} is selected for Watch-Party Live.`
-      : "Open Watch-Party Live from Player, or enter the linked title id.";
+      : "Choose content first to start Watch-Party Live.";
   const hostPreflightRows = [
     {
       label: "Room type",
@@ -1463,7 +1469,7 @@ export default function WatchPartyIndexScreen() {
           <View style={styles.permissionsCard}>
             <Text style={styles.permissionsLabel}>ROOM TICKETS</Text>
             <Text style={styles.permissionsBody}>
-              Room tickets are sandbox-only until live money is approved. This ticket unlocks access to this Watch-Party room only. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.
+              Room tickets are sandbox/test only and not payable while live money is off. This ticket unlocks access to this Watch-Party room only. It does not include Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, other rooms, or Live Stage.
             </Text>
             {hostLabel === "You are hosting" ? (
               <>
@@ -1638,25 +1644,26 @@ export default function WatchPartyIndexScreen() {
                 {partyTitleName} is set. Create the room, share the code, and finish setup in Party Room.
               </Text>
             ) : (
-              <TextInput
-                value={createTitleId}
-                onChangeText={(t) => {
-                  setCreateTitleId(t.trim());
-                  setCreateError(null);
-                }}
-                placeholder="Linked title id required"
-                placeholderTextColor="#5A5A5A"
-                style={styles.input}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!creating}
-                returnKeyType="go"
-                onSubmitEditing={onCreateRoom}
-              />
+              <View style={styles.contentRequiredBox}>
+                <Text style={styles.contentRequiredTitle}>Choose content first to start Watch-Party Live.</Text>
+                <Text style={styles.contentRequiredBody}>
+                  Start from a title or creator video, then create a content-first Party Room. Room-code joins still work below.
+                </Text>
+                <TouchableOpacity
+                  style={styles.generateCodeButton}
+                  onPress={onBrowseTitles}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Browse Titles"
+                  testID="watch-party-browse-titles-button"
+                >
+                  <Text style={styles.generateCodeButtonText}>Browse Titles</Text>
+                </TouchableOpacity>
+              </View>
             )}
             {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
             <TouchableOpacity
-              style={[styles.primaryButton, createActionBusy && styles.primaryButtonDisabled]}
+              style={[styles.primaryButton, createActionDisabled && styles.primaryButtonDisabled]}
               onPressIn={() => {
                 console.log("[watch-party-proof] create room press-in", {
                   roomType: inferredWaitingRoomType,
@@ -1666,11 +1673,11 @@ export default function WatchPartyIndexScreen() {
               }}
               onPress={onCreateRoom}
               activeOpacity={0.85}
-              disabled={createActionBusy || !features.watchPartyEnabled}
+              disabled={createActionDisabled}
               testID="watch-party-create-room"
               accessibilityRole="button"
               accessibilityLabel={isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}
-              accessibilityState={{ disabled: createActionBusy || !features.watchPartyEnabled, busy: createActionBusy }}
+              accessibilityState={{ disabled: createActionDisabled, busy: createActionBusy }}
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
               {createActionBusy ? (
@@ -1681,7 +1688,9 @@ export default function WatchPartyIndexScreen() {
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.primaryButtonText}>{isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}</Text>
+                <Text style={styles.primaryButtonText}>
+                  {isMissingWatchPartyContent ? "Choose Content First" : isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -1737,7 +1746,7 @@ export default function WatchPartyIndexScreen() {
                   <View style={styles.inlineTicketGate}>
                     <Text style={styles.inlineTicketGateTitle}>Room ticket required</Text>
                     <Text style={styles.inlineTicketGateBody}>
-                      This ticket unlocks access to this Watch-Party room only. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.
+                      This sandbox ticket unlocks this Watch-Party room only. It does not include Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, other rooms, or Live Stage.
                     </Text>
                     {paidTicketNotice ? <Text style={styles.errorText}>{paidTicketNotice}</Text> : null}
                     <Pressable
@@ -2087,6 +2096,16 @@ const styles = StyleSheet.create({
   },
   joinLabel: { color: "#6C7488", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
   joinSupportText: { color: "#A7B0C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  contentRequiredBox: {
+    backgroundColor: "rgba(255,255,255,0.045)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    padding: 12,
+    gap: 10,
+  },
+  contentRequiredTitle: { color: "#F4F7FF", fontSize: 14, lineHeight: 19, fontWeight: "900" },
+  contentRequiredBody: { color: "#A7B0C3", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
   input: {
     minHeight: 48,
     backgroundColor: "rgba(255,255,255,0.06)",

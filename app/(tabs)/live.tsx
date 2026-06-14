@@ -59,10 +59,10 @@ export default function LiveTabScreen() {
       onPress: openLiveWatchParty,
     },
     {
-      title: "Watch-Party Live",
-      subtitle: "Watch content together.",
-      status: "Room code",
-      body: "Enter a room code or start from content.",
+      title: "Enter Watch-Party Code",
+      subtitle: "Room-code utility.",
+      status: "Watch-Party Live",
+      body: "Use a room code for an existing content-first Watch-Party Live room.",
       action: "Enter Code",
       icon: "confirmation-number",
       tone: "secondary",
@@ -71,11 +71,11 @@ export default function LiveTabScreen() {
       },
     },
     {
-      title: "Find Content",
-      subtitle: "Pick a title first.",
-      status: "Browse first",
-      body: "Pick something first, then watch together.",
-      action: "Browse",
+      title: "Browse Titles",
+      subtitle: "Pick content first.",
+      status: "Find Content",
+      body: "Choose a title or creator video first, then start Watch-Party Live from the player.",
+      action: "Browse Titles",
       icon: "explore",
       onPress: () => {
         router.push("/(tabs)/explore");
@@ -98,11 +98,11 @@ export default function LiveTabScreen() {
               </View>
             </View>
             <Text style={styles.title}>Live</Text>
-            <Text style={styles.heroSubtitle}>Choose how you want to go live or watch together.</Text>
+            <Text style={styles.heroSubtitle}>Start a people-first live room, enter a Watch-Party code, or browse content first.</Text>
             <View style={styles.choiceChipRow}>
-              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>People-first</Text></View>
-              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>Watch together</Text></View>
-              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>Browse first</Text></View>
+              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>People-first live</Text></View>
+              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>Room code</Text></View>
+              <View style={styles.choiceChip}><Text style={styles.choiceChipText}>Browse titles</Text></View>
             </View>
           </View>
 
@@ -154,10 +154,10 @@ export default function LiveTabScreen() {
             </Pressable>
             {detailsOpen ? (
               <View style={styles.detailList}>
-                <Text style={styles.detailText}>Live Watch-Party is for people-first live rooms.</Text>
-                <Text style={styles.detailText}>Watch-Party Live is for watching content together.</Text>
-                <Text style={styles.detailText}>Find Content lets you start from a title or creator video.</Text>
-                <Text style={styles.detailText}>Party Room stays separate after a watch party is created.</Text>
+                <Text style={styles.detailText}>Live Watch-Party is the primary people-first live-room path.</Text>
+                <Text style={styles.detailText}>Enter Watch-Party Code opens the existing room-code utility for Watch-Party Live rooms.</Text>
+                <Text style={styles.detailText}>Browse Titles starts from content before Watch-Party Live.</Text>
+                <Text style={styles.detailText}>Paid Watch-Party tickets stay in Party Waiting Room to Party Room, not Live Stage.</Text>
               </View>
             ) : null}
           </View>

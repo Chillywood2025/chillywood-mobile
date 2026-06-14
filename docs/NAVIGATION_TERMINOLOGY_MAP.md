@@ -22,7 +22,7 @@ This map records the current Chi'llywood app navigation and product language aft
 Viewer mode:
 - Home: cinematic launch/feed surface with a branded hero by default and a `Continue Watching` hero only when real progress is backed, plus Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle when backed, and Upcoming Events when backed. Home must not carry Top Picks, Browse, Favorites, or random title-detail hero jobs.
 - Explore: backed browse/discovery surface for title search, public people/Profile discovery, public Platform discovery, public discovery feed rows, public creator videos, Rachi public-safe Originals, events, replays, and honest empty states.
-- Live: bottom-nav entry point for choosing `Live Watch-Party`, joining `Watch-Party Live` by code, or browsing content before starting a content-first party.
+- Live: bottom-nav entry point for choosing `Live Watch-Party`, entering a `Watch-Party Live` room code, or browsing titles before starting a content-first party.
 - Library: current saved-title list. Broader My Stuff sections are planned only when backed.
 - top Profile/avatar entry: opens the signed-in user's social identity route from normal main tabs without duplicating Profile in the bottom nav.
 - top Settings entry: opens Settings from normal main tabs; detail, Profile, Platform, Studio, Admin, Player, and room surfaces keep route-local controls.
@@ -225,13 +225,13 @@ Implemented status:
 - The Live tab at `app/(tabs)/live.tsx` is a modern compact launcher.
 - It uses these named patterns: Hero header, Compact action cards, Action rows, Status pills, Choice chips, Progressive disclosure, Collapsible details, Empty state, Primary CTA, and Secondary CTA.
 - It renders over the Chi'llwood branded background so the Live route does not fall back to a plain black shell.
-- Main cards use one-sentence copy: `Live Watch-Party` is people-first, `Watch-Party Live` is for room codes/content watch-together, and `Find Content` starts from content discovery.
+- Main cards use one-sentence copy: `Live Watch-Party` is the primary people-first live-room path, `Enter Watch-Party Code` is the room-code utility for content-first Watch-Party Live rooms, and `Browse Titles` starts from content discovery.
 - Long technical copy such as route ownership and waiting-room internals is removed from the main cards.
 
 Route map:
 - `Open Live` keeps the existing Premium/runtime preflight, then opens `/watch-party?mode=live`.
 - `Enter Code` opens `/watch-party` for the existing Watch-Party Live waiting-room/code path.
-- `Browse` opens Explore.
+- `Browse Titles` opens Explore.
 - Party Room remains `/watch-party/[partyId]`.
 - Live Room / Live Stage remains `/watch-party/live-stage/[partyId]`.
 - Player remains `/player/[id]` and is deferred for a later scoped pass.
