@@ -378,6 +378,27 @@ export default function ChillyCircleScreen() {
     );
   };
 
+  const openPersonActions = (
+    item: ChillyCircleListItem,
+    actions: { label: string; action: CircleAction; accent?: boolean }[],
+  ) => {
+    if (!actions.length) return;
+    Alert.alert(
+      item.displayName,
+      "Manage this Chi'lly Circle connection.",
+      [
+        ...actions.map((entry) => ({
+          text: entry.label,
+          style: entry.action === "remove" || entry.action === "decline" || entry.action === "cancel" ? "destructive" as const : "default" as const,
+          onPress: () => {
+            void runAction(entry.action, item.id);
+          },
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
+  };
+
   const renderSuggestionGroup = (group: { label: string; kind: ChillyCircleSuggestion["kind"]; rows: ChillyCircleSuggestion[] }, index: number) => (
     <View key={`${group.label}-${group.kind}-${index}`} style={styles.sectionCard}>
       <Text style={styles.sectionTitle}>{group.label}</Text>
@@ -413,33 +434,39 @@ export default function ChillyCircleScreen() {
     item: ChillyCircleListItem,
     actions: { label: string; action: CircleAction; accent?: boolean }[],
     statusLabel?: string,
-  ) => (
-    <View key={item.id} style={styles.personCard}>
-      <TouchableOpacity
-        style={styles.personMain}
-        activeOpacity={0.86}
-        onPress={() => openProfile(item.id)}
-      >
-        {renderAvatar(item.avatarUrl ?? null, item.displayName)}
-        <View style={styles.personCopy}>
-          <Text style={styles.personName} numberOfLines={1}>{item.displayName}</Text>
-          <Text style={styles.personMeta} numberOfLines={1}>
-            {item.tagline || `Updated ${formatUpdatedAt(item.relationshipUpdatedAt)}`}
-          </Text>
-        </View>
-        {statusLabel ? (
-          <View style={styles.statusPill}>
-            <Text style={styles.statusPillText}>{statusLabel}</Text>
+  ) => {
+    const showInlineActions = statusLabel !== "Connected";
+    return (
+      <View key={item.id} style={[styles.personCard, !showInlineActions && styles.personCardCompact]}>
+        <TouchableOpacity
+          style={styles.personMain}
+          activeOpacity={0.86}
+          onPress={() => openProfile(item.id)}
+          onLongPress={() => openPersonActions(item, actions)}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${item.displayName}. Hold for Chi'lly Circle options.`}
+        >
+          {renderAvatar(item.avatarUrl ?? null, item.displayName)}
+          <View style={styles.personCopy}>
+            <Text style={styles.personName} numberOfLines={1}>{item.displayName}</Text>
+            <Text style={styles.personMeta} numberOfLines={1}>
+              {item.tagline || `Updated ${formatUpdatedAt(item.relationshipUpdatedAt)}`}
+            </Text>
+          </View>
+          {statusLabel ? (
+            <View style={styles.statusPill}>
+              <Text style={styles.statusPillText}>{statusLabel}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+        {actions.length && showInlineActions ? (
+          <View style={styles.personActions}>
+            {actions.map((entry) => renderActionButton(entry.label, entry.action, item, entry.accent))}
           </View>
         ) : null}
-      </TouchableOpacity>
-      {actions.length ? (
-        <View style={styles.personActions}>
-          {actions.map((entry) => renderActionButton(entry.label, entry.action, item, entry.accent))}
-        </View>
-      ) : null}
-    </View>
-  );
+      </View>
+    );
+  };
 
   const renderSection = (
     sectionKey: CircleSectionKey,
@@ -877,13 +904,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 10,
-    gap: 10,
+    padding: 9,
+    gap: 8,
+  },
+  personCardCompact: {
+    paddingVertical: 8,
   },
   personMain: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 9,
   },
   personCopy: {
     flex: 1,
@@ -891,19 +921,19 @@ const styles = StyleSheet.create({
   },
   personName: {
     color: "#F4F7FC",
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: "900",
   },
   personMeta: {
     color: "#9CA7BA",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     marginTop: 2,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(220,20,60,0.28)",
@@ -928,8 +958,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   statusPillText: {
     color: "#E8EEFB",
