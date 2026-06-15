@@ -87,11 +87,28 @@ export type PublicChannelAudienceState = {
 type ChannelFollowerRow = Tables<"channel_followers">;
 type ChannelAudienceRequestRow = Tables<"channel_audience_requests">;
 type ChannelAudienceBlockRow = Tables<"channel_audience_blocks">;
+type UserProfileRow = Tables<"user_profiles">;
 
 type ChannelFollowerInsert = TablesInsert<"channel_followers">;
 type ChannelAudienceRequestInsert = TablesInsert<"channel_audience_requests">;
 type ChannelAudienceRequestUpdate = TablesUpdate<"channel_audience_requests">;
 type ChannelAudienceBlockInsert = TablesInsert<"channel_audience_blocks">;
+
+export type ChannelAudienceMemberKind = "pending_request" | "follower" | "blocked";
+
+export type ChannelAudienceMemberSummary = {
+  id: string;
+  kind: ChannelAudienceMemberKind;
+  userId: string;
+  displayName: string;
+  username: string | null;
+  avatarUrl: string | null;
+  requestId: number | null;
+  requestKind: ChannelAudienceRequestKind | null;
+  note: string | null;
+  reason: string | null;
+  updatedAt: string | null;
+};
 
 type ChannelAudienceActorContext = {
   channelUserId: string | null;
@@ -256,6 +273,140 @@ async function readBlockRow(
 
   if (error || !data) return null;
   return data;
+}
+
+const formatAudienceMemberName = (
+  profile: Pick<UserProfileRow, "display_name" | "username"> | null | undefined,
+  fallback: string,
+) => {
+  const displayName = normalizeText(profile?.display_name);
+  if (displayName) return displayName;
+  const username = normalizeText(profile?.username);
+  if (username) return `@${username}`;
+  return fallback;
+};
+
+export async function readChannelAudienceMembers(
+  channelUserId: string,
+  limit = 50,
+): Promise<ChannelAudienceMemberSummary[]> {
+  const context = await readAudienceActorContext(channelUserId);
+  if (!context.channelUserId || (!context.isOwner && !context.canOperateAcrossChannels)) {
+    return [];
+  }
+
+  const rowLimit = Math.max(1, Math.min(limit, 100));
+  const [
+    { data: requestRows, error: requestError },
+    { data: followerRows, error: followerError },
+    { data: blockRows, error: blockError },
+  ] = await Promise.all([
+    supabase
+      .from(CHANNEL_AUDIENCE_REQUESTS_TABLE)
+      .select("*")
+      .eq("channel_user_id", context.channelUserId)
+      .eq("status", "pending")
+      .order("updated_at", { ascending: false })
+      .limit(rowLimit)
+      .returns<ChannelAudienceRequestRow[]>(),
+    supabase
+      .from(CHANNEL_FOLLOWERS_TABLE)
+      .select("*")
+      .eq("channel_user_id", context.channelUserId)
+      .order("updated_at", { ascending: false })
+      .limit(rowLimit)
+      .returns<ChannelFollowerRow[]>(),
+    supabase
+      .from(CHANNEL_AUDIENCE_BLOCKS_TABLE)
+      .select("*")
+      .eq("channel_user_id", context.channelUserId)
+      .order("updated_at", { ascending: false })
+      .limit(rowLimit)
+      .returns<ChannelAudienceBlockRow[]>(),
+  ]);
+
+  if (requestError) throw requestError;
+  if (followerError) throw followerError;
+  if (blockError) throw blockError;
+
+  const userIds = Array.from(new Set([
+    ...(requestRows ?? []).map((row) => normalizeText(row.requester_user_id)),
+    ...(followerRows ?? []).map((row) => normalizeText(row.follower_user_id)),
+    ...(blockRows ?? []).map((row) => normalizeText(row.blocked_user_id)),
+  ].filter(Boolean)));
+
+  let profilesByUserId = new Map<string, Pick<UserProfileRow, "avatar_url" | "display_name" | "username" | "user_id">>();
+  if (userIds.length) {
+    const { data: profileRows } = await supabase
+      .from("user_profiles")
+      .select("user_id,display_name,username,avatar_url")
+      .in("user_id", userIds)
+      .returns<Pick<UserProfileRow, "avatar_url" | "display_name" | "username" | "user_id">[]>();
+
+    profilesByUserId = new Map(
+      (profileRows ?? []).map((profileRow) => [profileRow.user_id, profileRow]),
+    );
+  }
+
+  const members: ChannelAudienceMemberSummary[] = [
+    ...(requestRows ?? []).map((row) => {
+      const userId = normalizeText(row.requester_user_id);
+      const profile = profilesByUserId.get(userId);
+      return {
+        id: `request-${row.id}`,
+        kind: "pending_request" as const,
+        userId,
+        displayName: formatAudienceMemberName(profile, "Audience request"),
+        username: normalizeText(profile?.username) || null,
+        avatarUrl: normalizeText(profile?.avatar_url) || null,
+        requestId: Number(row.id),
+        requestKind: normalizeRequestKind(row.request_kind),
+        note: normalizeText(row.note) || null,
+        reason: null,
+        updatedAt: normalizeText(row.updated_at || row.created_at) || null,
+      };
+    }),
+    ...(followerRows ?? []).map((row) => {
+      const userId = normalizeText(row.follower_user_id);
+      const profile = profilesByUserId.get(userId);
+      return {
+        id: `follower-${userId}`,
+        kind: "follower" as const,
+        userId,
+        displayName: formatAudienceMemberName(profile, "Follower"),
+        username: normalizeText(profile?.username) || null,
+        avatarUrl: normalizeText(profile?.avatar_url) || null,
+        requestId: null,
+        requestKind: null,
+        note: null,
+        reason: null,
+        updatedAt: normalizeText(row.updated_at || row.followed_at) || null,
+      };
+    }),
+    ...(blockRows ?? []).map((row) => {
+      const userId = normalizeText(row.blocked_user_id);
+      const profile = profilesByUserId.get(userId);
+      return {
+        id: `blocked-${userId}`,
+        kind: "blocked" as const,
+        userId,
+        displayName: formatAudienceMemberName(profile, "Blocked audience member"),
+        username: normalizeText(profile?.username) || null,
+        avatarUrl: normalizeText(profile?.avatar_url) || null,
+        requestId: null,
+        requestKind: null,
+        note: null,
+        reason: normalizeText(row.reason) || null,
+        updatedAt: normalizeText(row.updated_at || row.blocked_at) || null,
+      };
+    }),
+  ];
+
+  return members.sort((left, right) => {
+    const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+    const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+    return rightTime - leftTime;
+  });
 }
 
 export async function followChannel(channelUserId: string): Promise<ChannelAudienceActionResult> {
