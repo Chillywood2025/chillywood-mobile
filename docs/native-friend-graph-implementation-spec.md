@@ -125,13 +125,13 @@ The native lifecycle supports or should preserve:
 - `removed`
 
 Meaning:
-- `pending`: one side has requested friendship and the other side has not accepted yet
-- `active`: mutual friendship exists
+- `pending`: legacy/request-management state for previously created or imported request rows
+- `active`: a Chi'lly Circle connection exists
 - `declined`: the invite was rejected
 - `canceled`: the sender withdrew the invite before acceptance
 - `removed`: an active friendship was ended
 
-Current Chi'lly Circle behavior must preserve request, accept, decline, cancel, and remove semantics without renaming Follow or subscribers into friendship.
+Current Profile behavior treats `Add to Chi'lly Circle` as an immediate active connection. Request, accept, decline, and cancel semantics remain supported for legacy pending rows and the management screen, but new normal Profile adds should not leave the user in a pending state. Followers and subscribers must not be renamed into Chi'lly Circle connections.
 
 ## 6. Public Vs Private Visibility Doctrine
 
@@ -254,7 +254,7 @@ Not current truth:
 1. Doctrine/spec pass.
    Closed.
 2. Schema + helper foundation pass.
-   Landed April 21, 2026 through `user_friendships`, `request_friendship(...)`, `respond_to_friendship(...)`, and `_lib/friendGraph.ts`.
+   Landed April 21, 2026 through `user_friendships`, `request_friendship(...)`, `respond_to_friendship(...)`, and `_lib/friendGraph.ts`. On June 15, 2026, `request_friendship(...)` was corrected for product behavior so new Profile adds become `active` immediately while block, self, and official-account guards remain in force.
 3. Private read-model pass.
    Add self-only friend summary truth, pending request truth, and mutual-friend derivation where actually backed.
 4. Narrow profile/chat adoption pass.

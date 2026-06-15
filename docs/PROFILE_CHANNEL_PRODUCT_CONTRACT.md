@@ -105,4 +105,4 @@ Do not fake personal posts, likes, comments, shares, followers, engagement count
 
 Do not show unsupported public Follow, Message, Share, Report, upload, edit, draft, moderation, billing, or owner controls.
 
-Followers are not Chi'lly Circle connections. Chi'lly Circle connections are mutual personal connections. Chat contacts and room participants are not automatically Chi'lly Circle.
+Followers are not Chi'lly Circle connections. Chi'lly Circle connections are personal Circle connections created by the Chi'lly Circle action, and Profile `Add to Chi'lly Circle` makes the connection active immediately unless a safety/block guard prevents it. Chat contacts and room participants are not automatically Chi'lly Circle.

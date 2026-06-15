@@ -502,9 +502,6 @@ const getCommunicationAccessBody = (resolution: ChannelAccessResolution | null, 
 const CHILLY_CIRCLE_BLOCKED_COPY =
   "A Platform audience block exists between these accounts, so Chi'lly Circle requests are unavailable.";
 
-const CHILLY_CIRCLE_UNAVAILABLE_COPY =
-  "Chi'lly Circle is unavailable for this profile right now.";
-
 const getBrowseAccessValue = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
   if (isOfficialProfile || resolution?.reason === "official_access") return "Verified";
   if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
@@ -1941,6 +1938,9 @@ export default function ProfileScreen() {
               ? await cancelChillyCircleRequest(userId)
               : await removeFromChillyCircle(userId);
       setFriendState(nextState);
+      if (action === "request" && nextState.isFriend) {
+        Alert.alert("Chi'lly Circle", "Added to your Chi'lly Circle.");
+      }
     } catch (error) {
       Alert.alert("Chi'lly Circle", normalizeChillyCircleActionError(error));
     } finally {
@@ -2448,19 +2448,7 @@ export default function ProfileScreen() {
       );
     }
 
-    if (!friendState) {
-      return (
-        <TouchableOpacity
-          style={[styles.actionChip, styles.actionChipPlaceholder]}
-          activeOpacity={0.82}
-          onPress={() => Alert.alert("Chi'lly Circle unavailable", CHILLY_CIRCLE_UNAVAILABLE_COPY)}
-        >
-          <Text style={[styles.actionChipText, styles.actionChipTextPlaceholder]}>Circle unavailable</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    if (friendState.canRequest || friendState.availability === "signed_out") {
+    if (!friendState || friendState.canRequest || friendState.availability === "signed_out") {
       return (
         <TouchableOpacity
           style={[styles.actionChip, styles.actionChipConnected, actionDisabled && styles.actionChipPlaceholder]}
