@@ -1940,6 +1940,8 @@ export default function ProfileScreen() {
       setFriendState(nextState);
       if (action === "request" && nextState.isFriend) {
         Alert.alert("Chi'lly Circle", "Added to your Chi'lly Circle.");
+      } else if (action === "request" && nextState.status === "pending") {
+        Alert.alert("Chi'lly Circle", "Request sent. This profile approves Chi'lly Circle adds first.");
       }
     } catch (error) {
       Alert.alert("Chi'lly Circle", normalizeChillyCircleActionError(error));

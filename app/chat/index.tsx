@@ -31,7 +31,7 @@ type InboxErrorState = {
 
 const CHAT_SUGGESTION_MIN_LENGTH = 2;
 const CHAT_SUGGESTION_DEBOUNCE_MS = 300;
-const CHAT_THREAD_PREVIEW_LIMIT = 8;
+const CHAT_THREAD_PREVIEW_LIMIT = 4;
 
 function buildThreadMap(items: ChatThreadSummary[]) {
   const map = new Map<string, ChatThreadSummary>();
@@ -503,9 +503,35 @@ export default function ChillyChatInboxScreen() {
         ) : null}
       </View>
       {renderPeopleSuggestionRows()}
+      {filteredThreads.length ? (
+        <View style={styles.threadSectionHeader}>
+          <View>
+            <Text style={styles.threadSectionTitle}>Threads</Text>
+            <Text style={styles.threadSectionMeta}>
+              {shouldCollapseThreads && !areThreadsExpanded
+                ? `Showing ${visibleThreads.length} of ${filteredThreads.length}`
+                : `${filteredThreads.length} visible`}
+            </Text>
+          </View>
+          {shouldCollapseThreads ? (
+            <TouchableOpacity
+              testID="chat-thread-list-header-collapse-toggle"
+              activeOpacity={0.84}
+              onPress={() => setAreThreadsExpanded((next) => !next)}
+              style={styles.threadSectionToggle}
+            >
+              <Text style={styles.threadSectionToggleText}>
+                {areThreadsExpanded ? "Collapse" : "Show all"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   ), [
+    areThreadsExpanded,
     error,
+    filteredThreads.length,
     liveCallCount,
     loadThreads,
     openProfile,
@@ -517,8 +543,10 @@ export default function ChillyChatInboxScreen() {
     searchPeopleError,
     searchPeopleLoading,
     searchPeopleResults,
+    shouldCollapseThreads,
     threads.length,
     unreadThreadCount,
+    visibleThreads.length,
   ]);
 
   if (authLoading || loading) {
@@ -938,6 +966,43 @@ const styles = StyleSheet.create({
   suggestionAction: {
     color: "#EAF0FF",
     fontSize: 10.5,
+    fontWeight: "900",
+  },
+  threadSectionHeader: {
+    marginTop: 4,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  threadSectionTitle: {
+    color: "#F7FAFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  threadSectionMeta: {
+    color: "#91A0B8",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  threadSectionToggle: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  threadSectionToggleText: {
+    color: "#EAF0FF",
+    fontSize: 11,
     fontWeight: "900",
   },
   kicker: {
