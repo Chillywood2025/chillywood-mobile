@@ -826,11 +826,16 @@ export async function publishPlatformBrandProfile(
     .filter(Boolean);
 
   for (const assetId of selectedReviewAssetIds) {
-    await reviewPlatformBrandAsset(
-      assetId,
-      "approve",
-      "Approved by the creator during Brand Studio publish.",
-    );
+    try {
+      await reviewPlatformBrandAsset(
+        assetId,
+        "approve",
+        "Approved by the creator during Brand Studio publish.",
+      );
+    } catch {
+      // Keep publish moving for any other selected asset that is already eligible.
+      // Readback below decides whether the creator sees public, pending, or blocked status.
+    }
   }
 
   if (assetIds.length) {

@@ -2385,6 +2385,13 @@ export function ChannelStudioScreen() {
     return `Published, but public Platform did not return the asset. ${profileCopy} Retry after refresh.`;
   };
 
+  const getBrandPublishFailureNotice = (
+    readback: PlatformBrandPublishReadbackStatus | null | undefined,
+  ) => {
+    if (readback) return getBrandPublishNotice(readback, false);
+    return "Unable to publish Brand Studio changes right now. Reopen Brand Studio, check the selected media, and try again.";
+  };
+
   const getNormalizedProfileForSave = () => {
     if (!profile) return null;
     return normalizeUserProfile({
@@ -2467,11 +2474,16 @@ export function ChannelStudioScreen() {
     brandProfileSaveInFlightRef.current = true;
     setBrandSaving(true);
     setBrandNotice(null);
+    const ownerUserId = String(user?.id ?? "").trim();
+    const selectedAssetIds = getBrandSelectedAssetIds(getCurrentBrandDraft());
     try {
       const { readback } = await persistBrandPublish();
       setBrandNotice(getBrandPublishNotice(readback, true));
     } catch {
-      setBrandNotice("Unable to publish Brand Studio changes right now. Check the selected media and try again.");
+      const readback = ownerUserId
+        ? await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds).catch(() => null)
+        : null;
+      setBrandNotice(getBrandPublishFailureNotice(readback));
     } finally {
       brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
@@ -2515,10 +2527,15 @@ export function ChannelStudioScreen() {
     setBrandNotice(null);
     setNotice(null);
     let publishResult: { bundle: PlatformBrandingBundle | null; readback: PlatformBrandPublishReadbackStatus | null } | null = null;
+    const ownerUserId = String(user?.id ?? "").trim();
+    const selectedAssetIds = getBrandSelectedAssetIds(getCurrentBrandDraft());
     try {
       publishResult = await persistBrandPublish();
     } catch {
-      setBrandNotice("Unable to publish Brand Studio changes. Platform name and tagline were not saved from this action.");
+      const readback = ownerUserId
+        ? await resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds).catch(() => null)
+        : null;
+      setBrandNotice(getBrandPublishFailureNotice(readback));
       brandProfileSaveInFlightRef.current = false;
       setBrandSaving(false);
       setSaving(false);
