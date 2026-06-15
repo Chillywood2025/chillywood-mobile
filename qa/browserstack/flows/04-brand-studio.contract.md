@@ -50,10 +50,10 @@ Use these test IDs/accessibility labels instead of coordinate taps where the aut
 16. Confirm the public visitor view does not show unpublished draft media.
 17. Tap `Publish Changes` with `brand-publish-changes-button`.
 18. Confirm the mobile publish path uses the owner-only selected-asset publish helper or equivalent current publish path; creator-facing `Approve`, `Reject`, and `Archive` controls must remain hidden.
-19. Confirm one clear readback notice appears after publish completes. Classify it exactly as public shown, waiting on safety scan, publish/apply retry needed, not publishable yet, or public Platform readback mismatch.
+19. Confirm one clear readback notice appears after publish completes. Classify it exactly as public shown, media still getting ready, publish/apply retry needed, not publishable yet, or public Platform readback mismatch.
 20. Confirm the notice does not claim public media success unless the public Platform readback returns the selected asset.
 21. Confirm the creator Brand tab does not show `Approve`, `Reject`, `Archive`, or a creator-facing `Review & Publish` sheet.
-22. Tap `Preview Platform` again with `brand-preview-public-platform-button` and confirm the view matches the readback notice: eligible approved, scan-safe, published media appears publicly; pending or blocked media stays hidden.
+22. Tap `Preview Platform` again with `brand-preview-public-platform-button` and confirm the view matches the readback notice: eligible approved, scan-safe, published media appears publicly; pending or blocked media stays hidden. Creator-facing success copy should say the public Platform is updated and should not mention scan internals.
 23. Log in as `normal_viewer`.
 24. Open creator public Platform and confirm public brand state with no owner controls.
 25. Confirm rejected, removed, scan-blocked, deleted, and unpublished assets stay hidden if fixtures are available.

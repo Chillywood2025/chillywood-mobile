@@ -135,11 +135,14 @@ assertIncludes(channelSettings, `publishBrandStudioAndProfile`, "Brand Studio co
 assertIncludes(channelSettings, `await persistBrandDraftPatch();`, "Brand Studio draft save is awaited");
 assertIncludes(channelSettings, `await persistBrandPublish();`, "Brand Studio publish is awaited");
 assertIncludes(channelSettings, `resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds)`, "Brand Studio publish reloads public readback");
-assertIncludes(channelSettings, `Saved, but safety scan is still pending.`, "Brand Studio scan-pending publish notice");
-assertIncludes(channelSettings, `Saved, but Publish Changes could not apply this safe asset yet.`, "Brand Studio publish/apply retry notice");
+assertIncludes(channelSettings, `Brand Studio published. Your public Platform is updated.`, "Brand Studio public success notice");
+assertIncludes(channelSettings, `Saved. Your media is still getting ready.`, "Brand Studio pending media publish notice");
+assertIncludes(channelSettings, `Saved, but Publish Changes could not apply this media yet.`, "Brand Studio publish/apply retry notice");
 assertNotIncludes(channelSettings, `Saved, but review is still pending.`, "creator Brand Studio must not imply another review after Publish Changes");
-assertIncludes(channelSettings, `Saved, but this asset is not publishable yet.`, "Brand Studio non-publishable publish notice");
-assertIncludes(channelSettings, `Published, but public Platform did not return the asset.`, "Brand Studio public readback mismatch notice");
+assertNotIncludes(channelSettings, `Saved, but safety scan is still pending.`, "creator Brand Studio must not expose scan-pending internals in notices");
+assertNotIncludes(channelSettings, `scan-safe media can now appear publicly.`, "creator Brand Studio success copy must not expose scan internals");
+assertIncludes(channelSettings, `Saved, but this media cannot be published yet.`, "Brand Studio non-publishable publish notice");
+assertIncludes(channelSettings, `Published, but Preview Platform has not refreshed yet.`, "Brand Studio public readback mismatch notice");
 assertIncludes(channelSettings, `await saveCurrentProfileSettings();`, "Brand Studio profile save is awaited");
 assertIncludes(channelSettings, `brandProfileSaveInFlightRef`, "Brand Studio duplicate mutation guard");
 assertNotMatches(

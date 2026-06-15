@@ -2386,33 +2386,33 @@ export function ChannelStudioScreen() {
     readback: PlatformBrandPublishReadbackStatus | null | undefined,
     profileSaved: boolean,
   ) => {
-    const profileCopy = profileSaved ? "Platform name and tagline are current." : "Platform name or tagline still needs retry.";
+    const profileRetryCopy = profileSaved ? "" : " Name or tagline changes may need another save.";
     if (!readback) {
-      return `Brand Studio changes saved. ${profileCopy} Refresh Preview Platform to confirm public media.`;
+      return `Brand Studio changes saved.${profileRetryCopy} Refresh Preview Platform to confirm public media.`;
     }
     if (readback.selectedCount <= 0) {
-      return `Brand Studio settings published. ${profileCopy}`;
+      return `Brand Studio settings published.${profileRetryCopy}`;
     }
     if (readback.publicReturnedCount > 0) {
       const remainingCount = Math.max(0, readback.selectedCount - readback.publicReturnedCount);
       if (remainingCount > 0) {
-        return `Brand Studio published. ${profileCopy} ${readback.publicReturnedCount} media asset${readback.publicReturnedCount === 1 ? "" : "s"} can appear publicly; ${remainingCount} still waiting.`;
+        return `Brand Studio published. ${readback.publicReturnedCount} media item${readback.publicReturnedCount === 1 ? "" : "s"} live; ${remainingCount} still getting ready.${profileRetryCopy}`;
       }
-      return `Brand Studio published. ${profileCopy} Approved, scan-safe media can now appear publicly.`;
+      return `Brand Studio published. Your public Platform is updated.${profileRetryCopy}`;
     }
     if (readback.publicReadbackMissingCount > 0) {
-      return `Published, but public Platform did not return the asset. ${profileCopy} Retry after refresh.`;
+      return `Published, but Preview Platform has not refreshed yet.${profileRetryCopy} Reopen Preview Platform to check it.`;
     }
     if (readback.waitingScanCount > 0) {
-      return `Saved, but safety scan is still pending. ${profileCopy}`;
+      return `Saved. Your media is still getting ready.${profileRetryCopy} Try Publish Changes again shortly.`;
     }
     if (readback.waitingReviewCount > 0) {
-      return `Saved, but Publish Changes could not apply this safe asset yet. ${profileCopy} Retry after refresh.`;
+      return `Saved, but Publish Changes could not apply this media yet.${profileRetryCopy} Retry after refresh.`;
     }
     if (readback.blockedCount > 0 || readback.notPublishedCount > 0) {
-      return `Saved, but this asset is not publishable yet. ${profileCopy}`;
+      return `Saved, but this media cannot be published yet.${profileRetryCopy}`;
     }
-    return `Published, but public Platform did not return the asset. ${profileCopy} Retry after refresh.`;
+    return `Published, but Preview Platform has not refreshed yet.${profileRetryCopy} Reopen Preview Platform to check it.`;
   };
 
   const getBrandPublishFailureNotice = (
@@ -2487,7 +2487,7 @@ export function ChannelStudioScreen() {
     setBrandNotice(null);
     try {
       const savedProfile = await persistBrandDraftPatch(patch);
-      setBrandNotice("Draft changes saved. Public media appears only after safety clearance and Publish Changes.");
+      setBrandNotice("Draft changes saved. Publish Changes when you are ready to update your public Platform.");
       return savedProfile;
     } catch {
       setBrandNotice("Unable to save Brand Studio changes right now.");
@@ -2553,7 +2553,7 @@ export function ChannelStudioScreen() {
 
     try {
       await saveCurrentProfileSettings();
-      setBrandNotice("Draft changes saved. Platform name and tagline saved. Public media appears only after safety clearance and Publish Changes.");
+      setBrandNotice("Draft changes saved. Platform name and tagline saved. Publish Changes when you are ready to update your public Platform.");
     } catch {
       setBrandNotice("Brand Studio draft saved, but Platform name or tagline changes could not be saved. Retry Save Draft to finish profile details.");
     } finally {
@@ -6205,13 +6205,13 @@ export function ChannelStudioScreen() {
                 <Text style={styles.homeSnapshotBody}>{(platformBranding?.assets ?? []).length ? "Saved Brand Studio assets exist." : "No Brand Studio media selected."}</Text>
               </View>
               <View style={styles.homeSnapshotCard}>
-                <Text style={styles.homeSnapshotLabel}>Safety</Text>
+                <Text style={styles.homeSnapshotLabel}>Status</Text>
                 <Text style={styles.homeSnapshotBody}>
                   {platformBranding?.assets?.some((asset) => asset.scanStatus === "pending_scan" || asset.scanStatus === "scanning")
-                    ? "Safety checks are still running."
+                    ? "Media is getting ready."
                     : platformBranding?.assets?.some((asset) => asset.scanStatus === "malware_detected" || asset.scanStatus === "scan_failed" || asset.scanStatus === "quarantined")
-                      ? "One asset is blocked."
-                      : "No blocked asset detected."}
+                      ? "One media item needs changes."
+                      : "Ready."}
                 </Text>
               </View>
               <View style={styles.homeSnapshotCard}>
