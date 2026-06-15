@@ -499,6 +499,12 @@ const getCommunicationAccessBody = (resolution: ChannelAccessResolution | null, 
   return "Chi'lly Chat follow-up stays open by default";
 };
 
+const CHILLY_CIRCLE_BLOCKED_COPY =
+  "A Platform audience block exists between these accounts, so Chi'lly Circle requests are unavailable.";
+
+const CHILLY_CIRCLE_UNAVAILABLE_COPY =
+  "Chi'lly Circle is unavailable for this profile right now.";
+
 const getBrowseAccessValue = (resolution: ChannelAccessResolution | null, isOfficialProfile: boolean) => {
   if (isOfficialProfile || resolution?.reason === "official_access") return "Verified";
   if (!resolution || resolution.renderState === "loading" || resolution.reason === "missing_channel_context") {
@@ -1589,7 +1595,7 @@ export default function ProfileScreen() {
       });
       Alert.alert(
         "Chi'lly Chat",
-        "Messaging is unavailable while a block exists between these accounts.",
+        "Messaging is unavailable while a Platform audience block exists between these accounts.",
       );
       return;
     }
@@ -1905,6 +1911,7 @@ export default function ProfileScreen() {
   };
   const normalizeChillyCircleActionError = (error: unknown) => {
     const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Circle right now.");
+    if (message.toLowerCase().includes("audience block")) return CHILLY_CIRCLE_BLOCKED_COPY;
     return message
       .replace(/friendship/gi, "Chi'lly Circle")
       .replace(/friends/gi, "Chi'lly Circle")
@@ -1918,7 +1925,7 @@ export default function ProfileScreen() {
       return;
     }
     if (friendState?.availability === "blocked") {
-      Alert.alert("Chi'lly Circle", "Chi'lly Circle is unavailable while a Platform audience block exists between these accounts.");
+      Alert.alert("Chi'lly Circle unavailable", CHILLY_CIRCLE_BLOCKED_COPY);
       return;
     }
 
@@ -2429,9 +2436,31 @@ export default function ProfileScreen() {
       );
     }
 
-    if (friendState?.availability === "blocked") return null;
+    if (friendState?.availability === "blocked") {
+      return (
+        <TouchableOpacity
+          style={[styles.actionChip, styles.actionChipPlaceholder]}
+          activeOpacity={0.82}
+          onPress={() => Alert.alert("Chi'lly Circle unavailable", CHILLY_CIRCLE_BLOCKED_COPY)}
+        >
+          <Text style={[styles.actionChipText, styles.actionChipTextPlaceholder]}>Circle unavailable</Text>
+        </TouchableOpacity>
+      );
+    }
 
-    if (!friendState || friendState.canRequest || friendState.availability === "signed_out") {
+    if (!friendState) {
+      return (
+        <TouchableOpacity
+          style={[styles.actionChip, styles.actionChipPlaceholder]}
+          activeOpacity={0.82}
+          onPress={() => Alert.alert("Chi'lly Circle unavailable", CHILLY_CIRCLE_UNAVAILABLE_COPY)}
+        >
+          <Text style={[styles.actionChipText, styles.actionChipTextPlaceholder]}>Circle unavailable</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    if (friendState.canRequest || friendState.availability === "signed_out") {
       return (
         <TouchableOpacity
           style={[styles.actionChip, styles.actionChipConnected, actionDisabled && styles.actionChipPlaceholder]}
