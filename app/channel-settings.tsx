@@ -301,6 +301,22 @@ type MoneyTransactionFilter = "all" | "tips" | "videos" | "rooms" | "subscriptio
 type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scenePresets" | "preview" | "defaults";
 type ClipStudioSectionId = "media" | "cover" | "title" | "templates" | "format" | "brand" | "save" | "advanced";
 
+const LAUNCH_CRITICAL_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 } as const;
+
+const getBrandSectionTestId = (id: BrandStudioSectionId) => {
+  if (id === "hero") return "brand-hero-media-section";
+  if (id === "background") return "brand-background-section";
+  if (id === "brandKit") return "brand-avatar-logo-section";
+  return undefined;
+};
+
+const getBrandSectionAccessibilityLabel = (id: BrandStudioSectionId, title: string, summary: string) => {
+  if (id === "hero") return "Open Hero Media";
+  if (id === "background") return "Open Brand Studio Background";
+  if (id === "brandKit") return "Open Brand Studio Avatar and Logo";
+  return `${title}. ${summary}`;
+};
+
 const createPayoutSetupRedirectUrl = (status: "return" | "refresh") => (
   `chillywoodmobile://channel-studio?tab=monetization&focus=payouts&payout_setup=${status}`
 );
@@ -2377,7 +2393,7 @@ export function ChannelStudioScreen() {
       return `Saved, but safety scan is still pending. ${profileCopy}`;
     }
     if (readback.waitingReviewCount > 0) {
-      return `Saved, but review is still pending. ${profileCopy}`;
+      return `Saved, but Publish Changes could not apply this safe asset yet. ${profileCopy} Retry after refresh.`;
     }
     if (readback.blockedCount > 0 || readback.notPublishedCount > 0) {
       return `Saved, but this asset is not publishable yet. ${profileCopy}`;
@@ -4853,6 +4869,8 @@ export function ChannelStudioScreen() {
           style={[styles.studioActionButton, styles.studioActionButtonDisabled]}
           activeOpacity={0.86}
           disabled
+          testID="brand-preview-public-platform-button"
+          accessibilityLabel="Preview Public Platform"
         >
           <Text style={styles.studioActionButtonText}>Preview Platform</Text>
           <Text style={styles.studioActionButtonCopy}>Profile required to preview platform.</Text>
@@ -4870,6 +4888,8 @@ export function ChannelStudioScreen() {
             params: { userId: previewUserId, preview: "public" },
           });
         }}
+        testID="brand-preview-public-platform-button"
+        accessibilityLabel="Preview Public Platform"
       >
         <Text style={styles.studioActionButtonText}>Preview Platform</Text>
         <Text style={styles.studioActionButtonCopy}>Reviewed public view</Text>
@@ -4928,6 +4948,7 @@ export function ChannelStudioScreen() {
           style={styles.studioActionButton}
           activeOpacity={0.88}
           onPress={() => openStudioTab("brand", { focus: "studio" })}
+          accessibilityLabel="Open Brand Studio"
         >
           <Text style={styles.studioActionButtonText}>Brand Studio</Text>
           <Text style={styles.studioActionButtonCopy}>Stage Design</Text>
@@ -4951,6 +4972,8 @@ export function ChannelStudioScreen() {
             style={[styles.studioTabButton, active && styles.studioTabButtonActive]}
             activeOpacity={0.86}
             onPress={() => openStudioTab(tab.id)}
+            testID={tab.id === "brand" ? "platform-studio-tab-brand" : undefined}
+            accessibilityLabel={tab.id === "brand" ? "Open Brand Studio" : tab.label}
           >
             <Text style={[styles.studioTabButtonText, active && styles.studioTabButtonTextActive]}>
               {tab.label}
@@ -4978,6 +5001,8 @@ export function ChannelStudioScreen() {
     onPress,
     tone = "default",
     disabled = false,
+    testID,
+    accessibilityLabel,
   }: {
     title: string;
     body: string;
@@ -4985,6 +5010,8 @@ export function ChannelStudioScreen() {
     onPress: () => void;
     tone?: "default" | "muted" | "warning";
     disabled?: boolean;
+    testID?: string;
+    accessibilityLabel?: string;
   }) => (
     <TouchableOpacity
       style={[
@@ -4996,8 +5023,9 @@ export function ChannelStudioScreen() {
       activeOpacity={0.86}
       onPress={onPress}
       disabled={disabled}
+      testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={`${title}. ${body}`}
+      accessibilityLabel={accessibilityLabel ?? `${title}. ${body}`}
     >
       <View style={styles.studioActionRowCopy}>
         <Text style={styles.studioActionRowTitle}>{title}</Text>
@@ -5116,9 +5144,10 @@ export function ChannelStudioScreen() {
           style={styles.studioAccordionHeader}
           activeOpacity={0.86}
           onPress={() => setActiveBrandSheetSection(id)}
+          testID={getBrandSectionTestId(id)}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
-          accessibilityLabel={`${title}. ${summary}`}
+          accessibilityLabel={getBrandSectionAccessibilityLabel(id, title, summary)}
         >
           <View style={styles.brandAssetThumb}>
             {thumbnailAsset?.signedUrl ? (
@@ -5672,6 +5701,8 @@ export function ChannelStudioScreen() {
                 body: "Owner-only preview with saved Brand Studio media before public publish.",
                 value: "Draft",
                 tone: brandBlockedCount || brandCheckingCount ? "warning" : "default",
+                testID: "brand-preview-draft-platform-button",
+                accessibilityLabel: "Preview Brand Draft",
                 onPress: openDraftBrandPreview,
               })}
               {renderStudioActionRow({
@@ -5767,6 +5798,8 @@ export function ChannelStudioScreen() {
                     activeOpacity={0.88}
                     disabled={heroBusy || brandSaving}
                     onPress={() => pickPlatformBrandAsset("hero_image")}
+                    testID="brand-hero-choose-image-button"
+                    accessibilityLabel="Choose Brand Studio Hero Image"
                   >
                     {brandBusyAssetType === "hero_image"
                       ? <ActivityIndicator color="#fff" />
@@ -5776,6 +5809,8 @@ export function ChannelStudioScreen() {
                     style={[styles.eventSecondaryButton, styles.eventPrimaryButtonDisabled]}
                     activeOpacity={0.88}
                     disabled
+                    testID="brand-hero-reel-disabled-button"
+                    accessibilityLabel="Hero Reel Coming Later"
                     onPress={() => {
                       showStudioUnavailable(
                         "Hero Reel not available yet",
@@ -5828,6 +5863,9 @@ export function ChannelStudioScreen() {
                         activeOpacity={0.88}
                         disabled={brandSaving}
                         onPress={() => void saveBrandDraftPatch()}
+                        testID="brand-save-draft-button"
+                        accessibilityLabel="Save Brand Studio Draft"
+                        hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
                       >
                         <Text style={styles.eventPrimaryButtonText}>Save Draft</Text>
                       </TouchableOpacity>
@@ -5835,6 +5873,8 @@ export function ChannelStudioScreen() {
                         style={styles.eventSecondaryButton}
                         activeOpacity={0.88}
                         onPress={() => confirmRemoveBrandAsset("hero_image", platformBranding.heroImage)}
+                        testID="brand-hero-remove-image-button"
+                        accessibilityLabel="Remove Brand Studio Hero Image"
                       >
                         <Text style={styles.eventSecondaryButtonText}>Remove</Text>
                       </TouchableOpacity>
@@ -5861,6 +5901,8 @@ export function ChannelStudioScreen() {
                     activeOpacity={0.88}
                     disabled={backgroundBusy || brandSaving}
                     onPress={() => pickPlatformBrandAsset("background_image")}
+                    testID="brand-background-choose-image-button"
+                    accessibilityLabel="Choose Brand Studio Background Image"
                   >
                     {brandBusyAssetType === "background_image"
                       ? <ActivityIndicator color="#fff" />
@@ -5909,6 +5951,8 @@ export function ChannelStudioScreen() {
                         activeOpacity={0.88}
                         disabled={brandSaving}
                         onPress={() => void saveBrandDraftPatch()}
+                        testID="brand-background-save-draft-button"
+                        accessibilityLabel="Save Brand Studio Draft"
                       >
                         <Text style={styles.eventPrimaryButtonText}>Save Draft</Text>
                       </TouchableOpacity>
@@ -5916,6 +5960,8 @@ export function ChannelStudioScreen() {
                         style={styles.eventSecondaryButton}
                         activeOpacity={0.88}
                         onPress={() => confirmRemoveBrandAsset("background_image", platformBranding.backgroundImage)}
+                        testID="brand-background-remove-image-button"
+                        accessibilityLabel="Remove Brand Studio Background Image"
                       >
                         <Text style={styles.eventSecondaryButtonText}>Remove</Text>
                       </TouchableOpacity>
@@ -5957,6 +6003,8 @@ export function ChannelStudioScreen() {
                     activeOpacity={0.88}
                     disabled={kitBusy || brandSaving}
                     onPress={() => pickPlatformBrandAsset("avatar")}
+                    testID="brand-avatar-choose-image-button"
+                    accessibilityLabel="Choose Brand Studio Avatar Image"
                   >
                     <Text style={styles.eventPrimaryButtonText}>{platformBranding?.avatar ? "Change Avatar" : "Choose Avatar"}</Text>
                   </TouchableOpacity>
@@ -5965,6 +6013,8 @@ export function ChannelStudioScreen() {
                     activeOpacity={0.88}
                     disabled={kitBusy || brandSaving}
                     onPress={() => pickPlatformBrandAsset("logo")}
+                    testID="brand-logo-choose-image-button"
+                    accessibilityLabel="Choose Brand Studio Logo Image"
                   >
                     <Text style={styles.eventSecondaryButtonText}>{platformBranding?.logo ? "Change Logo" : "Choose Logo"}</Text>
                   </TouchableOpacity>
@@ -6155,6 +6205,9 @@ export function ChannelStudioScreen() {
             onPress={() => {
               void saveBrandStudioDraftAndProfile();
             }}
+            testID="brand-main-save-draft-button"
+            accessibilityLabel="Save Brand Studio Draft"
+            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
           >
             <Text style={styles.eventSecondaryButtonText}>Save Draft</Text>
           </TouchableOpacity>
@@ -6165,6 +6218,9 @@ export function ChannelStudioScreen() {
             }}
             activeOpacity={0.88}
             disabled={brandSaving || saving}
+            testID="brand-publish-changes-button"
+            accessibilityLabel="Publish Brand Studio Changes"
+            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
           >
             {brandSaving || saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Publish Changes</Text>}
           </TouchableOpacity>

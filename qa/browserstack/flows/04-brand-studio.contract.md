@@ -16,32 +16,48 @@ Play/internal runtime only.
 - `nonpremium_user` lacks Platform Studio access.
 - No live money or payout state is enabled.
 
+## Stable Selectors
+Use these test IDs/accessibility labels instead of coordinate taps where the automation runner supports them:
+
+| Action | Selector |
+| --- | --- |
+| Open Brand Studio tab | `platform-studio-tab-brand` |
+| Open Hero Media | `brand-hero-media-section` |
+| Choose Hero Image | `brand-hero-choose-image-button` |
+| Save Hero draft | `brand-save-draft-button` |
+| Save Brand Studio draft from sticky actions | `brand-main-save-draft-button` |
+| Publish Changes | `brand-publish-changes-button` |
+| Preview Brand Draft | `brand-preview-draft-platform-button` |
+| Preview Public Platform | `brand-preview-public-platform-button` |
+| Remove Hero Image | `brand-hero-remove-image-button` |
+
 ## Steps
 1. Log in as `nonpremium_user`.
 2. Attempt Platform Studio.
 3. Confirm clear Premium/operator gate.
 4. Log in as `premium_creator`.
 5. Open Platform Studio.
-6. Open Brand Studio.
+6. Open Brand Studio with `platform-studio-tab-brand`.
 7. Confirm existing brand state loads and Hero Reel remains unavailable in normal UI.
 8. Confirm creator Brand Studio does not label normal owned uploads as `Needs review`; draft/safe assets should guide the creator to `Ready to publish` / `Publish Changes`.
-9. Choose a supported Hero Image test asset (JPG, PNG, or WebP).
-10. Tap `Save Draft`.
-11. Confirm one clear success/error notice appears and does not claim public publish.
-12. Tap `Preview Brand Draft`.
-13. Confirm `/channel/[creator]?preview=brand-draft` shows owner-only draft Brand Studio media and hides normal owner controls.
-14. Return to Brand Studio and tap `Preview Platform`.
-15. Confirm the public visitor view does not show unpublished draft media.
-16. Tap `Publish Changes`.
-17. Confirm the mobile publish path uses the owner-only selected-asset publish helper or equivalent current publish path; creator-facing `Approve`, `Reject`, and `Archive` controls must remain hidden.
-18. Confirm one clear readback notice appears after publish completes. Classify it exactly as public shown, waiting on safety scan, waiting on review, not publishable yet, or public Platform readback mismatch.
-19. Confirm the notice does not claim public media success unless the public Platform readback returns the selected asset.
-20. Confirm the creator Brand tab does not show `Approve`, `Reject`, `Archive`, or a creator-facing `Review & Publish` sheet.
-21. Tap `Preview Platform` again and confirm the view matches the readback notice: eligible approved, scan-safe, published media appears publicly; pending or blocked media stays hidden.
-22. Log in as `normal_viewer`.
-23. Open creator public Platform and confirm public brand state with no owner controls.
-24. Confirm rejected, removed, scan-blocked, deleted, and unpublished assets stay hidden if fixtures are available.
-25. Confirm Profile photo/background remain unchanged and separate from Platform hero/background/avatar/logo.
+9. Open Hero Media with `brand-hero-media-section`.
+10. Choose a supported Hero Image test asset (JPG, PNG, or WebP) with `brand-hero-choose-image-button`.
+11. Tap `Save Draft` with `brand-save-draft-button` or the sticky `brand-main-save-draft-button`.
+12. Confirm one clear success/error notice appears and does not claim public publish.
+13. Tap `Preview Brand Draft` with `brand-preview-draft-platform-button`.
+14. Confirm `/channel/[creator]?preview=brand-draft` shows owner-only draft Brand Studio media and hides normal owner controls.
+15. Return to Brand Studio and tap `Preview Platform` with `brand-preview-public-platform-button`.
+16. Confirm the public visitor view does not show unpublished draft media.
+17. Tap `Publish Changes` with `brand-publish-changes-button`.
+18. Confirm the mobile publish path uses the owner-only selected-asset publish helper or equivalent current publish path; creator-facing `Approve`, `Reject`, and `Archive` controls must remain hidden.
+19. Confirm one clear readback notice appears after publish completes. Classify it exactly as public shown, waiting on safety scan, publish/apply retry needed, not publishable yet, or public Platform readback mismatch.
+20. Confirm the notice does not claim public media success unless the public Platform readback returns the selected asset.
+21. Confirm the creator Brand tab does not show `Approve`, `Reject`, `Archive`, or a creator-facing `Review & Publish` sheet.
+22. Tap `Preview Platform` again with `brand-preview-public-platform-button` and confirm the view matches the readback notice: eligible approved, scan-safe, published media appears publicly; pending or blocked media stays hidden.
+23. Log in as `normal_viewer`.
+24. Open creator public Platform and confirm public brand state with no owner controls.
+25. Confirm rejected, removed, scan-blocked, deleted, and unpublished assets stay hidden if fixtures are available.
+26. Confirm Profile photo/background remain unchanged and separate from Platform hero/background/avatar/logo.
 
 ## Expected Result
 Brand Studio is owner-only, Save Draft persists owner draft state without public exposure, Preview Brand Draft shows saved owner-only media, Preview Platform shows only public visitor state, Publish Changes exposes only eligible approved/scan-safe published media after public readback proves it, creator-facing review controls stay hidden, and Profile media remains separate.
