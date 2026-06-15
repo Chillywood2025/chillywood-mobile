@@ -79,7 +79,7 @@ Upload blocker root cause: Brand Studio used `expo-document-picker` and passed t
 
 Upload fix: Brand Studio now stages Android `content://` picks into cache when needed, uploads through a Supabase Storage REST binary path with the signed-in user's bearer token and anon API key, falls back to the existing SDK upload path when needed, probes a short signed read-back range after upload, then creates the draft `platform_brand_assets` row. Errors stay creator-safe and do not expose buckets, object keys, raw paths, signed URLs, or service-role details.
 
-Modern layout: the Brand tab opens as a compact asset manager overview unless a deep-link focus opens a section editor. Sections are compact glassy asset cards with thumbnails, status pills, short summaries, and one-handed action rows: Hero Media, Background, Avatar and Logo, Theme, Scene Presets, and Publishing Status. Tapping editable asset cards opens a modal bottom sheet. Publishing Status is a read-only creator status panel; it does not expose reviewer queue controls. Hero/background Fit / Fill / Center and overlay/blur controls render only inside the bottom sheet after media exists. Empty states no longer show giant blank preview editors or remove actions for missing media.
+Modern layout: the Brand tab opens as a compact asset manager overview unless a deep-link focus opens a section editor. Sections are compact glassy asset cards with thumbnails, status pills, short summaries, and one-handed action rows: Hero Media, Background, Avatar and Logo, Theme, and Publishing Status. Tapping editable asset cards opens a modal bottom sheet. Publishing Status is a read-only creator status panel; it does not expose reviewer queue controls. Hero/background Fit / Fill / Center and overlay/blur controls render only inside the bottom sheet after media exists, and the sheet preview reflects the selected framing and readability controls before save/publish. Empty states no longer show giant blank preview editors or remove actions for missing media.
 
 Review/public rules remain unchanged: uploads are draft assets with `pending_review` moderation and `pending_scan` malware status; public Platform rendering requires published state, moderation-safe status, not deleted, and scan-public-safe status through the existing public-safe database gates. Pending, rejected, removed, scan-failed, quarantined, or malware-detected assets must not render publicly.
 
@@ -91,7 +91,7 @@ Asset model mapping for the current schema:
 - `avatar` maps to Platform avatar.
 - `logo` maps to Platform logo.
 - `watermark` maps to future Brand Mark/watermark and remains unavailable for public video rendering.
-- Theme and scene presets are saved as profile presentation metadata; scene presets only apply backed theme/overlay draft metadata and do not fake a live scene renderer.
+- Theme presets are saved as profile presentation metadata. Scene preset shortcuts are hidden from the normal Brand Studio UI until a backed public scene renderer exists.
 
 Status model:
 
@@ -103,7 +103,7 @@ Brand Studio is the creator-facing Stage Design area inside Platform Studio. It 
 
 ## Implemented
 
-- Platform Studio Brand tab with compact sections for Hero Media, Background, Avatar and Logo, Theme, Scene Presets, Public Preview, and Platform Defaults.
+- Platform Studio Brand tab with compact sections for Hero Media, Background, Avatar and Logo, Theme, Public Preview, and Platform Defaults.
 - Hero image, background image, avatar, and logo draft uploads through `expo-document-picker`.
 - Fit modes: Fill, Fit, and Center.
 - Hero overlay and background blur/dim metadata.

@@ -888,6 +888,29 @@ const BRAND_BLUR_OPTIONS: readonly { label: string; value: number }[] = [
   { label: "Strong", value: 0.7 },
 ];
 
+const getBrandPreviewResizeMode = (
+  fitMode?: PlatformBrandFitMode | null,
+): "cover" | "contain" | "center" => {
+  if (fitMode === "fit") return "contain";
+  if (fitMode === "center") return "center";
+  return "cover";
+};
+
+const getBrandPreviewOverlayColor = (strength?: number | null) => {
+  const numericStrength = Number(strength);
+  const alpha = Number.isFinite(numericStrength)
+    ? Math.max(0.24, Math.min(0.82, numericStrength))
+    : 0.62;
+  return `rgba(4,7,13,${alpha})`;
+};
+
+const getBrandPreviewBlurRadius = (strength?: number | null) => {
+  const numericStrength = Number(strength);
+  if (!Number.isFinite(numericStrength) || numericStrength <= 0) return 0;
+  if (numericStrength >= 0.7) return 8;
+  return 4;
+};
+
 const createInitialBrandSections = (
   tab: unknown,
   focus: unknown,
@@ -5272,12 +5295,19 @@ export function ChannelStudioScreen() {
     title,
     asset,
     fallback,
+    fitMode,
+    overlayStrength,
+    blurStrength,
   }: {
     title: string;
     asset?: PlatformBrandAsset | null;
     fallback: string;
+    fitMode?: PlatformBrandFitMode | null;
+    overlayStrength?: number | null;
+    blurStrength?: number | null;
   }) => {
     const canShowPreview = !!asset?.signedUrl && !brandPreviewFailedAssetIds.has(asset.id);
+    const previewBlurRadius = getBrandPreviewBlurRadius(blurStrength);
     return (
       <View style={styles.brandPreviewCard}>
         {canShowPreview ? (
@@ -5285,7 +5315,8 @@ export function ChannelStudioScreen() {
             <Image
               source={{ uri: asset.signedUrl }}
               style={styles.brandPreviewImage}
-              resizeMode="cover"
+              resizeMode={getBrandPreviewResizeMode(fitMode)}
+              blurRadius={previewBlurRadius}
               onError={() => {
                 if (!asset?.id) return;
                 setBrandPreviewFailedAssetIds((current) => {
@@ -5295,6 +5326,15 @@ export function ChannelStudioScreen() {
                 });
               }}
             />
+            {overlayStrength != null ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.brandPreviewOverlay,
+                  { backgroundColor: getBrandPreviewOverlayColor(overlayStrength) },
+                ]}
+              />
+            ) : null}
             <View pointerEvents="none" style={styles.brandSafeAreaFrame} />
           </View>
         ) : null}
@@ -5855,6 +5895,8 @@ export function ChannelStudioScreen() {
                       title: "Adjust Hero Image",
                       asset: platformBranding.heroImage,
                       fallback: "HERO MEDIA",
+                      fitMode: draft?.heroFitMode,
+                      overlayStrength: draft?.overlayStrength,
                     })}
                     <Text style={styles.sectionLabel}>Fit</Text>
                     <View style={styles.chipRow}>
@@ -5943,6 +5985,8 @@ export function ChannelStudioScreen() {
                       title: "Adjust Background",
                       asset: platformBranding.backgroundImage,
                       fallback: "BACKGROUND",
+                      fitMode: draft?.backgroundFitMode,
+                      blurStrength: draft?.blurStrength,
                     })}
                     <Text style={styles.sectionLabel}>Fit</Text>
                     <View style={styles.chipRow}>
@@ -6129,49 +6173,6 @@ export function ChannelStudioScreen() {
                   ))}
                 </View>
                 <Text style={styles.permissionCopy}>{getChannelLayoutPresetBody(profile.channelLayoutPreset)}</Text>
-              </>
-            ),
-          })}
-
-          {renderBrandAccordion({
-            id: "scenePresets",
-            title: "Scene Presets",
-            summary: "Visual presets for launch, spotlight, and offline presentation.",
-            status: "Preview",
-            children: (
-              <>
-                {renderStudioActionRow({
-                  title: "Spotlight",
-                  body: "Hero-forward visual template using current Brand Studio media.",
-                  value: "Apply",
-                  onPress: () => {
-                    updateBrandDraft({ themePreset: "spotlight", heroFitMode: "fill", overlayStrength: 0.78 });
-                    setBrandNotice("Spotlight preset applied as a draft.");
-                  },
-                })}
-                {renderStudioActionRow({
-                  title: "Launch",
-                  body: "Stronger crimson accent and readable hero dim for premieres.",
-                  value: "Apply",
-                  onPress: () => {
-                    updateBrandDraft({ themePreset: "studio_red", accentColor: "#DC143C", overlayStrength: 0.78 });
-                    setBrandNotice("Launch preset applied as a draft.");
-                  },
-                })}
-                {renderStudioActionRow({
-                  title: "Starting Soon",
-                  body: "Live scene switching is not active here yet.",
-                  value: "Not available",
-                  tone: "muted",
-                  onPress: () => showStudioUnavailable("Not available yet", "Starting Soon cards need a public scene renderer before creators can publish them."),
-                })}
-                {renderStudioActionRow({
-                  title: "Offline Card",
-                  body: "Offline presentation can be previewed in a later Brand Studio lane.",
-                  value: "Not available",
-                  tone: "muted",
-                  onPress: () => showStudioUnavailable("Not available yet", "Offline Cards need a public renderer before they can launch."),
-                })}
               </>
             ),
           })}
@@ -9145,6 +9146,9 @@ const styles = StyleSheet.create({
   brandPreviewImage: {
     width: "100%",
     height: "100%",
+  },
+  brandPreviewOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   brandPreviewFallback: {
     width: "100%",
