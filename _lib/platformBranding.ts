@@ -816,25 +816,29 @@ export async function publishPlatformBrandProfile(
     selectedAssetRows = data ?? [];
   }
 
-  const selectedReviewAssetIds = selectedAssetRows
-    .filter((row) => (
-      normalizeModerationStatus(row.moderation_status) === "pending_review"
-      && PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(normalizeScanStatus(row.scan_status))
-      && !row.deleted_at
-    ))
-    .map((row) => toText(row.id))
-    .filter(Boolean);
+  const repairedByPublishRpc = await publishSelectedPlatformBrandAssets(assetIds);
 
-  for (const assetId of selectedReviewAssetIds) {
-    try {
-      await reviewPlatformBrandAsset(
-        assetId,
-        "approve",
-        "Approved by the creator during Brand Studio publish.",
-      );
-    } catch {
-      // Keep publish moving for any other selected asset that is already eligible.
-      // Readback below decides whether the creator sees public, pending, or blocked status.
+  if (!repairedByPublishRpc) {
+    const selectedReviewAssetIds = selectedAssetRows
+      .filter((row) => (
+        normalizeModerationStatus(row.moderation_status) === "pending_review"
+        && PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(normalizeScanStatus(row.scan_status))
+        && !row.deleted_at
+      ))
+      .map((row) => toText(row.id))
+      .filter(Boolean);
+
+    for (const assetId of selectedReviewAssetIds) {
+      try {
+        await reviewPlatformBrandAsset(
+          assetId,
+          "approve",
+          "Approved by the creator during Brand Studio publish.",
+        );
+      } catch {
+        // Keep publish moving for any other selected asset that is already eligible.
+        // Readback below decides whether the creator sees public, pending, or blocked status.
+      }
     }
   }
 
@@ -990,3 +994,24 @@ export async function reviewPlatformBrandAsset(
   if (error) throw error;
   return parsePlatformBrandReviewResult(data);
 }
+
+const publishSelectedPlatformBrandAssets = async (assetIds: string[]) => {
+  const selectedAssetIds = Array.from(new Set(assetIds.map(toText).filter(Boolean)));
+  if (!selectedAssetIds.length) return true;
+
+  const rpc = supabase.rpc as unknown as (
+    fn: "publish_platform_brand_profile_assets",
+    args: { p_asset_ids: string[]; p_reason: string | null },
+  ) => Promise<{ data: unknown; error: Error | null }>;
+
+  const { error } = await rpc("publish_platform_brand_profile_assets", {
+    p_asset_ids: selectedAssetIds,
+    p_reason: "Approved by the creator during Brand Studio publish.",
+  });
+
+  if (!error) return true;
+  if (error.message.includes("publish_platform_brand_profile_assets") && error.message.includes("schema cache")) {
+    return false;
+  }
+  throw error;
+};

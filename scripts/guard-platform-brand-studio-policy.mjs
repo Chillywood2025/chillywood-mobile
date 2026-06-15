@@ -28,6 +28,7 @@ const reviewMigration = read("supabase/migrations/202605240002_platform_brand_st
 const reviewQueueMigration = read("supabase/migrations/202605240004_platform_brand_studio_review_queue_access.sql");
 const reviewContextMigration = read("supabase/migrations/202605240007_platform_brand_review_rpc_trigger_context.sql");
 const ownerPublishReviewRepairMigration = read("supabase/migrations/20260603033000_platform_brand_owner_publish_review_repair.sql");
+const ownerPublishAssetsMigration = read("supabase/migrations/20260615142151_platform_brand_owner_publish_assets_rpc.sql");
 const cleanupMigration = [
   read("supabase/migrations/202605240005_platform_brand_asset_cleanup_candidates.sql"),
   read("supabase/migrations/202605240006_platform_brand_cleanup_service_role_guard.sql"),
@@ -80,7 +81,16 @@ assertIncludes(ownerPublishReviewRepairMigration, `if not (v_has_reviewer_access
 assertIncludes(ownerPublishReviewRepairMigration, `raise exception 'brand_review_forbidden'`, "wrong-account Brand Studio review denial");
 assertIncludes(ownerPublishReviewRepairMigration, `v_before."scan_status" in ('malware_detected', 'scan_failed', 'quarantined')`, "scan-blocked owner approval denial");
 assertIncludes(ownerPublishReviewRepairMigration, `'self_review', v_is_asset_owner`, "Brand Studio self-review audit marker");
+assertIncludes(ownerPublishAssetsMigration, `publish_platform_brand_profile_assets`, "owner publish selected assets RPC");
+assertIncludes(ownerPublishAssetsMigration, `asset."owner_user_id" = v_actor_user_id`, "owner publish selected assets ownership gate");
+assertIncludes(ownerPublishAssetsMigration, `asset."deleted_at" is null`, "owner publish selected assets deleted gate");
+assertIncludes(ownerPublishAssetsMigration, `v_before."scan_status" in ('clean', 'manual_review')`, "owner publish selected assets scan-safe review gate");
+assertIncludes(ownerPublishAssetsMigration, `asset."moderation_status" in ('clean', 'reported')`, "owner publish selected assets moderation-safe publish gate");
+assertIncludes(ownerPublishAssetsMigration, `asset."scan_status" in ('clean', 'manual_review')`, "owner publish selected assets scan-safe publish gate");
+assertIncludes(ownerPublishAssetsMigration, `'fake_approval', false`, "owner publish selected assets no fake approval audit marker");
+assertIncludes(ownerPublishAssetsMigration, `'self_review', true`, "owner publish selected assets self-review audit marker");
 assertIncludes(platformBranding, `Approved by the creator during Brand Studio publish.`, "creator publish approves selected owned assets");
+assertIncludes(platformBranding, `publish_platform_brand_profile_assets`, "client publish selected assets RPC");
 assertIncludes(platformBranding, `selectedReviewAssetIds`, "creator publish filters selected self-review assets");
 assertNotIncludes(platformBranding, `reviewPlatformBrandAsset(\n      assetId,\n      "approve",\n      "Approved by the creator during Brand Studio publish.",\n    ).catch`, "Brand Studio selected publish must not swallow self-review failures");
 assertIncludes(platformBranding, `resolveBrandPublishReadbackStatus`, "Brand Studio publish public readback helper");

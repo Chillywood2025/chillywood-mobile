@@ -33,14 +33,15 @@ Play/internal runtime only.
 14. Return to Brand Studio and tap `Preview Platform`.
 15. Confirm the public visitor view does not show unpublished draft media.
 16. Tap `Publish Changes`.
-17. Confirm one clear readback notice appears after publish completes. Classify it exactly as public shown, waiting on safety scan, waiting on review, not publishable yet, or public Platform readback mismatch.
-18. Confirm the notice does not claim public media success unless the public Platform readback returns the selected asset.
-19. Confirm the creator Brand tab does not show `Approve`, `Reject`, `Archive`, or a creator-facing `Review & Publish` sheet.
-20. Tap `Preview Platform` again and confirm the view matches the readback notice: eligible approved, scan-safe, published media appears publicly; pending or blocked media stays hidden.
-21. Log in as `normal_viewer`.
-22. Open creator public Platform and confirm public brand state with no owner controls.
-23. Confirm rejected, removed, scan-blocked, deleted, and unpublished assets stay hidden if fixtures are available.
-24. Confirm Profile photo/background remain unchanged and separate from Platform hero/background/avatar/logo.
+17. Confirm the mobile publish path uses the owner-only selected-asset publish helper or equivalent current publish path; creator-facing `Approve`, `Reject`, and `Archive` controls must remain hidden.
+18. Confirm one clear readback notice appears after publish completes. Classify it exactly as public shown, waiting on safety scan, waiting on review, not publishable yet, or public Platform readback mismatch.
+19. Confirm the notice does not claim public media success unless the public Platform readback returns the selected asset.
+20. Confirm the creator Brand tab does not show `Approve`, `Reject`, `Archive`, or a creator-facing `Review & Publish` sheet.
+21. Tap `Preview Platform` again and confirm the view matches the readback notice: eligible approved, scan-safe, published media appears publicly; pending or blocked media stays hidden.
+22. Log in as `normal_viewer`.
+23. Open creator public Platform and confirm public brand state with no owner controls.
+24. Confirm rejected, removed, scan-blocked, deleted, and unpublished assets stay hidden if fixtures are available.
+25. Confirm Profile photo/background remain unchanged and separate from Platform hero/background/avatar/logo.
 
 ## Expected Result
 Brand Studio is owner-only, Save Draft persists owner draft state without public exposure, Preview Brand Draft shows saved owner-only media, Preview Platform shows only public visitor state, Publish Changes exposes only eligible approved/scan-safe published media after public readback proves it, creator-facing review controls stay hidden, and Profile media remains separate.
