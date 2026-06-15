@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  ImageBackground,
   ScrollView,
   Share,
   StyleSheet,
@@ -59,8 +58,6 @@ import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfi
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
-
-const SKYLINE_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 
 type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked";
 
@@ -304,16 +301,12 @@ export default function PublicChannelScreen() {
     if (["malware_detected", "scan_failed", "quarantined"].includes(asset.scanStatus)) return null;
     return asset;
   };
-  const visibleBrandHeroImage = canShowDraftAsset(platformBranding?.heroImage);
-  const visibleBrandHeroPoster = canShowDraftAsset(platformBranding?.heroPoster);
   const visibleBrandBackground = canShowDraftAsset(platformBranding?.backgroundImage);
   const visibleBrandAvatar = canShowDraftAsset(platformBranding?.avatar);
   const visibleBrandLogo = canShowDraftAsset(platformBranding?.logo);
-  const brandHeroSource = visibleBrandHeroImage?.signedUrl || visibleBrandHeroPoster?.signedUrl || "";
   const brandBackgroundSource = visibleBrandBackground?.signedUrl || "";
   const brandAvatarSource = visibleBrandAvatar?.signedUrl || channel?.avatarUrl || "";
   const brandLogoSource = visibleBrandLogo?.signedUrl || "";
-  const heroResizeMode = resolveBrandResizeMode(platformBranding?.profile.heroFitMode);
   const backgroundResizeMode = resolveBrandResizeMode(platformBranding?.profile.backgroundFitMode);
   const heroOverlayColor = buildBrandOverlayColor(platformBranding?.profile.overlayStrength);
 
@@ -616,11 +609,7 @@ export default function PublicChannelScreen() {
 
     return (
       <View style={styles.hero}>
-        <ImageBackground
-          source={brandHeroSource ? { uri: brandHeroSource } : SKYLINE_SOURCE}
-          resizeMode={heroResizeMode}
-          style={styles.heroBackdrop}
-        >
+        <View style={styles.heroBackdrop}>
           <View style={[styles.heroOverlay, { backgroundColor: heroOverlayColor }]} />
           <View style={styles.heroContent}>
             {brandLogoSource ? (
@@ -654,7 +643,7 @@ export default function PublicChannelScreen() {
               ))}
             </View>
           </View>
-        </ImageBackground>
+        </View>
 
         <View style={styles.actionRow}>
           {canRenderFollow ? (
