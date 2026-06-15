@@ -82,7 +82,9 @@ assertIncludes(ownerPublishReviewRepairMigration, `v_before."scan_status" in ('m
 assertIncludes(ownerPublishReviewRepairMigration, `'self_review', v_is_asset_owner`, "Brand Studio self-review audit marker");
 assertIncludes(platformBranding, `Approved by the creator during Brand Studio publish.`, "creator publish approves selected owned assets");
 assertIncludes(platformBranding, `selectedReviewAssetIds`, "creator publish filters selected self-review assets");
-assertIncludes(platformBranding, `).catch(() => undefined);`, "Brand Studio publish must not fail fully when one asset cannot self-review");
+assertNotIncludes(platformBranding, `reviewPlatformBrandAsset(\n      assetId,\n      "approve",\n      "Approved by the creator during Brand Studio publish.",\n    ).catch`, "Brand Studio selected publish must not swallow self-review failures");
+assertIncludes(platformBranding, `resolveBrandPublishReadbackStatus`, "Brand Studio publish public readback helper");
+assertIncludes(platformBranding, `publicReadbackMissingCount`, "Brand Studio public readback mismatch classification");
 assertIncludes(platformBranding, `return savePlatformBrandProfileDraft(normalizedOwnerId, {\n    ...profile,\n    publishedAt,`, "Brand Studio publish marks profile published after asset repair");
 assertNotIncludes(platformBranding, `...assetIds,\n    ...((waitingAssetRows`, "Brand Studio publish self-review must not include unfiltered selected assets");
 assertIncludes(reviewQueueMigration, `public.has_platform_permission('content_moderation')`, "review queue content moderation access");
@@ -117,6 +119,11 @@ assertIncludes(channelSettings, `saveBrandStudioDraftAndProfile`, "Brand Studio 
 assertIncludes(channelSettings, `publishBrandStudioAndProfile`, "Brand Studio controlled publish/profile save handler");
 assertIncludes(channelSettings, `await persistBrandDraftPatch();`, "Brand Studio draft save is awaited");
 assertIncludes(channelSettings, `await persistBrandPublish();`, "Brand Studio publish is awaited");
+assertIncludes(channelSettings, `resolveBrandPublishReadbackStatus(ownerUserId, selectedAssetIds)`, "Brand Studio publish reloads public readback");
+assertIncludes(channelSettings, `Saved, but safety scan is still pending.`, "Brand Studio scan-pending publish notice");
+assertIncludes(channelSettings, `Saved, but review is still pending.`, "Brand Studio review-pending publish notice");
+assertIncludes(channelSettings, `Saved, but this asset is not publishable yet.`, "Brand Studio non-publishable publish notice");
+assertIncludes(channelSettings, `Published, but public Platform did not return the asset.`, "Brand Studio public readback mismatch notice");
 assertIncludes(channelSettings, `await saveCurrentProfileSettings();`, "Brand Studio profile save is awaited");
 assertIncludes(channelSettings, `brandProfileSaveInFlightRef`, "Brand Studio duplicate mutation guard");
 assertNotMatches(

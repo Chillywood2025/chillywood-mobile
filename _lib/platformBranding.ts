@@ -107,6 +107,18 @@ export type PlatformBrandingBundle = {
   watermark: PlatformBrandAsset | null;
 };
 
+export type PlatformBrandPublishReadbackStatus = {
+  selectedAssetIds: string[];
+  selectedCount: number;
+  publicReadyCount: number;
+  publicReturnedCount: number;
+  waitingScanCount: number;
+  waitingReviewCount: number;
+  blockedCount: number;
+  notPublishedCount: number;
+  publicReadbackMissingCount: number;
+};
+
 export type PlatformBrandReviewResult = {
   id: string;
   ownerUserId: string;
@@ -136,7 +148,6 @@ const PLATFORM_BRAND_PROFILE_SELECT =
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const PLATFORM_BRAND_UPLOAD_TIMEOUT_MS = 120000;
-const PLATFORM_BRAND_REVIEW_PUBLISH_BATCH_LIMIT = 50;
 const PLATFORM_BRAND_PUBLIC_SCAN_STATUSES: PlatformBrandScanStatus[] = ["clean", "manual_review"];
 
 const toText = (value: unknown) => String(value ?? "").trim();
@@ -559,6 +570,17 @@ const createBundle = (profile: PlatformBrandProfile, assets: PlatformBrandAsset[
   };
 };
 
+const getProfileSelectedAssetIds = (profile: PlatformBrandProfile | null | undefined) =>
+  Array.from(new Set([
+    profile?.heroImageAssetId,
+    profile?.heroVideoAssetId,
+    profile?.heroPosterAssetId,
+    profile?.backgroundImageAssetId,
+    profile?.avatarAssetId,
+    profile?.logoAssetId,
+    profile?.watermarkAssetId,
+  ].filter(Boolean))) as string[];
+
 export async function readPlatformBrandStudio(ownerUserId: string): Promise<PlatformBrandingBundle> {
   const normalizedOwnerId = toText(ownerUserId);
   const emptyProfile = createDefaultPlatformBrandProfile(normalizedOwnerId);
@@ -641,6 +663,82 @@ export async function readPublicPlatformBranding(ownerUserId: string): Promise<P
   return createBundle(profile, assets);
 }
 
+export async function resolveBrandPublishReadbackStatus(
+  ownerUserId: string,
+  selectedAssetIds?: string[] | null,
+): Promise<PlatformBrandPublishReadbackStatus> {
+  const normalizedOwnerId = toText(ownerUserId);
+  if (!normalizedOwnerId) {
+    return {
+      selectedAssetIds: [],
+      selectedCount: 0,
+      publicReadyCount: 0,
+      publicReturnedCount: 0,
+      waitingScanCount: 0,
+      waitingReviewCount: 0,
+      blockedCount: 0,
+      notPublishedCount: 0,
+      publicReadbackMissingCount: 0,
+    };
+  }
+
+  const [studioBundle, publicBundle] = await Promise.all([
+    readPlatformBrandStudio(normalizedOwnerId),
+    readPublicPlatformBranding(normalizedOwnerId).catch(() => null),
+  ]);
+  const selectedIds = Array.from(new Set((selectedAssetIds?.length ? selectedAssetIds : getProfileSelectedAssetIds(studioBundle.profile))
+    .map(toText)
+    .filter(Boolean)));
+  const selectedIdSet = new Set(selectedIds);
+  const selectedAssets = studioBundle.assets.filter((asset) => selectedIdSet.has(asset.id));
+  const publicAssetIds = new Set([
+    ...getProfileSelectedAssetIds(publicBundle?.profile),
+    ...(publicBundle?.assets ?? []).map((asset) => asset.id),
+  ].map(toText).filter(Boolean));
+
+  let waitingScanCount = 0;
+  let waitingReviewCount = 0;
+  let blockedCount = 0;
+  let notPublishedCount = 0;
+  let publicReadyCount = 0;
+
+  selectedAssets.forEach((asset) => {
+    const scanSafe = PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(asset.scanStatus);
+    const moderationSafe = ["clean", "reported"].includes(asset.moderationStatus);
+    const published = asset.assetState === "published";
+    if (asset.deletedAt || ["malware_detected", "scan_failed", "quarantined"].includes(asset.scanStatus) || ["rejected", "hidden", "removed"].includes(asset.moderationStatus)) {
+      blockedCount += 1;
+      return;
+    }
+    if (!scanSafe) {
+      waitingScanCount += 1;
+      return;
+    }
+    if (!moderationSafe) {
+      waitingReviewCount += 1;
+      return;
+    }
+    if (!published) {
+      notPublishedCount += 1;
+      return;
+    }
+    publicReadyCount += 1;
+  });
+
+  const publicReturnedCount = selectedIds.filter((assetId) => publicAssetIds.has(assetId)).length;
+  return {
+    selectedAssetIds: selectedIds,
+    selectedCount: selectedIds.length,
+    publicReadyCount,
+    publicReturnedCount,
+    waitingScanCount,
+    waitingReviewCount,
+    blockedCount,
+    notPublishedCount,
+    publicReadbackMissingCount: Math.max(0, publicReadyCount - publicReturnedCount),
+  };
+}
+
 const toProfileUpsert = (
   ownerUserId: string,
   patch: Partial<PlatformBrandProfile>,
@@ -705,56 +803,69 @@ export async function publishPlatformBrandProfile(
     profile.watermarkAssetId,
   ].filter(Boolean))) as string[];
 
-  let selectedReviewAssetIds: string[] = [];
+  let selectedAssetRows: Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[] = [];
   if (assetIds.length) {
-    const { data: selectedReviewAssetRows } = await supabase
+    const { data, error } = await supabase
       .from("platform_brand_assets")
-      .select("id")
+      .select("id,asset_state,moderation_status,scan_status,deleted_at")
       .eq("owner_user_id", normalizedOwnerId)
       .in("id", assetIds)
-      .eq("moderation_status", "pending_review")
       .is("deleted_at", null)
-      .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
-      .returns<Array<Pick<PlatformBrandAssetRow, "id">>>();
-    selectedReviewAssetIds = (selectedReviewAssetRows ?? []).map((row) => toText(row.id)).filter(Boolean);
+      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
+    if (error) throw error;
+    selectedAssetRows = data ?? [];
   }
 
-  const { data: waitingAssetRows } = await supabase
-    .from("platform_brand_assets")
-    .select("id")
-    .eq("owner_user_id", normalizedOwnerId)
-    .eq("moderation_status", "pending_review")
-    .is("deleted_at", null)
-    .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
-    .order("updated_at", { ascending: false })
-    .limit(PLATFORM_BRAND_REVIEW_PUBLISH_BATCH_LIMIT)
-    .returns<Array<Pick<PlatformBrandAssetRow, "id">>>();
+  const selectedReviewAssetIds = selectedAssetRows
+    .filter((row) => (
+      normalizeModerationStatus(row.moderation_status) === "pending_review"
+      && PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(normalizeScanStatus(row.scan_status))
+      && !row.deleted_at
+    ))
+    .map((row) => toText(row.id))
+    .filter(Boolean);
 
-  const reviewAssetIds = Array.from(new Set([
-    ...selectedReviewAssetIds,
-    ...((waitingAssetRows ?? []).map((row) => toText(row.id)).filter(Boolean)),
-  ]));
-
-  if (reviewAssetIds.length) {
-    for (const assetId of reviewAssetIds) {
-      await reviewPlatformBrandAsset(
-        assetId,
-        "approve",
-        "Approved by the creator during Brand Studio publish.",
-      ).catch(() => undefined);
-    }
+  for (const assetId of selectedReviewAssetIds) {
+    await reviewPlatformBrandAsset(
+      assetId,
+      "approve",
+      "Approved by the creator during Brand Studio publish.",
+    );
   }
 
   if (assetIds.length) {
-    const { error } = await supabase
+    const { data: publishedAssetRows, error } = await supabase
       .from("platform_brand_assets")
       .update({ asset_state: "published" } satisfies PlatformBrandAssetUpdate)
       .eq("owner_user_id", normalizedOwnerId)
       .in("id", assetIds)
       .in("moderation_status", ["clean", "reported"])
       .in("scan_status", PLATFORM_BRAND_PUBLIC_SCAN_STATUSES)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .select("id,asset_state,moderation_status,scan_status,deleted_at")
+      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
     if (error) throw error;
+
+    const publishedIds = new Set((publishedAssetRows ?? []).map((row) => toText(row.id)).filter(Boolean));
+    const { data: postPublishAssetRows, error: postPublishError } = await supabase
+      .from("platform_brand_assets")
+      .select("id,asset_state,moderation_status,scan_status,deleted_at")
+      .eq("owner_user_id", normalizedOwnerId)
+      .in("id", assetIds)
+      .is("deleted_at", null)
+      .returns<Pick<PlatformBrandAssetRow, "id" | "asset_state" | "moderation_status" | "scan_status" | "deleted_at">[]>();
+    if (postPublishError) throw postPublishError;
+
+    const eligibleUnpublished = (postPublishAssetRows ?? []).some((row) => (
+      !publishedIds.has(toText(row.id))
+      && normalizeAssetState(row.asset_state) !== "published"
+      && ["clean", "reported"].includes(normalizeModerationStatus(row.moderation_status))
+      && PLATFORM_BRAND_PUBLIC_SCAN_STATUSES.includes(normalizeScanStatus(row.scan_status))
+      && !row.deleted_at
+    ));
+    if (eligibleUnpublished) {
+      throw new Error("Selected Platform media could not be published yet.");
+    }
   }
 
   return savePlatformBrandProfileDraft(normalizedOwnerId, {
