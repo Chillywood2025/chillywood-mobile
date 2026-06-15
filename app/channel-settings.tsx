@@ -317,6 +317,15 @@ const getBrandSectionAccessibilityLabel = (id: BrandStudioSectionId, title: stri
   return `${title}. ${summary}`;
 };
 
+const getProfilePublishSnapshot = (profile: UserProfile | null | undefined) => {
+  const normalized = normalizeUserProfile(profile ?? {});
+  return JSON.stringify({
+    displayName: normalized.displayName ?? "",
+    tagline: normalized.tagline ?? "",
+    channelLayoutPreset: normalized.channelLayoutPreset ?? "spotlight",
+  });
+};
+
 const createPayoutSetupRedirectUrl = (status: "return" | "refresh") => (
   `chillywoodmobile://channel-studio?tab=monetization&focus=payouts&payout_setup=${status}`
 );
@@ -1127,6 +1136,7 @@ export function ChannelStudioScreen() {
   const [contentSearchQuery, setContentSearchQuery] = useState("");
   const [contentSort, setContentSort] = useState<ContentSortId>("newest");
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const savedProfilePublishSnapshotRef = useRef<string | null>(null);
   const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
   const [brandDraft, setBrandDraft] = useState<PlatformBrandProfile | null>(null);
   const [brandLoading, setBrandLoading] = useState(false);
@@ -1428,7 +1438,9 @@ export function ChannelStudioScreen() {
         resolvedPremiumEntitlement,
       ]) => {
         if (!active) return;
-        setProfile(normalizeUserProfile(resolvedProfile));
+        const normalizedProfile = normalizeUserProfile(resolvedProfile);
+        setProfile(normalizedProfile);
+        savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(normalizedProfile);
         setSettingsEnabled(resolveFeatureConfig(resolvedConfig).creatorSettingsEnabled);
         setAppDisplayName(resolveBrandingConfig(resolvedConfig).appDisplayName);
         setUploadsEnabled(resolvedConfig.runtimeControls.uploads_enabled);
@@ -1463,7 +1475,9 @@ export function ChannelStudioScreen() {
       })
       .catch(() => {
         if (!active) return;
-        setProfile(normalizeUserProfile({ username: "", avatarIndex: 0 }));
+        const fallbackProfile = normalizeUserProfile({ username: "", avatarIndex: 0 });
+        setProfile(fallbackProfile);
+        savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(fallbackProfile);
         setUploadsEnabled(DEFAULT_APP_CONFIG.runtimeControls.uploads_enabled);
         setCreatorPostingEnabled(DEFAULT_APP_CONFIG.runtimeControls.creator_posting_enabled);
         setMaxUploadSizeMb(DEFAULT_APP_CONFIG.runtimeControls.max_upload_size_mb);
@@ -2372,7 +2386,7 @@ export function ChannelStudioScreen() {
     readback: PlatformBrandPublishReadbackStatus | null | undefined,
     profileSaved: boolean,
   ) => {
-    const profileCopy = profileSaved ? "Platform name and tagline saved." : "Platform name or tagline still needs retry.";
+    const profileCopy = profileSaved ? "Platform name and tagline are current." : "Platform name or tagline still needs retry.";
     if (!readback) {
       return `Brand Studio changes saved. ${profileCopy} Refresh Preview Platform to confirm public media.`;
     }
@@ -2428,7 +2442,21 @@ export function ChannelStudioScreen() {
     if (!normalized) throw new Error("Platform profile unavailable.");
     await saveUserProfile(normalized);
     setProfile(normalized);
+    savedProfilePublishSnapshotRef.current = getProfilePublishSnapshot(normalized);
     return normalized;
+  };
+
+  const saveCurrentProfileSettingsIfNeeded = async () => {
+    const normalized = getNormalizedProfileForSave();
+    if (!normalized) throw new Error("Platform profile unavailable.");
+    const nextSnapshot = getProfilePublishSnapshot(normalized);
+    if (savedProfilePublishSnapshotRef.current === nextSnapshot) {
+      return { saved: false, profile: normalized };
+    }
+    await saveUserProfile(normalized);
+    setProfile(normalized);
+    savedProfilePublishSnapshotRef.current = nextSnapshot;
+    return { saved: true, profile: normalized };
   };
 
   const persistBrandDraftPatch = async (patch?: Partial<PlatformBrandProfile>) => {
@@ -2559,7 +2587,7 @@ export function ChannelStudioScreen() {
     }
 
     try {
-      await saveCurrentProfileSettings();
+      await saveCurrentProfileSettingsIfNeeded();
       setBrandNotice(getBrandPublishNotice(publishResult?.readback, true));
     } catch {
       setBrandNotice(getBrandPublishNotice(publishResult?.readback, false));
