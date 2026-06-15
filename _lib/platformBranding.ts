@@ -1010,7 +1010,15 @@ const publishSelectedPlatformBrandAssets = async (assetIds: string[]) => {
   });
 
   if (!error) return true;
-  if (error.message.includes("publish_platform_brand_profile_assets") && error.message.includes("schema cache")) {
+  const normalizedMessage = error.message.toLowerCase();
+  if (
+    normalizedMessage.includes("publish_platform_brand_profile_assets")
+    && (
+      normalizedMessage.includes("schema cache")
+      || normalizedMessage.includes("could not find the function")
+      || normalizedMessage.includes("pgrst202")
+    )
+  ) {
     return false;
   }
   throw error;

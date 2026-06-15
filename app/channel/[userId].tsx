@@ -301,12 +301,16 @@ export default function PublicChannelScreen() {
     if (["malware_detected", "scan_failed", "quarantined"].includes(asset.scanStatus)) return null;
     return asset;
   };
+  const visibleBrandHeroImage = canShowDraftAsset(platformBranding?.heroImage);
+  const visibleBrandHeroPoster = canShowDraftAsset(platformBranding?.heroPoster);
   const visibleBrandBackground = canShowDraftAsset(platformBranding?.backgroundImage);
   const visibleBrandAvatar = canShowDraftAsset(platformBranding?.avatar);
   const visibleBrandLogo = canShowDraftAsset(platformBranding?.logo);
+  const brandHeroSource = visibleBrandHeroImage?.signedUrl || visibleBrandHeroPoster?.signedUrl || "";
   const brandBackgroundSource = visibleBrandBackground?.signedUrl || "";
   const brandAvatarSource = visibleBrandAvatar?.signedUrl || channel?.avatarUrl || "";
   const brandLogoSource = visibleBrandLogo?.signedUrl || "";
+  const heroResizeMode = resolveBrandResizeMode(platformBranding?.profile.heroFitMode);
   const backgroundResizeMode = resolveBrandResizeMode(platformBranding?.profile.backgroundFitMode);
   const heroOverlayColor = buildBrandOverlayColor(platformBranding?.profile.overlayStrength);
 
@@ -610,6 +614,9 @@ export default function PublicChannelScreen() {
     return (
       <View style={styles.hero}>
         <View style={styles.heroBackdrop}>
+          {brandHeroSource ? (
+            <Image source={{ uri: brandHeroSource }} resizeMode={heroResizeMode} style={styles.heroImage} />
+          ) : null}
           <View style={[styles.heroOverlay, { backgroundColor: heroOverlayColor }]} />
           <View style={styles.heroContent}>
             {brandLogoSource ? (
@@ -1165,6 +1172,11 @@ const styles = StyleSheet.create({
   heroBackdrop: {
     minHeight: 352,
     justifyContent: "flex-end",
+  },
+  heroImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
