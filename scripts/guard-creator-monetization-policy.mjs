@@ -26,13 +26,19 @@ const paymentRailPolicy = read("_lib/paymentRailPolicy.ts");
 const migration = read("supabase/migrations/202605140011_creator_monetization_systems_foundation.sql");
 const creatorSetupMigration = read("supabase/migrations/20260605000610_creator_monetization_in_app_setup_flows.sql");
 const creatorSetupBoundMigration = read("supabase/migrations/20260605002000_bound_creator_monetization_setup_access.sql");
+const sandboxTesterMigration = read("supabase/migrations/20260616030632_sandbox_monetization_testers.sql");
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
 const channelSettings = read("app/channel-settings.tsx");
+const creatorTips = read("_lib/creatorTips.ts");
 const creatorSetupRoute = read("app/creator-monetization-setup.tsx");
 const revenueRoute = read("app/revenue.tsx");
 const publicChannel = read("app/channel/[userId].tsx");
 const player = read("app/player/[id].tsx");
+const watchPartyEntry = read("app/watch-party/index.tsx");
+const watchPartyRoom = read("app/watch-party/[partyId].tsx");
+const eventRoute = read("app/event/[eventId].tsx");
+const vipRoute = read("app/vip-pass/[creatorId].tsx");
 const admin = read("app/admin.tsx");
 
 [
@@ -77,6 +83,7 @@ assertIncludes(creatorMonetizationSetup, "hostApprovalBypassedBySeatPass: false"
   "cw_live_watch_party_access_sandbox_099",
   "cw_live_watch_party_seat_sandbox_099",
   "cw_creator_tip_sandbox_099",
+  "cw_vip_pass_sandbox_499",
   "cw_event_pass_sandbox_099",
   "cw_merch_test_tee_sandbox",
 ].forEach((productId) => assertIncludes(creatorMonetizationSetup, productId, `creator setup product ${productId}`));
@@ -117,6 +124,11 @@ assertIncludes(creatorSetupMigration, 'admin_list_creator_sandbox_monetization_c
 assertIncludes(creatorSetupBoundMigration, "has_active_beta_access()", "creator setup server-side beta/internal tester requirement");
 assertIncludes(creatorSetupBoundMigration, "internal_sandbox_tester_required", "creator setup server-side tester denial");
 assertIncludes(creatorSetupBoundMigration, "public.has_platform_role(array['owner'::text, 'operator'::text])", "creator setup owner/operator server-side access");
+assertIncludes(sandboxTesterMigration, 'create table if not exists public."sandbox_monetization_testers"', "sandbox tester table");
+assertIncludes(sandboxTesterMigration, "resolve_sandbox_monetization_tester", "sandbox tester resolver");
+assertIncludes(sandboxTesterMigration, "grant_sandbox_monetization_tester", "sandbox tester grant RPC");
+assertIncludes(sandboxTesterMigration, "revoke_sandbox_monetization_tester", "sandbox tester revoke RPC");
+assertIncludes(sandboxTesterMigration, "service_role", "sandbox tester service-role proof-script access");
 
 assertIncludes(monetization, "premium_subscription: {", "RevenueCat premium target");
 assertIncludes(monetization, "offeringId: \"premium\"", "RevenueCat premium offering");
@@ -126,24 +138,25 @@ assertIncludes(monetization, "isPremiumPurchaseShellAvailable", "Premium purchas
 assertIncludes(premiumEntitlements, "entitlement_key", "backed entitlement helper");
 assertIncludes(premiumEntitlements, "revoked_at", "revoked entitlement blocking");
 
-assertIncludes(channelSettings, "Tips will unlock after store products and payout rules are verified.", "tip unavailable copy");
+assertIncludes(creatorTips, "purchaseCreatorTipWithGooglePlay", "Google Play creator tip helper");
+assertIncludes(creatorTips, "creator_tip_sandbox_099", "creator tip sandbox product key");
+assertIncludes(creatorTips, "cw_creator_tip_sandbox_099", "creator tip RevenueCat product");
+assertIncludes(channelSettings, "Sandbox Tester Experience", "Money Center sandbox tester setup section");
+assertIncludes(channelSettings, "money-sandbox-setup-button", "Money Center sandbox setup selector");
+assertIncludes(channelSettings, "money-sandbox-refresh-button", "Money Center sandbox refresh selector");
+assertIncludes(channelSettings, "money-sandbox-tips-card", "Money Center sandbox tips card selector");
+assertIncludes(channelSettings, "money-sandbox-paid-video-card", "Money Center sandbox paid video card selector");
+assertIncludes(channelSettings, "money-sandbox-watch-party-ticket-card", "Money Center sandbox Watch-Party card selector");
+assertIncludes(channelSettings, "money-sandbox-event-pass-card", "Money Center sandbox event card selector");
+assertIncludes(channelSettings, "money-sandbox-channel-subscription-card", "Money Center sandbox subscription card selector");
+assertIncludes(channelSettings, "money-sandbox-vip-pass-card", "Money Center sandbox VIP card selector");
 assertIncludes(channelSettings, "Monetization", "Platform Studio Monetization tab");
-assertIncludes(channelSettings, "Paid Content", "Platform Studio paid content copy");
+assertIncludes(channelSettings, "Paid Video", "Platform Studio paid video copy");
 assertIncludes(channelSettings, "Physical merch", "Platform Studio merch copy");
-assertIncludes(channelSettings, "/creator-monetization-setup", "Platform Studio creator setup route link");
-assertIncludes(channelSettings, "Stripe is not used to charge Android users for in-app digital access.", "Android digital Stripe block copy");
-assertIncludes(creatorSetupRoute, "Creator setup / Internal sandbox", "creator setup route header");
-assertIncludes(creatorSetupRoute, "Arbitrary Android prices", "creator setup arbitrary price guard copy");
-assertIncludes(creatorSetupRoute, "Completion proof checklist", "creator setup completion matrix UI");
-assertIncludes(creatorSetupRoute, "Save each approved sandbox tier", "creator setup one-by-one proof copy");
-assertIncludes(creatorSetupRoute, "4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f", "creator setup paid content proof source");
-assertIncludes(creatorSetupRoute, "9b2f4e7d-2e8e-4d2f-93ef-40b06d317001", "creator setup ticket proof source");
-assertIncludes(creatorSetupRoute, "9b2f4e7d-2e8e-4d2f-93ef-40b06d317002", "creator setup live access proof source");
-assertIncludes(creatorSetupRoute, "9b2f4e7d-2e8e-4d2f-93ef-40b06d317003", "creator setup live seat proof source");
-assertIncludes(creatorSetupRoute, "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004", "creator setup event pass proof source");
-assertIncludes(creatorSetupRoute, "4121ff8c-b97f-4f90-860e-8b32fa83e7e5", "creator setup merch proof source");
-assertIncludes(creatorSetupRoute, "Payout readiness", "creator setup payout readiness section");
-assertIncludes(creatorSetupRoute, "Payout execution", "creator setup payout execution blocked copy");
+assertIncludes(channelSettings, "Stripe is reserved for physical merch", "Android digital Stripe block copy");
+assertIncludes(creatorSetupRoute, "/channel-studio?tab=monetization&focus=offers", "legacy creator setup redirects to Money Center");
+assertIncludes(channelSettings, "Set up sandbox offers", "Money Center creator setup action");
+assertIncludes(channelSettings, "Google Play / RevenueCat sandbox", "Money Center Android digital rail copy");
 assertIncludes(channelSettings, "tab=monetization&focus=payouts", "old payout deep link maps to Monetization");
 assertIncludes(revenueRoute, "focus=balance", "old revenue route maps to creator balance");
 assertNotIncludes(channelSettings, "{ id: \"payouts\", label: \"Payouts\" }", "separate Payouts tab");
@@ -152,8 +165,16 @@ assertNotIncludes(channelSettings, "{ id: \"monetize\", label: \"Monetize\" }", 
 assertIncludes(channelSettings, "Run your platform from one place", "Platform Studio platform copy");
 assertIncludes(publicChannel, "Platform Store", "public platform store state");
 assertIncludes(publicChannel, "Checkout pending", "public platform checkout disabled copy");
+assertIncludes(publicChannel, "tester-channel-subscribe-button", "tester subscription CTA selector");
+assertIncludes(publicChannel, "tester-vip-pass-button", "tester VIP CTA selector");
 assertIncludes(player, "creatorVideoPaidContentLocked", "Player paid creator-content lock");
-assertIncludes(player, "Buying creator-paid content does not require Premium", "Player paid-content doctrine copy");
+assertIncludes(player, "It does not include Premium", "Player paid-content doctrine copy");
+assertIncludes(player, "tester-paid-video-unlock-button", "tester paid video selector");
+assertIncludes(read("components/monetization/tip-sheet.tsx"), "tester-tip-creator-button", "tester tip selector");
+assertIncludes(watchPartyEntry, "tester-watch-party-ticket-button", "tester Watch-Party entry ticket selector");
+assertIncludes(watchPartyRoom, "tester-watch-party-ticket-button", "tester Watch-Party room ticket selector");
+assertIncludes(eventRoute, "tester-event-pass-button", "tester event pass selector");
+assertIncludes(vipRoute, "tester-vip-pass-button", "tester VIP route selector");
 assertIncludes(admin, "No checkout success, payout release, fake purchase, fake order, fake tip, or live money action", "Admin money safety copy");
 assertIncludes(admin, "1.5% with no default cap", "Admin cash-out fee copy");
 

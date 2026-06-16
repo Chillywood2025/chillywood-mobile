@@ -53,6 +53,7 @@ import {
   type PlatformBrandFitMode,
   type PlatformBrandingBundle,
 } from "../../_lib/platformBranding";
+import { resolveSandboxMonetizationTester } from "../../_lib/sandboxMonetizationTesters";
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -157,6 +158,7 @@ export default function PublicChannelScreen() {
   const [events, setEvents] = useState<CreatorEventSummary[]>([]);
   const [commerceSurface, setCommerceSurface] = useState<CreatorMiniPlatformCommerceSurface | null>(null);
   const [tipStatus, setTipStatus] = useState<CreatorTipPublicStatus | null>(null);
+  const [sandboxTesterActive, setSandboxTesterActive] = useState(false);
   const [tipSheetVisible, setTipSheetVisible] = useState(false);
   const [subscriptionAccess, setSubscriptionAccess] = useState<ChannelSubscriptionAccess | null>(null);
   const [subscriptionBusy, setSubscriptionBusy] = useState(false);
@@ -184,6 +186,7 @@ export default function PublicChannelScreen() {
       setEvents([]);
       setCommerceSurface(null);
       setTipStatus(null);
+      setSandboxTesterActive(false);
       setSubscriptionAccess(null);
       setSubscriptionNotice(null);
       setVipAccess(null);
@@ -227,13 +230,14 @@ export default function PublicChannelScreen() {
       const brandPromise = showDraftBranding
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
-      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextPlatformBranding] = await Promise.all([
+      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
         readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
         resolveChannelSubscriptionAccess(routeUserId).catch(() => null),
         resolveCreatorVipPassAccess(routeUserId).catch(() => null),
+        resolveSandboxMonetizationTester(viewerUserId, String(user?.email ?? "")).catch(() => false),
         brandPromise,
       ]);
 
@@ -243,6 +247,7 @@ export default function PublicChannelScreen() {
       setEvents(publicEvents.filter((event) => event.isLiveNow || event.isUpcoming));
       setCommerceSurface(nextCommerceSurface);
       setTipStatus(nextTipStatus);
+      setSandboxTesterActive(nextSandboxTesterActive === true);
       setSubscriptionAccess(nextSubscriptionAccess);
       setVipAccess(nextVipAccess);
       setPlatformBranding(nextPlatformBranding);
@@ -254,7 +259,7 @@ export default function PublicChannelScreen() {
     return () => {
       active = false;
     };
-  }, [routeUserId, sessionLoading, showDraftBranding]);
+  }, [routeUserId, sessionLoading, showDraftBranding, user?.email, viewerUserId]);
 
   const spotlightVideoId = platformBranding?.profile.spotlightVideoId ?? null;
   const featuredVideo = useMemo(() => (
@@ -603,8 +608,8 @@ export default function PublicChannelScreen() {
     if (!channel) return null;
     const followLabel = viewerFollowState === "following" ? "Following" : "Follow";
     const canRenderFollow = !isOwner && viewerFollowState !== "unavailable";
-    const canRenderTip = !isOwner && tipStatus?.canTip === true;
-    const canRenderSubscribe = !isOwner && !!subscriptionAccess?.offer && (subscriptionAccess.requiresPurchase || subscriptionAccess.allowed);
+    const canRenderTip = !isOwner && (tipStatus?.canTip === true || sandboxTesterActive);
+    const canRenderSubscribe = !isOwner && sandboxTesterActive && !!subscriptionAccess?.offer && (subscriptionAccess.requiresPurchase || subscriptionAccess.allowed);
     const subscribeLabel = subscriptionAccess?.allowed
       ? "Subscribed"
       : subscriptionBusy
@@ -664,7 +669,7 @@ export default function PublicChannelScreen() {
           ) : null}
           {canRenderTip ? (
             <AppActionButton
-              label="Tip"
+              label={sandboxTesterActive ? "Sandbox Tip" : "Tip"}
               onPress={() => setTipSheetVisible(true)}
               style={styles.actionButtonWide}
               variant="success"
@@ -923,7 +928,7 @@ export default function PublicChannelScreen() {
 
   const renderChannelSubscription = () => {
     const offer = subscriptionAccess?.offer ?? null;
-    if (!offer) return null;
+    if (!offer || (!sandboxTesterActive && !isOwner)) return null;
     const subscribed = subscriptionAccess?.allowed === true;
     const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
     const unavailableCopy = "Channel Subscription is not available for this creator in sandbox right now. Premium, VIP, paid videos, paid rooms, and paid events stay separate.";
@@ -937,7 +942,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator membership</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
 	          <Text style={styles.cardBody}>
-	            {`Subscribe to this creator's channel for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.`}
+	            {`Sandbox Test: subscribe to this creator's channel for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. No live payout. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.`}
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -946,6 +951,8 @@ export default function PublicChannelScreen() {
             activeOpacity={0.86}
             disabled={subscriptionBusy || unavailable}
             onPress={subscribed ? openSubscriberArea : handleSubscribe}
+            testID="tester-channel-subscribe-button"
+            accessibilityLabel="Sandbox Test Subscribe to Creator Channel"
           >
             {subscriptionBusy ? (
               <ActivityIndicator color="#fff" />
@@ -960,7 +967,7 @@ export default function PublicChannelScreen() {
 
   const renderVipPass = () => {
     const offer = vipAccess?.offer ?? null;
-    if (!offer) return null;
+    if (!offer || (!sandboxTesterActive && !isOwner)) return null;
     const isVip = vipAccess?.allowed === true;
     const unavailable = !isVip && !vipAccess?.requiresPurchase;
     const unavailableCopy = "VIP is not available for this creator in sandbox right now. Premium, channel subscriptions, paid videos, paid rooms, and paid events stay separate.";
@@ -974,7 +981,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator-specific VIP</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
           <Text style={styles.cardBody}>
-            {`Get VIP for this creator's channel for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.`}
+            {`Sandbox Test: get VIP for this creator's channel for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.`}
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -983,6 +990,8 @@ export default function PublicChannelScreen() {
             activeOpacity={0.86}
             disabled={vipBusy || unavailable}
             onPress={isVip ? openVipArea : handleGetVip}
+            testID="tester-vip-pass-button"
+            accessibilityLabel="Sandbox Test Get Creator VIP"
           >
             {vipBusy ? (
               <ActivityIndicator color="#fff" />
@@ -1083,6 +1092,7 @@ export default function PublicChannelScreen() {
           creatorAvatarUrl={brandAvatarSource}
           sourceSurface="creator_channel_header"
           tipStatus={tipStatus}
+          sandboxTester={sandboxTesterActive}
           onClose={() => setTipSheetVisible(false)}
         />
       ) : null}

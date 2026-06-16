@@ -885,3 +885,10 @@ Device proof on `R5CR120QCBF` used the Play-installed app (`installerPackageName
 ## Shared Player Fullscreen Rails Exact Component Fix
 
 June 6, 2026 Shared Player fullscreen rails follow-up corrects the final right-rail participant bubble mismatch. The right rail now reuses the same portrait shared-player `renderWatchPartyBubbleGridSurface` / `LiveKitStageMediaSurface` path so LiveKit camera/avatar bubbles match portrait instead of falling back through the non-LiveKit participant panel. The fullscreen left rail remains the existing room comments renderer with compact rail-specific presentation, and the center video/player sizing and playback path are unchanged. Fullscreen right rail does not show `Shared Player` or `Shared playback stays here if the room drops back from live camera.` Proof target: `/tmp/chillywood-shared-player-fullscreen-bubble-reuse-proof-20260605/`.
+# Current State
+
+## Sandbox Monetization Tester Access
+
+June 16, 2026 repo-side work adds a dedicated sandbox monetization tester access lane. Owner Money Center now has `Sandbox Tester Experience` with setup/refresh actions and six test-only/not-payable offer cards: Tips, Paid Video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass. Tester access is separate from owner/operator roles through `sandbox_monetization_testers` plus grant/revoke proof scripts. Creator tips use Google Play / RevenueCat sandbox only; physical merchandise stays on Stripe sandbox. Live money, payouts, cash-out, withdrawal, transfer, and payable creator balances remain off.
+
+Remaining proof: apply the tester-access migration in production if it is not already applied, grant a real fan/tester account, run the Play-installed Android tester flow, and verify each available sandbox CTA plus Owner Money Center readback before claiming tester monetization ready.

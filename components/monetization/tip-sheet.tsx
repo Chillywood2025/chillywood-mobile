@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   Modal,
   Pressable,
   StyleSheet,
@@ -15,7 +14,7 @@ import {
 
 import { trackEvent } from "../../_lib/analytics";
 import {
-  createCreatorTipCheckout,
+  purchaseCreatorTipWithGooglePlay,
   type CreatorTipPublicStatus,
 } from "../../_lib/creatorTips";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
@@ -28,6 +27,7 @@ type TipSheetProps = {
   creatorAvatarUrl?: string | null;
   sourceSurface: string;
   tipStatus: CreatorTipPublicStatus | null;
+  sandboxTester?: boolean;
   onClose: () => void;
 };
 
@@ -40,6 +40,7 @@ export function TipSheet({
   creatorAvatarUrl,
   sourceSurface,
   tipStatus,
+  sandboxTester = false,
   onClose,
 }: TipSheetProps) {
   const { user } = useSession();
@@ -75,7 +76,8 @@ export function TipSheet({
   const minAmount = tipStatus?.minAmountCents ?? 100;
   const maxAmount = tipStatus?.maxAmountCents ?? 50000;
   const amountValid = Number.isInteger(amountCents) && amountCents >= minAmount && amountCents <= maxAmount;
-  const canSubmit = !!tipStatus?.canTip && !!user?.id && amountValid && !busy;
+  const canTipInSandbox = sandboxTester || tipStatus?.canTip === true;
+  const canSubmit = canTipInSandbox && !!user?.id && amountValid && !busy;
 
   const startCheckout = async () => {
     if (!user?.id) {
@@ -83,7 +85,7 @@ export function TipSheet({
       return;
     }
 
-    if (!tipStatus?.canTip) {
+    if (!canTipInSandbox) {
       setNotice("Tips are unavailable for this creator right now.");
       return;
     }
@@ -105,30 +107,23 @@ export function TipSheet({
     });
 
     try {
-      const result = await createCreatorTipCheckout({
+      const result = await purchaseCreatorTipWithGooglePlay({
         amountCents,
-        cancelUrl: "chillywoodmobile://tip-status",
         creatorId,
-        currency: tipStatus.currency,
+        currency: tipStatus?.currency ?? "usd",
         privateNote: privateNote.trim() ? privateNote.trim() : null,
-        returnUrl: "chillywoodmobile://tip-status",
+        sourceSurface,
+        userId: String(user.id),
       });
 
-      if (!result.checkoutCreated || !result.url) {
-        setNotice(result.message || "Tip checkout is unavailable right now.");
+      if (!result.ok) {
+        setNotice(result.message || "Sandbox tip is unavailable right now.");
         return;
       }
 
-      const canOpen = await Linking.canOpenURL(result.url).catch(() => true);
-      if (!canOpen) {
-        setNotice("Tip checkout could not be opened on this device.");
-        return;
-      }
-
-      await Linking.openURL(result.url);
-      onClose();
+      setNotice(result.message);
     } catch {
-      setNotice("Tip checkout could not be started. Try again later.");
+      setNotice("Google Play sandbox tip could not be started. Try again later.");
     } finally {
       setBusy(false);
     }
@@ -151,11 +146,11 @@ export function TipSheet({
             <View style={styles.creatorCopy}>
               <Text style={styles.kicker}>CREATOR TIP</Text>
               <Text style={styles.title}>Tip {creatorName || "creator"}</Text>
-              <Text style={styles.body}>Tips support the creator and do not unlock content, badges, room access, VIP, or perks.</Text>
+              <Text style={styles.body}>Tips use Google Play sandbox on Android and do not unlock content, badges, room access, VIP, or perks.</Text>
             </View>
           </View>
 
-          {tipStatus?.testMode ? <Text style={styles.testMode}>Test mode</Text> : null}
+          {tipStatus?.testMode || sandboxTester ? <Text style={styles.testMode}>Sandbox Test · Google Play · No live payout</Text> : null}
 
           <View style={styles.amountGrid}>
             {amounts.map((amount) => (
@@ -193,7 +188,7 @@ export function TipSheet({
           />
 
           <Text style={styles.policyCopy}>
-            Tips are contributions only. They do not unlock videos, events, rooms, VIP, subscriptions, badges, or public rewards.
+            Tips are contributions only. They do not unlock videos, events, rooms, VIP, subscriptions, badges, or public rewards. Merchandise uses Stripe separately.
           </Text>
 
           {notice ? <Text style={styles.notice}>{notice}</Text> : null}
@@ -203,14 +198,17 @@ export function TipSheet({
             disabled={!canSubmit}
             style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}
             onPress={startCheckout}
+            testID="tester-tip-creator-button"
+            accessibilityRole="button"
+            accessibilityLabel="Sandbox Test Tip Creator"
           >
             {busy ? (
               <View style={styles.busyRow}>
                 <ActivityIndicator color="#fff" />
-                <Text style={styles.primaryButtonText}>Opening checkout</Text>
+                <Text style={styles.primaryButtonText}>Opening Google Play</Text>
               </View>
             ) : (
-              <Text style={styles.primaryButtonText}>Continue to tip</Text>
+              <Text style={styles.primaryButtonText}>{tipStatus?.testMode || sandboxTester ? "Sandbox Test Tip" : "Continue to tip"}</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity disabled={busy} style={styles.secondaryButton} onPress={onClose}>

@@ -2602,12 +2602,12 @@ export default function WatchPartyRoomScreen() {
               onPress={onBuyPaidTicketFromRoomGate}
               activeOpacity={0.85}
               disabled={paidTicketBusy}
-              testID="buy-room-ticket-button"
+              testID="tester-watch-party-ticket-button"
               accessibilityRole="button"
-              accessibilityLabel="Buy Room Ticket"
+              accessibilityLabel="Sandbox Test Buy Watch-Party Ticket"
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                {paidTicketBusy ? "Opening Checkout" : "Buy Room Ticket"}
+                {paidTicketBusy ? "Opening Google Play" : "Sandbox Test Ticket"}
               </Text>
             </TouchableOpacity>
           ) : null}

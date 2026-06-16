@@ -136,7 +136,7 @@ export default function PaidCreatorEventRoute() {
               {offer ? (
                 <>
                   <Text style={styles.detail}>Price: {formatPaidCreatorEventPrice(offer.priceCents, offer.currency)}</Text>
-                  <Text style={styles.detail}>Sandbox: {offer.providerProductId || "event pass product"}</Text>
+                  <Text style={styles.detail}>Sandbox Test · Google Play · No live payout</Text>
                   <Text style={styles.detail}>
                     Passes: {offer.passesSold}{offer.capacityLimit ? ` / ${offer.capacityLimit}` : ""}
                   </Text>
@@ -158,8 +158,8 @@ export default function PaidCreatorEventRoute() {
                 <Text style={styles.body}>{LOCKED_COPY}</Text>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Buy Event Pass"
-                  testID="buy-event-pass-button"
+                  accessibilityLabel="Sandbox Test Buy Event Pass"
+                  testID="tester-event-pass-button"
                   onPress={onBuyEventPass}
                   style={[styles.primaryButton, purchaseLoading && styles.buttonDisabled]}
                   disabled={purchaseLoading || soldOut}
@@ -167,7 +167,7 @@ export default function PaidCreatorEventRoute() {
                   {purchaseLoading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : "Buy Event Pass"}</Text>
+                    <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : "Sandbox Test Event Pass"}</Text>
                   )}
                 </Pressable>
               </View>

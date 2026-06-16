@@ -31,6 +31,7 @@ Creators cannot type arbitrary Android digital prices. They choose approved mapp
 | Live Watch-Party access pass | `live_watch_party_access_pass_sandbox_099` | `cw_live_watch_party_access_sandbox_099` | Google Play / RevenueCat | `$0.99 sandbox/test` |
 | Live Watch-Party seat pass | `live_watch_party_seat_pass_sandbox_099` | `cw_live_watch_party_seat_sandbox_099` | Google Play / RevenueCat | `$0.99 sandbox/test` |
 | Creator tip | `creator_tip_sandbox_099` | `cw_creator_tip_sandbox_099` | Google Play / RevenueCat | `$0.99 sandbox/test` |
+| VIP pass | `vip_pass_sandbox_499` | `cw_vip_pass_sandbox_499` | Google Play / RevenueCat | `$4.99 sandbox/test` |
 | Event pass | `event_pass_sandbox_099` | `cw_event_pass_sandbox_099` | Google Play / RevenueCat | `$0.99 sandbox/test` |
 | Physical merch | `cw_merch_test_tee_sandbox` | `cw_merch_test_tee_sandbox` | Stripe sandbox physical goods | `$9.99 sandbox/test` |
 
@@ -66,6 +67,7 @@ Owner/Admin inspection:
 - Cash-out, withdrawal, and transfer remain absent.
 - Sandbox/setup rows remain not payable.
 - Stripe is not used for Android digital goods.
+- Creator tips use Google Play / RevenueCat on Android. Stripe is only for physical merchandise.
 - Physical merch creates no digital access, RevenueCat entitlement, or Premium entitlement.
 - Payout readiness cannot request, trigger, simulate, cash out, withdraw, transfer, or activate payouts.
 - Payment does not grant LiveKit publish, host, speaker, mod/admin, payout, or safety-bypass authority.

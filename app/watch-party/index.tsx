@@ -1503,12 +1503,12 @@ export default function WatchPartyIndexScreen() {
                 onPress={onBuyPaidTicketAndJoin}
                 activeOpacity={0.85}
                 disabled={paidTicketBusy}
-                testID="buy-room-ticket-button"
+                testID="tester-watch-party-ticket-button"
                 accessibilityRole="button"
-                accessibilityLabel="Buy Room Ticket"
+                accessibilityLabel="Sandbox Test Buy Watch-Party Ticket"
               >
                 <Text style={styles.generateCodeButtonText}>
-                  {paidTicketBusy ? "Opening Checkout" : "Buy Room Ticket"}
+                  {paidTicketBusy ? "Opening Google Play" : "Sandbox Test Ticket"}
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -1760,13 +1760,13 @@ export default function WatchPartyIndexScreen() {
                       onPress={onBuyPaidTicketAndJoin}
                       disabled={paidTicketBusy}
                       accessibilityRole="button"
-                      accessibilityLabel="Buy Room Ticket"
+                      accessibilityLabel="Sandbox Test Buy Watch-Party Ticket"
                       accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
-                      testID="buy-room-ticket-preview-button"
+                      testID="tester-watch-party-ticket-button"
                     >
                       <Text style={styles.joinNowBtnText}>
-                        {paidTicketBusy ? "Opening Checkout" : `Buy Room Ticket ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`}
+                        {paidTicketBusy ? "Opening Google Play" : `Sandbox Test Ticket ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`}
                       </Text>
                     </Pressable>
                   </View>

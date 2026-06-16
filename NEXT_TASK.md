@@ -1152,3 +1152,16 @@ Remaining proof-only follow-ups:
 ## Signup Follow-Up
 
 Signup is no longer blocked on the Play-installed Android build. Commit `ea4b545` imports `react-native-get-random-values` before Supabase auth initialization, and EAS production update group `4679bd00-d966-4950-b7eb-570e120b3e4d` proved a fresh Android signup on `R5CR120QCBF` with success copy. Keep using fresh emails for signup smoke because proof emails created during debugging now exist in Supabase auth. The remaining signup follow-up is operational: confirm real user confirmation-email delivery with the configured SMTP/provider and keep reset-email rate limits managed through Supabase Auth email settings, not app UI changes.
+# Next Task
+
+## Prove Sandbox Monetization Tester Experience
+
+1. Apply/verify migration `20260616030632_sandbox_monetization_testers.sql` in production Supabase.
+2. Grant a non-owner tester account with `scripts/grant-sandbox-money-tester.mjs`.
+3. Owner `rob2008gn@gmail.com` opens Money Center and runs `Set up sandbox offers`.
+4. Tester opens the creator Platform and confirms sandbox-only CTAs for Tips, Paid Video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP where configured.
+5. Complete available Google Play / RevenueCat sandbox purchases and confirm no live payout/payable balance.
+6. Refresh Owner Money Center and capture sandbox/not-payable readback.
+7. Revoke tester access and confirm the tester no longer sees sandbox-only offers.
+
+Do not mark tester monetization ready until a Play-installed tester account completes the real visible flows.

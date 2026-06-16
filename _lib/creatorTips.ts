@@ -1,4 +1,9 @@
 import { supabase } from "./supabase";
+import {
+  purchaseRevenueCatStoreProduct,
+  readRevenueCatNonSubscriptionProducts,
+  syncRevenueCatCustomerIdentity,
+} from "./revenuecat";
 
 export type CreatorTipStatus = "setup_incomplete" | "active" | "paused" | "blocked";
 
@@ -74,6 +79,16 @@ export type CreatorTipCheckoutResult = {
   message?: string;
   error?: string;
 };
+
+export type CreatorTipGooglePlayPurchaseResult = {
+  ok: boolean;
+  intentId: string | null;
+  productId: string;
+  message: string;
+};
+
+const CREATOR_TIP_SANDBOX_PRODUCT_KEY = "creator_tip_sandbox_099";
+const CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID = "cw_creator_tip_sandbox_099";
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -248,5 +263,71 @@ export async function createCreatorTipCheckout(input: {
     url: toText(row.url) || null,
     message: toText(row.message) || undefined,
     error: toText(row.error) || undefined,
+  };
+}
+
+export async function purchaseCreatorTipWithGooglePlay(input: {
+  creatorId: string;
+  userId: string;
+  amountCents: number;
+  currency?: string;
+  privateNote?: string | null;
+  sourceSurface?: string;
+}): Promise<CreatorTipGooglePlayPurchaseResult> {
+  const creatorId = toText(input.creatorId);
+  const userId = toText(input.userId);
+  if (!creatorId || !userId) {
+    return {
+      ok: false,
+      intentId: null,
+      productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+      message: "Sign in again before sending a sandbox tip.",
+    };
+  }
+
+  await syncRevenueCatCustomerIdentity(userId);
+
+  const { data: intent, error } = await creatorTipsClient.rpc<{ id?: unknown }>("create_money_purchase_intent", {
+    p_metadata: {
+      amount_minor: String(Math.max(0, Math.trunc(input.amountCents))),
+      creator_id: creatorId,
+      currency: toText(input.currency) || "usd",
+      no_access_grant: true,
+      no_live_payout: true,
+      not_payable: true,
+      private_note_present: !!toText(input.privateNote),
+      sandbox_only: true,
+      source_surface: toText(input.sourceSurface) || "creator_tip_sheet",
+    },
+    p_product_key: CREATOR_TIP_SANDBOX_PRODUCT_KEY,
+    p_source_id: creatorId,
+    p_source_type: "creator_tip",
+  });
+  if (error) {
+    return {
+      ok: false,
+      intentId: null,
+      productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+      message: "Sandbox tip could not be started right now.",
+    };
+  }
+
+  const products = await readRevenueCatNonSubscriptionProducts([CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID]);
+  const storeProduct = products.find((entry) => toText(entry.identifier) === CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID);
+  if (!storeProduct) {
+    return {
+      ok: false,
+      intentId: toText(intent?.id) || null,
+      productId: CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+      message: "Google Play sandbox tip product is not available on this device yet.",
+    };
+  }
+
+  const purchase = await purchaseRevenueCatStoreProduct(storeProduct);
+  return {
+    ok: true,
+    intentId: toText(intent?.id) || null,
+    productId: toText(purchase.productIdentifier) || CREATOR_TIP_SANDBOX_PROVIDER_PRODUCT_ID,
+    message: "Sandbox tip complete. No live payout was created.",
   };
 }

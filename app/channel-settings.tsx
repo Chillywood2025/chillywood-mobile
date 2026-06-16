@@ -54,6 +54,7 @@ import {
   readCreatorMonetizationFoundationSummary,
   type CreatorMonetizationFoundationSummary,
 } from "../_lib/creatorMonetization";
+import { saveCreatorSandboxMonetizationConfig } from "../_lib/creatorMonetizationSetup";
 import {
   listMyPaidVideoOffers,
   listMyPaidVideoTransactions,
@@ -64,6 +65,7 @@ import {
 import {
   listMyPaidWatchPartyOffers,
   listMyPaidWatchPartyTransactions,
+  savePaidWatchPartyOffer,
   type PaidWatchPartyOffer,
   type PaidWatchPartyTransaction,
 } from "../_lib/paidWatchPartyTickets";
@@ -98,6 +100,11 @@ import {
   type CreatorTipSettings,
   type CreatorTipTransaction,
 } from "../_lib/creatorTips";
+import {
+  listSandboxMonetizationTesters,
+  resolveSandboxMonetizationTester,
+  type SandboxMonetizationTesterRow,
+} from "../_lib/sandboxMonetizationTesters";
 import {
   CREATOR_MONETIZATION_FEATURE_CATALOG,
   type MonetizationFeatureAction,
@@ -272,6 +279,23 @@ type SummaryMetricCard = {
   value: string;
   body: string;
   tone?: "default" | "unavailable";
+};
+
+type SandboxTesterOfferKey =
+  | "tips"
+  | "paid_video"
+  | "watch_party_ticket"
+  | "event_pass"
+  | "channel_subscription"
+  | "vip_pass";
+
+type SandboxTesterOfferCard = {
+  key: SandboxTesterOfferKey;
+  title: string;
+  configured: boolean;
+  blocker?: string;
+  description: string;
+  testID: string;
 };
 
 type StudioTabId = "home" | "content" | "clip" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
@@ -1210,6 +1234,10 @@ export function ChannelStudioScreen() {
   const [creatorChannelSubscriptionTransactions, setCreatorChannelSubscriptionTransactions] = useState<ChannelSubscriptionTransaction[]>([]);
   const [channelSubscriptionSaving, setChannelSubscriptionSaving] = useState(false);
   const [channelSubscriptionNotice, setChannelSubscriptionNotice] = useState<string | null>(null);
+  const [sandboxTesterActive, setSandboxTesterActive] = useState(false);
+  const [sandboxTesterRows, setSandboxTesterRows] = useState<SandboxMonetizationTesterRow[]>([]);
+  const [sandboxSetupBusy, setSandboxSetupBusy] = useState(false);
+  const [sandboxSetupNotice, setSandboxSetupNotice] = useState<string | null>(null);
   const [paidEventSavingId, setPaidEventSavingId] = useState<string | null>(null);
   const [tipSettingsBusy, setTipSettingsBusy] = useState(false);
   const [tipSettingsNotice, setTipSettingsNotice] = useState<string | null>(null);
@@ -1388,6 +1416,10 @@ export function ChannelStudioScreen() {
       setCreatorChannelSubscriptionTransactions([]);
       setChannelSubscriptionSaving(false);
       setChannelSubscriptionNotice(null);
+      setSandboxTesterActive(false);
+      setSandboxTesterRows([]);
+      setSandboxSetupBusy(false);
+      setSandboxSetupNotice(null);
       setPaidEventSavingId(null);
       setTipSettingsNotice(null);
       setProviderReadinessSummary(getProviderReadinessFallbackSummary());
@@ -1428,6 +1460,8 @@ export function ChannelStudioScreen() {
       listMyCreatorVipTransactions(50).catch(() => []),
       listMyChannelSubscriptionOffers().catch(() => []),
       listMyChannelSubscriptionTransactions(50).catch(() => []),
+      resolveSandboxMonetizationTester(String(user?.id ?? ""), String(user?.email ?? "")).catch(() => false),
+      listSandboxMonetizationTesters().catch(() => []),
       readProviderReadinessSummary().catch(getProviderReadinessFallbackSummary),
       readMoneyFeatureFlagSummary().catch(getMoneyFeatureFlagFallbackSummary),
       readPlatformBrandStudio(String(user?.id ?? "")).catch(() => null),
@@ -1457,6 +1491,8 @@ export function ChannelStudioScreen() {
         resolvedCreatorVipTransactions,
         resolvedCreatorChannelSubscriptionOffers,
         resolvedCreatorChannelSubscriptionTransactions,
+        resolvedSandboxTesterActive,
+        resolvedSandboxTesterRows,
         resolvedProviderReadinessSummary,
         resolvedMoneyFeatureFlags,
         resolvedPlatformBranding,
@@ -1492,6 +1528,8 @@ export function ChannelStudioScreen() {
         setCreatorVipTransactions(resolvedCreatorVipTransactions);
         setCreatorChannelSubscriptionOffers(resolvedCreatorChannelSubscriptionOffers);
         setCreatorChannelSubscriptionTransactions(resolvedCreatorChannelSubscriptionTransactions);
+        setSandboxTesterActive(resolvedSandboxTesterActive);
+        setSandboxTesterRows(resolvedSandboxTesterRows);
         setProviderReadinessSummary(resolvedProviderReadinessSummary);
         setMoneyFeatureFlags(resolvedMoneyFeatureFlags);
         setPlatformBranding(resolvedPlatformBranding);
@@ -1529,6 +1567,10 @@ export function ChannelStudioScreen() {
         setCreatorVipTransactions([]);
         setCreatorChannelSubscriptionOffers([]);
         setCreatorChannelSubscriptionTransactions([]);
+        setSandboxTesterActive(false);
+        setSandboxTesterRows([]);
+        setSandboxSetupBusy(false);
+        setSandboxSetupNotice(null);
         setChannelSubscriptionSaving(false);
         setChannelSubscriptionNotice(null);
         setPaidEventSavingId(null);
@@ -1543,7 +1585,7 @@ export function ChannelStudioScreen() {
     return () => {
       active = false;
     };
-  }, [canUseChannelSettings, user?.id]);
+  }, [canUseChannelSettings, user?.email, user?.id]);
 
   const refreshCreatorPayouts = useCallback(async () => {
     if (!user?.id) {
@@ -1632,6 +1674,61 @@ export function ChannelStudioScreen() {
     setCreatorChannelSubscriptionOffers(nextOffers);
     setCreatorChannelSubscriptionTransactions(nextTransactions);
   }, [user?.id]);
+
+  const refreshSandboxTesterExperience = useCallback(async () => {
+    if (!user?.id) {
+      setSandboxTesterActive(false);
+      setSandboxTesterRows([]);
+      return;
+    }
+
+    const [
+      nextTipSettings,
+      nextTipTransactions,
+      nextPaidVideoOffers,
+      nextPaidVideoTransactions,
+      nextPaidWatchPartyOffers,
+      nextPaidWatchPartyTransactions,
+      nextPaidEventOffers,
+      nextPaidEventTransactions,
+      nextVipOffers,
+      nextVipTransactions,
+      nextSubscriptionOffers,
+      nextSubscriptionTransactions,
+      nextTesterActive,
+      nextTesterRows,
+    ] = await Promise.all([
+      readMyCreatorTipSettings().catch(() => null),
+      listMyCreatorTipTransactions(25).catch(() => []),
+      listMyPaidVideoOffers().catch(() => []),
+      listMyPaidVideoTransactions(50).catch(() => []),
+      listMyPaidWatchPartyOffers().catch(() => []),
+      listMyPaidWatchPartyTransactions(50).catch(() => []),
+      listMyPaidCreatorEventOffers().catch(() => []),
+      listMyPaidCreatorEventTransactions(50).catch(() => []),
+      listMyCreatorVipPassOffers().catch(() => []),
+      listMyCreatorVipTransactions(50).catch(() => []),
+      listMyChannelSubscriptionOffers().catch(() => []),
+      listMyChannelSubscriptionTransactions(50).catch(() => []),
+      resolveSandboxMonetizationTester(String(user.id), String(user.email ?? "")).catch(() => false),
+      listSandboxMonetizationTesters().catch(() => []),
+    ]);
+
+    setCreatorTipSettings(nextTipSettings);
+    setCreatorTipTransactions(nextTipTransactions);
+    setCreatorPaidVideoOffers(nextPaidVideoOffers);
+    setCreatorPaidVideoTransactions(nextPaidVideoTransactions);
+    setCreatorPaidWatchPartyOffers(nextPaidWatchPartyOffers);
+    setCreatorPaidWatchPartyTransactions(nextPaidWatchPartyTransactions);
+    setCreatorPaidEventOffers(nextPaidEventOffers);
+    setCreatorPaidEventTransactions(nextPaidEventTransactions);
+    setCreatorVipPassOffers(nextVipOffers);
+    setCreatorVipTransactions(nextVipTransactions);
+    setCreatorChannelSubscriptionOffers(nextSubscriptionOffers);
+    setCreatorChannelSubscriptionTransactions(nextSubscriptionTransactions);
+    setSandboxTesterActive(nextTesterActive);
+    setSandboxTesterRows(nextTesterRows);
+  }, [user?.email, user?.id]);
 
   const handleSaveTipSettings = useCallback(async (tipsEnabled: boolean) => {
     if (tipSettingsBusy) return;
@@ -1734,6 +1831,229 @@ export function ChannelStudioScreen() {
       setVipPassSaving(false);
     }
   }, [refreshVipPasses, user?.id, vipPassSaving]);
+
+  const handleRefreshSandboxTesterExperience = useCallback(async () => {
+    if (sandboxSetupBusy) return;
+    setSandboxSetupBusy(true);
+    setSandboxSetupNotice(null);
+    try {
+      await refreshSandboxTesterExperience();
+      setSandboxSetupNotice("Sandbox tester status refreshed. Live money and payouts remain off.");
+    } catch {
+      setSandboxSetupNotice("Sandbox tester status could not be refreshed right now.");
+    } finally {
+      setSandboxSetupBusy(false);
+    }
+  }, [refreshSandboxTesterExperience, sandboxSetupBusy]);
+
+  const handleSetupSandboxTesterExperience = useCallback(async () => {
+    if (!user?.id || sandboxSetupBusy) return;
+
+    setSandboxSetupBusy(true);
+    setSandboxSetupNotice(null);
+
+    const blockers: string[] = [];
+    const completed: string[] = [];
+
+    try {
+      const currentTipSettings = creatorTipSettings;
+      await saveMyCreatorTipSettings({
+        currency: currentTipSettings?.currency ?? "usd",
+        defaultAmountCents: currentTipSettings?.defaultAmountCents ?? 300,
+        maxAmountCents: currentTipSettings?.maxAmountCents ?? 50000,
+        minAmountCents: currentTipSettings?.minAmountCents ?? 100,
+        suggestedAmountsCents: currentTipSettings?.suggestedAmountsCents?.length
+          ? currentTipSettings.suggestedAmountsCents
+          : [100, 300, 500, 1000],
+        tipsEnabled: true,
+      });
+      await saveCreatorSandboxMonetizationConfig({
+        displayName: "Creator tip",
+        metadata: {
+          google_play_revenuecat_only: true,
+          no_access_grant: true,
+          no_live_payout: true,
+          setup_surface: "money_center_sandbox_tester_experience",
+        },
+        productKey: "creator_tip_sandbox_099",
+        sourceId: String(user.id),
+        sourceType: "creator_tip",
+      });
+      completed.push("Tips");
+    } catch {
+      blockers.push("Google Play sandbox tip setup still needs attention.");
+    }
+
+    const latestPublicVideo = creatorVideos
+      .filter((video) => (
+        video.visibility === "public"
+        && ["clean", "reported"].includes(video.moderationStatus)
+        && hasPlayableCreatorVideoSource(video)
+      ))
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] ?? null;
+
+    if (latestPublicVideo) {
+      try {
+        await savePaidVideoOffer({
+          currency: "usd",
+          isPaid: true,
+          priceCents: 99,
+          videoId: latestPublicVideo.id,
+        });
+        await saveCreatorSandboxMonetizationConfig({
+          displayName: "Sandbox Paid Video",
+          metadata: {
+            no_live_payout: true,
+            setup_surface: "money_center_sandbox_tester_experience",
+          },
+          productKey: "paid_content_access_sandbox_099",
+          sourceId: latestPublicVideo.id,
+          sourceType: "paid_content",
+        });
+        completed.push("Paid Video");
+      } catch {
+        blockers.push("Paid Video could not be saved for the latest public video.");
+      }
+    } else {
+      blockers.push("No public safe video is available for Paid Video.");
+    }
+
+    const existingWatchPartyOffer = creatorPaidWatchPartyOffers
+      .find((offer) => !!offer.partyId && ["sandbox", "paused", "draft", "sold_out"].includes(offer.status));
+    if (existingWatchPartyOffer?.partyId) {
+      try {
+        const savedWatchPartyOffer = await savePaidWatchPartyOffer({
+          partyId: existingWatchPartyOffer.partyId,
+          priceCents: 99,
+          seatLimit: existingWatchPartyOffer.seatLimit ?? 25,
+          status: "sandbox",
+          title: existingWatchPartyOffer.title || "Sandbox Watch-Party Ticket",
+        });
+        await saveCreatorSandboxMonetizationConfig({
+          displayName: "Sandbox Watch-Party Ticket",
+          metadata: {
+            no_live_payout: true,
+            party_id: savedWatchPartyOffer.partyId,
+            setup_surface: "money_center_sandbox_tester_experience",
+          },
+          productKey: "watch_party_live_ticket_sandbox_099",
+          sourceId: savedWatchPartyOffer.id,
+          sourceType: "watch_party_live",
+        });
+        completed.push("Watch-Party Ticket");
+      } catch {
+        blockers.push("Watch-Party Ticket needs a valid creator-owned Party Room.");
+      }
+    } else {
+      blockers.push("Create one Party Room before a Watch-Party Ticket can be configured.");
+    }
+
+    let eventForPass = creatorEvents
+      .filter((event) => !["expired", "canceled", "ended"].includes(event.status))
+      .sort((a, b) => Date.parse(a.startsAt ?? "") - Date.parse(b.startsAt ?? ""))[0] ?? null;
+    if (!eventForPass) {
+      const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const endsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString();
+      const created = await createCreatorEvent({
+        endsAt,
+        eventTitle: "Sandbox Event Pass Demo",
+        eventType: "live_first",
+        hostUserId: String(user.id),
+        startsAt,
+        status: "scheduled",
+      });
+      if ("error" in created) {
+        blockers.push("Event Pass needs a valid creator event.");
+      } else {
+        eventForPass = created;
+        setCreatorEvents((current) => [created, ...current.filter((event) => event.id !== created.id)]);
+      }
+    }
+    if (eventForPass) {
+      try {
+        const savedEventOffer = await savePaidCreatorEventOffer({
+          capacityLimit: null,
+          creatorEventId: eventForPass.id,
+          description: "Sandbox event pass test flow. No live payout.",
+          priceCents: 99,
+          status: "sandbox",
+        });
+        await saveCreatorSandboxMonetizationConfig({
+          displayName: "Sandbox Event Pass",
+          metadata: {
+            event_offer_id: savedEventOffer.id,
+            no_live_payout: true,
+            setup_surface: "money_center_sandbox_tester_experience",
+          },
+          productKey: "event_pass_sandbox_099",
+          sourceId: eventForPass.id,
+          sourceType: "event",
+        });
+        completed.push("Event Pass");
+      } catch {
+        blockers.push("Event Pass could not be saved for the selected event.");
+      }
+    }
+
+    try {
+      const savedChannelSubscriptionOffer = await saveChannelSubscriptionOffer({
+        description:
+          "Sandbox creator-channel subscription test flow. This is not Chi'llywood Premium and does not include VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.",
+        status: "sandbox",
+        title: "Channel subscription",
+      });
+      await saveCreatorSandboxMonetizationConfig({
+        displayName: "Sandbox Channel Subscription",
+        metadata: {
+          no_live_payout: true,
+          setup_surface: "money_center_sandbox_tester_experience",
+        },
+        productKey: "channel_subscription_sandbox_monthly_499",
+        sourceId: savedChannelSubscriptionOffer.id,
+        sourceType: "channel_subscription",
+      });
+      completed.push("Channel Subscription");
+    } catch {
+      blockers.push("Channel Subscription could not be saved.");
+    }
+
+    try {
+      const savedVipOffer = await saveCreatorVipPassOffer({
+        description:
+          "Sandbox creator-specific VIP test flow. This does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, or other creators.",
+        status: "sandbox",
+        title: "VIP Pass",
+      });
+      await saveCreatorSandboxMonetizationConfig({
+        displayName: "Sandbox VIP Pass",
+        metadata: {
+          no_live_payout: true,
+          setup_surface: "money_center_sandbox_tester_experience",
+        },
+        productKey: "vip_pass_sandbox_499",
+        sourceId: savedVipOffer.id,
+        sourceType: "vip_pass",
+      });
+      completed.push("VIP Pass");
+    } catch {
+      blockers.push("VIP Pass could not be saved.");
+    }
+
+    await refreshSandboxTesterExperience();
+    setSandboxSetupNotice(
+      blockers.length
+        ? `Sandbox setup partially configured: ${completed.length} ready. ${blockers.slice(0, 2).join(" ")}`
+        : "Sandbox tester offers are ready. Test purchases remain sandbox-only and not payable.",
+    );
+  }, [
+    creatorEvents,
+    creatorPaidWatchPartyOffers,
+    creatorTipSettings,
+    creatorVideos,
+    refreshSandboxTesterExperience,
+    sandboxSetupBusy,
+    user?.id,
+  ]);
 
   const handleStartPayoutProviderSetup = useCallback(async () => {
     const creatorUserId = String(user?.id ?? "").trim();
@@ -6753,9 +7073,9 @@ export function ChannelStudioScreen() {
         tone: sectionTone(stripeStatus) === "default" ? "default" : "unavailable",
       },
       {
-        label: "Tips checkout",
+        label: "Tips rail",
         value: providerStatusLabel(tipsProviderReadiness, tipFeatureStatus === "Active" ? "Test ready" : "Setup needed"),
-        body: summarizeProviderReadiness(tipsProviderReadiness, "Tips V1 uses server-side Stripe test-mode checkout and webhook verification only."),
+        body: summarizeProviderReadiness(tipsProviderReadiness, "Android tester tips use Google Play / RevenueCat sandbox. Stripe is reserved for physical merch and payout readiness."),
         tone: getProviderReadinessTone(tipsProviderReadiness),
       },
       {
@@ -6904,6 +7224,70 @@ export function ChannelStudioScreen() {
       creatorActionLabel: featureActionForStatus(featureStatusByKey[feature.key]),
       blockedReason: featureBlockedReasonByKey[feature.key] ?? feature.blockedReason,
     }));
+    const sandboxTesterOfferCards: SandboxTesterOfferCard[] = [
+      {
+        key: "tips",
+        title: "Tips",
+        configured: creatorTipSettings?.tipsEnabled === true,
+        blocker: creatorTipSettings?.tipsEnabled === true ? undefined : "Tips are not enabled yet.",
+        description: "Tester can open the tip sheet and start a test contribution. No payout is created.",
+        testID: "money-sandbox-tips-card",
+      },
+      {
+        key: "paid_video",
+        title: "Paid Video",
+        configured: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox"),
+        blocker: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox")
+          ? undefined
+          : creatorVideos.some((video) => video.visibility === "public" && ["clean", "reported"].includes(video.moderationStatus))
+            ? "Run setup to attach a sandbox paid-video offer."
+            : "No public video.",
+        description: "Tester can unlock one public creator video with sandbox checkout.",
+        testID: "money-sandbox-paid-video-card",
+      },
+      {
+        key: "watch_party_ticket",
+        title: "Watch-Party Ticket",
+        configured: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out"),
+        blocker: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+          ? undefined
+          : "No creator-owned Party Room target.",
+        description: "Tester can buy a sandbox room ticket before Party Waiting Room or Party Room entry.",
+        testID: "money-sandbox-watch-party-ticket-card",
+      },
+      {
+        key: "event_pass",
+        title: "Event Pass",
+        configured: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out"),
+        blocker: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+          ? undefined
+          : "Run setup to create a sandbox event/pass.",
+        description: "Tester can get a sandbox pass for the creator event.",
+        testID: "money-sandbox-event-pass-card",
+      },
+      {
+        key: "channel_subscription",
+        title: "Channel Subscription",
+        configured: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox"),
+        blocker: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? undefined : "No sandbox subscription offer.",
+        description: "Tester can subscribe to this creator channel only. This is not Premium.",
+        testID: "money-sandbox-channel-subscription-card",
+      },
+      {
+        key: "vip_pass",
+        title: "VIP Pass",
+        configured: creatorVipPassOffers.some((offer) => offer.status === "sandbox"),
+        blocker: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? undefined : "No sandbox VIP offer.",
+        description: "Tester can get creator-specific VIP. It does not unlock Premium or other creators.",
+        testID: "money-sandbox-vip-pass-card",
+      },
+    ];
+    const sandboxConfiguredCount = sandboxTesterOfferCards.filter((card) => card.configured).length;
+    const sandboxSetupStatus = sandboxConfiguredCount === sandboxTesterOfferCards.length
+      ? "Ready"
+      : sandboxConfiguredCount > 0
+        ? "Partially configured"
+        : "Needs setup";
     const renderFeatureCard = (feature: MonetizationFeatureCatalogItem) => (
       <View key={feature.key} style={[styles.summaryCard, (feature.status === "Blocked" || feature.status === "Needs attention") && styles.summaryCardUnavailable]}>
         <Text style={styles.summaryLabel}>{feature.title}</Text>
@@ -7214,6 +7598,91 @@ export function ChannelStudioScreen() {
           </View>
         </View>
 
+        <View
+          style={styles.panel}
+          testID="money-sandbox-setup-section"
+          accessibilityLabel="Sandbox Tester Experience"
+        >
+          <View style={styles.panelHeader}>
+            <View style={styles.panelHeaderCopy}>
+              <Text style={styles.panelTitle}>Sandbox Tester Experience</Text>
+              <Text style={styles.panelSubtitle}>
+                Set up test-only offers so tester accounts can try tips, paid videos, Watch-Party tickets, event passes, channel subscriptions, and VIP without live payouts.
+              </Text>
+            </View>
+            {renderStudioStatusPill(sandboxSetupStatus, sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially configured" ? "warning" : "muted")}
+          </View>
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Current account</Text>
+              <Text style={styles.summaryValue}>{hasOwnerOperatorStudioAccess ? "Owner" : sandboxTesterActive ? "Tester" : "Not tester"}</Text>
+              <Text style={styles.summaryBody}>
+                Tester access only allows sandbox/test-only monetization flows. It does not grant owner, payout, or live-money permissions.
+              </Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Tester grants</Text>
+              <Text style={styles.summaryValue}>{sandboxTesterRows.length}</Text>
+              <Text style={styles.summaryBody}>
+                Add or revoke testers with the proof scripts. Tester rows can expire and stay separate from owner roles.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.summaryGrid}>
+            {sandboxTesterOfferCards.map((card) => (
+              <View
+                key={card.key}
+                style={[styles.summaryCard, !card.configured && styles.summaryCardUnavailable]}
+                testID={card.testID}
+                accessibilityLabel={`${card.title} sandbox offer status`}
+              >
+                <View style={styles.eventCardHeader}>
+                  <Text style={styles.summaryLabel}>{card.title}</Text>
+                  {renderStudioStatusPill(card.configured ? "Configured" : "Missing", card.configured ? "default" : "muted")}
+                </View>
+                <Text style={styles.summaryValue}>Sandbox Test</Text>
+                <Text style={styles.summaryBody}>{card.description}</Text>
+                <Text style={styles.eventEmptyBody}>Not payable · Tester visible · No live payout</Text>
+                {card.blocker ? <Text style={styles.noticeText}>{card.blocker}</Text> : null}
+              </View>
+            ))}
+          </View>
+          <View style={styles.eventActionRow}>
+            <TouchableOpacity
+              style={[styles.eventPrimaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
+              activeOpacity={0.88}
+              disabled={sandboxSetupBusy}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={handleSetupSandboxTesterExperience}
+              testID="money-sandbox-setup-button"
+              accessibilityRole="button"
+              accessibilityLabel="Set up sandbox offers"
+            >
+              {sandboxSetupBusy ? (
+                <View style={styles.eventPrimaryButtonBusyRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.eventPrimaryButtonText}>Setting up</Text>
+                </View>
+              ) : (
+                <Text style={styles.eventPrimaryButtonText}>Set up sandbox offers</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.eventSecondaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
+              activeOpacity={0.88}
+              disabled={sandboxSetupBusy}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={handleRefreshSandboxTesterExperience}
+              testID="money-sandbox-refresh-button"
+              accessibilityRole="button"
+              accessibilityLabel="Refresh sandbox status"
+            >
+              <Text style={styles.eventSecondaryButtonText}>Refresh sandbox status</Text>
+            </TouchableOpacity>
+          </View>
+          {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
+        </View>
+
         <View style={styles.studioAccordionStack}>
           {renderMonetizationAccordion({
             id: "overview",
@@ -7269,7 +7738,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Tips setup</Text>
                   <Text style={styles.eventEmptyBody}>
-                    Tips do not unlock perks or content. Fans can only send a contribution when tips are enabled and the Stripe test-mode payout provider is ready.
+                    Tips do not unlock perks or content. Android tester tips use Google Play / RevenueCat sandbox only. Physical merchandise uses Stripe separately.
                   </Text>
                 </View>
                 {renderSummaryMetricCards(tipSetupCards)}

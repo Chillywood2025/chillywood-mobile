@@ -8634,16 +8634,17 @@ export default function PlayerScreen() {
                   onPress={() => {
                     void handlePaidVideoUnlock();
                   }}
-                  testID="unlock-paid-video-button"
+                  testID="tester-paid-video-unlock-button"
                   accessibilityRole="button"
-                  accessibilityLabel="Unlock Video"
+                  accessibilityLabel="Sandbox Test Unlock Paid Video"
                 >
                   {paidVideoUnlockBusy ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.playerAccessPrimaryText}>Unlock Video</Text>
+                    <Text style={styles.playerAccessPrimaryText}>Sandbox Test Unlock</Text>
                   )}
                 </TouchableOpacity>
+                <Text style={styles.videoLoadingSubtext}>Sandbox Test · No live payout</Text>
                 {paidVideoUnlockMessage ? (
                   <Text style={styles.videoLoadingSubtext}>{paidVideoUnlockMessage}</Text>
                 ) : null}

@@ -14,6 +14,7 @@ export type CreatorMonetizationSetupSourceType =
   | "live_watch_party_seat"
   | "creator_tip"
   | "channel_subscription"
+  | "vip_pass"
   | "event"
   | "merch_physical_good";
 
@@ -119,6 +120,17 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     providerRail: "revenuecat_google_play",
     unlocks: "Creates subscriber status for this creator channel only.",
     safety: "Does not unlock Chi'llwood Premium, VIP, paid videos, Watch-Party tickets, paid events, LiveKit authority, or other creators.",
+  },
+  {
+    key: "vip_pass_sandbox_499",
+    label: "VIP pass",
+    sourceType: "vip_pass",
+    productType: "vip_pass",
+    providerProductId: "cw_vip_pass_sandbox_499",
+    priceLabel: "$4.99 sandbox/test",
+    providerRail: "revenuecat_google_play",
+    unlocks: "Creates VIP status for this creator channel only.",
+    safety: "Does not unlock Premium, paid videos, event passes, channel subscriptions, Watch-Party tickets, LiveKit authority, or other creators.",
   },
   {
     key: "event_pass_sandbox_099",
