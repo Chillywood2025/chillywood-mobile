@@ -27,6 +27,7 @@ const migration = read("supabase/migrations/202605140011_creator_monetization_sy
 const creatorSetupMigration = read("supabase/migrations/20260605000610_creator_monetization_in_app_setup_flows.sql");
 const creatorSetupBoundMigration = read("supabase/migrations/20260605002000_bound_creator_monetization_setup_access.sql");
 const sandboxTesterMigration = read("supabase/migrations/20260616030632_sandbox_monetization_testers.sql");
+const sandboxTesterGrantMigration = read("supabase/migrations/20260616034235_tighten_sandbox_monetization_tester_rpc_grants.sql");
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
 const channelSettings = read("app/channel-settings.tsx");
@@ -129,6 +130,11 @@ assertIncludes(sandboxTesterMigration, "resolve_sandbox_monetization_tester", "s
 assertIncludes(sandboxTesterMigration, "grant_sandbox_monetization_tester", "sandbox tester grant RPC");
 assertIncludes(sandboxTesterMigration, "revoke_sandbox_monetization_tester", "sandbox tester revoke RPC");
 assertIncludes(sandboxTesterMigration, "service_role", "sandbox tester service-role proof-script access");
+assertIncludes(sandboxTesterGrantMigration, "revoke all on function public.\"grant_sandbox_monetization_tester\"", "sandbox tester grant RPC public revoke");
+assertIncludes(sandboxTesterGrantMigration, "revoke all on function public.\"revoke_sandbox_monetization_tester\"", "sandbox tester revoke RPC public revoke");
+assertIncludes(sandboxTesterGrantMigration, "from anon", "sandbox tester RPC anon revoke");
+assertIncludes(sandboxTesterGrantMigration, "to authenticated", "sandbox tester RPC authenticated grant");
+assertIncludes(sandboxTesterGrantMigration, "to service_role", "sandbox tester RPC service role grant");
 
 assertIncludes(monetization, "premium_subscription: {", "RevenueCat premium target");
 assertIncludes(monetization, "offeringId: \"premium\"", "RevenueCat premium offering");
