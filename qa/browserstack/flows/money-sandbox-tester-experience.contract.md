@@ -55,3 +55,25 @@ Target: Android Play-installed internal tester build.
 14. Relaunch/refresh as the tester and confirm sandbox-only offers are no longer visible.
 
 Do not mark this contract passed until the tester can actually see and complete the available sandbox flows on a Play-installed device.
+
+## June 16, 2026 Device Proof Notes
+
+Proof folder: `/tmp/chillywood-sandbox-money-fixtures-proof-20260616-135025`.
+
+Passed on Play-installed Android `R5CR120QCBF`:
+
+- `tester-tip-creator-button`
+- `tester-paid-video-unlock-button`
+- `tester-watch-party-ticket-button`
+- `tester-event-pass-button`
+- `tester-channel-subscribe-button`
+
+Remaining clean-account proof gap:
+
+- `tester-vip-pass-button` is visible and reaches Google Play, but the available tester already owns `cw_vip_pass_sandbox_499`. Use a fresh Play license tester or provider-side proof reset before calling VIP first-time completion passed.
+
+Fixture notes:
+
+- Watch-Party Ticket fixture room `W3JJHH` must be refreshed immediately before proof because active room freshness is intentionally limited.
+- Paid Video proof uses playable fixture video `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`.
+- Do not use coordinate taps for these controls; selector taps were sufficient after the route fixes.

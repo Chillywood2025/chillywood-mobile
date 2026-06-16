@@ -1160,19 +1160,20 @@ Remaining proof-only follow-ups:
 Signup is no longer blocked on the Play-installed Android build. Commit `ea4b545` imports `react-native-get-random-values` before Supabase auth initialization, and EAS production update group `4679bd00-d966-4950-b7eb-570e120b3e4d` proved a fresh Android signup on `R5CR120QCBF` with success copy. Keep using fresh emails for signup smoke because proof emails created during debugging now exist in Supabase auth. The remaining signup follow-up is operational: confirm real user confirmation-email delivery with the configured SMTP/provider and keep reset-email rate limits managed through Supabase Auth email settings, not app UI changes.
 # Next Task
 
-## Finish Visible Sandbox Monetization Tester UI Proof
+## Finish VIP Clean-Tester Sandbox Money Proof
 
 Backend proof is closed in `/tmp/chillywood-sandbox-money-tester-proof-20260616-063426`: a non-owner tester could start six sandbox/not-payable intents while active, and after revoke direct intent creation failed with `sandbox_monetization_tester_required`.
 
-Remaining work is visible Play-installed UI proof only:
+Play-installed visible proof advanced in `/tmp/chillywood-sandbox-money-fixtures-proof-20260616-135025`. Tips, Paid Video, Watch-Party Ticket, Event Pass, and Channel Subscription passed on `R5CR120QCBF` through Google Play / RevenueCat sandbox or active sandbox receipt states. Revoke also passed on backend and device. The only remaining proof gap is VIP first-time completion because the available Google Play tester already owns `cw_vip_pass_sandbox_499`.
 
-1. Use a clean manual sign-in or reliable BrowserStack credential-entry path; coordinate/text automation on `R5CR120QCBF` corrupted login input.
-2. Grant a non-owner tester account with `scripts/grant-sandbox-money-tester.mjs`.
-3. Owner opens Money Center and confirms Sandbox Tester Experience shows six configured cards.
-4. Tester opens the creator Platform and confirms sandbox-only CTAs for Tips, Paid Video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP.
-5. Open available Google Play / RevenueCat sandbox purchase sheets and confirm no live payout/payable balance.
-6. Revoke tester access and confirm tester no longer sees sandbox-only offers; direct intent creation is already backend-guarded.
+Remaining work:
 
-Do not mark tester monetization fully public-v1 ready until a Play-installed tester account completes the real visible flows.
+1. Use a fresh non-owner Google Play license tester that does not already own the VIP sandbox product, or safely reset only the proof VIP sandbox ownership through provider tooling.
+2. Grant that account sandbox monetization tester access with a TTL.
+3. Open the public proof creator Platform and tap `tester-vip-pass-button`.
+4. Complete the Google Play sandbox VIP purchase and confirm creator-specific VIP only, not Premium, not channel subscription, not paid video, not event pass, and not Watch-Party ticket.
+5. Revoke tester access and confirm CTAs are hidden plus direct intent returns `sandbox_monetization_tester_required`.
+
+Do not mark tester monetization fully public-v1 ready until VIP first-time completion is proved with a clean Play tester or the VIP flow is explicitly removed from the public-v1 required set.
 
 Migration prerequisite is closed: local migration history was reconciled to production timestamps for the two Chi'lly Circle migrations, and production now has `20260616030632_sandbox_monetization_testers`, `20260616034235_tighten_sandbox_monetization_tester_rpc_grants`, `20260616120810_support_channel_vip_sandbox_config`, `20260616120924_allow_channel_vip_config_product_types`, and `20260616121739_require_sandbox_tester_for_purchase_intents` applied.

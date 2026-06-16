@@ -133,3 +133,33 @@ Required proof:
 Do not call the tester experience production-ready until the Play-installed app proves the redesigned owner surface, the non-owner tester surface, sandbox receipts, Watch-Party missing-state copy if applicable, and revoke behavior.
 
 iOS/TestFlight sandbox proof is later. This lane does not enable live money or Stripe digital checkout on Android.
+
+## Play-Installed Fixture Closeout: June 16, 2026
+
+Proof folder:
+
+```text
+/tmp/chillywood-sandbox-money-fixtures-proof-20260616-135025
+```
+
+Device: `R5CR120QCBF` / `SM-N986U1`, Play-installed `com.chillywood.mobile`, version `1.0.0` versionCode `53`.
+
+Latest OTA used for proof:
+
+- Commit `e6f5508421d45246c60cf71099fd6bcab4b9b804`
+- Branch `production`
+- Runtime `1.0.0`
+- Update group `00933c8b-2807-4471-b9bd-c1d08f3d5883`
+- Android update `019ed1e1-a009-7a66-905a-04c2068981f1`
+
+Result:
+
+- Tips: passed through Google Play sandbox and showed `Sandbox tip complete. No money moved. No payout created.`
+- Paid Video: passed after replacing the dead proof video with playable fixture `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`; Player opened a playable 9:56 video after unlock.
+- Watch-Party Ticket: passed after adding the public tester CTA, routing it to `/watch-party/[partyId]`, and fixing the ticket-owned route hook-order crash. Ticket offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` targets room `W3JJHH`.
+- Event Pass: passed with event `a9167135-d3cc-4349-bf8a-46dfd9068806`; Google Play sandbox completed and the event screen showed `Event pass confirmed`.
+- Channel Subscription: passed through Google Play sandbox and showed creator-channel subscription only, not Premium.
+- VIP: CTA is wired and reaches Google Play, but the available Play tester already owns `cw_vip_pass_sandbox_499`. First-time VIP completion still requires a clean Play license tester or provider-side proof ownership reset.
+- Revoke: passed. `resolve_sandbox_monetization_tester` returned false, direct purchase intent returned `sandbox_monetization_tester_required`, and fresh app restart hid sandbox CTAs.
+
+No live money, payout request, provider transfer, payout batch, withdrawal, cash-out, transfer, or payable creator balance was enabled. The Watch-Party room fixture needs a fresh `last_activity_at` during proof because normal room activity windows remain 15 minutes; that is a fixture freshness requirement, not a LiveKit authority change.
