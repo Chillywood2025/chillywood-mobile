@@ -93,6 +93,22 @@ Meaning:
 - a person follows a creator/channel
 - follower counts can appear in creator summaries when backed
 - follower relationship is not the same as paid entitlement
+- following is one-way; it does not create a Chi'lly Circle connection
+- following does not bypass private Profile visibility, room access, Premium, paid tickets, subscriber access, VIP, moderation, or block boundaries
+
+Current viewer follow surfaces:
+- public Platform hero: `Follow` / `Following`
+- public Profile primary actions: `Follow` / `Following`
+- standalone creator-video Player: compact creator `Follow` / `Following`
+- shared creator-video Player inside Watch-Party Live: compact creator `Follow` / `Following`
+- Party Room participant detail sheet: `Follow` / `Following` for non-self participants with a creator Platform identity
+- Live Stage participant detail sheet: `Follow` / `Following` for non-self participants with a creator Platform identity
+
+Modern UX rule:
+- `Follow` should be a lightweight content/audience action wherever a creator identity is already visible.
+- `Following` can toggle back to not-following from the same button.
+- Profile avatar/name can still open Profile or Platform; it should not be the only way to follow a creator from content.
+- Approval language belongs to private Profile / Chi'lly Circle only unless a future private-channel follow lane explicitly backs follow approval.
 
 ### 4.2 Subscribers
 Subscribers are creator/channel subscriber relationships.

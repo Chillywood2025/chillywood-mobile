@@ -139,6 +139,7 @@ import { SocialAttachmentActionSheet } from "../../components/social/social-atta
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
 import { LiveLowerDock } from "../../components/room/live-lower-dock";
 import { pushRecentReaction } from "../../components/room/reaction-picker";
+import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
 import {
   LiveKitStageMediaSurface,
@@ -675,6 +676,10 @@ type StandalonePlayerTopChromeProps = {
   onCyclePlaybackRate: () => void;
   canShare: boolean;
   onShare: () => void;
+  canFollowCreator: boolean;
+  followCreatorLabel: string;
+  followCreatorBusy: boolean;
+  onFollowCreator: () => void;
   canStartWatchPartyLive: boolean;
   onWatchParty: () => void;
   canReport: boolean;
@@ -691,13 +696,17 @@ function StandalonePlayerTopChrome({
   onCyclePlaybackRate,
   canShare,
   onShare,
+  canFollowCreator,
+  followCreatorLabel,
+  followCreatorBusy,
+  onFollowCreator,
   canStartWatchPartyLive,
   onWatchParty,
   canReport,
   reportBusy,
   onReport,
 }: StandalonePlayerTopChromeProps) {
-  const hasTopLeftActions = canShare || canReport || !!playbackRateLabel;
+  const hasTopLeftActions = canShare || canFollowCreator || canReport || !!playbackRateLabel;
 
   return (
     <View style={styles.partyOverlayTopRow} pointerEvents="box-none">
@@ -738,6 +747,21 @@ function StandalonePlayerTopChrome({
                   hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                 >
                   <Text style={styles.compactChipText}>{reportBusy ? "Sending..." : "Report"}</Text>
+                </TouchableOpacity>
+              ) : null}
+              {canFollowCreator ? (
+                <TouchableOpacity
+                  style={[styles.compactChip, followCreatorBusy && styles.secondaryBtnDisabled]}
+                  onPress={onFollowCreator}
+                  disabled={followCreatorBusy}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={followCreatorLabel === "Following" ? "Unfollow this creator Platform" : "Follow this creator Platform"}
+                  accessibilityState={{ disabled: followCreatorBusy, busy: followCreatorBusy }}
+                  testID="player-creator-follow-button"
+                  hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+                >
+                  <Text style={styles.compactChipText}>{followCreatorLabel}</Text>
                 </TouchableOpacity>
               ) : null}
               {playbackRateLabel ? (
@@ -6033,6 +6057,11 @@ export default function PlayerScreen() {
 
   const isCreatorVideoPlayback = playbackSourceKind === "creator-video" || expectsCreatorVideo;
   const isSpectatorPlayback = playbackSourceKind === "spectator-playback" || expectsSpectatorPlayback;
+  const creatorVideoFollowAction = useChannelFollowAction({
+    channelUserId: creatorVideo?.ownerId ?? null,
+    enabled: isCreatorVideoPlayback && !!creatorVideo?.ownerId,
+    signedOutMessage: "Sign in to follow this creator Platform.",
+  });
   const playerSurfaceMode = resolvePlayerSurfaceMode({
     inWatchParty,
     isLiveModeFlag,
@@ -8871,6 +8900,21 @@ export default function PlayerScreen() {
                     >
                       <Text style={styles.compactChipText}>{(isCreatorVideoPlayback ? creatorVideoReportBusy : titleReportBusy) ? "Sending..." : "Report"}</Text>
                     </TouchableOpacity>
+                    {isCreatorVideoPlayback && creatorVideoFollowAction.canRender ? (
+                      <TouchableOpacity
+                        style={[styles.compactChip, creatorVideoFollowAction.busy && styles.secondaryBtnDisabled]}
+                        onPress={creatorVideoFollowAction.toggle}
+                        disabled={creatorVideoFollowAction.busy}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel={creatorVideoFollowAction.label === "Following" ? "Unfollow this creator Platform" : "Follow this creator Platform"}
+                        accessibilityState={{ disabled: creatorVideoFollowAction.busy, busy: creatorVideoFollowAction.busy }}
+                        testID="shared-player-creator-follow-button"
+                        hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+                      >
+                        <Text style={styles.compactChipText}>{creatorVideoFollowAction.label}</Text>
+                      </TouchableOpacity>
+                    ) : null}
                     <TouchableOpacity
                       style={[styles.compactChip, styles.compactSpeedChip, watchPartyLiveSharedPlaybackControlsLocked && styles.secondaryBtnDisabled]}
                       onPress={() => onSelectWatchPartyRate(playbackRate >= 2 ? 0.5 : playbackRate === 1.5 ? 2 : playbackRate === 1 ? 1.5 : 1)}
@@ -8954,6 +8998,10 @@ export default function PlayerScreen() {
                 }}
                 canShare={isCreatorVideoPlayback ? canShareStandaloneCreatorVideo : canShareStandaloneTitle}
                 onShare={isCreatorVideoPlayback ? onShareCreatorVideo : onShareStandaloneTitle}
+                canFollowCreator={isCreatorVideoPlayback && creatorVideoFollowAction.canRender}
+                followCreatorLabel={creatorVideoFollowAction.label}
+                followCreatorBusy={creatorVideoFollowAction.busy}
+                onFollowCreator={creatorVideoFollowAction.toggle}
                 canStartWatchPartyLive={canStartStandaloneWatchPartyLive}
                 onWatchParty={onWatchParty}
                 canReport={isCreatorVideoPlayback || canReportStandaloneTitle}

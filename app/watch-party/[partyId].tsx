@@ -136,6 +136,7 @@ import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
+import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../components/social/social-attachment-card";
@@ -2713,6 +2714,10 @@ export default function WatchPartyRoomScreen() {
     participantStateById,
     currentUserId: currentUserBubbleId,
   });
+  const selectedParticipantFollowAction = useChannelFollowAction({
+    channelUserId: selectedParticipantUserId,
+    enabled: !!selectedParticipantUserId && canShowProfileAction,
+  });
   const selectedParticipantProfile = selectedParticipant
     ? buildUserChannelProfile({
         id: selectedParticipantUserId,
@@ -3595,6 +3600,10 @@ export default function WatchPartyRoomScreen() {
         participant={selectedParticipant}
         participantState={selectedParticipantState}
         canShowProfileAction={canShowProfileAction}
+        canShowFollowAction={selectedParticipantFollowAction.canRender}
+        followActionLabel={selectedParticipantFollowAction.label}
+        followActionBusy={selectedParticipantFollowAction.busy}
+        onToggleFollow={selectedParticipantFollowAction.toggle}
         safeAreaBottom={safeAreaInsets.bottom}
         onClose={closeParticipantModal}
         onReportParticipant={selectedParticipantUserId ? () => {

@@ -21,6 +21,10 @@ type ParticipantDetailSheetProps = {
   participantState: SharedParticipantLocalState | null;
   canShowProfileAction: boolean;
   safeAreaBottom?: number;
+  canShowFollowAction?: boolean;
+  followActionLabel?: string;
+  followActionBusy?: boolean;
+  onToggleFollow?: () => void;
   onViewProfile?: () => void;
   onReportParticipant?: () => void;
   onClose: () => void;
@@ -37,6 +41,10 @@ export function ParticipantDetailSheet({
   participantState,
   canShowProfileAction,
   safeAreaBottom = 20,
+  canShowFollowAction = false,
+  followActionLabel = "Follow",
+  followActionBusy = false,
+  onToggleFollow,
   onViewProfile,
   onReportParticipant,
   onClose,
@@ -112,6 +120,21 @@ export function ParticipantDetailSheet({
             </View>
           </View>
           <Text style={styles.actionsLabel}>Actions</Text>
+
+          {canShowFollowAction && onToggleFollow ? (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnPrimary, followActionBusy && styles.actionBtnDisabled]}
+              activeOpacity={0.82}
+              disabled={followActionBusy}
+              onPress={onToggleFollow}
+              accessibilityRole="button"
+              accessibilityLabel={followActionLabel === "Following" ? "Unfollow this Platform" : "Follow this Platform"}
+              accessibilityState={{ disabled: followActionBusy, busy: followActionBusy }}
+              testID="room-participant-follow-platform-button"
+            >
+              <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>{followActionLabel}</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {canShowProfileAction && onViewProfile ? (
             <TouchableOpacity
@@ -234,7 +257,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
   },
+  actionBtnPrimary: {
+    borderColor: "rgba(220,20,60,0.52)",
+    backgroundColor: "rgba(220,20,60,0.2)",
+  },
+  actionBtnDisabled: {
+    opacity: 0.62,
+  },
   actionBtnText: { color: "#E2E2E2", fontSize: 14, fontWeight: "800" },
+  actionBtnTextPrimary: { color: "#FFFFFF" },
   actionBtnClose: {
     borderRadius: 12,
     borderWidth: 1,

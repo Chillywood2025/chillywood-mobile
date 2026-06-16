@@ -125,6 +125,7 @@ import { RoomReactionPicker, pushRecentReaction } from "../../../components/room
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
 import { ReportSheet } from "../../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../../components/system/beta-access-screen";
+import { useChannelFollowAction } from "../../../hooks/use-channel-follow-action";
 import { LiveEffectsPanel } from "../../../components/live/live-effects-sheet";
 import { SocialAttachmentActionSheet } from "../../../components/social/social-attachment-action-sheet";
 import { SocialAttachmentCard } from "../../../components/social/social-attachment-card";
@@ -1718,6 +1719,10 @@ export default function WatchPartyLiveStageScreen({
     selectedParticipant,
     participantStateById,
     currentUserId: currentUserParticipantId,
+  });
+  const selectedParticipantFollowAction = useChannelFollowAction({
+    channelUserId: selectedParticipantUserId,
+    enabled: !!selectedParticipantUserId && canShowProfileAction,
   });
   const tailoredFocusParticipant = useMemo(
     () => visibleStripParticipants.find((participant) => participant.userId === activeParticipantId)
@@ -4784,6 +4789,10 @@ export default function WatchPartyLiveStageScreen({
         isFeatured={!!(selectedParticipant && featuredParticipantById[selectedParticipant.userId])}
         isRequesting={!!(selectedParticipant && seatRequestsById[selectedParticipant.userId])}
         canShowProfileAction={canShowProfileAction}
+        canShowFollowAction={selectedParticipantFollowAction.canRender}
+        followActionLabel={selectedParticipantFollowAction.label}
+        followActionBusy={selectedParticipantFollowAction.busy}
+        onToggleFollow={selectedParticipantFollowAction.toggle}
         safeAreaBottom={safeAreaInsets.bottom}
         onClose={closeParticipantModal}
         onReportParticipant={selectedParticipantUserId ? () => {
