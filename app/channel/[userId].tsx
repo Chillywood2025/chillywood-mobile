@@ -978,7 +978,7 @@ export default function PublicChannelScreen() {
         onPress: () => {
           if (!watchPartyTicketOffer?.partyId) return;
           router.push({
-            pathname: "/watch-party",
+            pathname: "/watch-party/[partyId]",
             params: { partyId: watchPartyTicketOffer.partyId },
           } as unknown as Parameters<typeof router.push>[0]);
         },
