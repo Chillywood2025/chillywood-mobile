@@ -40,6 +40,10 @@ import {
   resolveChannelSubscriptionAccess,
   type ChannelSubscriptionAccess,
 } from "../../_lib/channelSubscriptions";
+import {
+  readPublicPaidWatchPartyTicketOfferForCreator,
+  type PaidWatchPartyOffer,
+} from "../../_lib/paidWatchPartyTickets";
 import { formatClipStudioTemplateLabel, type ClipStudioTemplatePreset } from "../../_lib/clipStudio";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
@@ -166,6 +170,7 @@ export default function PublicChannelScreen() {
   const [vipAccess, setVipAccess] = useState<CreatorVipPassAccess | null>(null);
   const [vipBusy, setVipBusy] = useState(false);
   const [vipNotice, setVipNotice] = useState<string | null>(null);
+  const [watchPartyTicketOffer, setWatchPartyTicketOffer] = useState<PaidWatchPartyOffer | null>(null);
   const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -191,6 +196,7 @@ export default function PublicChannelScreen() {
       setSubscriptionNotice(null);
       setVipAccess(null);
       setVipNotice(null);
+      setWatchPartyTicketOffer(null);
       setPlatformBranding(null);
 
       if (!routeUserId) {
@@ -230,13 +236,14 @@ export default function PublicChannelScreen() {
       const brandPromise = showDraftBranding
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
-      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
+      const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextWatchPartyTicketOffer, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
         readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
         resolveChannelSubscriptionAccess(routeUserId).catch(() => null),
         resolveCreatorVipPassAccess(routeUserId).catch(() => null),
+        readPublicPaidWatchPartyTicketOfferForCreator(routeUserId).catch(() => null),
         resolveSandboxMonetizationTester(viewerUserId, String(user?.email ?? "")).catch(() => false),
         brandPromise,
       ]);
@@ -250,6 +257,7 @@ export default function PublicChannelScreen() {
       setSandboxTesterActive(nextSandboxTesterActive === true);
       setSubscriptionAccess(nextSubscriptionAccess);
       setVipAccess(nextVipAccess);
+      setWatchPartyTicketOffer(nextWatchPartyTicketOffer);
       setPlatformBranding(nextPlatformBranding);
       setLoadState("ready");
     };
@@ -962,11 +970,19 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Watch-Party Ticket",
-        body: "Ticket test unavailable - creator needs a Party Room target.",
+        body: watchPartyTicketOffer?.partyId
+          ? "Get a sandbox Watch-Party ticket. No payout is created."
+          : "Ticket test unavailable - creator needs a Party Room target.",
         button: "Get test ticket",
-        testID: undefined,
-        onPress: undefined,
-        available: false,
+        testID: "tester-watch-party-ticket-button",
+        onPress: () => {
+          if (!watchPartyTicketOffer?.partyId) return;
+          router.push({
+            pathname: "/watch-party",
+            params: { partyId: watchPartyTicketOffer.partyId },
+          } as unknown as Parameters<typeof router.push>[0]);
+        },
+        available: !!watchPartyTicketOffer?.partyId,
       },
       {
         title: "Event Pass",

@@ -221,6 +221,45 @@ export async function listMyPaidWatchPartyTransactions(limit = 50): Promise<Paid
   return parseJsonArray(data, parseTransaction);
 }
 
+export async function readPublicPaidWatchPartyTicketOfferForCreator(creatorId: string): Promise<PaidWatchPartyOffer | null> {
+  const normalizedCreatorId = toText(creatorId);
+  if (!normalizedCreatorId) return null;
+
+  const { data, error } = await (supabase as any)
+    .from("paid_watch_party_offers")
+    .select("id,party_id,creator_id,host_id,title_id,video_id,title,description,price_cents,currency,seat_limit,seats_sold,starts_at,ends_at,status,provider,provider_product_key,provider_product_id,created_at,updated_at")
+    .eq("creator_id", normalizedCreatorId)
+    .in("status", ["sandbox", "active"])
+    .not("party_id", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return parseOffer({
+    id: data.id,
+    partyId: data.party_id,
+    creatorId: data.creator_id,
+    hostId: data.host_id,
+    titleId: data.title_id,
+    videoId: data.video_id,
+    title: data.title,
+    description: data.description,
+    priceCents: data.price_cents,
+    currency: data.currency,
+    seatLimit: data.seat_limit,
+    seatsSold: data.seats_sold,
+    startsAt: data.starts_at,
+    endsAt: data.ends_at,
+    status: data.status,
+    provider: data.provider,
+    providerProductKey: data.provider_product_key,
+    providerProductId: data.provider_product_id,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  });
+}
+
 export async function savePaidWatchPartyOffer(input: {
   partyId: string;
   title?: string | null;

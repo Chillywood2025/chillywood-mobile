@@ -197,6 +197,7 @@ assertIncludes(publicChannel, "Test Creator Purchases", "public tester sandbox p
 assertIncludes(publicChannel, "Sandbox only. No real money moves.", "public tester sandbox no-money copy");
 assertIncludes(publicChannel, "No money moved. No payout created.", "public tester sandbox receipt copy");
 assertIncludes(publicChannel, "Checkout pending", "public platform checkout disabled copy");
+assertIncludes(publicChannel, "tester-watch-party-ticket-button", "public tester Watch-Party ticket selector");
 assertIncludes(publicChannel, "tester-channel-subscribe-button", "tester subscription CTA selector");
 assertIncludes(publicChannel, "tester-vip-pass-button", "tester VIP CTA selector");
 assertIncludes(player, "creatorVideoPaidContentLocked", "Player paid creator-content lock");
