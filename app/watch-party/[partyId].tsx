@@ -2415,6 +2415,25 @@ export default function WatchPartyRoomScreen() {
   const closeParticipantModal = useCallback(() => {
     setSelectedParticipant(null);
   }, []);
+  const { selectedParticipantUserId, selectedParticipantState, canShowProfileAction } = resolveSelectedParticipantContext({
+    selectedParticipant,
+    participantStateById,
+    currentUserId: currentUserBubbleId,
+  });
+  const selectedParticipantFollowAction = useChannelFollowAction({
+    channelUserId: selectedParticipantUserId,
+    enabled: !!selectedParticipantUserId && canShowProfileAction,
+  });
+  const selectedParticipantProfile = selectedParticipant
+    ? buildUserChannelProfile({
+        id: selectedParticipantUserId,
+        displayName: selectedParticipant.displayName,
+        avatarUrl: selectedParticipant.avatarUrl,
+        role: selectedParticipant.role,
+        isLive: selectedParticipant.isLive,
+        fallbackDisplayName: "Participant",
+      })
+    : null;
   const onSubmitReport = useCallback(async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
     if (!reportTarget) return;
     setReportBusy(true);
@@ -2709,25 +2728,6 @@ export default function WatchPartyRoomScreen() {
   const partyRoomReactionLabel = reactionsGloballyMuted ? "Muted" : "Enabled";
   const partyRoomCaptureLabel = room.capturePolicy === "host_managed" ? "Host-managed" : "Best-effort";
   const tailoredRoomIsDefault = !tailoredFocusParticipant || tailoredFocusParticipant.userId === hostParticipant?.userId;
-  const { selectedParticipantUserId, selectedParticipantState, canShowProfileAction } = resolveSelectedParticipantContext({
-    selectedParticipant,
-    participantStateById,
-    currentUserId: currentUserBubbleId,
-  });
-  const selectedParticipantFollowAction = useChannelFollowAction({
-    channelUserId: selectedParticipantUserId,
-    enabled: !!selectedParticipantUserId && canShowProfileAction,
-  });
-  const selectedParticipantProfile = selectedParticipant
-    ? buildUserChannelProfile({
-        id: selectedParticipantUserId,
-        displayName: selectedParticipant.displayName,
-        avatarUrl: selectedParticipant.avatarUrl,
-        role: selectedParticipant.role,
-        isLive: selectedParticipant.isLive,
-        fallbackDisplayName: "Participant",
-      })
-    : null;
   const renderPartyRoomParticipantSummary = () => {
     if (waitingRoomParticipantSummary.totalCount <= 0) return null;
 
