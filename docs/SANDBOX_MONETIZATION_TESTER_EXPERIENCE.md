@@ -51,11 +51,41 @@ Creator tips are Android digital support and use Google Play / RevenueCat only. 
 - No production live money is enabled.
 - No payout, withdrawal, cash-out, transfer, or payable creator balance is enabled.
 - No service-role key is used in the mobile app.
+- Sandbox purchase intents require an active sandbox tester, beta/internal account, owner, or operator; revoked testers are blocked by `sandbox_monetization_tester_required`.
 - Sandbox offers do not unlock Premium unless the flow is explicitly Premium, which these are not.
 - Tips do not unlock content, badges, rooms, subscriptions, VIP, events, or other perks.
 - VIP is creator-specific and does not unlock Premium or other creators.
 - Channel subscription is creator-channel-specific and is not Chi'llywood Premium.
 - Paid video, event pass, and Watch-Party ticket access remain bound to their own safe target.
+
+## Production Proof: June 16, 2026
+
+Proof folder:
+
+```text
+/tmp/chillywood-sandbox-money-tester-proof-20260616-063426
+```
+
+Production-safe readback used proof accounts only:
+
+- Owner/setup account: `paid-videos-fixture-creator@chillywood.test`
+- Non-owner tester account: `paid-videos-unpaid-fan-20260611@chillywood.test`
+
+Result:
+
+- Owner setup produced all six sandbox configs: Tips, Paid Video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass.
+- The tester resolver returned active while the tester row was active.
+- The tester could start six sandbox purchase intents, all `environment=sandbox`, `status=pending`, and not payable.
+- Config readback showed `environment=sandbox`, `payable_state=not_payable`, `production_enabled=false`, `payout_enabled=false`, and no LiveKit publish/host authority.
+- Revocation was proven: after tester revoke, `resolve_sandbox_monetization_tester` returned false and `create_money_purchase_intent` returned `sandbox_monetization_tester_required`.
+
+During proof, two narrow production migrations were required so Channel Subscription and VIP can be linked into `creator_monetization_configs`, plus one hardening migration so revoked testers cannot start sandbox purchase intents:
+
+- `20260616120810_support_channel_vip_sandbox_config.sql`
+- `20260616120924_allow_channel_vip_config_product_types.sql`
+- `20260616121739_require_sandbox_tester_for_purchase_intents.sql`
+
+Play-installed UI proof is still not closed for the sign-in/device path. Android text-entry automation corrupted proof-account login input on `R5CR120QCBF`, so the backend/setup/revoke contract is proven, but the visible tester CTA flow still needs a clean manual sign-in or a more reliable BrowserStack credential-entry path.
 
 ## Proof Readiness
 
@@ -72,6 +102,6 @@ Required proof:
 7. Tester completes each available sandbox flow through Google Play / RevenueCat.
 8. Owner refreshes Money Center and sees sandbox/not-payable readback.
 9. Tester grant is revoked.
-10. Tester no longer sees sandbox-only offers after revoke/refresh.
+10. Tester no longer sees sandbox-only offers after revoke/refresh, and direct sandbox intent creation fails with `sandbox_monetization_tester_required`.
 
 iOS/TestFlight sandbox proof is later. This lane does not enable live money or Stripe digital checkout on Android.

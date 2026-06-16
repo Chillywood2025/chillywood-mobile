@@ -28,6 +28,9 @@ const creatorSetupMigration = read("supabase/migrations/20260605000610_creator_m
 const creatorSetupBoundMigration = read("supabase/migrations/20260605002000_bound_creator_monetization_setup_access.sql");
 const sandboxTesterMigration = read("supabase/migrations/20260616030632_sandbox_monetization_testers.sql");
 const sandboxTesterGrantMigration = read("supabase/migrations/20260616034235_tighten_sandbox_monetization_tester_rpc_grants.sql");
+const sandboxChannelVipSourceMigration = read("supabase/migrations/20260616120810_support_channel_vip_sandbox_config.sql");
+const sandboxChannelVipConstraintMigration = read("supabase/migrations/20260616120924_allow_channel_vip_config_product_types.sql");
+const sandboxIntentTesterMigration = read("supabase/migrations/20260616121739_require_sandbox_tester_for_purchase_intents.sql");
 const monetization = read("_lib/monetization.ts");
 const premiumEntitlements = read("_lib/premiumEntitlements.ts");
 const channelSettings = read("app/channel-settings.tsx");
@@ -135,6 +138,14 @@ assertIncludes(sandboxTesterGrantMigration, "revoke all on function public.\"rev
 assertIncludes(sandboxTesterGrantMigration, "from anon", "sandbox tester RPC anon revoke");
 assertIncludes(sandboxTesterGrantMigration, "to authenticated", "sandbox tester RPC authenticated grant");
 assertIncludes(sandboxTesterGrantMigration, "to service_role", "sandbox tester RPC service role grant");
+assertIncludes(sandboxChannelVipSourceMigration, "when 'channel_subscription' then 'channel_subscription'", "sandbox config channel subscription source mapping");
+assertIncludes(sandboxChannelVipSourceMigration, "when 'vip_pass' then 'vip_pass'", "sandbox config VIP source mapping");
+assertIncludes(sandboxChannelVipConstraintMigration, "'channel_subscription'", "sandbox config channel subscription constraint");
+assertIncludes(sandboxChannelVipConstraintMigration, "'vip_pass'", "sandbox config VIP constraint");
+assertIncludes(sandboxIntentTesterMigration, "sandbox_monetization_tester_required", "sandbox purchase intent revoked tester denial");
+assertIncludes(sandboxIntentTesterMigration, "public.resolve_sandbox_monetization_tester", "sandbox purchase intent tester resolver");
+assertIncludes(sandboxIntentTesterMigration, "'sandbox_tester_checked', true", "sandbox purchase intent tester checked metadata");
+assertIncludes(sandboxIntentTesterMigration, "payable_state", "sandbox purchase intent not payable guard context");
 
 assertIncludes(monetization, "premium_subscription: {", "RevenueCat premium target");
 assertIncludes(monetization, "offeringId: \"premium\"", "RevenueCat premium offering");
