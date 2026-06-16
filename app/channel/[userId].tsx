@@ -410,7 +410,11 @@ export default function PublicChannelScreen() {
         sourceSurface: "creator_channel_header",
       });
       setSubscriptionAccess(result.access);
-      setSubscriptionNotice(result.message);
+      setSubscriptionNotice(
+        result.ok && sandboxTesterActive
+          ? `Sandbox subscription complete. No money moved. No payout created. ${new Date().toLocaleString()}`
+          : result.message,
+      );
       if (result.ok) {
         openSubscriberArea();
       } else {
@@ -452,7 +456,11 @@ export default function PublicChannelScreen() {
         sourceSurface: "creator_channel_vip_card",
       });
       setVipAccess(result.access);
-      setVipNotice(result.message);
+      setVipNotice(
+        result.ok && sandboxTesterActive
+          ? `Sandbox VIP complete. No money moved. No payout created. ${new Date().toLocaleString()}`
+          : result.message,
+      );
       if (result.ok) {
         openVipArea();
       } else {
@@ -926,7 +934,105 @@ export default function PublicChannelScreen() {
     );
   };
 
+  const renderSandboxTesterSurface = () => {
+    if (!sandboxTesterActive || isOwner) return null;
+
+    const firstVideo = videos.find(hasPlayableVideo) ?? null;
+    const firstEvent = events[0] ?? null;
+    const hasSubscription = !!subscriptionAccess?.offer && (subscriptionAccess.requiresPurchase || subscriptionAccess.allowed);
+    const hasVip = !!vipAccess?.offer && (vipAccess.requiresPurchase || vipAccess.allowed);
+    const flowCards = [
+      {
+        title: "Tip creator",
+        body: "Sandbox only. No real money moves.",
+        button: "Test tip",
+        testID: "tester-tip-creator-button",
+        onPress: () => setTipSheetVisible(true),
+        available: tipStatus?.canTip === true || sandboxTesterActive,
+      },
+      {
+        title: "Paid video",
+        body: firstVideo ? "Open a public creator video and unlock it in sandbox mode." : "Video test unavailable - creator needs a public video.",
+        button: "Unlock test video",
+        testID: "tester-paid-video-unlock-button",
+        onPress: () => {
+          if (firstVideo) router.push({ pathname: "/player/[id]", params: { id: firstVideo.id, source: "creator-video" } });
+        },
+        available: !!firstVideo,
+      },
+      {
+        title: "Watch-Party Ticket",
+        body: "Ticket test unavailable - creator needs a Party Room target.",
+        button: "Get test ticket",
+        testID: undefined,
+        onPress: undefined,
+        available: false,
+      },
+      {
+        title: "Event Pass",
+        body: firstEvent ? "Get a sandbox event pass. No payout is created." : "Event pass unavailable - creator needs an event.",
+        button: "Get test event pass",
+        testID: "tester-event-pass-button",
+        onPress: () => {
+          if (firstEvent) router.push(`/event/${firstEvent.id}` as Parameters<typeof router.push>[0]);
+        },
+        available: !!firstEvent,
+      },
+      {
+        title: "Channel Subscription",
+        body: "Creator channel subscription test. This is not Chi'llywood Premium.",
+        button: subscriptionAccess?.allowed ? "Open Subscriber Area" : "Subscribe in test mode",
+        testID: "tester-channel-subscribe-button",
+        onPress: subscriptionAccess?.allowed ? openSubscriberArea : handleSubscribe,
+        available: hasSubscription,
+      },
+      {
+        title: "VIP Pass",
+        body: "Creator-specific VIP test. Does not unlock Premium or other creators.",
+        button: vipAccess?.allowed ? "Open VIP Area" : "Get test VIP",
+        testID: "tester-vip-pass-button",
+        onPress: vipAccess?.allowed ? openVipArea : handleGetVip,
+        available: hasVip,
+      },
+    ];
+
+    return (
+      <AppSection title="Test Creator Purchases" statusLabel="Sandbox" statusTone="warning">
+        <View style={styles.programmingCard}>
+          <Text style={styles.cardKicker}>Sandbox only</Text>
+          <Text style={styles.cardTitle}>No real money moves.</Text>
+          <Text style={styles.cardBody}>
+            Try configured creator purchase flows as a tester. Revoked tester access hides these test actions.
+          </Text>
+          <View style={styles.sandboxFlowGrid}>
+            {flowCards.map((flow) => (
+              <View key={flow.title} style={[styles.sandboxFlowCard, !flow.available && styles.sandboxFlowCardDisabled]}>
+                <Text style={styles.sandboxFlowTitle}>{flow.title}</Text>
+                <Text style={styles.sandboxFlowBody}>{flow.body}</Text>
+                {flow.available && flow.onPress ? (
+                  <TouchableOpacity
+                    style={styles.sandboxFlowButton}
+                    activeOpacity={0.86}
+                    onPress={flow.onPress}
+                    testID={flow.testID}
+                    accessibilityRole="button"
+                    accessibilityLabel={flow.button}
+                  >
+                    <Text style={styles.sandboxFlowButtonText}>{flow.button}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.sandboxFlowUnavailable}>Unavailable</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        </View>
+      </AppSection>
+    );
+  };
+
   const renderChannelSubscription = () => {
+    if (sandboxTesterActive && !isOwner) return null;
     const offer = subscriptionAccess?.offer ?? null;
     if (!offer || (!sandboxTesterActive && !isOwner)) return null;
     const subscribed = subscriptionAccess?.allowed === true;
@@ -966,6 +1072,7 @@ export default function PublicChannelScreen() {
   };
 
   const renderVipPass = () => {
+    if (sandboxTesterActive && !isOwner) return null;
     const offer = vipAccess?.offer ?? null;
     if (!offer || (!sandboxTesterActive && !isOwner)) return null;
     const isVip = vipAccess?.allowed === true;
@@ -1068,6 +1175,7 @@ export default function PublicChannelScreen() {
         {renderLatestUploads()}
         {renderLiveNow()}
         {renderUpcomingEvents()}
+        {renderSandboxTesterSurface()}
         {renderChannelSubscription()}
         {renderVipPass()}
         {renderMiniPlatformCommerce()}
@@ -1574,6 +1682,50 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     fontWeight: "700",
+  },
+  sandboxFlowGrid: {
+    gap: 10,
+    marginTop: 8,
+  },
+  sandboxFlowCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.22)",
+    backgroundColor: "rgba(115,134,255,0.08)",
+    padding: 12,
+    gap: 7,
+  },
+  sandboxFlowCardDisabled: {
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+  },
+  sandboxFlowTitle: {
+    color: "#F8FAFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  sandboxFlowBody: {
+    color: "#B9C4D8",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  sandboxFlowButton: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "#DC143C",
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+  },
+  sandboxFlowButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  sandboxFlowUnavailable: {
+    color: "#8F9AB0",
+    fontSize: 11,
+    fontWeight: "900",
   },
   metaRow: {
     flexDirection: "row",

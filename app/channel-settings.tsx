@@ -296,7 +296,13 @@ type SandboxTesterOfferCard = {
   blocker?: string;
   description: string;
   testID: string;
+  statusLabel: string;
+  actionLabel?: string;
+  actionTestID?: string;
+  onPress?: () => void;
 };
+
+type SandboxSetupLifecycle = "idle" | "setting_up" | "complete" | "partial" | "failed" | "timed_out";
 
 type StudioTabId = "home" | "content" | "clip" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
 type ContentStatusFilter = "all" | "published" | "drafts";
@@ -327,6 +333,8 @@ type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scen
 type ClipStudioSectionId = "media" | "cover" | "title" | "templates" | "format" | "brand" | "save" | "advanced";
 
 const LAUNCH_CRITICAL_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 } as const;
+const SANDBOX_SETUP_TIMEOUT_MS = 30000;
+const SANDBOX_SETUP_TIMEOUT_ERROR = "sandbox_setup_timed_out";
 
 const getBrandSectionTestId = (id: BrandStudioSectionId) => {
   if (id === "hero") return "brand-hero-media-section";
@@ -1237,6 +1245,7 @@ export function ChannelStudioScreen() {
   const [sandboxTesterActive, setSandboxTesterActive] = useState(false);
   const [sandboxTesterRows, setSandboxTesterRows] = useState<SandboxMonetizationTesterRow[]>([]);
   const [sandboxSetupBusy, setSandboxSetupBusy] = useState(false);
+  const [sandboxSetupState, setSandboxSetupState] = useState<SandboxSetupLifecycle>("idle");
   const [sandboxSetupNotice, setSandboxSetupNotice] = useState<string | null>(null);
   const [paidEventSavingId, setPaidEventSavingId] = useState<string | null>(null);
   const [tipSettingsBusy, setTipSettingsBusy] = useState(false);
@@ -1835,11 +1844,14 @@ export function ChannelStudioScreen() {
   const handleRefreshSandboxTesterExperience = useCallback(async () => {
     if (sandboxSetupBusy) return;
     setSandboxSetupBusy(true);
+    setSandboxSetupState("setting_up");
     setSandboxSetupNotice(null);
     try {
       await refreshSandboxTesterExperience();
+      setSandboxSetupState("complete");
       setSandboxSetupNotice("Sandbox tester status refreshed. Live money and payouts remain off.");
     } catch {
+      setSandboxSetupState("failed");
       setSandboxSetupNotice("Sandbox tester status could not be refreshed right now.");
     } finally {
       setSandboxSetupBusy(false);
@@ -1850,7 +1862,14 @@ export function ChannelStudioScreen() {
     if (!user?.id || sandboxSetupBusy) return;
 
     setSandboxSetupBusy(true);
+    setSandboxSetupState("setting_up");
     setSandboxSetupNotice(null);
+
+    let setupTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    try {
+      await Promise.race([
+        (async () => {
 
     const blockers: string[] = [];
     const completed: string[] = [];
@@ -2040,11 +2059,29 @@ export function ChannelStudioScreen() {
     }
 
     await refreshSandboxTesterExperience();
+    setSandboxSetupState(blockers.length ? "partial" : "complete");
     setSandboxSetupNotice(
       blockers.length
-        ? `Sandbox setup partially configured: ${completed.length} ready. ${blockers.slice(0, 2).join(" ")}`
-        : "Sandbox tester offers are ready. Test purchases remain sandbox-only and not payable.",
+        ? `Sandbox setup is partially ready: ${completed.length} flow${completed.length === 1 ? "" : "s"} ready. ${blockers.slice(0, 2).join(" ")} Live money: Off. Payouts: Off.`
+        : "Sandbox tester offers are ready. Test mode only. No real charges, creator earnings, payouts, withdrawals, or cash-out.",
     );
+        })(),
+        new Promise<never>((_, reject) => {
+          setupTimeout = setTimeout(() => reject(new Error(SANDBOX_SETUP_TIMEOUT_ERROR)), SANDBOX_SETUP_TIMEOUT_MS);
+        }),
+      ]);
+    } catch (error) {
+      const timedOut = error instanceof Error && error.message === SANDBOX_SETUP_TIMEOUT_ERROR;
+      setSandboxSetupState(timedOut ? "timed_out" : "failed");
+      setSandboxSetupNotice(
+        timedOut
+          ? "Setup timed out. Refresh status or retry setup. Live money: Off. Payouts: Off."
+          : "Setup failed. Retry setup or check the missing flow cards. Live money: Off. Payouts: Off.",
+      );
+    } finally {
+      if (setupTimeout) clearTimeout(setupTimeout);
+      setSandboxSetupBusy(false);
+    }
   }, [
     creatorEvents,
     creatorPaidWatchPartyOffers,
@@ -7163,36 +7200,37 @@ export function ChannelStudioScreen() {
     const sandboxActivityCount = creatorMoneyAuditEvents.filter((event) => event.environment === "sandbox").length;
     const launchReadinessCards: readonly SummaryMetricCard[] = [
       {
-        label: "Premium",
-        value: "Proved",
-        body: "Premium remains on the existing entitlement path; the purchase shell stays closed unless approved.",
+        label: "Sandbox Testing",
+        value: "Check setup",
+        body: "Use the Sandbox Tester Experience below to prepare and prove creator purchase flows.",
       },
       {
-        label: "Creator purchases",
-        value: "Sandbox proved",
-        body: "All six creator money flows have local/manual sandbox proof. Live money and payouts remain off.",
-      },
-      {
-        label: "Sandbox Activity",
-        value: sandboxActivityCount ? `${sandboxActivityCount} visible` : "Sandbox proved",
-        body: "Sandbox rows are inspection records only and stay not payable.",
-      },
-      {
-        label: "Creator earnings",
-        value: "No verified earnings yet",
-        body: "No payable creator balance is shown from sandbox or setup activity.",
+        label: "Live Money",
+        value: "Off",
+        body: "No real charges, sales, withdrawals, transfers, or live creator earnings are enabled.",
         tone: "unavailable",
       },
       {
         label: "Payouts",
-        value: "Not active",
-        body: "Payouts are not active. No withdrawal, transfer, cash-out, or payout release action is available.",
+        value: "Off",
+        body: "No cash-out, withdrawal, transfer, payout release, or payout balance is available.",
+        tone: "unavailable",
+      },
+      {
+        label: "Test transactions",
+        value: sandboxActivityCount ? `${sandboxActivityCount} recorded` : "None yet",
+        body: "Test transactions only. They do not create payable creator balances.",
+      },
+      {
+        label: "Creator earnings",
+        value: "No real earnings yet",
+        body: "No payable creator balance is shown from sandbox or setup activity.",
         tone: "unavailable",
       },
       {
         label: "Remaining checks",
-        value: "Provider-tooling gaps",
-        body: "Provider refund/revoke and subscription lifecycle delivery proof still need safe provider tooling.",
+        value: "Refund/cancel testing still needed",
+        body: "Provider refund, revoke, and subscription lifecycle proof still need safe provider tooling.",
         tone: "unavailable",
       },
     ];
@@ -7224,13 +7262,32 @@ export function ChannelStudioScreen() {
       creatorActionLabel: featureActionForStatus(featureStatusByKey[feature.key]),
       blockedReason: featureBlockedReasonByKey[feature.key] ?? feature.blockedReason,
     }));
+    const latestPublicSandboxVideo = creatorVideos
+      .filter((video) => (
+        video.visibility === "public"
+        && ["clean", "reported"].includes(video.moderationStatus)
+        && hasPlayableCreatorVideoSource(video)
+      ))
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] ?? null;
+    const previewCreatorPlatform = () => {
+      if (!user?.id) return;
+      router.push({ pathname: "/channel/[userId]", params: { userId: String(user.id), preview: "public" } });
+    };
+    const openMoneyTransactions = () => {
+      setExpandedMonetizationSections((current) => new Set([...current, "transactions"]));
+    };
     const sandboxTesterOfferCards: SandboxTesterOfferCard[] = [
       {
         key: "tips",
         title: "Tips",
         configured: creatorTipSettings?.tipsEnabled === true,
         blocker: creatorTipSettings?.tipsEnabled === true ? undefined : "Tips are not enabled yet.",
-        description: "Tester can open the tip sheet and start a test contribution. No payout is created.",
+        description: creatorTipSettings?.tipsEnabled === true
+          ? "Testers can send a sandbox tip. No money moves."
+          : "Run setup to turn on the sandbox tip flow.",
+        statusLabel: creatorTipSettings?.tipsEnabled === true ? "Ready" : "Needs setup",
+        actionLabel: creatorTipSettings?.tipsEnabled === true ? "Preview tip flow" : undefined,
+        onPress: previewCreatorPlatform,
         testID: "money-sandbox-tips-card",
       },
       {
@@ -7239,10 +7296,23 @@ export function ChannelStudioScreen() {
         configured: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox"),
         blocker: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox")
           ? undefined
-          : creatorVideos.some((video) => video.visibility === "public" && ["clean", "reported"].includes(video.moderationStatus))
+          : latestPublicSandboxVideo
             ? "Run setup to attach a sandbox paid-video offer."
-            : "No public video.",
-        description: "Tester can unlock one public creator video with sandbox checkout.",
+            : "Publish a creator video before testers can unlock paid video.",
+        description: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox")
+          ? "Testers can unlock one public creator video in sandbox mode."
+          : latestPublicSandboxVideo
+            ? "A public video exists. Run setup to attach a sandbox unlock."
+            : "Paid video needs a public safe creator video first.",
+        statusLabel: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Ready" : latestPublicSandboxVideo ? "Needs setup" : "Blocked",
+        actionLabel: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox")
+          ? "Preview paid video"
+          : latestPublicSandboxVideo
+            ? "Fix missing setup"
+            : "Open Content",
+        onPress: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") && latestPublicSandboxVideo
+          ? () => router.push({ pathname: "/player/[id]", params: { id: latestPublicSandboxVideo.id, source: "creator-video" } })
+          : () => setActiveStudioTab("content"),
         testID: "money-sandbox-paid-video-card",
       },
       {
@@ -7251,8 +7321,18 @@ export function ChannelStudioScreen() {
         configured: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out"),
         blocker: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
           ? undefined
-          : "No creator-owned Party Room target.",
-        description: "Tester can buy a sandbox room ticket before Party Waiting Room or Party Room entry.",
+          : "Create a Party Room before testers can buy a ticket.",
+        description: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+          ? "Testers can buy a sandbox ticket before Party Waiting Room or Party Room entry."
+          : "Watch-Party Ticket needs a Party Room target.",
+        statusLabel: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Ready" : "Blocked",
+        actionLabel: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+          ? "Preview ticket flow"
+          : "Create Party Room target",
+        actionTestID: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+          ? undefined
+          : "money-sandbox-create-party-room-target-button",
+        onPress: () => router.push({ pathname: "/watch-party", params: { mode: "live", source: "money-sandbox" } }),
         testID: "money-sandbox-watch-party-ticket-card",
       },
       {
@@ -7261,8 +7341,15 @@ export function ChannelStudioScreen() {
         configured: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out"),
         blocker: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
           ? undefined
-          : "Run setup to create a sandbox event/pass.",
-        description: "Tester can get a sandbox pass for the creator event.",
+          : "Create a creator event first, or run setup to create the sandbox event demo.",
+        description: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+          ? "Testers can get a sandbox event pass."
+          : "Event Pass needs a creator event and sandbox offer.",
+        statusLabel: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Ready" : "Needs setup",
+        actionLabel: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Preview event pass" : "Create event",
+        onPress: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") && creatorEvents[0]
+          ? () => router.push(`/event/${creatorEvents[0].id}` as Parameters<typeof router.push>[0])
+          : () => setActiveStudioTab("live"),
         testID: "money-sandbox-event-pass-card",
       },
       {
@@ -7270,7 +7357,12 @@ export function ChannelStudioScreen() {
         title: "Channel Subscription",
         configured: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox"),
         blocker: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? undefined : "No sandbox subscription offer.",
-        description: "Tester can subscribe to this creator channel only. This is not Premium.",
+        description: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox")
+          ? "Testers can subscribe to this creator channel in sandbox mode. This is not Chi'llywood Premium."
+          : "Run setup to create the sandbox channel subscription.",
+        statusLabel: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Ready" : "Needs setup",
+        actionLabel: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Preview subscription" : undefined,
+        onPress: previewCreatorPlatform,
         testID: "money-sandbox-channel-subscription-card",
       },
       {
@@ -7278,7 +7370,12 @@ export function ChannelStudioScreen() {
         title: "VIP Pass",
         configured: creatorVipPassOffers.some((offer) => offer.status === "sandbox"),
         blocker: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? undefined : "No sandbox VIP offer.",
-        description: "Tester can get creator-specific VIP. It does not unlock Premium or other creators.",
+        description: creatorVipPassOffers.some((offer) => offer.status === "sandbox")
+          ? "Testers can get creator-specific VIP in sandbox mode. It does not unlock Premium or other creators."
+          : "Run setup to create the sandbox VIP pass.",
+        statusLabel: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Ready" : "Needs setup",
+        actionLabel: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Preview VIP" : undefined,
+        onPress: previewCreatorPlatform,
         testID: "money-sandbox-vip-pass-card",
       },
     ];
@@ -7286,8 +7383,46 @@ export function ChannelStudioScreen() {
     const sandboxSetupStatus = sandboxConfiguredCount === sandboxTesterOfferCards.length
       ? "Ready"
       : sandboxConfiguredCount > 0
-        ? "Partially configured"
-        : "Needs setup";
+        ? "Partially Ready"
+        : "Needs Setup";
+    const sandboxNextStep = sandboxConfiguredCount === sandboxTesterOfferCards.length
+      ? "Open tester preview"
+      : sandboxTesterOfferCards.find((card) => !card.configured)?.actionLabel
+        ?? sandboxTesterOfferCards.find((card) => !card.configured)?.blocker
+        ?? "Set up sandbox offers";
+    const sandboxSetupButtonLabel = sandboxSetupBusy
+      ? "Setting up"
+      : sandboxSetupState === "failed"
+        ? "Setup failed - retry"
+        : sandboxSetupState === "timed_out"
+          ? "Retry setup"
+          : sandboxConfiguredCount === sandboxTesterOfferCards.length
+            ? "Refresh setup"
+            : sandboxConfiguredCount > 0
+              ? "Fix missing setup"
+              : "Set up sandbox offers";
+    const sandboxChecklist = [
+      {
+        label: "Configure offers",
+        status: sandboxConfiguredCount === sandboxTesterOfferCards.length ? "Done" : sandboxConfiguredCount > 0 ? "Needs action" : "Not started",
+        body: `${sandboxConfiguredCount} of ${sandboxTesterOfferCards.length} flows ready.`,
+      },
+      {
+        label: "Grant tester",
+        status: sandboxTesterRows.length > 0 ? "Done" : "Needs action",
+        body: sandboxTesterRows.length > 0 ? `Active testers: ${sandboxTesterRows.length}` : "No active testers.",
+      },
+      {
+        label: "Test flows",
+        status: sandboxConfiguredCount === sandboxTesterOfferCards.length && sandboxTesterRows.length > 0 ? "Ready" : "Not started",
+        body: "Use a non-owner tester account on the Play-installed app.",
+      },
+      {
+        label: "Revoke tester",
+        status: "Not started",
+        body: "After proof, revoke the tester and confirm sandbox CTAs disappear.",
+      },
+    ] as const;
     const renderFeatureCard = (feature: MonetizationFeatureCatalogItem) => (
       <View key={feature.key} style={[styles.summaryCard, (feature.status === "Blocked" || feature.status === "Needs attention") && styles.summaryCardUnavailable]}>
         <Text style={styles.summaryLabel}>{feature.title}</Text>
@@ -7549,21 +7684,20 @@ export function ChannelStudioScreen() {
           <View style={styles.panelHeader}>
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>Money Center</Text>
-              <Text style={styles.panelSubtitle}>Sandbox testing is complete for digital access. Live money is not active.</Text>
+              <Text style={styles.panelSubtitle}>Set up sandbox creator purchase tests while live money stays locked.</Text>
             </View>
-            {renderStudioStatusPill(topStatus, sectionTone(topStatus))}
+            {renderStudioStatusPill(`Sandbox ${sandboxSetupStatus}`, sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially Ready" ? "warning" : "muted")}
           </View>
           <Text style={styles.permissionCopy}>
-            {monetizationActive
-              ? "Sandbox money tools are configured. Keep store, payment, refund, tax, safety, and payout checks reviewed before any live approval."
-              : "Sandbox activity is inspection-only and not payable. No verified payable earnings, payout, cash-out, withdrawal, or transfer action is available."}
+            Test mode - no payouts. No real charges. No creator earnings. No withdrawals.
           </Text>
           {renderSummaryMetricCards(launchReadinessCards)}
           <View style={styles.summaryGrid}>
             {[
-              { label: "Active", value: monetizationActive ? "Money tools" : "None" },
-              { label: "Locked", value: monetizationActive ? "Review needed" : "Sales and payouts" },
-              { label: "Next step", value: providerOverallStatus === "Sandbox ready" ? "Review setup" : "Store setup needed" },
+              { label: "Sandbox Testing", value: `${sandboxConfiguredCount} of ${sandboxTesterOfferCards.length} ready` },
+              { label: "Live Money", value: "Off" },
+              { label: "Payouts", value: "Off" },
+              { label: "Next Step", value: sandboxNextStep },
             ].map((item) => (
               <View key={item.label} style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>{item.label}</Text>
@@ -7607,43 +7741,101 @@ export function ChannelStudioScreen() {
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>Sandbox Tester Experience</Text>
               <Text style={styles.panelSubtitle}>
-                Set up test-only offers so tester accounts can try tips, paid videos, Watch-Party tickets, event passes, channel subscriptions, and VIP without live payouts.
+                Set up test-only creator purchase flows for tester accounts. No live money, no payouts.
               </Text>
             </View>
-            {renderStudioStatusPill(sandboxSetupStatus, sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially configured" ? "warning" : "muted")}
+            {renderStudioStatusPill(sandboxSetupStatus, sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially Ready" ? "warning" : "muted")}
+          </View>
+          <View style={styles.sandboxSafetyBanner}>
+            <Text style={styles.sandboxSafetyTitle}>Test mode - no payouts</Text>
+            <Text style={styles.sandboxSafetyBody}>No real charges. No creator earnings. No withdrawals.</Text>
           </View>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Current account</Text>
-              <Text style={styles.summaryValue}>{hasOwnerOperatorStudioAccess ? "Owner" : sandboxTesterActive ? "Tester" : "Not tester"}</Text>
+              <Text style={styles.summaryLabel}>Sandbox Testing</Text>
+              <Text style={styles.summaryValue}>{sandboxSetupStatus}</Text>
               <Text style={styles.summaryBody}>
-                Tester access only allows sandbox/test-only monetization flows. It does not grant owner, payout, or live-money permissions.
+                {sandboxConfiguredCount} of {sandboxTesterOfferCards.length} flows ready.
               </Text>
             </View>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Tester grants</Text>
-              <Text style={styles.summaryValue}>{sandboxTesterRows.length}</Text>
+              <Text style={styles.summaryLabel}>Tester Access</Text>
+              <Text style={styles.summaryValue}>{sandboxTesterRows.length > 0 ? `Active testers: ${sandboxTesterRows.length}` : "No active testers"}</Text>
               <Text style={styles.summaryBody}>
-                Add or revoke testers with the proof scripts. Tester rows can expire and stay separate from owner roles.
+                Tester access allows sandbox/test-only monetization flows. It does not grant owner, payout, or live-money permissions.
               </Text>
             </View>
           </View>
+          <Text style={styles.sectionLabel}>Setup checklist</Text>
+          <View style={styles.summaryGrid}>
+            {sandboxChecklist.map((step, index) => (
+              <View key={step.label} style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>{index + 1}. {step.label}</Text>
+                <Text style={styles.summaryValue}>{step.status}</Text>
+                <Text style={styles.summaryBody}>{step.body}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Live Money</Text>
+              <Text style={styles.summaryValue}>Off</Text>
+              <Text style={styles.summaryBody}>Provider details stay behind the advanced section.</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Payouts</Text>
+              <Text style={styles.summaryValue}>Off</Text>
+              <Text style={styles.summaryBody}>Cash-out, transfer, and payout release stay locked.</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Purchase provider</Text>
+              <Text style={styles.summaryValue}>Google Play sandbox</Text>
+              <Text style={styles.summaryBody}>
+                Android digital tests use Google Play / RevenueCat. Merchandise stays in the separate Stripe lane.
+              </Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Next Step</Text>
+              <Text style={styles.summaryValue}>{sandboxNextStep}</Text>
+              <Text style={styles.summaryBody}>
+                {hasOwnerOperatorStudioAccess ? "Owner setup mode." : sandboxTesterActive ? "Tester access active." : "No tester access on this account."}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.sectionLabel}>Offer setup</Text>
           <View style={styles.summaryGrid}>
             {sandboxTesterOfferCards.map((card) => (
               <View
                 key={card.key}
-                style={[styles.summaryCard, !card.configured && styles.summaryCardUnavailable]}
+                style={[
+                  styles.summaryCard,
+                  styles.sandboxOfferCard,
+                  card.configured ? styles.sandboxOfferCardReady : styles.sandboxOfferCardBlocked,
+                ]}
                 testID={card.testID}
                 accessibilityLabel={`${card.title} sandbox offer status`}
               >
                 <View style={styles.eventCardHeader}>
                   <Text style={styles.summaryLabel}>{card.title}</Text>
-                  {renderStudioStatusPill(card.configured ? "Configured" : "Missing", card.configured ? "default" : "muted")}
+                  {renderStudioStatusPill(card.statusLabel, card.configured ? "default" : card.statusLabel === "Blocked" ? "warning" : "muted")}
                 </View>
-                <Text style={styles.summaryValue}>Sandbox Test</Text>
+                <Text style={styles.summaryValue}>{card.configured ? "Tester visible" : card.statusLabel}</Text>
                 <Text style={styles.summaryBody}>{card.description}</Text>
-                <Text style={styles.eventEmptyBody}>Not payable · Tester visible · No live payout</Text>
+                <Text style={styles.eventEmptyBody}>Sandbox only · No payouts</Text>
                 {card.blocker ? <Text style={styles.noticeText}>{card.blocker}</Text> : null}
+                {card.actionLabel && card.onPress ? (
+                  <TouchableOpacity
+                    style={styles.eventActionButton}
+                    activeOpacity={0.86}
+                    onPress={card.onPress}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    testID={card.actionTestID}
+                    accessibilityRole="button"
+                    accessibilityLabel={card.actionLabel}
+                  >
+                    <Text style={styles.eventActionButtonText}>{card.actionLabel}</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ))}
           </View>
@@ -7661,10 +7853,10 @@ export function ChannelStudioScreen() {
               {sandboxSetupBusy ? (
                 <View style={styles.eventPrimaryButtonBusyRow}>
                   <ActivityIndicator color="#fff" />
-                  <Text style={styles.eventPrimaryButtonText}>Setting up</Text>
+                  <Text style={styles.eventPrimaryButtonText}>{sandboxSetupButtonLabel}</Text>
                 </View>
               ) : (
-                <Text style={styles.eventPrimaryButtonText}>Set up sandbox offers</Text>
+                <Text style={styles.eventPrimaryButtonText}>{sandboxSetupButtonLabel}</Text>
               )}
             </TouchableOpacity>
             <TouchableOpacity
@@ -7677,7 +7869,31 @@ export function ChannelStudioScreen() {
               accessibilityRole="button"
               accessibilityLabel="Refresh sandbox status"
             >
-              <Text style={styles.eventSecondaryButtonText}>Refresh sandbox status</Text>
+              <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.eventActionRow}>
+            <TouchableOpacity
+              style={styles.eventSecondaryButton}
+              activeOpacity={0.88}
+              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+              onPress={previewCreatorPlatform}
+              testID="money-sandbox-open-tester-preview-button"
+              accessibilityRole="button"
+              accessibilityLabel="Open tester preview"
+            >
+              <Text style={styles.eventSecondaryButtonText}>Open tester preview</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eventSecondaryButton}
+              activeOpacity={0.88}
+              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+              onPress={openMoneyTransactions}
+              testID="money-sandbox-manage-testers-button"
+              accessibilityRole="button"
+              accessibilityLabel="View tester access"
+            >
+              <Text style={styles.eventSecondaryButtonText}>View tester access</Text>
             </TouchableOpacity>
           </View>
           {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
@@ -10349,6 +10565,38 @@ const styles = StyleSheet.create({
   summaryCardUnavailable: {
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  sandboxSafetyBanner: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.25)",
+    backgroundColor: "rgba(115,134,255,0.12)",
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    marginBottom: 12,
+    gap: 3,
+  },
+  sandboxSafetyTitle: {
+    color: "#E4E9FF",
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  sandboxSafetyBody: {
+    color: "#BFC8E3",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  sandboxOfferCard: {
+    minWidth: 150,
+  },
+  sandboxOfferCardReady: {
+    borderColor: "rgba(45,153,92,0.34)",
+    backgroundColor: "rgba(45,153,92,0.09)",
+  },
+  sandboxOfferCardBlocked: {
+    borderColor: "rgba(242,194,91,0.28)",
+    backgroundColor: "rgba(242,194,91,0.07)",
   },
   summaryLabel: {
     color: "#8590A6",

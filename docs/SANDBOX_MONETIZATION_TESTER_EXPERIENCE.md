@@ -8,11 +8,37 @@ This lane makes sandbox creator-money flows visible to fan/tester accounts witho
 
 Owner Money Center includes `Sandbox Tester Experience`.
 
+- The owner surface now uses product states instead of backend diagnostics: `Sandbox Testing`, `Live Money: Off`, `Payouts: Off`, `Flow readiness`, and `Next step`.
+- A compact safety banner says `Test mode - no payouts` with `No real charges. No creator earnings. No withdrawals.`
+- The owner checklist is four steps: configure offers, grant tester, test flows, revoke tester.
 - `Set up sandbox offers` creates or updates test-only offers for Tips, Paid Video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass.
-- `Refresh sandbox status` reloads offer status, tester status, and transaction/readback rows.
+- `Refresh status` reloads offer status, tester status, and transaction/readback rows.
+- Setup has deterministic states: idle, setting up, complete, partial, failed, and timed out. The button cannot spin forever.
 - Setup is idempotent and keeps rows sandbox-only, not payable, production off, and payout off.
 - Watch-Party tickets require an existing valid creator-owned Party Room target; setup reports a blocker instead of creating invalid rows.
 - Paid Video requires an existing public/safe creator video; setup reports a blocker instead of faking a video.
+
+Owner cards use these launch-facing meanings:
+
+- `Ready`: tester can see/use the sandbox flow.
+- `Needs setup`: run setup or complete the named local setup action.
+- `Blocked`: a required creator asset is missing, such as a Party Room target or public video.
+- `Tester visible`: configured sandbox offer is available to active sandbox testers.
+
+The Watch-Party Ticket missing state must say `Create a Party Room before testers can buy a ticket` and provide a `Create Party Room target` action. Provider/debug detail belongs behind Advanced provider details, not the primary creator UX.
+
+## Tester Surface
+
+Active non-owner sandbox testers see `Test Creator Purchases` on the creator public Platform.
+
+- Subtitle/copy: `Sandbox only. No real money moves.`
+- Tester cards cover Tip creator, Paid video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass.
+- Missing flows show an unavailable state with the exact creator action, not a broken purchase button.
+- Channel Subscription copy says it is a creator channel subscription test and not Chi'llywood Premium.
+- VIP copy says it is creator-specific and does not unlock Premium or other creators.
+- Completed sandbox actions show receipt-style copy such as `Sandbox tip complete. No money moved. No payout created.`
+
+If tester access is revoked, sandbox-only CTAs hide after refresh and direct sandbox purchase intent creation remains blocked by the database guard.
 
 ## Tester Access
 
@@ -103,5 +129,7 @@ Required proof:
 8. Owner refreshes Money Center and sees sandbox/not-payable readback.
 9. Tester grant is revoked.
 10. Tester no longer sees sandbox-only offers after revoke/refresh, and direct sandbox intent creation fails with `sandbox_monetization_tester_required`.
+
+Do not call the tester experience production-ready until the Play-installed app proves the redesigned owner surface, the non-owner tester surface, sandbox receipts, Watch-Party missing-state copy if applicable, and revoke behavior.
 
 iOS/TestFlight sandbox proof is later. This lane does not enable live money or Stripe digital checkout on Android.

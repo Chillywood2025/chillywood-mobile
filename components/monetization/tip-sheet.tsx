@@ -121,7 +121,11 @@ export function TipSheet({
         return;
       }
 
-      setNotice(result.message);
+      setNotice(
+        sandboxTester || tipStatus?.testMode
+          ? `Sandbox tip complete. No money moved. No payout created. ${new Date().toLocaleString()}`
+          : result.message,
+      );
     } catch {
       setNotice("Google Play sandbox tip could not be started. Try again later.");
     } finally {

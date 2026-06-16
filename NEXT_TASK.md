@@ -1,5 +1,11 @@
 # NEXT TASK
 
+## Sandbox Monetization Tester UX Proof
+
+After this UX closeout, run a Play-installed Android proof for Money Center -> Sandbox Tester Experience and the non-owner tester Platform surface. The expected owner UI is `Sandbox Testing`, `X of 6 ready`, `Live Money: Off`, `Payouts: Off`, exact `Next Step`, four-step checklist, action-oriented six-flow cards, and setup button states that exit `Setting up` into Ready/Partial/Failed/Timed out. The expected tester UI is `Test Creator Purchases` with `Sandbox only. No real money moves.`, configured sandbox CTAs, unavailable states for missing dependencies, and receipt copy saying no money moved/no payout created.
+
+Proof must still confirm: owner setup completes or partials with exact blockers, non-owner tester sees and can use configured sandbox CTAs, Watch-Party Ticket missing state points to Party Room target creation if still missing, revoked tester loses sandbox visibility, and direct sandbox intent remains blocked for revoked testers. Do not call tester monetization production-ready until this Play-installed UI proof passes. Live money, payouts, withdrawals, cash-out, service-role-in-mobile, Premium weakening, RLS weakening, and tester owner/operator access remain prohibited.
+
 ## Brand Studio Closeout Proof / OTA Pickup
 
 Latest repo-side follow-up removes the creator-facing `Needs review` state from normal owned Brand Studio uploads and is OTA-published from code commit `1f3cb80` to branch `production`, runtime `1.0.0`, update group `c382be3e-b17a-473f-bdfd-38101e8edadc`, Android update `019ec762-ce39-711c-a6db-a4264a552ffd`. In tester proof, the Brand tab should now show `Ready to publish`, `Checking`, `Blocked`, `Approved`, or `Published` instead of sending the creator to a review workflow. Public gates remain unchanged: only published, moderation-safe, scan-safe, not-deleted Brand assets can render publicly.
