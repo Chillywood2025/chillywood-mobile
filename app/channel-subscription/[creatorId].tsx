@@ -17,6 +17,8 @@ import {
   resolveChannelSubscriptionAccess,
   type ChannelSubscriptionAccess,
 } from "../../_lib/channelSubscriptions";
+import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRouteTargets";
+import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
 import { buildUserChannelProfile, readUserProfileByUserId } from "../../_lib/userData";
 import { useSession } from "../../_lib/session";
 
@@ -46,10 +48,15 @@ export default function ChannelSubscriptionScreen() {
       readUserProfileByUserId(creatorId).catch(() => null),
     ]);
     setAccess(nextAccess);
-    setCreatorName(buildUserChannelProfile({
+    const channelProfile = buildUserChannelProfile({
       id: creatorId,
       profile,
       fallbackDisplayName: "Creator",
+    });
+    setCreatorName(resolvePlatformDisplayIdentity({
+      channel: channelProfile,
+      profile,
+      fallbackDisplayName: "Untitled Platform",
     }).displayName);
     setLoading(false);
   };
@@ -60,6 +67,10 @@ export default function ChannelSubscriptionScreen() {
 
   const handleSubscribe = async () => {
     if (!creatorId || busy) return;
+    if (isOwner) {
+      Alert.alert("Owner preview", "You manage this creator subscription from Platform Studio. Owners cannot buy their own creator subscription.");
+      return;
+    }
     if (!viewerUserId) {
       Alert.alert("Subscribe", "Sign in to subscribe to this creator Platform.");
       return;
@@ -89,8 +100,8 @@ export default function ChannelSubscriptionScreen() {
   };
 
   const offer = access?.offer ?? null;
-  const subscribed = access?.allowed === true;
-  const needsPurchase = access?.requiresPurchase === true && !!offer;
+  const subscribed = access?.allowed === true || isOwner;
+  const needsPurchase = !isOwner && access?.requiresPurchase === true && !!offer;
 
   return (
     <View style={styles.screen}>
@@ -136,7 +147,11 @@ export default function ChannelSubscriptionScreen() {
               <Text style={styles.emptyStateBody}>{isOwner ? "Subscriber-only posts can be managed from Platform Studio when the post system is backed." : "Subscriber-only posts coming later."}</Text>
             </View>
             {isOwner ? (
-              <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={() => router.push({ pathname: "/channel-studio", params: { tab: "monetization" } } as unknown as Parameters<typeof router.push>[0])}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                activeOpacity={0.86}
+                onPress={() => router.push(CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget as unknown as Parameters<typeof router.push>[0])}
+              >
                 <Text style={styles.secondaryButtonText}>Manage subscription offer</Text>
               </TouchableOpacity>
             ) : null}

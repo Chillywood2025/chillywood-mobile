@@ -36,6 +36,8 @@ Active non-owner sandbox testers see `Test Creator Purchases` on the creator pub
 - Missing flows show an unavailable state with the exact creator action, not a broken purchase button.
 - Channel Subscription copy says it is a creator channel subscription test and not Chi'llywood Premium.
 - VIP copy says it is creator-specific and does not unlock Premium or other creators.
+- Owner management for Channel Subscription and VIP routes to Platform Studio / Money Center offer setup targets, not the Chi'llywood Premium purchase shell.
+- Owners cannot buy their own creator subscription or creator VIP pass; proof purchases must use a true non-owner tester account.
 - Completed sandbox actions show receipt-style copy such as `Sandbox tip complete. No money moved. No payout created.`
 
 If tester access is revoked, sandbox-only CTAs hide after refresh and direct sandbox purchase intent creation remains blocked by the database guard.
@@ -71,6 +73,16 @@ Scripts require local `SUPABASE_SERVICE_ROLE_KEY` and never print the key.
 | VIP Pass | Sandbox creator-specific VIP CTA | Google Play / RevenueCat | No |
 
 Creator tips are Android digital support and use Google Play / RevenueCat only. Physical merchandise is the Stripe sandbox path and remains separate from these six tester flows.
+
+Route separation remains part of the proof contract:
+
+- Premium is app-wide Chi'llywood Premium only.
+- Creator Subscription is one creator Platform membership only.
+- VIP is creator-specific VIP only.
+- Tips are contribution-only and unlock no access.
+- Paid Video unlocks one video only.
+- Watch-Party Ticket unlocks one Party Room / Watch-Party target only.
+- Event Pass unlocks one event only.
 
 ## Safety
 

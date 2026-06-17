@@ -17,6 +17,8 @@ import {
   resolveCreatorVipPassAccess,
   type CreatorVipPassAccess,
 } from "../../_lib/creatorVipPasses";
+import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRouteTargets";
+import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId } from "../../_lib/userData";
 
@@ -46,10 +48,15 @@ export default function CreatorVipPassScreen() {
       readUserProfileByUserId(creatorId).catch(() => null),
     ]);
     setAccess(nextAccess);
-    setCreatorName(buildUserChannelProfile({
+    const channelProfile = buildUserChannelProfile({
       id: creatorId,
       profile,
       fallbackDisplayName: "Creator",
+    });
+    setCreatorName(resolvePlatformDisplayIdentity({
+      channel: channelProfile,
+      profile,
+      fallbackDisplayName: "Untitled Platform",
     }).displayName);
     setLoading(false);
   };
@@ -60,6 +67,10 @@ export default function CreatorVipPassScreen() {
 
   const handleGetVip = async () => {
     if (!creatorId || busy) return;
+    if (isOwner) {
+      Alert.alert("Owner preview", "You manage VIP from Platform Studio. Owners cannot buy their own creator VIP pass.");
+      return;
+    }
     if (!viewerUserId) {
       Alert.alert("Get VIP", "Sign in to get VIP for this creator Platform.");
       return;
@@ -89,8 +100,8 @@ export default function CreatorVipPassScreen() {
   };
 
   const offer = access?.offer ?? null;
-  const isVip = access?.allowed === true;
-  const needsPurchase = access?.requiresPurchase === true && !!offer;
+  const isVip = access?.allowed === true || isOwner;
+  const needsPurchase = !isOwner && access?.requiresPurchase === true && !!offer;
 
   return (
     <View style={styles.screen}>
@@ -133,7 +144,11 @@ export default function CreatorVipPassScreen() {
               <Text style={styles.emptyStateBody}>{isOwner ? "VIP perks can be managed from Platform Studio when the perk system is backed." : "VIP perks coming later."}</Text>
             </View>
             {isOwner ? (
-              <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={() => router.push({ pathname: "/channel-studio", params: { tab: "monetization" } } as unknown as Parameters<typeof router.push>[0])}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                activeOpacity={0.86}
+                onPress={() => router.push(CREATOR_MONEY_ROUTE_TARGETS.vipPass.ownerTarget as unknown as Parameters<typeof router.push>[0])}
+              >
                 <Text style={styles.secondaryButtonText}>Manage VIP offer</Text>
               </TouchableOpacity>
             ) : null}

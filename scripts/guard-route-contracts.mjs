@@ -45,9 +45,15 @@ const assertScopedIncludes = (source, startNeedle, endNeedle, needle, label) => 
   ["app/title/[id].tsx", "Title"],
   ["app/channel-studio/index.tsx", "Platform Studio preferred wrapper"],
   ["app/channel-settings.tsx", "Platform Studio compatibility implementation"],
+  ["app/channel/[userId].tsx", "Public Platform"],
+  ["app/channel-subscription/[creatorId].tsx", "Subscriber Area"],
+  ["app/vip-pass/[creatorId].tsx", "VIP Area"],
   ["app/chat/index.tsx", "Chi'lly Chat inbox"],
   ["app/chat/[threadId].tsx", "Chi'lly Chat thread"],
   ["app/subscribe.tsx", "Premium route"],
+  ["_lib/platformIdentity.ts", "Platform identity resolver"],
+  ["_lib/platformModes.ts", "Platform owner/viewer mode resolver"],
+  ["_lib/creatorMonetizationRouteTargets.ts", "Creator money route targets"],
 ].forEach(([relativePath, label]) => assertFile(relativePath, label));
 
 const appLayout = read("app/_layout.tsx");
@@ -57,11 +63,15 @@ const player = read("app/player/[id].tsx");
 const title = read("app/title/[id].tsx");
 const channelStudio = read("app/channel-studio/index.tsx");
 const channelSettings = read("app/channel-settings.tsx");
+const publicPlatform = read("app/channel/[userId].tsx");
 const communicationIndex = read("app/communication/index.tsx");
 const communicationRoom = read("app/communication/[roomId].tsx");
 const monetization = read("_lib/monetization.ts");
 const channelSubscriptionRoute = read("app/channel-subscription/[creatorId].tsx");
 const vipRoute = read("app/vip-pass/[creatorId].tsx");
+const platformIdentity = read("_lib/platformIdentity.ts");
+const platformModes = read("_lib/platformModes.ts");
+const creatorMoneyRouteTargets = read("_lib/creatorMonetizationRouteTargets.ts");
 const routeDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
 
 assertIncludes(appLayout, '<Stack.Screen name="watch-party/index" />', "Waiting Room route registration");
@@ -111,6 +121,26 @@ assertIncludes(monetization, 'premium_subscription: {', "Premium target remains 
 assertIncludes(monetization, 'id: "premium_subscription"', "Premium product id remains separate");
 assertIncludes(channelSubscriptionRoute, "does not include Chi'llywood Premium", "Channel Subscription separation copy");
 assertIncludes(vipRoute, "does not unlock Chi'llywood Premium", "VIP separation copy");
+assertIncludes(platformIdentity, "GENERATED_USERNAME_PATTERN", "Platform identity generated fallback guard");
+assertIncludes(platformIdentity, '"Untitled Platform"', "Platform identity clean fallback");
+assertIncludes(publicPlatform, "resolvePlatformDisplayIdentity", "Public Platform identity resolver usage");
+assertIncludes(channelSubscriptionRoute, "resolvePlatformDisplayIdentity", "Subscriber Area identity resolver usage");
+assertIncludes(vipRoute, "resolvePlatformDisplayIdentity", "VIP Area identity resolver usage");
+assertIncludes(platformModes, '"owner_mode"', "Platform owner mode contract");
+assertIncludes(platformModes, '"viewer_mode"', "Platform viewer mode contract");
+assertIncludes(platformModes, '"sandbox_tester_mode"', "Platform sandbox tester mode contract");
+assertIncludes(publicPlatform, "resolvePublicPlatformMode", "Public Platform mode resolver usage");
+assertIncludes(publicPlatform, "isViewerPurchasePlatformMode", "Public Platform viewer purchase mode guard");
+assertIncludes(publicPlatform, "isOwnerPlatformMode", "Public Platform owner mode guard");
+assertIncludes(creatorMoneyRouteTargets, "platformSubscription", "Creator subscription route target");
+assertIncludes(creatorMoneyRouteTargets, "vipPass", "Creator VIP route target");
+assertIncludes(creatorMoneyRouteTargets, 'pathname: "/channel-studio"', "Creator offer owner management target");
+assertIncludes(publicPlatform, "CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget", "Public Platform subscription manage target");
+assertIncludes(publicPlatform, "CREATOR_MONEY_ROUTE_TARGETS.vipPass.ownerTarget", "Public Platform VIP manage target");
+assertIncludes(channelSubscriptionRoute, "Owners cannot buy their own creator subscription", "Subscriber Area owner self-purchase guard");
+assertIncludes(vipRoute, "Owners cannot buy their own creator VIP pass", "VIP Area owner self-purchase guard");
+assertNotIncludes(creatorMoneyRouteTargets, 'platformSubscription: {\n    ownerTarget: "/subscribe"', "Creator subscription owner route");
+assertNotIncludes(creatorMoneyRouteTargets, 'vipPass: {\n    ownerTarget: "/subscribe"', "Creator VIP owner route");
 
 if (process.exitCode) process.exit();
 console.log("Route contract guard passed.");

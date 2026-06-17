@@ -46,11 +46,14 @@ import {
   type PaidWatchPartyOffer,
 } from "../../_lib/paidWatchPartyTickets";
 import { formatClipStudioTemplateLabel, type ClipStudioTemplatePreset } from "../../_lib/clipStudio";
+import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRouteTargets";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { deleteCreatorVideo, readCreatorVideos, updateCreatorVideoMetadata, type CreatorVideo } from "../../_lib/creatorVideos";
 import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
+import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
+import { isOwnerPlatformMode, isViewerPurchasePlatformMode, resolvePublicPlatformMode } from "../../_lib/platformModes";
 import {
   readPlatformBrandStudio,
   readPublicPlatformBranding,
@@ -60,7 +63,7 @@ import {
 } from "../../_lib/platformBranding";
 import { resolveSandboxMonetizationTester } from "../../_lib/sandboxMonetizationTesters";
 import { useSession } from "../../_lib/session";
-import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile } from "../../_lib/userData";
+import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile, type UserProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
@@ -163,6 +166,7 @@ export default function PublicChannelScreen() {
 
   const [loadState, setLoadState] = useState<ChannelLoadState>("loading");
   const [channel, setChannel] = useState<UserChannelProfile | null>(null);
+  const [channelProfile, setChannelProfile] = useState<UserProfile | null>(null);
   const [audienceState, setAudienceState] = useState<PublicChannelAudienceState | null>(null);
   const [videos, setVideos] = useState<CreatorVideo[]>([]);
   const [events, setEvents] = useState<CreatorEventSummary[]>([]);
@@ -194,6 +198,7 @@ export default function PublicChannelScreen() {
     const loadChannel = async () => {
       setLoadState("loading");
       setChannel(null);
+      setChannelProfile(null);
       setAudienceState(null);
       setVideos([]);
       setEvents([]);
@@ -234,6 +239,7 @@ export default function PublicChannelScreen() {
       if (!active) return;
 
       setChannel(nextChannel);
+      setChannelProfile(profile);
       setAudienceState(nextAudienceState);
 
       if (nextAudienceState?.isViewerBlocked) {
@@ -291,6 +297,18 @@ export default function PublicChannelScreen() {
   const liveNowEvents = useMemo(() => events.filter((event) => event.isLiveNow), [events]);
   const upcomingEvents = useMemo(() => events.filter((event) => event.isUpcoming), [events]);
   const isOfficialChannel = channel?.identityKind === "official_platform";
+  const platformMode = resolvePublicPlatformMode({
+    isOwner,
+    sandboxTesterActive,
+    publicPreviewMode,
+  });
+  const platformIdentity = useMemo(() => resolvePlatformDisplayIdentity({
+    channel,
+    profile: channelProfile,
+    fallbackDisplayName: "Untitled Platform",
+  }), [channel, channelProfile]);
+  const platformDisplayName = platformIdentity.displayName;
+  const platformHandle = platformIdentity.handle;
   const followerCount = audienceState?.followerCount ?? null;
   const viewerFollowState = audienceState?.viewerFollowState ?? "unavailable";
   const visibleStats = useMemo(() => {
@@ -466,7 +484,7 @@ export default function PublicChannelScreen() {
   const handleSubscribe = async () => {
     if (!routeUserId || subscriptionBusy || isOwner) return;
     if (!viewerUserId) {
-      Alert.alert("Subscribe", "Sign in to subscribe to this creator's channel.");
+      Alert.alert("Subscribe", "Sign in to subscribe to this creator Platform.");
       return;
     }
     if (subscriptionAccess?.allowed) {
@@ -512,7 +530,7 @@ export default function PublicChannelScreen() {
   const handleGetVip = async () => {
     if (!routeUserId || vipBusy || isOwner) return;
     if (!viewerUserId) {
-      Alert.alert("Get VIP", "Sign in to get VIP for this creator's channel.");
+      Alert.alert("Get VIP", "Sign in to get VIP for this creator Platform.");
       return;
     }
     if (vipAccess?.allowed) {
@@ -563,7 +581,7 @@ export default function PublicChannelScreen() {
 
     try {
       await Share.share({
-        message: `View ${channel.displayName} on Chi'llywood: ${buildChannelDeepLink(channel.id)}`,
+        message: `View ${platformDisplayName} on Chi'llywood: ${buildChannelDeepLink(channel.id)}`,
       });
     } catch {
       Alert.alert("Share unavailable", "Unable to open the share sheet right now.");
@@ -638,13 +656,13 @@ export default function PublicChannelScreen() {
         context: buildSafetyReportContext({
           sourceSurface: "channel",
           sourceRoute: `/channel/${channel.id}`,
-          targetLabel: channel.displayName,
+          targetLabel: platformDisplayName,
           targetRoleLabel: formatPlatformRoleLabel(channel.role, false),
           targetAuditOwnerKey: channel.auditOwnerKey ?? null,
           platformOwnedTarget: channel.identityKind === "official_platform",
           context: {
             channelUserId: channel.id,
-            channelHandle: channel.handle ?? null,
+            channelHandle: platformHandle ?? null,
           },
         }),
       });
@@ -691,9 +709,10 @@ export default function PublicChannelScreen() {
   const renderHero = () => {
     if (!channel) return null;
     const followLabel = viewerFollowState === "following" ? "Following" : "Follow";
-    const canRenderFollow = !isOwner && viewerFollowState !== "unavailable";
-    const canRenderTip = !isOwner && (tipStatus?.canTip === true || sandboxTesterActive);
-    const canRenderSubscribe = !isOwner && sandboxTesterActive && !!subscriptionAccess?.offer && (subscriptionAccess.requiresPurchase || subscriptionAccess.allowed);
+    const viewerPurchaseMode = isViewerPurchasePlatformMode(platformMode);
+    const canRenderFollow = viewerPurchaseMode && viewerFollowState !== "unavailable";
+    const canRenderTip = viewerPurchaseMode && (tipStatus?.canTip === true || sandboxTesterActive);
+    const canRenderSubscribe = viewerPurchaseMode && sandboxTesterActive && !!subscriptionAccess?.offer && (subscriptionAccess.requiresPurchase || subscriptionAccess.allowed);
     const subscribeLabel = subscriptionAccess?.allowed
       ? "Subscribed"
       : subscriptionBusy
@@ -716,14 +735,14 @@ export default function PublicChannelScreen() {
                 <Image source={{ uri: brandAvatarSource }} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarInitial}>
-                  {(channel.displayName || "U").slice(0, 1).toUpperCase()}
+                  {(platformDisplayName || "U").slice(0, 1).toUpperCase()}
                 </Text>
               )}
             </View>
-            <Text style={styles.channelName} numberOfLines={2}>{channel.displayName || "Untitled Platform"}</Text>
-            {channel.handle ? (
+            <Text style={styles.channelName} numberOfLines={2}>{platformDisplayName}</Text>
+            {platformHandle ? (
               <Text style={styles.channelHandle} numberOfLines={1} testID="platform-public-handle">
-                {channel.handle}
+                {platformHandle}
               </Text>
             ) : null}
 	            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>{"Official Chi'llwood"}</Text> : null}
@@ -769,7 +788,7 @@ export default function PublicChannelScreen() {
             />
           ) : null}
           <AppActionButton label="Share" onPress={shareChannel} />
-          {!isOwner ? (
+          {viewerPurchaseMode ? (
             <AppActionButton label="Report" onPress={openReport} variant="danger" />
           ) : null}
           <AppActionButton label="View Profile" onPress={openProfile} />
@@ -1047,7 +1066,7 @@ export default function PublicChannelScreen() {
   };
 
   const renderSandboxTesterSurface = () => {
-    if (!sandboxTesterActive || isOwner) return null;
+    if (!sandboxTesterActive || platformMode !== "sandbox_tester_mode") return null;
 
     const firstVideo = videos.find(hasPlayableVideo) ?? null;
     const firstEvent = events[0] ?? null;
@@ -1152,13 +1171,13 @@ export default function PublicChannelScreen() {
   };
 
   const renderChannelSubscription = () => {
-    if (sandboxTesterActive && !isOwner) return null;
+    if (sandboxTesterActive && !isOwnerPlatformMode(platformMode)) return null;
     const offer = subscriptionAccess?.offer ?? null;
-    if (!offer || (!sandboxTesterActive && !isOwner)) return null;
+    if (!offer || (!sandboxTesterActive && !isOwnerPlatformMode(platformMode))) return null;
     const subscribed = subscriptionAccess?.allowed === true;
     const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
     const unavailableCopy = "Channel Subscription is not available for this creator Platform in sandbox right now. Premium, VIP, paid videos, paid rooms, and paid events stay separate.";
-    if (isOwner) {
+    if (isOwnerPlatformMode(platformMode)) {
       return (
         <AppSection title="Channel Subscription" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
           <View style={styles.programmingCard}>
@@ -1168,7 +1187,11 @@ export default function PublicChannelScreen() {
               Manage this creator Platform subscription. This is separate from Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, and payouts.
             </Text>
             <View style={styles.ownerCommerceActions}>
-              <TouchableOpacity style={styles.ownerCommerceButton} activeOpacity={0.86} onPress={() => openStudio({ tab: "monetization" })}>
+              <TouchableOpacity
+                style={styles.ownerCommerceButton}
+                activeOpacity={0.86}
+                onPress={() => router.push(CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget as unknown as Parameters<typeof router.push>[0])}
+              >
                 <Text style={styles.ownerCommerceButtonText}>Manage subscription offer</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.ownerCommerceButtonSecondary} activeOpacity={0.86} onPress={openSubscriberArea}>
@@ -1213,13 +1236,13 @@ export default function PublicChannelScreen() {
   };
 
   const renderVipPass = () => {
-    if (sandboxTesterActive && !isOwner) return null;
+    if (sandboxTesterActive && !isOwnerPlatformMode(platformMode)) return null;
     const offer = vipAccess?.offer ?? null;
-    if (!offer || (!sandboxTesterActive && !isOwner)) return null;
+    if (!offer || (!sandboxTesterActive && !isOwnerPlatformMode(platformMode))) return null;
     const isVip = vipAccess?.allowed === true;
     const unavailable = !isVip && !vipAccess?.requiresPurchase;
     const unavailableCopy = "VIP is not available for this creator Platform in sandbox right now. Premium, subscriptions, paid videos, paid rooms, and paid events stay separate.";
-    if (isOwner) {
+    if (isOwnerPlatformMode(platformMode)) {
       return (
         <AppSection title="VIP Pass" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
           <View style={styles.programmingCard}>
@@ -1229,7 +1252,11 @@ export default function PublicChannelScreen() {
               Manage creator-specific VIP for this Platform. VIP does not unlock Chi'llywood Premium, subscriptions, paid videos, Watch-Party tickets, paid events, room authority, or payouts.
             </Text>
             <View style={styles.ownerCommerceActions}>
-              <TouchableOpacity style={styles.ownerCommerceButton} activeOpacity={0.86} onPress={() => openStudio({ tab: "monetization" })}>
+              <TouchableOpacity
+                style={styles.ownerCommerceButton}
+                activeOpacity={0.86}
+                onPress={() => router.push(CREATOR_MONEY_ROUTE_TARGETS.vipPass.ownerTarget as unknown as Parameters<typeof router.push>[0])}
+              >
                 <Text style={styles.ownerCommerceButtonText}>Manage VIP offer</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.ownerCommerceButtonSecondary} activeOpacity={0.86} onPress={openVipArea}>
@@ -1302,7 +1329,7 @@ export default function PublicChannelScreen() {
         {renderBackHeader()}
         <View style={styles.loadingCard}>
           <ActivityIndicator color="#DC143C" />
-          <Text style={styles.loadingText}>Loading creator channel…</Text>
+          <Text style={styles.loadingText}>Loading creator Platform…</Text>
         </View>
       </View>
     );
@@ -1346,7 +1373,7 @@ export default function PublicChannelScreen() {
       <ReportSheet
         visible={reportVisible}
         title="Report Platform"
-        description={channel ? `Send a safety report for ${channel.displayName}.` : "Send a safety report for this Platform."}
+        description={channel ? `Send a safety report for ${platformDisplayName}.` : "Send a safety report for this Platform."}
         busy={reportBusy}
         onSubmit={submitChannelReport}
         onClose={() => {
@@ -1358,7 +1385,7 @@ export default function PublicChannelScreen() {
         <TipSheet
           visible={tipSheetVisible}
           creatorId={channel.id}
-          creatorName={channel.displayName}
+          creatorName={platformDisplayName}
           creatorAvatarUrl={brandAvatarSource}
           sourceSurface="creator_channel_header"
           tipStatus={tipStatus}
@@ -1420,7 +1447,13 @@ export default function PublicChannelScreen() {
                 onPress={() => {
                   const videoId = selectedVideoAction.id;
                   setSelectedVideoAction(null);
-                  openStudio({ tab: "monetization", videoId });
+                  router.push({
+                    ...CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget,
+                    params: {
+                      ...CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget.params,
+                      videoId,
+                    },
+                  } as unknown as Parameters<typeof router.push>[0]);
                 }}
                 testID="platform-content-set-price-button"
                 accessibilityRole="button"

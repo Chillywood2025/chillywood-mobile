@@ -12,6 +12,7 @@ Updated: 2026-05-29 for Profile Photo picker correction: the first avatar edit s
 Updated: 2026-05-29 for Home/Profile cleanup: normal main tabs expose top Profile/Settings controls, Profile bottom nav remains hidden, and Profile feed empty states no longer show the old ready-card or random feed-level Platform CTA.
 Updated: 2026-05-26 for Profile Platform navigation cleanup and lightweight Rights Disclosure.
 Updated: 2026-06-17 for owner/public Platform identity correction, owner-vs-viewer creator purchase copy, VIP/Subscriber Area usefulness, Platform content owner actions, and standalone Player fullscreen framing.
+Updated: 2026-06-17 for the hard owner-vs-viewer creator monetization route contract and centralized Platform identity fallback.
 
 This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Platform work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.
 
@@ -33,7 +34,7 @@ It should make creators feel like producers: creator uploaded videos, public cre
 
 Public Platform currently lives on the internal `/channel/[userId]` route as the viewer-facing creator home. Profile remains the personal/social identity route at `/profile/[userId]`. Owner controls live in Platform Studio on `/channel-studio`, with `/channel-settings` preserved as compatibility.
 
-As of June 17, 2026, the owner viewing their own Platform must see owner context (`Your Platform`) and management/preview actions instead of buyer-style role or purchase CTAs. Public viewers continue to see public creator identity, follower/share/report actions where backed, and purchase CTAs only when they are not the owner and access requires it. Platform display name falls back to `Untitled Platform` instead of exposing random technical usernames when no better safe identity exists.
+As of June 17, 2026, the owner viewing their own Platform must see owner context (`Your Platform`) and management/preview actions instead of buyer-style role or purchase CTAs. Public viewers continue to see public creator identity, follower/share/report actions where backed, and purchase CTAs only when they are not the owner and access requires it. Platform display identity is resolved through the shared Platform resolver: Brand/Platform name when backed, Profile display name, Profile handle, and only then a clean `Untitled Platform` fallback. Generated technical usernames such as `user578667` must not be preferred when a better Profile or Platform identity exists.
 
 ## 3. Profile 1-6 Structure
 
@@ -61,6 +62,18 @@ Public viewers may see identity, backed Follow/Following, Chi'lly Chat, View Pla
 Public viewers must not see owner controls, Platform Studio controls, upload, edit, publish, unpublish, delete, audience management, insights/analytics, drafts, private/hidden/removed videos, or admin controls.
 
 Creator subscription and VIP surfaces must use Platform/creator language in normal UI. Owners see `Manage subscription offer`, `View Subscriber Area`, `Manage VIP offer`, and `View VIP Area`; they must not be invited to subscribe to or buy VIP from themselves. Viewers/testers see subscribe/get-VIP CTAs only when eligible, and successful access must explain that each purchase is creator/Platform-specific and does not include Chi'llywood Premium, other creator purchase types, LiveKit/room authority, payouts, or other creators.
+
+Creator monetization route contract:
+
+- Chi'llywood Premium routes only to Premium setup/purchase/restore and must not act as creator VIP, creator subscription, tips, paid video, Watch-Party ticket, or event pass.
+- Tip Creator owner target is creator tip settings/readback; viewer target is the tip sheet.
+- Paid Video owner target is content/paid-offer management; viewer target is Player unlock for one video.
+- Watch-Party Ticket owner target is Party/ticket setup; viewer target is ticket gate and Party Waiting Room or Party Room entry for one target.
+- Event Pass owner target is event/pass setup; viewer target is event pass checkout/access for one event.
+- Platform Subscription owner target is Platform Studio / Money Center focused to subscription setup; viewer target is subscribe or Subscriber Area for that creator Platform only.
+- VIP Pass owner target is Platform Studio / Money Center focused to VIP setup; viewer target is Get VIP or VIP Area for that creator Platform only.
+
+Owner actions for creator offers must not route into the Chi'llywood Premium purchase shell, and owner mode must not create owner purchase records for the owner's own creator offers.
 
 Platform content cards may expose owner-only contextual actions backed by existing routes/helpers: Open in Player, Edit details through Platform Studio, manage paid offer through Platform Studio, feature through Platform Studio, unpublish/move to draft, and delete with confirmation. These actions must not render for public viewers.
 
