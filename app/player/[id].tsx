@@ -1072,6 +1072,7 @@ export default function PlayerScreen() {
   const [playbackLoadError, setPlaybackLoadError] = useState<string | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
+  const [loadedVideoAspectRatio, setLoadedVideoAspectRatio] = useState<number | null>(null);
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
   const [showUpNext, setShowUpNext] = useState(false);
   const [upNextCountdown, setUpNextCountdown] = useState(UP_NEXT_COUNTDOWN_SECONDS);
@@ -4026,6 +4027,15 @@ export default function PlayerScreen() {
         setIsVideoReady(true);
         setIsPlaying(status.isPlaying);
 
+        const naturalSize = (status as AVPlaybackStatus & {
+          naturalSize?: { width?: number; height?: number };
+        }).naturalSize;
+        const naturalWidth = Number(naturalSize?.width ?? 0);
+        const naturalHeight = Number(naturalSize?.height ?? 0);
+        if (Number.isFinite(naturalWidth) && Number.isFinite(naturalHeight) && naturalWidth > 0 && naturalHeight > 0) {
+          setLoadedVideoAspectRatio(naturalWidth / naturalHeight);
+        }
+
         const duration = status.durationMillis ?? 0;
         durationRef.current = duration;
         setDurationMillis(duration);
@@ -4659,8 +4669,16 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (isLiveModeFlag) return undefined;
 
+    const shouldUsePortraitFullscreen = isStandaloneFullscreen
+      && !inWatchParty
+      && typeof loadedVideoAspectRatio === "number"
+      && loadedVideoAspectRatio > 0
+      && loadedVideoAspectRatio < 1;
+
     const orientationLock = isStandaloneFullscreen
-      ? ScreenOrientation.OrientationLock.LANDSCAPE
+      ? shouldUsePortraitFullscreen
+        ? ScreenOrientation.OrientationLock.PORTRAIT_UP
+        : ScreenOrientation.OrientationLock.LANDSCAPE
       : ScreenOrientation.OrientationLock.PORTRAIT_UP;
 
     void ScreenOrientation.lockAsync(orientationLock).catch((error) => {
@@ -4678,7 +4696,7 @@ export default function PlayerScreen() {
         });
       });
     };
-  }, [isLiveModeFlag, isStandaloneFullscreen]);
+  }, [inWatchParty, isLiveModeFlag, isStandaloneFullscreen, loadedVideoAspectRatio]);
 
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
@@ -6213,9 +6231,15 @@ export default function PlayerScreen() {
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);
   const isSharedPlayerFullscreen = isSharedPartyPlayback && isPlayerFullscreen;
+  const isPortraitStandaloneFullscreen = isStandalonePlayer
+    && isStandaloneFullscreen
+    && typeof loadedVideoAspectRatio === "number"
+    && loadedVideoAspectRatio > 0
+    && loadedVideoAspectRatio < 1;
   const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
     && !isLiveMode
-    && !isSharedPlayerFullscreen;
+    && !isSharedPlayerFullscreen
+    && !isPortraitStandaloneFullscreen;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
