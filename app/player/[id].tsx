@@ -950,7 +950,7 @@ const clampZoomTranslation = (translation: ZoomTranslation, scale: number, layou
 
 export default function PlayerScreen() {
   const { isSignedIn } = useSession();
-  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const { width: viewportWidth } = useWindowDimensions();
   const {
     id,
     partyId: partyIdParam,
@@ -6213,11 +6213,9 @@ export default function PlayerScreen() {
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);
   const isSharedPlayerFullscreen = isSharedPartyPlayback && isPlayerFullscreen;
-  const shouldSoftCoverStandaloneFullscreenVideo = isStandalonePlayer && isStandaloneFullscreen;
   const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
     && !isLiveMode
-    && !isSharedPlayerFullscreen
-    && !shouldSoftCoverStandaloneFullscreenVideo;
+    && !isSharedPlayerFullscreen;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
@@ -8533,22 +8531,6 @@ export default function PlayerScreen() {
             {inWatchParty && entryBoostActive ? (
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
-            {shouldSoftCoverStandaloneFullscreenVideo && playbackSource && !standalonePlaybackSourceFailed ? (
-              <>
-                <Video
-                  source={playbackSource}
-                  style={styles.standaloneFullscreenBackdropVideo}
-                  pointerEvents="none"
-                  resizeMode={ResizeMode.COVER}
-                  shouldPlay={isPlaying}
-                  isLooping={false}
-                  useNativeControls={false}
-                  volume={0}
-                  isMuted
-                />
-                <View pointerEvents="none" style={styles.standaloneFullscreenBackdropScrim} />
-              </>
-            ) : null}
             <Animated.View
               pointerEvents={creatorVideoPaidContentLocked ? "auto" : "none"}
               style={[
@@ -9541,15 +9523,6 @@ const styles = StyleSheet.create({
   videoAnimatedWrap: {
     width: "100%",
     height: "100%",
-  },
-  standaloneFullscreenBackdropVideo: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.34,
-    backgroundColor: "black",
-  },
-  standaloneFullscreenBackdropScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.38)",
   },
   standaloneVideoGestureTarget: {
     ...StyleSheet.absoluteFillObject,
