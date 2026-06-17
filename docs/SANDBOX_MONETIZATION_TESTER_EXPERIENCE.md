@@ -111,7 +111,7 @@ During proof, two narrow production migrations were required so Channel Subscrip
 - `20260616120924_allow_channel_vip_config_product_types.sql`
 - `20260616121739_require_sandbox_tester_for_purchase_intents.sql`
 
-Play-installed UI proof is still not closed for the sign-in/device path. Android text-entry automation corrupted proof-account login input on `R5CR120QCBF`, so the backend/setup/revoke contract is proven, but the visible tester CTA flow still needs a clean manual sign-in or a more reliable BrowserStack credential-entry path.
+Play-installed UI proof is now closed for the Android sandbox tester path. Later proof used local-only proof credentials and stable selectors; no coordinate taps were needed for the launch-critical money actions.
 
 ## Proof Readiness
 
@@ -130,7 +130,7 @@ Required proof:
 9. Tester grant is revoked.
 10. Tester no longer sees sandbox-only offers after revoke/refresh, and direct sandbox intent creation fails with `sandbox_monetization_tester_required`.
 
-Do not call the tester experience production-ready until the Play-installed app proves the redesigned owner surface, the non-owner tester surface, sandbox receipts, Watch-Party missing-state copy if applicable, and revoke behavior.
+Do not call live money production-ready from this proof. This proof closes Android sandbox tester readiness only: no real charges, no payouts, no creator earnings, no withdrawals, no service-role-in-mobile, and no Premium or LiveKit authority changes.
 
 iOS/TestFlight sandbox proof is later. This lane does not enable live money or Stripe digital checkout on Android.
 
@@ -163,3 +163,39 @@ Result:
 - Revoke: passed. `resolve_sandbox_monetization_tester` returned false, direct purchase intent returned `sandbox_monetization_tester_required`, and fresh app restart hid sandbox CTAs.
 
 No live money, payout request, provider transfer, payout batch, withdrawal, cash-out, transfer, or payable creator balance was enabled. The Watch-Party room fixture needs a fresh `last_activity_at` during proof because normal room activity windows remain 15 minutes; that is a fixture freshness requirement, not a LiveKit authority change.
+
+## VIP Clean-Tester Proof: June 16, 2026
+
+Proof folder:
+
+```text
+/tmp/chillywood-vip-after-play-refund-proof-20260616-180235
+```
+
+Result:
+
+- Google Play opened the first-time VIP sandbox purchase sheet.
+- Purchase completed with the Google Play test card.
+- The app landed on VIP Area and showed VIP active for this creator channel only.
+- Backend readback confirmed VIP pass active, purchase intent sandbox/consumed, access grant `sandbox_only`, `not_payable=true`, no Premium unlock, no payout/payment authority, and no LiveKit/room authority.
+- Revoke passed: sandbox tester access was revoked, resolver returned false, fresh app restart hid `Test Creator Purchases` and the VIP CTA, and direct stale purchase intent was blocked with `sandbox_monetization_tester_required`.
+
+## Final Three-Flow Proof: June 16, 2026
+
+Proof folder:
+
+```text
+/tmp/chillywood-sandbox-money-final-three-proof-20260616-183633
+```
+
+Device: `R5CR120QCBF` / `SM-N986U1`, Play-installed `com.chillywood.mobile`, installer `com.android.vending`, version `1.0.0` versionCode `53`.
+
+Result:
+
+- Paid Video passed with selector `tester-paid-video-unlock-button`. Google Play sandbox purchase completed for `paid_content_access_sandbox_099`, backend readback stayed sandbox/not-payable/no-payout, and Player opened playable 9:56 media for fixture video `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`.
+- Watch-Party Ticket passed with selector `tester-watch-party-ticket-button`. Offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` targets room `W3JJHH`; Google Play sandbox purchase completed, ticket access was granted, and the app reached the room permission path. Camera/mic permissions were denied, so no LiveKit media join or room publish authority is claimed from this proof.
+- Event Pass passed with selector `tester-event-pass-button`. Event `a9167135-d3cc-4349-bf8a-46dfd9068806` showed scheduled pass copy, Google Play sandbox purchase completed, and the app showed `Event pass confirmed`.
+- Regression readback kept Tips, Channel Subscription, and VIP in sandbox/not-payable/no-payout states from accepted proofs.
+- Revoke passed again: resolver returned false, direct stale purchase intent returned `sandbox_monetization_tester_required`, and fresh app restart hid sandbox CTAs.
+
+Final Android sandbox tester label: `6/6 Play-installed sandbox flows proven`. This does not enable live money, payouts, withdrawals, cash-out, payable balances, Premium, or LiveKit authority.

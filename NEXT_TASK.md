@@ -1,10 +1,10 @@
 # NEXT TASK
 
-## Sandbox Monetization Tester UX Proof
+## Sandbox Monetization Tester Proof
 
-After this UX closeout, run a Play-installed Android proof for Money Center -> Sandbox Tester Experience and the non-owner tester Platform surface. The expected owner UI is `Sandbox Testing`, `X of 6 ready`, `Live Money: Off`, `Payouts: Off`, exact `Next Step`, four-step checklist, action-oriented six-flow cards, and setup button states that exit `Setting up` into Ready/Partial/Failed/Timed out. The expected tester UI is `Test Creator Purchases` with `Sandbox only. No real money moves.`, configured sandbox CTAs, unavailable states for missing dependencies, and receipt copy saying no money moved/no payout created.
+Play-installed Android sandbox tester proof is closed for all six creator-money tester flows. The final open Paid Video, Watch-Party Ticket, and Event Pass gaps were closed in `/tmp/chillywood-sandbox-money-final-three-proof-20260616-183633` on `R5CR120QCBF` / `SM-N986U1`, package `com.chillywood.mobile`, installer `com.android.vending`, version `1.0.0` / versionCode `53`, using stable selectors. Combined with accepted prior Tips, Channel Subscription, VIP, and revoke/security proofs, Sandbox Money Tester Experience is `6/6` Android sandbox-flow proved.
 
-Proof must still confirm: owner setup completes or partials with exact blockers, non-owner tester sees and can use configured sandbox CTAs, Watch-Party Ticket missing state points to Party Room target creation if still missing, revoked tester loses sandbox visibility, and direct sandbox intent remains blocked for revoked testers. Do not call tester monetization production-ready until this Play-installed UI proof passes. Live money, payouts, withdrawals, cash-out, service-role-in-mobile, Premium weakening, RLS weakening, and tester owner/operator access remain prohibited.
+Do not start another broad sandbox money fixture lane unless a real regression is found. Remaining monetization work should be narrow: future provider refund/revoke/lifecycle tooling, broader BrowserStack regression, and live-money approval planning. Live money, payouts, withdrawals, cash-out, service-role-in-mobile, Premium weakening, RLS weakening, and tester owner/operator access remain prohibited.
 
 ## Brand Studio Closeout Proof / OTA Pickup
 
@@ -1160,20 +1160,10 @@ Remaining proof-only follow-ups:
 Signup is no longer blocked on the Play-installed Android build. Commit `ea4b545` imports `react-native-get-random-values` before Supabase auth initialization, and EAS production update group `4679bd00-d966-4950-b7eb-570e120b3e4d` proved a fresh Android signup on `R5CR120QCBF` with success copy. Keep using fresh emails for signup smoke because proof emails created during debugging now exist in Supabase auth. The remaining signup follow-up is operational: confirm real user confirmation-email delivery with the configured SMTP/provider and keep reset-email rate limits managed through Supabase Auth email settings, not app UI changes.
 # Next Task
 
-## Finish VIP Clean-Tester Sandbox Money Proof
+## Sandbox Money Follow-Up
 
-Backend proof is closed in `/tmp/chillywood-sandbox-money-tester-proof-20260616-063426`: a non-owner tester could start six sandbox/not-payable intents while active, and after revoke direct intent creation failed with `sandbox_monetization_tester_required`.
+VIP clean-tester proof is closed in `/tmp/chillywood-vip-after-play-refund-proof-20260616-180235`. Final Paid Video, Watch-Party Ticket, and Event Pass proof is closed in `/tmp/chillywood-sandbox-money-final-three-proof-20260616-183633`. Do not mark any future money lane live-money-ready from these proofs: they prove Android sandbox tester flows only, with no real charges, no payouts, no creator earnings, no Premium unlock, and no LiveKit/room authority changes.
 
-Play-installed visible proof advanced in `/tmp/chillywood-sandbox-money-fixtures-proof-20260616-135025`. Tips, Paid Video, Watch-Party Ticket, Event Pass, and Channel Subscription passed on `R5CR120QCBF` through Google Play / RevenueCat sandbox or active sandbox receipt states. Revoke also passed on backend and device. The only remaining proof gap is VIP first-time completion because the available Google Play tester already owns `cw_vip_pass_sandbox_499`.
-
-Remaining work:
-
-1. Use a fresh non-owner Google Play license tester that does not already own the VIP sandbox product, or safely reset only the proof VIP sandbox ownership through provider tooling.
-2. Grant that account sandbox monetization tester access with a TTL.
-3. Open the public proof creator Platform and tap `tester-vip-pass-button`.
-4. Complete the Google Play sandbox VIP purchase and confirm creator-specific VIP only, not Premium, not channel subscription, not paid video, not event pass, and not Watch-Party ticket.
-5. Revoke tester access and confirm CTAs are hidden plus direct intent returns `sandbox_monetization_tester_required`.
-
-Do not mark tester monetization fully public-v1 ready until VIP first-time completion is proved with a clean Play tester or the VIP flow is explicitly removed from the public-v1 required set.
+Next useful follow-up is BrowserStack/final regression plus provider lifecycle tooling when safe order ids are available. Watch-Party Ticket proof reached the room permission path after purchase; camera/mic permissions were denied and full media join was intentionally not part of this sandbox money proof.
 
 Migration prerequisite is closed: local migration history was reconciled to production timestamps for the two Chi'lly Circle migrations, and production now has `20260616030632_sandbox_monetization_testers`, `20260616034235_tighten_sandbox_monetization_tester_rpc_grants`, `20260616120810_support_channel_vip_sandbox_config`, `20260616120924_allow_channel_vip_config_product_types`, and `20260616121739_require_sandbox_tester_for_purchase_intents` applied.

@@ -54,7 +54,7 @@ Target: Android Play-installed internal tester build.
 13. Revoke tester access with `scripts/revoke-sandbox-money-tester.mjs`.
 14. Relaunch/refresh as the tester and confirm sandbox-only offers are no longer visible.
 
-Do not mark this contract passed until the tester can actually see and complete the available sandbox flows on a Play-installed device.
+Do not mark live money production-ready from this contract. Passing this contract proves sandbox tester UX only: no real charges, no payouts, no creator earnings, no Premium unlock, and no LiveKit authority.
 
 ## June 16, 2026 Device Proof Notes
 
@@ -68,12 +68,24 @@ Passed on Play-installed Android `R5CR120QCBF`:
 - `tester-event-pass-button`
 - `tester-channel-subscribe-button`
 
-Remaining clean-account proof gap:
-
-- `tester-vip-pass-button` is visible and reaches Google Play, but the available tester already owns `cw_vip_pass_sandbox_499`. Use a fresh Play license tester or provider-side proof reset before calling VIP first-time completion passed.
-
 Fixture notes:
 
 - Watch-Party Ticket fixture room `W3JJHH` must be refreshed immediately before proof because active room freshness is intentionally limited.
 - Paid Video proof uses playable fixture video `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`.
 - Do not use coordinate taps for these controls; selector taps were sufficient after the route fixes.
+
+## June 16, 2026 Final Proof Notes
+
+VIP clean-tester proof folder: `/tmp/chillywood-vip-after-play-refund-proof-20260616-180235`.
+
+Final three-flow proof folder: `/tmp/chillywood-sandbox-money-final-three-proof-20260616-183633`.
+
+Passed on Play-installed Android `R5CR120QCBF`:
+
+- `tester-vip-pass-button`: first-time Google Play sandbox VIP purchase completed; app landed on VIP Area; backend readback showed creator-specific VIP only, not Premium, not payable, and no payout/LiveKit authority.
+- `tester-paid-video-unlock-button`: Google Play sandbox paid-video purchase completed; Player opened playable media for fixture `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`.
+- `tester-watch-party-ticket-button`: Google Play sandbox ticket purchase completed for offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` / room `W3JJHH`; app reached the room permission path. Camera/mic prompts were denied, so room media join and LiveKit publish authority are not claimed by this proof.
+- `tester-event-pass-button`: Google Play sandbox event pass purchase completed for event `a9167135-d3cc-4349-bf8a-46dfd9068806`; app showed `Event pass confirmed`.
+- Revoke/security: resolver returned false, direct stale purchase intent returned `sandbox_monetization_tester_required`, and fresh restart hid sandbox CTAs.
+
+Current label: `6/6 Play-installed sandbox tester flows proven` for Android sandbox mode. Future BrowserStack work should treat this as a regression contract unless a real app regression appears.
