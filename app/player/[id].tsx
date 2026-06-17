@@ -950,7 +950,7 @@ const clampZoomTranslation = (translation: ZoomTranslation, scale: number, layou
 
 export default function PlayerScreen() {
   const { isSignedIn } = useSession();
-  const { width: viewportWidth } = useWindowDimensions();
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const {
     id,
     partyId: partyIdParam,
@@ -6217,6 +6217,9 @@ export default function PlayerScreen() {
   const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
     && !isLiveMode
     && !isSharedPlayerFullscreen;
+  const standaloneFullscreenVerticalBias = shouldSoftCoverStandaloneFullscreenVideo
+    ? -Math.round(Math.min(110, viewportHeight * 0.1))
+    : 0;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
@@ -8536,10 +8539,10 @@ export default function PlayerScreen() {
               pointerEvents={creatorVideoPaidContentLocked ? "auto" : "none"}
               style={[
                 styles.videoAnimatedWrap,
-                shouldSoftCoverStandaloneFullscreenVideo && styles.standaloneFullscreenVideoWrap,
                 {
                   transform: [
                     { translateX: zoomTranslateX },
+                    { translateY: standaloneFullscreenVerticalBias },
                     { translateY: zoomTranslateY },
                     { scale: zoomScale },
                   ],
@@ -9525,11 +9528,6 @@ const styles = StyleSheet.create({
   videoAnimatedWrap: {
     width: "100%",
     height: "100%",
-  },
-  standaloneFullscreenVideoWrap: {
-    width: "62%",
-    height: "100%",
-    alignSelf: "center",
   },
   standaloneVideoGestureTarget: {
     ...StyleSheet.absoluteFillObject,
