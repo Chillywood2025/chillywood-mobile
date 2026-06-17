@@ -6216,7 +6216,8 @@ export default function PlayerScreen() {
   const shouldSoftCoverStandaloneFullscreenVideo = isStandalonePlayer && isStandaloneFullscreen;
   const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
     && !isLiveMode
-    && !isSharedPlayerFullscreen;
+    && !isSharedPlayerFullscreen
+    && !shouldSoftCoverStandaloneFullscreenVideo;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
@@ -8552,7 +8553,6 @@ export default function PlayerScreen() {
               pointerEvents={creatorVideoPaidContentLocked ? "auto" : "none"}
               style={[
                 styles.videoAnimatedWrap,
-                shouldSoftCoverStandaloneFullscreenVideo && styles.standaloneFullscreenVideoWrap,
                 {
                   transform: [
                     { translateX: zoomTranslateX },
@@ -9541,11 +9541,6 @@ const styles = StyleSheet.create({
   videoAnimatedWrap: {
     width: "100%",
     height: "100%",
-  },
-  standaloneFullscreenVideoWrap: {
-    width: "58%",
-    height: "100%",
-    alignSelf: "center",
   },
   standaloneFullscreenBackdropVideo: {
     ...StyleSheet.absoluteFillObject,
