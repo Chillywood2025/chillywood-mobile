@@ -1,10 +1,12 @@
 # Final Public V1 QA Plan
 
-Last updated: June 14, 2026
+Last updated: June 16, 2026
 
 ## Scope
 
 This plan is the final public-v1 launch-readiness QA pass after creator monetization sandbox closeout. It does not add product features, enable live money, enable payouts, change LiveKit authority, change Watch-Party routing, or mix Premium with creator purchases.
+
+Latest launch-blocker audit: `docs/PUBLIC_V1_FINAL_REGRESSION_AUDIT_20260616.md`.
 
 Canonical monetization closeout truth: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md`.
 
@@ -112,14 +114,18 @@ Protected route doctrine:
 ## Current Launch Blockers
 
 - BrowserStack final multi-device regression has not run.
+- Chi'lly Chat two-user message/call proof still needs a second physical session or BrowserStack.
+- Watch-Party Live / Party Room two-user participant rail, join/leave, comments, and controls still need a second physical session or BrowserStack.
+- Live Watch-Party / Live Stage route smoke still needs final runtime regression.
 - Live money remains disabled and must stay disabled until a separate owner-approved launch lane.
 - Payouts, cash-out, withdrawals, transfers, payout release, and payable creator balances remain disabled.
 - Provider refund/revoke/lifecycle proof remains incomplete for several creator-money flows because safe provider tooling/order identifiers are not available.
 - Channel Subscription lifecycle webhook delivery is still provider-blocked until a fresh signed RevenueCat lifecycle event is received after the handler deployment.
-- Paid Watch-Party visual Money Center screenshot remains a follow-up; RPC readback passed.
 - Paid Events capacity UI proof remains deferred because creator UI does not expose `capacity_limit`.
-- Chi'lly Chat, Watch-Party/LiveKit, Premium separation, direct-link gates, and BrowserStack still need release-candidate regression proof; installed-app signup verification and forgot-password reset completion passed on Play/internal v53 with a disposable inbox.
+- Premium separation, direct-link gates, and BrowserStack still need release-candidate regression proof; installed-app signup verification and forgot-password reset completion passed on Play/internal v53 with a disposable inbox.
 - External Google Play / legal / Data Safety / account-deletion acceptance and operational signoff remain launch-governance blockers where not separately closed.
+
+Sandbox Money Tester Experience update: all six Android sandbox tester flows are now Play-installed proved. Final proof folders are `/tmp/chillywood-sandbox-money-final-three-proof-20260616-183633` and `/tmp/chillywood-vip-after-play-refund-proof-20260616-180235`. Future money work in this plan is regression/provider-lifecycle only unless a real regression appears.
 
 ## Safe Deferred Provider-Tooling Gaps
 

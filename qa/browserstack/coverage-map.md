@@ -34,10 +34,13 @@ Platform lanes:
 - BrowserStack has not run.
 - Chi'lly Chat two-user call proof still needs a second device/session or BrowserStack approval.
 - Watch-Party/LiveKit two-user proof still needs a second device/session or BrowserStack approval.
+- Live Watch-Party / Live Stage route smoke still needs final runtime regression.
 - Provider refund/revoke/lifecycle gaps remain deferred by provider tooling/order identifiers.
 - Live money and payouts remain disabled.
 - Google Play external launch governance remains separate from BrowserStack prep.
 - iOS BrowserStack remains a future placeholder and requires future Apple signing, App Store Connect, App Store IAP, and RevenueCat Apple product proof.
+
+Sandbox Money Tester Experience is no longer a launch-blocking fixture gap: all six Android sandbox tester flows are Play-installed proved. BrowserStack should treat money as regression/readback, not first proof.
 
 ## Future iOS Placeholder Device Ideas
 

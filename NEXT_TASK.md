@@ -1,10 +1,10 @@
 # NEXT TASK
 
-## Sandbox Monetization Tester Proof
+## Public V1 Final Regression
 
-Play-installed Android sandbox tester proof is closed for all six creator-money tester flows. The final open Paid Video, Watch-Party Ticket, and Event Pass gaps were closed in `/tmp/chillywood-sandbox-money-final-three-proof-20260616-183633` on `R5CR120QCBF` / `SM-N986U1`, package `com.chillywood.mobile`, installer `com.android.vending`, version `1.0.0` / versionCode `53`, using stable selectors. Combined with accepted prior Tips, Channel Subscription, VIP, and revoke/security proofs, Sandbox Money Tester Experience is `6/6` Android sandbox-flow proved.
+Launch-blocker audit is recorded in `docs/PUBLIC_V1_FINAL_REGRESSION_AUDIT_20260616.md`. Sandbox Money Tester Experience is `6/6` Play-installed Android sandbox-flow proved; do not start another broad money fixture lane unless a real regression appears.
 
-Do not start another broad sandbox money fixture lane unless a real regression is found. Remaining monetization work should be narrow: future provider refund/revoke/lifecycle tooling, broader BrowserStack regression, and live-money approval planning. Live money, payouts, withdrawals, cash-out, service-role-in-mobile, Premium weakening, RLS weakening, and tester owner/operator access remain prohibited.
+Top remaining public-v1 blocker is multi-session real-time regression proof: Chi'lly Chat two-user message/call states, Watch-Party Live / Party Room two-user participant rail and join/leave behavior, and Live Watch-Party / Live Stage route smoke. This needs a second physical device/session or explicitly approved BrowserStack Android final regression using the prepared `qa/browserstack/` contracts. Live money, payouts, withdrawals, cash-out, service-role-in-mobile, Premium weakening, RLS weakening, LiveKit authority changes, and tester owner/operator access remain prohibited.
 
 ## Brand Studio Closeout Proof / OTA Pickup
 
