@@ -9527,7 +9527,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   standaloneFullscreenVideoWrap: {
-    width: "70%",
+    width: "62%",
     height: "100%",
     alignSelf: "center",
   },
