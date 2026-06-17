@@ -6217,9 +6217,6 @@ export default function PlayerScreen() {
   const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
     && !isLiveMode
     && !isSharedPlayerFullscreen;
-  const standaloneFullscreenVerticalBias = shouldSoftCoverStandaloneFullscreenVideo
-    ? -Math.round(Math.min(110, viewportHeight * 0.1))
-    : 0;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
@@ -8535,14 +8532,30 @@ export default function PlayerScreen() {
             {inWatchParty && entryBoostActive ? (
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
+            {shouldSoftCoverStandaloneFullscreenVideo && playbackSource && !standalonePlaybackSourceFailed ? (
+              <>
+                <Video
+                  source={playbackSource}
+                  style={styles.standaloneFullscreenBackdropVideo}
+                  pointerEvents="none"
+                  resizeMode={ResizeMode.COVER}
+                  shouldPlay={isPlaying}
+                  isLooping={false}
+                  useNativeControls={false}
+                  volume={0}
+                  isMuted
+                />
+                <View pointerEvents="none" style={styles.standaloneFullscreenBackdropScrim} />
+              </>
+            ) : null}
             <Animated.View
               pointerEvents={creatorVideoPaidContentLocked ? "auto" : "none"}
               style={[
                 styles.videoAnimatedWrap,
+                shouldSoftCoverStandaloneFullscreenVideo && styles.standaloneFullscreenVideoWrap,
                 {
                   transform: [
                     { translateX: zoomTranslateX },
-                    { translateY: standaloneFullscreenVerticalBias },
                     { translateY: zoomTranslateY },
                     { scale: zoomScale },
                   ],
@@ -9528,6 +9541,20 @@ const styles = StyleSheet.create({
   videoAnimatedWrap: {
     width: "100%",
     height: "100%",
+  },
+  standaloneFullscreenVideoWrap: {
+    width: "58%",
+    height: "100%",
+    alignSelf: "center",
+  },
+  standaloneFullscreenBackdropVideo: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.34,
+    backgroundColor: "black",
+  },
+  standaloneFullscreenBackdropScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.38)",
   },
   standaloneVideoGestureTarget: {
     ...StyleSheet.absoluteFillObject,
