@@ -13,6 +13,7 @@ Updated: 2026-05-29 for Home/Profile cleanup: normal main tabs expose top Profil
 Updated: 2026-05-26 for Profile Platform navigation cleanup and lightweight Rights Disclosure.
 Updated: 2026-06-17 for owner/public Platform identity correction, owner-vs-viewer creator purchase copy, VIP/Subscriber Area usefulness, Platform content owner actions, and standalone Player fullscreen framing.
 Updated: 2026-06-17 for the hard owner-vs-viewer creator monetization route contract and centralized Platform identity fallback.
+Updated: 2026-06-17 for visible Platform monetization UX: owner `Creator Offers` management is separate from viewer/tester `Support this Platform` purchase/support actions.
 
 This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Platform work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.
 
@@ -62,6 +63,8 @@ Public viewers may see identity, backed Follow/Following, Chi'lly Chat, View Pla
 Public viewers must not see owner controls, Platform Studio controls, upload, edit, publish, unpublish, delete, audience management, insights/analytics, drafts, private/hidden/removed videos, or admin controls.
 
 Creator subscription and VIP surfaces must use Platform/creator language in normal UI. Owners see `Manage subscription offer`, `View Subscriber Area`, `Manage VIP offer`, and `View VIP Area`; they must not be invited to subscribe to or buy VIP from themselves. Viewers/testers see subscribe/get-VIP CTAs only when eligible, and successful access must explain that each purchase is creator/Platform-specific and does not include Chi'llywood Premium, other creator purchase types, LiveKit/room authority, payouts, or other creators.
+
+Visible Platform monetization is split by mode. Owner mode renders a `Creator Offers` management module for Tips, Paid videos, Watch-Party tickets, Event passes, Subscription, and VIP; its actions go to Platform Studio/Money Center offer setup or the owned Subscriber/VIP areas, never to the Premium purchase shell and never to an owner self-purchase. Viewer and sandbox tester modes render `Support this Platform`, a compact list of only available/configured actions: Tip, Subscribe, Get VIP, Paid video, Ticket, and Event pass. Each item must state its scope: tips unlock no content; subscriptions support one creator Platform and are not Premium; VIP is creator-specific and does not unlock Premium or paid videos; paid videos unlock one video only; tickets unlock one Party Room/Watch-Party target only; event passes unlock one event only.
 
 Creator monetization route contract:
 

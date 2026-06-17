@@ -42,6 +42,7 @@ import {
   type ChannelSubscriptionAccess,
 } from "../../_lib/channelSubscriptions";
 import {
+  formatPaidWatchPartyTicketPrice,
   readPublicPaidWatchPartyTicketOfferForCreator,
   type PaidWatchPartyOffer,
 } from "../../_lib/paidWatchPartyTickets";
@@ -1300,6 +1301,235 @@ export default function PublicChannelScreen() {
     );
   };
 
+  const renderPlatformMonetization = () => {
+    const firstVideo = videos.find(hasPlayableVideo) ?? null;
+    const firstEvent = events[0] ?? null;
+    const subscriptionOffer = subscriptionAccess?.offer ?? null;
+    const vipOffer = vipAccess?.offer ?? null;
+    const subscriptionAvailable = !!subscriptionOffer && (subscriptionAccess?.requiresPurchase || subscriptionAccess?.allowed);
+    const vipAvailable = !!vipOffer && (vipAccess?.requiresPurchase || vipAccess?.allowed);
+
+    if (isOwnerPlatformMode(platformMode)) {
+      const ownerOffers = [
+        {
+          title: "Tips",
+          body: "Manage contribution settings and test readback. Tips do not unlock content.",
+          status: tipStatus?.canTip ? "Ready" : "Setup",
+          actions: [
+            {
+              label: "Manage tip settings",
+              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.tips.ownerTarget as unknown as Parameters<typeof router.push>[0]),
+            },
+          ],
+        },
+        {
+          title: "Paid videos",
+          body: "Set prices from Content. Each unlock applies to one video only.",
+          status: firstVideo ? "Content ready" : "Needs video",
+          actions: [
+            { label: "Manage Content", onPress: () => openStudio({ tab: "content" }) },
+            {
+              label: "Manage paid offers",
+              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget as unknown as Parameters<typeof router.push>[0]),
+            },
+          ],
+        },
+        {
+          title: "Watch-Party tickets",
+          body: "Choose a Party Room target. Ticket access does not grant host or LiveKit authority.",
+          status: watchPartyTicketOffer?.partyId ? "Target ready" : "Needs target",
+          actions: [
+            {
+              label: watchPartyTicketOffer?.partyId ? "Manage ticket target" : "Choose Party Room target",
+              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.watchPartyTicket.ownerTarget as unknown as Parameters<typeof router.push>[0]),
+            },
+          ],
+        },
+        {
+          title: "Event passes",
+          body: "Manage event access. Each pass is for one creator event only.",
+          status: firstEvent ? "Event ready" : "Needs event",
+          actions: [
+            {
+              label: "Manage event pass",
+              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.eventPass.ownerTarget as unknown as Parameters<typeof router.push>[0]),
+            },
+          ],
+        },
+        {
+          title: "Subscription",
+          body: "Monthly creator Platform membership. This is not Chi'llywood Premium.",
+          status: subscriptionOffer ? "Manage" : "Not set",
+          actions: [
+            {
+              label: "Manage subscription offer",
+              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget as unknown as Parameters<typeof router.push>[0]),
+            },
+            { label: "View Subscriber Area", onPress: openSubscriberArea },
+          ],
+        },
+        {
+          title: "VIP",
+          body: "Creator-specific VIP only. Does not unlock Premium, paid videos, tickets, or events.",
+          status: vipOffer ? "Manage" : "Not set",
+          actions: [
+            {
+              label: "Manage VIP offer",
+              onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.vipPass.ownerTarget as unknown as Parameters<typeof router.push>[0]),
+            },
+            { label: "View VIP Area", onPress: openVipArea },
+          ],
+        },
+      ];
+
+      return (
+        <AppSection title="Creator Offers" statusLabel="Manage" statusTone="success">
+          <View style={styles.creatorOffersIntro}>
+            <Text style={styles.cardKicker}>Owner management</Text>
+            <Text style={styles.cardTitle}>Manage offers. Do not buy your own.</Text>
+            <Text style={styles.cardBody}>
+              Premium is app-wide and separate. Live money and payouts remain off unless a future launch lane explicitly enables them.
+            </Text>
+          </View>
+          <View style={styles.offerGrid}>
+            {ownerOffers.map((offer) => (
+              <View key={offer.title} style={styles.ownerOfferCard}>
+                <View style={styles.offerHeaderRow}>
+                  <Text style={styles.offerTitle}>{offer.title}</Text>
+                  <Text style={styles.offerStatusPill}>{offer.status}</Text>
+                </View>
+                <Text style={styles.offerBody}>{offer.body}</Text>
+                <View style={styles.offerActionRow}>
+                  {offer.actions.map((action, index) => (
+                    <TouchableOpacity
+                      key={`${offer.title}-${action.label}`}
+                      style={[styles.offerActionButton, index > 0 && styles.offerActionButtonSecondary]}
+                      activeOpacity={0.86}
+                      onPress={action.onPress}
+                    >
+                      <Text style={styles.offerActionText}>{action.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
+        </AppSection>
+      );
+    }
+
+    if (!isViewerPurchasePlatformMode(platformMode)) return null;
+
+    const supportItems = [
+      {
+        title: "Tip",
+        body: "Send a contribution. Does not unlock content.",
+        price: sandboxTesterActive ? "Sandbox test" : null,
+        button: sandboxTesterActive ? "Test tip" : "Tip",
+        testID: sandboxTesterActive ? "tester-tip-creator-button" : "platform-support-tip-button",
+        available: tipStatus?.canTip === true || sandboxTesterActive,
+        onPress: () => setTipSheetVisible(true),
+      },
+      {
+        title: "Subscribe",
+        body: "Support this Platform monthly. Does not include Premium.",
+        price: subscriptionOffer ? formatChannelSubscriptionPrice(subscriptionOffer.priceCents, subscriptionOffer.currency) : null,
+        button: subscriptionAccess?.allowed ? "Open Subscriber Area" : sandboxTesterActive ? "Subscribe in test mode" : "Subscribe",
+        testID: sandboxTesterActive ? "tester-channel-subscribe-button" : "platform-support-subscribe-button",
+        available: subscriptionAvailable,
+        busy: subscriptionBusy,
+        onPress: subscriptionAccess?.allowed ? openSubscriberArea : handleSubscribe,
+      },
+      {
+        title: "VIP",
+        body: "Creator-specific VIP. Does not unlock Premium or paid videos.",
+        price: vipOffer ? formatCreatorVipPassPrice(vipOffer.priceCents, vipOffer.currency) : null,
+        button: vipAccess?.allowed ? "Open VIP Area" : sandboxTesterActive ? "Get test VIP" : "Get VIP",
+        testID: sandboxTesterActive ? "tester-vip-pass-button" : "platform-support-vip-button",
+        available: vipAvailable,
+        busy: vipBusy,
+        onPress: vipAccess?.allowed ? openVipArea : handleGetVip,
+      },
+      {
+        title: "Paid video",
+        body: firstVideo ? "Unlock this video only." : "Paid video unavailable until a public video is ready.",
+        price: sandboxTesterActive ? "Sandbox unlock" : null,
+        button: "Unlock video",
+        testID: sandboxTesterActive ? "tester-paid-video-unlock-button" : "platform-support-paid-video-button",
+        available: !!firstVideo,
+        onPress: () => {
+          if (firstVideo) router.push({ pathname: "/player/[id]", params: { id: firstVideo.id, source: "creator-video" } });
+        },
+      },
+      {
+        title: "Ticket",
+        body: "Access this Watch-Party target only.",
+        price: watchPartyTicketOffer ? formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency) : null,
+        button: "Get ticket",
+        testID: sandboxTesterActive ? "tester-watch-party-ticket-button" : "platform-support-ticket-button",
+        available: !!watchPartyTicketOffer?.partyId,
+        onPress: () => {
+          if (!watchPartyTicketOffer?.partyId) return;
+          router.push({
+            pathname: "/watch-party/[partyId]",
+            params: { partyId: watchPartyTicketOffer.partyId },
+          } as unknown as Parameters<typeof router.push>[0]);
+        },
+      },
+      {
+        title: "Event pass",
+        body: firstEvent ? "Access this event only." : "Event pass unavailable until an event is ready.",
+        price: sandboxTesterActive ? "Sandbox pass" : null,
+        button: "Get event pass",
+        testID: sandboxTesterActive ? "tester-event-pass-button" : "platform-support-event-pass-button",
+        available: !!firstEvent,
+        onPress: () => {
+          if (firstEvent) router.push(`/event/${firstEvent.id}` as Parameters<typeof router.push>[0]);
+        },
+      },
+    ].filter((item) => item.available);
+
+    if (!supportItems.length) return null;
+
+    return (
+      <AppSection title="Support this Platform" statusLabel={sandboxTesterActive ? "Sandbox" : "Available"} statusTone={sandboxTesterActive ? "warning" : "success"}>
+        <View style={styles.supportIntro}>
+          <Text style={styles.cardKicker}>{sandboxTesterActive ? "Sandbox tester" : "Creator support"}</Text>
+          <Text style={styles.cardTitle}>{sandboxTesterActive ? "Test purchases. No real money moves." : "Choose exactly what you want to support."}</Text>
+          <Text style={styles.cardBody}>
+            Premium, subscriptions, VIP, tips, videos, tickets, and event passes are separate.
+          </Text>
+        </View>
+        <View style={styles.supportList}>
+          {supportItems.map((item) => (
+            <View key={item.title} style={styles.supportItemCard}>
+              <View style={styles.offerHeaderRow}>
+                <Text style={styles.offerTitle}>{item.title}</Text>
+                {sandboxTesterActive ? <Text style={styles.sandboxBadge}>Sandbox</Text> : null}
+              </View>
+              <Text style={styles.offerBody}>{item.body}</Text>
+              {item.price ? <Text style={styles.offerMeta}>{item.price}</Text> : null}
+              {(subscriptionNotice && item.title === "Subscribe") || (vipNotice && item.title === "VIP") ? (
+                <Text style={styles.offerMeta}>{item.title === "Subscribe" ? subscriptionNotice : vipNotice}</Text>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.supportButton, item.busy && styles.actionButtonDisabled]}
+                activeOpacity={0.86}
+                disabled={!!item.busy}
+                onPress={item.onPress}
+                testID={item.testID}
+                accessibilityRole="button"
+                accessibilityLabel={item.button}
+              >
+                {item.busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.supportButtonText}>{item.button}</Text>}
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      </AppSection>
+    );
+  };
+
   const renderAbout = () => (
     <AppSection title="About" statusLabel={aboutItems.length ? "Public" : "Empty"} statusTone={aboutItems.length ? "success" : "muted"}>
       {aboutItems.length ? (
@@ -1364,10 +1594,7 @@ export default function PublicChannelScreen() {
         {renderLatestUploads()}
         {renderLiveNow()}
         {renderUpcomingEvents()}
-        {renderSandboxTesterSurface()}
-        {renderChannelSubscription()}
-        {renderVipPass()}
-        {renderMiniPlatformCommerce()}
+        {renderPlatformMonetization()}
         {renderAbout()}
       </ScrollView>
       <ReportSheet
@@ -1422,6 +1649,7 @@ export default function PublicChannelScreen() {
                   setSelectedVideoAction(null);
                   openPlayer(video);
                 }}
+                testID="platform-content-open-button"
                 accessibilityRole="button"
                 accessibilityLabel="Open Platform content in Player"
               >
@@ -2148,6 +2376,123 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(14,20,30,0.96)",
     padding: 17,
     gap: 9,
+  },
+  creatorOffersIntro: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(57,217,138,0.18)",
+    backgroundColor: "rgba(14,20,30,0.92)",
+    padding: 15,
+    gap: 7,
+  },
+  supportIntro: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(126,215,255,0.18)",
+    backgroundColor: "rgba(14,20,30,0.92)",
+    padding: 15,
+    gap: 7,
+  },
+  offerGrid: {
+    gap: 10,
+  },
+  supportList: {
+    gap: 10,
+  },
+  ownerOfferCard: {
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 13,
+    gap: 9,
+  },
+  supportItemCard: {
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(115,134,255,0.2)",
+    backgroundColor: "rgba(115,134,255,0.07)",
+    padding: 13,
+    gap: 9,
+  },
+  offerHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  offerTitle: {
+    flex: 1,
+    color: "#F8FAFF",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  offerBody: {
+    color: "#B9C4D8",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  offerMeta: {
+    color: "#F2C25B",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  offerStatusPill: {
+    overflow: "hidden",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    color: "#BFFFE8",
+    backgroundColor: "rgba(57,217,138,0.13)",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  sandboxBadge: {
+    overflow: "hidden",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    color: "#D8DEFF",
+    backgroundColor: "rgba(115,134,255,0.18)",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  offerActionRow: {
+    gap: 8,
+  },
+  offerActionButton: {
+    minHeight: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC143C",
+    paddingHorizontal: 12,
+  },
+  offerActionButtonSecondary: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  offerActionText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  supportButton: {
+    minHeight: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFF",
+    paddingHorizontal: 12,
+  },
+  supportButtonText: {
+    color: "#080A10",
+    fontSize: 12,
+    fontWeight: "900",
   },
   ownerCommerceActions: {
     gap: 10,

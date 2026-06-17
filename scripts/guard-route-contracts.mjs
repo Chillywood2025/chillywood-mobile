@@ -137,8 +137,24 @@ assertIncludes(creatorMoneyRouteTargets, "vipPass", "Creator VIP route target");
 assertIncludes(creatorMoneyRouteTargets, 'pathname: "/channel-studio"', "Creator offer owner management target");
 assertIncludes(publicPlatform, "CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget", "Public Platform subscription manage target");
 assertIncludes(publicPlatform, "CREATOR_MONEY_ROUTE_TARGETS.vipPass.ownerTarget", "Public Platform VIP manage target");
+assertIncludes(publicPlatform, "Creator Offers", "Public Platform owner creator-offers surface");
+assertIncludes(publicPlatform, "Manage offers. Do not buy your own.", "Public Platform owner self-purchase copy");
+assertIncludes(publicPlatform, "Support this Platform", "Public Platform viewer support surface");
+[
+  "platform-support-tip-button",
+  "platform-support-subscribe-button",
+  "platform-support-vip-button",
+  "platform-support-paid-video-button",
+  "platform-support-ticket-button",
+  "platform-support-event-pass-button",
+  "platform-content-open-button",
+].forEach((needle) => assertIncludes(publicPlatform, needle, "Public Platform stable selector"));
 assertIncludes(channelSubscriptionRoute, "Owners cannot buy their own creator subscription", "Subscriber Area owner self-purchase guard");
 assertIncludes(vipRoute, "Owners cannot buy their own creator VIP pass", "VIP Area owner self-purchase guard");
+assertIncludes(channelSubscriptionRoute, "subscriber-area-manage-offer-button", "Subscriber Area manage selector");
+assertIncludes(channelSubscriptionRoute, "subscriber-area-preview-button", "Subscriber Area preview selector");
+assertIncludes(vipRoute, "vip-area-manage-offer-button", "VIP Area manage selector");
+assertIncludes(vipRoute, "vip-area-preview-button", "VIP Area preview selector");
 assertNotIncludes(creatorMoneyRouteTargets, 'platformSubscription: {\n    ownerTarget: "/subscribe"', "Creator subscription owner route");
 assertNotIncludes(creatorMoneyRouteTargets, 'vipPass: {\n    ownerTarget: "/subscribe"', "Creator VIP owner route");
 

@@ -29,12 +29,12 @@ The Watch-Party Ticket missing state must say `Create a Party Room before tester
 
 ## Tester Surface
 
-Active non-owner sandbox testers see `Test Creator Purchases` on the creator public Platform.
+Active non-owner sandbox testers see creator purchase tests inside the public Platform `Support this Platform` section. Owner mode uses `Creator Offers` instead and must not show owner self-purchase CTAs.
 
 - Subtitle/copy: `Sandbox only. No real money moves.`
-- Tester cards cover Tip creator, Paid video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass.
+- Tester actions cover Tip creator, Paid video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass when those flows are configured and available.
 - Missing flows show an unavailable state with the exact creator action, not a broken purchase button.
-- Channel Subscription copy says it is a creator channel subscription test and not Chi'llywood Premium.
+- Channel Subscription copy says it is a creator Platform subscription test and not Chi'llywood Premium.
 - VIP copy says it is creator-specific and does not unlock Premium or other creators.
 - Owner management for Channel Subscription and VIP routes to Platform Studio / Money Center offer setup targets, not the Chi'llywood Premium purchase shell.
 - Owners cannot buy their own creator subscription or creator VIP pass; proof purchases must use a true non-owner tester account.

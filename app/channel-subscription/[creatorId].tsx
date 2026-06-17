@@ -99,6 +99,14 @@ export default function ChannelSubscriptionScreen() {
     }
   };
 
+  const openPublicPreview = () => {
+    if (!creatorId) return;
+    router.push({
+      pathname: "/channel/[userId]",
+      params: { userId: creatorId, preview: "public" },
+    } as unknown as Parameters<typeof router.push>[0]);
+  };
+
   const offer = access?.offer ?? null;
   const subscribed = access?.allowed === true || isOwner;
   const needsPurchase = !isOwner && access?.requiresPurchase === true && !!offer;
@@ -147,13 +155,28 @@ export default function ChannelSubscriptionScreen() {
               <Text style={styles.emptyStateBody}>{isOwner ? "Subscriber-only posts can be managed from Platform Studio when the post system is backed." : "Subscriber-only posts coming later."}</Text>
             </View>
             {isOwner ? (
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                activeOpacity={0.86}
-                onPress={() => router.push(CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget as unknown as Parameters<typeof router.push>[0])}
-              >
-                <Text style={styles.secondaryButtonText}>Manage subscription offer</Text>
-              </TouchableOpacity>
+              <View style={styles.ownerActionStack}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  activeOpacity={0.86}
+                  onPress={() => router.push(CREATOR_MONEY_ROUTE_TARGETS.platformSubscription.ownerTarget as unknown as Parameters<typeof router.push>[0])}
+                  testID="subscriber-area-manage-offer-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Manage subscription offer"
+                >
+                  <Text style={styles.secondaryButtonText}>Manage subscription offer</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.ghostButton}
+                  activeOpacity={0.86}
+                  onPress={openPublicPreview}
+                  testID="subscriber-area-preview-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Preview subscriber experience"
+                >
+                  <Text style={styles.ghostButtonText}>Preview subscriber experience</Text>
+                </TouchableOpacity>
+              </View>
             ) : null}
           </View>
         ) : (
@@ -172,6 +195,9 @@ export default function ChannelSubscriptionScreen() {
                 activeOpacity={0.86}
                 disabled={busy}
                 onPress={handleSubscribe}
+                testID="tester-channel-subscribe-button"
+                accessibilityRole="button"
+                accessibilityLabel="Subscribe to creator Platform"
               >
                 {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Subscribe</Text>}
               </TouchableOpacity>
@@ -317,6 +343,9 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: "700",
   },
+  ownerActionStack: {
+    gap: 10,
+  },
   primaryButton: {
     minHeight: 48,
     borderRadius: 12,
@@ -342,6 +371,21 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: "#fff",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  ghostButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(126,215,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(126,215,255,0.18)",
+    paddingHorizontal: 16,
+  },
+  ghostButtonText: {
+    color: "#D6F8FF",
     fontSize: 15,
     fontWeight: "900",
   },
