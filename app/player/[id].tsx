@@ -1073,6 +1073,7 @@ export default function PlayerScreen() {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isStandaloneFullscreen, setIsStandaloneFullscreen] = useState(false);
   const [loadedVideoAspectRatio, setLoadedVideoAspectRatio] = useState<number | null>(null);
+  const [thumbnailVideoAspectRatio, setThumbnailVideoAspectRatio] = useState<number | null>(null);
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
   const [showUpNext, setShowUpNext] = useState(false);
   const [upNextCountdown, setUpNextCountdown] = useState(UP_NEXT_COUNTDOWN_SECONDS);
@@ -1090,6 +1091,17 @@ export default function PlayerScreen() {
   const isCreatorStandalonePlaybackSurface = !inWatchParty
     && !isLiveModeFlag
     && (playbackSourceKind === "creator-video" || expectsCreatorVideo);
+  const resolvedStandaloneVideoAspectRatio = typeof loadedVideoAspectRatio === "number" && loadedVideoAspectRatio > 0
+    ? loadedVideoAspectRatio
+    : typeof thumbnailVideoAspectRatio === "number" && thumbnailVideoAspectRatio > 0
+      ? thumbnailVideoAspectRatio
+      : null;
+  const shouldUsePortraitStandaloneFullscreen = isStandaloneFullscreen
+    && isCreatorStandalonePlaybackSurface
+    && (
+      resolvedStandaloneVideoAspectRatio === null
+      || resolvedStandaloneVideoAspectRatio < 1
+    );
   const [partyUserId, setPartyUserId] = useState("");
   const [, setPartyViewerCount] = useState(0);
   const [viewerCount, setViewerCount] = useState(1);
@@ -4669,14 +4681,8 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (isLiveModeFlag) return undefined;
 
-    const shouldUsePortraitFullscreen = isStandaloneFullscreen
-      && !inWatchParty
-      && typeof loadedVideoAspectRatio === "number"
-      && loadedVideoAspectRatio > 0
-      && loadedVideoAspectRatio < 1;
-
     const orientationLock = isStandaloneFullscreen
-      ? shouldUsePortraitFullscreen
+      ? shouldUsePortraitStandaloneFullscreen
         ? ScreenOrientation.OrientationLock.PORTRAIT_UP
         : ScreenOrientation.OrientationLock.LANDSCAPE
       : ScreenOrientation.OrientationLock.PORTRAIT_UP;
@@ -4696,7 +4702,7 @@ export default function PlayerScreen() {
         });
       });
     };
-  }, [inWatchParty, isLiveModeFlag, isStandaloneFullscreen, loadedVideoAspectRatio]);
+  }, [isLiveModeFlag, isStandaloneFullscreen, shouldUsePortraitStandaloneFullscreen]);
 
   const onSelectRate = useCallback(async (rate: number) => {
     resetAutoHideTimer();
@@ -6160,6 +6166,8 @@ export default function PlayerScreen() {
   useEffect(() => {
     setPlaybackLoadError(null);
     setIsVideoReady(false);
+    setLoadedVideoAspectRatio(null);
+    setThumbnailVideoAspectRatio(null);
   }, [cleanId, displayItem?.id, displayItem?.video_url, expectsCreatorVideo, expectsSpectatorPlayback]);
   const sharedPartyResolvedSource = useMemo(() => {
     if (!inWatchParty) return source;
@@ -6225,21 +6233,52 @@ export default function PlayerScreen() {
     const localVisual = localTitle as any;
     return localVisual?.image || localVisual?.poster || null;
   }, [displayItem, isCreatorVideoPlayback, localTitle]);
+  useEffect(() => {
+    if (!isCreatorStandalonePlaybackSurface) return undefined;
+
+    const thumbnailUrl = String(
+      (displayItem as any)?.thumbnail_url
+        ?? (displayItem as any)?.poster_url
+        ?? creatorVideo?.thumbnailUrl
+        ?? "",
+    ).trim();
+    if (!thumbnailUrl || !/^https?:\/\//i.test(thumbnailUrl)) return undefined;
+
+    let active = true;
+    Image.getSize(
+      thumbnailUrl,
+      (width, height) => {
+        if (!active) return;
+        const safeWidth = Number(width);
+        const safeHeight = Number(height);
+        if (
+          Number.isFinite(safeWidth)
+          && Number.isFinite(safeHeight)
+          && safeWidth > 0
+          && safeHeight > 0
+        ) {
+          setThumbnailVideoAspectRatio(safeWidth / safeHeight);
+        }
+      },
+      () => {
+        if (active) setThumbnailVideoAspectRatio(null);
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [creatorVideo?.thumbnailUrl, displayItem, isCreatorStandalonePlaybackSurface]);
   const isLiveMode = isLiveModeFlag;
   const shouldUseSharedAndroidVideoSurface = Platform.OS === "android" && isSharedPartyPlayback;
   const playerVideoVolume = isSharedPartyPlayback ? effectiveVideoVolume : 1;
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);
   const isSharedPlayerFullscreen = isSharedPartyPlayback && isPlayerFullscreen;
-  const isPortraitStandaloneFullscreen = isStandalonePlayer
-    && isStandaloneFullscreen
-    && typeof loadedVideoAspectRatio === "number"
-    && loadedVideoAspectRatio > 0
-    && loadedVideoAspectRatio < 1;
   const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
     && !isLiveMode
     && !isSharedPlayerFullscreen
-    && !isPortraitStandaloneFullscreen;
+    && !shouldUsePortraitStandaloneFullscreen;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
