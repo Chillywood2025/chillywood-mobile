@@ -30,6 +30,7 @@ export default function ChannelSubscriptionScreen() {
   const creatorId = normalizeParam(params.creatorId);
   const { isLoading: sessionLoading, user } = useSession();
   const viewerUserId = String(user?.id ?? "").trim();
+  const isOwner = !!creatorId && viewerUserId === creatorId;
   const [access, setAccess] = useState<ChannelSubscriptionAccess | null>(null);
   const [creatorName, setCreatorName] = useState("Creator");
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,7 @@ export default function ChannelSubscriptionScreen() {
   const handleSubscribe = async () => {
     if (!creatorId || busy) return;
     if (!viewerUserId) {
-      Alert.alert("Subscribe", "Sign in to subscribe to this creator's channel.");
+      Alert.alert("Subscribe", "Sign in to subscribe to this creator Platform.");
       return;
     }
     try {
@@ -108,13 +109,36 @@ export default function ChannelSubscriptionScreen() {
           </View>
         ) : subscribed ? (
           <View style={styles.card}>
-            <Text style={styles.kicker}>Subscribed</Text>
-            <Text style={styles.title}>{creatorName}</Text>
+            <View style={styles.statusRow}>
+              <Text style={styles.kicker}>{isOwner ? "Owner preview" : "Subscribed"}</Text>
+              <Text style={[styles.statusPill, isOwner && styles.statusPillOwner]}>{isOwner ? "Owner preview" : "Subscribed"}</Text>
+            </View>
+            <Text style={styles.title}>Subscriber Area</Text>
+            <Text style={styles.platformName}>{creatorName}</Text>
 	            <Text style={styles.body}>
-	              {"Your creator channel subscription is active for this channel only. It does not unlock Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators' channels."}
+	              {"Your creator subscription is active for this Platform only."}
 	            </Text>
+            <View style={styles.scopeGrid}>
+              <View style={styles.scopeCard}>
+                <Text style={styles.scopeTitle}>Includes</Text>
+                <Text style={styles.scopeBody}>Subscriber access for this creator Platform.</Text>
+              </View>
+              <View style={styles.scopeCard}>
+                <Text style={styles.scopeTitle}>Does not include</Text>
+                <Text style={styles.scopeBody}>This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators.</Text>
+              </View>
+            </View>
             {access?.currentPeriodEnd ? (
               <Text style={styles.meta}>Current period ends {new Date(access.currentPeriodEnd).toLocaleString()}.</Text>
+            ) : null}
+            <View style={styles.emptyStateCard}>
+              <Text style={styles.emptyStateTitle}>No subscriber-only posts yet</Text>
+              <Text style={styles.emptyStateBody}>{isOwner ? "Subscriber-only posts can be managed from Platform Studio when the post system is backed." : "Subscriber-only posts coming later."}</Text>
+            </View>
+            {isOwner ? (
+              <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.86} onPress={() => router.push({ pathname: "/channel-studio", params: { tab: "monetization" } } as unknown as Parameters<typeof router.push>[0])}>
+                <Text style={styles.secondaryButtonText}>Manage subscription offer</Text>
+              </TouchableOpacity>
             ) : null}
           </View>
         ) : (
@@ -123,7 +147,7 @@ export default function ChannelSubscriptionScreen() {
             <Text style={styles.title}>{offer?.title ?? "Channel Subscription"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Subscribe to ${creatorName}'s channel for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.`
+                ? `Subscribe to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.`
                 : "This creator subscription is not available right now."}
             </Text>
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
@@ -199,6 +223,32 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     fontWeight: "900",
   },
+  platformName: {
+    color: "#B9C8DE",
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  statusPill: {
+    overflow: "hidden",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    color: "#BFFFE8",
+    backgroundColor: "rgba(57,217,138,0.14)",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  statusPillOwner: {
+    color: "#D6F8FF",
+    backgroundColor: "rgba(126,215,255,0.16)",
+  },
   body: {
     color: "#D7E2F3",
     fontSize: 15,
@@ -211,6 +261,47 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: "800",
   },
+  scopeGrid: {
+    gap: 10,
+  },
+  scopeCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 12,
+    gap: 4,
+  },
+  scopeTitle: {
+    color: "#F8FAFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  scopeBody: {
+    color: "#AEB9CF",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  emptyStateCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.22)",
+    backgroundColor: "rgba(242,194,91,0.08)",
+    padding: 12,
+    gap: 4,
+  },
+  emptyStateTitle: {
+    color: "#F8FAFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  emptyStateBody: {
+    color: "#B9C4D8",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
   primaryButton: {
     minHeight: 48,
     borderRadius: 12,
@@ -220,6 +311,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   primaryButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  secondaryButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    paddingHorizontal: 16,
+  },
+  secondaryButtonText: {
     color: "#fff",
     fontSize: 15,
     fontWeight: "900",

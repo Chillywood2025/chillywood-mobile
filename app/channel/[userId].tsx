@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   ScrollView,
   Share,
   StyleSheet,
@@ -46,7 +47,7 @@ import {
 } from "../../_lib/paidWatchPartyTickets";
 import { formatClipStudioTemplateLabel, type ClipStudioTemplatePreset } from "../../_lib/clipStudio";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
-import { readCreatorVideos, type CreatorVideo } from "../../_lib/creatorVideos";
+import { deleteCreatorVideo, readCreatorVideos, updateCreatorVideoMetadata, type CreatorVideo } from "../../_lib/creatorVideos";
 import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
@@ -76,6 +77,11 @@ const formatRoleLabel = (value?: UserChannelProfile["role"] | null) => {
   if (value === "creator") return "Creator";
   if (value === "host") return "Host";
   return "Viewer";
+};
+
+const formatPlatformRoleLabel = (value: UserChannelProfile["role"] | null | undefined, isOwner: boolean) => {
+  if (isOwner) return "Your Platform";
+  return formatRoleLabel(value);
 };
 
 const formatCountLabel = (value: number, singular: string, plural: string) => {
@@ -172,6 +178,8 @@ export default function PublicChannelScreen() {
   const [vipNotice, setVipNotice] = useState<string | null>(null);
   const [watchPartyTicketOffer, setWatchPartyTicketOffer] = useState<PaidWatchPartyOffer | null>(null);
   const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
+  const [selectedVideoAction, setSelectedVideoAction] = useState<CreatorVideo | null>(null);
+  const [videoActionBusy, setVideoActionBusy] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -331,12 +339,13 @@ export default function PublicChannelScreen() {
     if (!channel) return [];
     const items: { label: string; value: string }[] = [];
     if (channel.tagline) items.push({ label: "About", value: channel.tagline });
-    if (channel.role) items.push({ label: "Role", value: formatRoleLabel(channel.role) });
+    items.push({ label: "Platform", value: formatPlatformRoleLabel(channel.role, isOwner) });
+    if (isOwner) items.push({ label: "Profile", value: "Profile settings stay separate from Platform settings." });
     if (followerCount !== null) {
       items.push({ label: "Audience", value: formatCountLabel(followerCount, "follower", "followers") });
     }
     return items;
-  }, [channel, followerCount]);
+  }, [channel, followerCount, isOwner]);
 
   const openPlayer = (video: CreatorVideo) => {
     if (!hasPlayableVideo(video)) {
@@ -353,8 +362,67 @@ export default function PublicChannelScreen() {
     });
   };
 
-  const openStudio = () => {
+  const openStudio = (params?: Record<string, string>) => {
+    if (params) {
+      router.push({ pathname: "/channel-studio", params } as unknown as Parameters<typeof router.push>[0]);
+      return;
+    }
     router.push("/channel-studio");
+  };
+
+  const refreshPublicVideos = async () => {
+    if (!routeUserId) return;
+    const nextVideos = await readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []);
+    setVideos(nextVideos);
+  };
+
+  const updateSelectedVideoVisibility = async (video: CreatorVideo, visibility: "draft" | "public") => {
+    if (!showOwnerControls || videoActionBusy) return;
+    try {
+      setVideoActionBusy(true);
+      await updateCreatorVideoMetadata(video.id, { visibility });
+      setSelectedVideoAction(null);
+      await refreshPublicVideos();
+    } catch (error) {
+      Alert.alert(
+        "Update video",
+        error instanceof Error && error.message ? error.message : "Unable to update this video right now.",
+      );
+    } finally {
+      setVideoActionBusy(false);
+    }
+  };
+
+  const confirmDeleteSelectedVideo = (video: CreatorVideo) => {
+    if (!showOwnerControls || videoActionBusy) return;
+    Alert.alert(
+      "Delete video?",
+      `"${video.title}" will be removed from your Platform library.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                setVideoActionBusy(true);
+                await deleteCreatorVideo(video);
+                setSelectedVideoAction(null);
+                await refreshPublicVideos();
+              } catch (error) {
+                Alert.alert(
+                  "Delete video",
+                  error instanceof Error && error.message ? error.message : "Unable to delete this video right now.",
+                );
+              } finally {
+                setVideoActionBusy(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const openProfile = () => {
@@ -571,7 +639,7 @@ export default function PublicChannelScreen() {
           sourceSurface: "channel",
           sourceRoute: `/channel/${channel.id}`,
           targetLabel: channel.displayName,
-          targetRoleLabel: formatRoleLabel(channel.role),
+          targetRoleLabel: formatPlatformRoleLabel(channel.role, false),
           targetAuditOwnerKey: channel.auditOwnerKey ?? null,
           platformOwnedTarget: channel.identityKind === "official_platform",
           context: {
@@ -600,7 +668,7 @@ export default function PublicChannelScreen() {
       </TouchableOpacity>
       <Text style={styles.navTitle}>Platform</Text>
       {showOwnerControls ? (
-        <TouchableOpacity style={styles.navStudioButton} activeOpacity={0.86} onPress={openStudio}>
+        <TouchableOpacity style={styles.navStudioButton} activeOpacity={0.86} onPress={() => openStudio()}>
           <Text style={styles.navStudioText}>Platform Studio</Text>
         </TouchableOpacity>
       ) : (
@@ -660,7 +728,7 @@ export default function PublicChannelScreen() {
             ) : null}
 	            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>{"Official Chi'llwood"}</Text> : null}
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
-            {channel.role ? <Text style={styles.rolePill}>{formatRoleLabel(channel.role)}</Text> : null}
+            <Text style={styles.rolePill}>{formatPlatformRoleLabel(channel.role, isOwner)}</Text>
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
               {visibleStats.map((stat) => (
@@ -706,7 +774,7 @@ export default function PublicChannelScreen() {
           ) : null}
           <AppActionButton label="View Profile" onPress={openProfile} />
           {showOwnerControls ? (
-            <AppActionButton label="Open Platform Studio" onPress={openStudio} style={styles.actionButtonWide} variant="success" />
+            <AppActionButton label="Manage Platform" onPress={() => openStudio()} style={styles.actionButtonWide} variant="success" />
           ) : null}
         </View>
       </View>
@@ -773,8 +841,33 @@ export default function PublicChannelScreen() {
     );
   };
 
+  const renderOwnerVideoActionButton = (video: CreatorVideo) => (
+    showOwnerControls ? (
+      <TouchableOpacity
+        style={styles.videoOverflowButton}
+        activeOpacity={0.84}
+        onPress={() => setSelectedVideoAction(video)}
+        testID="platform-content-overflow-button"
+        accessibilityRole="button"
+        accessibilityLabel="Open Platform content actions"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Text style={styles.videoOverflowText}>•••</Text>
+      </TouchableOpacity>
+    ) : null
+  );
+
   const renderFeaturedVideoCard = (video: CreatorVideo) => (
-    <View key={video.id} style={styles.featuredSpotlightCard}>
+    <TouchableOpacity
+      key={video.id}
+      style={styles.featuredSpotlightCard}
+      activeOpacity={0.92}
+      onPress={() => openPlayer(video)}
+      onLongPress={showOwnerControls ? () => setSelectedVideoAction(video) : undefined}
+      testID="platform-content-card"
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${video.title}`}
+    >
       <View style={styles.featuredSpotlightMedia}>
         {video.thumbnailUrl ? (
           <Image source={{ uri: video.thumbnailUrl }} resizeMode="cover" style={styles.videoThumbImage} />
@@ -784,6 +877,7 @@ export default function PublicChannelScreen() {
           </View>
         )}
         <View style={styles.mediaScrim} />
+        {renderOwnerVideoActionButton(video)}
         {renderPublicClipTemplateBadge(video)}
         {renderPublicClipMetadataOverlay(video, "featured") ?? (
           <View style={styles.featuredMediaFooter}>
@@ -804,11 +898,20 @@ export default function PublicChannelScreen() {
           <Text style={styles.playButtonText}>Play</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderLatestUploadCard = (video: CreatorVideo) => (
-    <View key={video.id} style={styles.shelfCard}>
+    <TouchableOpacity
+      key={video.id}
+      style={styles.shelfCard}
+      activeOpacity={0.92}
+      onPress={() => openPlayer(video)}
+      onLongPress={showOwnerControls ? () => setSelectedVideoAction(video) : undefined}
+      testID="platform-content-card"
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${video.title}`}
+    >
       <View style={styles.shelfThumb}>
         {video.thumbnailUrl ? (
           <Image source={{ uri: video.thumbnailUrl }} resizeMode="cover" style={styles.videoThumbImage} />
@@ -817,6 +920,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.videoThumbInitial}>{video.title.slice(0, 1).toUpperCase()}</Text>
           </View>
         )}
+        {renderOwnerVideoActionButton(video)}
         {renderPublicClipTemplateBadge(video)}
         {renderPublicClipMetadataOverlay(video, "shelf")}
       </View>
@@ -833,7 +937,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.playButtonText}>Play</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderFeatured = () => (
@@ -996,7 +1100,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Channel Subscription",
-        body: "Creator channel subscription test. This is not Chi'llywood Premium.",
+        body: "Creator Platform subscription test. This is not Chi'llywood Premium.",
         button: subscriptionAccess?.allowed ? "Open Subscriber Area" : "Subscribe in test mode",
         testID: "tester-channel-subscribe-button",
         onPress: subscriptionAccess?.allowed ? openSubscriberArea : handleSubscribe,
@@ -1053,7 +1157,28 @@ export default function PublicChannelScreen() {
     if (!offer || (!sandboxTesterActive && !isOwner)) return null;
     const subscribed = subscriptionAccess?.allowed === true;
     const unavailable = !subscribed && !subscriptionAccess?.requiresPurchase;
-    const unavailableCopy = "Channel Subscription is not available for this creator in sandbox right now. Premium, VIP, paid videos, paid rooms, and paid events stay separate.";
+    const unavailableCopy = "Channel Subscription is not available for this creator Platform in sandbox right now. Premium, VIP, paid videos, paid rooms, and paid events stay separate.";
+    if (isOwner) {
+      return (
+        <AppSection title="Channel Subscription" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
+          <View style={styles.programmingCard}>
+            <Text style={styles.cardKicker}>Owner tools</Text>
+            <Text style={styles.cardTitle}>{offer?.title ?? "Subscription offer"}</Text>
+            <Text style={styles.cardBody}>
+              Manage this creator Platform subscription. This is separate from Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, and payouts.
+            </Text>
+            <View style={styles.ownerCommerceActions}>
+              <TouchableOpacity style={styles.ownerCommerceButton} activeOpacity={0.86} onPress={() => openStudio({ tab: "monetization" })}>
+                <Text style={styles.ownerCommerceButtonText}>Manage subscription offer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.ownerCommerceButtonSecondary} activeOpacity={0.86} onPress={openSubscriberArea}>
+                <Text style={styles.ownerCommerceButtonText}>View Subscriber Area</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </AppSection>
+      );
+    }
     return (
       <AppSection
         title="Channel Subscription"
@@ -1064,7 +1189,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator membership</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
 	          <Text style={styles.cardBody}>
-	            {`Sandbox Test: subscribe to this creator's channel for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. No live payout. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.`}
+	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. No live payout. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.`}
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1093,7 +1218,28 @@ export default function PublicChannelScreen() {
     if (!offer || (!sandboxTesterActive && !isOwner)) return null;
     const isVip = vipAccess?.allowed === true;
     const unavailable = !isVip && !vipAccess?.requiresPurchase;
-    const unavailableCopy = "VIP is not available for this creator in sandbox right now. Premium, channel subscriptions, paid videos, paid rooms, and paid events stay separate.";
+    const unavailableCopy = "VIP is not available for this creator Platform in sandbox right now. Premium, subscriptions, paid videos, paid rooms, and paid events stay separate.";
+    if (isOwner) {
+      return (
+        <AppSection title="VIP Pass" statusLabel={offer ? "Manage" : "Not set"} statusTone={offer ? "success" : "muted"}>
+          <View style={styles.programmingCard}>
+            <Text style={styles.cardKicker}>Owner tools</Text>
+            <Text style={styles.cardTitle}>{offer?.title ?? "VIP offer"}</Text>
+            <Text style={styles.cardBody}>
+              Manage creator-specific VIP for this Platform. VIP does not unlock Chi'llywood Premium, subscriptions, paid videos, Watch-Party tickets, paid events, room authority, or payouts.
+            </Text>
+            <View style={styles.ownerCommerceActions}>
+              <TouchableOpacity style={styles.ownerCommerceButton} activeOpacity={0.86} onPress={() => openStudio({ tab: "monetization" })}>
+                <Text style={styles.ownerCommerceButtonText}>Manage VIP offer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.ownerCommerceButtonSecondary} activeOpacity={0.86} onPress={openVipArea}>
+                <Text style={styles.ownerCommerceButtonText}>View VIP Area</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </AppSection>
+      );
+    }
     return (
       <AppSection
         title="VIP Pass"
@@ -1104,7 +1250,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator-specific VIP</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
           <Text style={styles.cardBody}>
-            {`Sandbox Test: get VIP for this creator's channel for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.`}
+            {`Sandbox Test: get VIP for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP does not unlock Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, subscriptions, LiveKit authority, room permissions, or other creators.`}
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1220,6 +1366,118 @@ export default function PublicChannelScreen() {
           onClose={() => setTipSheetVisible(false)}
         />
       ) : null}
+      <Modal
+        visible={!!selectedVideoAction}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!videoActionBusy) setSelectedVideoAction(null);
+        }}
+      >
+        <View style={styles.videoActionBackdrop}>
+          <TouchableOpacity
+            style={styles.videoActionDismiss}
+            activeOpacity={1}
+            onPress={() => {
+              if (!videoActionBusy) setSelectedVideoAction(null);
+            }}
+          />
+          {selectedVideoAction ? (
+            <View style={styles.videoActionSheet}>
+              <Text style={styles.cardKicker}>Platform content</Text>
+              <Text style={styles.videoActionTitle} numberOfLines={2}>{selectedVideoAction.title}</Text>
+              <Text style={styles.cardBody}>Owner actions stay hidden from public viewers.</Text>
+              <TouchableOpacity
+                style={styles.videoActionButton}
+                activeOpacity={0.86}
+                onPress={() => {
+                  const video = selectedVideoAction;
+                  setSelectedVideoAction(null);
+                  openPlayer(video);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Open Platform content in Player"
+              >
+                <Text style={styles.videoActionButtonText}>Open in Player</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.videoActionButton}
+                activeOpacity={0.86}
+                onPress={() => {
+                  const videoId = selectedVideoAction.id;
+                  setSelectedVideoAction(null);
+                  openStudio({ tab: "content", videoId });
+                }}
+                testID="platform-content-edit-button"
+                accessibilityRole="button"
+                accessibilityLabel="Edit Platform content details"
+              >
+                <Text style={styles.videoActionButtonText}>Edit details</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.videoActionButton}
+                activeOpacity={0.86}
+                onPress={() => {
+                  const videoId = selectedVideoAction.id;
+                  setSelectedVideoAction(null);
+                  openStudio({ tab: "monetization", videoId });
+                }}
+                testID="platform-content-set-price-button"
+                accessibilityRole="button"
+                accessibilityLabel="Manage paid video offer"
+              >
+                <Text style={styles.videoActionButtonText}>Set price / manage paid offer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.videoActionButton}
+                activeOpacity={0.86}
+                onPress={() => {
+                  const spotlightVideoId = selectedVideoAction.id;
+                  setSelectedVideoAction(null);
+                  openStudio({ tab: "brand", spotlightVideoId });
+                }}
+                testID="platform-content-feature-button"
+                accessibilityRole="button"
+                accessibilityLabel="Feature Platform content"
+              >
+                <Text style={styles.videoActionButtonText}>Feature in Platform Studio</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.videoActionButton}
+                activeOpacity={0.86}
+                disabled={videoActionBusy}
+                onPress={() => updateSelectedVideoVisibility(selectedVideoAction, "draft")}
+                testID="platform-content-visibility-button"
+                accessibilityRole="button"
+                accessibilityLabel="Move Platform content to draft"
+              >
+                <Text style={styles.videoActionButtonText}>Unpublish / move to draft</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.videoActionButton, styles.videoActionButtonDanger]}
+                activeOpacity={0.86}
+                disabled={videoActionBusy}
+                onPress={() => confirmDeleteSelectedVideo(selectedVideoAction)}
+                testID="platform-content-delete-button"
+                accessibilityRole="button"
+                accessibilityLabel="Delete Platform content"
+              >
+                <Text style={styles.videoActionButtonText}>Delete</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.videoActionCancelButton}
+                activeOpacity={0.86}
+                disabled={videoActionBusy}
+                onPress={() => setSelectedVideoAction(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close Platform content actions"
+              >
+                <Text style={styles.videoActionButtonText}>{videoActionBusy ? "Working..." : "Cancel"}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1595,6 +1853,26 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(4,6,11,0.34)",
   },
+  videoOverflowButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(5,8,14,0.82)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+  },
+  videoOverflowText: {
+    color: "#F8FAFF",
+    fontSize: 16,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
   publicClipTemplateBadge: {
     position: "absolute",
     top: 12,
@@ -1780,8 +2058,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   shelfCard: {
-    width: 282,
-    minHeight: 378,
+    width: 248,
+    minHeight: 316,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
@@ -1838,6 +2116,33 @@ const styles = StyleSheet.create({
     padding: 17,
     gap: 9,
   },
+  ownerCommerceActions: {
+    gap: 10,
+    marginTop: 4,
+  },
+  ownerCommerceButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC143C",
+    paddingHorizontal: 14,
+  },
+  ownerCommerceButtonSecondary: {
+    minHeight: 46,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    paddingHorizontal: 14,
+  },
+  ownerCommerceButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
   eventCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -1858,6 +2163,58 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(16,20,29,0.72)",
     paddingHorizontal: 17,
     paddingVertical: 4,
+  },
+  videoActionBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.56)",
+  },
+  videoActionDismiss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  videoActionSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "#0B1018",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 30,
+    gap: 10,
+  },
+  videoActionTitle: {
+    color: "#F8FAFF",
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: "900",
+  },
+  videoActionButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    paddingHorizontal: 14,
+  },
+  videoActionButtonDanger: {
+    borderColor: "rgba(255,92,122,0.35)",
+    backgroundColor: "rgba(220,20,60,0.18)",
+  },
+  videoActionCancelButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC143C",
+    paddingHorizontal: 14,
+  },
+  videoActionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
   },
   aboutRow: {
     gap: 5,

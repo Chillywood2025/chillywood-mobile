@@ -109,8 +109,8 @@ assertIncludes(communicationRoom, 'router.replace("/chat")', "Communication room
 
 assertIncludes(monetization, 'premium_subscription: {', "Premium target remains separate");
 assertIncludes(monetization, 'id: "premium_subscription"', "Premium product id remains separate");
-assertIncludes(channelSubscriptionRoute, "does not include Chi'llwood Premium", "Channel Subscription separation copy");
-assertIncludes(vipRoute, "does not unlock Chi'llwood Premium", "VIP separation copy");
+assertIncludes(channelSubscriptionRoute, "does not include Chi'llywood Premium", "Channel Subscription separation copy");
+assertIncludes(vipRoute, "does not unlock Chi'llywood Premium", "VIP separation copy");
 
 if (process.exitCode) process.exit();
 console.log("Route contract guard passed.");

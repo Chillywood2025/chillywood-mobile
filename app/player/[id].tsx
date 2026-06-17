@@ -6213,7 +6213,11 @@ export default function PlayerScreen() {
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);
   const isSharedPlayerFullscreen = isSharedPartyPlayback && isPlayerFullscreen;
-  const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback) && !isLiveMode && !isSharedPlayerFullscreen;
+  const shouldContainStandaloneFullscreenVideo = isStandalonePlayer && isStandaloneFullscreen;
+  const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
+    && !isLiveMode
+    && !isSharedPlayerFullscreen
+    && !shouldContainStandaloneFullscreenVideo;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);

@@ -11,6 +11,7 @@ Updated: 2026-05-29 for Public V1 burn-down proof status: owner Profile route an
 Updated: 2026-05-29 for Profile Photo picker correction: the first avatar edit sheet is compact, `Change Photo` is primary, `Remove Photo` is conditional on an existing photo, and Fit/Fill/Center moved out of the first Profile Photo sheet.
 Updated: 2026-05-29 for Home/Profile cleanup: normal main tabs expose top Profile/Settings controls, Profile bottom nav remains hidden, and Profile feed empty states no longer show the old ready-card or random feed-level Platform CTA.
 Updated: 2026-05-26 for Profile Platform navigation cleanup and lightweight Rights Disclosure.
+Updated: 2026-06-17 for owner/public Platform identity correction, owner-vs-viewer creator purchase copy, VIP/Subscriber Area usefulness, Platform content owner actions, and standalone Player fullscreen framing.
 
 This contract inherits `docs/APP_UI_UX_RULES.md`. Profile and Platform work must feel like a modern premium mobile social/streaming product by default: media-forward, adaptive, fast to scan, honest about backed state, and never a generic stacked-card or admin-style layout on public surfaces.
 
@@ -31,6 +32,8 @@ Platform is the creator's public channel surface inside Chi'llywood.
 It should make creators feel like producers: creator uploaded videos, public creator library, creator events, live/watch-party context, backed Platform identity/theme controls, and owner upload/manage handoffs through Platform Studio.
 
 Public Platform currently lives on the internal `/channel/[userId]` route as the viewer-facing creator home. Profile remains the personal/social identity route at `/profile/[userId]`. Owner controls live in Platform Studio on `/channel-studio`, with `/channel-settings` preserved as compatibility.
+
+As of June 17, 2026, the owner viewing their own Platform must see owner context (`Your Platform`) and management/preview actions instead of buyer-style role or purchase CTAs. Public viewers continue to see public creator identity, follower/share/report actions where backed, and purchase CTAs only when they are not the owner and access requires it. Platform display name falls back to `Untitled Platform` instead of exposing random technical usernames when no better safe identity exists.
 
 ## 3. Profile 1-6 Structure
 
@@ -56,6 +59,12 @@ Owners may see profile controls, Platform Studio, Platform, Settings, Chi'lly Ci
 Public viewers may see identity, backed Follow/Following, Chi'lly Chat, View Platform, public creator videos only, clean public event context, Share Profile, and Report.
 
 Public viewers must not see owner controls, Platform Studio controls, upload, edit, publish, unpublish, delete, audience management, insights/analytics, drafts, private/hidden/removed videos, or admin controls.
+
+Creator subscription and VIP surfaces must use Platform/creator language in normal UI. Owners see `Manage subscription offer`, `View Subscriber Area`, `Manage VIP offer`, and `View VIP Area`; they must not be invited to subscribe to or buy VIP from themselves. Viewers/testers see subscribe/get-VIP CTAs only when eligible, and successful access must explain that each purchase is creator/Platform-specific and does not include Chi'llywood Premium, other creator purchase types, LiveKit/room authority, payouts, or other creators.
+
+Platform content cards may expose owner-only contextual actions backed by existing routes/helpers: Open in Player, Edit details through Platform Studio, manage paid offer through Platform Studio, feature through Platform Studio, unpublish/move to draft, and delete with confirmation. These actions must not render for public viewers.
+
+Visibility truth for this pass: Profile privacy is backed today as public/everyone, Chi'lly Circle-only, and private. Platform audience read models expose public activity and subscriber/follower surface state, but a single backed Platform-wide `public/private/subscriber_only` visibility gate and a Profile `subscriber_only` gate are not yet landed. Followers/following remain public discovery/social relationships and must not unlock private or subscriber-only access. A later migration/product lane is required before claiming full Platform/Profile `public/private/subscriber_only` configuration.
 
 Profile post owners may create and delete their own text-only posts. Public viewers may read public clean Profile posts and report them where backed. Public viewers must not edit/delete posts or see draft/hidden/removed posts.
 
