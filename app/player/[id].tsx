@@ -165,6 +165,7 @@ const STEP_MILLIS = 10_000;
 const SWIPE_PIXELS_PER_STEP = 30;
 const MAX_ZOOM = 2.5;
 const MIN_ZOOM = 1;
+const STANDALONE_FULLSCREEN_SOFT_COVER_SCALE = 0.92;
 const PROGRESS_WRITE_INTERVAL = 4_000;
 const CONTROLS_AUTO_HIDE_MILLIS = 5_000;
 const PLAYBACK_END_REPLAY_THRESHOLD_MILLIS = 1_500;
@@ -6213,11 +6214,13 @@ export default function PlayerScreen() {
   const isStandalonePlayer = !inWatchParty && !isLiveMode;
   const isPlayerFullscreen = isStandaloneFullscreen && (isStandalonePlayer || isSharedPartyPlayback);
   const isSharedPlayerFullscreen = isSharedPartyPlayback && isPlayerFullscreen;
-  const shouldContainStandaloneFullscreenVideo = isStandalonePlayer && isStandaloneFullscreen;
+  const shouldSoftCoverStandaloneFullscreenVideo = isStandalonePlayer && isStandaloneFullscreen;
   const shouldCoverPlayerVideo = (isStandalonePlayer || isSharedPartyPlayback)
     && !isLiveMode
-    && !isSharedPlayerFullscreen
-    && !shouldContainStandaloneFullscreenVideo;
+    && !isSharedPlayerFullscreen;
+  const playerVideoScale = shouldSoftCoverStandaloneFullscreenVideo
+    ? Animated.multiply(zoomScale, STANDALONE_FULLSCREEN_SOFT_COVER_SCALE)
+    : zoomScale;
   const shouldUseLiveSpeakerStage = isLiveMode;
   const activeLiveFaceFilter = getLiveFaceFilterPresentation(liveFaceFilter);
   const branding = resolveBrandingConfig(appConfig);
@@ -8541,7 +8544,7 @@ export default function PlayerScreen() {
                   transform: [
                     { translateX: zoomTranslateX },
                     { translateY: zoomTranslateY },
-                    { scale: zoomScale },
+                    { scale: playerVideoScale },
                   ],
                 },
               ]}
