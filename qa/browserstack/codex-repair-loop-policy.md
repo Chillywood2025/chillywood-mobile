@@ -13,6 +13,16 @@ The repair loop is evidence-first:
 
 Codex must not blindly bypass guards, use coordinate taps, fake purchase completion, or mark a purchase flow passed without post-purchase app state and backend readback.
 
+## Purchase Automation Modes
+
+BrowserStack purchase automation has three explicit modes:
+
+1. Default mode refuses Tip, Paid Video, Watch-Party Ticket, Event Pass, Platform Subscription, and VIP purchase flows through the `purchase_flow_requested` guard.
+2. Manual-assisted mode uses `--manual-assisted-purchase`, may navigate to the purchase checkpoint, and stops with `HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION`.
+3. Strict sandbox auto-confirm mode uses `--auto-confirm-sandbox-purchase`, is never enabled by default, and may confirm only after the runner proves the BrowserStack device is on Android, the app package is `com.chillywood.mobile`, the flow uses no coordinate taps, backend fixtures are sandbox/not_payable/no_payout, live money and payout authority are off, production purchase intents are zero, payable ledger events are zero, and the visible Google Play sheet clearly shows test/sandbox wording plus the expected tester account and product when those fields are exposed.
+
+If the Google Play sheet does not expose a clear test purchase notice such as `Test card`, `Test instrument`, `Test purchase`, `This is a test`, or `Google Play test`, the runner must stop with `HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION` or fail closed. If the account or product is visible and wrong or cannot be verified, it must stop with `FAIL_CLOSED_UNKNOWN_PURCHASE_ACCOUNT`, `FAIL_CLOSED_UNSAFE_PURCHASE_SHEET`, or `FAIL_CLOSED_REAL_PAYMENT_RISK`.
+
 ## Auto-Fix Allowed
 
 Codex may propose and, when explicitly authorized in the current prompt, implement a narrow fix for:
@@ -37,6 +47,7 @@ Codex must print `HUMAN_REQUIRED` and stop for:
 
 - Google Play purchase confirmation
 - any flow requiring a human to click or approve a purchase sheet
+- any ambiguous Google Play purchase sheet where test/sandbox wording, expected tester, or expected product cannot be verified
 - BrowserStack App Live manual interaction
 - creating/changing real payment products
 - changing RevenueCat/Google Play purchase logic
@@ -62,6 +73,9 @@ Codex must print `FAIL_CLOSED` and stop for:
 - payout authority true
 - unrelated product unlock detected
 - fake purchase completion attempted
+- purchase flow attempted without `--manual-assisted-purchase` or `--auto-confirm-sandbox-purchase`
+- coordinate purchase-sheet tapping attempted
+- Google Play sheet appears to be a real payment method without a visible test notice
 
 Fail-closed cases are not product bugs to bypass. They require env repair, fixture reset, or explicit human review before rerun.
 
@@ -73,4 +87,4 @@ When a safe fix is made, rerun only the smallest relevant proof:
 - fixture readback only for fixture/readback fixes
 - upload/app-reference check only for stale APK fixes
 
-Do not rerun purchase-confirmation flows through App Automate. Purchase confirmation remains human-required.
+Do not rerun purchase-confirmation flows through App Automate unless strict sandbox auto-confirm mode is explicitly requested and every safety preflight and Google Play sheet verification passes. Purchase confirmation remains human-required when any required check is missing or ambiguous.

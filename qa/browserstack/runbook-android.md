@@ -2,7 +2,7 @@
 
 ## Strategy
 
-Use Maestro-first selector flows against the installed app package `com.chillywood.mobile`. Use BrowserStack App Live for manual-assisted Google Play sandbox purchase steps when App Automate cannot safely interact with the Play sheet.
+Use Maestro-first selector flows against the installed app package `com.chillywood.mobile`. Use BrowserStack App Live for manual-assisted Google Play sandbox purchase steps when App Automate cannot safely verify the Play sheet. BrowserStack App Automate must not use coordinate taps or claim a purchase pass without post-purchase app state and backend readback.
 
 ## Required Env
 
@@ -107,3 +107,25 @@ Manual-assisted purchase mode is explicit:
 `node scripts/qa/run-browserstack-maestro.mjs --run --manual-assisted-purchase --flow monetization-tip-smoke.yaml --proof-dir /tmp/chillywood-browserstack-manual-assisted-YYYYMMDD-HHMMSS`
 
 This mode may navigate to the purchase checkpoint and then reports `HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION`. It must not use coordinate taps, must not auto-confirm Google Play purchase sheets, and must not claim a pass until post-purchase app state and backend readback prove the correct product scope. Purchase confirmation is human-required.
+
+## Strict Sandbox Auto-Confirm Mode
+
+Default purchase refusal remains active through the `purchase_flow_requested` guard. Manual-assisted mode remains the normal proof path. Strict sandbox auto-confirm is an explicit opt-in only:
+
+`node scripts/qa/run-browserstack-maestro.mjs --auto-confirm-sandbox-purchase --flow monetization-tip-smoke.yaml --proof-dir /tmp/chillywood-browserstack-sandbox-purchase-safety-proof-YYYYMMDD-HHMMSS`
+
+Strict mode is allowed to confirm only when every safety check passes:
+
+- Local env has BrowserStack credentials, app id/custom id, `CHILLYWOOD_APP_ID=com.chillywood.mobile`, E2E viewer login, creator id, `SUPABASE_URL`, and local-only `SUPABASE_SERVICE_ROLE_KEY`.
+- Target app reference points at the fresh Chi'llwood APK/custom id and the BrowserStack target is an Android real device.
+- Selected Maestro flow has no coordinate taps, image-position taps, repeated blind taps, or bottom-button assumptions.
+- Fixture readback proves the selected target is sandbox, `not_payable` or `payable_state=not_payable`, `production_enabled=false`, `payout_enabled=false`, live money off, production purchase intents zero, payable ledger events zero, and payout authority false.
+- The Google Play purchase sheet visibly exposes test/sandbox wording such as `Test card`, `Test instrument`, `Test purchase`, `This is a test`, or `Google Play test`.
+- The expected tester account and expected product are verified when exposed by the sheet.
+- Confirmation uses only a stable visible text/accessibility label for the Google Play confirm button.
+
+Stop with `HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION` when the sheet is not reached, test wording is not exposed, the tester/product is not visible, or App Live/manual interaction is needed. Fail closed with `FAIL_CLOSED_UNSAFE_PURCHASE_SHEET`, `FAIL_CLOSED_UNKNOWN_PURCHASE_ACCOUNT`, or `FAIL_CLOSED_REAL_PAYMENT_RISK` when the sheet appears unsafe, the account/product is wrong, live money/payable/payout state is detected, or any unrelated unlock appears.
+
+After any sandbox purchase confirmation, the pass condition is the app success/access selector plus backend readback proving scoped access only, no Premium or unrelated creator product unlock, no payout authority, no LiveKit host/publish authority for Watch-Party Ticket, no live money, and no payable ledger activity. Fake purchase completion is forbidden.
+
+If a previous sandbox ownership state blocks rerun, classify `PROVIDER_OWNERSHIP_REUSE_BLOCKER`. Use a reset/revoke script only for dedicated E2E users and sandbox-only grants, and do not delete proof evidence or production data.
