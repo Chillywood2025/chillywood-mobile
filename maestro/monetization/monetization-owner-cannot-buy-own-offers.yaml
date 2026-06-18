@@ -1,6 +1,9 @@
 appId: ${CHILLYWOOD_APP_ID}
 ---
 - launchApp
+- assertVisible:
+    id: "app-root-ready"
+    optional: true
 - openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
 - assertVisible:
     id: "screen-platform"

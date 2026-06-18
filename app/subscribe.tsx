@@ -349,7 +349,7 @@ export default function SubscribeScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.heroCard}>
+      <View style={styles.heroCard} testID="premium-not-creator-offer-copy" collapsable={false}>
         <Text style={styles.heroKicker}>CHI'LLYWOOD PREMIUM</Text>
         <Text style={styles.heroTitle}>{hasPremium ? "Premium is active." : "Premium is not active."}</Text>
         <Text style={styles.heroBody}>{statusSummary}</Text>
@@ -463,7 +463,6 @@ export default function SubscribeScreen() {
             </View>
           ) : null}
 
-          <View testID="premium-not-creator-offer-copy">
           <PremiumAccordion
             id="premium-unlocks"
             title="What Premium unlocks"
@@ -478,7 +477,6 @@ export default function SubscribeScreen() {
               </View>
             ))}
           </PremiumAccordion>
-          </View>
 
           {!hasPremium && !purchaseReady ? (
             <PremiumAccordion

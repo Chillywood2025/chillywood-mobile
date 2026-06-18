@@ -775,10 +775,10 @@ export default function PublicChannelScreen() {
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
             <View
               testID={
-                sandboxTesterActive
-                  ? "platform-sandbox-tester-mode-badge"
-                  : isOwner
-                    ? "platform-owner-mode-badge"
+                isOwner
+                  ? "platform-owner-mode-badge"
+                  : sandboxTesterActive
+                    ? "platform-sandbox-tester-mode-badge"
                     : "platform-viewer-mode-badge"
               }
               collapsable={false}
