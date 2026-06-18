@@ -22,6 +22,7 @@ const parseArgs = () => {
     appPath: DEFAULT_ANDROID_APK_PATH,
     customId: DEFAULT_CUSTOM_ID,
     proofDir: "",
+    skipUploadIfAppIdPresent: true,
     skipUploadIfCustomIdPresent: true,
   };
   for (let index = 0; index < args.length; index += 1) {
@@ -34,6 +35,8 @@ const parseArgs = () => {
       options.customId = args[++index] ?? options.customId;
     } else if (arg === "--proof-dir") {
       options.proofDir = path.resolve(args[++index] ?? "");
+    } else if (arg === "--upload-even-if-app-id-present") {
+      options.skipUploadIfAppIdPresent = false;
     } else if (arg === "--upload-even-if-custom-id-present") {
       options.skipUploadIfCustomIdPresent = false;
     } else {
@@ -122,7 +125,7 @@ let exitCode = 0;
 let appReference = existingAppId || existingCustomId;
 let uploadHappened = false;
 
-if (hasValue(existingAppId)) {
+if (hasValue(existingAppId) && options.skipUploadIfAppIdPresent) {
   lines.push("app_id_action: using_existing_browserstack_app_id");
 } else if (hasValue(existingCustomId) && options.skipUploadIfCustomIdPresent) {
   lines.push("app_id_action: using_existing_browserstack_custom_id");

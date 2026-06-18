@@ -24,6 +24,9 @@ Use Maestro-first selector flows against the installed app package `com.chillywo
    `node scripts/qa/browserstack-verify-access.mjs --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS`.
    If `BROWSERSTACK_APP_ID` is missing, upload the existing APK only after confirming the artifact path:
    `node scripts/qa/browserstack-upload-app.mjs --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS`.
+   If the configured BrowserStack app points at a stale APK, rebuild the release APK first, then replace the app reference explicitly:
+   `node scripts/qa/browserstack-upload-app.mjs --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS --upload-even-if-app-id-present --upload-even-if-custom-id-present`.
+   Keep returned app URLs only in ignored local env/proof files.
 1. Prepare fixture readback: `npm run qa:monetization:fixtures:readback`.
 2. Grant tester access with the existing proof script or fixture prepare script.
 3. Run local non-purchase Maestro smoke flows with resolved temporary copies:
@@ -34,6 +37,10 @@ Use Maestro-first selector flows against the installed app package `com.chillywo
    This dry-run resolves only `monetization-premium-smoke.yaml`, `monetization-premium-creator-separation.yaml`, and `monetization-owner-cannot-buy-own-offers.yaml`; it skips purchase-completion flows.
 5. Run the BrowserStack Maestro suite only when explicitly approved for the specific safe flows:
    `node scripts/qa/run-browserstack-maestro.mjs --run --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS`.
+
+## BrowserStack Account-State Boundary
+
+App Automate installs a clean app runtime. The safe non-purchase flows can prove route-level selector exposure on that runtime, but owner/tester-only assertions still require the BrowserStack device to reach the intended signed-in account state first. If a run shows route roots such as `premium-screen`, `screen-premium`, or `screen-platform` but then lands on logged-out Premium copy or Platform viewer mode, classify it as an account/env setup blocker, not a Premium gate or route selector regression. Do not weaken owner-only assertions or fake purchase/account state to make the run pass.
 
 ## OTA / Installed Runtime Check
 
