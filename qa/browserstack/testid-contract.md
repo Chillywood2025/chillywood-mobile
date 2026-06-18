@@ -38,7 +38,7 @@ Stable selectors are the contract for BrowserStack, Maestro, App Live, and local
 
 - `premium-screen`
 - `premium-status-card`
-- `premium-purchase-button`
+- `premium-purchase-button` when purchase readiness is available; optional for non-purchase BrowserStack smoke
 - `premium-restore-button`
 - `premium-active-receipt` when an active receipt is rendered
 - `premium-not-creator-offer-copy`

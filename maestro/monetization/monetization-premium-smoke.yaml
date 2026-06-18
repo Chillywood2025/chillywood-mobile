@@ -28,6 +28,4 @@ appId: ${CHILLYWOOD_APP_ID}
     id: "premium-status-card"
 - assertVisible:
     id: "premium-not-creator-offer-copy"
-- assertVisible:
-    id: "premium-purchase-button"
 - takeScreenshot: "monetization-premium-smoke"
