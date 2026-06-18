@@ -42,6 +42,7 @@ const parseArgs = () => {
     device: "Samsung Galaxy S23-13.0",
     project: "chillywood-browserstack-safe-maestro",
     customBuildName: `chillywood-safe-maestro-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+    manualAssistedPurchase: false,
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -57,6 +58,8 @@ const parseArgs = () => {
       options.flows.push(args[++index] ?? "");
     } else if (arg === "--device") {
       options.device = args[++index] ?? options.device;
+    } else if (arg === "--manual-assisted-purchase") {
+      options.manualAssistedPurchase = true;
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -147,7 +150,7 @@ function uploadMultipart({ urlPath, filePath, fieldName, customId, username, acc
 const options = parseArgs();
 const selectedFlows = options.flows.length ? options.flows.map((flow) => path.basename(flow)) : safeFlows;
 const blocked = selectedFlows.filter((flow) => blockedPurchaseFlows.has(flow));
-if (blocked.length) {
+if (blocked.length && !options.manualAssistedPurchase) {
   console.error(JSON.stringify({ ok: false, error: "purchase_flow_requested", blocked }, null, 2));
   process.exit(1);
 }
@@ -166,6 +169,12 @@ const flowUsesOwnerAccount = (flow) => [
 ].includes(flow);
 const flowUsesViewerAccount = (flow) => [
   "monetization-premium-smoke.yaml",
+  "monetization-tip-smoke.yaml",
+  "monetization-paid-video-smoke.yaml",
+  "monetization-watch-party-ticket-smoke.yaml",
+  "monetization-event-pass-smoke.yaml",
+  "monetization-platform-subscription-smoke.yaml",
+  "monetization-vip-smoke.yaml",
 ].includes(flow);
 const proofDir = options.proofDir || path.join(os.tmpdir(), `chillywood-browserstack-maestro-${Date.now()}`);
 const suiteRoot = path.join(proofDir, "maestro_safe_suite");
@@ -231,6 +240,8 @@ const summary = {
   appReferenceConfigured: hasValue(appReference),
   selectedFlows,
   skippedPurchaseFlows: Array.from(blockedPurchaseFlows),
+  manualAssistedPurchase: options.manualAssistedPurchase,
+  humanRequiredGooglePlayConfirmation: options.manualAssistedPurchase && blocked.length > 0,
   suiteZipCreated: existsSync(zipPath),
   device: options.device,
 };
@@ -244,6 +255,10 @@ if (missing.length) {
 } else if (!options.run) {
   log += "browserstack_execution: skipped_dry_run\n";
   log += "browserstack_sessions_created: false\n";
+  if (options.manualAssistedPurchase && blocked.length) {
+    log += "manual_assisted_purchase_boundary: HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION\n";
+    log += "purchase_confirmation_result: not_attempted\n";
+  }
 } else {
   const testSuiteCustomId = `chillywood-safe-maestro-${Date.now()}`;
   const testSuiteUpload = await uploadMultipart({
@@ -279,6 +294,11 @@ if (missing.length) {
       log += `build_started: ${hasValue(buildId)}\n`;
       if (hasValue(buildId)) {
         sessionLinks += `BrowserStack Maestro build: https://app-automate.browserstack.com/dashboard/v2/builds/${buildId}\n`;
+      }
+      if (options.manualAssistedPurchase && blocked.length) {
+        log += "manual_assisted_purchase_boundary: HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION\n";
+        log += "purchase_confirmation_result: not_attempted\n";
+        log += "purchase_pass_claimed: false\n";
       }
     }
   }

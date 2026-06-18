@@ -38,6 +38,20 @@ Use Maestro-first selector flows against the installed app package `com.chillywo
 5. Run the BrowserStack Maestro suite only when explicitly approved for the specific safe flows:
    `node scripts/qa/run-browserstack-maestro.mjs --run --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS`.
 
+## Codex Repair Loop
+
+Use `qa/browserstack/codex-repair-loop-policy.md` and `scripts/qa/browserstack-repair-loop.mjs` when a BrowserStack smoke fails.
+
+Codex can auto-fix narrow QA/test/app-state blockers such as missing selectors, Maestro wait timeouts, wrong deep links, stale APK detection, runner bugs, fixture readback script bugs, env guard bugs, docs mismatches, overly strict non-purchase assertions, and safe `collapsable={false}` selector placement. After a safe fix, rerun only the failed flow.
+
+Codex must stop when purchase confirmation is human-required, when BrowserStack App Live manual interaction is needed, or when a proposed fix would touch RevenueCat/Google Play production purchase logic, Premium entitlement logic, RLS/security policy, service-role handling, live money, payouts, LiveKit authority, Watch-Party shared player, Chi'lly Chat, production data deletion, or broad route/product refactors. Do not weaken live money, payouts, Premium gates, RLS, LiveKit authority, Watch-Party shared player, or Chi'lly Chat to make a test pass.
+
+To hand Codex evidence, provide the BrowserStack build/session links plus the proof folder containing `browserstack_run.log`, `session_links.txt`, redacted Maestro logs, screenshots, and readback logs. Codex should classify the failure first, then either print `AUTO_FIX_ALLOWED`, `HUMAN_REQUIRED`, or `FAIL_CLOSED`.
+
+Example non-purchase repair loop:
+
+`node scripts/qa/browserstack-repair-loop.mjs --flow monetization-premium-smoke.yaml --run --proof-dir /tmp/chillywood-browserstack-repair-loop-YYYYMMDD-HHMMSS`
+
 ## BrowserStack Account-State Boundary
 
 App Automate installs a clean app runtime. The safe non-purchase flows can prove route-level selector exposure on that runtime, but owner/tester-only assertions still require the BrowserStack device to reach the intended signed-in account state first. If a run shows route roots such as `premium-screen`, `screen-premium`, or `screen-platform` but then lands on logged-out Premium copy or Platform viewer mode, classify it as an account/env setup blocker, not a Premium gate or route selector regression. Do not weaken owner-only assertions or fake purchase/account state to make the run pass.
@@ -87,3 +101,9 @@ Save screenshots, XML dumps, fixture readback JSON, BrowserStack session IDs, an
 ## Manual-Assisted Boundary
 
 For Google Play sandbox sheets, the automated flow may stop at the purchase boundary. Manual App Live can complete the purchase using the license tester account, then automation/readback resumes inside Chi'llywood.
+
+Manual-assisted purchase mode is explicit:
+
+`node scripts/qa/run-browserstack-maestro.mjs --run --manual-assisted-purchase --flow monetization-tip-smoke.yaml --proof-dir /tmp/chillywood-browserstack-manual-assisted-YYYYMMDD-HHMMSS`
+
+This mode may navigate to the purchase checkpoint and then reports `HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION`. It must not use coordinate taps, must not auto-confirm Google Play purchase sheets, and must not claim a pass until post-purchase app state and backend readback prove the correct product scope. Purchase confirmation is human-required.

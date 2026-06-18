@@ -4,6 +4,12 @@ Proof folder: `/tmp/chillywood-browserstack-monetization-e2e-proof-YYYYMMDD-HHMM
 
 Use checkboxes during BrowserStack App Live or physical-device proof.
 
+Google Play purchase confirmation is human-required. Use BrowserStack App Live or a physical licensed-tester device for the purchase sheet. No coordinate taps, no fake purchase completion, and no pass claim without post-purchase app state and backend readback.
+
+Before manual confirmation, Codex may use the repair-loop policy only for safe QA blockers. Codex must stop for purchase approval, RevenueCat/Google Play production purchase logic, Premium entitlement logic, RLS, service-role handling, live money, payouts, LiveKit authority, Watch-Party shared player, Chi'lly Chat, or broad product refactors.
+
+After every manual purchase confirmation, save screenshots/video and run readback proving scoped access only, no unrelated unlock, no payable ledger, no payout authority, and no live money.
+
 ## Premium
 
 - [ ] Account: viewer/tester
@@ -19,6 +25,8 @@ Use checkboxes during BrowserStack App Live or physical-device proof.
 - [ ] Route: creator Platform
 - [ ] Selector: `tester-tip-creator-button`, then `tip-confirm-button`
 - [ ] Screenshot: `tip_sheet.png`
+- [ ] Manual Google Play confirmation completed by human
+- [ ] Post-purchase app state and backend readback saved
 - [ ] Expected: contribution only, no content unlock, no payout
 - [ ] Pass/fail notes:
 
@@ -28,6 +36,8 @@ Use checkboxes during BrowserStack App Live or physical-device proof.
 - [ ] Route: creator Platform or Player
 - [ ] Selector: `tester-paid-video-unlock-button`
 - [ ] Screenshot: `paid_video_gate.png`, `paid_video_player_ready.png`
+- [ ] Manual Google Play confirmation completed by human
+- [ ] Post-purchase app state and backend readback saved
 - [ ] Expected: unlock one video only; playable source opens
 - [ ] Pass/fail notes:
 
@@ -37,6 +47,8 @@ Use checkboxes during BrowserStack App Live or physical-device proof.
 - [ ] Route: creator Platform or Party Room
 - [ ] Selector: `tester-watch-party-ticket-button`, `watch-party-ticket-purchase-button`
 - [ ] Screenshot: `watch_party_ticket_gate.png`
+- [ ] Manual Google Play confirmation completed by human
+- [ ] Post-purchase app state and backend readback saved
 - [ ] Expected: ticket unlocks one Party Room/Watch-Party target only
 - [ ] Pass/fail notes:
 
@@ -46,6 +58,8 @@ Use checkboxes during BrowserStack App Live or physical-device proof.
 - [ ] Route: event route
 - [ ] Selector: `event-pass-purchase-button`
 - [ ] Screenshot: `event_pass_gate.png`, `event_pass_confirmed.png`
+- [ ] Manual Google Play confirmation completed by human
+- [ ] Post-purchase app state and backend readback saved
 - [ ] Expected: event pass unlocks one event only
 - [ ] Pass/fail notes:
 
@@ -55,6 +69,8 @@ Use checkboxes during BrowserStack App Live or physical-device proof.
 - [ ] Route: creator Platform or Subscriber Area
 - [ ] Selector: `tester-channel-subscribe-button`, `subscriber-area-subscribe-button`
 - [ ] Screenshot: `subscriber_area.png`
+- [ ] Manual Google Play confirmation completed by human
+- [ ] Post-purchase app state and backend readback saved
 - [ ] Expected: creator Platform subscription only; not Chi'llywood Premium
 - [ ] Pass/fail notes:
 
@@ -64,6 +80,8 @@ Use checkboxes during BrowserStack App Live or physical-device proof.
 - [ ] Route: creator Platform or VIP Area
 - [ ] Selector: `tester-vip-pass-button`, `vip-area-get-vip-button`
 - [ ] Screenshot: `vip_area.png`
+- [ ] Manual Google Play confirmation completed by human
+- [ ] Post-purchase app state and backend readback saved
 - [ ] Expected: creator-specific VIP only; not Premium/subscription
 - [ ] Pass/fail notes:
 

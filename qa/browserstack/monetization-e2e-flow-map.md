@@ -30,6 +30,8 @@ Fixture prepare/readback requires a local-only `SUPABASE_SERVICE_ROLE_KEY`. Miss
 
 Watch-Party Ticket requires a valid owner-owned Party Room target and a `paid_watch_party_offers` row visible through `list_my_paid_watch_party_offers`. If authenticated owner readback returns an empty list, classify the ticket fixture as missing or stale until service-role/admin fixture setup can verify whether the row is absent, scoped to another owner, or hidden by RLS.
 
+Manual-assisted Google Play confirmation is human-required for Tip, Paid Video, Watch-Party Ticket, Event Pass, Platform Subscription, and VIP. App Automate must not confirm purchase sheets. The repair-loop may fix safe selector/wait/deep-link/readback blockers and rerun only the failed flow, but it must stop for money/security/product authority changes.
+
 ## Two-Device Need
 
 Watch-Party Live media authority is not part of the money proof. Ticket proof can be one-device to the Party Waiting Room/Room gate. Multi-device room authority proof remains separate.
