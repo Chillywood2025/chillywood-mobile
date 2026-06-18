@@ -1,9 +1,26 @@
 appId: ${CHILLYWOOD_APP_ID}
 ---
-- launchApp
+- launchApp:
+    clearState: true
 - assertVisible:
     id: "app-root-ready"
     optional: true
+- openLink: "chillywoodmobile://login"
+- assertVisible:
+    id: "auth-login-email-input"
+- tapOn:
+    id: "auth-login-email-input"
+- inputText: "${CHILLYWOOD_E2E_OWNER_EMAIL}"
+- tapOn:
+    id: "auth-login-password-input"
+- inputText: "${CHILLYWOOD_E2E_OWNER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "auth-login-submit-button"
+- extendedWaitUntil:
+    visible:
+      id: "auth-logged-in-home"
+    timeout: 30000
 - openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
 - assertVisible:
     id: "screen-platform"

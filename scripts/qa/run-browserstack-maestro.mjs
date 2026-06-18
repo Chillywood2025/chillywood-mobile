@@ -11,6 +11,7 @@ import {
   loadBrowserStackEnv,
   parseEnvFile,
   redactBrowserStackSecrets,
+  redactKnownSecretValues,
 } from "./browserstack-env.mjs";
 
 const root = process.cwd();
@@ -159,6 +160,13 @@ const env = {
   ...browserStack.env,
 };
 const appReference = String(env.BROWSERSTACK_APP_ID || env.BROWSERSTACK_APP_CUSTOM_ID || "").trim();
+const flowUsesOwnerAccount = (flow) => [
+  "monetization-premium-creator-separation.yaml",
+  "monetization-owner-cannot-buy-own-offers.yaml",
+].includes(flow);
+const flowUsesViewerAccount = (flow) => [
+  "monetization-premium-smoke.yaml",
+].includes(flow);
 const proofDir = options.proofDir || path.join(os.tmpdir(), `chillywood-browserstack-maestro-${Date.now()}`);
 const suiteRoot = path.join(proofDir, "maestro_safe_suite");
 const zipPath = path.join(proofDir, "maestro-safe-suite.zip");
@@ -168,13 +176,31 @@ const missing = [];
 if (!hasValue(env.BROWSERSTACK_USERNAME)) missing.push("BROWSERSTACK_USERNAME");
 if (!hasValue(env.BROWSERSTACK_ACCESS_KEY)) missing.push("BROWSERSTACK_ACCESS_KEY");
 if (!hasValue(appReference)) missing.push("BROWSERSTACK_APP_ID_or_BROWSERSTACK_APP_CUSTOM_ID");
+if (!hasValue(env.CHILLYWOOD_APP_ID)) missing.push("CHILLYWOOD_APP_ID");
 if (selectedFlows.some((flow) => flow !== "monetization-premium-smoke.yaml") && !hasValue(env.CHILLYWOOD_E2E_CREATOR_ID)) {
   missing.push("CHILLYWOOD_E2E_CREATOR_ID");
 }
+if (selectedFlows.some(flowUsesOwnerAccount)) {
+  if (!hasValue(env.CHILLYWOOD_E2E_OWNER_EMAIL)) missing.push("CHILLYWOOD_E2E_OWNER_EMAIL");
+  if (!hasValue(env.CHILLYWOOD_E2E_OWNER_PASSWORD)) missing.push("CHILLYWOOD_E2E_OWNER_PASSWORD");
+  if (!hasValue(env.CHILLYWOOD_E2E_CREATOR_ID)) missing.push("CHILLYWOOD_E2E_CREATOR_ID");
+}
+if (selectedFlows.some(flowUsesViewerAccount)) {
+  if (!hasValue(env.CHILLYWOOD_E2E_VIEWER_EMAIL)) missing.push("CHILLYWOOD_E2E_VIEWER_EMAIL");
+  if (!hasValue(env.CHILLYWOOD_E2E_VIEWER_PASSWORD)) missing.push("CHILLYWOOD_E2E_VIEWER_PASSWORD");
+}
 
 const replacements = {
-  "${CHILLYWOOD_APP_ID}": env.CHILLYWOOD_APP_ID || "com.chillywood.mobile",
+  "${CHILLYWOOD_APP_ID}": env.CHILLYWOOD_APP_ID || "",
   "${CHILLYWOOD_E2E_CREATOR_ID}": env.CHILLYWOOD_E2E_CREATOR_ID || "",
+};
+const maestroEnv = {
+  CHILLYWOOD_APP_ID: env.CHILLYWOOD_APP_ID || "",
+  CHILLYWOOD_E2E_CREATOR_ID: env.CHILLYWOOD_E2E_CREATOR_ID || "",
+  CHILLYWOOD_E2E_OWNER_EMAIL: env.CHILLYWOOD_E2E_OWNER_EMAIL || "",
+  CHILLYWOOD_E2E_OWNER_PASSWORD: env.CHILLYWOOD_E2E_OWNER_PASSWORD || "",
+  CHILLYWOOD_E2E_VIEWER_EMAIL: env.CHILLYWOOD_E2E_VIEWER_EMAIL || "",
+  CHILLYWOOD_E2E_VIEWER_PASSWORD: env.CHILLYWOOD_E2E_VIEWER_PASSWORD || "",
 };
 
 for (const flow of selectedFlows) {
@@ -242,6 +268,7 @@ if (missing.length) {
       debugscreenshots: true,
       deviceLogs: "true",
       networkLogs: "false",
+      setEnvVariables: maestroEnv,
       customBuildName: options.customBuildName,
     }, env.BROWSERSTACK_USERNAME, env.BROWSERSTACK_ACCESS_KEY);
     log += `build_start_status: http_${build.status}\n`;
@@ -257,7 +284,7 @@ if (missing.length) {
   }
 }
 
-const safeLog = redactBrowserStackSecrets(log);
+const safeLog = redactKnownSecretValues(redactBrowserStackSecrets(log), env);
 writeFileSync(path.join(proofDir, "browserstack_dry_run.log"), safeLog);
 writeFileSync(path.join(proofDir, "session_links.txt"), sessionLinks || "No BrowserStack sessions created.\n");
 console.log(safeLog.trimEnd());

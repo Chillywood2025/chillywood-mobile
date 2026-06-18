@@ -48,6 +48,24 @@ export function redactBrowserStackSecrets(text) {
     .replace(/(access_key=)[^&\s]+/gi, "$1[REDACTED]");
 }
 
+export function redactKnownSecretValues(text, env = {}) {
+  let output = redactBrowserStackSecrets(text);
+  const secretKeys = [
+    "BROWSERSTACK_ACCESS_KEY",
+    "CHILLYWOOD_E2E_OWNER_EMAIL",
+    "CHILLYWOOD_E2E_OWNER_PASSWORD",
+    "CHILLYWOOD_E2E_VIEWER_EMAIL",
+    "CHILLYWOOD_E2E_VIEWER_PASSWORD",
+    "SUPABASE_SERVICE_ROLE_KEY",
+  ];
+  for (const key of secretKeys) {
+    const value = String(env[key] ?? "").trim();
+    if (!value) continue;
+    output = output.split(value).join(`[REDACTED_${key}]`);
+  }
+  return output;
+}
+
 export function writeSafeBrowserStackEnvValue(absoluteEnvPath, key, value) {
   if (!hasValue(value)) return false;
   const existing = existsSync(absoluteEnvPath) ? readFileSync(absoluteEnvPath, "utf8") : "";
