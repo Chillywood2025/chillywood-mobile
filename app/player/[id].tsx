@@ -8329,7 +8329,7 @@ export default function PlayerScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} testID="screen-player">
       <KeyboardAvoidingView
         style={styles.playerKeyboardAvoider}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -8595,6 +8595,7 @@ export default function PlayerScreen() {
               <Animated.View pointerEvents="none" style={[styles.entryEnergyPulse, { opacity: entryPulseOpacity }]} />
             ) : null}
             <Animated.View
+              testID={isCreatorVideoPlayback && playbackSource && !creatorVideoPaidContentLocked ? "paid-video-player-ready" : undefined}
               pointerEvents={creatorVideoPaidContentLocked ? "auto" : "none"}
               style={[
                 styles.videoAnimatedWrap,
@@ -8687,7 +8688,7 @@ export default function PlayerScreen() {
             </Animated.View>
 
             {creatorVideoPaidContentLocked ? (
-              <View pointerEvents="box-none" style={styles.paidVideoUnlockFloatingCard}>
+              <View pointerEvents="box-none" style={styles.paidVideoUnlockFloatingCard} testID="paid-video-lock-card">
                 <TouchableOpacity
                   style={[
                     styles.playerAccessPrimaryBtn,
@@ -8711,7 +8712,7 @@ export default function PlayerScreen() {
                 </TouchableOpacity>
                 <Text style={styles.videoLoadingSubtext}>Sandbox Test · No live payout</Text>
                 {paidVideoUnlockMessage ? (
-                  <Text style={styles.videoLoadingSubtext}>{paidVideoUnlockMessage}</Text>
+                  <Text style={styles.videoLoadingSubtext} testID="paid-video-purchase-success-receipt">{paidVideoUnlockMessage}</Text>
                 ) : null}
               </View>
             ) : null}

@@ -2604,8 +2604,8 @@ export default function WatchPartyRoomScreen() {
       ? `${(offer.priceCents / 100).toLocaleString(undefined, { style: "currency", currency: offer.currency.toUpperCase() })}`
       : "$0.99";
     return (
-      <View style={styles.center}>
-        <View style={styles.errorCard}>
+      <View style={styles.center} testID="screen-party-room">
+        <View style={styles.errorCard} testID="watch-party-ticket-lock-card">
           <Text style={styles.errorTitle}>
             {paidTicketGate.requiresPurchase ? "Buy Room Ticket" : "Room ticket unavailable"}
           </Text>
@@ -2621,7 +2621,7 @@ export default function WatchPartyRoomScreen() {
               onPress={onBuyPaidTicketFromRoomGate}
               activeOpacity={0.85}
               disabled={paidTicketBusy}
-              testID="tester-watch-party-ticket-button"
+              testID="watch-party-ticket-purchase-button"
               accessibilityRole="button"
               accessibilityLabel="Sandbox Test Buy Watch-Party Ticket"
             >
@@ -2630,7 +2630,7 @@ export default function WatchPartyRoomScreen() {
               </Text>
             </TouchableOpacity>
           ) : null}
-          {paidTicketNotice ? <Text style={styles.errorBody}>{paidTicketNotice}</Text> : null}
+          {paidTicketNotice ? <Text style={styles.errorBody} testID="watch-party-ticket-success-receipt">{paidTicketNotice}</Text> : null}
           <TouchableOpacity style={styles.secondaryBtn} onPress={returnToWatchPartyEntry} activeOpacity={0.85}>
             <Text style={styles.secondaryBtnText}>← Go Back</Text>
           </TouchableOpacity>

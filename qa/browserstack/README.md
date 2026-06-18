@@ -24,6 +24,10 @@ iOS is a planned/deferred future lane only. Do not run iOS BrowserStack until An
 - `personas.example.json`: labels and state requirements only; no passwords.
 - `env.example`: placeholder environment variable names only.
 - `runbook.md`: operator sequence for a future approved BrowserStack run.
+- `runbook-android.md`: Android App Automate/App Live runbook for monetization E2E readiness.
+- `monetization-e2e-flow-map.md`: seven-flow owner/viewer/fixture/selector map.
+- `testid-contract.md`: stable selector contract for BrowserStack/Maestro/device proof.
+- `manual-app-live-monetization-checklist.md`: manual App Live checklist for purchase-sheet-assisted proof.
 - `flows/*.contract.md`: flow contracts with preconditions, steps, pass/fail criteria, artifact rules, and device/session requirements.
 
 ## Execution Boundary

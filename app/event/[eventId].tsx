@@ -116,7 +116,7 @@ export default function PaidCreatorEventRoute() {
   const title = event?.event_title || offer?.title || "Creator event";
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} testID="screen-event">
       <ScrollView contentContainerStyle={styles.wrap}>
         {loading ? (
           <View style={styles.card}>
@@ -145,7 +145,7 @@ export default function PaidCreatorEventRoute() {
             </View>
 
             {access?.allowed ? (
-              <View style={styles.stateBox}>
+              <View style={styles.stateBox} testID="event-pass-access-granted-state">
                 <Text style={styles.stateTitle}>Event pass confirmed</Text>
                 <Text style={styles.body}>
                   You can access this creator event. This pass does not grant Premium, VIP, paid videos, Watch-Party rooms, other events, LiveKit host controls, or payout authority.
@@ -153,13 +153,13 @@ export default function PaidCreatorEventRoute() {
                 <Text style={styles.detail}>Access reason: {access.reason}</Text>
               </View>
             ) : locked ? (
-              <View style={styles.stateBox}>
+              <View style={styles.stateBox} testID="event-pass-lock-card">
                 <Text style={styles.stateTitle}>Event pass required</Text>
                 <Text style={styles.body}>{LOCKED_COPY}</Text>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Sandbox Test Buy Event Pass"
-                  testID="tester-event-pass-button"
+                  testID="event-pass-purchase-button"
                   onPress={onBuyEventPass}
                   style={[styles.primaryButton, purchaseLoading && styles.buttonDisabled]}
                   disabled={purchaseLoading || soldOut}
@@ -172,7 +172,7 @@ export default function PaidCreatorEventRoute() {
                 </Pressable>
               </View>
             ) : unavailable ? (
-              <View style={styles.stateBox}>
+              <View style={styles.stateBox} testID="event-pass-access-denied-state">
                 <Text style={styles.stateTitle}>Event Pass Not Available</Text>
                 <Text style={styles.body}>
                   This paid event cannot be purchased right now. Reason: {access?.reason || "unavailable"}.

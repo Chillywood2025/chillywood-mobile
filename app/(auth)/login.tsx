@@ -122,7 +122,7 @@ export default function Login() {
               keyboardType="email-address"
               autoCorrect={false}
               returnKeyType="next"
-              testID="login-email-input"
+              testID="auth-login-email-input"
               value={email}
               onChangeText={setEmail}
               onFocus={() => {
@@ -138,7 +138,7 @@ export default function Login() {
               accessibilityHint="Enter your Chi’llywood account password"
               secureTextEntry
               returnKeyType="done"
-              testID="login-password-input"
+              testID="auth-login-password-input"
               value={password}
               onChangeText={setPassword}
               onFocus={() => {
@@ -166,7 +166,7 @@ export default function Login() {
               label={loading ? "Signing in..." : "Log In"}
               loading={loading}
               onPress={signIn}
-              testID="login-submit-button"
+              testID="auth-login-submit-button"
               variant="primary"
             />
 

@@ -22,6 +22,14 @@ Target: Android Play-installed internal tester build.
 - `tester-event-pass-button`
 - `tester-channel-subscribe-button`
 - `tester-vip-pass-button`
+- `tip-sheet`
+- `tip-confirm-button`
+- `paid-video-lock-card`
+- `paid-video-player-ready`
+- `watch-party-ticket-purchase-button`
+- `event-pass-purchase-button`
+- `subscriber-area-subscribe-button`
+- `vip-area-get-vip-button`
 
 ## Owner Setup Proof
 
@@ -44,12 +52,12 @@ Target: Android Play-installed internal tester build.
 3. Open the creator public Platform.
 4. Confirm `Test Creator Purchases` appears with `Sandbox only. No real money moves.`
 5. Confirm sandbox offers appear only for tester-visible flows.
-6. Tap `tester-tip-creator-button`; confirm Google Play / RevenueCat sandbox tip starts and success says no money moved/no payout created.
+6. Tap `tester-tip-creator-button`, confirm `tip-sheet`, then tap `tip-confirm-button`; confirm Google Play / RevenueCat sandbox tip starts and success says no money moved/no payout created.
 7. Open the public safe paid video and tap `tester-paid-video-unlock-button`.
-8. Open the Watch-Party ticket gate and tap `tester-watch-party-ticket-button`, or confirm the public tester surface says the creator needs a Party Room target.
-9. Open the event pass route and tap `tester-event-pass-button`.
-10. Tap `tester-channel-subscribe-button`; confirm receipt-style copy says no money moved/no payout created.
-11. Tap `tester-vip-pass-button`; confirm receipt-style copy says no money moved/no payout created.
+8. Open the Watch-Party ticket gate from `tester-watch-party-ticket-button` and tap `watch-party-ticket-purchase-button`, or confirm the public tester surface says the creator needs a Party Room target.
+9. Open the event pass route from `tester-event-pass-button` and tap `event-pass-purchase-button`.
+10. Tap `tester-channel-subscribe-button`; on Subscriber Area use `subscriber-area-subscribe-button` if purchase is still required, then confirm receipt-style copy says no money moved/no payout created.
+11. Tap `tester-vip-pass-button`; on VIP Area use `vip-area-get-vip-button` if purchase is still required, then confirm receipt-style copy says no money moved/no payout created.
 12. Confirm every completed transaction is sandbox/test-only/not-payable in Owner Money Center readback.
 13. Revoke tester access with `scripts/revoke-sandbox-money-tester.mjs`.
 14. Relaunch/refresh as the tester and confirm sandbox-only offers are no longer visible.

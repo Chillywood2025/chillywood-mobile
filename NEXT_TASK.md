@@ -1174,6 +1174,12 @@ Remaining proof-only follow-ups:
 Signup is no longer blocked on the Play-installed Android build. Commit `ea4b545` imports `react-native-get-random-values` before Supabase auth initialization, and EAS production update group `4679bd00-d966-4950-b7eb-570e120b3e4d` proved a fresh Android signup on `R5CR120QCBF` with success copy. Keep using fresh emails for signup smoke because proof emails created during debugging now exist in Supabase auth. The remaining signup follow-up is operational: confirm real user confirmation-email delivery with the configured SMTP/provider and keep reset-email rate limits managed through Supabase Auth email settings, not app UI changes.
 # Next Task
 
+## BrowserStack Monetization E2E
+
+Next proof lane: use the BrowserStack readiness artifacts to run Android App Live/App Automate smoke proof for the seven monetization flows. Start with fixture readback, grant a non-owner sandbox tester, run Maestro selector smoke flows locally when possible, then use BrowserStack App Live for Google Play sandbox purchase-sheet completion. Do not use coordinate taps unless documented as an emergency proof weakness.
+
+Required proof target remains: owner cannot buy their own creator offers; Premium remains separate from creator subscription/VIP/tips/paid videos/tickets/events; tester revoke hides/blocks sandbox CTAs and direct purchase intents; live money and payouts remain off.
+
 ## Sandbox Money Follow-Up
 
 VIP clean-tester proof is closed in `/tmp/chillywood-vip-after-play-refund-proof-20260616-180235`. Final Paid Video, Watch-Party Ticket, and Event Pass proof is closed in `/tmp/chillywood-sandbox-money-final-three-proof-20260616-183633`. Do not mark any future money lane live-money-ready from these proofs: they prove Android sandbox tester flows only, with no real charges, no payouts, no creator earnings, no Premium unlock, and no LiveKit/room authority changes.

@@ -325,9 +325,10 @@ export default function SubscribeScreen() {
   }, [canManage, isSignedIn, onSignIn]);
 
   return (
-    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
+    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover" testID="screen-premium">
       <View style={styles.backgroundOverlay} />
       <ScrollView
+        testID="premium-screen"
         style={[styles.screen, { marginTop: insets.top }]}
         contentContainerStyle={[
           styles.content,
@@ -370,7 +371,7 @@ export default function SubscribeScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.card}>
+          <View style={styles.card} testID="premium-status-card">
             <Text style={styles.cardKicker}>ACCOUNT STATUS</Text>
             {sandboxMode.enabled ? (
               <View style={styles.sandboxNotice}>
@@ -381,12 +382,14 @@ export default function SubscribeScreen() {
                 </Text>
               </View>
             ) : null}
-            <StatusLine
-              label="Premium status"
-              value={hasPremium ? "Active" : "Not active"}
-              body={statusSummary}
-              tone={hasPremium ? "default" : "muted"}
-            />
+            <View testID={hasPremium ? "premium-active-receipt" : undefined}>
+              <StatusLine
+                label="Premium status"
+                value={hasPremium ? "Active" : "Not active"}
+                body={statusSummary}
+                tone={hasPremium ? "default" : "muted"}
+              />
+            </View>
             <StatusLine
               label="Purchase status"
               value={purchaseStatusLabel}
@@ -400,6 +403,9 @@ export default function SubscribeScreen() {
                 activeOpacity={0.86}
                 disabled={busy}
                 onPress={onRestore}
+                testID="premium-restore-button"
+                accessibilityRole="button"
+                accessibilityLabel="Restore Premium purchases"
               >
                 {restoreBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Restore purchases</Text>}
               </TouchableOpacity>
@@ -409,6 +415,8 @@ export default function SubscribeScreen() {
                   activeOpacity={0.86}
                   disabled={busy}
                   onPress={onManage}
+                  accessibilityRole="button"
+                  accessibilityLabel="Manage Chi'llywood Premium subscription"
                 >
                   {manageBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Manage subscription</Text>}
                 </TouchableOpacity>
@@ -421,6 +429,9 @@ export default function SubscribeScreen() {
                 activeOpacity={0.88}
                 disabled={busy}
                 onPress={onPurchase}
+                testID="premium-purchase-button"
+                accessibilityRole="button"
+                accessibilityLabel="Start Chi'llywood Premium purchase"
               >
                 {purchaseBusy ? (
                   <ActivityIndicator color="#fff" />
@@ -450,6 +461,7 @@ export default function SubscribeScreen() {
             </View>
           ) : null}
 
+          <View testID="premium-not-creator-offer-copy">
           <PremiumAccordion
             id="premium-unlocks"
             title="What Premium unlocks"
@@ -464,6 +476,7 @@ export default function SubscribeScreen() {
               </View>
             ))}
           </PremiumAccordion>
+          </View>
 
           {!hasPremium && !purchaseReady ? (
             <PremiumAccordion

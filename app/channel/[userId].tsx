@@ -722,9 +722,9 @@ export default function PublicChannelScreen() {
   );
 
   const renderUnavailable = (body: string) => (
-    <View style={styles.screen}>
+    <View style={styles.screen} testID="screen-platform">
       {renderBackHeader()}
-      <View style={styles.unavailableCard}>
+      <View style={styles.unavailableCard} testID="platform-access-denied-state">
         <Text style={styles.unavailableTitle}>Platform unavailable</Text>
         <Text style={styles.unavailableBody}>{body}</Text>
         <AppActionButton label="Back" onPress={() => router.back()} variant="primary" />
@@ -773,7 +773,18 @@ export default function PublicChannelScreen() {
             ) : null}
 	            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>{"Official Chi'llwood"}</Text> : null}
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
-            <Text style={styles.rolePill}>{formatPlatformRoleLabel(channel.role, isOwner)}</Text>
+            <Text
+              style={styles.rolePill}
+              testID={
+                sandboxTesterActive
+                  ? "platform-sandbox-tester-mode-badge"
+                  : isOwner
+                    ? "platform-owner-mode-badge"
+                    : "platform-viewer-mode-badge"
+              }
+            >
+              {formatPlatformRoleLabel(channel.role, isOwner)}
+            </Text>
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
               {visibleStats.map((stat) => (
@@ -1409,6 +1420,7 @@ export default function PublicChannelScreen() {
 
       return (
         <AppSection title="Creator Offers" statusLabel="Manage" statusTone="success">
+          <View testID="platform-creator-offers-section">
           <View style={styles.creatorOffersIntro}>
             <Text style={styles.cardKicker}>Owner management</Text>
             <Text style={styles.cardTitle}>Manage offers. Do not buy your own.</Text>
@@ -1431,6 +1443,21 @@ export default function PublicChannelScreen() {
                       style={[styles.offerActionButton, index > 0 && styles.offerActionButtonSecondary]}
                       activeOpacity={0.86}
                       onPress={action.onPress}
+                      testID={
+                        action.label === "Manage subscription offer"
+                          ? "platform-owner-manage-subscription-button"
+                          : action.label === "Manage VIP offer"
+                            ? "platform-owner-manage-vip-button"
+                            : action.label.toLowerCase().includes("paid")
+                              ? "owner-paid-video-manage-price-button"
+                              : action.label.toLowerCase().includes("ticket") || action.label.toLowerCase().includes("party room")
+                                ? "owner-ticket-manage-target-button"
+                                : action.label.toLowerCase().includes("event")
+                                  ? "owner-event-pass-manage-button"
+                                  : undefined
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={action.label}
                     >
                       <Text style={styles.offerActionText}>{action.label}</Text>
                     </TouchableOpacity>
@@ -1438,6 +1465,7 @@ export default function PublicChannelScreen() {
                 </View>
               </View>
             ))}
+          </View>
           </View>
         </AppSection>
       );
@@ -1518,6 +1546,7 @@ export default function PublicChannelScreen() {
 
     return (
       <AppSection title="Support this Platform" statusLabel={sandboxTesterActive ? "Sandbox" : "Available"} statusTone={sandboxTesterActive ? "warning" : "success"}>
+        <View testID="platform-support-this-platform-section">
         <View style={styles.supportIntro}>
           <Text style={styles.cardKicker}>{sandboxTesterActive ? "Sandbox tester" : "Creator support"}</Text>
           <Text style={styles.cardTitle}>{sandboxTesterActive ? "Test purchases. No real money moves." : "Choose exactly what you want to support."}</Text>
@@ -1550,6 +1579,7 @@ export default function PublicChannelScreen() {
               </TouchableOpacity>
             </View>
           ))}
+        </View>
         </View>
       </AppSection>
     );
@@ -1608,7 +1638,7 @@ export default function PublicChannelScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} testID="screen-platform">
       {brandBackgroundSource ? (
         <Image
           source={{ uri: brandBackgroundSource }}

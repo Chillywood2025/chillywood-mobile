@@ -891,6 +891,20 @@ Device proof on `R5CR120QCBF` used the Play-installed app (`installerPackageName
 June 6, 2026 Shared Player fullscreen rails follow-up corrects the final right-rail participant bubble mismatch. The right rail now reuses the same portrait shared-player `renderWatchPartyBubbleGridSurface` / `LiveKitStageMediaSurface` path so LiveKit camera/avatar bubbles match portrait instead of falling back through the non-LiveKit participant panel. The fullscreen left rail remains the existing room comments renderer with compact rail-specific presentation, and the center video/player sizing and playback path are unchanged. Fullscreen right rail does not show `Shared Player` or `Shared playback stays here if the room drops back from live camera.` Proof target: `/tmp/chillywood-shared-player-fullscreen-bubble-reuse-proof-20260605/`.
 # Current State
 
+## Profile and Platform Visibility Foundation
+
+June 17, 2026 backed Profile/Platform visibility foundation is committed, pushed, migrated, OTA-published, and device-proved for the owner controls currently in scope. Production migrations `20260617235547_profile_platform_access_visibility.sql` and `20260618000942_profile_access_visibility_rls_bridge.sql` are applied, and `supabase db push --dry-run` reports the remote database is up to date.
+
+Profile visibility save/readback passed earlier for `public`, `private`, and `subscriber_only`, then was restored to `public`. Platform Studio / Audience proof is now closed on Play-installed Android package `com.chillywood.mobile` with proof at `/tmp/chillywood-platform-visibility-audience-proof-20260617-194538`: owner/operator session reached Platform Studio without weakening the Premium gate, saved Platform visibility as `private`, `subscriber_only`, and `public`, and anon-authenticated owner readback confirmed each saved state. Final Platform visibility was restored to `public`. Owner Platform still shows `Your Platform`, hides buyer CTAs for the owner, and showed no raw RPC/internal error.
+
+Remaining visibility proof is expanded multi-account access-matrix proof: signed-out, follower-only, Circle member, active subscriber, blocked viewer, and non-subscriber/non-Circle viewer. Do not fake those states; use safe fixtures when available.
+
+## BrowserStack Monetization E2E Readiness
+
+June 17, 2026 BrowserStack/App Live readiness is being prepared for the seven monetization flows: Premium, Tip Creator, Paid Video, Watch-Party Ticket, Event Pass, Platform Subscription, and VIP Pass. The strategy is Maestro-first with stable `testID` selectors, BrowserStack App Automate/App Live readiness, and Appium only as fallback. Google Play sandbox purchase sheets remain manual-assisted where automation cannot safely complete them without coordinates.
+
+New QA contracts live in `docs/BROWSERSTACK_E2E_MODERNITY_CHECK.md`, `qa/browserstack/monetization-e2e-flow-map.md`, `qa/browserstack/testid-contract.md`, `qa/browserstack/runbook-android.md`, and `qa/browserstack/manual-app-live-monetization-checklist.md`. Fixture scripts under `scripts/qa/` use local service-role env only, fail closed when env is missing, and do not put service-role keys in app code.
+
 ## Sandbox Monetization Tester Access
 
 June 16, 2026 repo-side work adds a dedicated sandbox monetization tester access lane. Owner Money Center now has `Sandbox Tester Experience` with setup/refresh actions and six test-only/not-payable offer cards: Tips, Paid Video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass. Tester access is separate from owner/operator roles through `sandbox_monetization_testers` plus grant/revoke proof scripts. Creator tips use Google Play / RevenueCat sandbox only; physical merchandise stays on Stripe sandbox. Live money, payouts, cash-out, withdrawal, transfer, and payable creator balances remain off.

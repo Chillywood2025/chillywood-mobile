@@ -112,8 +112,11 @@ export default function ChannelSubscriptionScreen() {
   const needsPurchase = !isOwner && access?.requiresPurchase === true && !!offer;
 
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: safeAreaInsets.top + 18, paddingBottom: safeAreaInsets.bottom + 32 }]}>
+    <View style={styles.screen} testID="screen-channel-subscription">
+      <ScrollView
+        testID="subscriber-area-screen"
+        contentContainerStyle={[styles.content, { paddingTop: safeAreaInsets.top + 18, paddingBottom: safeAreaInsets.bottom + 32 }]}
+      >
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.82} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>←</Text>
@@ -130,7 +133,12 @@ export default function ChannelSubscriptionScreen() {
           <View style={styles.card}>
             <View style={styles.statusRow}>
               <Text style={styles.kicker}>{isOwner ? "Owner preview" : "Subscribed"}</Text>
-              <Text style={[styles.statusPill, isOwner && styles.statusPillOwner]}>{isOwner ? "Owner preview" : "Subscribed"}</Text>
+              <Text
+                style={[styles.statusPill, isOwner && styles.statusPillOwner]}
+                testID={isOwner ? "subscriber-area-owner-preview-badge" : "subscriber-area-subscribed-badge"}
+              >
+                {isOwner ? "Owner preview" : "Subscribed"}
+              </Text>
             </View>
             <Text style={styles.title}>Subscriber Area</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
@@ -138,11 +146,11 @@ export default function ChannelSubscriptionScreen() {
 	              {"Your creator subscription is active for this Platform only."}
 	            </Text>
             <View style={styles.scopeGrid}>
-              <View style={styles.scopeCard}>
+              <View style={styles.scopeCard} testID="subscriber-area-includes-list">
                 <Text style={styles.scopeTitle}>Includes</Text>
                 <Text style={styles.scopeBody}>Subscriber access for this creator Platform.</Text>
               </View>
-              <View style={styles.scopeCard}>
+              <View style={styles.scopeCard} testID="subscriber-area-does-not-include-list">
                 <Text style={styles.scopeTitle}>Does not include</Text>
                 <Text style={styles.scopeBody}>This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators.</Text>
               </View>
@@ -180,7 +188,7 @@ export default function ChannelSubscriptionScreen() {
             ) : null}
           </View>
         ) : (
-          <View style={styles.card}>
+          <View style={styles.card} testID="subscriber-area-access-denied-state">
             <Text style={styles.kicker}>Subscriber access required</Text>
             <Text style={styles.title}>{offer?.title ?? "Channel Subscription"}</Text>
             <Text style={styles.body}>
@@ -195,7 +203,7 @@ export default function ChannelSubscriptionScreen() {
                 activeOpacity={0.86}
                 disabled={busy}
                 onPress={handleSubscribe}
-                testID="tester-channel-subscribe-button"
+                testID="subscriber-area-subscribe-button"
                 accessibilityRole="button"
                 accessibilityLabel="Subscribe to creator Platform"
               >

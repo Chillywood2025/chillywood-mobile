@@ -1,0 +1,13 @@
+userName: ${BROWSERSTACK_USERNAME}
+accessKey: ${BROWSERSTACK_ACCESS_KEY}
+app: ${BROWSERSTACK_APP_ID}
+platforms:
+  - platformName: android
+    deviceName: Samsung Galaxy S23
+    platformVersion: "13.0"
+projectName: Chi'llywood Mobile
+buildName: monetization-e2e
+sessionName: monetization-seven-flow-smoke
+debug: true
+networkLogs: true
+consoleLogs: info

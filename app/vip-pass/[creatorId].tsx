@@ -112,8 +112,11 @@ export default function CreatorVipPassScreen() {
   const needsPurchase = !isOwner && access?.requiresPurchase === true && !!offer;
 
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: safeAreaInsets.top + 18, paddingBottom: safeAreaInsets.bottom + 32 }]}>
+    <View style={styles.screen} testID="screen-vip-pass">
+      <ScrollView
+        testID="vip-area-screen"
+        contentContainerStyle={[styles.content, { paddingTop: safeAreaInsets.top + 18, paddingBottom: safeAreaInsets.bottom + 32 }]}
+      >
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.82} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>←</Text>
@@ -130,7 +133,12 @@ export default function CreatorVipPassScreen() {
           <View style={styles.card}>
             <View style={styles.statusRow}>
               <Text style={styles.kicker}>{isOwner ? "Owner preview" : "VIP active"}</Text>
-              <Text style={[styles.statusPill, isOwner && styles.statusPillOwner]}>{isOwner ? "Owner preview" : "VIP active"}</Text>
+              <Text
+                style={[styles.statusPill, isOwner && styles.statusPillOwner]}
+                testID={isOwner ? "vip-area-owner-preview-badge" : "vip-area-active-badge"}
+              >
+                {isOwner ? "Owner preview" : "VIP active"}
+              </Text>
             </View>
             <Text style={styles.title}>VIP Area</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
@@ -138,11 +146,11 @@ export default function CreatorVipPassScreen() {
               VIP is active for this creator's Platform only.
             </Text>
             <View style={styles.scopeGrid}>
-              <View style={styles.scopeCard}>
+              <View style={styles.scopeCard} testID="vip-area-includes-list">
                 <Text style={styles.scopeTitle}>Includes</Text>
                 <Text style={styles.scopeBody}>Creator-specific VIP access for this Platform.</Text>
               </View>
-              <View style={styles.scopeCard}>
+              <View style={styles.scopeCard} testID="vip-area-does-not-include-list">
                 <Text style={styles.scopeTitle}>Does not include</Text>
                 <Text style={styles.scopeBody}>Chi'llywood Premium, subscriptions, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, room permissions, payouts, or other creators.</Text>
               </View>
@@ -177,7 +185,7 @@ export default function CreatorVipPassScreen() {
             ) : null}
           </View>
         ) : (
-          <View style={styles.card}>
+          <View style={styles.card} testID="vip-area-access-denied-state">
             <Text style={styles.kicker}>VIP access required</Text>
             <Text style={styles.title}>{offer?.title ?? "VIP Pass"}</Text>
             <Text style={styles.body}>
@@ -193,7 +201,7 @@ export default function CreatorVipPassScreen() {
                 activeOpacity={0.86}
                 disabled={busy}
                 onPress={handleGetVip}
-                testID="tester-vip-pass-button"
+                testID="vip-area-get-vip-button"
                 accessibilityRole="button"
                 accessibilityLabel="Sandbox Test Get Creator VIP"
               >

@@ -1,0 +1,15 @@
+appId: ${CHILLYWOOD_APP_ID}
+---
+- launchApp
+- openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
+- assertVisible:
+    id: "screen-platform"
+- assertVisible:
+    id: "platform-support-this-platform-section"
+- tapOn:
+    id: "tester-tip-creator-button"
+- assertVisible:
+    id: "tip-sheet"
+- assertVisible:
+    id: "tip-no-content-unlock-copy"
+- takeScreenshot: "monetization-tip-smoke"

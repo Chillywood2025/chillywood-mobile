@@ -1,0 +1,19 @@
+appId: ${CHILLYWOOD_APP_ID}
+---
+- launchApp
+- openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
+- assertVisible:
+    id: "screen-platform"
+- assertVisible:
+    id: "platform-owner-mode-badge"
+- assertVisible:
+    id: "platform-creator-offers-section"
+- assertVisible:
+    id: "platform-owner-manage-subscription-button"
+- assertVisible:
+    id: "platform-owner-manage-vip-button"
+- assertNotVisible:
+    id: "platform-support-this-platform-section"
+- assertNotVisible:
+    id: "premium-purchase-button"
+- takeScreenshot: "monetization-owner-cannot-buy-own-offers"

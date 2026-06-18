@@ -1,0 +1,13 @@
+appId: ${CHILLYWOOD_APP_ID}
+---
+- launchApp
+- openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
+- assertVisible:
+    id: "screen-platform"
+- tapOn:
+    id: "tester-vip-pass-button"
+- assertVisible:
+    id: "screen-vip-pass"
+- assertVisible:
+    id: "vip-area-screen"
+- takeScreenshot: "monetization-vip-smoke"

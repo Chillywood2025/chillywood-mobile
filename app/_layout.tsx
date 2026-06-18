@@ -540,7 +540,11 @@ function AuthRouteGate() {
   if (isLoading) return <AuthBootScreen />;
   if ((!isSignedIn && insideTabsGroup) || (isSignedIn && insideAuthGroup)) return <AuthBootScreen />;
 
-  return <RootNavigator />;
+  return (
+    <View style={styles.appRootReady} testID="app-root-ready">
+      <RootNavigator />
+    </View>
+  );
 }
 
 function BetaWelcomeController() {
@@ -643,6 +647,9 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  appRootReady: {
+    flex: 1,
+  },
   authBootScreen: {
     flex: 1,
     alignItems: "center",

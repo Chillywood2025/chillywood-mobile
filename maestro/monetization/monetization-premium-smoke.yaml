@@ -1,0 +1,16 @@
+appId: ${CHILLYWOOD_APP_ID}
+---
+- launchApp
+- assertVisible:
+    id: "app-root-ready"
+    optional: true
+- openLink: "chillywoodmobile://subscribe"
+- assertVisible:
+    id: "premium-screen"
+- assertVisible:
+    id: "premium-status-card"
+- assertVisible:
+    id: "premium-not-creator-offer-copy"
+- assertVisible:
+    id: "premium-purchase-button"
+- takeScreenshot: "monetization-premium-smoke"

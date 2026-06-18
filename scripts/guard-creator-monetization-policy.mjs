@@ -203,11 +203,11 @@ assertIncludes(publicChannel, "tester-vip-pass-button", "tester VIP CTA selector
 assertIncludes(player, "creatorVideoPaidContentLocked", "Player paid creator-content lock");
 assertIncludes(player, "It does not include Premium", "Player paid-content doctrine copy");
 assertIncludes(player, "tester-paid-video-unlock-button", "tester paid video selector");
-assertIncludes(read("components/monetization/tip-sheet.tsx"), "tester-tip-creator-button", "tester tip selector");
+assertIncludes(read("components/monetization/tip-sheet.tsx"), "tip-confirm-button", "tip sheet confirm selector");
 assertIncludes(watchPartyEntry, "tester-watch-party-ticket-button", "tester Watch-Party entry ticket selector");
-assertIncludes(watchPartyRoom, "tester-watch-party-ticket-button", "tester Watch-Party room ticket selector");
-assertIncludes(eventRoute, "tester-event-pass-button", "tester event pass selector");
-assertIncludes(vipRoute, "tester-vip-pass-button", "tester VIP route selector");
+assertIncludes(watchPartyRoom, "watch-party-ticket-purchase-button", "Watch-Party room ticket purchase selector");
+assertIncludes(eventRoute, "event-pass-purchase-button", "event pass purchase selector");
+assertIncludes(vipRoute, "vip-area-get-vip-button", "VIP route purchase selector");
 assertIncludes(admin, "No checkout success, payout release, fake purchase, fake order, fake tip, or live money action", "Admin money safety copy");
 assertIncludes(admin, "1.5% with no default cap", "Admin cash-out fee copy");
 

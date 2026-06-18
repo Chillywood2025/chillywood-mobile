@@ -1,0 +1,19 @@
+appId: ${CHILLYWOOD_APP_ID}
+---
+- launchApp
+- openLink: "chillywoodmobile://subscribe"
+- assertVisible:
+    id: "premium-screen"
+- assertVisible:
+    id: "premium-not-creator-offer-copy"
+- openLink: "chillywoodmobile://channel-subscription/${CHILLYWOOD_E2E_CREATOR_ID}"
+- assertVisible:
+    id: "screen-channel-subscription"
+- assertVisible:
+    id: "subscriber-area-does-not-include-list"
+- openLink: "chillywoodmobile://vip-pass/${CHILLYWOOD_E2E_CREATOR_ID}"
+- assertVisible:
+    id: "screen-vip-pass"
+- assertVisible:
+    id: "vip-area-does-not-include-list"
+- takeScreenshot: "monetization-premium-creator-separation"

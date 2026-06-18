@@ -795,7 +795,7 @@ export default function HomeScreen() {
       style={styles.screenBackground}
       resizeMode="cover"
     >
-    <View style={styles.container}>
+    <View style={styles.container} testID="auth-logged-in-home">
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color="#E50914" />

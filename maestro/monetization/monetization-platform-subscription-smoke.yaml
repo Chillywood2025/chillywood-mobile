@@ -1,0 +1,13 @@
+appId: ${CHILLYWOOD_APP_ID}
+---
+- launchApp
+- openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
+- assertVisible:
+    id: "screen-platform"
+- tapOn:
+    id: "tester-channel-subscribe-button"
+- assertVisible:
+    id: "screen-channel-subscription"
+- assertVisible:
+    id: "subscriber-area-screen"
+- takeScreenshot: "monetization-platform-subscription-smoke"

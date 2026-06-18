@@ -1,0 +1,15 @@
+appId: ${CHILLYWOOD_APP_ID}
+---
+- launchApp
+- openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
+- assertVisible:
+    id: "screen-platform"
+- tapOn:
+    id: "tester-watch-party-ticket-button"
+- assertVisible:
+    id: "screen-party-room"
+- assertVisible:
+    id: "watch-party-ticket-lock-card"
+- assertVisible:
+    id: "watch-party-ticket-purchase-button"
+- takeScreenshot: "monetization-watch-party-ticket-smoke"

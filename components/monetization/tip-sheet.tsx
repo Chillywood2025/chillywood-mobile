@@ -137,7 +137,7 @@ export function TipSheet({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
-        <View style={styles.sheet}>
+        <View style={styles.sheet} testID="tip-sheet">
           <View style={styles.handle} />
           <View style={styles.creatorRow}>
             <View style={styles.avatarWrap}>
@@ -160,6 +160,7 @@ export function TipSheet({
             {amounts.map((amount) => (
               <TouchableOpacity
                 key={amount}
+                testID="tip-amount-option"
                 activeOpacity={0.86}
                 style={[styles.amountButton, !customAmount.trim() && selectedAmount === amount && styles.amountButtonActive]}
                 onPress={() => {
@@ -191,18 +192,18 @@ export function TipSheet({
             style={[styles.input, styles.noteInput]}
           />
 
-          <Text style={styles.policyCopy}>
+          <Text style={styles.policyCopy} testID="tip-no-content-unlock-copy">
             Tips are contributions only. They do not unlock videos, events, rooms, VIP, subscriptions, badges, or public rewards. Merchandise uses Stripe separately.
           </Text>
 
-          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+          {notice ? <Text style={styles.notice} testID="tip-success-receipt">{notice}</Text> : null}
 
           <TouchableOpacity
             activeOpacity={0.88}
             disabled={!canSubmit}
             style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}
             onPress={startCheckout}
-            testID="tester-tip-creator-button"
+            testID="tip-confirm-button"
             accessibilityRole="button"
             accessibilityLabel="Sandbox Test Tip Creator"
           >

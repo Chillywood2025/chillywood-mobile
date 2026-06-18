@@ -1,0 +1,15 @@
+appId: ${CHILLYWOOD_APP_ID}
+---
+- launchApp
+- openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
+- assertVisible:
+    id: "screen-platform"
+- tapOn:
+    id: "tester-paid-video-unlock-button"
+- assertVisible:
+    id: "screen-player"
+- assertVisible:
+    id: "paid-video-lock-card"
+- assertVisible:
+    id: "tester-paid-video-unlock-button"
+- takeScreenshot: "monetization-paid-video-smoke"
