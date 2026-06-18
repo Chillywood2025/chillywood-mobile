@@ -20,12 +20,20 @@ Use Maestro-first selector flows against the installed app package `com.chillywo
 
 ## Local Prep
 
+0. Verify BrowserStack credentials without printing secrets:
+   `node scripts/qa/browserstack-verify-access.mjs --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS`.
+   If `BROWSERSTACK_APP_ID` is missing, upload the existing APK only after confirming the artifact path:
+   `node scripts/qa/browserstack-upload-app.mjs --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS`.
 1. Prepare fixture readback: `npm run qa:monetization:fixtures:readback`.
 2. Grant tester access with the existing proof script or fixture prepare script.
 3. Run local non-purchase Maestro smoke flows with resolved temporary copies:
    `npm run qa:monetization:maestro:local -- --proof-dir /tmp/chillywood-local-monetization-e2e-proof-YYYYMMDD-HHMMSS`.
    Use `--dry-run` first to verify env resolution without launching the app.
-4. Upload APK/AAB to BrowserStack and record app URL/custom ID.
+4. Prepare the safe BrowserStack Maestro suite without creating sessions:
+   `node scripts/qa/run-browserstack-maestro.mjs --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS`.
+   This dry-run resolves only `monetization-premium-smoke.yaml`, `monetization-premium-creator-separation.yaml`, and `monetization-owner-cannot-buy-own-offers.yaml`; it skips purchase-completion flows.
+5. Run the BrowserStack Maestro suite only when explicitly approved for the specific safe flows:
+   `node scripts/qa/run-browserstack-maestro.mjs --run --proof-dir /tmp/chillywood-browserstack-setup-proof-YYYYMMDD-HHMMSS`.
 
 ## OTA / Installed Runtime Check
 
