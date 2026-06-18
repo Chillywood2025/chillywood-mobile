@@ -64,6 +64,8 @@
     "qa:monetization:fixtures:prepare": "node ./scripts/qa/prepare-monetization-e2e-fixtures.mjs",
     "qa:monetization:fixtures:readback": "node ./scripts/qa/readback-monetization-e2e-fixtures.mjs",
     "qa:monetization:fixtures:reset": "node ./scripts/qa/reset-monetization-e2e-fixtures.mjs",
+    "qa:browserstack:e2e-accounts:create": "node ./scripts/qa/create-browserstack-e2e-accounts.mjs",
+    "qa:browserstack:e2e-accounts:readback": "node ./scripts/qa/readback-browserstack-e2e-accounts.mjs",
     "qa:monetization:maestro:local": "node ./scripts/qa/run-monetization-maestro-local.mjs",
     "guard:monetization-e2e-testids": "node ./scripts/guard-monetization-e2e-testids.mjs",
     "typecheck": "tsc --noEmit && npm run guard:android-launcher-icon-policy && npm run guard:watch-party-livekit && npm run guard:old-room-handling"
