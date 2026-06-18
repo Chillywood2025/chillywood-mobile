@@ -26,6 +26,10 @@ Scope: seven public-v1 monetization flows. Sandbox only unless explicitly stated
 - Premium remains app-wide and separate.
 - Owner cannot buy own creator offers.
 
+Fixture prepare/readback requires a local-only `SUPABASE_SERVICE_ROLE_KEY`. Missing service-role env is an expected fail-closed proof blocker; do not weaken RLS or mobile app permissions to avoid it.
+
+Watch-Party Ticket requires a valid owner-owned Party Room target and a `paid_watch_party_offers` row visible through `list_my_paid_watch_party_offers`. If authenticated owner readback returns an empty list, classify the ticket fixture as missing or stale until service-role/admin fixture setup can verify whether the row is absent, scoped to another owner, or hidden by RLS.
+
 ## Two-Device Need
 
 Watch-Party Live media authority is not part of the money proof. Ticket proof can be one-device to the Party Waiting Room/Room gate. Multi-device room authority proof remains separate.

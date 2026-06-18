@@ -31,6 +31,7 @@ const files = {
   watchParty: read("app/watch-party/[partyId].tsx"),
   tipSheet: read("components/monetization/tip-sheet.tsx"),
   packageJson: read("package.json"),
+  localRunner: read("scripts/qa/run-monetization-maestro-local.mjs"),
 };
 
 [
@@ -84,6 +85,10 @@ const files = {
   [files.packageJson, "qa:monetization:fixtures:prepare", "fixture prepare script"],
   [files.packageJson, "qa:monetization:fixtures:readback", "fixture readback script"],
   [files.packageJson, "qa:monetization:fixtures:reset", "fixture reset script"],
+  [files.packageJson, "qa:monetization:maestro:local", "local Maestro runner script"],
+  [files.localRunner, "manual_assisted_flow_requested", "manual-assisted flow skip guard"],
+  [files.localRunner, "resolved_flows", "temporary resolved Maestro copies"],
+  [files.localRunner, "com.chillywood.mobile", "default local app id"],
 ].forEach(([source, needle, label]) => assertIncludes(source, needle, label));
 
 [

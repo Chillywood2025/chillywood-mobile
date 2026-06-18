@@ -23,11 +23,19 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const { data, error } = await supabase.rpc("revoke_sandbox_monetization_tester", {
-  p_id: testerId,
-  p_user_id: viewerUserId,
-  p_email: viewerEmail,
-});
+let query = supabase
+  .from("sandbox_monetization_testers")
+  .update({
+    revoked_at: new Date().toISOString(),
+    status: "revoked",
+  })
+  .eq("status", "active");
+
+if (testerId) query = query.eq("id", testerId);
+else if (viewerUserId) query = query.eq("user_id", viewerUserId);
+else query = query.eq("email", viewerEmail);
+
+const { data, error } = await query.select("id,user_id,email,status,revoked_at,updated_at");
 
 if (error) {
   console.error(JSON.stringify({ ok: false, error: error.message }, null, 2));
@@ -36,9 +44,11 @@ if (error) {
 
 console.log(JSON.stringify({
   ok: true,
-  action: "revoke_sandbox_monetization_tester",
+  action: "revoke_sandbox_monetization_tester_direct_service_role",
   testerId,
   viewerUserId,
   viewerEmail,
-  row: data,
+  revokedCount: Array.isArray(data) ? data.length : 0,
+  rows: data,
+  serviceRolePrinted: false,
 }, null, 2));

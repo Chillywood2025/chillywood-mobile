@@ -16,12 +16,38 @@ Use Maestro-first selector flows against the installed app package `com.chillywo
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY` for local/proof fixture scripts only, never app code
 
+`SUPABASE_SERVICE_ROLE_KEY` is required for local fixture prepare/readback scripts that grant or revoke sandbox monetization tester access. It must live only in an ignored local env file such as `.env.browserstack-monetization.local`, must never be committed, and must never be imported by mobile app code. If it is missing, fixture prepare/readback must fail closed and sandbox tester grant/readback is not fully proved.
+
 ## Local Prep
 
 1. Prepare fixture readback: `npm run qa:monetization:fixtures:readback`.
 2. Grant tester access with the existing proof script or fixture prepare script.
-3. Run Maestro smoke flows locally where possible.
+3. Run local non-purchase Maestro smoke flows with resolved temporary copies:
+   `npm run qa:monetization:maestro:local -- --proof-dir /tmp/chillywood-local-monetization-e2e-proof-YYYYMMDD-HHMMSS`.
+   Use `--dry-run` first to verify env resolution without launching the app.
 4. Upload APK/AAB to BrowserStack and record app URL/custom ID.
+
+## OTA / Installed Runtime Check
+
+Before local Maestro selector proof, confirm the installed app has the OTA/build that contains the selector contract commit:
+
+1. Force close the app.
+2. Relaunch and wait for OTA pickup.
+3. Confirm runtime/update id if available.
+4. Open `/subscribe` and verify `premium-screen` / `screen-premium` in UI hierarchy.
+5. If selectors are missing but source contains them, treat it as stale installed runtime or OTA cache, not a product regression.
+
+## Maestro Driver Retry Checklist
+
+If Maestro fails with `Connection refused: localhost:7001` or another Android driver hierarchy error:
+
+1. Close any running Maestro sessions.
+2. Run `adb kill-server && adb start-server`.
+3. Confirm the device with `adb devices`.
+4. Force-stop the app.
+5. Relaunch the app.
+6. Rerun one non-purchase smoke flow.
+7. If it still fails, mark local Maestro driver blocked. Do not change app code for driver instability.
 
 ## Proof Folder
 

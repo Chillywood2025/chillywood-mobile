@@ -18,12 +18,43 @@ const viewerUserId = String(process.env.CHILLYWOOD_E2E_VIEWER_USER_ID ?? "").tri
 const viewerEmail = String(process.env.CHILLYWOOD_E2E_VIEWER_EMAIL).trim().toLowerCase();
 const expiresAt = process.env.CHILLYWOOD_E2E_TESTER_EXPIRES_AT || new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
-const { data, error } = await supabase.rpc("grant_sandbox_monetization_tester", {
-  p_user_id: viewerUserId,
-  p_email: viewerEmail,
-  p_expires_at: expiresAt,
-  p_note: "BrowserStack monetization E2E proof tester",
-});
+const now = new Date().toISOString();
+
+if (viewerUserId) {
+  const { error } = await supabase
+    .from("sandbox_monetization_testers")
+    .update({ revoked_at: now, status: "revoked" })
+    .eq("status", "active")
+    .eq("user_id", viewerUserId);
+  if (error) {
+    console.error(JSON.stringify({ ok: false, error: error.message }, null, 2));
+    process.exit(1);
+  }
+}
+
+const { error: revokeEmailError } = await supabase
+  .from("sandbox_monetization_testers")
+  .update({ revoked_at: now, status: "revoked" })
+  .eq("status", "active")
+  .eq("email", viewerEmail);
+
+if (revokeEmailError) {
+  console.error(JSON.stringify({ ok: false, error: revokeEmailError.message }, null, 2));
+  process.exit(1);
+}
+
+const { data, error } = await supabase
+  .from("sandbox_monetization_testers")
+  .insert({
+    created_by: "browserstack-monetization-e2e",
+    email: viewerEmail,
+    expires_at: expiresAt,
+    note: "BrowserStack monetization E2E proof tester",
+    status: "active",
+    user_id: viewerUserId,
+  })
+  .select("id,user_id,email,status,expires_at,created_at")
+  .single();
 
 if (error) {
   console.error(JSON.stringify({ ok: false, error: error.message }, null, 2));
@@ -32,9 +63,14 @@ if (error) {
 
 console.log(JSON.stringify({
   ok: true,
-  action: "grant_sandbox_monetization_tester",
+  action: "grant_sandbox_monetization_tester_direct_service_role",
   viewerUserId,
   viewerEmail,
   expiresAt,
   row: data,
+  sandboxOnly: true,
+  notPayable: true,
+  ownerRoleGranted: false,
+  payoutAccessGranted: false,
+  serviceRolePrinted: false,
 }, null, 2));

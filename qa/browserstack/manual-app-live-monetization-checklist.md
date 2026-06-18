@@ -10,6 +10,7 @@ Use checkboxes during BrowserStack App Live or physical-device proof.
 - [ ] Route: `/subscribe`
 - [ ] Screenshot: `premium_screen.png`
 - [ ] Expected: Chi'llywood Premium only; not creator subscription/VIP
+- [ ] Confirm installed runtime exposes `premium-screen` or document stale OTA/cache before proceeding.
 - [ ] Pass/fail notes:
 
 ## Tip Creator
@@ -83,3 +84,4 @@ Use checkboxes during BrowserStack App Live or physical-device proof.
 - [ ] Paid video/ticket/event are target scoped
 - [ ] Tester revoke hides/blocks sandbox CTAs
 - [ ] No crash, no raw internal error, no live money, no payout
+- [ ] Fixture setup used local-only `SUPABASE_SERVICE_ROLE_KEY`; if absent, tester grant/readback is blocked and must not be bypassed.
