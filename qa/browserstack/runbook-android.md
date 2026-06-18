@@ -42,6 +42,20 @@ Use Maestro-first selector flows against the installed app package `com.chillywo
 
 App Automate installs a clean app runtime. The safe non-purchase flows can prove route-level selector exposure on that runtime, but owner/tester-only assertions still require the BrowserStack device to reach the intended signed-in account state first. If a run shows route roots such as `premium-screen`, `screen-premium`, or `screen-platform` but then lands on logged-out Premium copy or Platform viewer mode, classify it as an account/env setup blocker, not a Premium gate or route selector regression. Do not weaken owner-only assertions or fake purchase/account state to make the run pass.
 
+## Minimum Android Device Matrix
+
+Do not run the whole matrix by default. Use the smoke set for non-purchase route/account validation and reserve the full money proof matrix for later manual-assisted Google Play purchase work.
+
+| Device class | BrowserStack target | Android | Status |
+| --- | --- | --- | --- |
+| Samsung flagship smoke | Samsung Galaxy S23 or S24 | 13, 14, 15 where available | Smoke required |
+| Pixel flagship smoke | Google Pixel 7, 8, or 9 | 14, 15 where available | Smoke required |
+| Lower-end Android | Moto/OnePlus/Samsung A-class equivalent if available | 12-14 | Later, route smoke |
+| Small screen | Any compact Android device available | 12-15 | Later, layout/accessibility smoke |
+| Large screen/foldable | Galaxy Fold/large-screen Android | 14-15 | Later |
+
+Minimum current smoke should cover one Samsung and one Pixel before expanding. Full money proof remains later/manual-assisted because Google Play purchase sheets must not be faked.
+
 ## OTA / Installed Runtime Check
 
 Before local Maestro selector proof, confirm the installed app has the OTA/build that contains the selector contract commit:

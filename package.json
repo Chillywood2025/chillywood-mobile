@@ -61,6 +61,7 @@
     "guard:live-stage-approved-seats": "node ./scripts/guard-live-stage-approved-seats.mjs",
     "guard:old-room-handling": "node ./scripts/guard-old-room-handling.mjs",
     "guard:algorithm-ranking-v1": "node ./scripts/guard-algorithm-ranking-v1.mjs",
+    "guard:big-app-qa-coverage": "node ./scripts/guard-big-app-qa-coverage.mjs",
     "qa:monetization:fixtures:prepare": "node ./scripts/qa/prepare-monetization-e2e-fixtures.mjs",
     "qa:monetization:fixtures:readback": "node ./scripts/qa/readback-monetization-e2e-fixtures.mjs",
     "qa:monetization:fixtures:reset": "node ./scripts/qa/reset-monetization-e2e-fixtures.mjs",

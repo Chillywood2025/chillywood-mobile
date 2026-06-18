@@ -176,7 +176,11 @@ async function main() {
     liveMoneyOnSwitches: await countRows(admin, "platform_money_kill_switches", (query) => query.eq("key", "live_money_enabled").eq("state", "on")),
     ownerPayableLedgerEvents: await countRows(admin, "money_access_ledger_events", (query) => query.eq("creator_id", owner.id).in("payable_state", ["payable", "paid"])),
     ownerPayoutEnabledConfigs: await countRows(admin, "creator_monetization_configs", (query) => query.eq("creator_id", owner.id).eq("payout_enabled", true)),
-    socialGraphAccessGrants: await countRows(admin, "access_grants", (query) => query.in("user_id", viewerIds).contains("metadata", { browserstack_e2e_social_graph: true }).eq("environment", "sandbox")),
+    socialGraphAccessGrants: await countRows(admin, "access_grants", (query) => query
+      .in("user_id", viewerIds)
+      .contains("metadata", { browserstack_e2e_social_graph: true })
+      .eq("environment", "sandbox")
+      .eq("status", "sandbox_only")),
   };
 
   const output = {
