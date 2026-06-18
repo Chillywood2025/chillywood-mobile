@@ -132,7 +132,7 @@ function evaluateFixtureReadback(readback, selected) {
 
   for (const flow of selected) {
     if (flow === "monetization-tip-smoke.yaml" && tipRows.length === 0) failures.push("tip_config_missing");
-    if (flow === "monetization-paid-video-smoke.yaml" && !configs.some((row) => productTypeMatches(row, ["paid_video", "video"]))) failures.push("paid_video_fixture_missing");
+    if (flow === "monetization-paid-video-smoke.yaml" && !configs.some((row) => productTypeMatches(row, ["paid_video", "video", "paid_content"]))) failures.push("paid_video_fixture_missing");
     if (flow === "monetization-watch-party-ticket-smoke.yaml") {
       if (!configs.some((row) => productTypeMatches(row, ["watch", "ticket"]))) failures.push("watch_party_ticket_fixture_missing");
       if (configs.some((row) => productTypeMatches(row, ["watch", "ticket"]) && (row?.grants_livekit_publish === true || row?.grants_host_authority === true))) {
@@ -272,9 +272,9 @@ if (blocked.length && !options.manualAssistedPurchase && !options.autoConfirmSan
 const browserStack = loadBrowserStackEnv(options.envPath);
 const moneyEnv = parseEnvFile(path.resolve(root, options.moneyEnvPath));
 const env = {
-  ...process.env,
   ...moneyEnv,
   ...browserStack.env,
+  ...process.env,
 };
 const appReference = String(env.BROWSERSTACK_APP_ID || env.BROWSERSTACK_APP_CUSTOM_ID || "").trim();
 const flowUsesOwnerAccount = (flow) => [
