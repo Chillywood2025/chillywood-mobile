@@ -15,6 +15,16 @@ export const REMOTE_CONFIG_KEYS = {
   watchPartyLiveHandoffV2: "watch_party_live_handoff_v2",
   chillyChatExpandedV1: "chilly_chat_expanded_v1",
   aiChatSuggestionsV1: "ai_chat_suggestions_v1",
+  algorithmRankingV1Enabled: "algorithm_ranking_v1_enabled",
+  algorithmRankingFreshnessWeight: "algorithm_ranking_freshness_weight",
+  algorithmRankingEngagementWeight: "algorithm_ranking_engagement_weight",
+  algorithmRankingCompletionWeight: "algorithm_ranking_completion_weight",
+  algorithmRankingCreatorTrustWeight: "algorithm_ranking_creator_trust_weight",
+  algorithmRankingLiveBoostWeight: "algorithm_ranking_live_boost_weight",
+  algorithmRankingSafetyPenaltyWeight: "algorithm_ranking_safety_penalty_weight",
+  algorithmRankingAlreadySeenPenaltyWeight: "algorithm_ranking_already_seen_penalty_weight",
+  algorithmRankingNewCreatorBoostWeight: "algorithm_ranking_new_creator_boost_weight",
+  algorithmRankingDiversityPenaltyWeight: "algorithm_ranking_diversity_penalty_weight",
 } as const;
 
 export const REMOTE_CONFIG_DEFAULTS: Record<
@@ -26,6 +36,16 @@ export const REMOTE_CONFIG_DEFAULTS: Record<
   [REMOTE_CONFIG_KEYS.watchPartyLiveHandoffV2]: false,
   [REMOTE_CONFIG_KEYS.chillyChatExpandedV1]: false,
   [REMOTE_CONFIG_KEYS.aiChatSuggestionsV1]: false,
+  [REMOTE_CONFIG_KEYS.algorithmRankingV1Enabled]: false,
+  [REMOTE_CONFIG_KEYS.algorithmRankingFreshnessWeight]: 0.16,
+  [REMOTE_CONFIG_KEYS.algorithmRankingEngagementWeight]: 0.2,
+  [REMOTE_CONFIG_KEYS.algorithmRankingCompletionWeight]: 0.14,
+  [REMOTE_CONFIG_KEYS.algorithmRankingCreatorTrustWeight]: 0.14,
+  [REMOTE_CONFIG_KEYS.algorithmRankingLiveBoostWeight]: 0.12,
+  [REMOTE_CONFIG_KEYS.algorithmRankingSafetyPenaltyWeight]: 1,
+  [REMOTE_CONFIG_KEYS.algorithmRankingAlreadySeenPenaltyWeight]: 0.2,
+  [REMOTE_CONFIG_KEYS.algorithmRankingNewCreatorBoostWeight]: 0.08,
+  [REMOTE_CONFIG_KEYS.algorithmRankingDiversityPenaltyWeight]: 0.2,
 };
 
 export type FeatureFlags = typeof FEATURE_FLAGS;

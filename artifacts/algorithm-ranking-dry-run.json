@@ -1,0 +1,238 @@
+{
+  "generatedAt": "2026-06-18T10:57:35.836Z",
+  "dryRunOnly": true,
+  "mutatedProductionData": false,
+  "usedPrivateViewerData": false,
+  "version": "algorithm-ranking-v1-rules-2026-06-18",
+  "results": [
+    {
+      "id": "active-live-room",
+      "surface": "live_discovery",
+      "finalScore": 68.16,
+      "componentScores": {
+        "freshnessScore": 1,
+        "engagementScore": 1,
+        "completionScore": 0.58,
+        "creatorTrustScore": 0.86,
+        "safetyScore": 1,
+        "liveActivityBoost": 1,
+        "personalizationPlaceholder": 0,
+        "newCreatorBoost": 0,
+        "searchRelevanceScore": 0
+      },
+      "penalties": {
+        "alreadySeenPenalty": 0,
+        "reportPenalty": 0,
+        "spamPenalty": 0,
+        "diversityPenalty": 0,
+        "accessPenalty": 0,
+        "exclusionPenalty": 0
+      },
+      "explanation": [
+        "Fresh or recently active item.",
+        "Engagement signals are meaningful.",
+        "Completion/watch quality is healthy.",
+        "Creator trust score is strong.",
+        "Live or active item receives a bounded boost."
+      ],
+      "version": "algorithm-ranking-v1-rules-2026-06-18",
+      "excluded": false,
+      "exclusionReason": null
+    },
+    {
+      "id": "safe-fresh-video",
+      "surface": "home_video",
+      "finalScore": 59.54,
+      "componentScores": {
+        "freshnessScore": 1,
+        "engagementScore": 0.8172337671045913,
+        "completionScore": 0.71,
+        "creatorTrustScore": 0.6610799432870245,
+        "safetyScore": 1,
+        "liveActivityBoost": 0,
+        "personalizationPlaceholder": 0,
+        "newCreatorBoost": 1,
+        "searchRelevanceScore": 0
+      },
+      "penalties": {
+        "alreadySeenPenalty": 0,
+        "reportPenalty": 0,
+        "spamPenalty": 0,
+        "diversityPenalty": 0,
+        "accessPenalty": 0,
+        "exclusionPenalty": 0
+      },
+      "explanation": [
+        "Fresh or recently active item.",
+        "Engagement signals are meaningful.",
+        "Completion/watch quality is healthy.",
+        "New or small creator receives a discovery boost."
+      ],
+      "version": "algorithm-ranking-v1-rules-2026-06-18",
+      "excluded": false,
+      "exclusionReason": null
+    },
+    {
+      "id": "search-match-safe",
+      "surface": "search_result",
+      "finalScore": 52.84,
+      "componentScores": {
+        "freshnessScore": 0.68,
+        "engagementScore": 0.8519827791591337,
+        "completionScore": 0,
+        "creatorTrustScore": 0.48,
+        "safetyScore": 1,
+        "liveActivityBoost": 0,
+        "personalizationPlaceholder": 0,
+        "newCreatorBoost": 0,
+        "searchRelevanceScore": 0.65
+      },
+      "penalties": {
+        "alreadySeenPenalty": 0,
+        "reportPenalty": 0,
+        "spamPenalty": 0,
+        "diversityPenalty": 0,
+        "accessPenalty": 0,
+        "exclusionPenalty": 0
+      },
+      "explanation": [
+        "Fresh or recently active item.",
+        "Engagement signals are meaningful.",
+        "Search text matches the query."
+      ],
+      "version": "algorithm-ranking-v1-rules-2026-06-18",
+      "excluded": false,
+      "exclusionReason": null
+    },
+    {
+      "id": "paid-offer-safe",
+      "surface": "paid_creator_offer",
+      "finalScore": 37.62,
+      "componentScores": {
+        "freshnessScore": 0.68,
+        "engagementScore": 0.8188089271100457,
+        "completionScore": 0,
+        "creatorTrustScore": 0.74,
+        "safetyScore": 1,
+        "liveActivityBoost": 0,
+        "personalizationPlaceholder": 0,
+        "newCreatorBoost": 0,
+        "searchRelevanceScore": 0
+      },
+      "penalties": {
+        "alreadySeenPenalty": 0,
+        "reportPenalty": 0,
+        "spamPenalty": 0,
+        "diversityPenalty": 0,
+        "accessPenalty": 0,
+        "exclusionPenalty": 0
+      },
+      "explanation": [
+        "Fresh or recently active item.",
+        "Engagement signals are meaningful.",
+        "Creator trust score is strong."
+      ],
+      "version": "algorithm-ranking-v1-rules-2026-06-18",
+      "excluded": false,
+      "exclusionReason": null
+    },
+    {
+      "id": "already-seen-repeat",
+      "surface": "home_video",
+      "finalScore": 14.46,
+      "componentScores": {
+        "freshnessScore": 0.88,
+        "engagementScore": 0.873054914212302,
+        "completionScore": 0.8,
+        "creatorTrustScore": 0.48,
+        "safetyScore": 1,
+        "liveActivityBoost": 0,
+        "personalizationPlaceholder": 0,
+        "newCreatorBoost": 0,
+        "searchRelevanceScore": 0
+      },
+      "penalties": {
+        "alreadySeenPenalty": 1,
+        "reportPenalty": 0,
+        "spamPenalty": 0,
+        "diversityPenalty": 0.75,
+        "accessPenalty": 0,
+        "exclusionPenalty": 0
+      },
+      "explanation": [
+        "Fresh or recently active item.",
+        "Engagement signals are meaningful.",
+        "Completion/watch quality is healthy.",
+        "Already-watched item is lowered outside Continue Watching.",
+        "Same-creator repetition is capped for diversity."
+      ],
+      "version": "algorithm-ranking-v1-rules-2026-06-18",
+      "excluded": false,
+      "exclusionReason": null
+    },
+    {
+      "id": "reported-video",
+      "surface": "home_video",
+      "finalScore": 0,
+      "componentScores": {
+        "freshnessScore": 1,
+        "engagementScore": 1,
+        "completionScore": 0.9,
+        "creatorTrustScore": 0.48,
+        "safetyScore": 0.35,
+        "liveActivityBoost": 0,
+        "personalizationPlaceholder": 0,
+        "newCreatorBoost": 0,
+        "searchRelevanceScore": 0
+      },
+      "penalties": {
+        "alreadySeenPenalty": 0,
+        "reportPenalty": 0.6,
+        "spamPenalty": 0,
+        "diversityPenalty": 0,
+        "accessPenalty": 0,
+        "exclusionPenalty": 0
+      },
+      "explanation": [
+        "Fresh or recently active item.",
+        "Engagement signals are meaningful.",
+        "Completion/watch quality is healthy.",
+        "Reports or review status lower ranking."
+      ],
+      "version": "algorithm-ranking-v1-rules-2026-06-18",
+      "excluded": false,
+      "exclusionReason": "reported_penalized"
+    },
+    {
+      "id": "private-draft",
+      "surface": "home_video",
+      "finalScore": 0,
+      "componentScores": {
+        "freshnessScore": 1,
+        "engagementScore": 0,
+        "completionScore": 0,
+        "creatorTrustScore": 0.48,
+        "safetyScore": 1,
+        "liveActivityBoost": 0,
+        "personalizationPlaceholder": 0,
+        "newCreatorBoost": 0,
+        "searchRelevanceScore": 0
+      },
+      "penalties": {
+        "alreadySeenPenalty": 0,
+        "reportPenalty": 0,
+        "spamPenalty": 0,
+        "diversityPenalty": 0,
+        "accessPenalty": 0,
+        "exclusionPenalty": 10
+      },
+      "explanation": [
+        "Excluded from public ranking: draft_content.",
+        "Fresh or recently active item."
+      ],
+      "version": "algorithm-ranking-v1-rules-2026-06-18",
+      "excluded": true,
+      "exclusionReason": "draft_content"
+    }
+  ]
+}
