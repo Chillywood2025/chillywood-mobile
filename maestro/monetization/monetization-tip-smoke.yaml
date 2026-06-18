@@ -1,15 +1,48 @@
 appId: ${CHILLYWOOD_APP_ID}
 ---
-- launchApp
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: "app-root-ready"
+    optional: true
+- openLink: "chillywoodmobile://login"
+- assertVisible:
+    id: "auth-login-email-input"
+- tapOn:
+    id: "auth-login-email-input"
+- inputText: "${CHILLYWOOD_E2E_VIEWER_EMAIL}"
+- tapOn:
+    id: "auth-login-password-input"
+- inputText: "${CHILLYWOOD_E2E_VIEWER_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "auth-login-submit-button"
+- extendedWaitUntil:
+    visible:
+      id: "auth-logged-in-home"
+    timeout: 30000
 - openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"
-- assertVisible:
-    id: "screen-platform"
-- assertVisible:
-    id: "platform-support-this-platform-section"
+- extendedWaitUntil:
+    visible:
+      id: "screen-platform"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "tester-tip-creator-button"
+    direction: DOWN
+    timeout: 20000
+- extendedWaitUntil:
+    visible:
+      id: "tester-tip-creator-button"
+    timeout: 30000
 - tapOn:
     id: "tester-tip-creator-button"
 - assertVisible:
     id: "tip-sheet"
 - assertVisible:
+    id: "tip-confirm-button"
+- assertVisible:
     id: "tip-no-content-unlock-copy"
+- tapOn:
+    id: "tip-confirm-button"
 - takeScreenshot: "monetization-tip-smoke"

@@ -22,8 +22,16 @@ const files = [
   "qa/browserstack/runbook-android.md",
   "qa/BIG_APP_COMPANY_TEST_COVERAGE.md",
 ];
+const purchaseFlows = [
+  "maestro/monetization/monetization-tip-smoke.yaml",
+  "maestro/monetization/monetization-paid-video-smoke.yaml",
+  "maestro/monetization/monetization-watch-party-ticket-smoke.yaml",
+  "maestro/monetization/monetization-event-pass-smoke.yaml",
+  "maestro/monetization/monetization-platform-subscription-smoke.yaml",
+  "maestro/monetization/monetization-vip-smoke.yaml",
+];
 
-for (const file of files) {
+for (const file of [...files, ...purchaseFlows]) {
   if (!existsSync(file)) fail(`missing required file ${file}`);
 }
 
@@ -52,6 +60,10 @@ assertIncludes(runner, "This is a test", "this is a test language");
 assertIncludes(runner, "Google Play test", "Google Play test language");
 assertIncludes(runner, "productionPurchaseIntents", "production purchase intent readback");
 assertIncludes(runner, "payableLedgerEvents", "payable ledger readback");
+assertIncludes(runner, "purchaseFlowViewerEnv", "assigned purchase viewer env map");
+assertIncludes(runner, "one_purchase_flow_per_strict_sandbox_run", "one strict purchase flow per run guard");
+assertIncludes(runner, "CHILLYWOOD_E2E_VIEWER_02_EMAIL", "paid video viewer assignment");
+assertIncludes(runner, "CHILLYWOOD_E2E_VIEWER_06_PASSWORD", "VIP viewer assignment");
 assertIncludes(runner, "not_payable", "not-payable fixture check");
 assertIncludes(runner, "payout_enabled", "payout-disabled fixture check");
 assertIncludes(runner, "production_enabled", "production-disabled fixture check");
@@ -80,6 +92,25 @@ assertIncludes(flowMap, "Platform Subscription pre:", "Platform Subscription pre
 assertIncludes(flowMap, "VIP pre:", "VIP pre/post gates");
 assertIncludes(flowMap, "PROVIDER_OWNERSHIP_REUSE_BLOCKER", "provider ownership blocker");
 assertIncludes(packageJson, "guard:browserstack-sandbox-purchase-safety", "package script");
+
+for (const file of purchaseFlows) {
+  const flow = read(file);
+  const loginIndex = flow.indexOf('openLink: "chillywoodmobile://login"');
+  const routeIndex = flow.indexOf('openLink: "chillywoodmobile://channel/${CHILLYWOOD_E2E_CREATOR_ID}"');
+  if (loginIndex < 0) fail(`${file} missing login deep link`);
+  if (routeIndex < 0) fail(`${file} missing creator route deep link`);
+  if (loginIndex > routeIndex) fail(`${file} opens creator route before login`);
+  [
+    "auth-login-email-input",
+    "auth-login-password-input",
+    "auth-login-submit-button",
+    "auth-logged-in-home",
+    "${CHILLYWOOD_E2E_VIEWER_EMAIL}",
+    "${CHILLYWOOD_E2E_VIEWER_PASSWORD}",
+  ].forEach((needle) => assertIncludes(flow, needle, file));
+  assertNotIncludes(flow, "tapOn: { point", `${file} coordinate taps`);
+  assertNotIncludes(flow, "point:", `${file} coordinate taps`);
+}
 
 const secretPattern = /(BROWSERSTACK_ACCESS_KEY|SUPABASE_SERVICE_ROLE_KEY|CHILLYWOOD_E2E_[A-Z0-9_]*PASSWORD)=([^\s"']{8,}|"[^".][^"]{7,}"|'[^'.][^']{7,}')/;
 for (const file of files.filter((item) => item.endsWith(".md"))) {

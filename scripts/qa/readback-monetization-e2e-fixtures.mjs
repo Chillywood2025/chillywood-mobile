@@ -59,6 +59,20 @@ const creatorConfigs = await safeSelect("creator_monetization_configs", (query) 
     .limit(40),
 );
 
+const monetizationProducts = await safeSelect("monetization_products", (query) =>
+  query
+    .select("id, product_key, product_type, provider, provider_product_id, environment, status, is_android_digital, metadata, updated_at")
+    .in("product_key", [
+      "creator_tip_sandbox_099",
+      "paid_content_access_sandbox_099",
+      "watch_party_live_ticket_sandbox_099",
+      "event_pass_sandbox_099",
+      "channel_subscription_sandbox_monthly_499",
+      "vip_pass_sandbox_499",
+    ])
+    .order("product_key", { ascending: true }),
+);
+
 const output = {
   ok: true,
   ownerUserId,
@@ -72,6 +86,7 @@ const output = {
     : { ok: false, error: "viewer_not_configured" },
   sandboxTesterRows,
   creatorConfigs,
+  monetizationProducts,
   purchaseIntents: await safeSelect("money_purchase_intents", (query) =>
     query.select("id, user_id, creator_id, product_type, source_type, source_id, status, environment, provider, amount_minor, currency, consumed_at, revoked_at, created_at, updated_at")
       .eq("creator_id", ownerUserId)

@@ -254,6 +254,8 @@ async function ensureProduct(supabase, fixture) {
         production_enabled: false,
         live_money_enabled: false,
         premium_unlock: false,
+        sandbox_purchase_intents_enabled: true,
+        source_policy_checked: true,
       },
     }, { onConflict: "product_key" })
     .select("id,product_key,product_type,provider_product_id")

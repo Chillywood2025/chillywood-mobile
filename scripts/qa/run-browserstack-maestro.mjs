@@ -30,6 +30,32 @@ const blockedPurchaseFlows = new Set([
   "monetization-platform-subscription-smoke.yaml",
   "monetization-vip-smoke.yaml",
 ]);
+const purchaseFlowViewerEnv = {
+  "monetization-tip-smoke.yaml": {
+    email: "CHILLYWOOD_E2E_VIEWER_EMAIL",
+    password: "CHILLYWOOD_E2E_VIEWER_PASSWORD",
+  },
+  "monetization-paid-video-smoke.yaml": {
+    email: "CHILLYWOOD_E2E_VIEWER_02_EMAIL",
+    password: "CHILLYWOOD_E2E_VIEWER_02_PASSWORD",
+  },
+  "monetization-watch-party-ticket-smoke.yaml": {
+    email: "CHILLYWOOD_E2E_VIEWER_03_EMAIL",
+    password: "CHILLYWOOD_E2E_VIEWER_03_PASSWORD",
+  },
+  "monetization-event-pass-smoke.yaml": {
+    email: "CHILLYWOOD_E2E_VIEWER_04_EMAIL",
+    password: "CHILLYWOOD_E2E_VIEWER_04_PASSWORD",
+  },
+  "monetization-platform-subscription-smoke.yaml": {
+    email: "CHILLYWOOD_E2E_VIEWER_05_EMAIL",
+    password: "CHILLYWOOD_E2E_VIEWER_05_PASSWORD",
+  },
+  "monetization-vip-smoke.yaml": {
+    email: "CHILLYWOOD_E2E_VIEWER_06_EMAIL",
+    password: "CHILLYWOOD_E2E_VIEWER_06_PASSWORD",
+  },
+};
 const expectedAppId = "com.chillywood.mobile";
 const sandboxPurchaseTestLanguage = [
   "Test card",
@@ -108,10 +134,20 @@ function productTypeMatches(row, candidates) {
   return candidates.some((candidate) => values.some((value) => value.includes(candidate)));
 }
 
+const flowProductKeys = {
+  "monetization-tip-smoke.yaml": "creator_tip_sandbox_099",
+  "monetization-paid-video-smoke.yaml": "paid_content_access_sandbox_099",
+  "monetization-watch-party-ticket-smoke.yaml": "watch_party_live_ticket_sandbox_099",
+  "monetization-event-pass-smoke.yaml": "event_pass_sandbox_099",
+  "monetization-platform-subscription-smoke.yaml": "channel_subscription_sandbox_monthly_499",
+  "monetization-vip-smoke.yaml": "vip_pass_sandbox_499",
+};
+
 function evaluateFixtureReadback(readback, selected) {
   const failures = [];
   const configs = rows(readback?.creatorConfigs);
   const tipRows = rows(readback?.tipSettings);
+  const products = rows(readback?.monetizationProducts);
   const productionPurchaseIntents = count(readback?.liveMoneyReadback?.productionPurchaseIntents);
   const payableLedgerEvents = count(readback?.liveMoneyReadback?.payableLedgerEvents);
   const unsafeConfigs = configs.filter((row) =>
@@ -131,6 +167,23 @@ function evaluateFixtureReadback(readback, selected) {
   if (unsafeTips.length) failures.push("unsafe_tip_settings");
 
   for (const flow of selected) {
+    const productKey = flowProductKeys[flow];
+    const product = productKey ? products.find((row) => row?.product_key === productKey) : null;
+    if (productKey && !product) failures.push(`product_fixture_missing:${productKey}`);
+    if (product) {
+      if (
+        product.environment !== "sandbox"
+        || product.status !== "sandbox"
+        || product.is_android_digital !== true
+        || !["revenuecat_google_play", "google_play", "revenuecat"].includes(String(product.provider ?? ""))
+        || !String(product.provider_product_id ?? "").trim()
+      ) {
+        failures.push(`unsafe_product_fixture:${productKey}`);
+      }
+      if (product.metadata?.sandbox_purchase_intents_enabled !== true) {
+        failures.push(`sandbox_purchase_intents_not_enabled:${productKey}`);
+      }
+    }
     if (flow === "monetization-tip-smoke.yaml" && tipRows.length === 0) failures.push("tip_config_missing");
     if (flow === "monetization-paid-video-smoke.yaml" && !configs.some((row) => productTypeMatches(row, ["paid_video", "video", "paid_content"]))) failures.push("paid_video_fixture_missing");
     if (flow === "monetization-watch-party-ticket-smoke.yaml") {
@@ -150,6 +203,7 @@ function evaluateFixtureReadback(readback, selected) {
     productionPurchaseIntents,
     payableLedgerEvents,
     creatorConfigCount: configs.length,
+    monetizationProductCount: products.length,
     tipSettingsCount: tipRows.length,
     unsafeConfigCount: unsafeConfigs.length,
     unsafeTipSettingsCount: unsafeTips.length,
@@ -260,12 +314,17 @@ function uploadMultipart({ urlPath, filePath, fieldName, customId, username, acc
 const options = parseArgs();
 const selectedFlows = options.flows.length ? options.flows.map((flow) => path.basename(flow)) : safeFlows;
 const blocked = selectedFlows.filter((flow) => blockedPurchaseFlows.has(flow));
+const assignedPurchaseViewer = blocked.length === 1 ? purchaseFlowViewerEnv[blocked[0]] : null;
 if (blocked.length && options.manualAssistedPurchase && options.autoConfirmSandboxPurchase) {
   console.error(JSON.stringify({ ok: false, error: "ambiguous_purchase_mode", blocked }, null, 2));
   process.exit(1);
 }
 if (blocked.length && !options.manualAssistedPurchase && !options.autoConfirmSandboxPurchase) {
   console.error(JSON.stringify({ ok: false, error: "purchase_flow_requested", blocked }, null, 2));
+  process.exit(1);
+}
+if (options.autoConfirmSandboxPurchase && blocked.length > 1) {
+  console.error(JSON.stringify({ ok: false, error: "one_purchase_flow_per_strict_sandbox_run", blocked }, null, 2));
   process.exit(1);
 }
 
@@ -319,10 +378,20 @@ if (options.autoConfirmSandboxPurchase) {
   if (!blocked.length) missing.push("purchase_flow_required_for_auto_confirm_sandbox_purchase");
   if (!hasValue(env.SUPABASE_URL)) missing.push("SUPABASE_URL");
   if (!hasValue(env.SUPABASE_SERVICE_ROLE_KEY)) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  if (assignedPurchaseViewer) {
+    if (!hasValue(env[assignedPurchaseViewer.email])) missing.push(assignedPurchaseViewer.email);
+    if (!hasValue(env[assignedPurchaseViewer.password])) missing.push(assignedPurchaseViewer.password);
+  }
   if (!options.device.toLowerCase().includes("android") && !/\d+\.\d+$/.test(options.device)) {
     missing.push("android_real_device_target");
   }
 }
+const effectiveViewerEmail = assignedPurchaseViewer
+  ? env[assignedPurchaseViewer.email] || ""
+  : env.CHILLYWOOD_E2E_VIEWER_EMAIL || "";
+const effectiveViewerPassword = assignedPurchaseViewer
+  ? env[assignedPurchaseViewer.password] || ""
+  : env.CHILLYWOOD_E2E_VIEWER_PASSWORD || "";
 
 const replacements = {
   "${CHILLYWOOD_APP_ID}": env.CHILLYWOOD_APP_ID || "",
@@ -333,8 +402,8 @@ const maestroEnv = {
   CHILLYWOOD_E2E_CREATOR_ID: env.CHILLYWOOD_E2E_CREATOR_ID || "",
   CHILLYWOOD_E2E_OWNER_EMAIL: env.CHILLYWOOD_E2E_OWNER_EMAIL || "",
   CHILLYWOOD_E2E_OWNER_PASSWORD: env.CHILLYWOOD_E2E_OWNER_PASSWORD || "",
-  CHILLYWOOD_E2E_VIEWER_EMAIL: env.CHILLYWOOD_E2E_VIEWER_EMAIL || "",
-  CHILLYWOOD_E2E_VIEWER_PASSWORD: env.CHILLYWOOD_E2E_VIEWER_PASSWORD || "",
+  CHILLYWOOD_E2E_VIEWER_EMAIL: effectiveViewerEmail,
+  CHILLYWOOD_E2E_VIEWER_PASSWORD: effectiveViewerPassword,
 };
 
 for (const flow of selectedFlows) {
@@ -370,6 +439,9 @@ const summary = {
   skippedPurchaseFlows: Array.from(blockedPurchaseFlows),
   manualAssistedPurchase: options.manualAssistedPurchase,
   autoConfirmSandboxPurchase: options.autoConfirmSandboxPurchase,
+  assignedPurchaseViewerAccountConfigured: assignedPurchaseViewer
+    ? hasValue(effectiveViewerEmail) && hasValue(effectiveViewerPassword)
+    : null,
   purchaseMode: options.autoConfirmSandboxPurchase
     ? "strict_sandbox_auto_confirm"
     : options.manualAssistedPurchase

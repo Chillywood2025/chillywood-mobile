@@ -1568,17 +1568,18 @@ export default function PublicChannelScreen() {
               {(subscriptionNotice && item.title === "Subscribe") || (vipNotice && item.title === "VIP") ? (
                 <Text style={styles.offerMeta}>{item.title === "Subscribe" ? subscriptionNotice : vipNotice}</Text>
               ) : null}
-              <TouchableOpacity
-                style={[styles.supportButton, item.busy && styles.actionButtonDisabled]}
-                activeOpacity={0.86}
-                disabled={!!item.busy}
-                onPress={item.onPress}
-                testID={item.testID}
-                accessibilityRole="button"
-                accessibilityLabel={item.button}
-              >
-                {item.busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.supportButtonText}>{item.button}</Text>}
-              </TouchableOpacity>
+              <View testID={item.testID} collapsable={false}>
+                <TouchableOpacity
+                  style={[styles.supportButton, item.busy && styles.actionButtonDisabled]}
+                  activeOpacity={0.86}
+                  disabled={!!item.busy}
+                  onPress={item.onPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.button}
+                >
+                  {item.busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.supportButtonText}>{item.button}</Text>}
+                </TouchableOpacity>
+              </View>
             </View>
           ))}
         </View>
