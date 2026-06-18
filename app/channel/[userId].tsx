@@ -722,7 +722,7 @@ export default function PublicChannelScreen() {
   );
 
   const renderUnavailable = (body: string) => (
-    <View style={styles.screen} testID="screen-platform">
+    <View style={styles.screen} testID="screen-platform" collapsable={false}>
       {renderBackHeader()}
       <View style={styles.unavailableCard} testID="platform-access-denied-state">
         <Text style={styles.unavailableTitle}>Platform unavailable</Text>
@@ -773,8 +773,7 @@ export default function PublicChannelScreen() {
             ) : null}
 	            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>{"Official Chi'llwood"}</Text> : null}
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
-            <Text
-              style={styles.rolePill}
+            <View
               testID={
                 sandboxTesterActive
                   ? "platform-sandbox-tester-mode-badge"
@@ -782,9 +781,12 @@ export default function PublicChannelScreen() {
                     ? "platform-owner-mode-badge"
                     : "platform-viewer-mode-badge"
               }
+              collapsable={false}
             >
-              {formatPlatformRoleLabel(channel.role, isOwner)}
-            </Text>
+              <Text style={styles.rolePill}>
+                {formatPlatformRoleLabel(channel.role, isOwner)}
+              </Text>
+            </View>
             {channel.tagline ? <Text style={styles.channelTagline} numberOfLines={2}>{channel.tagline}</Text> : null}
             <View style={styles.statsRow}>
               {visibleStats.map((stat) => (
@@ -1610,9 +1612,9 @@ export default function PublicChannelScreen() {
 
   if (loadState === "loading") {
     return (
-      <View style={styles.screen}>
+      <View style={styles.screen} testID="screen-platform" collapsable={false}>
         {renderBackHeader()}
-        <View style={styles.loadingCard}>
+        <View style={styles.loadingCard} testID="platform-loading-state" collapsable={false}>
           <ActivityIndicator color="#DC143C" />
           <Text style={styles.loadingText}>Loading creator Platform…</Text>
         </View>
@@ -1638,7 +1640,7 @@ export default function PublicChannelScreen() {
   }
 
   return (
-    <View style={styles.screen} testID="screen-platform">
+    <View style={styles.screen} testID="screen-platform" collapsable={false}>
       {brandBackgroundSource ? (
         <Image
           source={{ uri: brandBackgroundSource }}

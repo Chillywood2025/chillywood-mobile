@@ -325,10 +325,12 @@ export default function SubscribeScreen() {
   }, [canManage, isSignedIn, onSignIn]);
 
   return (
-    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover" testID="screen-premium">
+    <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
+      <View style={styles.routeContainer} testID="screen-premium" collapsable={false}>
       <View style={styles.backgroundOverlay} />
       <ScrollView
         testID="premium-screen"
+        collapsable={false}
         style={[styles.screen, { marginTop: insets.top }]}
         contentContainerStyle={[
           styles.content,
@@ -354,12 +356,12 @@ export default function SubscribeScreen() {
       </View>
 
       {sessionLoading ? (
-        <View style={styles.card}>
+        <View style={styles.card} testID="premium-loading-state" collapsable={false}>
           <ActivityIndicator color="#DC143C" />
           <Text style={styles.body}>Checking your session...</Text>
         </View>
       ) : !isSignedIn ? (
-        <View style={styles.card}>
+        <View style={styles.card} testID="premium-purchase-state" collapsable={false}>
           <Text style={styles.cardKicker}>SIGN IN REQUIRED</Text>
           <Text style={styles.cardTitle}>Sign in before Premium can be checked.</Text>
           <Text style={styles.body}>
@@ -371,7 +373,7 @@ export default function SubscribeScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.card} testID="premium-status-card">
+          <View style={styles.card} testID="premium-status-card" collapsable={false}>
             <Text style={styles.cardKicker}>ACCOUNT STATUS</Text>
             {sandboxMode.enabled ? (
               <View style={styles.sandboxNotice}>
@@ -496,6 +498,7 @@ export default function SubscribeScreen() {
         </>
       )}
       </ScrollView>
+      </View>
     </ImageBackground>
   );
 }
@@ -504,6 +507,9 @@ const styles = StyleSheet.create({
   background: {
     flex: 1,
     backgroundColor: "#06070B",
+  },
+  routeContainer: {
+    flex: 1,
   },
   backgroundOverlay: {
     ...StyleSheet.absoluteFillObject,
