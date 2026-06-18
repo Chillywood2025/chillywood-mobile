@@ -141,6 +141,12 @@ import {
 } from "../_lib/moneyAuditEvents";
 import { getRevenueCatProductionReadiness } from "../_lib/revenuecat";
 import {
+  ACCESS_VISIBILITY_OPTIONS,
+  getAccessVisibilityLabel,
+  normalizeAccessVisibility,
+  type AccessVisibility,
+} from "../_lib/accessVisibility";
+import {
   readCurrentUserEntitlement,
   type PremiumEntitlementDecision,
 } from "../_lib/premiumEntitlements";
@@ -247,7 +253,7 @@ import {
   type CreatorEventReminderSummary,
 } from "../_lib/notifications";
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
-import { normalizeUserProfile, readUserProfile, saveUserProfile } from "../_lib/userData";
+import { normalizeUserProfile, readUserProfile, saveUserProfile, updateMyPlatformAccessVisibility } from "../_lib/userData";
 import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { AppActionButton, AppEmptyState, AppStickyActionBar } from "../components/ui/app-surface";
@@ -1192,6 +1198,8 @@ export function ChannelStudioScreen() {
   const [contentSearchQuery, setContentSearchQuery] = useState("");
   const [contentSort, setContentSort] = useState<ContentSortId>("newest");
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [platformVisibilitySaving, setPlatformVisibilitySaving] = useState<AccessVisibility | null>(null);
+  const [platformVisibilityNotice, setPlatformVisibilityNotice] = useState<string | null>(null);
   const savedProfilePublishSnapshotRef = useRef<string | null>(null);
   const [platformBranding, setPlatformBranding] = useState<PlatformBrandingBundle | null>(null);
   const [brandDraft, setBrandDraft] = useState<PlatformBrandProfile | null>(null);
@@ -1435,6 +1443,8 @@ export function ChannelStudioScreen() {
       setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
       setPayoutSetupNotice(null);
       setPlatformBranding(null);
+      setPlatformVisibilitySaving(null);
+      setPlatformVisibilityNotice(null);
       setBrandDraft(null);
       setPlatformRoleMemberships([]);
       setPremiumEntitlement(null);
@@ -2272,6 +2282,25 @@ export function ChannelStudioScreen() {
   const updateProfile = (patch: Partial<UserProfile>) => {
     setProfile((prev) => normalizeUserProfile({ ...(prev ?? {}), ...patch }));
     setNotice(null);
+  };
+
+  const onSavePlatformVisibility = async (visibility: AccessVisibility) => {
+    const normalizedVisibility = normalizeAccessVisibility(visibility);
+    if (platformVisibilitySaving) return;
+
+    setPlatformVisibilitySaving(normalizedVisibility);
+    setPlatformVisibilityNotice(null);
+    try {
+      const savedVisibility = await updateMyPlatformAccessVisibility(normalizedVisibility);
+      updateProfile({ platformAccessVisibility: savedVisibility });
+      setPlatformVisibilityNotice(`Platform visibility set to ${getAccessVisibilityLabel(savedVisibility)}.`);
+    } catch (error) {
+      const message = getUserFacingErrorMessage(error, "Unable to update Platform visibility right now.");
+      setPlatformVisibilityNotice(message);
+      Alert.alert("Platform Visibility", message);
+    } finally {
+      setPlatformVisibilitySaving(null);
+    }
   };
 
   const updateEventEditor = (patch: Partial<ChannelEventEditorState>) => {
@@ -8921,6 +8950,54 @@ export function ChannelStudioScreen() {
               <Text style={styles.permissionCopy}>
                 Counts and visibility values come from the landed audience read model. Deeper audience-role systems still stay later.
               </Text>
+              <View style={styles.eventSnapshotCard}>
+                <Text style={styles.accessSummaryKicker}>PLATFORM VISIBILITY</Text>
+                <Text style={styles.accessSummaryTitle}>Who can view your creator Platform</Text>
+                <Text style={styles.accessSummaryBody}>
+                  Platform is your creator destination. Public means anyone can view. Private means Circle members or subscribers can view. Subscriber-only means only subscribers can view. Followers stay a public social signal only.
+                </Text>
+                <View style={styles.chipRow}>
+                  {ACCESS_VISIBILITY_OPTIONS.map((option) => {
+                    const currentVisibility = normalizeAccessVisibility(profile?.platformAccessVisibility);
+                    const active = currentVisibility === option.value;
+                    const savingVisibility = platformVisibilitySaving === option.value;
+
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        testID={option.platformTestID}
+                        accessibilityLabel={`${option.label} Platform visibility`}
+                        style={[styles.chip, active && styles.chipActive, !!platformVisibilitySaving && styles.chipDisabled]}
+                        activeOpacity={0.86}
+                        disabled={!!platformVisibilitySaving}
+                        onPress={() => {
+                          void onSavePlatformVisibility(option.value);
+                        }}
+                      >
+                        {savingVisibility ? <ActivityIndicator color="#FFE4EA" size="small" /> : null}
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity
+                  testID="platform-visibility-save-button"
+                  accessibilityLabel="Save Platform visibility"
+                  style={[styles.eventSecondaryButtonCompact, platformVisibilitySaving && styles.chipDisabled]}
+                  activeOpacity={0.86}
+                  disabled={!!platformVisibilitySaving}
+                  onPress={() => {
+                    void onSavePlatformVisibility(normalizeAccessVisibility(profile?.platformAccessVisibility));
+                  }}
+                >
+                  <Text style={styles.eventSecondaryButtonText}>
+                    {platformVisibilitySaving ? "Saving..." : "Save Platform Visibility"}
+                  </Text>
+                </TouchableOpacity>
+                {platformVisibilityNotice ? <Text style={styles.permissionCopy}>{platformVisibilityNotice}</Text> : null}
+              </View>
               <View style={styles.summaryGrid}>
                 {audienceSummaryCards.map((card) => (
                   <View key={card.label} style={styles.summaryCard}>

@@ -82,6 +82,33 @@ Platform content cards may expose owner-only contextual actions backed by existi
 
 Visibility truth for this pass: Profile privacy is backed today as public/everyone, Chi'lly Circle-only, and private. Platform audience read models expose public activity and subscriber/follower surface state, but a single backed Platform-wide `public/private/subscriber_only` visibility gate and a Profile `subscriber_only` gate are not yet landed. Followers/following remain public discovery/social relationships and must not unlock private or subscriber-only access. A later migration/product lane is required before claiming full Platform/Profile `public/private/subscriber_only` configuration.
 
+Visibility implementation audit, June 17, 2026:
+
+- Backed Profile support today: `user_profiles.profile_visibility` supports `everyone`, `chilly_circle_only`, and `private`; `public.can_view_profile_content(profile_user_id)` plus `resolveProfilePrivacyAccess` gate Profile posts/full Profile content for owner, active Chi'lly Circle, blocked, signed-out, and private states. The current `private` value means owner-only, not the requested Circle-or-subscriber private state.
+- Backed Platform support today: Public Platform blocks viewer pairs through `readPublicChannelAudienceState` / `channel_audience_blocks` and reads public-safe videos, events, commerce, and Brand Studio media. `public_activity_visibility`, `follower_surface_enabled`, and `subscriber_surface_enabled` describe audience posture/surface visibility; they are not a Platform-wide access gate.
+- Backed relationship inputs today: Chi'lly Circle uses `user_friendships` with active/pending states; channel following uses `channel_followers`; creator subscribers use channel subscription access helpers/RPCs. These are intentionally separate. Followers must not grant private or subscriber-only access.
+- Missing backing: a canonical Profile/Platform visibility enum matching `public`, `private`, and `subscriber_only`; Platform-wide and Profile-wide access resolvers that combine owner/admin/operator, active Circle, active creator subscription, blocks, and signed-out state; public RPC/read-path masking for locked Platform/Profile fields; settings writes with RLS-safe owner-only updates; and proof fixtures for owner, Circle member, subscriber, follower-only, signed-out, blocked, and public viewers.
+- Recommended migration shape: add separately named Profile and Platform access columns or a dedicated visibility settings table rather than overloading `public_activity_visibility`; preserve/migrate existing `profile_visibility` semantics explicitly; add `resolve_profile_visibility_access(...)` and `resolve_platform_visibility_access(...)` RPCs; gate public Profile/Platform read RPCs through those resolvers; keep `channel_followers` out of private/subscriber-only decisions; and dry-run before production apply.
+- Safe UI now: existing read-only posture/status copy may describe current backed states. New Platform/Profile `Public / Private / Subscriber only` controls must stay deferred until the server-side access model and proof exist.
+
+Visibility implementation update, June 17, 2026:
+
+- New hard-gate fields are introduced by Supabase-applied migration `20260617235547_profile_platform_access_visibility.sql`: `user_profiles.profile_access_visibility` and `user_profiles.platform_access_visibility`.
+- Allowed values are `public`, `private`, and `subscriber_only`.
+- `profile_visibility`, `public_activity_visibility`, `follower_surface_enabled`, and `subscriber_surface_enabled` stay for compatibility and audience posture; they are not deleted or repurposed.
+- Server access is resolved through `resolve_profile_visibility_access(profile_owner_id text, viewer_id text default auth.uid()::text)` and `resolve_platform_visibility_access(platform_owner_id text, viewer_id text default auth.uid()::text)`.
+- Access matrix:
+  - Owner/admin/operator: allowed.
+  - Blocked viewer: denied.
+  - Public: signed-out and signed-in viewers may view unless blocked.
+  - Private: active Chi'lly Circle members or active creator subscribers may view.
+  - Subscriber-only: active creator subscribers may view.
+  - Followers/following: public social relationship only; never unlocks private or subscriber-only.
+- Client routes must call the resolver RPCs for access decisions and fail closed if access cannot be resolved.
+- Settings exposes Profile visibility controls only against `profile_access_visibility`; Platform Studio exposes Platform visibility controls only against `platform_access_visibility`.
+- Follow-up migration `20260618000942_profile_access_visibility_rls_bridge.sql` updates `can_view_profile_content` so existing Profile post/comment RLS uses the new Profile access resolver.
+- Post-apply `supabase db push --dry-run` reports the remote database is up to date. Local direct schema dump/readback was blocked by Docker not running, so device/API fixture proof remains required before launch claims.
+
 Profile post owners may create and delete their own text-only posts. Public viewers may read public clean Profile posts and report them where backed. Public viewers must not edit/delete posts or see draft/hidden/removed posts.
 
 Android `R5CR120QCBF` proof on 2026-05-25 confirmed the available runtime states: signed-out public Profile shows no owner controls/composer/Attach/delete/draft badges, signed-out Follow and Chi'lly Chat show sign-in-required handoffs, signed-out View Platform opens public Platform, signed-in non-owner official Profile proof shows no owner controls and routes Chi'lly Chat/View Platform safely, and owner regression keeps Platform Studio, Preview Platform public view, Chi'lly Chat inbox, Chi'lly Circle, Settings, composer, Attach, owner delete, and owner draft markers. The May 26 navigation cleanup renames the owner top action to `Platform` and removes the duplicate bottom Profile `Platform` tab/pill; the bottom tab row is Posts, Live, Community, About, while Platform content remains available through Profile cards/sections and the top Platform action. True second-account and blocked/private runtime fixtures were not available and must remain explicit follow-up work rather than faked proof; static guards cover the current privacy/block path until that fixture lane runs.

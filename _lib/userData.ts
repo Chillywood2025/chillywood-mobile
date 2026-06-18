@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Tables, TablesInsert } from "../supabase/database.types";
+import { normalizeAccessVisibility, type AccessVisibility } from "./accessVisibility";
 import { getOfficialPlatformAccount } from "./officialAccounts";
 import {
   normalizeCapturePolicy,
@@ -56,6 +57,8 @@ export type UserProfile = {
   channelLayoutPreset?: "spotlight" | "live_first" | "library_first";
   channelRole?: "viewer" | "host" | "creator";
   profileVisibility?: ProfileVisibility;
+  profileAccessVisibility?: AccessVisibility;
+  platformAccessVisibility?: AccessVisibility;
   publicActivityVisibility?: "public" | "followers_only" | "subscribers_only" | "private";
   followerSurfaceEnabled?: boolean;
   subscriberSurfaceEnabled?: boolean;
@@ -143,6 +146,8 @@ type UserProfileRow = Pick<
   | "channel_layout_preset"
   | "channel_role"
   | "profile_visibility"
+  | "profile_access_visibility"
+  | "platform_access_visibility"
   | "public_activity_visibility"
   | "follower_surface_enabled"
   | "subscriber_surface_enabled"
@@ -242,6 +247,8 @@ export const normalizeUserProfile = (profile?: Partial<UserProfile> | null): Use
     channelLayoutPreset: normalizeChannelLayoutPreset(profile?.channelLayoutPreset),
     channelRole: normalizeChannelRole(profile?.channelRole),
     profileVisibility: normalizeProfileVisibility(profile?.profileVisibility),
+    profileAccessVisibility: normalizeAccessVisibility(profile?.profileAccessVisibility),
+    platformAccessVisibility: normalizeAccessVisibility(profile?.platformAccessVisibility),
     publicActivityVisibility: normalizePublicActivityVisibility(profile?.publicActivityVisibility),
     followerSurfaceEnabled: typeof profile?.followerSurfaceEnabled === "boolean" ? profile.followerSurfaceEnabled : undefined,
     subscriberSurfaceEnabled: typeof profile?.subscriberSurfaceEnabled === "boolean" ? profile.subscriberSurfaceEnabled : undefined,
@@ -356,6 +363,8 @@ const parseRemoteUserProfile = (row: UserProfileRow | null | undefined): UserPro
     channelLayoutPreset: normalizeChannelLayoutPreset(row.channel_layout_preset),
     channelRole: normalizeChannelRole(row.channel_role),
     profileVisibility: normalizeProfileVisibility(row.profile_visibility),
+    profileAccessVisibility: normalizeAccessVisibility(row.profile_access_visibility),
+    platformAccessVisibility: normalizeAccessVisibility(row.platform_access_visibility),
     publicActivityVisibility: normalizePublicActivityVisibility(row.public_activity_visibility),
     followerSurfaceEnabled: typeof row.follower_surface_enabled === "boolean" ? row.follower_surface_enabled : undefined,
     subscriberSurfaceEnabled: typeof row.subscriber_surface_enabled === "boolean" ? row.subscriber_surface_enabled : undefined,
@@ -503,7 +512,7 @@ async function readRemoteUserProfile(userId: string): Promise<UserProfile | null
     const { data, error } = await supabase
       .from(USER_PROFILES_TABLE)
       .select(
-        "user_id,username,avatar_index,display_name,avatar_url,profile_avatar_media_status,profile_avatar_media_flagged_at,profile_avatar_fit_mode,profile_avatar_focal_x,profile_avatar_focal_y,profile_background_url,profile_background_media_status,profile_background_media_flagged_at,profile_background_fit_mode,profile_background_focal_x,profile_background_focal_y,profile_background_overlay_strength,tagline,channel_layout_preset,channel_role,profile_visibility,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
+        "user_id,username,avatar_index,display_name,avatar_url,profile_avatar_media_status,profile_avatar_media_flagged_at,profile_avatar_fit_mode,profile_avatar_focal_x,profile_avatar_focal_y,profile_background_url,profile_background_media_status,profile_background_media_flagged_at,profile_background_fit_mode,profile_background_focal_x,profile_background_focal_y,profile_background_overlay_strength,tagline,channel_layout_preset,channel_role,profile_visibility,profile_access_visibility,platform_access_visibility,public_activity_visibility,follower_surface_enabled,subscriber_surface_enabled,default_watch_party_join_policy,default_watch_party_reactions_policy,default_watch_party_content_access_rule,default_watch_party_capture_policy,default_communication_content_access_rule,default_communication_capture_policy",
       )
       .eq("user_id", normalizedUserId)
       .maybeSingle();
@@ -1074,6 +1083,82 @@ export async function updateMyProfileVisibility(visibility: ProfileVisibility): 
   await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile({
     ...existingProfile,
     profileVisibility: normalizedVisibility,
+  }));
+
+  return normalizedVisibility;
+}
+
+export async function readMyProfileAccessVisibility(): Promise<AccessVisibility> {
+  const userId = await getSignedInUserId();
+  if (!userId) return "public";
+
+  const { data, error } = await supabase
+    .from(USER_PROFILES_TABLE)
+    .select("profile_access_visibility")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return normalizeAccessVisibility(data?.profile_access_visibility);
+}
+
+export async function updateMyProfileAccessVisibility(visibility: AccessVisibility): Promise<AccessVisibility> {
+  const normalizedVisibility = normalizeAccessVisibility(visibility);
+  const userId = await getSignedInUserId();
+  if (!userId) throw new Error("Sign in before updating profile visibility.");
+
+  const { error } = await supabase
+    .from(USER_PROFILES_TABLE)
+    .update({
+      profile_access_visibility: normalizedVisibility,
+      updated_at: new Date().toISOString(),
+    } as any)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+
+  const existingProfile = await readUserProfile();
+  await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile({
+    ...existingProfile,
+    profileAccessVisibility: normalizedVisibility,
+  }));
+
+  return normalizedVisibility;
+}
+
+export async function readMyPlatformAccessVisibility(): Promise<AccessVisibility> {
+  const userId = await getSignedInUserId();
+  if (!userId) return "public";
+
+  const { data, error } = await supabase
+    .from(USER_PROFILES_TABLE)
+    .select("platform_access_visibility")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return normalizeAccessVisibility(data?.platform_access_visibility);
+}
+
+export async function updateMyPlatformAccessVisibility(visibility: AccessVisibility): Promise<AccessVisibility> {
+  const normalizedVisibility = normalizeAccessVisibility(visibility);
+  const userId = await getSignedInUserId();
+  if (!userId) throw new Error("Sign in before updating Platform visibility.");
+
+  const { error } = await supabase
+    .from(USER_PROFILES_TABLE)
+    .update({
+      platform_access_visibility: normalizedVisibility,
+      updated_at: new Date().toISOString(),
+    } as any)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+
+  const existingProfile = await readUserProfile();
+  await writeJsonValue(USER_PROFILE_KEY, normalizeUserProfile({
+    ...existingProfile,
+    platformAccessVisibility: normalizedVisibility,
   }));
 
   return normalizedVisibility;

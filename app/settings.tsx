@@ -45,10 +45,10 @@ import {
   type LegalPolicy,
 } from "../_lib/legalPolicies";
 import {
-  getProfileVisibilityLabel,
-  PROFILE_VISIBILITY_OPTIONS,
-  type ProfileVisibility,
-} from "../_lib/profileVisibility";
+  ACCESS_VISIBILITY_OPTIONS,
+  getAccessVisibilityLabel,
+  type AccessVisibility,
+} from "../_lib/accessVisibility";
 import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
 import {
@@ -63,10 +63,10 @@ import {
 import { useSession } from "../_lib/session";
 import {
   isProfileMediaActive,
-  readMyProfileVisibility,
+  readMyProfileAccessVisibility,
   readUserProfile,
   updateMyDisplayName,
-  updateMyProfileVisibility,
+  updateMyProfileAccessVisibility,
   type ProfileAppearanceFitMode,
   type UserProfile,
 } from "../_lib/userData";
@@ -399,9 +399,9 @@ export default function SettingsScreen() {
   const [accountDeletionStatusLoading, setAccountDeletionStatusLoading] = useState(false);
   const [monetizationSnapshot, setMonetizationSnapshot] = useState(() => getCachedMonetizationSnapshot());
   const [monetizationLoading, setMonetizationLoading] = useState(false);
-  const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>("everyone");
+  const [profileVisibility, setProfileVisibility] = useState<AccessVisibility>("public");
   const [profileVisibilityLoading, setProfileVisibilityLoading] = useState(false);
-  const [profileVisibilitySaving, setProfileVisibilitySaving] = useState<ProfileVisibility | null>(null);
+  const [profileVisibilitySaving, setProfileVisibilitySaving] = useState<AccessVisibility | null>(null);
   const [profileVisibilityNotice, setProfileVisibilityNotice] = useState<string | null>(null);
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [profileAppearanceSheetKind, setProfileAppearanceSheetKind] = useState<ProfileMediaKind | null>(null);
@@ -516,12 +516,12 @@ export default function SettingsScreen() {
     };
 
     setProfileVisibilityLoading(true);
-    void readMyProfileVisibility()
+    void readMyProfileAccessVisibility()
       .then((visibility) => {
         if (active) setProfileVisibility(visibility);
       })
       .catch(() => {
-        if (active) setProfileVisibility("everyone");
+        if (active) setProfileVisibility("public");
       })
       .finally(() => {
         if (active) setProfileVisibilityLoading(false);
@@ -754,7 +754,7 @@ export default function SettingsScreen() {
     return "Not registered";
   }, [pushRegistration?.permissionState, pushRegistration?.status]);
 
-  const profileVisibilityLabel = profileVisibilityLoading ? "Loading" : getProfileVisibilityLabel(profileVisibility);
+  const profileVisibilityLabel = profileVisibilityLoading ? "Loading" : getAccessVisibilityLabel(profileVisibility);
   const accountDeletionScheduled = accountDeletionStatus?.scheduled === true;
   const accountDeletionRestoreDate = useMemo(() => {
     const rawDate = accountDeletionStatus?.restoreDeadline || accountDeletionStatus?.deleteAfter;
@@ -947,15 +947,15 @@ export default function SettingsScreen() {
     router.push("/chilly-circle" as Parameters<typeof router.push>[0]);
   }, [router]);
 
-  const onPressProfileVisibility = useCallback(async (visibility: ProfileVisibility) => {
+  const onPressProfileVisibility = useCallback(async (visibility: AccessVisibility) => {
     if (profileVisibilitySaving || visibility === profileVisibility) return;
 
     setProfileVisibilitySaving(visibility);
     setProfileVisibilityNotice(null);
     try {
-      const savedVisibility = await updateMyProfileVisibility(visibility);
+      const savedVisibility = await updateMyProfileAccessVisibility(visibility);
       setProfileVisibility(savedVisibility);
-      setProfileVisibilityNotice(`Profile privacy set to ${getProfileVisibilityLabel(savedVisibility)}.`);
+      setProfileVisibilityNotice(`Profile visibility set to ${getAccessVisibilityLabel(savedVisibility)}.`);
     } catch (error) {
       const message = getUserFacingErrorMessage(error, "Unable to update profile privacy right now.");
       setProfileVisibilityNotice(message);
@@ -1605,15 +1605,17 @@ export default function SettingsScreen() {
           onToggle={toggleSection}
         >
           <Text style={styles.statusNote}>
-            Choose who can see your full Profile posts, comments, attachments, and activity. Follow remains separate.
+            Profile is your person/social identity. Followers are public social signals only and do not unlock private or subscriber-only access.
           </Text>
           <View style={styles.privacyOptionRow}>
-            {PROFILE_VISIBILITY_OPTIONS.map((option) => {
+            {ACCESS_VISIBILITY_OPTIONS.map((option) => {
               const active = profileVisibility === option.value;
               const saving = profileVisibilitySaving === option.value;
               return (
                 <TouchableOpacity
                   key={option.value}
+                  testID={option.profileTestID}
+                  accessibilityLabel={`${option.label} Profile visibility`}
                   style={[
                     styles.privacyOptionButton,
                     active && styles.privacyOptionButtonActive,
@@ -1632,10 +1634,25 @@ export default function SettingsScreen() {
                   ]}>
                     {saving ? "Saving" : option.label}
                   </Text>
+                  <Text style={styles.privacyOptionDescription}>{option.profileDescription}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+          <TouchableOpacity
+            testID="profile-visibility-save-button"
+            accessibilityLabel="Save Profile visibility"
+            style={[styles.inlinePrimaryButton, (profileVisibilityLoading || !!profileVisibilitySaving) && styles.inlinePrimaryButtonDisabled]}
+            activeOpacity={0.86}
+            disabled={profileVisibilityLoading || !!profileVisibilitySaving}
+            onPress={() => {
+              void onPressProfileVisibility(profileVisibility);
+            }}
+          >
+            <Text style={styles.inlinePrimaryButtonText}>
+              {profileVisibilitySaving ? "Saving..." : "Save Profile Visibility"}
+            </Text>
+          </TouchableOpacity>
           {profileVisibilityNotice ? <Text style={styles.metaText}>{profileVisibilityNotice}</Text> : null}
         </InlineAccordion>
 
@@ -2412,11 +2429,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.04)",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
-    flexDirection: "row",
+    flexDirection: "column",
     gap: 8,
     paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   privacyOptionButtonActive: {
     borderColor: "rgba(220,20,60,0.45)",
@@ -2429,6 +2447,12 @@ const styles = StyleSheet.create({
   },
   privacyOptionButtonTextActive: {
     color: "#FFE4EA",
+  },
+  privacyOptionDescription: {
+    color: "#AAB3C8",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 15,
   },
   preferenceList: {
     gap: 10,

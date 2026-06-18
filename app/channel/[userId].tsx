@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { resolvePlatformVisibilityAccess, type VisibilityAccessResolution } from "../../_lib/accessVisibility";
 import {
   followChannel,
   readPublicChannelAudienceState,
@@ -69,7 +70,7 @@ import { ReportSheet } from "../../components/safety/report-sheet";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 
-type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked";
+type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked";
 
 const normalizeRouteParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
@@ -166,6 +167,7 @@ export default function PublicChannelScreen() {
   const showOwnerControls = isOwner && !publicPreviewMode && !brandDraftPreviewMode;
 
   const [loadState, setLoadState] = useState<ChannelLoadState>("loading");
+  const [platformAccessResolution, setPlatformAccessResolution] = useState<VisibilityAccessResolution | null>(null);
   const [channel, setChannel] = useState<UserChannelProfile | null>(null);
   const [channelProfile, setChannelProfile] = useState<UserProfile | null>(null);
   const [audienceState, setAudienceState] = useState<PublicChannelAudienceState | null>(null);
@@ -200,6 +202,7 @@ export default function PublicChannelScreen() {
       setLoadState("loading");
       setChannel(null);
       setChannelProfile(null);
+      setPlatformAccessResolution(null);
       setAudienceState(null);
       setVideos([]);
       setEvents([]);
@@ -245,6 +248,28 @@ export default function PublicChannelScreen() {
 
       if (nextAudienceState?.isViewerBlocked) {
         setLoadState("blocked");
+        return;
+      }
+
+      const nextPlatformAccess = officialAccount
+        ? {
+          allowed: true,
+          visibility: "public" as const,
+          reason: "public_allowed" as const,
+          isOwner: false,
+          isBlocked: false,
+          isCircleMember: false,
+          isSubscriber: false,
+          isFollower: false,
+          viewerUserId: viewerUserId || null,
+          ownerUserId: routeUserId,
+        }
+        : await resolvePlatformVisibilityAccess(routeUserId).catch(() => null);
+      if (!active) return;
+      setPlatformAccessResolution(nextPlatformAccess);
+
+      if (!isOwner && nextPlatformAccess?.allowed !== true) {
+        setLoadState("locked");
         return;
       }
 
@@ -1571,6 +1596,15 @@ export default function PublicChannelScreen() {
 
   if (loadState === "blocked") {
     return renderUnavailable("You cannot view this platform.");
+  }
+
+  if (loadState === "locked") {
+    const isSubscriberOnly = platformAccessResolution?.visibility === "subscriber_only";
+    return renderUnavailable(
+      isSubscriberOnly
+        ? "This Platform is subscriber-only. Subscribers can view this Platform."
+        : "This Platform is private. Circle members or subscribers can view this Platform.",
+    );
   }
 
   return (

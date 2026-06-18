@@ -54,6 +54,9 @@ const assertScopedIncludes = (source, startNeedle, endNeedle, needle, label) => 
   ["_lib/platformIdentity.ts", "Platform identity resolver"],
   ["_lib/platformModes.ts", "Platform owner/viewer mode resolver"],
   ["_lib/creatorMonetizationRouteTargets.ts", "Creator money route targets"],
+  ["_lib/accessVisibility.ts", "Profile/Platform access visibility helper"],
+  ["supabase/migrations/20260617235547_profile_platform_access_visibility.sql", "Profile/Platform access visibility migration"],
+  ["supabase/migrations/20260618000942_profile_access_visibility_rls_bridge.sql", "Profile access visibility RLS bridge migration"],
 ].forEach(([relativePath, label]) => assertFile(relativePath, label));
 
 const appLayout = read("app/_layout.tsx");
@@ -72,6 +75,10 @@ const vipRoute = read("app/vip-pass/[creatorId].tsx");
 const platformIdentity = read("_lib/platformIdentity.ts");
 const platformModes = read("_lib/platformModes.ts");
 const creatorMoneyRouteTargets = read("_lib/creatorMonetizationRouteTargets.ts");
+const accessVisibility = read("_lib/accessVisibility.ts");
+const visibilityMigration = read("supabase/migrations/20260617235547_profile_platform_access_visibility.sql");
+const visibilityRlsMigration = read("supabase/migrations/20260618000942_profile_access_visibility_rls_bridge.sql");
+const settings = read("app/settings.tsx");
 const routeDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
 
 assertIncludes(appLayout, '<Stack.Screen name="watch-party/index" />', "Waiting Room route registration");
@@ -157,6 +164,30 @@ assertIncludes(vipRoute, "vip-area-manage-offer-button", "VIP Area manage select
 assertIncludes(vipRoute, "vip-area-preview-button", "VIP Area preview selector");
 assertNotIncludes(creatorMoneyRouteTargets, 'platformSubscription: {\n    ownerTarget: "/subscribe"', "Creator subscription owner route");
 assertNotIncludes(creatorMoneyRouteTargets, 'vipPass: {\n    ownerTarget: "/subscribe"', "Creator VIP owner route");
+
+assertIncludes(visibilityMigration, '"profile_access_visibility"', "Profile access visibility schema");
+assertIncludes(visibilityMigration, '"platform_access_visibility"', "Platform access visibility schema");
+assertIncludes(visibilityMigration, 'resolve_profile_visibility_access', "Profile visibility resolver RPC");
+assertIncludes(visibilityMigration, 'resolve_platform_visibility_access', "Platform visibility resolver RPC");
+assertIncludes(visibilityRlsMigration, "can_view_profile_content", "Profile content RLS visibility bridge");
+assertIncludes(visibilityRlsMigration, "resolve_profile_visibility_access", "Profile content RLS resolver usage");
+assertIncludes(visibilityMigration, '"channel_followers"', "Visibility resolver follower readback");
+assertIncludes(visibilityMigration, "'circle_or_subscriber_required'", "Visibility resolver private denial reason");
+assertIncludes(visibilityMigration, "'subscriber_required'", "Visibility resolver subscriber-only denial reason");
+assertNotIncludes(visibilityMigration, "v_is_follower then", "Follower must not unlock private visibility");
+assertIncludes(accessVisibility, "resolveProfileVisibilityAccess", "Client Profile visibility resolver");
+assertIncludes(accessVisibility, "resolvePlatformVisibilityAccess", "Client Platform visibility resolver");
+assertIncludes(publicPlatform, "resolvePlatformVisibilityAccess", "Public Platform access resolver usage");
+assertIncludes(accessVisibility, "profile-visibility-public-option", "Profile visibility public selector");
+assertIncludes(accessVisibility, "profile-visibility-private-option", "Profile visibility private selector");
+assertIncludes(accessVisibility, "profile-visibility-subscriber-only-option", "Profile visibility subscriber-only selector");
+assertIncludes(settings, "option.profileTestID", "Settings Profile visibility selector usage");
+assertIncludes(settings, "profile-visibility-save-button", "Profile visibility save selector");
+assertIncludes(accessVisibility, "platform-visibility-public-option", "Platform visibility public selector");
+assertIncludes(accessVisibility, "platform-visibility-private-option", "Platform visibility private selector");
+assertIncludes(accessVisibility, "platform-visibility-subscriber-only-option", "Platform visibility subscriber-only selector");
+assertIncludes(channelSettings, "option.platformTestID", "Platform Studio Platform visibility selector usage");
+assertIncludes(channelSettings, "platform-visibility-save-button", "Platform visibility save selector");
 
 if (process.exitCode) process.exit();
 console.log("Route contract guard passed.");

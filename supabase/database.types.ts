@@ -9239,6 +9239,8 @@ export type Database = {
           profile_background_scan_status: string
           profile_background_scanned_at: string | null
           profile_background_url: string | null
+          platform_access_visibility: string
+          profile_access_visibility: string
           profile_media_updated_at: string | null
           profile_visibility: string
           public_activity_visibility: string
@@ -9285,6 +9287,8 @@ export type Database = {
           profile_background_scan_status?: string
           profile_background_scanned_at?: string | null
           profile_background_url?: string | null
+          platform_access_visibility?: string
+          profile_access_visibility?: string
           profile_media_updated_at?: string | null
           profile_visibility?: string
           public_activity_visibility?: string
@@ -9331,6 +9335,8 @@ export type Database = {
           profile_background_scan_status?: string
           profile_background_scanned_at?: string | null
           profile_background_url?: string | null
+          platform_access_visibility?: string
+          profile_access_visibility?: string
           profile_media_updated_at?: string | null
           profile_visibility?: string
           public_activity_visibility?: string
