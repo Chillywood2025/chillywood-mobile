@@ -9,10 +9,25 @@ appId: ${CHILLYWOOD_APP_ID}
     id: "screen-platform"
 - assertVisible:
     id: "platform-owner-mode-badge"
+- scrollUntilVisible:
+    element:
+      id: "platform-creator-offers-section"
+    direction: DOWN
+    timeout: 20000
 - assertVisible:
     id: "platform-creator-offers-section"
+- scrollUntilVisible:
+    element:
+      id: "platform-owner-manage-subscription-button"
+    direction: DOWN
+    timeout: 20000
 - assertVisible:
     id: "platform-owner-manage-subscription-button"
+- scrollUntilVisible:
+    element:
+      id: "platform-owner-manage-vip-button"
+    direction: DOWN
+    timeout: 20000
 - assertVisible:
     id: "platform-owner-manage-vip-button"
 - assertNotVisible:
