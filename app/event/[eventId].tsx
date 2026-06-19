@@ -137,7 +137,6 @@ export default function PaidCreatorEventRoute() {
               {offer ? (
                 <>
                   <Text style={styles.detail}>Price: {formatPaidCreatorEventPrice(offer.priceCents, offer.currency)}</Text>
-                  <Text style={styles.detail}>Sandbox Test · Google Play · No live payout</Text>
                   <Text style={styles.detail}>
                     Passes: {offer.passesSold}{offer.capacityLimit ? ` / ${offer.capacityLimit}` : ""}
                   </Text>
@@ -170,16 +169,19 @@ export default function PaidCreatorEventRoute() {
                 />
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Sandbox Test Buy Event Pass"
+                  accessibilityLabel="Get Event Pass"
                   testID="event-pass-purchase-button"
                   onPress={onBuyEventPass}
                   style={[styles.primaryButton, purchaseLoading && styles.buttonDisabled]}
                   disabled={purchaseLoading || soldOut}
                 >
                   {purchaseLoading ? (
-                    <ActivityIndicator color="#fff" />
+                    <View style={styles.busyRow}>
+                      <ActivityIndicator color="#fff" />
+                      <Text style={styles.primaryButtonText}>Opening Google Play</Text>
+                    </View>
                   ) : (
-                    <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : "Sandbox Test Event Pass"}</Text>
+                    <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : "Get Event Pass"}</Text>
                   )}
                 </Pressable>
               </MoneyOfferCard>
@@ -294,6 +296,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#DC143C",
     paddingHorizontal: 16,
+  },
+  busyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
   buttonDisabled: {
     opacity: 0.7,

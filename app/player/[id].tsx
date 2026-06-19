@@ -6127,7 +6127,7 @@ export default function PlayerScreen() {
     }
 
     setPaidVideoUnlockBusy(true);
-    setPaidVideoUnlockMessage("Opening sandbox checkout...");
+    setPaidVideoUnlockMessage("Opening Google Play...");
     try {
       debugLog("paid-video", "paid_video_checkout_start", {
         videoId: creatorVideo.id,
@@ -8667,7 +8667,7 @@ export default function PlayerScreen() {
                   ) : null}
                   {creatorVideoPaidContentLocked ? (
                     <Text style={styles.videoLoadingSubtext}>
-                      Google Play / RevenueCat sandbox test only. Premium is separate from creator video purchases.
+                      Unlocking this video does not include Chi'llywood Premium, subscriptions, VIP, rooms, events, or other creator videos.
                     </Text>
                   ) : null}
                   {isSpectatorPlaybackUnavailable ? (
@@ -8716,15 +8716,14 @@ export default function PlayerScreen() {
                   }}
                   testID="tester-paid-video-unlock-button"
                   accessibilityRole="button"
-                  accessibilityLabel="Sandbox Test Unlock Paid Video"
+                  accessibilityLabel="Unlock paid creator video"
                 >
                   {paidVideoUnlockBusy ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.playerAccessPrimaryText}>Sandbox Test Unlock</Text>
+                    <Text style={styles.playerAccessPrimaryText}>Unlock Video</Text>
                   )}
                 </TouchableOpacity>
-                <Text style={styles.videoLoadingSubtext}>Sandbox Test · No live payout</Text>
                 {paidVideoUnlockMessage ? (
                   <Text style={styles.videoLoadingSubtext} testID="paid-video-purchase-success-receipt">{paidVideoUnlockMessage}</Text>
                 ) : null}

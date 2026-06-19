@@ -2632,10 +2632,10 @@ export default function WatchPartyRoomScreen() {
               disabled={paidTicketBusy}
               testID="watch-party-ticket-purchase-button"
               accessibilityRole="button"
-              accessibilityLabel="Sandbox Test Buy Watch-Party Ticket"
+              accessibilityLabel="Get Watch-Party Room Ticket"
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                {paidTicketBusy ? "Opening Google Play" : "Sandbox Test Ticket"}
+                {paidTicketBusy ? "Opening Google Play" : "Get Room Ticket"}
               </Text>
             </TouchableOpacity>
           ) : null}

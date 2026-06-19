@@ -186,7 +186,7 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.title}>{offer?.title ?? "VIP Pass"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Sandbox Test: get VIP for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, subscriptions, or other creators.`
+                ? `Get VIP access for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, Watch-Party tickets, paid events, subscriptions, or other creators.`
                 : "This creator has not enabled VIP yet."}
             </Text>
             <MoneyScopeStrip
@@ -203,9 +203,9 @@ export default function CreatorVipPassScreen() {
                 onPress={handleGetVip}
                 testID="vip-area-get-vip-button"
                 accessibilityRole="button"
-                accessibilityLabel="Sandbox Test Get Creator VIP"
+                accessibilityLabel="Get Creator VIP"
               >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Sandbox Test VIP</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Get VIP</Text>}
               </TouchableOpacity>
             ) : null}
           </View>

@@ -76,6 +76,7 @@ export function TipSheet({
   const minAmount = tipStatus?.minAmountCents ?? 100;
   const maxAmount = tipStatus?.maxAmountCents ?? 50000;
   const amountValid = Number.isInteger(amountCents) && amountCents >= minAmount && amountCents <= maxAmount;
+  const showSandboxCopy = sandboxTester || tipStatus?.testMode === true;
   const canTipInSandbox = sandboxTester || tipStatus?.canTip === true;
   const canSubmit = canTipInSandbox && !!user?.id && amountValid && !busy;
 
@@ -117,17 +118,17 @@ export function TipSheet({
       });
 
       if (!result.ok) {
-        setNotice(result.message || "Sandbox tip is unavailable right now.");
+        setNotice(result.message || "Tips are unavailable right now.");
         return;
       }
 
       setNotice(
-        sandboxTester || tipStatus?.testMode
+        showSandboxCopy
           ? `Sandbox tip complete. No money moved. No payout created. ${new Date().toLocaleString()}`
           : result.message,
       );
     } catch {
-      setNotice("Google Play sandbox tip could not be started. Try again later.");
+      setNotice("Google Play tip could not be started. Try again later.");
     } finally {
       setBusy(false);
     }
@@ -148,7 +149,7 @@ export function TipSheet({
             tone="premium"
           />
 
-          {tipStatus?.testMode || sandboxTester ? <MoneyStatusChip label="Sandbox Test · Google Play · No live payout" tone="warning" /> : null}
+          {showSandboxCopy ? <MoneyStatusChip label="Sandbox Test · Google Play · No live payout" tone="warning" /> : null}
 
           <View style={styles.amountGrid}>
             {amounts.map((amount) => (
@@ -201,7 +202,7 @@ export function TipSheet({
             onPress={startCheckout}
             testID="tip-confirm-button"
             accessibilityRole="button"
-            accessibilityLabel="Sandbox Test Tip Creator"
+            accessibilityLabel={showSandboxCopy ? "Sandbox Test Tip Creator" : "Send creator tip"}
           >
             {busy ? (
               <View style={styles.busyRow}>
@@ -209,7 +210,7 @@ export function TipSheet({
                 <Text style={styles.primaryButtonText}>Opening Google Play</Text>
               </View>
             ) : (
-              <Text style={styles.primaryButtonText}>{tipStatus?.testMode || sandboxTester ? "Sandbox Test Tip" : "Continue to tip"}</Text>
+              <Text style={styles.primaryButtonText}>{showSandboxCopy ? "Sandbox Test Tip" : "Continue to tip"}</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity disabled={busy} style={styles.secondaryButton} onPress={onClose}>
