@@ -166,9 +166,9 @@ export function CreatorVideoCard({
   const isOfficialRachiInternalProofFixture = !ownerMode
     && video.ownerId === RACHI_OFFICIAL_USER_ID
     && INTERNAL_PROOF_TEXT_REGEX.test(`${video.title} ${video.description}`);
-  const publicDisplayTitle = isOfficialRachiInternalProofFixture ? "Chi'llwood Original" : displayTitle;
+  const publicDisplayTitle = isOfficialRachiInternalProofFixture ? "Chi'llywood Original" : displayTitle;
   const publicDescription = isOfficialRachiInternalProofFixture
-    ? "Official Chi'llwood Original from Rachi."
+    ? "Official Chi'llywood Original from Rachi."
     : (video.description || "Open this creator video in the Chi'llywood Player.");
 
   return (

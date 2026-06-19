@@ -190,7 +190,7 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.title}>{offer?.title ?? "VIP Pass"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Sandbox Test: get VIP for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP is creator-specific and does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, subscriptions, or other creators.`
+                ? `Sandbox Test: get VIP for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, subscriptions, or other creators.`
                 : "This creator has not enabled VIP yet."}
             </Text>
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}

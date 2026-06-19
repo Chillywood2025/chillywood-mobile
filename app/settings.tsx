@@ -1887,7 +1887,7 @@ export default function SettingsScreen() {
         ))}
         <SettingsRow
           title="Incoming call sound"
-          subtitle="Bundled Chi'llwood sounds play in-app. Background call alerts use the Android call channel sound from a native build, and Android settings may override it."
+          subtitle="Bundled Chi'llywood sounds play in-app. Background call alerts use the Android call channel sound from a native build, and Android settings may override it."
           value={
             CHILLY_CHAT_RINGTONE_OPTIONS.find((option) => option.key === notificationPreferences?.chillyChatCallSoundKey)?.label
             ?? "Chi'lly Ring"

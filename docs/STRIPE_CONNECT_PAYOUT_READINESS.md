@@ -66,7 +66,7 @@ Result:
 - upgraded proof account authenticated
 - no temporary operator role was required
 - existing real Stripe test-mode Express connected account was reused
-- onboarding link was created after using the approved HTTPS Chi'llwood origin
+- onboarding link was created after using the approved HTTPS Chi'llywood origin
 - account status was refreshed from Stripe sandbox
 - provider environment: `test`
 - status: `pending_kyc`

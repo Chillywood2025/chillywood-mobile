@@ -85,7 +85,7 @@ Channel Subscriptions V1 unlocks only subscriber status for one creator channel.
 
 It does not unlock:
 
-- Chi'llwood Premium
+- Chi'llywood Premium
 - VIP
 - Paid Videos
 - Paid Watch-Party tickets

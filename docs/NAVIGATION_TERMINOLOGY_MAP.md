@@ -20,7 +20,7 @@ This map records the current Chi'llywood app navigation and product language aft
 
 ## Main App Mode Map
 Viewer mode:
-- Home: cinematic launch/feed surface with a branded hero by default and a `Continue Watching` hero only when real progress is backed, plus Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle when backed, and Upcoming Events when backed. Home must not carry Top Picks, Browse, Favorites, or random title-detail hero jobs.
+- Home: cinematic launch/feed surface with a branded hero by default and a `Continue Watching` hero only when real progress is backed, plus Live Now, Rachi Official Updates, Chi'llywood Originals, From Your Chi'lly Circle when backed, and Upcoming Events when backed. Home must not carry Top Picks, Browse, Favorites, or random title-detail hero jobs.
 - Explore: backed browse/discovery surface for title search, public people/Profile discovery, public Platform discovery, public discovery feed rows, public creator videos, Rachi public-safe Originals, events, replays, and honest empty states.
 - Live: bottom-nav entry point for choosing `Live Watch-Party`, entering a `Watch-Party Live` room code, or browsing titles before starting a content-first party.
 - Library: current saved-title list. Broader My Stuff sections are planned only when backed.
@@ -71,12 +71,12 @@ Source truth:
 Current implementation:
 - Home no longer renders Top Picks, Browse, Favorites, Platforms You Follow, or Latest Public Uploads sections.
 - The removal is product scope, not a duplicate-bug claim: Explore covers browse/discovery work, and Library covers saved/favorites work.
-- Home keeps launch/feed content only: cinematic branded/Continue Watching hero, Live Now, Rachi Official Updates, Chi'llwood Originals, From Your Chi'lly Circle, Upcoming Events, and the existing native ad slot.
+- Home keeps launch/feed content only: cinematic branded/Continue Watching hero, Live Now, Rachi Official Updates, Chi'llywood Originals, From Your Chi'lly Circle, Upcoming Events, and the existing native ad slot.
 - Home no longer promotes a latest/programmed title into a giant hero when Continue Watching is empty. The `Chicago Streets` issue came from the former `spotlightItem` fallback chain: missing Continue Watching fell through to `programmedHeroItem`, which could fall through to `latestTitles[0]`.
-- The Home hero keeps the premium cinematic look. With no eligible progress, it shows neutral Chi'llwood branding instead of a title. With eligible progress, it becomes a `Continue Watching` title hero.
+- The Home hero keeps the premium cinematic look. With no eligible progress, it shows neutral Chi'llywood branding instead of a title. With eligible progress, it becomes a `Continue Watching` title hero.
 - Continue Watching hero eligibility requires real playback progress: position at or above `HOME_CONTINUE_MIN_POSITION_MILLIS` (`10_000` ms), and when duration is known the ratio must be below `HOME_CONTINUE_COMPLETION_THRESHOLD` (`0.94`). The selector also requires an available title row that is not unpublished/draft/scheduled/archived/deleted/private/restricted/ticketed, sorts by the merged watch-progress last-watched timestamp, and shows only the latest eligible item. Finished, not-started, saved/favorite, unavailable, and broad discovery titles are not eligible Home hero content.
 - Saved/favorite/history ownership remains Library. Browse/discovery/top-pick ownership remains Explore. A future editorial Home hero would need a distinct backed source before it can be shown.
-- Rachi Official Updates render identity with backed avatar or safe `R` fallback, `Rachi`, `Official Chi'llwood`, and backed timestamp text.
+- Rachi Official Updates render identity with backed avatar or safe `R` fallback, `Rachi`, `Official Chi'llywood`, and backed timestamp text.
 - Rachi Originals public cards keep backed Rachi-owned content but mask internal proof/fixture wording from normal Home copy.
 - No fake Home rows, fake progress, fake Rachi posts, fake Rachi Originals, fake saved rows, fake live rooms, fake events, fake creator activity, or fake counts were added.
 
@@ -85,9 +85,9 @@ Android proof:
 - `/tmp/chillywood-home-continue-watching-proof-20260529/02-explore-discovery.*` captures Explore still reachable for discovery.
 - `/tmp/chillywood-home-continue-watching-proof-20260529/03-library-saved.*` captures Library showing `Chicago Streets` as a real Saved item with `0` Continue Watching.
 - `/tmp/chillywood-home-continue-watching-proof-20260529/04-player-opens-title.*` captures the title opening from Library/Player route instead of Home hero.
-- `/tmp/chillywood-home-continue-watching-proof-20260529/05-home-originals-section.*` captures Rachi Official Updates and Chi'llwood Originals still visible after the Home cleanup.
+- `/tmp/chillywood-home-continue-watching-proof-20260529/05-home-originals-section.*` captures Rachi Official Updates and Chi'llywood Originals still visible after the Home cleanup.
 - `/tmp/chillywood-home-profile-cleanup-proof-20260529/01-home-first-view.*` captures Home first view with top Profile/Settings, bottom nav, Rachi Official Updates, and no Top Picks/Browse/Favorites labels.
-- `/tmp/chillywood-home-profile-cleanup-proof-20260529/02-home-rachi-originals.*` captures Rachi identity plus Chi'llwood Originals with sanitized public copy.
+- `/tmp/chillywood-home-profile-cleanup-proof-20260529/02-home-rachi-originals.*` captures Rachi identity plus Chi'llywood Originals with sanitized public copy.
 
 ## Explore Status
 Current implementation:
@@ -101,15 +101,15 @@ Current implementation:
 - Reads `readLatestPublicCreatorVideos` for public creator videos.
 - Reads Rachi public-safe Originals through the official Rachi account without draft/private inclusion.
 - Reads `readLatestPublicEventSummaries` for public event/replay summaries.
-- Renders compact backed or honest-empty sections: Search, People, Live Now, Platforms, Creator Videos, Chi'llwood Originals, Events, Replays, and Titles.
-- Uses backed hero/title imagery when present and falls back to the Chi'llwood branded background when no backed hero image is available.
+- Renders compact backed or honest-empty sections: Search, People, Live Now, Platforms, Creator Videos, Chi'llywood Originals, Events, Replays, and Titles.
+- Uses backed hero/title imagery when present and falls back to the Chi'llywood branded background when no backed hero image is available.
 - Does not invent trending rows, creator rows, Platform rows, live state, replays, events, Rachi content, counts, or protected/private content.
 - Public People search supports username, display name, and the current public Platform name source. It does not support email, phone, private account identifiers, private roles, or staff/security/system metadata.
 - Username search is backed by canonical lowercase `user_profiles.username`; handles are displayed with `@` but stored without it.
 - The Modern Username Handle System migration `20260602032030_modern_username_handle_system.sql` enforces unique case-insensitive usernames, safe format, reserved names, blocked-word protection, and username audit. See `docs/USERNAME_HANDLE_SYSTEM.md`.
 - Remote-applied migration `202605290003_public_people_search_operator_proof_hardening.sql` keeps the public `search_public_people` RPC returning only public-safe fields: user id, display name, username, active avatar URL, official flag/label, public Platform flag/id, and short public bio.
 - Public People search reuses `can_view_profile_content`, so private Profiles and blocked relationships stay hidden according to the existing profile policy.
-- Owner/operator/moderator/security/support/system/proof/service accounts and proof/operator display markers are excluded from public People search unless they are an explicitly public official account. Rachi is the allowed explicit official result and appears as `Official Chi'llwood`.
+- Owner/operator/moderator/security/support/system/proof/service accounts and proof/operator display markers are excluded from public People search unless they are an explicitly public official account. Rachi is the allowed explicit official result and appears as `Official Chi'llywood`.
 - Owner/Admin email lookup remains an Admin/staff-only boundary. Public Explore does not add exact or partial email lookup.
 - Public Explore typeahead does not expose Admin, Money, provider readiness, reports, legal requests, audit rows, or private operational data.
 
@@ -123,7 +123,7 @@ Owner/Admin search:
 - Normal users cannot access the Admin Search UI or audit data. The latest proof used API/RLS denial for the non-staff proof account; Android runtime denial for the new panel remains unclaimed until a safe normal-user device session can be switched in without losing the owner/admin proof session.
 
 Recommended next Explore phase:
-- Add purpose-built Explore read models if product wants ranked search across Platforms, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, replays, Chi'llwood Originals, and Rachi official content.
+- Add purpose-built Explore read models if product wants ranked search across Platforms, live rooms, Watch-Party Live entries, Live Watch-Party rooms, events, replays, Chi'llywood Originals, and Rachi official content.
 - Keep each section hidden or empty-state honest until backed rows exist.
 - Avoid fake trending, fake recommendations, fake viewer counts, and protected/private content leakage.
 - Add ranking/read models before adding recommendation claims. Do not use placeholder creator/platform/live rows.
@@ -178,7 +178,7 @@ Implemented status:
 - Continue Watching reads `readMergedWatchProgress` and resolves only titles with real progress.
 - Platforms reads `readFollowedChannelUserIds` and resolves only public profile read-back rows.
 - Empty state says replays, events, and clips appear only when real saved rows exist.
-- The Library route uses the Chi'llwood branded background behind the compact saved-title surface.
+- The Library route uses the Chi'llywood branded background behind the compact saved-title surface.
 
 Recommended Library/My Stuff phase:
 - Saved titles.
@@ -224,7 +224,7 @@ Audit result:
 Implemented status:
 - The Live tab at `app/(tabs)/live.tsx` is a modern compact launcher.
 - It uses these named patterns: Hero header, Compact action cards, Action rows, Status pills, Choice chips, Progressive disclosure, Collapsible details, Empty state, Primary CTA, and Secondary CTA.
-- It renders over the Chi'llwood branded background so the Live route does not fall back to a plain black shell.
+- It renders over the Chi'llywood branded background so the Live route does not fall back to a plain black shell.
 - Main cards use one-sentence copy: `Live Watch-Party` is the primary people-first live-room path, `Enter Watch-Party Code` is the room-code utility for content-first Watch-Party Live rooms, and `Browse Titles` starts from content discovery.
 - Long technical copy such as route ownership and waiting-room internals is removed from the main cards.
 
@@ -256,7 +256,7 @@ Guardrails:
 - Messaging copy uses `Chi'lly Chat`.
 - Rachi remains `Official Chi'llywood`, appears through canonical public-safe surfaces, and is not positioned as a private-chat watcher.
 - Rachi posts/content should show a visible identity row when the card design has author identity: avatar or official fallback, `Rachi`, official label, timestamp where backed, and public-safe body/content.
-- Rachi Official Updates and Chi'llwood Originals stay backed-only; no fake posts, fake Originals, fake followers, fake likes, or fake engagement are allowed.
+- Rachi Official Updates and Chi'llywood Originals stay backed-only; no fake posts, fake Originals, fake followers, fake likes, or fake engagement are allowed.
 
 ## Profile Header And Feed Empty State
 Implemented status:

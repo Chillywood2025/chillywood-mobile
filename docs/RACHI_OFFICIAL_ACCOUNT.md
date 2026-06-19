@@ -10,7 +10,7 @@ Rachi is Chi'llywood's official account:
 - protected public handle: `@chillywood.rachi`
 - first pinned Chi'lly Circle official connection
 - official updates voice
-- Chi'llwood Originals publisher when real public-safe Rachi content exists
+- Chi'llywood Originals publisher when real public-safe Rachi content exists
 
 Rachi is not:
 
@@ -30,11 +30,11 @@ User-facing privacy copy should stay short:
 - Rachi Profile shows official identity, recent public Rachi posts, public-safe Rachi uploads, Rachi Platform, and the Chi'lly Circle placement.
 - Rachi public Platform shows official branding and public-safe published Rachi content only.
 - Home shows real public Rachi posts in `Rachi Official Updates`.
-- Home shows real public-safe Rachi-owned creator videos in `Chi'llwood Originals`.
-- Home Rachi Official Updates show Rachi identity: backed avatar when active, safe `R` fallback when missing, `Rachi`, `Official Chi'llwood`, and timestamp where backed.
+- Home shows real public-safe Rachi-owned creator videos in `Chi'llywood Originals`.
+- Home Rachi Official Updates show Rachi identity: backed avatar when active, safe `R` fallback when missing, `Rachi`, `Official Chi'llywood`, and timestamp where backed.
 - Home/public Rachi Originals cards must not expose internal proof/fixture wording in normal user-facing title or description copy.
-- Explore People search and typeahead can show Rachi only as the explicit public official result after internal/proof account filtering: `Rachi`, `Official Chi'llwood`, official avatar/fallback, View Profile, and View Platform.
-- Explore Originals typeahead can show Rachi-owned Chi'llwood Originals only when the underlying public-safe Rachi creator-video row is backed.
+- Explore People search and typeahead can show Rachi only as the explicit public official result after internal/proof account filtering: `Rachi`, `Official Chi'llywood`, official avatar/fallback, View Profile, and View Platform.
+- Explore Originals typeahead can show Rachi-owned Chi'llywood Originals only when the underlying public-safe Rachi creator-video row is backed.
 - Admin Search can find Rachi posts/Originals only inside the owner/admin `/admin` gate. Those searches now write masked Admin Search audit events; Rachi must still never appear publicly as admin authority, a bot, a chat monitor, or fake private activity.
 - Chi'lly Chat does not show Rachi as a starter/helper thread; Rachi stays discoverable as the first official Chi'lly Circle connection.
 - Admin Rachi tab is owner/admin-only and manages official Rachi posts plus official-content visibility.
@@ -73,7 +73,7 @@ Rules:
 
 ## Originals
 
-Chi'llwood Originals uses real Rachi-owned creator videos only:
+Chi'llywood Originals uses real Rachi-owned creator videos only:
 
 - Home reads Rachi creator videos with `includeDrafts: false`
 - drafts, private uploads, hidden content, rejected content, and raw storage paths stay out of Home
@@ -81,11 +81,11 @@ Chi'llwood Originals uses real Rachi-owned creator videos only:
 - remote-applied migration `202605260011_rachi_originals_public_video_fixture.sql` adds `official_rachi_original_videos`, an owner/operator-managed link table for public-safe official Rachi Originals
 - remote-applied migration `202605260012_rachi_originals_fixture_playback_mp4.sql` keeps the proof fixture on direct `video/mp4` playback
 - remote-applied migration `202605260013_rachi_originals_public_link_select_hardening.sql` makes public link reads require a published official link and a linked public clean/reported video
-- proof fixture: `6e1c3405-7db8-4cb2-98f3-5a7642e82126`, `Chi'llwood Originals Proof Fixture`
+- proof fixture: `6e1c3405-7db8-4cb2-98f3-5a7642e82126`, `Chi'llywood Originals Proof Fixture`
 - fixture attribution: `Big Buck Bunny by Blender Foundation, CC BY 3.0.`
 - `public-creator-video-cards` reads official Rachi Originals through the link table and still requires published official links plus public, moderation-safe `videos` rows
 - public card responses use `ownerId=platform_rachi_official` and do not return raw playback URLs, raw storage paths, storage object keys, drafts, private rows, hidden rows, or admin controls
-- normal public cards may mask internal proof/fixture title and description wording as `Chi'llwood Original` and `Official Chi'llwood Original from Rachi.` while preserving the real backed row and resolver result
+- normal public cards may mask internal proof/fixture title and description wording as `Chi'llywood Original` and `Official Chi'llywood Original from Rachi.` while preserving the real backed row and resolver result
 - Admin shows `Upload Original` as an honest disabled action until a backend-safe upload-as-Rachi Studio path exists
 
 Do not create placeholder Originals or fake production claims.
@@ -96,7 +96,7 @@ Username/handle safety:
 
 - `rachi`, `rachi_official`, and `chillywood.rachi` are reserved in `username_reserved_names`.
 - Normal users cannot claim Rachi handles.
-- Public People search may return explicit official Rachi as `username='chillywood.rachi'`, `Rachi`, and `Official Chi'llwood`.
+- Public People search may return explicit official Rachi as `username='chillywood.rachi'`, `Rachi`, and `Official Chi'llywood`.
 - Rachi must never appear publicly as owner/admin/operator authority.
 
 Rachi does not replace:
@@ -120,11 +120,11 @@ Rachi does not change:
 
 ## Explore People Search And Typeahead
 
-Rachi is allowed in public Explore People search and typeahead because Rachi is an explicit public official Chi'llwood account, not because of any owner/admin role.
+Rachi is allowed in public Explore People search and typeahead because Rachi is an explicit public official Chi'llywood account, not because of any owner/admin role.
 
 Rules:
 
-- Search result label is `Official Chi'llwood`.
+- Search result label is `Official Chi'llywood`.
 - Typeahead result label can be `Official` or `Originals` only when backed by the explicit official account / public-safe Originals source.
 - Result actions are View Profile and View Platform where backed.
 - Do not show admin/operator/system role labels.
@@ -164,14 +164,14 @@ Captured on `R5CR120QCBF`:
 - real official Rachi post created through the Admin Rachi tab
 - real official Rachi post visible on Rachi Profile
 - real official Rachi post visible on Home under `Rachi Official Updates`
-- Home `Chi'llwood Originals` honest empty state before the fixture pass
+- Home `Chi'llywood Originals` honest empty state before the fixture pass
 
 Proof path: `/tmp/chillywood-rachi-originals-proof-20260526/`.
 
 Captured on `R5CR120QCBF`:
 
 - Home `Rachi Official Updates` still present
-- Home `Chi'llwood Originals` with the Rachi video fixture
+- Home `Chi'llywood Originals` with the Rachi video fixture
 - Rachi video card with public/Media Ready state and no fake engagement
 - Rachi public Platform showing `1 Videos`, Featured, and Latest Uploads for the fixture
 - public Platform actions are Follow, Share, Report, and View Profile, with no app owner/admin controls in public preview
@@ -181,8 +181,8 @@ Proof path: `/tmp/chillywood-home-profile-cleanup-proof-20260529/`.
 
 Captured on `R5CR120QCBF`:
 
-- Home `Rachi Official Updates` with Rachi avatar/fallback, `Rachi`, `Official Chi'llwood`, and backed timestamp text
-- Home `Chi'llwood Originals` with the real Rachi-owned fixture row and public copy that no longer exposes `Proof Fixture` or `Proof-scoped` wording
+- Home `Rachi Official Updates` with Rachi avatar/fallback, `Rachi`, `Official Chi'llywood`, and backed timestamp text
+- Home `Chi'llywood Originals` with the real Rachi-owned fixture row and public copy that no longer exposes `Proof Fixture` or `Proof-scoped` wording
 - Home no longer shows Top Picks, Browse, or Favorites sections
 
 Backend proof:

@@ -72,12 +72,12 @@ Official/current sources checked on 2026-05-25:
 | Source | Relevant finding |
 | --- | --- |
 | [Expo Video](https://docs.expo.dev/versions/latest/sdk/video/) | `expo-video` is the supported Expo video playback surface. It is for playback/player UI, not a video trim/export renderer. |
-| [Expo AV](https://docs.expo.dev/versions/latest/sdk/av/) | Expo positions `expo-av` as deprecated for new audio/video work in favor of newer modules. Chi'llwood should not add new Clip Studio export work on top of `expo-av`. |
+| [Expo AV](https://docs.expo.dev/versions/latest/sdk/av/) | Expo positions `expo-av` as deprecated for new audio/video work in favor of newer modules. Chi'llywood should not add new Clip Studio export work on top of `expo-av`. |
 | [Expo DocumentPicker](https://docs.expo.dev/versions/latest/sdk/document-picker/) | `getDocumentAsync` and `copyToCacheDirectory` match the repo's current picker/upload pattern. It does not provide trim/export. |
 | [Expo ImagePicker](https://docs.expo.dev/versions/latest/sdk/imagepicker/) | `getPendingResultAsync` exists for Android picker result recovery after MainActivity destruction. The repo does not currently use ImagePicker, so adopting this would be a separate picker behavior lane. |
 | [Expo VideoThumbnails](https://docs.expo.dev/versions/latest/sdk/video-thumbnails/) | Supports thumbnail generation from video; useful for future poster-frame extraction, but not for trimming or exporting a new video. |
 | [Android Media3 Transformer getting started](https://developer.android.com/media/media3/transformer/getting-started) | Media3 Transformer is the credible official Android path for native edit/export, including edited media items. It requires native integration, release proof, and device proof. |
-| [Android Media3 Transformer supported formats](https://developer.android.com/media/media3/transformer/supported-formats) | Export capability depends on device codecs, container/track support, and format constraints. Chi'llwood would need physical-device coverage, not only emulator proof. |
+| [Android Media3 Transformer supported formats](https://developer.android.com/media/media3/transformer/supported-formats) | Export capability depends on device codecs, container/track support, and format constraints. Chi'llywood would need physical-device coverage, not only emulator proof. |
 | [FFmpegKit repository](https://github.com/arthenica/ffmpeg-kit) | The official FFmpegKit project is retired. It should not be the foundation for a new mobile native export lane. |
 | [FFmpeg CLI documentation](https://ffmpeg.org/ffmpeg.html) | FFmpeg remains a strong server-side worker option for true trim/render/export, overlays, captions, transcodes, and deterministic output files. |
 | [Expo prebuild](https://docs.expo.dev/workflow/prebuild/) and [Continuous Native Generation](https://docs.expo.dev/workflow/continuous-native-generation/) | Native dependencies and config plugins must be treated as native project changes with build reproducibility and release validation. |
@@ -144,7 +144,7 @@ LiveKit-specific constraints:
 ## Privacy And Safety Notes
 
 - Metadata-only trims are not privacy removal. If the original video remains uploaded and public playback uses the original file, trimmed-out moments still exist in storage and may still be playable through any surface that ignores trim metadata.
-- MP4 edit-list style trimming should be treated carefully because non-destructive edit metadata may leave original samples in the file. If the purpose is privacy, safety, or rights removal, Chi'llwood should physically render a new file and avoid publishing the untrimmed source.
+- MP4 edit-list style trimming should be treated carefully because non-destructive edit metadata may leave original samples in the file. If the purpose is privacy, safety, or rights removal, Chi'llywood should physically render a new file and avoid publishing the untrimmed source.
 - Draft/private source videos must remain owner-only while edit metadata is private.
 - Exported clips should use new storage object keys under the owner/video/export prefix, never expose raw local file paths, and never publish automatically after export success.
 - Failed exports must clean temporary local files and abandoned storage objects.
@@ -176,7 +176,7 @@ Phase 3: native Android Media3 Transformer only if still useful
 - Prototype in an isolated branch.
 - Measure APK/AAB size delta.
 - Prove release build on physical Android.
-- Prove codec behavior on source formats Chi'llwood accepts.
+- Prove codec behavior on source formats Chi'llywood accepts.
 - Prove backgrounding/cancel/temp cleanup.
 - Decide how to handle iOS parity before productizing.
 
@@ -201,7 +201,7 @@ Any future trim/export lane should state these boundaries explicitly:
 - Should public Player ever respect trim metadata without a physically exported file, or should public playback always require a rendered output?
 - Should server export produce a new `videos` row, a new `video_renditions` row, or a separate export table with explicit review/publish state?
 - What output durations and source sizes are acceptable for first export support?
-- Is Android-first native export acceptable, or should Chi'llwood avoid platform-specific export until server export exists?
+- Is Android-first native export acceptable, or should Chi'llywood avoid platform-specific export until server export exists?
 
 ## Closeout Notes
 

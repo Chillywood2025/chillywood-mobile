@@ -540,7 +540,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View testID="home-branded-hero" style={styles.homeHeroContent}>
-              <Text style={styles.homeHeroKicker}>CHI'LLWOOD</Text>
+              <Text style={styles.homeHeroKicker}>CHI'LLYWOOD</Text>
               <Text style={styles.homeHeroTitle} numberOfLines={2}>Stream the city</Text>
               <Text style={styles.homeHeroMeta} numberOfLines={2}>
                 Official updates, Originals, and live moments appear here when they are ready.
@@ -743,7 +743,7 @@ export default function HomeScreen() {
       <AppSection
         statusLabel={homeDiscoveryLoading ? "Loading" : rachiOfficialPosts.length ? "Official" : "Empty"}
         statusTone={rachiOfficialPosts.length ? "premium" : "muted"}
-        subtitle="Rachi shares official Chi'llwood tips, announcements, and Originals notes."
+        subtitle="Rachi shares official Chi'llywood tips, announcements, and Originals notes."
         title="Rachi Official Updates"
       >
 
@@ -772,7 +772,7 @@ export default function HomeScreen() {
                     <View style={styles.rachiNameRow}>
                       <Text style={styles.rachiName}>Rachi</Text>
                       <View style={styles.rachiOfficialBadge}>
-                        <Text style={styles.rachiOfficialBadgeText}>Official Chi'llwood</Text>
+                        <Text style={styles.rachiOfficialBadgeText}>Official Chi'llywood</Text>
                       </View>
                     </View>
                     <Text style={styles.rachiUpdateMeta}>{formatAddedDate(post.createdAt).replace("Added", "Posted")}</Text>
@@ -865,11 +865,11 @@ export default function HomeScreen() {
           {renderRachiOfficialUpdates()}
 
           {renderCreatorVideoRail({
-            title: "Chi'llwood Originals",
+            title: "Chi'llywood Originals",
             subtitle: "Published Originals from Rachi's official Platform.",
             videos: rachiOriginals,
             loading: homeDiscoveryLoading,
-            emptyTitle: "No Chi'llwood Originals yet",
+            emptyTitle: "No Chi'llywood Originals yet",
             emptyText: "Rachi Originals appear here after official content is published.",
             keyPrefix: "rachi-original",
           })}

@@ -2,12 +2,12 @@
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
-These terms describe the expected rules for creators who configure monetized content or experiences on Chi'llwood after production approval. They are not active until Chi'llwood enables production money in a separate approved lane.
+These terms describe the expected rules for creators who configure monetized content or experiences on Chi'llywood after production approval. They are not active until Chi'llywood enables production money in a separate approved lane.
 
 
-## Chi'llwood Money Boundary
+## Chi'llywood Money Boundary
 
-Chi'llwood's production-money posture is fail-closed. The sandbox monetization stack is proved, but production live money is not active. The app-level live money switch remains off, the app-level payouts switch remains off, and the cash-out switch remains off. Sandbox and setup rows are not payable, do not represent creator earnings, and must not be described to users as available balance. Android digital goods stay on Google Play Billing through RevenueCat. Stripe is reserved for physical merch checkout and Stripe Connect payout readiness. Stripe must not be used for Android Premium, paid content, tips, tickets, access passes, seat passes, or event passes. Physical merch must not unlock Premium, paid content, event passes, tickets, seats, LiveKit permissions, host or speaker power, moderator or admin authority, or payout access.
+Chi'llywood's production-money posture is fail-closed. The sandbox monetization stack is proved, but production live money is not active. The app-level live money switch remains off, the app-level payouts switch remains off, and the cash-out switch remains off. Sandbox and setup rows are not payable, do not represent creator earnings, and must not be described to users as available balance. Android digital goods stay on Google Play Billing through RevenueCat. Stripe is reserved for physical merch checkout and Stripe Connect payout readiness. Stripe must not be used for Android Premium, paid content, tips, tickets, access passes, seat passes, or event passes. Physical merch must not unlock Premium, paid content, event passes, tickets, seats, LiveKit permissions, host or speaker power, moderator or admin authority, or payout access.
 
 This boundary applies to every team function: product, engineering, support, risk, legal, tax, operations, and Owner/Admin review. No person or system should treat readiness documentation as authorization to activate real money. Activation requires a separate production lane, explicit Owner approval, provider live approval, policy signoff, support readiness, fraud readiness, tax readiness, privacy and Data Safety review, and a rollback plan. Until that lane is complete, user-facing copy must stay honest: sandbox only, not payable, production money off, payouts off, no cash-out, no withdrawal, and no transfer.
 
@@ -15,13 +15,13 @@ Owner/Admin surfaces may show readiness states, proof counts, policy status, and
 
 ## Approval Standard
 
-Before this material is used as public policy or production operating procedure, Chi'llwood should review it with qualified legal, tax, payments, fraud, privacy, and support advisors. That review requirement protects the company from promising rights, refunds, tax treatment, payout timing, or operational guarantees that are not yet provider-approved or legally verified. The review should confirm jurisdiction, consumer-protection obligations, creator eligibility, minor safety, tax reporting, sales tax, privacy notices, support response obligations, chargeback handling, records retention, and dispute procedures.
+Before this material is used as public policy or production operating procedure, Chi'llywood should review it with qualified legal, tax, payments, fraud, privacy, and support advisors. That review requirement protects the company from promising rights, refunds, tax treatment, payout timing, or operational guarantees that are not yet provider-approved or legally verified. The review should confirm jurisdiction, consumer-protection obligations, creator eligibility, minor safety, tax reporting, sales tax, privacy notices, support response obligations, chargeback handling, records retention, and dispute procedures.
 
 The approval standard is evidence-based. A reviewer should be able to inspect the current repo docs, Owner/Admin readiness screens, provider dashboards, Data Safety answers, support playbooks, tax plan, legal terms, fraud rules, and kill-switch state before approving production. If any dependency is missing, the correct state is blocked or review needed, not ready. A production activation checklist item is complete only when a named owner, date, evidence link, and rollback decision are recorded.
 
 ## Creator Eligibility
 
-A creator should be eligible for monetization only if the account is in good standing, satisfies age and identity requirements, accepts the applicable terms, and complies with Chi'llwood creator, community, copyright, and safety rules. Eligibility should be revocable when the creator violates policy, appears to manipulate purchases, sells prohibited content, fails verification, triggers fraud review, or creates unacceptable support risk. Eligibility does not guarantee earnings, audience, availability, placement, or payout approval.
+A creator should be eligible for monetization only if the account is in good standing, satisfies age and identity requirements, accepts the applicable terms, and complies with Chi'llywood creator, community, copyright, and safety rules. Eligibility should be revocable when the creator violates policy, appears to manipulate purchases, sells prohibited content, fails verification, triggers fraud review, or creates unacceptable support risk. Eligibility does not guarantee earnings, audience, availability, placement, or payout approval.
 
 ## Creator Responsibilities
 
@@ -29,7 +29,7 @@ Creators are responsible for the content, events, rooms, merch descriptions, tit
 
 ## Platform Rights
 
-Chi'llwood may remove or restrict monetized content, cancel or block monetized rooms or events, revoke access grants, disable monetization, hold or block payout eligibility, or escalate an account for review when safety, copyright, fraud, provider, support, or legal concerns arise. If content becomes private, draft, deleted, admin removed, malware detected, blocked, canceled, ended, stale, removed, or disabled, access may be denied even if a user previously purchased access. Purchase does not override safety or availability rules.
+Chi'llywood may remove or restrict monetized content, cancel or block monetized rooms or events, revoke access grants, disable monetization, hold or block payout eligibility, or escalate an account for review when safety, copyright, fraud, provider, support, or legal concerns arise. If content becomes private, draft, deleted, admin removed, malware detected, blocked, canceled, ended, stale, removed, or disabled, access may be denied even if a user previously purchased access. Purchase does not override safety or availability rules.
 
 ## Refunds And Violations
 

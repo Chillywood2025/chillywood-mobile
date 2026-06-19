@@ -40,7 +40,7 @@ Result:
 - Raw results bucket path: `gs://test-lab-nt3ctukisd678-ykr9mdfzvpc9x/chillywood-smoke-20260530-185453/`
 - Downloaded results: `/tmp/chillywood-firebase-test-lab-proof-20260530/results/MediumPhone.arm-35-en-portrait/`
 - Downloaded artifacts include `actions.json`, screenshots, `logcat`, `video.mp4`, `robo_results.pb`, `baseline_profile.txt`, and `sitemap.png`.
-- Logcat fatal scan: no Chi'llwood app fatal exception or ANR was found. `AndroidRuntime` lines in the scan are system command wrappers and teardown.
+- Logcat fatal scan: no Chi'llywood app fatal exception or ANR was found. `AndroidRuntime` lines in the scan are system command wrappers and teardown.
 
 Scope proved:
 
@@ -125,7 +125,7 @@ Result:
 - Raw results bucket path: `gs://test-lab-nt3ctukisd678-ykr9mdfzvpc9x/chillywood-iam-smoke-20260605-113243/`.
 - Downloaded results: `/tmp/chillywood-firebase-test-lab-iam-smoke-proof-20260605/results/MediumPhone.arm-35-en-portrait/`.
 - Downloaded artifacts include `actions.json`, screenshots, `logcat`, `video.mp4`, `robo_results.pb`, `baseline_profile.txt`, and `sitemap.png`.
-- Logcat fatal scan found no Chi'llwood app fatal exception or ANR. `AndroidRuntime` lines in the scan were Android command-wrapper process starts/exits.
+- Logcat fatal scan found no Chi'llywood app fatal exception or ANR. `AndroidRuntime` lines in the scan were Android command-wrapper process starts/exits.
 
 Scope proved:
 
@@ -165,7 +165,7 @@ Reviewed matrix:
 
 Artifact review result:
 
-- No Chi'llwood fatal exception, ANR, blank screen, broken route, unsafe money copy, production purchase button, payout/cash-out button, Stripe Android digital checkout, LiveKit issue, or route-ownership issue was found.
+- No Chi'llywood fatal exception, ANR, blank screen, broken route, unsafe money copy, production purchase button, payout/cash-out button, Stripe Android digital checkout, LiveKit issue, or route-ownership issue was found.
 - `AndroidRuntime` matches were Android command-wrapper process starts/exits, not app crashes.
 - Robo covered signed-out auth and legal pages only; that is expected for a bounded generic Robo smoke.
 - Two low-severity real UI/accessibility issues were confirmed and fixed: dark signup placeholders and low-contrast light-theme legal TOC chip text.
@@ -183,7 +183,7 @@ Rerun result:
 - Firebase Console: `https://console.firebase.google.com/project/chillywood-app/testlab/histories/bh.e9371a121da8f5fe/matrices/7065165681326020512`.
 - Raw results bucket: `gs://test-lab-nt3ctukisd678-ykr9mdfzvpc9x/chillywood-artifact-review-fix-20260605-115352/`.
 - Downloaded results: `/tmp/chillywood-firebase-test-lab-artifact-review-fix-proof-20260605/results/MediumPhone.arm-35-en-portrait/`.
-- Crash scan: no Chi'llwood fatal exception, ANR, TypeError, ReferenceError, or invariant violation.
+- Crash scan: no Chi'llywood fatal exception, ANR, TypeError, ReferenceError, or invariant violation.
 
 Scope remains bounded. This rerun proves cloud APK build/upload/install/launch smoke after the confirmed UI fixes. It does not prove signed-in routes, LiveKit two-session behavior, Google Play purchases, RevenueCat restore, Stripe Checkout, Stripe Connect, Owner/Admin, or Money Center.
 
@@ -233,7 +233,7 @@ Bounded signed-in smoke:
 - Raw results bucket: `gs://test-lab-nt3ctukisd678-ykr9mdfzvpc9x/chillywood-signed-in-20260605-122952/`.
 - Downloaded results: `/tmp/chillywood-firebase-test-lab-signed-in-proof-20260605/results/MediumPhone.arm-35-en-portrait/`.
 - Downloaded artifacts include screenshots `0.png` through `37.png`, `actions.json`, `logcat`, `video.mp4`, `robo_results.pb`, `baseline_profile.txt`, and `crawlscript.json`.
-- Crash scan: no Chi'llwood fatal exception, ANR, TypeError, ReferenceError, invariant violation, or unhandled fatal pattern found.
+- Crash scan: no Chi'llywood fatal exception, ANR, TypeError, ReferenceError, invariant violation, or unhandled fatal pattern found.
 
 Signed-in coverage observed:
 
@@ -263,7 +263,7 @@ Reviewed matrix:
 
 Artifact review result:
 
-- No Chi'llwood fatal exception, ANR, React Native fatal error, broken route, blank screen, stuck loading state, unsafe money/payout copy, production buy button, Stripe Android digital checkout, visible committed credential, LiveKit issue, or route-ownership issue was found.
+- No Chi'llywood fatal exception, ANR, React Native fatal error, broken route, blank screen, stuck loading state, unsafe money/payout copy, production buy button, Stripe Android digital checkout, visible committed credential, LiveKit issue, or route-ownership issue was found.
 - The action trace contained 71 successful Robo events and confirmed signed-in route smoke through Settings / Account, Profile / Platform actions, Platform Studio, Player/fullscreen, and comments.
 - The signed-in account identifier appears in Settings as expected account UI. Screenshots/logs remain in `/tmp` and are not committed.
 - No code fix was made, so no signed-in Test Lab rerun was needed for this artifact-review lane.

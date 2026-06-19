@@ -8,7 +8,7 @@ Status: complete.
 
 ## Scope
 
-This sweep tests Chi'llwood from a Play/internal tester point of view and records only proven issues. It does not activate production money, payouts, cash-out, withdrawal, transfer, payable balances, public production purchases, Stripe Android digital checkout, LiveKit authority, route ownership changes, Premium bypass, content-safety bypass, or Owner/Admin protection changes.
+This sweep tests Chi'llywood from a Play/internal tester point of view and records only proven issues. It does not activate production money, payouts, cash-out, withdrawal, transfer, payable balances, public production purchases, Stripe Android digital checkout, LiveKit authority, route ownership changes, Premium bypass, content-safety bypass, or Owner/Admin protection changes.
 
 Proof path:
 

@@ -11,7 +11,7 @@ Spectator is not participant entry into the original room. A spectator never rec
 - Spectator watches a public-safe controlled playback endpoint and can share/report/view the source Platform.
 - Participant joins a room through the room route and its existing membership, Premium, request-seat, request-speaker, and host-approval flows.
 - Starting a child room from Spectator does not upgrade the viewer in the original room. Joining or speaking in the original room still uses the existing request/approve path before any upgraded token is issued.
-- Spectator child-room start from an eligible Chi'llwood source does not force a new rights form. Source eligibility remains the gate. Spectator pages do not show Rights Disclosure unless separately approved later. Visible Rights Disclosure UI is disabled for now across Spectator, Watch-Party Live, and Live Watch-Party surfaces; dormant backend disclosure helpers/tables, if kept, do not bypass source eligibility, DMCA, Premium, or LiveKit boundaries.
+- Spectator child-room start from an eligible Chi'llywood source does not force a new rights form. Source eligibility remains the gate. Spectator pages do not show Rights Disclosure unless separately approved later. Visible Rights Disclosure UI is disabled for now across Spectator, Watch-Party Live, and Live Watch-Party surfaces; dormant backend disclosure helpers/tables, if kept, do not bypass source eligibility, DMCA, Premium, or LiveKit boundaries.
 
 ## Child Room Linking
 `spectator-start-room` creates a new `watch_party_rooms` row with `source_type = 'spectator_playback'` and the discovery item id as `source_id`. The safe linkage is stored in `spectator_child_room_sources`:
@@ -102,7 +102,7 @@ Closeout screenshots are outside the repo at `/tmp/chillywood-spectator-child-ro
 - `05-eligible-spectator-playback-fixture.png`: eligible public-safe Spectator fixture rendered playback metadata and a real playback frame.
 - `06-eligible-spectator-start-cta.png`: eligible fixture showed `Start Watch-Party Live`, `Watch with your Chi'lly Circle`, Share, View Platform, and Report.
 - `07-created-watch-party-live-child-room.png`: `Start Watch-Party Live` created child room `5SR4TQ` and routed to `/watch-party/[partyId]`.
-- `08-watch-party-child-room-source-attribution-after-load.png`: child room showed `Watching Chi'llwood Safe Playback Fixture from Chi'llwood Safe Fixtures` with no original host controls or original member list.
+- `08-watch-party-child-room-source-attribution-after-load.png`: child room showed `Watching Chi'llywood Safe Playback Fixture from Chi'llywood Safe Fixtures` with no original host controls or original member list.
 - `09-watch-party-child-shared-player-safe-source.png` and `10-watch-party-child-shared-player-playing.png`: the shared Player opened the spectator source through the controlled resolver and loaded the source duration. The Android shared-player screenshot did not capture visible video frames, so only the source load/duration and Spectator-page playback frame are claimed.
 - `12-signed-out-start-cta-visible.png` and `13-signed-out-start-login-handoff.png`: signed-out eligible Spectator showed the CTA and handed off to login without room creation.
 - `15-source-ended-disabled-cta.png`: ended live-stage fixture showed `Source live has ended`, disabled `Start Live Watch-Party`, disabled `Start Reaction Room`, and did not create a room.
@@ -131,7 +131,7 @@ Backend/runtime hardening in this closeout:
 - Public-safe live-reaction fixture discovery returned zero true live-compatible candidate rows, so successful Live Watch-Party / Reaction Room proof remains unclaimed. A VOD or replay source was not relabeled as live.
 - Replay resolver proof returned `state = available`, `canRenderPlayback = true`, the controlled HTTPS `spectator-playback` path, and no raw Mux/HLS path. The only token-shaped field in the public resolver response was the negative safety flag `fullRoomTokenForSpectators:false`.
 - Eligible Watch-Party Live child-room proof created one child link in `spectator_child_room_sources`: `child_room_id = 5SR4TQ`, source item `fc63e1ba-d744-4350-9a96-a6ef5f35491e`, root source `spectator_fixture_content_20260526`, safe public playback id `abba8e59-3cd2-4306-93e4-6ac7f93a76f3`, and no parent original-room credential.
-- Replay child-room proof created child room `NSHU7J` from source item `9c5f5655-1fbb-4ac8-9473-a5a8d73f3a19`. The route showed `Watching Chi'llwood Replay Archive Fixture from Chi'llwood Safe Fixtures`, the shared Player used `source=spectator-playback`, and original host controls/member lists were not visible.
+- Replay child-room proof created child room `NSHU7J` from source item `9c5f5655-1fbb-4ac8-9473-a5a8d73f3a19`. The route showed `Watching Chi'llywood Replay Archive Fixture from Chi'llywood Safe Fixtures`, the shared Player used `source=spectator-playback`, and original host controls/member lists were not visible.
 - Backend denial proof returned `source_not_public` for the private fixture, `blocked` for the blocked fixture, `source_ended` for the ended fixture, and `source_reuse_disabled` for the reuse-disabled fixture, with no child room id or token fields.
 - Controlled resolver proof fetched the public-safe playlist and a controlled segment through `spectator-playback`; the client-facing response kept the raw playback path private.
 

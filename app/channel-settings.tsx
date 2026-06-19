@@ -902,7 +902,7 @@ const BRAND_FIT_OPTIONS: readonly { id: PlatformBrandFitMode; label: string }[] 
 
 const BRAND_THEME_OPTIONS: readonly { id: PlatformBrandThemePreset; label: string; body: string }[] = [
   { id: "city_night", label: "City Night", body: "Dark skyline, soft crimson, readable overlays." },
-  { id: "studio_red", label: "Studio Red", body: "Stronger Chi'llwood accent for launches." },
+  { id: "studio_red", label: "Studio Red", body: "Stronger Chi'llywood accent for launches." },
   { id: "clean_dark", label: "Clean Dark", body: "Quiet, minimal, and content-first." },
   { id: "spotlight", label: "Spotlight", body: "Hero-forward with a stronger stage dim." },
   { id: "classic", label: "Classic", body: "Simple dark platform presentation." },
@@ -1802,7 +1802,7 @@ export function ChannelStudioScreen() {
     try {
       await saveChannelSubscriptionOffer({
         description:
-          "Subscribe to this creator's channel. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.",
+          "Subscribe to this creator's channel. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.",
         status: enabled ? "sandbox" : "paused",
         title: "Channel subscription",
       });
@@ -1834,7 +1834,7 @@ export function ChannelStudioScreen() {
     try {
       await saveCreatorVipPassOffer({
         description:
-          "VIP is a creator-specific status for this channel only. It does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, or other creators' channels.",
+          "VIP is a creator-specific status for this channel only. It does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, or other creators' channels.",
         status: enabled ? "sandbox" : "paused",
         title: "VIP Pass",
       });
@@ -7492,8 +7492,8 @@ export function ChannelStudioScreen() {
     const offerRows: readonly SummaryMetricCard[] = [
       { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
       { label: "Paid Watch-Party tickets", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox ticket${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
-      { label: "Channel subscriptions", value: creatorChannelSubscriptionOffers.length ? `${creatorChannelSubscriptionOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: channelSubscriptionPaidTransactions.length ? `${channelSubscriptionPaidTransactions.length} verified sandbox subscription transaction${channelSubscriptionPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(channelSubscriptionGrossCents, "usd")}. Channel subscriptions unlock only this creator's subscriber area.` : "Offer type: channel_subscription. Separate from Chi'llwood Premium, VIP, paid videos, Watch-Party tickets, and paid events.", tone: creatorChannelSubscriptionOffers.length ? "default" : "unavailable" },
-      { label: "VIP passes", value: creatorVipPassOffers.length ? `${creatorVipPassOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: vipPaidTransactions.length ? `${vipPaidTransactions.length} verified sandbox VIP purchase${vipPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(vipGrossCents, "usd")}. VIP unlocks only this creator channel VIP area.` : "Offer type: vip_pass. VIP stays separate from Chi'llwood Premium, paid videos, Watch-Party tickets, paid events, channel subscriptions, and Tips.", tone: creatorVipPassOffers.length ? "default" : "unavailable" },
+      { label: "Channel subscriptions", value: creatorChannelSubscriptionOffers.length ? `${creatorChannelSubscriptionOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: channelSubscriptionPaidTransactions.length ? `${channelSubscriptionPaidTransactions.length} verified sandbox subscription transaction${channelSubscriptionPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(channelSubscriptionGrossCents, "usd")}. Channel subscriptions unlock only this creator's subscriber area.` : "Offer type: channel_subscription. Separate from Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, and paid events.", tone: creatorChannelSubscriptionOffers.length ? "default" : "unavailable" },
+      { label: "VIP passes", value: creatorVipPassOffers.length ? `${creatorVipPassOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: vipPaidTransactions.length ? `${vipPaidTransactions.length} verified sandbox VIP purchase${vipPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(vipGrossCents, "usd")}. VIP unlocks only this creator channel VIP area.` : "Offer type: vip_pass. VIP stays separate from Chi'llywood Premium, paid videos, Watch-Party tickets, paid events, channel subscriptions, and Tips.", tone: creatorVipPassOffers.length ? "default" : "unavailable" },
       { label: "Paid event passes", value: creatorPaidEventOffers.length ? `${creatorPaidEventOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: paidEventPaidTransactions.length ? `${paidEventPaidTransactions.length} verified sandbox event pass${paidEventPaidTransactions.length === 1 ? "" : "es"} totaling ${formatMonetizationCurrency(paidEventGrossCents, "usd")}. Event passes unlock only the linked creator event.` : "Offer type: paid_event. Event passes unlock only the linked creator event and stay separate from Premium, VIP, paid videos, and Watch-Party tickets.", tone: creatorPaidEventOffers.length ? "default" : "unavailable" },
       { label: "Physical merch", value: merchStatus, body: "Offer type: merch. Physical goods stay separate from Android digital access.", tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable" },
     ];
@@ -8035,7 +8035,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Channel Subscription setup</Text>
 	                  <Text style={styles.eventEmptyBody}>
-	                    {"Channel Subscriptions are monthly creator memberships in sandbox mode. They do not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels."}
+	                    {"Channel Subscriptions are monthly creator memberships in sandbox mode. They do not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels."}
 	                  </Text>
                   <Text style={styles.eventEmptyBody}>
                     Product: channel_subscription_sandbox_monthly_499 · Price: $4.99/month sandbox/test.
@@ -8071,7 +8071,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>VIP Pass setup</Text>
                   <Text style={styles.eventEmptyBody}>
-                    VIP Passes are sandbox-only until live money is approved. VIP is creator-specific and does not include Chi'llwood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.
+                    VIP Passes are sandbox-only until live money is approved. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.
                   </Text>
                   <Text style={styles.eventEmptyBody}>
                     Product: vip_pass_sandbox_499 · Price: $4.99 sandbox/test.

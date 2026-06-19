@@ -128,7 +128,7 @@ assertIncludes(navDoc, "Explore owns public people discovery", "navigation publi
 assertIncludes(navDoc, "does not support email", "navigation no-email doc");
 assertIncludes(navDoc, "Owner/Admin email lookup", "navigation admin email boundary doc");
 assertIncludes(rachiDoc, "Explore People search", "Rachi people search doc");
-assertIncludes(rachiDoc, "Official Chi'llwood", "Rachi official label doc");
+assertIncludes(rachiDoc, "Official Chi'llywood", "Rachi official label doc");
 
 if (process.exitCode) process.exit(process.exitCode);
 

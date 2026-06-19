@@ -51,7 +51,7 @@ Digital creator purchases use RevenueCat / Google Play sandbox paths, not Stripe
 - Channel Subscriptions unlock only subscriber state/area for that creator channel while effective access is active.
 - VIP Passes unlock only creator-specific VIP status/area for that creator.
 
-Premium remains a Chi'llwood platform subscription. It does not automatically unlock creator paid videos, room tickets, paid events, channel subscriptions, or VIP passes.
+Premium remains a Chi'llywood platform subscription. It does not automatically unlock creator paid videos, room tickets, paid events, channel subscriptions, or VIP passes.
 
 VIP and Channel Subscription status do not unlock each other and do not unlock Paid Videos, Paid Watch-Party tickets, or Paid Events.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Posts a LiveKit server heartbeat to the Chi'llwood registry function.
+# Posts a LiveKit server heartbeat to the Chi'llywood registry function.
 # This script does not collect or invent production metrics. Operators should
 # feed real values from LiveKit/host monitoring env vars or a wrapper.
 

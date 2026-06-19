@@ -2,7 +2,7 @@
 
 Updated: June 13, 2026
 
-This document is the canonical repo truth for Chi'llwood monetization readiness after the completed Google Play / RevenueCat, Stripe merch, and Stripe Connect sandbox proof lanes. It consolidates proof status only. It does not activate production money.
+This document is the canonical repo truth for Chi'llywood monetization readiness after the completed Google Play / RevenueCat, Stripe merch, and Stripe Connect sandbox proof lanes. It consolidates proof status only. It does not activate production money.
 
 June 13 creator-money update: the six Money Center creator monetization flows now have local/manual sandbox proof for their core purchase/access or contribution paths: Tips V1, Paid Videos V1, Paid Watch-Party Seats V1, Paid Events V1, Channel Subscriptions V1, and VIP Passes V1. VIP Passes V1 completed after Google Play one-time product `cw_vip_pass_sandbox_499` was activated and mapped in RevenueCat as a published non-consumable; Play/internal v52 verified provider event `1e81db62-4b17-45b1-8369-004302d41108`, VIP transaction `829f230f-7734-4fad-a88b-bd674c1daa8e`, VIP pass `b19d3a26-1431-4033-bf70-5f3e5311e719`, access grant `3b051689-7879-4e39-9712-efab1d1d783c`, VIP route access, authenticated second non-VIP denial, and Money Center VIP readback as sandbox/not payable. Live money remains off, sandbox rows are not payable, and provider refund/revoke proof remains deferred where safe Google Play order tooling is unavailable.
 
@@ -20,7 +20,7 @@ Internal tester update: `docs/INTERNAL_TESTER_SANDBOX_PURCHASE_MODE.md` opens a 
 
 ## Executive Summary
 
-Chi'llwood has complete sandbox monetization readiness across Android digital goods, physical merch, and creator payout readiness:
+Chi'llywood has complete sandbox monetization readiness across Android digital goods, physical merch, and creator payout readiness:
 
 - Android digital goods use Google Play / RevenueCat.
 - Approved internal testers may use a clearly labeled sandbox-only mode to test Google Play / RevenueCat purchases.
@@ -78,7 +78,7 @@ Provider: Stripe Connect sandbox.
 Status:
 
 - real Stripe test-mode Express connected account reused
-- onboarding link created with approved HTTPS Chi'llwood origin
+- onboarding link created with approved HTTPS Chi'llywood origin
 - account status refreshed from Stripe sandbox
 - account remains `pending_kyc` / `onboarding_in_progress`
 - `charges_enabled=false`

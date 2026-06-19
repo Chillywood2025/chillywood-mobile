@@ -9,7 +9,7 @@ owner explicitly approves it.
 
 BrowserStack purchase proof uses two account layers:
 
-- Chi'llwood app accounts sign in to the app.
+- Chi'llywood app accounts sign in to the app.
 - Google Play tester accounts are real Google accounts on the Android device.
 
 The `@chillywood.test` app-login fixtures are not Google Play accounts. They
@@ -101,9 +101,9 @@ BrowserStack strict sandbox purchase proof requires the device Google account to
 be one of these tester accounts and to be visible or otherwise verified by the
 purchase-sheet safety detector.
 
-## Chi'llwood App User Setup
+## Chi'llywood App User Setup
 
-After the managed Google users exist, create matching Chi'llwood app users with
+After the managed Google users exist, create matching Chi'llywood app users with
 the local Supabase service role from ignored env only:
 
 - Confirm auth email as needed for E2E login.
@@ -138,7 +138,7 @@ The proof folder should include redacted logs confirming:
 - Users created, or bulk-upload CSV prepared.
 - Play tester list updated, or manual CSV prepared.
 - Local BrowserStack monetization env updated only after users exist.
-- Chi'llwood app users created only after managed Google users exist.
+- Chi'llywood app users created only after managed Google users exist.
 - Sandbox tester grants active.
 - Live money off.
 - Payout authority false.

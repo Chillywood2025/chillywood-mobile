@@ -105,14 +105,14 @@ Starting HEAD: `09da3fd`.
 Attempted setup:
 
 - Physical device: `R5CR120QCBF`, model `SM_N986U1`.
-- Available AVDs: `Chillywood_API_34`, `Maestro_Pixel_6_API_33_1`, `Pixel_8`.
+- Available AVDs: `Chi'llywood_API_34`, `Maestro_Pixel_6_API_33_1`, `Pixel_8`.
 - The local `emulator` binary was available at `~/Library/Android/sdk/emulator/emulator`, not on the default shell `PATH`.
 
 Result:
 
-- `Chillywood_API_34` and `Pixel_8` booted together; `Maestro_Pixel_6_API_33_1` did not attach as a usable adb device.
+- `Chi'llywood_API_34` and `Pixel_8` booted together; `Maestro_Pixel_6_API_33_1` did not attach as a usable adb device.
 - Running two emulators was not stable enough for app-room proof: Android system/launcher ANRs blocked app navigation.
-- The single-emulator fallback with `Chillywood_API_34` booted, installed/opened `com.chillywood.mobile`, and captured the Chi'llywood splash, then Android system ANR blocked reaching Home or a LiveKit room.
+- The single-emulator fallback with `Chi'llywood_API_34` booted, installed/opened `com.chillywood.mobile`, and captured the Chi'llywood splash, then Android system ANR blocked reaching Home or a LiveKit room.
 - The release APK installed/opened on `R5CR120QCBF` and `MainActivity` focused, but the physical device was on the Android PIN bouncer, so adb could not continue visual route navigation or joined-room proof.
 - Final adb state returned to `R5CR120QCBF` only; emulators were stopped.
 

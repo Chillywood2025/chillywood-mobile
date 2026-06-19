@@ -14,7 +14,7 @@ VIP V1 unlocks only creator-specific VIP status/area for one creator channel.
 
 VIP V1 does not unlock:
 
-- Chi'llwood Premium
+- Chi'llywood Premium
 - Paid Videos
 - Paid Watch-Party tickets
 - Paid Events
@@ -141,7 +141,7 @@ Passed:
    - product is not attached to Premium entitlement.
 9. Product availability passed on the same v52 Play/internal runtime after app restart:
    - tapping `Get VIP` opened the Google Play test purchase sheet.
-   - sheet showed `Chi'llwood VIP Pass Sandbox`, `$4.99`, and `Test card, always approves`.
+   - sheet showed `Chi'llywood VIP Pass Sandbox`, `$4.99`, and `Test card, always approves`.
 10. Sandbox purchase passed:
    - VIP fan tester: `tips_fan_test` / `c2afa6cc-52f2-4714-b972-89863582d05a`
    - creator: `tips_creator_test` / `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5`

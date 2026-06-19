@@ -418,7 +418,7 @@ const eventFromSourceRow = (
     statusLabel,
     environment: source.environment,
     payable,
-    actorLabel: options.creatorSafe ? "Chi'llwood system" : source.actorUserId ? "Recorded actor" : "System/setup",
+    actorLabel: options.creatorSafe ? "Chi'llywood system" : source.actorUserId ? "Recorded actor" : "System/setup",
     actorUserId: options.creatorSafe ? null : source.actorUserId,
     targetUserId: options.creatorSafe ? null : source.targetUserId,
     creatorId: options.creatorSafe ? null : source.creatorId,

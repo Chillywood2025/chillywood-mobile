@@ -771,7 +771,7 @@ export default function PublicChannelScreen() {
                 {platformHandle}
               </Text>
             ) : null}
-	            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>{"Official Chi'llwood"}</Text> : null}
+	            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>{"Official Chi'llywood"}</Text> : null}
             {showDraftBranding ? <Text style={[styles.rolePill, styles.draftPreviewPill]}>Draft Preview</Text> : null}
             <View
               testID={
@@ -1251,7 +1251,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator membership</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
 	          <Text style={styles.cardBody}>
-	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. No live payout. This does not include Chi'llwood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.`}
+	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. No live payout. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.`}
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}

@@ -92,7 +92,7 @@ API/RLS proof:
 - `write_admin_search_audit` returned denied with masked email-shaped query
 - non-staff account saw zero Admin audit rows
 - public People email-shaped query returned zero rows and no email fields
-- public Rachi result remained `Official Chi'llwood`
+- public Rachi result remained `Official Chi'llywood`
 
 Android normal-user Admin Search denial for the new panel remains unclaimed because the attached device session was owner/admin and there was no safe session-switch/restore path in that lane.
 

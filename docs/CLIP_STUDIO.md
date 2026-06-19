@@ -1,4 +1,4 @@
-# Chi'llwood Clip Studio
+# Chi'llywood Clip Studio
 
 Updated: 2026-05-25
 

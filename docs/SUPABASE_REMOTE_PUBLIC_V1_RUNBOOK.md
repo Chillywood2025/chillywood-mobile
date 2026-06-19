@@ -25,7 +25,7 @@ This runbook records what was actually executed against the remote Supabase proj
 | --- | --- |
 | Supabase CLI version | `2.75.0` |
 | Project ref | `bmkkhihfbmsnnmcqkoly` |
-| Project name from Supabase CLI | `Chillywood2025's Project` |
+| Project name from Supabase CLI | `Chi'llywood2025's Project` |
 | Region from Supabase CLI | West US (Oregon) |
 | Repo linked at start of lane | No, `supabase migration list` reported missing project ref |
 | Link action in this lane | `supabase link --project-ref bmkkhihfbmsnnmcqkoly` completed without prompting for a password |

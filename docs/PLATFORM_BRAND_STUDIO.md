@@ -109,7 +109,7 @@ Brand Studio is the creator-facing Stage Design area inside Platform Studio. It 
 - Hero overlay and background blur/dim metadata.
 - Safe-area previews for phone rendering.
 - Theme presets: City Night, Studio Red, Clean Dark, Spotlight, and Classic.
-- Public Platform fallback to the Chi'llwood city look when no published brand media exists.
+- Public Platform fallback to the Chi'llywood city look when no published brand media exists.
 - Public Platform rendering through `readPublicPlatformBranding`, which only resolves published moderation-safe assets.
 - Owner/operator/moderation review RPC for approve, reject, and archive actions.
 - Creator-owned Brand Studio publish repair: `Publish Changes` now approves the creator's owned safe waiting Brand Studio assets before publishing selected profile assets, so creator uploads no longer stay stuck before public publish after the creator publishes. A creator can review only assets they own through the publish repair path; non-owners still receive `brand_review_forbidden`.
@@ -190,7 +190,7 @@ Backed/source-checked friendly states:
 - Upload failure/no network/storage failure: UI shows "Unable to choose or save that Platform media right now."
 - Pending safe draft: asset cards say the asset is ready for the creator to publish through `Publish Changes`.
 - Rejected/hidden/removed: asset cards say changes are needed before public display.
-- Public fallback: public Platform uses the Chi'llwood city fallback when no approved published hero/background/avatar/logo exists.
+- Public fallback: public Platform uses the Chi'llywood city fallback when no approved published hero/background/avatar/logo exists.
 
 ## Deferred
 

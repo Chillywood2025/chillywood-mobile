@@ -85,7 +85,7 @@ If DNS is managed for the `chillywoodstream.com` zone and the provider auto-appe
 ## Supabase Dashboard Steps
 
 1. Open Supabase Dashboard.
-2. Select the Chi’llwood project.
+2. Select the Chi'llywood project.
 3. Go to Authentication.
 4. Open SMTP settings.
 5. Enable custom SMTP.

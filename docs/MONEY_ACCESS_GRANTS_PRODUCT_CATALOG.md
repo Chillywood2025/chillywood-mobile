@@ -2,7 +2,7 @@
 
 Updated June 4, 2026.
 
-Chi'llwood now has an additive money-access readiness architecture:
+Chi'llywood now has an additive money-access readiness architecture:
 
 RevenueCat / Google Play event -> `provider_events` -> `monetization_products` -> `access_grants` -> content/room resolver RPCs -> `money_access_ledger_events` -> Money Center readout.
 

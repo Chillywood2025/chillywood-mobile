@@ -1,6 +1,6 @@
 # Codex BrowserStack Repair Loop Policy
 
-This policy lets Codex repair safe BrowserStack QA blockers without weakening Chi'llwood product, money, security, LiveKit, Watch-Party, or chat behavior.
+This policy lets Codex repair safe BrowserStack QA blockers without weakening Chi'llywood product, money, security, LiveKit, Watch-Party, or chat behavior.
 
 The repair loop is evidence-first:
 

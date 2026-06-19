@@ -2,7 +2,7 @@
 
 Updated: June 5, 2026
 
-This lane applies the modern Owner/Admin interaction direction to public and creator-facing Chi'llwood screens without changing backend behavior, monetization truth, LiveKit behavior, route ownership, Premium gates, content safety, or Admin authority.
+This lane applies the modern Owner/Admin interaction direction to public and creator-facing Chi'llywood screens without changing backend behavior, monetization truth, LiveKit behavior, route ownership, Premium gates, content safety, or Admin authority.
 
 Stabilization follow-up: the June 5, 2026 internal testing sweep (`docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md`) rechecked Home, Profile, Explore, Library, Live, Platform Studio, Player, and sandbox routes on Play-installed `R5CR120QCBF`. The only public/creator gate copy fix was signed-in Platform Studio: Premium-gated signed-in users now see `Manage Premium` instead of `Sign In to Continue`. No auth, Premium entitlement, upload, playback, money, or route behavior changed.
 

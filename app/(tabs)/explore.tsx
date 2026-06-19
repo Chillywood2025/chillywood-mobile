@@ -106,7 +106,7 @@ const EXPLORE_TYPEAHEAD_GROUP_LABELS: Record<ExploreTypeaheadGroupKey, string> =
   content: "Content",
   people: "People",
   platforms: "Platforms",
-  originals: "Chi'llwood Originals",
+  originals: "Chi'llywood Originals",
   live: "Live",
   events: "Events",
 };
@@ -381,7 +381,7 @@ export default function ExploreScreen() {
         group: "content",
         label: "Title",
         title: item.title || "Untitled",
-        subtitle: buildExploreInfoLine(item) || "Chi'llwood title",
+        subtitle: buildExploreInfoLine(item) || "Chi'llywood title",
         badge: "Content",
         onPress: () => {
           const safeId = String(item.id || item.slug || item.title);
@@ -454,7 +454,7 @@ export default function ExploreScreen() {
         id: `original-${video.id}`,
         group: "originals",
         label: "Official",
-        title: video.title || "Chi'llwood Original",
+        title: video.title || "Chi'llywood Original",
         subtitle: video.publicClipMetadata?.subtitleText || video.description || "Rachi Original",
         badge: "Originals",
         onPress: () => openCreatorVideo(video),
@@ -1130,12 +1130,12 @@ export default function ExploreScreen() {
                 </View>
 
                 <View style={styles.searchShell}>
-                  <Text style={styles.searchLabel}>Search Chi'llwood</Text>
+                  <Text style={styles.searchLabel}>Search Chi'llywood</Text>
                   <View style={styles.searchInputRow}>
                     <MaterialIcons name="search" size={20} color="#AAB4C7" />
                     <TextInput
                       testID="home-explore-search-input"
-                      accessibilityLabel="Search Chi'llwood Explore"
+                      accessibilityLabel="Search Chi'llywood Explore"
                       value={searchQuery}
                       onChangeText={setSearchQuery}
                       placeholder="Search content, people, and Platforms"
@@ -1210,7 +1210,7 @@ export default function ExploreScreen() {
                 ) : null}
 
                 {showOriginalsScope ? renderBackedSection(
-                  "Chi'llwood Originals",
+                  "Chi'llywood Originals",
                   `${rachiOriginals.length} ready`,
                   rachiOriginals.length > 0,
                   "No public Originals yet",
@@ -1251,7 +1251,7 @@ export default function ExploreScreen() {
                 <Text style={styles.mutedSmall}>
                   {hasSearchQuery
                     ? "Try another title, category, year, runtime, or description."
-                    : "Chi'llwood titles will appear here once public programming is available."}
+                    : "Chi'llywood titles will appear here once public programming is available."}
                 </Text>
               </View>
             ) : null}

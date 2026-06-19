@@ -119,7 +119,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     priceLabel: "$4.99/month sandbox/test",
     providerRail: "revenuecat_google_play",
     unlocks: "Creates subscriber status for this creator channel only.",
-    safety: "Does not unlock Chi'llwood Premium, VIP, paid videos, Watch-Party tickets, paid events, LiveKit authority, or other creators.",
+    safety: "Does not unlock Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, LiveKit authority, or other creators.",
   },
   {
     key: "vip_pass_sandbox_499",

@@ -2,7 +2,7 @@
 
 BrowserStack purchase proof has two separate account layers:
 
-- Chi'llwood E2E app accounts log into the Chi'llwood app.
+- Chi'llywood E2E app accounts log into the Chi'llywood app.
 - Google Play tester accounts are real Google accounts on the Android device.
 
 The `@chillywood.test` E2E accounts are app-login fixtures only. They are not Google Play tester accounts unless separately created as real Google accounts, which should not be assumed.
@@ -41,7 +41,7 @@ Codex does not update Play Console unless explicit Google Play Console automatio
 
 If Cloud Identity Free is not active yet, complete
 `qa/browserstack/cloud-identity-e2e-tester-setup.md` first so the tester
-emails are real Google-managed accounts for the Chi'llwood domain.
+emails are real Google-managed accounts for the Chi'llywood domain.
 
 ## BrowserStack Purchase Proof Requirement
 

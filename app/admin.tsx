@@ -3398,7 +3398,7 @@ export default function AdminStudioScreen() {
     useState<PendingReportTargetModerationAction | null>(null);
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
   const [rachiPostBody, setRachiPostBody] = useState("");
-  const [rachiPostReason, setRachiPostReason] = useState("Official Chi'llwood update");
+  const [rachiPostReason, setRachiPostReason] = useState("Official Chi'llywood update");
   const [rachiPostVisibility, setRachiPostVisibility] = useState<"public" | "draft">("public");
   const [rachiPostBusy, setRachiPostBusy] = useState(false);
   const [rachiNotice, setRachiNotice] = useState<string | null>(null);
@@ -8133,7 +8133,7 @@ export default function AdminStudioScreen() {
           id: `rachi-post-${post.id}`,
           scope: "rachi",
           title: "Rachi Official Update",
-          subtitle: formatAuditDisplayText(post.body) || "Official Chi'llwood post",
+          subtitle: formatAuditDisplayText(post.body) || "Official Chi'llywood post",
           meta: `${formatModerationToken(post.visibility)} · ${formatModerationTimestamp(post.createdAt)}`,
           badge: "Official",
           tone: post.visibility === "public" ? "success" : "manual",
@@ -8155,7 +8155,7 @@ export default function AdminStudioScreen() {
           id: `rachi-original-${video.id}`,
           scope: "rachi",
           title: video.title || "Rachi Original",
-          subtitle: video.description || "Official Chi'llwood Original",
+          subtitle: video.description || "Official Chi'llywood Original",
           meta: `${formatModerationToken(video.visibility)} · ${formatModerationToken(video.moderationStatus)}`,
           badge: "Original",
           tone: video.visibility === "public" ? "success" : "manual",
@@ -12977,9 +12977,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>RACHI / OFFICIAL ACCOUNT</Text>
-              <Text style={styles.configTitle}>Official Chi'llwood presence</Text>
+              <Text style={styles.configTitle}>Official Chi'llywood presence</Text>
               <Text style={styles.configBody}>
-                Manage Rachi as an official Platform voice for updates, tips, and Chi'llwood Originals. Rachi does not read private chats.
+                Manage Rachi as an official Platform voice for updates, tips, and Chi'llywood Originals. Rachi does not read private chats.
               </Text>
             </View>
           </View>
@@ -13017,7 +13017,7 @@ export default function AdminStudioScreen() {
               </View>
               <OwnerDetailGrid
                 rows={[
-                  { label: "Identity", value: "Rachi · Official Chi'llwood" },
+                  { label: "Identity", value: "Rachi · Official Chi'llywood" },
                   { label: "Circle", value: "Pinned first official Chi'lly Circle connection" },
                   { label: "Privacy", value: "Does not read private Chi'lly Chat messages" },
                   { label: "Audit Owner", value: RACHI_OFFICIAL_ACCOUNT.auditOwnerKey },
@@ -13154,11 +13154,11 @@ export default function AdminStudioScreen() {
 
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
-                <Text style={styles.ownerSectionTitle}>Chi'llwood Originals</Text>
+                <Text style={styles.ownerSectionTitle}>Chi'llywood Originals</Text>
                 <OwnerStatusPill label={rachiOriginalsLoading ? "Loading" : `${rachiOriginals.length} public`} tone={rachiOriginals.length ? "info" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Home reads public-safe videos owned by Rachi for the Chi'llwood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
+                Home reads public-safe videos owned by Rachi for the Chi'llywood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
               </Text>
               {rachiOriginals.length ? (
                 <View style={styles.ownerControlList}>
@@ -13176,7 +13176,7 @@ export default function AdminStudioScreen() {
               ) : (
                 <OwnerEmptyState
                   title="No Public Originals"
-                  body="Official video upload as Rachi is not faked here. When a public-safe Rachi-owned video exists, Home can show it under Chi'llwood Originals."
+                  body="Official video upload as Rachi is not faked here. When a public-safe Rachi-owned video exists, Home can show it under Chi'llywood Originals."
                 />
               )}
             </View>

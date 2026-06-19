@@ -20,7 +20,7 @@ export const RACHI_OFFICIAL_ACCOUNT: OfficialPlatformAccount = {
   userId: RACHI_OFFICIAL_USER_ID,
   displayName: "Rachi",
   handle: "@chillywood.rachi",
-  tagline: "Official Chi'llywood guide for updates, tips, and Chi'llwood Originals.",
+  tagline: "Official Chi'llywood guide for updates, tips, and Chi'llywood Originals.",
   channelRole: "creator",
   officialBadgeLabel: "OFFICIAL",
   platformOwnershipLabel: "PLATFORM OWNED",
@@ -28,7 +28,7 @@ export const RACHI_OFFICIAL_ACCOUNT: OfficialPlatformAccount = {
   auditOwnerKey: "platform:rachi",
   conciergeHeadline: "Official Chi'llywood guide and Originals publisher.",
   trustSummary:
-    "Rachi shares Chi'llywood updates, tips, and Chi'llwood Originals. Rachi does not read your private chats.",
+    "Rachi shares Chi'llywood updates, tips, and Chi'llywood Originals. Rachi does not read your private chats.",
   guidanceTopics: [
     "Getting started",
     "Account help",

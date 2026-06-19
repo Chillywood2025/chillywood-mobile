@@ -1,6 +1,6 @@
 # Big-App QA Coverage
 
-Chi'llwood launch QA uses layered proof: local fixture/readback, local Maestro where available, BrowserStack App Automate for non-purchase smoke, and manual-assisted BrowserStack App Live for Google Play purchase boundaries. Synthetic fixtures must stay on dedicated `@chillywood.test` E2E accounts and must not count as real traction, payouts, live money, or production ranking proof.
+Chi'llywood launch QA uses layered proof: local fixture/readback, local Maestro where available, BrowserStack App Automate for non-purchase smoke, and manual-assisted BrowserStack App Live for Google Play purchase boundaries. Synthetic fixtures must stay on dedicated `@chillywood.test` E2E accounts and must not count as real traction, payouts, live money, or production ranking proof.
 
 ## Status Key
 

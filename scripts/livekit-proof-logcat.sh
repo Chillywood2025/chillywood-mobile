@@ -3,8 +3,8 @@ set -euo pipefail
 
 ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts/livekit-proof-current}"
 LOG_FILE="$ARTIFACT_DIR/logcat-filtered.txt"
-FILTER_LABEL='Chi|Chillywood|LiveKit|WebRTC|Room|Track|publish|subscribe|camera|microphone|ICE|PeerConnection|participant|partyId|watch-party|live-stage'
-FILTER_REGEX='Chi|Chillywood|LiveKit|WebRTC|Room|Track|publish|subscribe|camera|microphone|\bICE\b|PeerConnection|participant|partyId|watch-party|live-stage'
+FILTER_LABEL="Chi|Chi'llywood|LiveKit|WebRTC|Room|Track|publish|subscribe|camera|microphone|ICE|PeerConnection|participant|partyId|watch-party|live-stage"
+FILTER_REGEX="Chi|Chi'llywood|LiveKit|WebRTC|Room|Track|publish|subscribe|camera|microphone|\\bICE\\b|PeerConnection|participant|partyId|watch-party|live-stage"
 
 mkdir -p "$ARTIFACT_DIR"
 

@@ -5,7 +5,7 @@ Status: repo evidence prepared; owner/legal confirmation required before Play su
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
-June 6, 2026 auth email branding readiness note: Chi’llwood Auth email templates and sender setup runbook are repo-ready in `docs/auth-email-templates/` and `docs/SUPABASE_AUTH_EMAIL_BRANDING_RUNBOOK.md`. The app now passes mobile redirect URLs for signup confirmation and forgot-password reset. This does not add marketing email, tracking pixels, production money, payout flows, or new data sharing. External SMTP setup may add an email delivery provider for transactional Auth mail; Data Safety/privacy disclosures should be reviewed after the final provider is selected and before public launch claims.
+June 6, 2026 auth email branding readiness note: Chi'llywood Auth email templates and sender setup runbook are repo-ready in `docs/auth-email-templates/` and `docs/SUPABASE_AUTH_EMAIL_BRANDING_RUNBOOK.md`. The app now passes mobile redirect URLs for signup confirmation and forgot-password reset. This does not add marketing email, tracking pixels, production money, payout flows, or new data sharing. External SMTP setup may add an email delivery provider for transactional Auth mail; Data Safety/privacy disclosures should be reviewed after the final provider is selected and before public launch claims.
 
 External apply note: `docs/SUPABASE_AUTH_EMAIL_EXTERNAL_BRANDING_PROOF.md` records that no custom SMTP provider was configured in Supabase because required Management API and SMTP environment variables were missing. Do not add an outbound email provider to Data Safety claims until successful external proof identifies the provider and scope.
 

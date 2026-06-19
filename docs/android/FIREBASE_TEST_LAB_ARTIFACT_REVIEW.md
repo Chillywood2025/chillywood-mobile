@@ -16,7 +16,7 @@ Proof path: `/tmp/chillywood-firebase-test-lab-artifact-review-fix-proof-2026060
 
 Firebase Test Lab Robo artifacts from the prior successful bounded smoke run were reviewed before making any app changes. The reviewed run stayed on signed-out public/auth/legal surfaces. Robo did not prove signed-in routes, LiveKit, purchases, Stripe, Owner/Admin, Money Center, or internal sandbox flows, and this document does not claim that it did.
 
-The artifact review found no Chi'llwood app crash, no ANR, no broken route, no blank screen, no money/payout exposure, no production buy button, no Stripe Android digital checkout, and no LiveKit or route-ownership issue. Two real low-severity UI/accessibility issues were visible in the screenshots and were fixed:
+The artifact review found no Chi'llywood app crash, no ANR, no broken route, no blank screen, no money/payout exposure, no production buy button, no Stripe Android digital checkout, and no LiveKit or route-ownership issue. Two real low-severity UI/accessibility issues were visible in the screenshots and were fixed:
 
 - signup placeholders were too dark on dark input fields;
 - light-theme legal table-of-contents chips had weak text contrast.
@@ -28,7 +28,7 @@ After those fixes, local validation passed and a new bounded Firebase Test Lab R
 | Artifact | Finding | Screen/route | Severity | Real app bug? | Expected behavior? | Robo/test artifact? | Needs fix? | Proposed/final fix | Evidence path |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `logcat` | No `FATAL EXCEPTION`, no app ANR, no React Native fatal error, no route crash | App launch/auth/legal crawl | No issue | No | N/A | No | No | None | `/tmp/chillywood-firebase-test-lab-iam-smoke-proof-20260605/results/MediumPhone.arm-35-en-portrait/artifacts/logcat` |
-| `logcat` | `AndroidRuntime` entries were Android command-wrapper process starts/exits, not Chi'llwood crashes | Test wrapper | No issue | No | N/A | Yes | No | None | prior fatal scan and logcat |
+| `logcat` | `AndroidRuntime` entries were Android command-wrapper process starts/exits, not Chi'llywood crashes | Test wrapper | No issue | No | N/A | Yes | No | None | prior fatal scan and logcat |
 | `logcat` | React Native Firebase namespaced API warnings appeared | Startup | Low | No immediate app failure | N/A | No | No in this lane | Leave as technical-debt warning; no crash or broken smoke behavior | prior and rerun logcat |
 | Screenshots/actions | Signed-out login, signup, forgot-password, and validation dialogs rendered when Robo tapped auth forms without credentials | Auth routes | No issue | No | Yes | Partly | No | None | screenshots `0.png` through `7.png`, `10.png`, `11.png` |
 | Screenshots | Signup placeholders were hard to read against dark fields | `/signup` | Low | Yes | No | No | Yes | Added explicit placeholder color in `app/(auth)/signup.tsx` | prior screenshots `3.png`, `4.png`, `10.png`, `11.png`; rerun `3.png` |
@@ -94,7 +94,7 @@ Result:
 - Raw results bucket: `gs://test-lab-nt3ctukisd678-ykr9mdfzvpc9x/chillywood-artifact-review-fix-20260605-115352/`.
 - Downloaded results: `/tmp/chillywood-firebase-test-lab-artifact-review-fix-proof-20260605/results/MediumPhone.arm-35-en-portrait/`.
 - Downloaded artifacts include `actions.json`, screenshots, `logcat`, `video.mp4`, `robo_results.pb`, `baseline_profile.txt`, `sitemap.png`, and `crawlscript.json`.
-- Crash scan: no Chi'llwood fatal exception, no ANR, no TypeError, no ReferenceError, no invariant violation.
+- Crash scan: no Chi'llywood fatal exception, no ANR, no TypeError, no ReferenceError, no invariant violation.
 
 Rerun screenshots confirmed the signup placeholder and legal chip contrast fixes.
 

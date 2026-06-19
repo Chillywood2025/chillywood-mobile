@@ -2,7 +2,7 @@
 
 Updated June 4, 2026.
 
-This is the external setup checklist for Chi'llwood Android digital sandbox products. It does not activate production money, payouts, public buy buttons, Stripe Android digital checkout, fake balances, or fake sales.
+This is the external setup checklist for Chi'llywood Android digital sandbox products. It does not activate production money, payouts, public buy buttons, Stripe Android digital checkout, fake balances, or fake sales.
 
 Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md` confirms the sandbox product setup stayed review-ready with no production money, no public buy buttons, no payable sandbox/setup rows, and no active proof roles.
 
@@ -29,7 +29,7 @@ External provider product setup is no longer the blocker for the six first-pass 
 
 The item-availability root cause was the installed app source/current-build mismatch. The proof device account was a tester only through the exact internal-test join link; the generic package opt-in URL first showed app unavailable. After the exact internal-test link was accepted, the device still had an EAS/internal install with `installer=null`, so Play Billing could not reliably associate the installed app with the Play test-track product catalog. The fix was to uninstall that package, install from Google Play internal testing, then update from Play to EAS/Play versionCode `23` built from commit `8219c23` (`766b8015-cb3a-43ba-910d-fa442a45e9be`). Device readback then showed `installer=com.android.vending`, `versionCode=23`, `versionName=1.0.0`, and Billing permission granted.
 
-After that fix, Creator tip completed a real Google Play sandbox purchase with `Test card, always approves` and `This is a test order, you will not be charged.` RevenueCat delivered a sandbox `NON_RENEWING_PURCHASE` event, Chi'llwood stored provider event `BCAEB887-0B07-4F85-82F9-D40EC59999F6`, consumed purchase intent `befbf4ac-f951-4070-86c8-5361eeff99db`, and wrote one sandbox-only ledger row with `payable_state=not_payable`. It created no access grant, which is correct for a creator tip. Final readback showed purchase intents `2`, pending intents `0`, failed intents `1`, consumed intents `1`, provider events `1`, access grants `0`, money-access ledger events `1`, payable/paid money-access rows `0`, and active proof roles `0`. No fake provider event, fake sale row, fake access grant, fake ledger row, fake balance, payout, or cash-out was inserted.
+After that fix, Creator tip completed a real Google Play sandbox purchase with `Test card, always approves` and `This is a test order, you will not be charged.` RevenueCat delivered a sandbox `NON_RENEWING_PURCHASE` event, Chi'llywood stored provider event `BCAEB887-0B07-4F85-82F9-D40EC59999F6`, consumed purchase intent `befbf4ac-f951-4070-86c8-5361eeff99db`, and wrote one sandbox-only ledger row with `payable_state=not_payable`. It created no access grant, which is correct for a creator tip. Final readback showed purchase intents `2`, pending intents `0`, failed intents `1`, consumed intents `1`, provider events `1`, access grants `0`, money-access ledger events `1`, payable/paid money-access rows `0`, and active proof roles `0`. No fake provider event, fake sale row, fake access grant, fake ledger row, fake balance, payout, or cash-out was inserted.
 
 The follow-up access-product proof used the same Play-installed versionCode `23` path. Real Google Play sandbox purchases completed for `cw_watch_party_live_ticket_sandbox_099`, `cw_live_watch_party_access_sandbox_099`, `cw_live_watch_party_seat_sandbox_099`, and `cw_paid_content_access_sandbox_099`. RevenueCat webhook processing consumed the matching intents, created four `sandbox_only` access grants, and wrote four additional sandbox-only ledger rows with `payable_state=not_payable`. Final readback showed provider events `5`, purchase intents `6`, consumed intents `5`, access grants `4`, money-access ledger events `5`, payable/paid rows `0`, and active proof roles `0`.
 
@@ -40,8 +40,8 @@ The June 4 failure-path lane added event-pass backing through `creator_events` a
 | Product type | Proposed provider product id | Google Play product exists | Google Play product type | Google Play status | RevenueCat product imported | Offering/package exists | Entitlement attached | Webhook configured | Sandbox testable today | Blocker | Owner action required |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `premium_subscription` | Existing `premium_subscription` / base plan `monthly` | Yes, previously dashboard-proved | Subscription | Sandbox-proved for licensed tester path | Yes | Existing Premium offering | `premium` | Yes | Already proved; approved tester sandbox mode can re-proof | Public purchase shell remains closed by default | Keep existing mapping; do not rename |
-| `paid_content_access` | `cw_paid_content_access_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None; access comes from Chi'llwood intent/grant | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Player UI polish remains future; RPC resolver proof passed | Keep sandbox-only; no production buy button |
-| `watch_party_live_ticket` | `cw_watch_party_live_ticket_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None; ticket comes from Chi'llwood intent/grant | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Route UI entry polish remains future; RPC resolver proof passed | Keep entry/viewing only and host approval unchanged |
+| `paid_content_access` | `cw_paid_content_access_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None; access comes from Chi'llywood intent/grant | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Player UI polish remains future; RPC resolver proof passed | Keep sandbox-only; no production buy button |
+| `watch_party_live_ticket` | `cw_watch_party_live_ticket_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None; ticket comes from Chi'llywood intent/grant | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Route UI entry polish remains future; RPC resolver proof passed | Keep entry/viewing only and host approval unchanged |
 | `live_watch_party_access_pass` | `cw_live_watch_party_access_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Route UI entry polish remains future; RPC resolver proof passed | Keep viewer/listener only; no host/speaker/mod/admin grant |
 | `live_watch_party_seat_pass` | `cw_live_watch_party_seat_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store product | Not needed for the direct proof route | None | Webhook endpoint exists | Passed on Play-installed versionCode `23` | Route UI seat request polish remains future; RPC resolver proof passed | Keep seat eligibility only and host approval required |
 | `creator_tip` | `cw_creator_tip_sandbox_099` | Yes | One-time product with purchase option `sandbox-099` | Active | Yes, published Play Store consumable | Not needed for the new direct product proof route | None; ledger only unless a `creator_tip_record` readout is intentionally added | Webhook endpoint exists | Passed on Play-installed versionCode `23` | None for first creator-tip proof; repeat/idempotency/refund remain follow-up | Keep no entitlement; prove additional products separately |
@@ -66,11 +66,11 @@ For package `com.chillywood.mobile`:
 3. Attach products to the offering/package names the app will fetch for sandbox test launchers.
 4. Keep Premium attached to entitlement `premium`.
 5. Do not attach tips to a permanent entitlement.
-6. For tickets, seats, paid content, access passes, and event passes, use Chi'llwood purchase intents and access grants as the source of target binding.
+6. For tickets, seats, paid content, access passes, and event passes, use Chi'llywood purchase intents and access grants as the source of target binding.
 7. Confirm the webhook endpoint and authorization header are configured.
 8. Confirm sandbox RevenueCat events appear in RevenueCat before claiming app/backend proof.
 
-## Chi'llwood Catalog Steps
+## Chi'llywood Catalog Steps
 
 After external setup is verified, update the matching `monetization_products` row or add a new sandbox row:
 
@@ -91,7 +91,7 @@ For each mapped product:
 1. Create a short-lived purchase intent with `create_money_purchase_intent`.
 2. Launch the RevenueCat / Google Play sandbox purchase for the mapped product.
 3. Confirm RevenueCat receives the sandbox event.
-4. Confirm the Chi'llwood webhook creates or updates a sanitized `provider_events` row.
+4. Confirm the Chi'llywood webhook creates or updates a sanitized `provider_events` row.
 5. Confirm access products create `access_grants` for the intended source only.
 6. Confirm `money_access_ledger_events.environment='sandbox'`.
 7. Confirm `money_access_ledger_events.payable_state='not_payable'`.

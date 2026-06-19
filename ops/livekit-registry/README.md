@@ -4,7 +4,7 @@ This folder holds server/operator helper material for the LiveKit Server Registr
 
 Current production reality:
 
-- Chi'llwood has one Hetzner LiveKit box today: `chillywood-prod-01`.
+- Chi'llywood has one Hetzner LiveKit box today: `chillywood-prod-01`.
 - Public connect URL: `wss://live.chillywoodstream.com`.
 - The registry/router does not create, buy, autoscale, migrate, delete, or drain rooms by itself.
 - New RTC rooms can use `chillywood-prod-01` only while that server is `active`, recently heartbeating, and under capacity.

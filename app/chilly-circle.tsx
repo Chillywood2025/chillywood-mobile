@@ -281,7 +281,7 @@ export default function ChillyCircleScreen() {
             "official",
             "official-rachi",
             RACHI_OFFICIAL_ACCOUNT.displayName,
-            "Official Chi'llwood updates and Originals.",
+            "Official Chi'llywood updates and Originals.",
             RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? null,
             () => openProfile(RACHI_OFFICIAL_ACCOUNT.userId),
           ),
@@ -536,7 +536,7 @@ export default function ChillyCircleScreen() {
               <Text style={styles.statusPillText}>Official</Text>
             </View>
           </View>
-          <Text style={styles.officialMeta} numberOfLines={1}>Official Chi'llwood updates and Originals.</Text>
+          <Text style={styles.officialMeta} numberOfLines={1}>Official Chi'llywood updates and Originals.</Text>
         </View>
       </TouchableOpacity>
     </View>

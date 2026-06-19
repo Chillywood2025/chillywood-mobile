@@ -18,7 +18,7 @@ Prove BrowserStack is using the correct Play/internal launch-candidate runtime b
 - Expected versionCode is recorded in the run notes.
 
 ## Steps
-1. Install/open Chi'llwood on BrowserStack device.
+1. Install/open Chi'llywood on BrowserStack device.
 2. Record device model and Android version.
 3. Confirm package is `com.chillywood.mobile`.
 4. Confirm installer is `com.android.vending`.

@@ -2530,7 +2530,7 @@ const legalPolicyCanaryResults = (supportEmail: string, privacyUrl: string, term
   const uploadAckOk = CREATOR_UPLOAD_ACKNOWLEDGEMENT.includes("I own this content or have permission")
     && CREATOR_UPLOAD_ACKNOWLEDGEMENT.includes("monetize this content as described in the Creator Terms");
   const liveAckOk = LIVE_REPLAY_ACKNOWLEDGEMENT.includes("live content, speaker audio/video, chat, replays")
-    && LIVE_REPLAY_ACKNOWLEDGEMENT.includes("preserved as allowed by Chi'llwood rules and legal requirements");
+    && LIVE_REPLAY_ACKNOWLEDGEMENT.includes("preserved as allowed by Chi'llywood rules and legal requirements");
   const ownershipBad = /chi'?ll'?wood\s+owns\s+(creator\s+)?(your\s+)?content/i.test(allPolicyText)
     || /content\s+belongs\s+to\s+chi'?ll'?wood/i.test(allPolicyText);
   const licenseBad = /chi'?ll'?wood\s+(does\s+not|doesn't|lacks)\s+(have\s+)?(a\s+)?(license|right).{0,80}(host|use|display|stream|monetize)/i.test(allPolicyText);
@@ -2546,7 +2546,7 @@ const legalPolicyCanaryResults = (supportEmail: string, privacyUrl: string, term
   const checks = [
     {
       actual: creatorLicenseOk ? "Creator Content License clause includes ownership retention and broad service license." : "Creator Content License clause is missing required ownership/license terms.",
-      expected: "Creator policy grants Chi'llwood a broad service license while preserving creator ownership.",
+      expected: "Creator policy grants Chi'llywood a broad service license while preserving creator ownership.",
       key: "legal_creator_content_license_clause",
       label: "Creator Content License clause exists",
       status: creatorLicenseOk ? "pass" : "fail",
@@ -2569,18 +2569,18 @@ const legalPolicyCanaryResults = (supportEmail: string, privacyUrl: string, term
       surface: "constant: LIVE_REPLAY_ACKNOWLEDGEMENT",
     },
     {
-      actual: ownershipBad ? "A prohibited Chi'llwood-owns-content phrase was detected." : "No prohibited Chi'llwood-owns-creator-content phrase was detected.",
-      expected: "Legal text must not say Chi'llwood owns creator content.",
+      actual: ownershipBad ? "A prohibited Chi'llywood-owns-content phrase was detected." : "No prohibited Chi'llywood-owns-creator-content phrase was detected.",
+      expected: "Legal text must not say Chi'llywood owns creator content.",
       key: "legal_no_ownership_claim",
-      label: "No legal text says Chi'llwood owns creator content",
+      label: "No legal text says Chi'llywood owns creator content",
       status: ownershipBad ? "fail" : "pass",
       surface: "bundled legal policy corpus",
     },
     {
       actual: licenseBad ? "A prohibited no-license/right-to-use phrase was detected." : "No prohibited no-license/right-to-use phrase was detected.",
-      expected: "Legal text must not say Chi'llwood lacks rights to host/use uploaded content.",
+      expected: "Legal text must not say Chi'llywood lacks rights to host/use uploaded content.",
       key: "legal_no_license_disclaimer",
-      label: "No legal text says Chi'llwood lacks rights to host/use uploaded content",
+      label: "No legal text says Chi'llywood lacks rights to host/use uploaded content",
       status: licenseBad ? "fail" : "pass",
       surface: "bundled legal policy corpus",
     },
@@ -2656,7 +2656,7 @@ const DMCA_CONTENT_MUTATION_MATRIX = [
 const buildDmcaCanaryPayload = (label: string) => ({
   accuracyPenaltyPerjuryStatement: true,
   authorityStatement: true,
-  claimantCompany: "Chi'llwood Canary",
+  claimantCompany: "Chi'llywood Canary",
   claimantEmail: "liveops.proof+dmca@chillywoodstream.com",
   claimantName: "CANARY PROOF DMCA Reporter",
   contentId: DMCA_CANARY_CONTENT_ID,
@@ -2668,7 +2668,7 @@ const buildDmcaCanaryPayload = (label: string) => ({
   electronicSignature: "CANARY PROOF DMCA Reporter",
   goodFaithStatement: true,
   infringingMaterialDescription: `${label}: canary-only allegedly infringing material description.`,
-  reporterCompany: "Chi'llwood Canary",
+  reporterCompany: "Chi'llywood Canary",
   reporterEmail: "liveops.proof+dmca@chillywoodstream.com",
   reporterIsOwner: true,
   reporterName: "CANARY PROOF DMCA Reporter",

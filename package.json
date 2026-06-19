@@ -64,6 +64,7 @@
     "guard:big-app-qa-coverage": "node ./scripts/guard-big-app-qa-coverage.mjs",
     "guard:browserstack-repair-loop-policy": "node ./scripts/guard-browserstack-repair-loop-policy.mjs",
     "guard:browserstack-sandbox-purchase-safety": "node ./scripts/guard-browserstack-sandbox-purchase-safety.mjs",
+    "guard:brand-spelling-policy": "node ./scripts/guard-brand-spelling-policy.mjs",
     "qa:monetization:fixtures:prepare": "node ./scripts/qa/prepare-monetization-e2e-fixtures.mjs",
     "qa:monetization:fixtures:readback": "node ./scripts/qa/readback-monetization-e2e-fixtures.mjs",
     "qa:monetization:fixtures:reset": "node ./scripts/qa/reset-monetization-e2e-fixtures.mjs",

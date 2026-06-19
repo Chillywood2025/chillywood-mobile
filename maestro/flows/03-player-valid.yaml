@@ -3,7 +3,7 @@ appId: ${CHILLYWOOD_APP_ID}
 # Flow 03 — Player opens with a valid title (full checklist)
 #
 # Validates:
-#   ✓ Player renders CHILLYWOOD brand
+#   ✓ Player renders CHI'LLYWOOD brand
 #   ✓ Title name is NOT the fallback "Title not found." string
 #   ✓ "Loading title…" spinner resolves within timeout
 #   ✓ My List button is present (title-specific UI, confirms real content loaded)

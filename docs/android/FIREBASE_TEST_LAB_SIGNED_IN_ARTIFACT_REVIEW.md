@@ -14,7 +14,7 @@ Reviewed proof path:
 
 ## Summary
 
-The signed-in Firebase Test Lab Robo route smoke was reviewed through downloaded screenshots, video, action trace, sitemap, Robo results, and logcat. The run passed and did not expose a real Chi'llwood app bug that needed a code fix.
+The signed-in Firebase Test Lab Robo route smoke was reviewed through downloaded screenshots, video, action trace, sitemap, Robo results, and logcat. The run passed and did not expose a real Chi'llywood app bug that needed a code fix.
 
 Reviewed matrix:
 
@@ -49,7 +49,7 @@ Robo used the stable login resources and reached signed-in route surfaces:
 
 | Artifact | Screen/route | Finding | Severity | Classification | Needs fix? | Proposed fix | Evidence path |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `logcat` | App runtime | No Chi'llwood fatal exception, ANR, TypeError, ReferenceError, invariant violation, or unhandled fatal pattern found. | no issue | no issue | No | None | `/tmp/chillywood-firebase-test-lab-signed-in-proof-20260605/results/MediumPhone.arm-35-en-portrait/logcat` |
+| `logcat` | App runtime | No Chi'llywood fatal exception, ANR, TypeError, ReferenceError, invariant violation, or unhandled fatal pattern found. | no issue | no issue | No | None | `/tmp/chillywood-firebase-test-lab-signed-in-proof-20260605/results/MediumPhone.arm-35-en-portrait/logcat` |
 | `logcat` | Android/system runtime | AndroidRuntime/system entries were command-wrapper or platform noise, not app crashes. | no issue | system/test noise | No | None | same as above |
 | screenshots | Signed-in Settings / Account | Proof account identifier appears as expected inside the signed-in Account UI. Screenshots remain outside the repo and no credential value is committed. | no issue | expected gated behavior | No | None | `artifacts/10.png` |
 | screenshots/video | Player/fullscreen | Player media and fullscreen controls rendered with modern overlays; no giant black control bars, broken crop, blank player, or clipped primary control was visible. | no issue | no issue | No | None | `artifacts/20.png`, `artifacts/30.png`, `video.mp4` |
@@ -80,12 +80,12 @@ Searches were run for:
 
 Result:
 
-- Chi'llwood fatal crash: not found.
+- Chi'llywood fatal crash: not found.
 - ANR: not found.
 - React Native fatal error: not found.
 - Confirmed route error: not found.
 - Credential commit exposure: not found.
-- AndroidRuntime entries: system/test-wrapper noise, not Chi'llwood crashes.
+- AndroidRuntime entries: system/test-wrapper noise, not Chi'llywood crashes.
 
 Raw logs remain in `/tmp` and are not committed because Test Lab artifacts can contain account identifiers or provider/test metadata.
 

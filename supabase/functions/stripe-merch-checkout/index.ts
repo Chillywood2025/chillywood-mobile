@@ -315,7 +315,7 @@ Deno.serve(async (req) => {
 
     if (itemError) throw new Error(`Merch order item insert failed: ${itemError.message}`);
 
-    const productName = toText(product.title ?? product.display_name) || "Chi'llwood sandbox merch";
+    const productName = toText(product.title ?? product.display_name) || "Chi'llywood sandbox merch";
     const successUrl = safeRedirectUrl(parsed.value.success_url ?? parsed.value.successUrl, DEFAULT_SUCCESS_URL);
     const cancelUrl = safeRedirectUrl(parsed.value.cancel_url ?? parsed.value.cancelUrl, DEFAULT_CANCEL_URL);
     const session = await stripeRequest<StripeCheckoutSession>(stripeSecret.secret, "/checkout/sessions", {

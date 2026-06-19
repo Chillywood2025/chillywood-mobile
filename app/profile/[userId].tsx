@@ -1971,7 +1971,7 @@ export default function ProfileScreen() {
 
     try {
       await Share.share({
-        message: `Check out this Chi'llwood post from ${profile.displayName}: ${buildProfileDeepLink(userId)}`,
+        message: `Check out this Chi'llywood post from ${profile.displayName}: ${buildProfileDeepLink(userId)}`,
       });
     } catch {
       Alert.alert("Share unavailable", "Unable to open the share sheet right now.");

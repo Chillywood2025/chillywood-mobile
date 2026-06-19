@@ -6,11 +6,11 @@ Status: audit complete, docs-only. No Snap SDK was installed, no native dependen
 
 ## 1. Executive Summary
 
-Snap Camera Kit is a plausible first AR engine to test for Chi’llyfects, but it is not yet proven as the right production engine for Chi’llwood.
+Snap Camera Kit is a plausible first AR engine to test for Chi’llyfects, but it is not yet proven as the right production engine for Chi'llywood.
 
-The reason is narrow and important: Chi’llyfects does not only need a local Snap lens preview. Chi’llyfects needs a processed local camera feed that can be published through LiveKit so remote users see the effect. Official Snap docs show Android Camera Kit can process camera frames, render lenses, and connect processed output to Android surfaces/textures. Official LiveKit docs show LiveKit can publish camera/custom media tracks, and Chi’llwood already publishes camera through LiveKit. What is not proven is the bridge between Snap Camera Kit’s processed Android output and the current React Native / Expo LiveKit publishing path.
+The reason is narrow and important: Chi’llyfects does not only need a local Snap lens preview. Chi’llyfects needs a processed local camera feed that can be published through LiveKit so remote users see the effect. Official Snap docs show Android Camera Kit can process camera frames, render lenses, and connect processed output to Android surfaces/textures. Official LiveKit docs show LiveKit can publish camera/custom media tracks, and Chi'llywood already publishes camera through LiveKit. What is not proven is the bridge between Snap Camera Kit’s processed Android output and the current React Native / Expo LiveKit publishing path.
 
-Recommendation: test a smallest Android-only POC, then defer production adoption until the POC proves processed LiveKit publishing on a second device. Do not claim Snap Camera Kit works with Chi’llwood until that proof exists.
+Recommendation: test a smallest Android-only POC, then defer production adoption until the POC proves processed LiveKit publishing on a second device. Do not claim Snap Camera Kit works with Chi'llywood until that proof exists.
 
 Official sources checked:
 
@@ -165,7 +165,7 @@ Important distinction:
 
 Expo implication:
 
-- Chi’llwood is an Expo/React Native app with `expo-dev-client` and EAS profiles.
+- Chi'llywood is an Expo/React Native app with `expo-dev-client` and EAS profiles.
 - Expo’s docs state that adding a library with native code APIs requires rebuilding the development client.
 - Expo config plugins are the normal way to apply native Android/iOS config in Continuous Native Generation projects.
 - A Snap Camera Kit POC therefore requires an Android native module/bridge and an EAS/dev-client rebuild. It is not an Expo Go-only integration.
@@ -228,7 +228,7 @@ One active Lens:
 Pricing/cost:
 
 - The checked official docs do not provide a simple public pricing table for this use case.
-- Lens creation may carry production costs if Chi’llwood buys Lens Packs or hires creators through Creator Marketplace.
+- Lens creation may carry production costs if Chi'llywood buys Lens Packs or hires creators through Creator Marketplace.
 - Any production cost, usage limits, contract terms, or monetization restrictions must be confirmed in the Snap Developer Portal / Camera Kit terms before production commitment.
 
 Licensing/legal:
@@ -276,7 +276,7 @@ Security:
 
 ## 9. Architecture Options
 
-### Option A: Snap Owns Preview, Chi’llwood Publishes Processed Output To LiveKit
+### Option A: Snap Owns Preview, Chi'llywood Publishes Processed Output To LiveKit
 
 Technical feasibility: unknown but promising enough for a POC. Snap Android exposes processed output to surfaces/textures; LiveKit can publish video tracks. The missing proof is a native bridge/custom video source that sends Snap-processed frames as the outgoing LiveKit camera track.
 
@@ -302,7 +302,7 @@ Proof required:
 - `Off` restores raw camera locally and remotely.
 - Layout/comments do not move.
 
-Meets Chi’llwood requirements: yes only if processed LiveKit publishing is proven.
+Meets Chi'llywood requirements: yes only if processed LiveKit publishing is proven.
 
 ### Option B: LiveKit Owns Camera Track, Snap Is Local Preview/Effects UI Only
 
@@ -322,7 +322,7 @@ Proof required:
 
 - Confirm remote users do not see effects, and label as local preview only.
 
-Meets Chi’llwood requirements: no. This fails the key requirement unless product explicitly chooses local-only effects.
+Meets Chi'llywood requirements: no. This fails the key requirement unless product explicitly chooses local-only effects.
 
 ### Option C: Snap For Chi’llyfects Preview/Local Content Only, LiveKit Unprocessed
 
@@ -342,7 +342,7 @@ Proof required:
 
 - Clear labeling that this is not live remote Chi’llyfects.
 
-Meets Chi’llwood requirements: no for real live effects. Acceptable only if explicitly scoped as preview/local content.
+Meets Chi'llywood requirements: no for real live effects. Acceptable only if explicitly scoped as preview/local content.
 
 ### Option D: Snap For First AR Proof, Later Replace With MediaPipe/OpenGL
 
@@ -363,7 +363,7 @@ Proof required:
 
 - Same as Option A, plus adapter isolation strong enough to replace Snap later.
 
-Meets Chi’llwood requirements: potentially. This is the recommended test path if Chi’llwood wants quick AR learning without committing to Snap long term.
+Meets Chi'llywood requirements: potentially. This is the recommended test path if Chi'llywood wants quick AR learning without committing to Snap long term.
 
 ## 10. Recommended POC Plan
 
@@ -454,7 +454,7 @@ Do not continue with Snap Camera Kit as Chi’llyfects v1 engine if any of these
 - The solution requires replacing LiveKit camera ownership entirely.
 - Remote users cannot see the Chi’llyfect.
 - `Off` cannot restore raw camera cleanly.
-- License, review, terms, branding, attribution, or monetization rules conflict with Chi’llwood’s product plan.
+- License, review, terms, branding, attribution, or monetization rules conflict with Chi'llywood’s product plan.
 - Privacy requirements cannot be satisfied with current policy/consent surfaces.
 - Terms prompt behavior conflicts with the live room flow.
 - Android performance, battery, or thermal cost is too high during sustained LiveKit use.
@@ -479,7 +479,7 @@ No build/rebuild was performed in this audit.
 
 ## 13. Proof Checklist
 
-Before claiming Snap Camera Kit works with Chi’llwood, capture proof for all of the following:
+Before claiming Snap Camera Kit works with Chi'llywood, capture proof for all of the following:
 
 - Snap app access approved for development.
 - One private/proof Lens is available through Lens Scheduler.
@@ -503,7 +503,7 @@ Before claiming Snap Camera Kit works with Chi’llwood, capture proof for all o
 
 Recommendation: test POC.
 
-Do not use Snap Camera Kit in production now. Do not reject it yet. Run a focused Android-only POC only if Chi’llwood wants a realistic first AR engine test.
+Do not use Snap Camera Kit in production now. Do not reject it yet. Run a focused Android-only POC only if Chi'llywood wants a realistic first AR engine test.
 
 Decision language:
 

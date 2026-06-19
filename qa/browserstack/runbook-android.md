@@ -117,7 +117,7 @@ Default purchase refusal remains active through the `purchase_flow_requested` gu
 Strict mode is allowed to confirm only when every safety check passes:
 
 - Local env has BrowserStack credentials, app id/custom id, `CHILLYWOOD_APP_ID=com.chillywood.mobile`, E2E viewer login, creator id, `SUPABASE_URL`, and local-only `SUPABASE_SERVICE_ROLE_KEY`.
-- Target app reference points at the fresh Chi'llwood APK/custom id and the BrowserStack target is an Android real device.
+- Target app reference points at the fresh Chi'llywood APK/custom id and the BrowserStack target is an Android real device.
 - Selected Maestro flow has no coordinate taps, image-position taps, repeated blind taps, or bottom-button assumptions.
 - Fixture readback proves the selected target is sandbox, `not_payable` or `payable_state=not_payable`, `production_enabled=false`, `payout_enabled=false`, live money off, production purchase intents zero, payable ledger events zero, and payout authority false.
 - The Google Play purchase sheet visibly exposes test/sandbox wording such as `Test card`, `Test instrument`, `Test purchase`, `This is a test`, or `Google Play test`.

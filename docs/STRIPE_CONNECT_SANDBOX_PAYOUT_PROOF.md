@@ -19,7 +19,7 @@ Proof path: `/tmp/chillywood-stripe-connect-payout-readiness-proof-20260604/`.
 - Functions: `stripe-connect-account`, `stripe-connect-onboarding-link`, `stripe-connect-account-sync`, and `stripe-connect-webhook`
 - Function status: Connect account/link/sync ACTIVE version `47`; Connect webhook ACTIVE version `49`
 - Account result: existing real Stripe test-mode Express account reused
-- Onboarding result: sandbox onboarding link created with approved HTTPS Chi'llwood return/refresh origin
+- Onboarding result: sandbox onboarding link created with approved HTTPS Chi'llywood return/refresh origin
 - Sync result: Stripe account status refreshed from provider
 
 ## Safe Account State

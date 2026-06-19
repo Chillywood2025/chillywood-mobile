@@ -1,4 +1,4 @@
-# Chillywood — Automated Validation (Maestro)
+# Chi'llywood — Automated Validation (Maestro)
 
 Baseline smoke flows plus one optional authenticated owner-rails flow used to keep the active checkpoint docs and harness inventory aligned.
 

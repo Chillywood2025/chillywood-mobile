@@ -47,7 +47,7 @@ const userFacingSource = [
   chatThread,
 ].join("\n");
 
-assertIncludes(officialAccounts, "Rachi shares Chi'llywood updates, tips, and Chi'llwood Originals.", "official Rachi positioning");
+assertIncludes(officialAccounts, "Rachi shares Chi'llywood updates, tips, and Chi'llywood Originals.", "official Rachi positioning");
 assertIncludes(officialAccounts, "Rachi does not read your private chats.", "privacy trust copy");
 assertIncludes(officialAccounts, 'handle: "@chillywood.rachi"', "official Rachi protected handle");
 assertIncludes(userData, "profileAvatarUrl ?? normalizeTextValue(officialAccount.avatarUrl)", "official profile image reads backed avatar before fallback");
@@ -108,14 +108,14 @@ assertIncludes(admin, "Official upload-as-Rachi remains a separate backend-safe 
 assertIncludes(home, "readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId", "Home Rachi posts read");
 assertIncludes(home, "readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId", "Home Rachi Originals read");
 assertIncludes(home, "readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId", "Home Rachi backed avatar read");
-assertIncludes(home, "Chi'llwood Originals", "Home Originals rail");
+assertIncludes(home, "Chi'llywood Originals", "Home Originals rail");
 assertIncludes(home, "Rachi Official Updates", "Home Rachi updates rail");
 assertIncludes(home, "rachiIdentityRow", "Home Rachi identity row");
 assertIncludes(home, "rachiOfficialAvatarUrl", "Home Rachi avatar or official fallback");
-assertIncludes(home, "Official Chi'llwood", "Home Rachi official identity label");
+assertIncludes(home, "Official Chi'llywood", "Home Rachi official identity label");
 assertIncludes(home, "Public Rachi posts appear here after they are published.", "no fake Rachi posts copy");
 assertIncludes(creatorVideoCard, "isOfficialRachiInternalProofFixture", "Rachi public fixture display cleanup");
-assertIncludes(creatorVideoCard, "Official Chi'llwood Original from Rachi.", "Rachi public fixture production copy");
+assertIncludes(creatorVideoCard, "Official Chi'llywood Original from Rachi.", "Rachi public fixture production copy");
 assertIncludes(creatorVideoCard, "video.ownerId === RACHI_OFFICIAL_USER_ID", "Rachi fixture cleanup scoped to official Rachi rows");
 assertIncludes(publicCreatorVideoCardsFunction, 'RACHI_OFFICIAL_USER_ID = "platform_rachi_official"', "public card resolver official Rachi id");
 assertIncludes(publicCreatorVideoCardsFunction, "readPublishedOfficialRachiOriginalVideoIds", "public card resolver official Rachi link read");
@@ -129,7 +129,7 @@ assertNotIncludes(publicCreatorVideoCardsFunction, "storage_path,", "public card
 assertNotIncludes(publicCreatorVideoCardsFunction, "storage_object_key,", "public card resolver does not select raw storage object key");
 
 assertIncludes(profile, "Published public-safe Rachi uploads", "Profile Rachi Originals copy");
-assertIncludes(channel, "Official Chi'llwood", "Rachi Platform official badge");
+assertIncludes(channel, "Official Chi'llywood", "Rachi Platform official badge");
 
 for (const forbidden of [
   "Rachi is watching",

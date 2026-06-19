@@ -63,7 +63,7 @@ assertIncludes(liveTab, "Choose a title or creator video first, then start Watch
 assertIncludes(liveTab, "Paid Watch-Party tickets stay in Party Waiting Room to Party Room, not Live Stage.", "Party Room separation");
 assertIncludes(liveTab, "requireLiveFirstPremium", "Live tab Premium/runtime preflight");
 assertIncludes(liveTab, 'params: { mode: "live", source: "bottom-live-tab" }', "Live tab route mapping");
-assertIncludes(liveTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Live tab Chi'llwood background");
+assertIncludes(liveTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Live tab Chi'llywood background");
 [
   "This opens the existing Live Waiting Room",
   "keeps Live Stage ownership unchanged",
@@ -78,7 +78,7 @@ assertIncludes(libraryTab, "Your saved titles, watch progress, and followed Plat
 assertIncludes(libraryTab, "Replays, events, and clips appear when they are saved.", "no fake Library sections");
 assertIncludes(libraryTab, "readMergedWatchProgress", "Library backed continue watching");
 assertIncludes(libraryTab, "readFollowedChannelUserIds", "Library backed followed Platforms");
-assertIncludes(libraryTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Library Chi'llwood background");
+assertIncludes(libraryTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Library Chi'llywood background");
 assertIncludes(explore, "Search titles, public people, Platforms, creator videos, Originals, events, and replays.", "Explore backed scope copy");
 assertIncludes(explore, "EXPLORE_SEARCH_SCOPES", "Explore search scope list");
 assertIncludes(explore, 'label: "People"', "Explore People search scope");
@@ -91,8 +91,8 @@ assertIncludes(explore, "readPublicDiscoveryFeedItems({ surface: \"home\"", "Exp
 assertIncludes(explore, "readLatestPublicCreatorVideos", "Explore public creator video source");
 assertIncludes(explore, "readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId", "Explore Rachi Originals source");
 assertIncludes(explore, "No public replays yet", "Explore honest replay empty state");
-assertIncludes(explore, "Search Chi'llwood", "Explore unified search copy");
-assertIncludes(explore, "CHILLYWOOD_BACKGROUND_SOURCE", "Explore Chi'llwood fallback background");
+assertIncludes(explore, "Search Chi'llywood", "Explore unified search copy");
+assertIncludes(explore, "CHILLYWOOD_BACKGROUND_SOURCE", "Explore Chi'llywood fallback background");
 ["fake", "mock row", "sample row", "dummy row"].forEach((needle) => {
   assertNotIncludes(explore, needle, "Explore backed data surface");
   assertNotIncludes(libraryTab, needle, "Library backed data surface");

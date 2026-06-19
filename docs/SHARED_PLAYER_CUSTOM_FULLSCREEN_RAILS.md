@@ -4,7 +4,7 @@ Updated: June 10, 2026
 
 ## Intent
 
-Watch-Party Live Shared Player fullscreen is a custom Chi'llwood layout, not a normal fullscreen video mode. The intended fullscreen composition is:
+Watch-Party Live Shared Player fullscreen is a custom Chi'llywood layout, not a normal fullscreen video mode. The intended fullscreen composition is:
 
 - left dark rail for room comments
 - large center shared player/video surface

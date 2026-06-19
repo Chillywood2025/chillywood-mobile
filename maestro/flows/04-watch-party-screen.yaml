@@ -7,7 +7,7 @@ appId: ${CHILLYWOOD_APP_ID}
 #
 # Validates:
 #   ✓ Watch Party waiting-room entry opens via deeplink without crash
-#   ✓ CHILLYWOOD brand, room identity copy, and "JOIN A ROOM" section are visible
+#   ✓ CHI'LLYWOOD brand, room identity copy, and "JOIN A ROOM" section are visible
 #   ✓ Typing a bogus code and tapping "Find Room" shows "Room not found" error
 #   ✓ App remains usable after the error (screen does not crash)
 
@@ -25,7 +25,7 @@ appId: ${CHILLYWOOD_APP_ID}
 - waitForAnimationToEnd
 
 - assertVisible:
-    text: "CHILLYWOOD"
+    text: "CHI'LLYWOOD"
 
 - assertVisible:
     text: "Watch Party"
