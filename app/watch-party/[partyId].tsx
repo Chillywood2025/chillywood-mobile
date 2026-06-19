@@ -129,6 +129,7 @@ import {
 import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
+import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -2606,14 +2607,22 @@ export default function WatchPartyRoomScreen() {
     return (
       <View style={styles.center} testID="screen-party-room">
         <View style={styles.errorCard} testID="watch-party-ticket-lock-card">
-          <Text style={styles.errorTitle}>
-            {paidTicketGate.requiresPurchase ? "Buy Room Ticket" : "Room ticket unavailable"}
-          </Text>
+          <View style={styles.ticketGateHeaderRow}>
+            <Text style={styles.errorTitle}>
+              {paidTicketGate.requiresPurchase ? "Buy Room Ticket" : "Room ticket unavailable"}
+            </Text>
+            <MoneyStatusChip label={paidTicketGate.requiresPurchase ? "Ticketed" : "Unavailable"} tone={paidTicketGate.requiresPurchase ? "premium" : "warning"} />
+          </View>
+          <Text style={styles.ticketPrice}>{priceLabel}</Text>
           <Text style={styles.errorBody}>
             {paidTicketGate.requiresPurchase
               ? `This ticket unlocks access to this Watch-Party room only for ${priceLabel}. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.`
               : "This paid Watch-Party ticket is not available right now."}
           </Text>
+          <MoneyScopeStrip
+            includes="Access to this Watch-Party room target only."
+            excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, event passes, LiveKit publish authority, host controls, payouts, and other rooms stay separate."
+          />
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           {paidTicketGate.requiresPurchase ? (
             <TouchableOpacity
@@ -3717,6 +3726,17 @@ const styles = StyleSheet.create({
   },
   errorTitle: { color: "#fff", fontSize: 20, fontWeight: "900" },
   errorBody: { color: "#888", fontSize: 14, lineHeight: 20 },
+  ticketGateHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  ticketPrice: {
+    color: "#F2C25B",
+    fontSize: 28,
+    fontWeight: "900",
+  },
   secondaryBtn: {
     borderRadius: 12,
     borderWidth: 1,

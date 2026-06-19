@@ -132,6 +132,7 @@ import {
 } from "../../_lib/watchParty";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
+import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { LinkedText } from "../../components/social/linked-text";
@@ -8689,6 +8690,19 @@ export default function PlayerScreen() {
 
             {creatorVideoPaidContentLocked ? (
               <View pointerEvents="box-none" style={styles.paidVideoUnlockFloatingCard} testID="paid-video-lock-card">
+                <View style={styles.paidVideoLockHeader}>
+                  <Text style={styles.paidVideoLockTitle} numberOfLines={2}>
+                    {creatorVideo?.title ?? "Paid creator video"}
+                  </Text>
+                  <MoneyStatusChip label="Locked" tone="premium" />
+                </View>
+                {creatorVideoPaidContentPriceLabel ? (
+                  <Text style={styles.paidVideoLockPrice}>{creatorVideoPaidContentPriceLabel}</Text>
+                ) : null}
+                <MoneyScopeStrip
+                  includes="Playback access to this creator video only."
+                  excludes="Chi'llywood Premium, subscriptions, VIP, Watch-Party tickets, event passes, rooms, and other creator videos stay separate."
+                />
                 <TouchableOpacity
                   style={[
                     styles.playerAccessPrimaryBtn,
@@ -9648,8 +9662,31 @@ const styles = StyleSheet.create({
     bottom: 104,
     zIndex: 190,
     elevation: 190,
-    alignItems: "center",
+    alignItems: "stretch",
     gap: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.22)",
+    backgroundColor: "rgba(8,10,16,0.94)",
+    padding: 14,
+  },
+  paidVideoLockHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  paidVideoLockTitle: {
+    flex: 1,
+    color: "#F8FAFF",
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  paidVideoLockPrice: {
+    color: "#F2C25B",
+    fontSize: 24,
+    fontWeight: "900",
   },
   paidVideoUnlockPrimaryButton: {
     flex: 0,

@@ -26,6 +26,7 @@ import {
 } from "../../_lib/monetization";
 import { useOptionalBetaProgram } from "../../_lib/betaProgram";
 import { useSession } from "../../_lib/session";
+import { MoneyOfferCard, MoneyStatusChip } from "./money-ui";
 
 export type AccessSheetReason = "premium_required" | "party_pass_required";
 export type AccessSheetStatusTone = "neutral" | "success" | "error";
@@ -423,7 +424,7 @@ export function AccessSheet({
 
           {!deferredMonetization && sandboxMode.enabled ? (
             <View style={styles.sandboxCard}>
-              <Text style={styles.sandboxKicker}>INTERNAL TESTER SANDBOX MODE</Text>
+              <MoneyStatusChip label="Internal tester sandbox mode" tone="warning" />
               <Text style={styles.sandboxText}>
                 Google Play / RevenueCat sandbox test only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.
               </Text>
@@ -431,13 +432,16 @@ export function AccessSheet({
           ) : null}
 
           {!deferredMonetization && sheetState?.offer ? (
-            <View style={styles.offerCard}>
-              {sheetState.offer.badge ? <Text style={styles.offerBadge}>{sheetState.offer.badge}</Text> : null}
-              <Text style={styles.offerTitle}>{sheetState.offer.title}</Text>
-              <Text style={styles.offerPrice}>{sheetState.offer.priceLabel}</Text>
-              <Text style={styles.offerDetail}>{sheetState.offer.detail}</Text>
+            <MoneyOfferCard
+              kicker={sheetState.offer.badge}
+              title={sheetState.offer.title}
+              price={sheetState.offer.priceLabel}
+              body={sheetState.offer.detail}
+              statusLabel={reason === "premium_required" ? "App-wide" : "Room access"}
+              statusTone={reason === "premium_required" ? "premium" : "success"}
+            >
               {sheetState.offer.caption ? <Text style={styles.offerCaption}>{sheetState.offer.caption}</Text> : null}
-            </View>
+            </MoneyOfferCard>
           ) : null}
 
           {sheetState || deferredMonetization ? (

@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -19,6 +18,7 @@ import {
 } from "../../_lib/creatorTips";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { useSession } from "../../_lib/session";
+import { CreatorMoneyHeader, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "./money-ui";
 
 type TipSheetProps = {
   visible: boolean;
@@ -139,22 +139,16 @@ export function TipSheet({
         <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
         <View style={styles.sheet} testID="tip-sheet">
           <View style={styles.handle} />
-          <View style={styles.creatorRow}>
-            <View style={styles.avatarWrap}>
-              {creatorAvatarUrl ? (
-                <Image source={{ uri: creatorAvatarUrl }} style={styles.avatar} />
-              ) : (
-                <Text style={styles.avatarInitial}>{(creatorName || "C").slice(0, 1).toUpperCase()}</Text>
-              )}
-            </View>
-            <View style={styles.creatorCopy}>
-              <Text style={styles.kicker}>CREATOR TIP</Text>
-              <Text style={styles.title}>Tip {creatorName || "creator"}</Text>
-              <Text style={styles.body}>Tips use Google Play sandbox on Android and do not unlock content, badges, room access, VIP, or perks.</Text>
-            </View>
-          </View>
+          <CreatorMoneyHeader
+            kicker="Creator support"
+            title={`Tip ${creatorName || "creator"}`}
+            creatorName={creatorName || "Creator"}
+            imageUrl={creatorAvatarUrl}
+            body="Send a contribution directly from this creator's Platform. Tips are support only and never unlock paid access."
+            tone="premium"
+          />
 
-          {tipStatus?.testMode || sandboxTester ? <Text style={styles.testMode}>Sandbox Test · Google Play · No live payout</Text> : null}
+          {tipStatus?.testMode || sandboxTester ? <MoneyStatusChip label="Sandbox Test · Google Play · No live payout" tone="warning" /> : null}
 
           <View style={styles.amountGrid}>
             {amounts.map((amount) => (
@@ -192,11 +186,13 @@ export function TipSheet({
             style={[styles.input, styles.noteInput]}
           />
 
-          <Text style={styles.policyCopy} testID="tip-no-content-unlock-copy">
-            Tips are contributions only. They do not unlock videos, events, rooms, VIP, subscriptions, badges, or public rewards. Merchandise uses Stripe separately.
-          </Text>
+          <MoneyScopeStrip
+            includes="A private creator-support contribution."
+            excludes="Tips do not unlock videos, events, rooms, VIP, subscriptions, badges, public rewards, or merchandise."
+            excludesTestID="tip-no-content-unlock-copy"
+          />
 
-          {notice ? <Text style={styles.notice} testID="tip-success-receipt">{notice}</Text> : null}
+          {notice ? <MoneySuccessReceipt title="Tip status" body={notice} testID="tip-success-receipt" /> : null}
 
           <TouchableOpacity
             activeOpacity={0.88}

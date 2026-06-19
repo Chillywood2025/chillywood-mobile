@@ -21,6 +21,7 @@ import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRoute
 import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
 import { buildUserChannelProfile, readUserProfileByUserId } from "../../_lib/userData";
 import { useSession } from "../../_lib/session";
+import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 
 const normalizeParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
@@ -133,28 +134,23 @@ export default function ChannelSubscriptionScreen() {
           <View style={styles.card}>
             <View style={styles.statusRow}>
               <Text style={styles.kicker}>{isOwner ? "Owner preview" : "Subscribed"}</Text>
-              <Text
-                style={[styles.statusPill, isOwner && styles.statusPillOwner]}
+              <MoneyStatusChip
+                label={isOwner ? "Owner preview" : "Subscribed"}
+                tone={isOwner ? "premium" : "success"}
                 testID={isOwner ? "subscriber-area-owner-preview-badge" : "subscriber-area-subscribed-badge"}
-              >
-                {isOwner ? "Owner preview" : "Subscribed"}
-              </Text>
+              />
             </View>
             <Text style={styles.title}>Subscriber Area</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
 	            <Text style={styles.body}>
 	              {"Your creator subscription is active for this Platform only."}
 	            </Text>
-            <View style={styles.scopeGrid}>
-              <View style={styles.scopeCard} testID="subscriber-area-includes-list">
-                <Text style={styles.scopeTitle}>Includes</Text>
-                <Text style={styles.scopeBody}>Subscriber access for this creator Platform.</Text>
-              </View>
-              <View style={styles.scopeCard} testID="subscriber-area-does-not-include-list">
-                <Text style={styles.scopeTitle}>Does not include</Text>
-                <Text style={styles.scopeBody}>This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators.</Text>
-              </View>
-            </View>
+            <MoneyScopeStrip
+              includes="Subscriber access for this creator Platform."
+              excludes="This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators."
+              includesTestID="subscriber-area-includes-list"
+              excludesTestID="subscriber-area-does-not-include-list"
+            />
             {access?.currentPeriodEnd ? (
               <Text style={styles.meta}>Current period ends {new Date(access.currentPeriodEnd).toLocaleString()}.</Text>
             ) : null}
@@ -196,6 +192,10 @@ export default function ChannelSubscriptionScreen() {
                 ? `Subscribe to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.`
                 : "This creator subscription is not available right now."}
             </Text>
+            <MoneyScopeStrip
+              includes="Subscriber access for this creator Platform when active."
+              excludes="Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, payouts, and other creators stay separate."
+            />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
             {needsPurchase ? (
               <TouchableOpacity

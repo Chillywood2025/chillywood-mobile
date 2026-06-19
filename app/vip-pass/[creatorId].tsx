@@ -21,6 +21,7 @@ import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRoute
 import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId } from "../../_lib/userData";
+import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 
 const normalizeParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
@@ -133,28 +134,23 @@ export default function CreatorVipPassScreen() {
           <View style={styles.card}>
             <View style={styles.statusRow}>
               <Text style={styles.kicker}>{isOwner ? "Owner preview" : "VIP active"}</Text>
-              <Text
-                style={[styles.statusPill, isOwner && styles.statusPillOwner]}
+              <MoneyStatusChip
+                label={isOwner ? "Owner preview" : "VIP active"}
+                tone={isOwner ? "premium" : "vip"}
                 testID={isOwner ? "vip-area-owner-preview-badge" : "vip-area-active-badge"}
-              >
-                {isOwner ? "Owner preview" : "VIP active"}
-              </Text>
+              />
             </View>
             <Text style={styles.title}>VIP Area</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
             <Text style={styles.body}>
               VIP is active for this creator's Platform only.
             </Text>
-            <View style={styles.scopeGrid}>
-              <View style={styles.scopeCard} testID="vip-area-includes-list">
-                <Text style={styles.scopeTitle}>Includes</Text>
-                <Text style={styles.scopeBody}>Creator-specific VIP access for this Platform.</Text>
-              </View>
-              <View style={styles.scopeCard} testID="vip-area-does-not-include-list">
-                <Text style={styles.scopeTitle}>Does not include</Text>
-                <Text style={styles.scopeBody}>Chi'llywood Premium, subscriptions, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, room permissions, payouts, or other creators.</Text>
-              </View>
-            </View>
+            <MoneyScopeStrip
+              includes="Creator-specific VIP access for this Platform."
+              excludes="Chi'llywood Premium, subscriptions, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, room permissions, payouts, or other creators."
+              includesTestID="vip-area-includes-list"
+              excludesTestID="vip-area-does-not-include-list"
+            />
             <View style={styles.emptyStateCard}>
               <Text style={styles.emptyStateTitle}>No VIP perks yet</Text>
               <Text style={styles.emptyStateBody}>{isOwner ? "VIP perks can be managed from Platform Studio when the perk system is backed." : "VIP perks coming later."}</Text>
@@ -193,6 +189,10 @@ export default function CreatorVipPassScreen() {
                 ? `Sandbox Test: get VIP for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, subscriptions, or other creators.`
                 : "This creator has not enabled VIP yet."}
             </Text>
+            <MoneyScopeStrip
+              includes="Creator-specific VIP access for this Platform when active."
+              excludes="Chi'llywood Premium, subscriptions, paid videos, Watch-Party tickets, paid events, room authority, payouts, and other creators stay separate."
+            />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
             <Text style={styles.meta}>VIP does not unlock Chi'llywood Premium.</Text>
             {needsPurchase ? (

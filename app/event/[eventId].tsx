@@ -10,6 +10,7 @@ import {
   type PaidCreatorEventAccess,
 } from "../../_lib/paidCreatorEvents";
 import { supabase } from "../../_lib/supabase";
+import { MoneyOfferCard, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "../../components/monetization/money-ui";
 
 type EventRow = {
   id: string;
@@ -145,17 +146,28 @@ export default function PaidCreatorEventRoute() {
             </View>
 
             {access?.allowed ? (
-              <View style={styles.stateBox} testID="event-pass-access-granted-state">
-                <Text style={styles.stateTitle}>Event pass confirmed</Text>
-                <Text style={styles.body}>
-                  You can access this creator event. This pass does not grant Premium, VIP, paid videos, Watch-Party rooms, other events, LiveKit host controls, or payout authority.
-                </Text>
+              <View testID="event-pass-access-granted-state">
+                <MoneySuccessReceipt
+                  title="Event pass confirmed"
+                  body="You can access this creator event. This pass does not grant Premium, VIP, paid videos, Watch-Party rooms, other events, LiveKit host controls, or payout authority."
+                  testID="event-pass-success-receipt"
+                />
                 <Text style={styles.detail}>Access reason: {access.reason}</Text>
               </View>
             ) : locked ? (
-              <View style={styles.stateBox} testID="event-pass-lock-card">
-                <Text style={styles.stateTitle}>Event pass required</Text>
-                <Text style={styles.body}>{LOCKED_COPY}</Text>
+              <MoneyOfferCard
+                testID="event-pass-lock-card"
+                kicker="Creator event pass"
+                title="Event pass required"
+                price={offer ? formatPaidCreatorEventPrice(offer.priceCents, offer.currency) : null}
+                body={LOCKED_COPY}
+                statusLabel={soldOut ? "Sold out" : "Locked"}
+                statusTone={soldOut ? "warning" : "premium"}
+              >
+                <MoneyScopeStrip
+                  includes="Access to this creator event only."
+                  excludes="Chi'llywood Premium, VIP, subscriptions, paid videos, Watch-Party tickets, other events, host authority, and payouts stay separate."
+                />
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Sandbox Test Buy Event Pass"
@@ -170,10 +182,13 @@ export default function PaidCreatorEventRoute() {
                     <Text style={styles.primaryButtonText}>{soldOut ? "Sold Out" : "Sandbox Test Event Pass"}</Text>
                   )}
                 </Pressable>
-              </View>
+              </MoneyOfferCard>
             ) : unavailable ? (
               <View style={styles.stateBox} testID="event-pass-access-denied-state">
-                <Text style={styles.stateTitle}>Event Pass Not Available</Text>
+                <View style={styles.stateHeaderRow}>
+                  <Text style={styles.stateTitle}>Event Pass Not Available</Text>
+                  <MoneyStatusChip label="Unavailable" tone="warning" />
+                </View>
                 <Text style={styles.body}>
                   This paid event cannot be purchased right now. Reason: {access?.reason || "unavailable"}.
                 </Text>
@@ -255,6 +270,12 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "900",
+  },
+  stateHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
   notice: {
     color: "#A7F3D0",

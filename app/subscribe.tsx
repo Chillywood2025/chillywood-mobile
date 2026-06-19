@@ -21,6 +21,7 @@ import {
 } from "../_lib/monetization";
 import { useOptionalBetaProgram } from "../_lib/betaProgram";
 import { useSession } from "../_lib/session";
+import { MoneyScopeStrip, MoneySuccessReceipt } from "../components/monetization/money-ui";
 
 const FRIENDLY_UNAVAILABLE_MESSAGE =
   "Premium purchases are temporarily unavailable while setup is being finalized.";
@@ -355,6 +356,11 @@ export default function SubscribeScreen() {
         <Text style={styles.heroBody}>{statusSummary}</Text>
       </View>
 
+      <MoneyScopeStrip
+        includes="App-wide Chi'llywood Premium access for supported Premium features and creator tools."
+        excludes="Creator subscriptions, VIP passes, tips, paid videos, Watch-Party tickets, and paid events are separate creator products."
+      />
+
       {sessionLoading ? (
         <View style={styles.card} testID="premium-loading-state" collapsable={false}>
           <ActivityIndicator color="#DC143C" />
@@ -392,6 +398,12 @@ export default function SubscribeScreen() {
                 tone={hasPremium ? "default" : "muted"}
               />
             </View>
+            {hasPremium ? (
+              <MoneySuccessReceipt
+                title="Premium active"
+                body="Your app-wide Premium status is active. Creator subscriptions, VIP, paid videos, tickets, events, and tips still stay separate."
+              />
+            ) : null}
             <StatusLine
               label="Purchase status"
               value={purchaseStatusLabel}
