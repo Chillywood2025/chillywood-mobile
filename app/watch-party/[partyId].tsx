@@ -778,72 +778,85 @@ export default function WatchPartyRoomScreen() {
         }
 
         resolvedRoomForBootstrap = true;
-        const premiumAccessSource = snapshot.room.roomType === "live" ? "live_first" : "watch_party_live";
-        const premiumAccessKey = String(
-          snapshot.room.roomType === "live"
-            ? snapshot.room.partyId ?? partyId
-            : snapshot.room.sourceId ?? snapshot.room.titleId ?? snapshot.room.partyId ?? partyId,
-        ).trim();
-        const premiumAccess = await (
-          premiumAccessSource === "live_first" ? requireLiveFirstPremium : requireWatchPartyLivePremium
-        )({ accessKey: premiumAccessKey }).catch(() => null);
+        const isTicketedPartyRoom = snapshot.room.roomType !== "live";
+        const ticketAccess = isTicketedPartyRoom
+          ? await resolvePaidWatchPartyTicketAccess(snapshot.room.partyId).catch(() => null)
+          : null;
         if (cancelled) return;
 
-        if (!premiumAccess?.allowed) {
-          if (premiumAccess) {
-            setAccessGate({
-              source: premiumAccessSource,
-              access: premiumAccess,
-              accessKey: premiumAccessKey || snapshot.room.partyId,
-            });
-          }
-          setAccessSheetVisible(!isRuntimeControlBlockedAccess(premiumAccess));
+        const hasTicketedTarget = !!ticketAccess && (
+          ticketAccess.allowed
+          || ticketAccess.requiresPurchase
+          || !!ticketAccess.offer?.id
+          || !!ticketAccess.ticketId
+        );
+        const exactTicketAllowsEntry = isTicketedPartyRoom && hasTicketedTarget && ticketAccess?.allowed === true;
+
+        if (isTicketedPartyRoom && ticketAccess && hasTicketedTarget && !ticketAccess.allowed) {
           setRoom(snapshot.room);
+          setPaidTicketGate(ticketAccess);
+          setPaidTicketNotice(
+            ticketAccess.requiresPurchase
+              ? "Buy your ticket before entering the Party Room."
+              : "This room ticket is not available right now.",
+          );
           setLoading(false);
-          if (isRuntimeControlBlockedAccess(premiumAccess)) {
-            trackEvent("runtime_control_blocked", {
-              surface: "watch-party-room",
-              controlKey: premiumAccess?.runtimeControlKey ?? (
-                premiumAccessSource === "live_first" ? "live_first_enabled" : "watch_party_live_enabled"
-              ),
-              roomId: snapshot.room.partyId,
-            });
-          } else {
-            trackEvent("monetization_gate_shown", {
-              surface: "watch-party-room",
-              reason: premiumAccess?.reason ?? "premium_required",
-              roomId: snapshot.room.partyId,
-            });
-          }
+          trackEvent("money_provider_blocked_state_seen", {
+            blocked_reason: ticketAccess.reason,
+            offer_type: "paid_watch_party",
+            route_name: "watch-party-room",
+            room_type: "party_room",
+            source_surface: "party_room_direct_link",
+          });
           return;
         }
 
-        if (snapshot.room.roomType !== "live") {
-          const ticketAccess = await resolvePaidWatchPartyTicketAccess(snapshot.room.partyId).catch(() => null);
+        if (!exactTicketAllowsEntry) {
+          const premiumAccessSource = snapshot.room.roomType === "live" ? "live_first" : "watch_party_live";
+          const premiumAccessKey = String(
+            snapshot.room.roomType === "live"
+              ? snapshot.room.partyId ?? partyId
+              : snapshot.room.sourceId ?? snapshot.room.titleId ?? snapshot.room.partyId ?? partyId,
+          ).trim();
+          const premiumAccess = await (
+            premiumAccessSource === "live_first" ? requireLiveFirstPremium : requireWatchPartyLivePremium
+          )({ accessKey: premiumAccessKey }).catch(() => null);
           if (cancelled) return;
-          if (!ticketAccess) {
+
+          if (!premiumAccess?.allowed) {
+            if (premiumAccess) {
+              setAccessGate({
+                source: premiumAccessSource,
+                access: premiumAccess,
+                accessKey: premiumAccessKey || snapshot.room.partyId,
+              });
+            }
+            setAccessSheetVisible(!isRuntimeControlBlockedAccess(premiumAccess));
+            setRoom(snapshot.room);
+            setLoading(false);
+            if (isRuntimeControlBlockedAccess(premiumAccess)) {
+              trackEvent("runtime_control_blocked", {
+                surface: "watch-party-room",
+                controlKey: premiumAccess?.runtimeControlKey ?? (
+                  premiumAccessSource === "live_first" ? "live_first_enabled" : "watch_party_live_enabled"
+                ),
+                roomId: snapshot.room.partyId,
+              });
+            } else {
+              trackEvent("monetization_gate_shown", {
+                surface: "watch-party-room",
+                reason: premiumAccess?.reason ?? "premium_required",
+                roomId: snapshot.room.partyId,
+              });
+            }
+            return;
+          }
+        }
+
+        if (isTicketedPartyRoom && !ticketAccess) {
             setConnState("error");
             setLoading(false);
             return;
-          }
-          if (!ticketAccess.allowed) {
-            setRoom(snapshot.room);
-            setPaidTicketGate(ticketAccess);
-            setPaidTicketNotice(
-              ticketAccess.requiresPurchase
-                ? "Buy your ticket before entering the Party Room."
-                : "This room ticket is not available right now.",
-            );
-            setLoading(false);
-            trackEvent("money_provider_blocked_state_seen", {
-              blocked_reason: ticketAccess.reason,
-              offer_type: "paid_watch_party",
-              route_name: "watch-party-room",
-              room_type: "party_room",
-              source_surface: "party_room_direct_link",
-            });
-            return;
-          }
         }
 
         syncRoomFromSnapshot(snapshot, userId);
