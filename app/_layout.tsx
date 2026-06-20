@@ -514,12 +514,13 @@ function AuthRouteGate() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const segments = useSegments();
-  const { isLoading, isSignedIn } = useSession();
+  const { isLoading, isPasswordRecoverySession, isSignedIn } = useSession();
 
   const redirectTo = serializeRedirectTarget(pathname, params as Record<string, unknown>);
   const authRedirectTo = String(params.redirectTo ?? "").trim() || "/";
   const insideAuthGroup = segments[0] === "(auth)";
   const insideTabsGroup = segments[0] === "(tabs)" || pathname === "/";
+  const insideResetPassword = pathname === "/reset-password";
 
   useEffect(() => {
     if (isLoading) return;
@@ -532,13 +533,24 @@ function AuthRouteGate() {
       return;
     }
 
+    if (isSignedIn && isPasswordRecoverySession && !insideResetPassword) {
+      router.replace("/reset-password");
+      return;
+    }
+
     if (isSignedIn && insideAuthGroup) {
       router.replace(authRedirectTo as Parameters<typeof router.replace>[0]);
     }
-  }, [authRedirectTo, insideAuthGroup, insideTabsGroup, isLoading, isSignedIn, redirectTo, router]);
+  }, [authRedirectTo, insideAuthGroup, insideResetPassword, insideTabsGroup, isLoading, isPasswordRecoverySession, isSignedIn, redirectTo, router]);
 
   if (isLoading) return <AuthBootScreen />;
-  if ((!isSignedIn && insideTabsGroup) || (isSignedIn && insideAuthGroup)) return <AuthBootScreen />;
+  if (
+    (!isSignedIn && insideTabsGroup)
+    || (isSignedIn && isPasswordRecoverySession && !insideResetPassword)
+    || (isSignedIn && insideAuthGroup)
+  ) {
+    return <AuthBootScreen />;
+  }
 
   return (
     <View style={styles.appRootReady} testID="app-root-ready">

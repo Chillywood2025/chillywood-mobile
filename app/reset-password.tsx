@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../_lib/analytics";
 import { reportRuntimeError } from "../_lib/logger";
+import { useSession } from "../_lib/session";
 import { supabase } from "../_lib/supabase";
 
 type RecoveryParams = {
@@ -34,6 +35,7 @@ type RecoveryParams = {
 type RecoveryStatus = "checking" | "ready" | "missing" | "failed";
 
 const PASSWORD_MIN_LENGTH = 8;
+const RESET_FLOW_SIGN_OUT_TIMEOUT_MS = 2500;
 const RECOVERY_LINK_OPEN_ERROR = "This reset link expired or could not be opened. Request a fresh link.";
 const RECOVERY_PARAM_KEYS = [
   "access_token",
@@ -165,11 +167,25 @@ const parseRecoveryRouteParams = (
   return Object.values(recovery).some(Boolean) ? recovery : null;
 };
 
+const wait = (timeoutMs: number) => new Promise((resolve) => {
+  setTimeout(resolve, timeoutMs);
+});
+
+const clearResetFlowSession = async () => {
+  await Promise.race([
+    supabase.auth.signOut({ scope: "local" }).catch(() => null),
+    wait(RESET_FLOW_SIGN_OUT_TIMEOUT_MS),
+  ]);
+
+  void supabase.auth.signOut().catch(() => null);
+};
+
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<
     Partial<Record<(typeof RECOVERY_PARAM_KEYS)[number], string | string[]>>
   >();
+  const { isPasswordRecoverySession } = useSession();
   const insets = useSafeAreaInsets();
   const handledRecoveryKeyRef = useRef<string | null>(null);
   const [status, setStatus] = useState<RecoveryStatus>("checking");
@@ -232,27 +248,32 @@ export default function ResetPasswordScreen() {
       return true;
     }
 
-    const { data: currentSession } = await supabase.auth.getSession();
-
-    if (currentSession.session) {
-      markRecoveryReady(flow);
-      return true;
-    }
-
     return false;
   }, [markRecoveryReady]);
 
-  const markReadyFromExistingSession = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-
-    if (data.session) {
-      markRecoveryReady("existing_session");
-      return;
-    }
-
+  const markMissingRecoveryLink = useCallback(() => {
     setStatus("missing");
     setStatusMessage("This reset link is missing or expired. Request a fresh password reset email.");
-  }, [markRecoveryReady]);
+  }, []);
+
+  const requestNewResetEmail = useCallback(async () => {
+    setStatus("checking");
+    setStatusMessage("Opening password reset request...");
+
+    await clearResetFlowSession();
+
+    const email = routeRecoveryParams?.email?.trim();
+    const params = new URLSearchParams({ redirectTo: "/(auth)/login" });
+    if (email) params.set("email", email);
+    router.replace(`/forgot-password?${params.toString()}` as Href);
+  }, [routeRecoveryParams?.email, router]);
+
+  const backToSignIn = useCallback(async () => {
+    setStatus("checking");
+    setStatusMessage("Returning to sign in...");
+    await clearResetFlowSession();
+    router.replace("/(auth)/login");
+  }, [router]);
 
   const consumeRecoveryParams = useCallback(async (recovery: RecoveryParams | null) => {
     if (!recovery) return false;
@@ -377,7 +398,12 @@ export default function ResetPasswordScreen() {
         const initialUrl = await Linking.getInitialURL();
         const consumed = await consumeRecoveryUrl(initialUrl);
         if (!active || consumed) return;
-        await markReadyFromExistingSession();
+        if (isPasswordRecoverySession) {
+          markRecoveryReady("recovery_session");
+          return;
+        }
+
+        markMissingRecoveryLink();
       } catch (error) {
         if (!active) return;
         reportRuntimeError("auth-password-recovery-bootstrap", error, {
@@ -404,7 +430,14 @@ export default function ResetPasswordScreen() {
       active = false;
       subscription.remove();
     };
-  }, [consumeRecoveryParams, consumeRecoveryUrl, markReadyFromExistingSession, routeRecoveryParams]);
+  }, [
+    consumeRecoveryParams,
+    consumeRecoveryUrl,
+    isPasswordRecoverySession,
+    markMissingRecoveryLink,
+    markRecoveryReady,
+    routeRecoveryParams,
+  ]);
 
   const updatePassword = useCallback(async () => {
     if (saving) return;
@@ -439,7 +472,7 @@ export default function ResetPasswordScreen() {
 
       setNewPassword("");
       setConfirmPassword("");
-      await supabase.auth.signOut().catch(() => null);
+      await clearResetFlowSession();
       trackEvent("auth_password_recovery_update_success", {
         source: "reset-password",
       });
@@ -488,7 +521,7 @@ export default function ResetPasswordScreen() {
           ) : null}
 
           {status === "ready" ? (
-            <>
+            <View testID="reset-password-sheet" collapsable={false}>
               <TextInput
                 style={styles.input}
                 placeholder="New password"
@@ -502,6 +535,7 @@ export default function ResetPasswordScreen() {
                 value={newPassword}
                 onChangeText={setNewPassword}
                 accessibilityLabel="New password"
+                testID="reset-password-new-password-input"
               />
               <TextInput
                 style={styles.input}
@@ -519,6 +553,7 @@ export default function ResetPasswordScreen() {
                   void updatePassword();
                 }}
                 accessibilityLabel="Confirm new password"
+                testID="reset-password-confirm-password-input"
               />
               <Text
                 style={[
@@ -539,26 +574,30 @@ export default function ResetPasswordScreen() {
               >
                 <Text style={styles.buttonText}>{saving ? "Updating..." : "Update password"}</Text>
               </Pressable>
-            </>
+            </View>
           ) : null}
 
           {status === "missing" || status === "failed" ? (
-            <>
+            <View testID="reset-password-expired-state" collapsable={false}>
               <Pressable
                 style={styles.button}
-                onPress={() => router.replace("/forgot-password" as Href)}
+                onPress={requestNewResetEmail}
                 accessibilityRole="button"
                 accessibilityLabel="Request new reset email"
+                testID="reset-password-request-new-email-button"
               >
                 <Text style={styles.buttonText}>Request new reset email</Text>
               </Pressable>
               <Pressable
                 style={styles.secondaryButton}
-                onPress={() => router.replace("/(auth)/login")}
+                onPress={backToSignIn}
+                accessibilityRole="button"
+                accessibilityLabel="Back to sign in"
+                testID="reset-password-back-to-sign-in-button"
               >
                 <Text style={styles.secondaryButtonText}>Back to sign in</Text>
               </Pressable>
-            </>
+            </View>
           ) : null}
         </View>
       </ScrollView>

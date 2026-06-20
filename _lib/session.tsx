@@ -1,4 +1,5 @@
 import type { Session, User } from "@supabase/supabase-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { AppState, Platform } from "react-native";
 
@@ -6,11 +7,14 @@ import { clearUser, identifyUser, trackEvent } from "./analytics";
 import { reportDebugAuth } from "./devDebug";
 import { supabase } from "./supabase";
 
+const PASSWORD_RECOVERY_SESSION_STORAGE_KEY = "chillywood.passwordRecoverySession";
+
 type SessionContextValue = {
   isLoading: boolean;
   session: Session | null;
   user: User | null;
   isSignedIn: boolean;
+  isPasswordRecoverySession: boolean;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -19,6 +23,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPasswordRecoverySession, setIsPasswordRecoverySession] = useState(false);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -43,12 +48,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     let active = true;
 
     supabase.auth.getSession()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (!active) return;
         const nextSession = data.session ?? null;
         const nextUser = nextSession?.user ?? null;
+        const recoveryMarker = await AsyncStorage.getItem(PASSWORD_RECOVERY_SESSION_STORAGE_KEY).catch(() => null);
+        if (!active) return;
+
         setSession(nextSession);
         setUser(nextUser);
+        setIsPasswordRecoverySession(!!nextSession && recoveryMarker === "active");
         setIsLoading(false);
 
         if (!nextSession || Platform.OS === "web") return;
@@ -77,6 +86,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setSession(nextSession);
       setUser(nextUser);
       setIsLoading(false);
+
+      if (event === "PASSWORD_RECOVERY" && nextSession) {
+        setIsPasswordRecoverySession(true);
+        void AsyncStorage.setItem(PASSWORD_RECOVERY_SESSION_STORAGE_KEY, "active").catch(() => null);
+      }
+      if (event === "SIGNED_OUT" || !nextSession) {
+        setIsPasswordRecoverySession(false);
+        void AsyncStorage.removeItem(PASSWORD_RECOVERY_SESSION_STORAGE_KEY).catch(() => null);
+      }
 
       if (event === "SIGNED_IN" && nextUser) {
         trackEvent("auth_sign_in_success", {
@@ -115,7 +133,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     session,
     user,
     isSignedIn: !!user,
-  }), [isLoading, session, user]);
+    isPasswordRecoverySession,
+  }), [isLoading, isPasswordRecoverySession, session, user]);
 
   return (
     <SessionContext.Provider value={value}>
