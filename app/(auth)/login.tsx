@@ -117,7 +117,7 @@ export default function Login() {
               placeholder="Email"
               placeholderTextColor="#7A859A"
               accessibilityLabel="Login email"
-              accessibilityHint="Enter the email address for your Chi’llywood account"
+              accessibilityHint="Enter the email address for your Chi'llywood account"
               autoCapitalize="none"
               keyboardType="email-address"
               autoCorrect={false}
@@ -135,7 +135,7 @@ export default function Login() {
               placeholder="Password"
               placeholderTextColor="#7A859A"
               accessibilityLabel="Login password"
-              accessibilityHint="Enter your Chi’llywood account password"
+              accessibilityHint="Enter your Chi'llywood account password"
               secureTextEntry
               returnKeyType="done"
               testID="auth-login-password-input"

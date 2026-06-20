@@ -113,8 +113,8 @@ export default function Signup() {
     Alert.alert(
       "Success",
       isClosedBetaEnvironment()
-        ? "Check your email to confirm signup. Tap Verify and Chi’llywood will bring you back to login. Closed-beta access only activates if this email is on the invite list."
-        : "Check your email to confirm signup. Tap Verify and Chi’llywood will bring you back to login.",
+        ? "Check your email to confirm signup. Tap Verify and Chi'llywood will bring you back to login. Closed-beta access only activates if this email is on the invite list."
+        : "Check your email to confirm signup. Tap Verify and Chi'llywood will bring you back to login.",
       [
         {
           text: "Go to login",

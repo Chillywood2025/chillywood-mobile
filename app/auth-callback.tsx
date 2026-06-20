@@ -109,7 +109,7 @@ export default function AuthCallbackScreen() {
   const insets = useSafeAreaInsets();
   const [checking, setChecking] = useState(true);
   const [title, setTitle] = useState("Confirming your account");
-  const [message, setMessage] = useState("Opening your Chi’llywood email verification...");
+  const [message, setMessage] = useState("Opening your Chi'llywood email verification...");
   const [urlState, setUrlState] = useState<AuthCallbackState | null>(null);
   const [urlHydrated, setUrlHydrated] = useState(false);
 
