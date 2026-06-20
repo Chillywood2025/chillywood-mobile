@@ -1,10 +1,12 @@
 # Final Public V1 QA Plan
 
-Last updated: June 16, 2026
+Last updated: June 20, 2026
 
 ## Scope
 
 This plan is the final public-v1 launch-readiness QA pass after creator monetization sandbox closeout. It does not add product features, enable live money, enable payouts, change LiveKit authority, change Watch-Party routing, or mix Premium with creator purchases.
+
+Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are closed for Android app-side proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
 
 Latest launch-blocker audit: `docs/PUBLIC_V1_FINAL_REGRESSION_AUDIT_20260616.md`.
 
@@ -119,13 +121,13 @@ Protected route doctrine:
 - Live Watch-Party / Live Stage route smoke still needs final runtime regression.
 - Live money remains disabled and must stay disabled until a separate owner-approved launch lane.
 - Payouts, cash-out, withdrawals, transfers, payout release, and payable creator balances remain disabled.
-- Provider refund/revoke/lifecycle proof remains incomplete for several creator-money flows because safe provider tooling/order identifiers are not available.
+- Provider/test-account maintenance remains a future operations task; it is not an app-code money proof blocker after the June 20 seven-flow closeout.
 - Channel Subscription lifecycle webhook delivery is still provider-blocked until a fresh signed RevenueCat lifecycle event is received after the handler deployment.
 - Paid Events capacity UI proof remains deferred because creator UI does not expose `capacity_limit`.
 - Premium separation, direct-link gates, and BrowserStack still need release-candidate regression proof; installed-app signup verification and forgot-password reset completion passed on Play/internal v53 with a disposable inbox.
 - External Google Play / legal / Data Safety / account-deletion acceptance and operational signoff remain launch-governance blockers where not separately closed.
 
-Sandbox Money Tester Experience update: all six Android sandbox tester flows are now Play-installed proved. Final proof folders are `/tmp/chillywood-sandbox-money-final-three-proof-20260616-183633` and `/tmp/chillywood-vip-after-play-refund-proof-20260616-180235`. Future money work in this plan is regression/provider-lifecycle only unless a real regression appears.
+Sandbox Money Tester Experience update: all seven money flows are now app-side proved on Android. Final closeout proof folders include `/tmp/chillywood-watch-party-ticket-purchase-auto-fix-20260619-221241`, `/tmp/chillywood-provider-ownership-final-money-proof-20260619-231228`, and `/tmp/chillywood-vip-provider-ownership-reset-proof-20260620-002028`. Future money work in this plan is provider/test-account maintenance, live-production rollout governance, or regression-only if a real regression appears.
 
 ## Safe Deferred Provider-Tooling Gaps
 

@@ -2,9 +2,11 @@
 
 ## Public V1 Final Regression
 
-Algorithm Foundation V1 is now a separate foundation lane, not a launch-critical feed replacement. It is free/rules-based/not ML, has dry-run/readback and `guard:algorithm-ranking-v1`, and keeps `algorithmRankingV1Enabled=false` for production rail replacement. Do not wire it into Home, Live, Public Platform, creator monetization, Premium, Watch-Party, LiveKit, Chi'lly Chat, or BrowserStack proof routes without a separately scoped proof prompt. BrowserStack monetization purchase-flow proof remains separate and pending for manual-assisted purchase flows.
+Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass have reliable Android app-side proof, including Watch-Party Ticket exact-target purchase/readback and VIP provider ownership reset plus fresh first-purchase proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
 
-Launch-blocker audit is recorded in `docs/PUBLIC_V1_FINAL_REGRESSION_AUDIT_20260616.md`. Sandbox Money Tester Experience is `6/6` Play-installed Android sandbox-flow proved; do not start another broad money fixture lane unless a real regression appears.
+Algorithm Foundation V1 is now a separate foundation lane, not a launch-critical feed replacement. It is free/rules-based/not ML, has dry-run/readback and `guard:algorithm-ranking-v1`, and keeps `algorithmRankingV1Enabled=false` for production rail replacement. Do not wire it into Home, Live, Public Platform, creator monetization, Premium, Watch-Party, LiveKit, Chi'lly Chat, or BrowserStack proof routes without a separately scoped proof prompt.
+
+Launch-blocker audit is recorded in `docs/PUBLIC_V1_FINAL_REGRESSION_AUDIT_20260616.md`. Sandbox Money Tester Experience is Play-installed Android proved for the seven app-side money flows. Sandbox proof does not enable live money or payouts, and broad public launch still requires external launch governance, Play/RevenueCat production readiness, and non-money Public V1 blockers.
 
 Current spotted-fix lane should finish with validation and Play-installed/manual proof for owner Platform identity, owner-vs-viewer subscription/VIP route behavior, useful VIP/Subscriber areas, owner-only Platform content actions, and standalone Player fullscreen framing. The newest visible-UX focus is to prove owner Platform renders `Creator Offers` management, viewer/tester Platform renders `Support this Platform`, owner subscription/VIP management opens Platform Studio offer setup rather than the Premium purchase shell, owner self-purchase is blocked, true non-owner viewers/testers still see purchase CTAs where configured, and Premium remains only Chi'llywood Premium. The Profile/Platform `public/private/subscriber_only` visibility foundation is now backed by schema, resolver RPCs, Profile RLS bridge, Settings/Profile UI, Platform Studio UI, and route gates; remaining launch proof is direct SQL/RPC readback plus multi-account fixture proof. Followers/following remain public discovery/social relationships only.
 
@@ -82,8 +84,9 @@ Next task recommendation: execute `docs/FINAL_PUBLIC_V1_QA_PLAN.md` on the lates
 
 ## Monetization Closeout / Final Regression
 
-The six planned creator monetization flows are now sandbox-proven for their core paths and consolidated in Money Center:
+Seven-flow money proof: CLOSED / app-side proof complete. The app-side proof lane now includes Premium plus the six creator monetization flows:
 
+- Premium
 - Tips V1
 - Paid Videos V1
 - Paid Watch-Party Seats V1
@@ -91,11 +94,11 @@ The six planned creator monetization flows are now sandbox-proven for their core
 - Channel Subscriptions V1
 - VIP Passes V1
 
-Current truth lives in `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md`.
+Current proof truth lives in `CURRENT_STATE.md`, `docs/SANDBOX_MONETIZATION_TESTER_EXPERIENCE.md`, and the proof folders listed there. The older six-flow creator closeout audit remains historical background, not an instruction to reopen proof.
 
-Next monetization work should not add new creator-money flows. The next production-money tasks are closeout hardening, provider refund/revoke/lifecycle proof when safe tooling/order ids exist, and final BrowserStack regression on a Play/internal launch-candidate runtime.
+Next monetization work should not add new creator-money flows. The next production-money tasks are provider/test-account maintenance, live-production rollout governance, and final whole-app regression only if a real regression appears.
 
-Final BrowserStack regression must cover: auth email reset/signup, Brand Studio, Chi'lly Chat calls, Watch-Party participant rail, Tips, Paid Videos, Paid Watch-Party Seats, Paid Events, Channel Subscriptions, VIP Passes, Premium separation, direct-link denials, and Money Center readbacks. BrowserStack remains final regression, not first proof, and must use a Play/internal runtime rather than Expo Dev Launcher.
+Final whole-app regression must cover auth email reset/signup, Brand Studio, Chi'lly Chat calls, Watch-Party participant rail, Premium separation, direct-link denials, and Money Center readbacks. Do not restart the money proof lane unless one of those regression checks exposes a real money regression.
 
 Live money remains off. Payouts, cash-out, withdrawal, transfer, and payable creator balances remain unavailable.
 
@@ -298,9 +301,9 @@ Closed on June 11, 2026:
 - Ledger row is sandbox/not-payable; `live_money_enabled` remains off.
 - Separation proof showed no Tips transaction was created for the paid-video purchase window.
 
-Remaining proof:
+Remaining provider maintenance:
 
-- Provider refund/revoke remains deferred until RevenueCat/Google Play refund tooling and safe order identifiers are available. Do not claim refund/revoke proof passed yet.
+- Provider refund/revoke for historical Paid Video purchases is an operations/tooling maintenance item, not an app-code money proof blocker. Do not fake refund/revoke by manual Supabase mutation.
 
 Closed fixture-based proof on June 11, 2026:
 

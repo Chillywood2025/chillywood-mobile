@@ -118,7 +118,7 @@ Status key:
 | Repeat infringer policy | Implemented and live-proof passed for Admin tracking / attorney review pending | `dmca_strikes` tracks active/removed/disputed/resolved/expired strikes and can open repeat-infringer review; proof confirmed valid takedown strike creation, rejected notice no-strike behavior, strike dispute/resolve, Admin visibility, and no automatic termination. |
 | Account deletion in-app path | Linked in app / policy proof automated | Settings opens the full Account Deletion policy and support contact remains available. |
 | Account deletion web link | Public static route generated / Play acceptance pending | `https://chillywoodstream.com/account-deletion` remains the preferred public Google Play URL; Play Console acceptance remains external. |
-| Refund/subscription terms | Replaced by full Premium and Subscription Terms pending attorney review | Policy text lives in `legal/policies.mjs`; RevenueCat/Google Play proof remains external. |
+| Refund/subscription terms | Replaced by full Premium and Subscription Terms pending attorney review | Policy text lives in `legal/policies.mjs`; live-production provider governance remains external. |
 | Creator payout rules | Drafted pending attorney review | Payouts remain not active/live. |
 | Fraud/forfeiture rules | Drafted pending attorney review | Fraud foundations exist; live enforcement not connected. |
 | Sponsor disclosure rules | Drafted pending attorney review | Sponsor money/checkout remains not active. |

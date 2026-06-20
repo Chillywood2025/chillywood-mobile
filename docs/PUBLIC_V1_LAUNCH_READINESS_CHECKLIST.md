@@ -1,6 +1,6 @@
 # Public V1 Launch Readiness Checklist
 
-Last updated: June 14, 2026
+Last updated: June 20, 2026
 
 ## Status
 
@@ -19,6 +19,8 @@ June 14 owner/admin integration audit after route cleanup is recorded in `docs/O
 June 14 BrowserStack readiness package is prepared under `qa/browserstack/`. It includes coverage map, persona labels without secrets, placeholder env names, approval-gated runbook, and 15 whole-app flow contracts. BrowserStack has not run, no app has been uploaded to BrowserStack, and no BrowserStack minutes have been spent.
 
 Android remains the active proof lane. iOS BrowserStack is a planned/deferred future lane only and requires later Apple signing, App Store Connect, App Store IAP, and RevenueCat Apple product proof before it can run.
+
+June 20 money closeout: Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are closed for Android app-side proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof. Sandbox proof does not enable live money or payouts.
 
 ## 1. Auth
 
@@ -42,12 +44,14 @@ Android remains the active proof lane. iOS BrowserStack is a planned/deferred fu
 
 ## 3. Creator Monetization Sandbox
 
+- [x] Seven-flow money proof closed for app-side Android proof.
+- [x] Premium app-wide separation proved as part of the seven-flow lane.
 - [x] Tips V1 sandbox-proven.
 - [x] Paid Videos V1 sandbox-proven.
-- [x] Paid Watch-Party Seats V1 core sandbox-proven.
+- [x] Paid Watch-Party Seats V1 purchase/readback/exact-target entry proven.
 - [x] Paid Events V1 sandbox-proven.
 - [x] Channel Subscriptions V1 purchase/effective-access safety proven.
-- [x] VIP Passes V1 sandbox-proven.
+- [x] VIP Passes V1 provider ownership reset and fresh first-purchase proven.
 - [x] Live money remains off.
 - [x] Payouts remain off.
 - [x] Sandbox rows remain not payable.

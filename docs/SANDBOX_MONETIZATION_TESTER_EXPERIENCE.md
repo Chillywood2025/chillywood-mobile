@@ -171,7 +171,7 @@ Result:
 - Watch-Party Ticket: passed after adding the public tester CTA, routing it to `/watch-party/[partyId]`, and fixing the ticket-owned route hook-order crash. Ticket offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` targets room `W3JJHH`.
 - Event Pass: passed with event `a9167135-d3cc-4349-bf8a-46dfd9068806`; Google Play sandbox completed and the event screen showed `Event pass confirmed`.
 - Channel Subscription: passed through Google Play sandbox and showed creator-channel subscription only, not Premium.
-- VIP: CTA is wired and reaches Google Play, but the available Play tester already owns `cw_vip_pass_sandbox_499`. First-time VIP completion still requires a clean Play license tester or provider-side proof ownership reset.
+- VIP: CTA is wired and reaches Google Play. The June 16 first-time blocker was later closed in the June 20 provider ownership reset proof below.
 - Revoke: passed. `resolve_sandbox_monetization_tester` returned false, direct purchase intent returned `sandbox_monetization_tester_required`, and fresh app restart hid sandbox CTAs.
 
 No live money, payout request, provider transfer, payout batch, withdrawal, cash-out, transfer, or payable creator balance was enabled. The Watch-Party room fixture needs a fresh `last_activity_at` during proof because normal room activity windows remain 15 minutes; that is a fixture freshness requirement, not a LiveKit authority change.
@@ -211,3 +211,37 @@ Result:
 - Revoke passed again: resolver returned false, direct stale purchase intent returned `sandbox_monetization_tester_required`, and fresh app restart hid sandbox CTAs.
 
 Final Android sandbox tester label: `6/6 Play-installed sandbox flows proven`. This does not enable live money, payouts, withdrawals, cash-out, payable balances, Premium, or LiveKit authority.
+
+## Seven-Flow Money Proof Closeout: June 20, 2026
+
+Seven-flow money proof: CLOSED / app-side proof complete.
+
+Closed flows:
+
+1. Premium
+2. Tips
+3. Paid Video
+4. Watch-Party Ticket
+5. Channel Subscription
+6. VIP
+7. Event Pass
+
+Proof folders:
+
+```text
+/tmp/chillywood-watch-party-ticket-final-proof-20260619-205152
+/tmp/chillywood-watch-party-ticket-purchase-auto-fix-20260619-221241
+/tmp/chillywood-provider-ownership-final-money-proof-20260619-231228
+/tmp/chillywood-vip-provider-ownership-reset-proof-20260620-002028
+```
+
+Result:
+
+- App-side proof used a Play-installed Android app with installer `com.android.vending`.
+- Watch-Party Ticket purchase/readback closed: a real Google Play sandbox purchase completed, the purchase intent was consumed, exact-target Party Room access was granted, same-target entry worked, and no Premium/global unlock, other-room unlock, LiveKit/host/speaker/moderator authority, payout, live-money, or payable balance was created.
+- VIP first-purchase proof closed: the exact Google Play sandbox VIP order was refunded/reset with entitlement removed, `You already own this item` cleared, a fresh Google Play sandbox VIP purchase completed, backend readback created creator-specific VIP access only, Premium stayed expired/ungranted, and no other creator VIP grant was created.
+- Provider ownership caveat is closed.
+
+Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
+
+Sandbox proof does not enable live money or payouts. Public launch still requires external launch governance, Play/RevenueCat production readiness, and any non-money Public V1 blockers. iOS remains later unless explicitly changed.

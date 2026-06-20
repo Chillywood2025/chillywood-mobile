@@ -1,10 +1,12 @@
 # Creator Monetization Sandbox Closeout Audit
 
-Last updated: June 13, 2026
+Last updated: June 20, 2026
 
 ## Scope
 
 This audit closes the six-flow creator monetization sandbox buildout for review. It does not approve live money, payouts, cash-out, withdrawals, transfers, or launch-live monetization.
+
+June 20 update: Seven-flow money proof: CLOSED / app-side proof complete. Premium plus the six creator monetization flows are closed for Android app-side proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
 
 Money Center remains the single creator-facing creator-money hub in Platform Studio with these sections:
 
@@ -34,10 +36,10 @@ Remote switch readback from Supabase project `bmkkhihfbmsnnmcqkoly`:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Tips V1 | Stripe Connect test-mode Checkout + signed Stripe webhook | Sandbox-proven end to end | Verified tip transaction only; no access grant or perk | Creator readback passed with `payout_status=not_payable` | Failed/declined proof passed; live payout remains disabled | Sandbox only; not live | `docs/TIPS_V1_END_TO_END_PROOF.md` |
 | Paid Videos V1 | RevenueCat / Google Play sandbox product `cw_paid_content_access_sandbox_099` | Sandbox-proven for purchase, access grant, player unlock, unpaid/logged-out/direct-link denial, Money Center readback, RLS denial | Video-specific `access_grants` + mirrored `content_access_grants` | Visual readback passed as sandbox/not-payable | Refund/revoke deferred; no safe provider order/tooling path | Sandbox only; not live | `docs/PAID_VIDEOS_V1_END_TO_END_PROOF.md` |
-| Paid Watch-Party Seats V1 | RevenueCat / Google Play sandbox product `cw_watch_party_live_ticket_sandbox_099` | Sandbox-proven for ticket purchase, waiting-room gate, Party Room direct-link gate, paid entry, second unpaid denial, seat-limit, RPC Money Center readback | Active room ticket only for the purchased room | RPC readback passed as sandbox/not-payable; visual screenshot deferred | Refund/revoke deferred; no safe provider order/tooling path | Sandbox only; not live | `docs/PAID_WATCH_PARTY_SEATS_V1_END_TO_END_PROOF.md` |
+| Paid Watch-Party Seats V1 | RevenueCat / Google Play sandbox product `cw_watch_party_live_ticket_sandbox_099` | Sandbox-proven for ticket purchase, waiting-room gate, Party Room direct-link gate, paid entry, second unpaid denial, seat-limit, RPC Money Center readback, and June 20 exact-target purchase/readback closeout | Active room ticket only for the purchased room | Readback passed as sandbox/not-payable | Provider/test-account maintenance only after June 20 closeout | Sandbox only; not live | `docs/PAID_WATCH_PARTY_SEATS_V1_END_TO_END_PROOF.md` |
 | Paid Events V1 | RevenueCat / Google Play sandbox product `cw_event_pass_sandbox_099` | Sandbox-proven end to end for event creation, unpaid gate, purchase, pass creation, paid access, second unpaid denial, Money Center readback, RLS denial | Event-specific pass/access only | Visual readback passed as sandbox/not-payable | Capacity UI proof deferred; refund/revoke deferred | Sandbox only; not live | `docs/PAID_EVENTS_V1_END_TO_END_PROOF.md` |
 | Channel Subscriptions V1 | RevenueCat / Google Play subscription `channel_subscription_sandbox_monthly_499:monthly` | Sandbox purchase-proven with Money Center readback, authenticated non-subscriber denial, and stale-row effective-access safety | Creator-channel subscription row + access grant while effective period is active | Visual readback passed; expired provider periods are labeled safely | Lifecycle handler implemented; fresh signed lifecycle delivery remains provider-blocked/deferred | Sandbox only; not live | `docs/CHANNEL_SUBSCRIPTIONS_V1_END_TO_END_PROOF.md` |
-| VIP Passes V1 | RevenueCat / Google Play non-consumable product `cw_vip_pass_sandbox_499` | Sandbox-proven for provider setup, purchase, VIP pass/access creation, VIP route access, second non-VIP denial, Money Center readback | Creator-specific VIP pass/access only | Visual readback passed as sandbox/not-payable | Refund/revoke deferred; no safe provider order/tooling path | Sandbox only; not live | `docs/VIP_PASSES_V1_END_TO_END_PROOF.md` |
+| VIP Passes V1 | RevenueCat / Google Play non-consumable product `cw_vip_pass_sandbox_499` | Sandbox-proven for provider setup, purchase, VIP pass/access creation, VIP route access, second non-VIP denial, Money Center readback, and June 20 provider ownership reset plus fresh first-purchase proof | Creator-specific VIP pass/access only | Visual readback passed as sandbox/not-payable | Provider ownership caveat closed; future work is provider/test-account maintenance | Sandbox only; not live | `docs/VIP_PASSES_V1_END_TO_END_PROOF.md` |
 
 ## Product Separation
 
