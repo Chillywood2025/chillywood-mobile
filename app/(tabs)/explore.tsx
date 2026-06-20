@@ -1146,7 +1146,7 @@ export default function ExploreScreen() {
                     />
                     {searchQuery.trim() ? (
                       <Pressable
-                        testID="home-explore-search-clear-button"
+                        testID="explore-search-clear"
                         accessibilityRole="button"
                         accessibilityLabel="Clear Explore search"
                         style={styles.searchClearButton}
