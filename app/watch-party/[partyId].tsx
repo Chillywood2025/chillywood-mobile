@@ -861,17 +861,9 @@ export default function WatchPartyRoomScreen() {
 
         syncRoomFromSnapshot(snapshot, userId);
         const currentMembership = snapshot.memberships.find((membership) => membership.userId === userId) ?? null;
-        const access = await resolveRoomAccess({
-          roomSurface: "watch_party",
-          partyId,
-          userId,
-          room: snapshot.room,
-          membership: currentMembership,
-        }).catch(() => null);
-
-        if (cancelled) return;
-
-        if (access?.isAllowed) {
+        let roomAccessAllowed = false;
+        if (exactTicketAllowsEntry) {
+          roomAccessAllowed = true;
           await joinPartyRoomSession({
             partyId,
             userId,
@@ -885,26 +877,53 @@ export default function WatchPartyRoomScreen() {
           if (!cancelled) {
             await refreshRoomSnapshot(userId).catch(() => null);
           }
-        } else if (access?.reason === "identity_required") {
-          setConnState("error");
-        } else if (access && isAccessSheetReason(access.reason)) {
-          trackEvent("monetization_gate_shown", {
-            surface: "watch-party-room",
-            reason: access.reason,
-            roomId: snapshot.room.partyId,
-          });
-          setAccessGate({
-            source: "room",
-            access,
-            accessKey: snapshot.room.partyId,
-          });
-          setAccessSheetVisible(true);
-          setLoading(false);
-          return;
-        } else if (access && access.isBlocked) {
-          setBlockedRoomAccess(access);
-          setLoading(false);
-          return;
+        } else {
+          const access = await resolveRoomAccess({
+            roomSurface: "watch_party",
+            partyId,
+            userId,
+            room: snapshot.room,
+            membership: currentMembership,
+          }).catch(() => null);
+
+          if (cancelled) return;
+
+          if (access?.isAllowed) {
+            roomAccessAllowed = true;
+            await joinPartyRoomSession({
+              partyId,
+              userId,
+              role: userId === snapshot.room.hostUserId ? "host" : "viewer",
+              canSpeak: userId === snapshot.room.hostUserId,
+              cameraEnabled: !!profileCameraPreviewUrl,
+              micEnabled: true,
+              displayName: myProfileUsernameRef.current,
+              cameraPreviewUrl: profileCameraPreviewUrl,
+            }).catch(() => null);
+            if (!cancelled) {
+              await refreshRoomSnapshot(userId).catch(() => null);
+            }
+          } else if (access?.reason === "identity_required") {
+            setConnState("error");
+          } else if (access && isAccessSheetReason(access.reason)) {
+            trackEvent("monetization_gate_shown", {
+              surface: "watch-party-room",
+              reason: access.reason,
+              roomId: snapshot.room.partyId,
+            });
+            setAccessGate({
+              source: "room",
+              access,
+              accessKey: snapshot.room.partyId,
+            });
+            setAccessSheetVisible(true);
+            setLoading(false);
+            return;
+          } else if (access && access.isBlocked) {
+            setBlockedRoomAccess(access);
+            setLoading(false);
+            return;
+          }
         }
 
         if (snapshot.room.roomType === "live") {
@@ -954,7 +973,7 @@ export default function WatchPartyRoomScreen() {
           refreshRoomSnapshot(userId).catch(() => {});
         }, ROOM_SNAPSHOT_REFRESH_MS);
 
-        if (access?.isAllowed) {
+        if (roomAccessAllowed) {
           heartbeatRef.current = setInterval(() => {
             void touchPartyRoomSession({
               partyId,

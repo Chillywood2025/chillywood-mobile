@@ -2,8 +2,10 @@ import { trackEvent } from "./analytics";
 import { formatMonetizationCurrency } from "./creatorMonetization";
 import {
   purchaseRevenueCatStoreProduct,
+  readRevenueCatCustomerInfo,
   readRevenueCatNonSubscriptionProducts,
 } from "./revenuecat";
+import { reportRuntimeError } from "./logger";
 import { supabase } from "./supabase";
 
 export const PAID_WATCH_PARTY_TICKET_SANDBOX_PRODUCT_KEY = "watch_party_live_ticket_sandbox_099";
@@ -204,6 +206,25 @@ const normalizeAccess = (value: unknown): PaidWatchPartyTicketAccess => {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const purchaseErrorText = (error: unknown, key: string) => {
+  if (!error || typeof error !== "object") return "";
+  const value = (error as Record<string, unknown>)[key];
+  return toText(value);
+};
+
+const isRevenueCatUserCancellation = (error: unknown) => {
+  if (error && typeof error === "object" && (error as Record<string, unknown>).userCancelled === true) {
+    return true;
+  }
+  const combined = [
+    purchaseErrorText(error, "code"),
+    purchaseErrorText(error, "codeName"),
+    purchaseErrorText(error, "message"),
+    purchaseErrorText(error, "underlyingErrorMessage"),
+  ].join(" ").toLowerCase();
+  return combined.includes("cancel");
+};
+
 export const formatPaidWatchPartyTicketPrice = (amountCents: number, currency = "usd") =>
   formatMonetizationCurrency(amountCents, currency);
 
@@ -375,7 +396,46 @@ export async function purchasePaidWatchPartyTicket(input: {
     source_surface: input.sourceSurface,
   });
 
-  await purchaseRevenueCatStoreProduct(product);
+  try {
+    await purchaseRevenueCatStoreProduct(product);
+  } catch (error) {
+    await readRevenueCatCustomerInfo({ refresh: true });
+    const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
+    if (verifiedAccess.allowed) {
+      return {
+        ok: true,
+        message: "Room ticket confirmed. Join Party Waiting Room.",
+        access: verifiedAccess,
+        intentId: intent.id,
+        productId,
+      };
+    }
+
+    if (isRevenueCatUserCancellation(error)) {
+      return {
+        ok: false,
+        message: "Room ticket purchase was canceled before Google Play confirmed it.",
+        access: verifiedAccess,
+        intentId: intent.id,
+        productId,
+      };
+    }
+
+    reportRuntimeError("watch-party-ticket-purchase", error, {
+      productId,
+      sourceSurface: input.sourceSurface,
+    });
+
+    return {
+      ok: false,
+      message: "Room ticket purchase did not finish. If Google Play shows it as pending, refresh this room in a moment.",
+      access: verifiedAccess,
+      intentId: intent.id,
+      productId,
+    };
+  }
+
+  await readRevenueCatCustomerInfo({ refresh: true });
   const verifiedAccess = await waitForPaidWatchPartyTicketAccess(input.partyId);
   if (!verifiedAccess.allowed) {
     return {
