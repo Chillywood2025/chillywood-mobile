@@ -87,6 +87,7 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const usernameSuggestions = useMemo(() => buildUsernameSuggestions(displayName), [displayName]);
@@ -102,6 +103,7 @@ export default function Signup() {
     setEmail("");
     setPassword("");
     setAgeConfirmed(false);
+    setLegalAccepted(false);
     setUsernameAvailability({
       username: "",
       available: false,
@@ -196,6 +198,14 @@ export default function Signup() {
       Alert.alert(
         "18+ confirmation required",
         "Confirm you are 18 or older before creating a Chi'llywood account.",
+      );
+      return;
+    }
+
+    if (!legalAccepted) {
+      Alert.alert(
+        "Terms acceptance required",
+        "Review and accept Chi'llywood's Terms, Privacy Policy, and Community Guidelines before creating an account.",
       );
       return;
     }
@@ -336,7 +346,7 @@ export default function Signup() {
             : "Create an account so you can join rooms, manage your Platform, and send in-app support feedback."}
         </Text>
         <View style={styles.ageGateCard}>
-          <Text style={styles.ageGateTitle}>Chi'llywood is for users 18 and older.</Text>
+          <Text style={styles.ageGateTitle}>Account requirements</Text>
           <Pressable
             style={styles.ageGateRow}
             onPress={() => setAgeConfirmed((current) => !current)}
@@ -351,9 +361,25 @@ export default function Signup() {
             </View>
             <Text style={styles.ageGateLabel}>I confirm I am 18 or older.</Text>
           </Pressable>
+          <Pressable
+            style={styles.ageGateRow}
+            onPress={() => setLegalAccepted((current) => !current)}
+            disabled={loading}
+            accessibilityRole="checkbox"
+            accessibilityLabel="Accept Terms, Privacy Policy, and Community Guidelines"
+            accessibilityState={{ checked: legalAccepted, disabled: loading }}
+            testID="signup-legal-acceptance-checkbox"
+          >
+            <View style={[styles.checkbox, legalAccepted && styles.checkboxChecked]}>
+              {legalAccepted ? <View style={styles.checkboxDot} /> : null}
+            </View>
+            <Text style={styles.ageGateLabel} testID="signup-legal-acceptance-copy">
+              I agree to Chi'llywood's Terms of Service, Privacy Policy, and Community Guidelines.
+            </Text>
+          </Pressable>
         </View>
         <Text style={styles.legalNotice}>
-          By creating an account, you agree to Chi'llywood's{" "}
+          Before creating an account, review and accept Chi'llywood's{" "}
           <Link href="/terms" style={styles.legalLink}>
             Terms of Service
           </Link>
