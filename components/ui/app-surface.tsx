@@ -9,16 +9,18 @@ import {
   type ViewStyle,
 } from "react-native";
 
+import { color, fontSize, fontWeight, motion, radius, spacing } from "./tokens";
+
 type AppTone = "default" | "accent" | "success" | "warning" | "danger" | "muted" | "premium";
 
 const toneStyles: Record<AppTone, { backgroundColor: string; borderColor: string; color: string }> = {
-  accent: { backgroundColor: "rgba(220,20,60,0.16)", borderColor: "rgba(220,20,60,0.46)", color: "#FFE6EC" },
-  danger: { backgroundColor: "rgba(239,68,68,0.14)", borderColor: "rgba(239,68,68,0.42)", color: "#FFE4E6" },
-  default: { backgroundColor: "rgba(116,130,255,0.13)", borderColor: "rgba(116,130,255,0.32)", color: "#E8ECFF" },
-  muted: { backgroundColor: "rgba(255,255,255,0.07)", borderColor: "rgba(255,255,255,0.16)", color: "#D7DEEC" },
-  premium: { backgroundColor: "rgba(245,158,11,0.16)", borderColor: "rgba(245,158,11,0.38)", color: "#FFF2C7" },
-  success: { backgroundColor: "rgba(34,197,94,0.14)", borderColor: "rgba(34,197,94,0.36)", color: "#C9FFE1" },
-  warning: { backgroundColor: "rgba(245,158,11,0.14)", borderColor: "rgba(245,158,11,0.36)", color: "#FFE8A3" },
+  accent: { backgroundColor: color.accentSurface, borderColor: color.borderPrimarySoft, color: color.textAccent },
+  danger: { backgroundColor: color.dangerSurface, borderColor: color.dangerBorder, color: color.textDanger },
+  default: { backgroundColor: color.accentBlueSurfaceStrong, borderColor: color.borderBlueMuted, color: color.textLavender },
+  muted: { backgroundColor: color.surfaceMuted, borderColor: color.borderStrong, color: color.textMuted },
+  premium: { backgroundColor: color.premiumSurface, borderColor: color.premiumBorder, color: color.textPremium },
+  success: { backgroundColor: color.successSurface, borderColor: color.successBorder, color: color.textSuccess },
+  warning: { backgroundColor: color.warningSurface, borderColor: color.warningBorder, color: color.textWarning },
 };
 
 export const AppStatusPill = ({ label, tone = "default" }: { label: string; tone?: AppTone }) => {
@@ -53,9 +55,9 @@ export const AppActionButton = ({
     accessibilityLabel={accessibilityLabel ?? label}
     accessibilityRole="button"
     accessibilityState={{ disabled: disabled || loading, busy: loading }}
-    activeOpacity={0.84}
+    activeOpacity={motion.activeOpacity}
     disabled={disabled || loading}
-    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+    hitSlop={motion.hitSlop}
     onPress={onPress}
     testID={testID}
     style={[
@@ -68,7 +70,7 @@ export const AppActionButton = ({
       style,
     ]}
   >
-    {loading ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.actionButtonText}>{label}</Text>}
+    {loading ? <ActivityIndicator color={color.textOnPrimary} size="small" /> : <Text style={styles.actionButtonText}>{label}</Text>}
   </TouchableOpacity>
 );
 
@@ -119,7 +121,7 @@ export const AppSection = ({
           accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${title}`}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
-          activeOpacity={0.84}
+          activeOpacity={motion.activeOpacity}
           onPress={toggle}
           style={styles.sectionHeaderPressable}
         >
@@ -167,9 +169,9 @@ export const AppQuickLinkCard = ({
   <TouchableOpacity
     accessibilityRole="button"
     accessibilityState={{ disabled }}
-    activeOpacity={0.84}
+    activeOpacity={motion.activeOpacity}
     disabled={disabled}
-    hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
+    hitSlop={motion.hitSlop}
     onPress={onPress}
     style={[styles.quickLinkCard, disabled && styles.actionButtonDisabled]}
   >
@@ -193,183 +195,183 @@ export const AppStickyActionBar = ({ children, helper }: { children: React.React
 
 const styles = StyleSheet.create({
   actionButton: {
-    minHeight: 44,
-    borderRadius: 14,
+    minHeight: spacing.controlMinHeight,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: 16,
+    borderColor: color.borderStrong,
+    backgroundColor: color.surfaceSubtle,
+    paddingHorizontal: spacing.xxl,
     alignItems: "center",
     justifyContent: "center",
   },
   actionButtonDanger: {
-    borderColor: "rgba(239,68,68,0.44)",
-    backgroundColor: "rgba(239,68,68,0.15)",
+    borderColor: color.dangerBorderStrong,
+    backgroundColor: color.dangerSurfaceStrong,
   },
   actionButtonDisabled: {
-    opacity: 0.48,
+    opacity: motion.disabledOpacity,
   },
   actionButtonGhost: {
-    backgroundColor: "rgba(116,130,255,0.12)",
-    borderColor: "rgba(116,130,255,0.3)",
+    backgroundColor: color.accentBlueSurface,
+    borderColor: color.borderBlue,
   },
   actionButtonPrimary: {
-    backgroundColor: "#DC143C",
-    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: color.primary,
+    borderColor: color.borderDefault,
   },
   actionButtonSuccess: {
-    backgroundColor: "rgba(34,197,94,0.22)",
-    borderColor: "rgba(34,197,94,0.45)",
+    backgroundColor: color.successSurfaceStrong,
+    borderColor: color.successBorderStrong,
   },
   actionButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "900",
+    color: color.textOnPrimary,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.heavy,
   },
   chevronBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
+    width: spacing.controlMinHeight,
+    height: spacing.controlMinHeight,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.07)",
+    borderColor: color.borderMuted,
+    backgroundColor: color.surfaceMuted,
     alignItems: "center",
     justifyContent: "center",
   },
   chevronText: {
-    color: "#F8FAFF",
-    fontSize: 18,
-    fontWeight: "900",
+    color: color.textPrimary,
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.heavy,
   },
   emptyBody: {
-    color: "#AAB4C8",
-    fontSize: 13,
-    fontWeight: "700",
+    color: color.textSecondary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.strong,
     lineHeight: 19,
     textAlign: "center",
   },
   emptyState: {
-    minHeight: 116,
-    borderRadius: 18,
+    minHeight: spacing.emptyStateMinHeight,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(10,14,22,0.76)",
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    gap: 10,
+    borderColor: color.borderDefault,
+    backgroundColor: color.surfaceSoft,
+    paddingHorizontal: spacing.xxxl,
+    paddingVertical: spacing.xxxl,
+    gap: spacing.md,
     alignItems: "center",
     justifyContent: "center",
   },
   emptyTitle: {
-    color: "#F8FAFF",
-    fontSize: 16,
-    fontWeight: "900",
+    color: color.textPrimary,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.heavy,
     textAlign: "center",
   },
   quickLinkArrow: {
-    color: "#F8FAFF",
-    fontSize: 24,
-    fontWeight: "900",
+    color: color.textPrimary,
+    fontSize: fontSize.icon,
+    fontWeight: fontWeight.heavy,
   },
   quickLinkBody: {
-    color: "#AAB4C8",
-    fontSize: 13,
-    fontWeight: "700",
+    color: color.textSecondary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.strong,
     lineHeight: 19,
   },
   quickLinkCard: {
-    minHeight: 88,
-    borderRadius: 18,
+    minHeight: spacing.quickLinkMinHeight,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "rgba(116,130,255,0.24)",
-    backgroundColor: "rgba(13,17,28,0.82)",
-    paddingHorizontal: 16,
-    paddingVertical: 15,
+    borderColor: color.borderBlueSoft,
+    backgroundColor: color.surfaceRaised,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.xl,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: spacing.lg,
   },
   quickLinkCopy: {
     flex: 1,
-    gap: 7,
+    gap: spacing.quickLinkCopyGap,
   },
   quickLinkTitle: {
-    color: "#F8FAFF",
-    fontSize: 16,
-    fontWeight: "900",
+    color: color.textPrimary,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.heavy,
   },
   quickLinkTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
+    gap: spacing.md,
   },
   section: {
-    marginHorizontal: 16,
-    marginBottom: 18,
-    borderRadius: 20,
+    marginHorizontal: spacing.xxl,
+    marginBottom: spacing.xxxl,
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.11)",
-    backgroundColor: "rgba(8,12,20,0.62)",
+    borderColor: color.borderSoft,
+    backgroundColor: color.surfaceDeep,
     overflow: "hidden",
   },
   sectionBody: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 12,
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
   },
   sectionCopy: {
     flex: 1,
-    gap: 5,
+    gap: spacing.xs,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
+    gap: spacing.lg,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.xl,
   },
   sectionHeaderPressable: {
-    minHeight: 72,
+    minHeight: spacing.sectionHeaderMinHeight,
   },
   sectionSubtitle: {
-    color: "#AAB4C8",
-    fontSize: 13,
-    fontWeight: "700",
+    color: color.textSecondary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.strong,
     lineHeight: 19,
   },
   sectionTitle: {
-    color: "#F8FAFF",
-    fontSize: 20,
-    fontWeight: "900",
+    color: color.textPrimary,
+    fontSize: fontSize.sectionTitle,
+    fontWeight: fontWeight.heavy,
     lineHeight: 25,
   },
   statusPill: {
-    borderRadius: 999,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   statusPillText: {
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.heavy,
   },
   stickyActionBar: {
-    borderRadius: 18,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(9,12,20,0.92)",
-    padding: 12,
-    gap: 10,
+    borderColor: color.borderDefault,
+    backgroundColor: color.surfaceOverlay,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   stickyActionRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: spacing.md,
   },
   stickyHelper: {
-    color: "#AAB4C8",
-    fontSize: 12,
-    fontWeight: "700",
+    color: color.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.strong,
     lineHeight: 17,
   },
 });
