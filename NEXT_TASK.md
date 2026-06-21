@@ -2,6 +2,8 @@
 
 ## Public V1 Final Regression
 
+Refund / credit / creator payout-hold foundation is now a foundation-only money policy lane. `docs/REFUND_CREDIT_PAYOUT_HOLD_FOUNDATION.md`, `_lib/moneyRefundPolicy.ts`, migration `20260621091458_refund_credit_payout_hold_foundation.sql`, and `guard:refund-credit-payout-hold-policy` define future refund eligibility, non-spendable credit review, creator obligation status, and creator payout hold rules without enabling real refunds, provider refund API calls, spendable credits, payout releases, payable balances, live money, or payouts. Future production refunds/credits/payout releases require a separate provider/legal/store/admin approval lane and installed proof.
+
 Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass have reliable Android app-side proof, including Watch-Party Ticket exact-target purchase/readback and VIP provider ownership reset plus fresh first-purchase proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
 
 Algorithm Foundation V1 is closed as a production-safe foundation lane, not a launch-critical feed replacement. It is free/rules-based/not ML, has dry-run/readback and `guard:algorithm-ranking-v1`, and keeps `algorithmRankingV1Enabled=false` for production rail replacement. The closeout doc is `docs/ALGORITHM_FOUNDATION_V1_CLOSEOUT.md`. Do not wire it into Home, Live, Search, Public Platform, creator monetization, Premium, Watch-Party, LiveKit, Chi'lly Chat, or BrowserStack proof routes without a separately scoped production-integration proof prompt.
