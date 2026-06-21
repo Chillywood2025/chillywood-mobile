@@ -353,7 +353,7 @@ export function resolveMoneyRefundPolicyDecision(input: MoneyRefundPolicyDecisio
     reasonCodes.push("tips_unlock_nothing", "tips_no_standard_refunds");
   }
   if (input.key === "live_watch_party_seat_pass") {
-    reasonCodes.push("seat_eligibility_only", "host_approval_still_wins", "livekit_token_rules_still_win");
+    reasonCodes.push("seat_eligibility_only", "host_approval_still_wins", "livekit_authority_rules_still_win");
   }
 
   return {

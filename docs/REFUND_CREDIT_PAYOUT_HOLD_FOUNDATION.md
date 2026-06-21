@@ -4,6 +4,8 @@ Updated: June 21, 2026
 
 This is a foundation-only policy and schema lane. It does not execute real refunds, call Google Play, RevenueCat, Stripe, Stripe Connect, or merch provider refund APIs, create spendable credits, release payout holds, create payable creator balances, or enable live money.
 
+Remote apply status: migration `20260621091458_refund_credit_payout_hold_foundation.sql` is applied to linked Supabase project `bmkkhihfbmsnnmcqkoly`, and post-apply `supabase db push --dry-run` reports the remote database is up to date.
+
 ## Owner Files
 
 - `_lib/moneyRefundPolicy.ts`
