@@ -56,6 +56,8 @@ import { CreatorVideoCard } from "../../components/creator-media/creator-video-c
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { AppEmptyState, AppSection } from "../../components/ui/app-surface";
+import { StableImage } from "../../components/ui/StableImage";
+import { AppText } from "../../components/ui/typography";
 
 type TitleRow = Omit<
   Pick<
@@ -587,29 +589,29 @@ export default function HomeScreen() {
         accessibilityLabel={`Open ${title}`}
       >
         <View style={styles.feedActivityThumb}>
-          {item.thumbnail_url ? (
-            <Image source={{ uri: item.thumbnail_url }} style={styles.feedActivityImage} />
-          ) : (
-            <View style={styles.feedActivityFallback}>
-              <Text style={styles.feedActivityInitial}>{title.slice(0, 1).toUpperCase()}</Text>
-            </View>
-          )}
+          <StableImage
+            expectedWidth="100%"
+            expectedHeight="100%"
+            source={item.thumbnail_url ? { uri: item.thumbnail_url } : null}
+            borderRadius={0}
+            resizeMode="cover"
+          />
           <View style={styles.feedActivityScrim} />
           <View style={styles.feedActivityBadgeRow}>
-            <Text style={[styles.feedActivityBadge, item.live_state === "live" ? styles.feedActivityLiveBadge : null]}>
+            <AppText scale="caption" style={[styles.feedActivityBadge, item.live_state === "live" ? styles.feedActivityLiveBadge : null]}>
               {liveLabel}
-            </Text>
-            <Text style={styles.feedActivityBadge}>{accessLabel}</Text>
+            </AppText>
+            <AppText scale="caption" style={styles.feedActivityBadge}>{accessLabel}</AppText>
           </View>
         </View>
         <View style={styles.feedActivityCopy}>
-          <Text style={styles.feedActivityTitle} numberOfLines={2}>{title}</Text>
-          {subtitle ? <Text style={styles.feedActivitySubtitle} numberOfLines={2}>{subtitle}</Text> : null}
-          <Text style={styles.feedActivityMeta} numberOfLines={1}>{scheduleLabel}</Text>
+          <AppText scale="subhead" style={styles.feedActivityTitle} numberOfLines={2}>{title}</AppText>
+          {subtitle ? <AppText scale="footnote" style={styles.feedActivitySubtitle} numberOfLines={2}>{subtitle}</AppText> : null}
+          <AppText scale="caption" style={styles.feedActivityMeta} numberOfLines={1}>{scheduleLabel}</AppText>
           <View style={styles.feedActivityActionRow}>
-            <Text style={styles.feedActivityActionText}>
+            <AppText scale="footnote" style={styles.feedActivityActionText}>
               {item.item_type === "creator_upload" ? "Open" : "View Details"}
-            </Text>
+            </AppText>
             {ownerId ? (
               <TouchableOpacity
                 style={styles.feedActivityGhostButton}
@@ -621,7 +623,7 @@ export default function HomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${title} Platform`}
               >
-                <Text style={styles.feedActivityGhostText}>Platform</Text>
+                <AppText scale="caption" style={styles.feedActivityGhostText}>Platform</AppText>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -641,17 +643,17 @@ export default function HomeScreen() {
         accessibilityLabel={`Open ${event.eventTitle}`}
       >
         <View style={styles.feedEventBadgeRow}>
-          <Text style={[styles.feedEventBadge, event.isLiveNow ? styles.feedActivityLiveBadge : null]}>
+          <AppText scale="caption" style={[styles.feedEventBadge, event.isLiveNow ? styles.feedActivityLiveBadge : null]}>
             {event.isLiveNow ? "Live" : "Upcoming"}
-          </Text>
-          <Text style={styles.feedEventBadge}>{formatCreatorEventMode(event)}</Text>
-          <Text style={styles.feedEventBadge}>Public</Text>
+          </AppText>
+          <AppText scale="caption" style={styles.feedEventBadge}>{formatCreatorEventMode(event)}</AppText>
+          <AppText scale="caption" style={styles.feedEventBadge}>Public</AppText>
         </View>
-        <Text style={styles.feedEventTitle} numberOfLines={2}>{event.eventTitle}</Text>
-        <Text style={styles.feedEventMeta}>{formatFeedDate(event.startsAt)}</Text>
-        <Text style={styles.feedEventCopy} numberOfLines={2}>
+        <AppText scale="subhead" style={styles.feedEventTitle} numberOfLines={2}>{event.eventTitle}</AppText>
+        <AppText scale="footnote" style={styles.feedEventMeta}>{formatFeedDate(event.startsAt)}</AppText>
+        <AppText scale="footnote" style={styles.feedEventCopy} numberOfLines={2}>
           Public event metadata only. Full room entry remains gated by the room route.
-        </Text>
+        </AppText>
       </TouchableOpacity>
     );
   }
@@ -763,22 +765,28 @@ export default function HomeScreen() {
                 <View style={styles.rachiIdentityRow}>
                   <View style={styles.rachiAvatar}>
                     {rachiOfficialAvatarUrl ? (
-                      <Image source={{ uri: rachiOfficialAvatarUrl }} style={styles.rachiAvatarImage} />
+                      <StableImage
+                        expectedWidth="100%"
+                        expectedHeight="100%"
+                        source={{ uri: rachiOfficialAvatarUrl }}
+                        borderRadius={21}
+                        resizeMode="cover"
+                      />
                     ) : (
-                      <Text style={styles.rachiAvatarInitial}>R</Text>
+                      <AppText scale="title3" style={styles.rachiAvatarInitial}>R</AppText>
                     )}
                   </View>
                   <View style={styles.rachiIdentityCopy}>
                     <View style={styles.rachiNameRow}>
-                      <Text style={styles.rachiName}>Rachi</Text>
+                      <AppText scale="subhead" style={styles.rachiName}>Rachi</AppText>
                       <View style={styles.rachiOfficialBadge}>
-                        <Text style={styles.rachiOfficialBadgeText}>Official Chi'llywood</Text>
+                        <AppText scale="caption" style={styles.rachiOfficialBadgeText}>Official Chi'llywood</AppText>
                       </View>
                     </View>
-                    <Text style={styles.rachiUpdateMeta}>{formatAddedDate(post.createdAt).replace("Added", "Posted")}</Text>
+                    <AppText scale="caption" style={styles.rachiUpdateMeta}>{formatAddedDate(post.createdAt).replace("Added", "Posted")}</AppText>
                   </View>
                 </View>
-                <Text style={styles.rachiUpdateBody} numberOfLines={4}>{post.body}</Text>
+                <AppText scale="body" style={styles.rachiUpdateBody} numberOfLines={4}>{post.body}</AppText>
               </TouchableOpacity>
             ))}
           </View>
@@ -799,15 +807,15 @@ export default function HomeScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color="#E50914" />
-          <Text style={styles.muted}>Loading Home…</Text>
+          <AppText scale="body" style={styles.muted}>Loading Home…</AppText>
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.errorTitle}>Home couldn't refresh</Text>
-          <Text style={styles.errorMsg}>{error}</Text>
+          <AppText scale="title3" style={styles.errorTitle}>Home couldn't refresh</AppText>
+          <AppText scale="body" style={styles.errorMsg}>{error}</AppText>
 
           <Pressable style={styles.retryBtn} onPress={onRefresh}>
-            <Text style={styles.retryText}>Retry</Text>
+            <AppText scale="body" style={styles.retryText}>Retry</AppText>
           </Pressable>
         </View>
       ) : (
