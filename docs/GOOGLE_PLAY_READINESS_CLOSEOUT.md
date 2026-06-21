@@ -23,6 +23,8 @@ No app-code blocker was found in this pass. The remaining blockers are release-o
 
 BrowserStack/App Live is intentionally deferred until iOS integration is ready and is not a current Android-first launch blocker unless the owner changes that decision.
 
+Follow-up owner-action closeout is tracked in `docs/GOOGLE_PLAY_CONSOLE_OWNER_ACTION_CLOSEOUT.md`. That packet gives ready-to-paste Play Console fields and marks direct Console status as owner-blocked where it was not accessible from this environment. It does not change app behavior or claim Play Console acceptance.
+
 ## Package / Build Identity
 
 | Item | Current evidence | Status | Owner action | Code needed? |
