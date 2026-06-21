@@ -79,8 +79,8 @@ assertIncludes(channelSettings, "Offer type: paid_event", "paid event offer row"
 assertIncludes(channelSettings, "Offer type: merch", "merch offer row");
 assertIncludes(channelSettings, "moneyTransactionFilter", "single filtered transactions list");
 assertIncludes(creatorMonetizationSetupRoute, "focus=offers", "creator setup compatibility redirect");
-assertIncludes(channelSettings, "Sandbox proved", "sandbox-proved digital sales copy");
-assertIncludes(channelSettings, "No verified earnings yet", "no fake earnings copy");
+assertIncludes(channelSettings, "Sandbox ready", "sandbox-ready digital sales copy");
+assertIncludes(channelSettings, "No verified tips yet.", "no fake earnings copy");
 assertIncludes(channelSettings, "It is not used to charge Android users for digital access.", "Android digital Stripe block");
 assertIncludes(channelSettings, "Stripe Connect is for creator payouts only.", "Stripe Connect payout boundary");
 assertIncludes(channelSettings, "Physical goods stay separate from Android digital access.", "merch separation copy");
@@ -98,11 +98,11 @@ assertIncludes(channelSettings, "renderCreatorMoneyEventRows", "creator Money Ce
 assertIncludes(channelSettings, "Money Event Detail", "creator Money event detail sheet");
 assertIncludes(channelSettings, "Not payable", "creator non-payable labeling");
 assertIncludes(channelSettings, "Sandbox only", "creator sandbox labeling");
-assertIncludes(channelSettings, "Sandbox testing is complete for digital access. Live money is not active.", "creator launch summary copy");
-assertIncludes(channelSettings, "Sandbox activity is inspection-only and not payable.", "creator sandbox-only not-payable copy");
-assertIncludes(channelSettings, "Provider refund/revoke and subscription lifecycle delivery proof still need safe provider tooling.", "creator provider-tooling gap copy");
-assertIncludes(channelSettings, "All six creator money flows have local/manual sandbox proof. Live money and payouts remain off.", "creator sandbox proof product copy");
-assertIncludes(channelSettings, "Sandbox rows are inspection records only and stay not payable.", "creator setup/sandbox not-payable proof copy");
+assertIncludes(channelSettings, "Live money stays disabled until provider checks, policy checks, and owner approval pass.", "creator launch summary copy");
+assertIncludes(channelSettings, "No withdrawal, transfer, cash-out, or payout release action is available.", "creator sandbox-only not-payable copy");
+assertIncludes(channelSettings, "Provider readiness is the visible source of truth for creator money tools.", "creator provider-tooling source copy");
+assertIncludes(channelSettings, "Sandbox tester offers are ready. Test mode only. No real charges, creator earnings, payouts, withdrawals, or cash-out.", "creator sandbox proof product copy");
+assertIncludes(channelSettings, "Sandbox setup is partially ready", "creator setup/sandbox not-payable proof copy");
 assertIncludes(channelSettings, "money_center_visible", "Money Center visibility switch");
 assertIncludes(channelSettings, "digital_sales_enabled", "Digital sales switch");
 assertIncludes(channelSettings, "payouts_enabled", "Payouts switch");

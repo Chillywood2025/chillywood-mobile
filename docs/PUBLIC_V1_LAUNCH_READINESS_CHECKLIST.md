@@ -22,6 +22,8 @@ Android remains the active proof lane. iOS BrowserStack is a planned/deferred fu
 
 June 20 money closeout: Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are closed for Android app-side proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof. Sandbox proof does not enable live money or payouts.
 
+June 20 integration/proof closeout update: forgot/reset password routing, positive Admin/Owner access, selected non-LiveKit closeout, Chi'lly Chat non-media messaging/call-route proof, Profile/Platform visibility gates, seven-flow money app-side proof, and Live Stage media/authority proof are closed. Watch-Party shared Player camera/mic remote-render proof is still deferred until a stable second session or BrowserStack. BrowserStack/App Live final regression, fresh creator upload-to-playback proof, attachment-heavy comments proof, and external launch governance/provider/legal readiness remain pending. Audit folder: `/tmp/chillywood-production-integration-confusion-audit-20260620-185544`.
+
 ## 1. Auth
 
 - [x] Forgot-password reset email proof on Play/internal runtime.
@@ -79,23 +81,26 @@ June 20 money closeout: Seven-flow money proof: CLOSED / app-side proof complete
 
 ## 6. Chi'lly Chat
 
-- [ ] Inbox smoke.
-- [ ] Messaging A -> B.
-- [ ] Voice call incoming sheet/ringtone/vibration/decline/call card.
-- [ ] Video call accept/route/end card.
+- [x] Inbox / direct-thread route smoke for non-media proof.
+- [x] Two-user message send/receive/reply proof.
+- [x] Call route/state non-media proof.
+- [x] Unauthorized/thread membership boundaries checked in non-media proof.
 - [ ] Background call push notification proof or documented pending state.
 - [ ] No LiveKit token authority change.
 
 ## 7. Watch-Party / LiveKit
 
 - [ ] Watch-Party Live player smoke.
-- [ ] Participant rail smoke.
+- [x] Participant rail join/leave route/membership proof.
 - [ ] Comments panel smoke.
-- [ ] Join/leave/reconnect smoke.
+- [x] Join/leave proof for participant rail.
+- [ ] Watch-Party shared Player camera/mic remote-render proof on stable second session or BrowserStack.
+- [ ] Reconnect smoke.
 - [ ] Expired room fails closed.
 - [ ] Paid Watch-Party direct link blocks before camera/mic/membership/presence.
 - [x] Invalid Watch-Party direct link fails closed on Play/internal v53 with `Room not found`.
-- [ ] Paid Watch-Party stays Party Waiting Room -> Party Room, not Live Stage.
+- [x] Paid Watch-Party stays Party Waiting Room -> Party Room, not Live Stage in route-contract/app-side proof.
+- [x] Live Stage media/authority proof passed; viewer publish authority stayed restricted.
 - [x] Join Now proof logs are sanitized dev-only logs, not raw production console logs.
 
 ## 8. Player / Video
@@ -138,8 +143,8 @@ June 20 money closeout: Seven-flow money proof: CLOSED / app-side proof complete
 ## 12. Admin / Safety
 
 - [x] Owner/admin route/product integration audit after issues #1-#7.
-- [ ] Admin/owner runtime route smoke.
-- [ ] Normal user denied from Admin.
+- [x] Admin/owner runtime route smoke with real owner account.
+- [x] Normal user denied from Admin.
 - [ ] Blocked-user fixture smoke where available.
 - [ ] Report/support/legal surfaces smoke.
 - [ ] No admin-only controls exposed to creators/fans.
@@ -173,7 +178,7 @@ June 20 money closeout: Seven-flow money proof: CLOSED / app-side proof complete
 Safe deferred provider-tooling gaps:
 
 - Paid Videos refund/revoke.
-- Paid Watch-Party refund/revoke and visual Money Center screenshot.
+- Paid Watch-Party refund/revoke provider tooling.
 - Paid Events refund/revoke and capacity UI proof.
 - Channel Subscription fresh lifecycle webhook delivery.
 - VIP refund/revoke.
@@ -195,9 +200,10 @@ Launch blockers until explicitly closed:
 - live money approval not complete.
 - payouts/cash-out/withdrawal/transfer not enabled.
 - external Play/legal/Data Safety/account-deletion acceptance not fully closed where applicable.
-- Chi'lly Chat two-user call proof not closed in this QA pass.
-- Watch-Party/LiveKit two-user final proof not closed in this QA pass.
-- BrowserStack final regression must wait for either a second local device/session or explicit approval to use BrowserStack for the remaining two-user proofs.
+- Watch-Party shared Player camera/mic remote-render proof remains deferred until a stable second session or BrowserStack.
+- Fresh creator upload-to-playback proof remains pending.
+- Attachment-heavy comments proof remains pending if attachment paths are public-v1 critical.
+- BrowserStack final regression remains pending until explicitly approved.
 
 ## 17. Go / No-Go Decision
 

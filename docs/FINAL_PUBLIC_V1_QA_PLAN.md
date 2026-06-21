@@ -20,6 +20,8 @@ BrowserStack preparation package: `qa/browserstack/` now contains the whole-app 
 
 Platform scope: Android is the active proof lane. iOS is planned/deferred and must not start until Android final regression is closed and the user explicitly approves iOS work. Future iOS proof requires Apple signing, App Store Connect, App Store IAP products, and RevenueCat Apple product proof.
 
+June 20 closeout update: later installed-device and two-session proof supersedes the June 13 blocked rows for several lanes. Forgot/reset password routing is closed, positive Admin/Owner access is closed, Chi'lly Chat non-media messaging/call-route proof is closed, Profile/Platform visibility gates are closed, Live Stage media/authority proof passed, and selected non-LiveKit closeout passed except documented noncanonical/out-of-scope items. Do not reopen those lanes without a new current regression. Current pending proof is BrowserStack/App Live final regression, Watch-Party shared Player camera/mic remote-render proof on a stable second session or BrowserStack, fresh creator upload-to-playback proof, attachment-heavy comments proof, and external launch governance/provider/legal readiness.
+
 ## June 13, 2026 Play/Internal QA Execution Status
 
 Runtime delivery:
@@ -95,8 +97,8 @@ Proof artifacts are local-only under `/tmp/chillywood-final-qa-second-account-20
 | Disposable inbox delivery | Passed | Signup confirmation and reset emails arrived in a disposable readable inbox. |
 | Signup verification completion | Passed | Installed app requested signup, phone-opened verification link launched `com.chillywood.mobile`, and the app returned to login after verification. |
 | Password reset completion | Passed | Installed app requested reset, phone-opened reset link launched `com.chillywood.mobile`, recovery session opened, password update succeeded, and sign-in with the new password reached Home. |
-| Chi'lly Chat two-user calls | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
-| Watch-Party / LiveKit two-user flow | Blocked | Still needs a second interactive signed-in device/session; local emulator install was not usable. |
+| Chi'lly Chat two-user non-media proof | Superseded by pass | Later proof closed two-user send/receive/reply plus non-media call-route/state. Background push remains separate. |
+| Watch-Party / LiveKit two-user route proof | Superseded by pass / partial deferred | Later proof closed participant rail join/leave and Live Stage route/membership/authority plus Live Stage media. Watch-Party shared Player camera/mic remote-render remains deferred. |
 | BrowserStack | Prepared / deferred | Persona and flow contracts are documented in `docs/BROWSERSTACK_FINAL_REGRESSION_PLAN.md` and `qa/browserstack/`; BrowserStack was not run. |
 
 ## Route Contract Preflight
@@ -116,15 +118,17 @@ Protected route doctrine:
 ## Current Launch Blockers
 
 - BrowserStack final multi-device regression has not run.
-- Chi'lly Chat two-user message/call proof still needs a second physical session or BrowserStack.
-- Watch-Party Live / Party Room two-user participant rail, join/leave, comments, and controls still need a second physical session or BrowserStack.
-- Live Watch-Party / Live Stage route smoke still needs final runtime regression.
+- Chi'lly Chat two-user non-media message/call-route proof is closed; background push/ringtone delivery remains separate if required.
+- Watch-Party Live / Party Room participant rail join/leave proof is closed; Watch-Party shared Player camera/mic remote-render remains deferred until a stable second session or BrowserStack.
+- Live Watch-Party / Live Stage route/membership/authority smoke and Live Stage media proof are closed.
+- Fresh creator upload-to-playback proof remains pending.
+- Attachment-heavy comments proof remains pending if those attachment paths are public-v1 critical.
 - Live money remains disabled and must stay disabled until a separate owner-approved launch lane.
 - Payouts, cash-out, withdrawals, transfers, payout release, and payable creator balances remain disabled.
 - Provider/test-account maintenance remains a future operations task; it is not an app-code money proof blocker after the June 20 seven-flow closeout.
 - Channel Subscription lifecycle webhook delivery is still provider-blocked until a fresh signed RevenueCat lifecycle event is received after the handler deployment.
 - Paid Events capacity UI proof remains deferred because creator UI does not expose `capacity_limit`.
-- Premium separation, direct-link gates, and BrowserStack still need release-candidate regression proof; installed-app signup verification and forgot-password reset completion passed on Play/internal v53 with a disposable inbox.
+- Premium separation and direct-link gates are covered by closed proof lanes but should stay in BrowserStack regression. Installed-app signup verification and forgot-password reset completion passed on Play/internal v53 with a disposable inbox; the later wordbyrd reset-routing proof closed the current reset route bug.
 - External Google Play / legal / Data Safety / account-deletion acceptance and operational signoff remain launch-governance blockers where not separately closed.
 
 Sandbox Money Tester Experience update: all seven money flows are now app-side proved on Android. Final closeout proof folders include `/tmp/chillywood-watch-party-ticket-purchase-auto-fix-20260619-221241`, `/tmp/chillywood-provider-ownership-final-money-proof-20260619-231228`, and `/tmp/chillywood-vip-provider-ownership-reset-proof-20260620-002028`. Future money work in this plan is provider/test-account maintenance, live-production rollout governance, or regression-only if a real regression appears.

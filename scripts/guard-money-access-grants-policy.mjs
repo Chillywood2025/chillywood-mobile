@@ -190,13 +190,15 @@ assertIncludes(creatorSetup, "stripe_physical_goods", "creator setup merch physi
 assertIncludes(creatorSetup, "liveKitPublishGrantedByPayment: false", "creator setup payment no publish proof");
 assertIncludes(creatorSetup, "hostApprovalBypassedBySeatPass: false", "creator setup host approval proof");
 [
-  "4b5e7761-5bf1-4e18-9eb7-d6037a0eb32f",
-  "9b2f4e7d-2e8e-4d2f-93ef-40b06d317001",
-  "9b2f4e7d-2e8e-4d2f-93ef-40b06d317002",
-  "9b2f4e7d-2e8e-4d2f-93ef-40b06d317003",
-  "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004",
-  "4121ff8c-b97f-4f90-860e-8b32fa83e7e5",
-].forEach((sourceId) => assertIncludes(read("app/creator-monetization-setup.tsx"), sourceId, `creator setup proof source ${sourceId}`));
+  "sourceId: String(user.id)",
+  "sourceId: latestPublicVideo.id",
+  "sourceId: savedWatchPartyOffer.id",
+  "sourceId: eventForPass.id",
+  "sourceId: savedChannelSubscriptionOffer.id",
+  "sourceId: savedVipOffer.id",
+].forEach((sourceId) => assertIncludes(read("app/channel-settings.tsx"), sourceId, `creator setup dynamic proof source ${sourceId}`));
+assertIncludes(read("app/channel-settings.tsx"), "setup_surface: \"money_center_sandbox_tester_experience\"", "creator setup dynamic proof source metadata");
+assertIncludes(read("app/channel-settings.tsx"), "no_live_payout: true", "creator setup no live payout metadata");
 assertIncludes(failurePathsMigration, '"provider_event_id", "user_id", "grant_type"', "duplicate provider event cannot duplicate grants");
 assertIncludes(failurePathsMigration, 'on public."money_access_ledger_events" ("provider_event_id")', "duplicate provider event cannot duplicate ledger rows");
 assertIncludes(failurePathsMigration, '"status" = \'revoked\'', "admin revoke marks access revoked");

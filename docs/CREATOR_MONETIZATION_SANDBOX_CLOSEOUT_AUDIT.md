@@ -129,11 +129,12 @@ These are launch-live blockers:
 - payout, tax/legal, fraud/risk, support, refund, and owner approval lanes are not launch-closed
 - BrowserStack final multi-device regression has not run
 - no flow should be advertised as live creator earnings
+- production integration/confusion audit closeout found no current money app-code contradiction; optional money guard failures were stale expected copy/source-id drift, not proof that live money reopened
 
 These are safe deferred provider-tooling gaps for sandbox closeout:
 
 - Paid Videos refund/revoke
-- Paid Watch-Party refund/revoke and visual Money Center screenshot
+- Paid Watch-Party refund/revoke provider tooling
 - Paid Events refund/revoke and capacity UI proof
 - Channel Subscription fresh lifecycle webhook delivery
 - VIP refund/revoke and optional direct client active-VIP write-denial hardening proof
