@@ -2,6 +2,7 @@ import { Link, type Href, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  ImageBackground,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -28,9 +29,11 @@ import {
   validateUsernameHandle,
   type UsernameAvailability,
 } from "../../_lib/usernameHandles";
+import { AppStatusPill } from "../../components/ui/app-surface";
 
 const COMMUNITY_GUIDELINES_HREF = "/community-guidelines" as Href;
 const EMAIL_CONFIRM_REDIRECT_URL = "chillywoodmobile://auth/callback";
+const SIGNUP_BACKGROUND_SOURCE = require("../../assets/images/chicago-skyline.jpg");
 
 function getSignupErrorMessage(error: unknown) {
   const raw = String(
@@ -321,83 +324,91 @@ export default function Signup() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardShell}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={[
-          styles.container,
-          {
-            paddingTop: Math.max(insets.top + 32, 72),
-            paddingBottom: Math.max(insets.bottom + (keyboardVisible ? 188 : 128), keyboardVisible ? 208 : 152),
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
+    <ImageBackground source={SIGNUP_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
+      <View style={styles.overlay} />
+
+      <KeyboardAvoidingView
+        style={styles.keyboardShell}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <Text style={styles.title}>{isClosedBetaEnvironment() ? "Create Closed Beta Account" : "Create Account"}</Text>
-        <Text style={styles.subtitle}>
-          {isClosedBetaEnvironment()
-            ? "Sign up with the invited email for this small Chi'llywood beta. Accounts that are not on the invite list will stay blocked from invite-only flows."
-            : "Create an account so you can join rooms, manage your Platform, and send in-app support feedback."}
-        </Text>
-        <View style={styles.ageGateCard}>
-          <Text style={styles.ageGateTitle}>Account requirements</Text>
-          <Pressable
-            style={styles.ageGateRow}
-            onPress={() => setAgeConfirmed((current) => !current)}
-            disabled={loading}
-            accessibilityRole="checkbox"
-            accessibilityLabel="Confirm you are 18 or older"
-            accessibilityState={{ checked: ageConfirmed, disabled: loading }}
-            testID="signup-age-confirmation-checkbox"
-          >
-            <View style={[styles.checkbox, ageConfirmed && styles.checkboxChecked]}>
-              {ageConfirmed ? <View style={styles.checkboxDot} /> : null}
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[
+            styles.container,
+            {
+              paddingTop: Math.max(insets.top + 32, 72),
+              paddingBottom: Math.max(insets.bottom + (keyboardVisible ? 188 : 128), keyboardVisible ? 208 : 152),
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.card}>
+            <View style={styles.headerRow}>
+              <Text style={styles.kicker}>CHI'LLYWOOD</Text>
+              <AppStatusPill label={isClosedBetaEnvironment() ? "Closed Beta" : "Public V1"} tone="accent" />
             </View>
-            <Text style={styles.ageGateLabel}>I confirm I am 18 or older.</Text>
-          </Pressable>
-          <Pressable
-            style={styles.ageGateRow}
-            onPress={() => setLegalAccepted((current) => !current)}
-            disabled={loading}
-            accessibilityRole="checkbox"
-            accessibilityLabel="Accept Terms, Privacy Policy, and Community Guidelines"
-            accessibilityState={{ checked: legalAccepted, disabled: loading }}
-            testID="signup-legal-acceptance-checkbox"
-          >
-            <View style={[styles.checkbox, legalAccepted && styles.checkboxChecked]}>
-              {legalAccepted ? <View style={styles.checkboxDot} /> : null}
-            </View>
-            <Text style={styles.ageGateLabel} testID="signup-legal-acceptance-copy">
-              I agree to Chi'llywood's Terms of Service, Privacy Policy, and Community Guidelines.
+            <Text style={styles.title}>{isClosedBetaEnvironment() ? "Create Closed Beta Account" : "Create Account"}</Text>
+            <Text style={styles.subtitle}>
+              {isClosedBetaEnvironment()
+                ? "Sign up with the invited email for this small Chi'llywood beta. Accounts that are not on the invite list will stay blocked from invite-only flows."
+                : "Create an account so you can join rooms, manage your Platform, and send in-app support feedback."}
             </Text>
-          </Pressable>
-        </View>
-        <Text style={styles.legalNotice}>
-          Before creating an account, review and accept Chi'llywood's{" "}
-          <Link href="/terms" style={styles.legalLink}>
-            Terms of Service
-          </Link>
-          {", "}
-          <Link href="/privacy" style={styles.legalLink}>
-            Privacy Policy
-          </Link>
-          {" and "}
-          <Link href={COMMUNITY_GUIDELINES_HREF} style={styles.legalLink}>
-            Community Guidelines
-          </Link>
-          {"."}
-        </Text>
-        <View style={styles.usernameCard}>
-          <Text style={styles.usernameTitle}>Choose your name and handle</Text>
-          <Text style={styles.usernameHelper}>
-            Your display name is what people see. Your @username is how they find you, and it can be different.
-          </Text>
+            <View style={styles.ageGateCard}>
+              <Text style={styles.ageGateTitle}>Account requirements</Text>
+              <Pressable
+                style={styles.ageGateRow}
+                onPress={() => setAgeConfirmed((current) => !current)}
+                disabled={loading}
+                accessibilityRole="checkbox"
+                accessibilityLabel="Confirm you are 18 or older"
+                accessibilityState={{ checked: ageConfirmed, disabled: loading }}
+                testID="signup-age-confirmation-checkbox"
+              >
+                <View style={[styles.checkbox, ageConfirmed && styles.checkboxChecked]}>
+                  {ageConfirmed ? <View style={styles.checkboxDot} /> : null}
+                </View>
+                <Text style={styles.ageGateLabel}>I confirm I am 18 or older.</Text>
+              </Pressable>
+              <Pressable
+                style={styles.ageGateRow}
+                onPress={() => setLegalAccepted((current) => !current)}
+                disabled={loading}
+                accessibilityRole="checkbox"
+                accessibilityLabel="Accept Terms, Privacy Policy, and Community Guidelines"
+                accessibilityState={{ checked: legalAccepted, disabled: loading }}
+                testID="signup-legal-acceptance-checkbox"
+              >
+                <View style={[styles.checkbox, legalAccepted && styles.checkboxChecked]}>
+                  {legalAccepted ? <View style={styles.checkboxDot} /> : null}
+                </View>
+                <Text style={styles.ageGateLabel} testID="signup-legal-acceptance-copy">
+                  I agree to Chi'llywood's Terms of Service, Privacy Policy, and Community Guidelines.
+                </Text>
+              </Pressable>
+            </View>
+            <Text style={styles.legalNotice}>
+              Before creating an account, review and accept Chi'llywood's{" "}
+              <Link href="/terms" style={styles.legalLink}>
+                Terms of Service
+              </Link>
+              {", "}
+              <Link href="/privacy" style={styles.legalLink}>
+                Privacy Policy
+              </Link>
+              {" and "}
+              <Link href={COMMUNITY_GUIDELINES_HREF} style={styles.legalLink}>
+                Community Guidelines
+              </Link>
+              {"."}
+            </Text>
+            <View style={styles.usernameCard}>
+              <Text style={styles.usernameTitle}>Choose your name and handle</Text>
+              <Text style={styles.usernameHelper}>
+                Your display name is what people see. Your @username is how they find you, and it can be different.
+              </Text>
           <TextInput
             style={styles.input}
             placeholder="Display name"
@@ -516,26 +527,54 @@ export default function Signup() {
             Sign in
           </Link>
         </View>
+          </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    backgroundColor: "#06070B",
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(7,10,16,0.78)",
+  },
   keyboardShell: {
     flex: 1,
-    backgroundColor: "#0B0B0F",
   },
   container: {
     flexGrow: 1,
-    backgroundColor: "#0B0B0F",
-    padding: 24,
+    paddingHorizontal: 24,
     justifyContent: "flex-start",
+  },
+  card: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(12,13,19,0.94)",
+    padding: 22,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
+  kicker: {
+    color: "#7B869E",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.2,
   },
   title: {
     color: "#DC143C",
-    fontSize: 26,
-    fontWeight: "700",
+    fontSize: 28,
+    fontWeight: "900",
     marginBottom: 10,
   },
   subtitle: {
@@ -704,16 +743,18 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   input: {
-    backgroundColor: "#1A1A22",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
     color: "white",
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 14,
     marginBottom: 14,
   },
   button: {
     backgroundColor: "#DC143C",
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
     marginTop: 10,
   },
