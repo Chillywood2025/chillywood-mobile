@@ -111,12 +111,12 @@ export default function ForgotPassword() {
         >
           <View style={styles.card}>
             <View style={styles.headerRow}>
-              <Text style={styles.kicker}>CHI'LLYWOOD</Text>
+              <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
               <AppStatusPill label={isClosedBetaEnvironment() ? "Closed Beta" : "Public V1"} tone="accent" />
             </View>
             <Text style={styles.title}>Reset password</Text>
             <Text style={styles.subtitle}>
-              Enter your account email. Chi'llywood will send a reset link that opens the app reset screen.
+              Enter your account email. Chi&apos;llywood will send a reset link that opens the app reset screen.
             </Text>
 
             <TextInput
@@ -144,7 +144,7 @@ export default function ForgotPassword() {
               <View style={styles.sentBox} testID="forgot-password-sent-state">
                 <Text style={styles.sentTitle}>Reset link sent</Text>
                 <Text style={styles.sentBody}>
-                  Open the newest email from Chi'llywood. After you update your password, the app returns to login.
+                  Open the newest email from Chi&apos;llywood. After you update your password, the app returns to login.
                 </Text>
               </View>
             ) : null}

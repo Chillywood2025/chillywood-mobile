@@ -247,7 +247,7 @@ export function InternalInviteSheet({
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.sheet}>
-          <Text style={styles.kicker}>CHI'LLYWOOD INVITE</Text>
+          <Text style={styles.kicker}>CHI&apos;LLYWOOD INVITE</Text>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.body}>{body}</Text>
           <View style={styles.searchShell}>

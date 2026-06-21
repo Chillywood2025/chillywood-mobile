@@ -347,7 +347,7 @@ export default function Signup() {
         >
           <View style={styles.card}>
             <View style={styles.headerRow}>
-              <Text style={styles.kicker}>CHI'LLYWOOD</Text>
+              <Text style={styles.kicker}>CHI&apos;LLYWOOD</Text>
               <AppStatusPill label={isClosedBetaEnvironment() ? "Closed Beta" : "Public V1"} tone="accent" />
             </View>
             <Text style={styles.title}>{isClosedBetaEnvironment() ? "Create Closed Beta Account" : "Create Account"}</Text>
@@ -385,12 +385,12 @@ export default function Signup() {
                   {legalAccepted ? <View style={styles.checkboxDot} /> : null}
                 </View>
                 <Text style={styles.ageGateLabel} testID="signup-legal-acceptance-copy">
-                  I agree to Chi'llywood's Terms of Service, Privacy Policy, and Community Guidelines.
+                  I agree to Chi&apos;llywood&apos;s Terms of Service, Privacy Policy, and Community Guidelines.
                 </Text>
               </Pressable>
             </View>
             <Text style={styles.legalNotice}>
-              Before creating an account, review and accept Chi'llywood's{" "}
+              Before creating an account, review and accept Chi&apos;llywood&apos;s{" "}
               <Link href="/terms" style={styles.legalLink}>
                 Terms of Service
               </Link>

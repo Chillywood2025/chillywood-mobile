@@ -1130,7 +1130,7 @@ export default function ExploreScreen() {
                 </View>
 
                 <View style={styles.searchShell}>
-                  <Text style={styles.searchLabel}>Search Chi'llywood</Text>
+                  <Text style={styles.searchLabel}>Search Chi&apos;llywood</Text>
                   <View style={styles.searchInputRow}>
                     <MaterialIcons name="search" size={20} color="#AAB4C7" />
                     <TextInput

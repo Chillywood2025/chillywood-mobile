@@ -144,7 +144,7 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.title}>VIP Area</Text>
             <Text style={styles.platformName}>{creatorName}</Text>
             <Text style={styles.body}>
-              VIP is active for this creator's Platform only.
+              VIP is active for this creator&apos;s Platform only.
             </Text>
             <MoneyScopeStrip
               includes="Creator-specific VIP access for this Platform."
@@ -197,7 +197,7 @@ export default function CreatorVipPassScreen() {
             />
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
-            <Text style={styles.meta}>VIP does not unlock Chi'llywood Premium.</Text>
+            <Text style={styles.meta}>{"VIP does not unlock Chi'llywood Premium."}</Text>
             {needsPurchase ? (
               <TouchableOpacity
                 style={[styles.primaryButton, busy && styles.buttonDisabled]}

@@ -8097,7 +8097,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>VIP Pass setup</Text>
                   <Text style={styles.eventEmptyBody}>
-                    VIP Passes are sandbox-only until live money is approved. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.
+                    VIP Passes are sandbox-only until live money is approved. VIP is creator-specific and does not include Chi&apos;llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators&apos; channels.
                   </Text>
                   <MoneyScopeInfoButton scope="vip_pass" label="What does VIP unlock?" />
                   <Text style={styles.eventEmptyBody}>
