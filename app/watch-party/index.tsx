@@ -23,7 +23,6 @@ import {
     ScrollView,
     Share,
     StyleSheet,
-    Text,
     TextInput,
     TouchableOpacity,
     View,
@@ -71,6 +70,7 @@ import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { PLAYER_WATCH_PARTY_SOURCE } from "../../_lib/watch-party/room-shared";
 import WatchPartyLiveStageScreen from "./live-stage/[partyId]";
+import { AppText } from "../../components/ui/typography";
 
 type RoomPreview = {
   room: WatchPartyState;
@@ -1427,22 +1427,22 @@ export default function WatchPartyIndexScreen() {
       <>
         <View style={styles.hostPreflightCard}>
           <View style={styles.hostPreflightHeader}>
-            <Text style={styles.hostPreflightLabel}>HOST PREFLIGHT</Text>
-            <Text style={styles.hostPreflightPill}>{isLiveWaitingRoom ? "Live" : "Party"}</Text>
+            <AppText scale="caption" style={styles.hostPreflightLabel}>HOST PREFLIGHT</AppText>
+            <AppText scale="caption" style={styles.hostPreflightPill}>{isLiveWaitingRoom ? "Live" : "Party"}</AppText>
           </View>
           {hostPreflightRows.map((row) => (
             <View key={row.label} style={styles.hostPreflightRow}>
               <View style={styles.hostPreflightCopy}>
-                <Text style={styles.hostPreflightTitle}>{row.label}</Text>
-                <Text style={styles.hostPreflightBody}>{row.detail}</Text>
+                <AppText scale="footnote" style={styles.hostPreflightTitle}>{row.label}</AppText>
+                <AppText scale="caption" style={styles.hostPreflightBody}>{row.detail}</AppText>
               </View>
-              <Text style={styles.hostPreflightStatus}>{row.status}</Text>
+              <AppText scale="caption" style={styles.hostPreflightStatus}>{row.status}</AppText>
             </View>
           ))}
         </View>
 
         <View style={styles.readinessCard}>
-          <Text style={styles.readinessLabel}>SETUP STATUS</Text>
+          <AppText scale="caption" style={styles.readinessLabel}>SETUP STATUS</AppText>
           {waitingRoomReadinessRows.map((entry) => (
             <View key={entry.label} style={styles.readinessRow}>
               <View style={[styles.readinessDot, entry.tone === "ready"
@@ -1452,28 +1452,28 @@ export default function WatchPartyIndexScreen() {
                   : styles.readinessDotNeeded]} />
               <View style={styles.readinessMeta}>
                 <View style={styles.readinessHeadline}>
-                  <Text style={styles.readinessTitle}>{entry.label}</Text>
-                  <Text style={styles.readinessStatus}>{entry.status}</Text>
+                  <AppText scale="footnote" style={styles.readinessTitle}>{entry.label}</AppText>
+                  <AppText scale="caption" style={styles.readinessStatus}>{entry.status}</AppText>
                 </View>
-                <Text style={styles.readinessBody}>{entry.detail}</Text>
+                <AppText scale="caption" style={styles.readinessBody}>{entry.detail}</AppText>
               </View>
             </View>
           ))}
         </View>
 
         <View style={styles.permissionsCard}>
-          <Text style={styles.permissionsLabel}>ROOM ACCESS</Text>
-          <Text style={styles.permissionsBody}>
+          <AppText scale="caption" style={styles.permissionsLabel}>ROOM ACCESS</AppText>
+          <AppText scale="footnote" style={styles.permissionsBody}>
             {waitingRoomPermissionsBody}
-          </Text>
+          </AppText>
         </View>
 
         {!isLiveWaitingRoom && topRoomCode ? (
           <View style={styles.permissionsCard}>
-            <Text style={styles.permissionsLabel}>ROOM TICKETS</Text>
-            <Text style={styles.permissionsBody}>
+            <AppText scale="caption" style={styles.permissionsLabel}>ROOM TICKETS</AppText>
+            <AppText scale="footnote" style={styles.permissionsBody}>
               Room tickets are sandbox/test only and not payable while live money is off. This ticket unlocks access to this Watch-Party room only. It does not include Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, other rooms, or Live Stage.
-            </Text>
+            </AppText>
             <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this ticket unlock?" />
             {hostLabel === "You are hosting" ? (
               <>
@@ -1494,9 +1494,9 @@ export default function WatchPartyIndexScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Set up paid Watch-Party ticket"
                 >
-                  <Text style={styles.generateCodeButtonText}>
+                  <AppText scale="footnote" style={styles.generateCodeButtonText}>
                     {paidTicketBusy ? "Saving Ticket" : "Set Up $0.99 Sandbox Ticket"}
-                  </Text>
+                  </AppText>
                 </TouchableOpacity>
               </>
             ) : paidTicketGate?.requiresPurchase ? (
@@ -1509,12 +1509,12 @@ export default function WatchPartyIndexScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Sandbox Test Buy Watch-Party Ticket"
               >
-                <Text style={styles.generateCodeButtonText}>
+                <AppText scale="footnote" style={styles.generateCodeButtonText}>
                   {paidTicketBusy ? "Opening Google Play" : "Sandbox Test Ticket"}
-                </Text>
+                </AppText>
               </TouchableOpacity>
             ) : null}
-            {paidTicketNotice ? <Text style={styles.errorText}>{paidTicketNotice}</Text> : null}
+            {paidTicketNotice ? <AppText scale="footnote" style={styles.errorText}>{paidTicketNotice}</AppText> : null}
           </View>
         ) : null}
 
@@ -1547,12 +1547,12 @@ export default function WatchPartyIndexScreen() {
               {refreshingCode || isPreparingInitialCode ? (
                 <View style={styles.lookingRow}>
                   <ActivityIndicator color="#fff" size="small" />
-                  <Text style={styles.generateCodeButtonText}>
+                  <AppText scale="footnote" style={styles.generateCodeButtonText}>
                     {isPreparingInitialCode ? "  Preparing room code…" : "  Generating new code…"}
-                  </Text>
+                  </AppText>
                 </View>
               ) : (
-                <Text style={styles.generateCodeButtonText}>{roomCodeButtonLabel}</Text>
+                <AppText scale="footnote" style={styles.generateCodeButtonText}>{roomCodeButtonLabel}</AppText>
               )}
             </TouchableOpacity>
           </>
@@ -1597,62 +1597,62 @@ export default function WatchPartyIndexScreen() {
           keyboardDismissMode="none"
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
-        <Text style={styles.kicker}>{branding.appDisplayName.toUpperCase()}</Text>
-        <Text style={styles.tagline}>{waitingRoomTagline}</Text>
+        <AppText scale="caption" style={styles.kicker}>{branding.appDisplayName.toUpperCase()}</AppText>
+        <AppText scale="body" style={styles.tagline}>{waitingRoomTagline}</AppText>
 
         {/* ── Presence / identity ─────────────────────────────────────── */}
         <View style={styles.presenceCard}>
           <View style={styles.presenceAvatar}>
-            <Text style={styles.presenceAvatarText}>Y</Text>
+            <AppText scale="title3" style={styles.presenceAvatarText}>Y</AppText>
           </View>
             <View style={styles.presenceMeta}>
-            <Text style={styles.presenceKicker}>{isLiveWaitingRoom ? "LIVE IDENTITY" : "YOUR PRESENCE"}</Text>
-            <Text style={styles.presenceTitle}>You</Text>
-            <Text style={styles.presenceStatus}>{waitingPresenceLabel}</Text>
+            <AppText scale="caption" style={styles.presenceKicker}>{isLiveWaitingRoom ? "LIVE IDENTITY" : "YOUR PRESENCE"}</AppText>
+            <AppText scale="subhead" style={styles.presenceTitle}>You</AppText>
+            <AppText scale="footnote" style={styles.presenceStatus}>{waitingPresenceLabel}</AppText>
           </View>
           {topRoomCode ? (
             <View style={styles.presenceCodePill}>
-              <Text style={styles.presenceCodeText}>{topRoomCode}</Text>
+              <AppText scale="footnote" style={styles.presenceCodeText}>{topRoomCode}</AppText>
             </View>
           ) : null}
         </View>
 
         {/* ── Room identity ───────────────────────────────────────────── */}
         <View style={styles.roomIdentityCard}>
-          <Text style={styles.roomIdentityLabel}>ROOM</Text>
-          <Text style={styles.roomIdentityTitle}>{waitingRoomTitle}</Text>
-          <Text style={styles.roomIdentityBody}>{waitingRoomBody}</Text>
+          <AppText scale="caption" style={styles.roomIdentityLabel}>ROOM</AppText>
+          <AppText scale="title3" style={styles.roomIdentityTitle}>{waitingRoomTitle}</AppText>
+          <AppText scale="body" style={styles.roomIdentityBody}>{waitingRoomBody}</AppText>
         </View>
 
         {/* ── Actions ─────────────────────────────────────────────────── */}
         <View style={styles.actionArea}>
-          <Text style={styles.actionAreaLabel}>START HERE</Text>
+          <AppText scale="caption" style={styles.actionAreaLabel}>START HERE</AppText>
 
           {!features.watchPartyEnabled ? (
             <View style={styles.joinCard}>
-              <Text style={styles.joinLabel}>WATCH PARTY HIDDEN</Text>
-              <Text style={styles.roomIdentityBody}>
+              <AppText scale="caption" style={styles.joinLabel}>WATCH PARTY HIDDEN</AppText>
+              <AppText scale="body" style={styles.roomIdentityBody}>
                 Watch Party creation and room entry are currently disabled in app configuration.
-              </Text>
+              </AppText>
             </View>
           ) : null}
 
           <View style={styles.joinCard}>
-            <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "HOST THIS LIVE SESSION" : "HOST THIS WATCH-PARTY"}</Text>
+            <AppText scale="caption" style={styles.joinLabel}>{isLiveWaitingRoom ? "HOST THIS LIVE SESSION" : "HOST THIS WATCH-PARTY"}</AppText>
             {isLiveWaitingRoom ? (
-              <Text style={styles.joinSupportText}>
+              <AppText scale="footnote" style={styles.joinSupportText}>
                 Create the room here, keep the code handy, and continue into Live Room.
-              </Text>
+              </AppText>
             ) : partyTitleLocked ? (
-              <Text style={styles.joinSupportText}>
+              <AppText scale="footnote" style={styles.joinSupportText}>
                 {partyTitleName} is set. Create the room, share the code, and finish setup in Party Room.
-              </Text>
+              </AppText>
             ) : (
               <View style={styles.contentRequiredBox}>
-                <Text style={styles.contentRequiredTitle}>Choose content first to start Watch-Party Live.</Text>
-                <Text style={styles.contentRequiredBody}>
+                <AppText scale="subhead" style={styles.contentRequiredTitle}>Choose content first to start Watch-Party Live.</AppText>
+                <AppText scale="footnote" style={styles.contentRequiredBody}>
                   Start from a title or creator video, then create a content-first Party Room. Room-code joins still work below.
-                </Text>
+                </AppText>
                 <TouchableOpacity
                   style={styles.generateCodeButton}
                   onPress={onBrowseTitles}
@@ -1661,11 +1661,11 @@ export default function WatchPartyIndexScreen() {
                   accessibilityLabel="Browse Titles"
                   testID="watch-party-browse-titles-button"
                 >
-                  <Text style={styles.generateCodeButtonText}>Browse Titles</Text>
+                  <AppText scale="footnote" style={styles.generateCodeButtonText}>Browse Titles</AppText>
                 </TouchableOpacity>
               </View>
             )}
-            {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
+            {createError ? <AppText scale="footnote" style={styles.errorText}>{createError}</AppText> : null}
             <TouchableOpacity
               style={[styles.primaryButton, createActionDisabled && styles.primaryButtonDisabled]}
               onPressIn={() => {
@@ -1687,42 +1687,42 @@ export default function WatchPartyIndexScreen() {
               {createActionBusy ? (
                 <View style={styles.lookingRow}>
                   <ActivityIndicator color="#fff" size="small" />
-                  <Text style={styles.primaryButtonText}>
+                  <AppText scale="body" style={styles.primaryButtonText}>
                     {creating ? "  Creating room…" : "  Preparing room…"}
-                  </Text>
+                  </AppText>
                 </View>
               ) : (
-                <Text style={styles.primaryButtonText}>
+                <AppText scale="body" style={styles.primaryButtonText}>
                   {isMissingWatchPartyContent ? "Choose Content First" : isLiveWaitingRoom ? "Create Live Room" : "Create Party Room"}
-                </Text>
+                </AppText>
               )}
             </TouchableOpacity>
           </View>
 
           <View style={styles.joinCard}>
-            <Text style={styles.joinLabel}>{isLiveWaitingRoom ? "JOIN A LIVE ROOM" : "JOIN WATCH-PARTY LIVE"}</Text>
+            <AppText scale="caption" style={styles.joinLabel}>{isLiveWaitingRoom ? "JOIN A LIVE ROOM" : "JOIN WATCH-PARTY LIVE"}</AppText>
             {isLiveWaitingRoom ? (
-              <Text style={styles.joinSupportText}>
+              <AppText scale="footnote" style={styles.joinSupportText}>
                 Enter a live room code to preview the lane and continue.
-              </Text>
+              </AppText>
             ) : (
-              <Text style={styles.joinSupportText}>
+              <AppText scale="footnote" style={styles.joinSupportText}>
                 Enter a room code to preview the title and continue.
-              </Text>
+              </AppText>
             )}
 
             {preview ? (
               <View style={styles.previewBox}>
                 <View style={styles.previewMeta}>
                   <View style={[styles.previewDot, { backgroundColor: preview.room.playbackState === "playing" ? "#2ecc40" : "#b58900" }]} />
-                  <Text style={styles.previewStatus}>
+                  <AppText scale="caption" style={styles.previewStatus}>
                     {preview.room.playbackState === "playing" ? "Playing" : "Paused"}
-                  </Text>
+                  </AppText>
                 </View>
-                <Text style={styles.previewTitle} numberOfLines={2}>
+                <AppText scale="title3" style={styles.previewTitle} numberOfLines={2}>
                   {getWaitingRoomPreviewTitle(preview)}
-                </Text>
-                <Text style={styles.previewCode}>Room  {preview.room.roomCode}</Text>
+                </AppText>
+                <AppText scale="caption" style={styles.previewCode}>Room  {preview.room.roomCode}</AppText>
                 <View style={styles.previewActions}>
                   <Pressable
                     style={({ pressed }) => [styles.joinNowBtn, pressed && styles.previewActionPressed]}
@@ -1732,7 +1732,7 @@ export default function WatchPartyIndexScreen() {
                     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     testID="watch-party-preview-join"
                   >
-                    <Text style={styles.joinNowBtnText}>Join Now →</Text>
+                    <AppText scale="body" style={styles.joinNowBtnText}>Join Now →</AppText>
                   </Pressable>
                   <Pressable
                     style={({ pressed }) => [styles.cancelBtn, pressed && styles.previewActionPressed]}
@@ -1742,18 +1742,18 @@ export default function WatchPartyIndexScreen() {
                     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                     testID="watch-party-preview-cancel"
                   >
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                    <AppText scale="body" style={styles.cancelBtnText}>Cancel</AppText>
                   </Pressable>
                 </View>
-                {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+                {joinError ? <AppText scale="footnote" style={styles.errorText}>{joinError}</AppText> : null}
                 {paidTicketGate?.requiresPurchase ? (
                   <View style={styles.inlineTicketGate}>
-                    <Text style={styles.inlineTicketGateTitle}>Room ticket required</Text>
-                    <Text style={styles.inlineTicketGateBody}>
+                    <AppText scale="subhead" style={styles.inlineTicketGateTitle}>Room ticket required</AppText>
+                    <AppText scale="footnote" style={styles.inlineTicketGateBody}>
                       This sandbox ticket unlocks this Watch-Party room only. It does not include Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, other rooms, or Live Stage.
-                    </Text>
+                    </AppText>
                     <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this unlock?" compact />
-                    {paidTicketNotice ? <Text style={styles.errorText}>{paidTicketNotice}</Text> : null}
+                    {paidTicketNotice ? <AppText scale="footnote" style={styles.errorText}>{paidTicketNotice}</AppText> : null}
                     <Pressable
                       style={({ pressed }) => [
                         styles.joinNowBtn,
@@ -1768,9 +1768,9 @@ export default function WatchPartyIndexScreen() {
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                       testID="tester-watch-party-ticket-button"
                     >
-                      <Text style={styles.joinNowBtnText}>
+                      <AppText scale="body" style={styles.joinNowBtnText}>
                         {paidTicketBusy ? "Opening Google Play" : `Sandbox Test Ticket ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`}
-                      </Text>
+                      </AppText>
                     </Pressable>
                   </View>
                 ) : null}
@@ -1793,7 +1793,7 @@ export default function WatchPartyIndexScreen() {
                   editable={!joinLookupBusy}
                 />
 
-                {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+                {joinError ? <AppText scale="footnote" style={styles.errorText}>{joinError}</AppText> : null}
 
                 <Pressable
                   style={({ pressed }) => [
@@ -1813,10 +1813,10 @@ export default function WatchPartyIndexScreen() {
                   {joinLookupBusy ? (
                     <View style={styles.lookingRow}>
                       <ActivityIndicator color="#fff" size="small" />
-                      <Text style={styles.primaryButtonText}>  Looking up room…</Text>
+                      <AppText scale="body" style={styles.primaryButtonText}>  Looking up room…</AppText>
                     </View>
                   ) : (
-                    <Text style={styles.primaryButtonText}>Find Room</Text>
+                    <AppText scale="body" style={styles.primaryButtonText}>Find Room</AppText>
                   )}
                 </Pressable>
               </>
