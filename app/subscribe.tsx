@@ -21,6 +21,7 @@ import {
 } from "../_lib/monetization";
 import { useOptionalBetaProgram } from "../_lib/betaProgram";
 import { useSession } from "../_lib/session";
+import { MoneyScopeInfoButton } from "../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneySuccessReceipt } from "../components/monetization/money-ui";
 
 const FRIENDLY_UNAVAILABLE_MESSAGE =
@@ -360,6 +361,7 @@ export default function SubscribeScreen() {
         includes="App-wide Chi'llywood Premium access for supported Premium features and creator tools."
         excludes="Creator subscriptions, VIP passes, tips, paid videos, Watch-Party tickets, and paid events are separate creator products."
       />
+      <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
 
       {sessionLoading ? (
         <View style={styles.card} testID="premium-loading-state" collapsable={false}>

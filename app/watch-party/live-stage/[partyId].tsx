@@ -119,6 +119,7 @@ import {
 import { useCommunicationRoomSession } from "../../../hooks/use-communication-room-session";
 import { InternalInviteSheet } from "../../../components/chat/internal-invite-sheet";
 import { AccessSheet, type AccessSheetReason } from "../../../components/monetization/access-sheet";
+import { MoneyScopeInfoButton } from "../../../components/monetization/MoneyScopeInfoButton";
 import { RouteBackedMonetizationProofCard } from "../../../components/monetization/route-backed-monetization-proof-card";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
 import { RoomReactionPicker, pushRecentReaction } from "../../../components/room/reaction-picker";
@@ -4055,6 +4056,10 @@ export default function WatchPartyLiveStageScreen({
             config={routeProofConfig}
             surface={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_seat" : "live_access"}
           />
+          <MoneyScopeInfoButton
+            scope={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_watch_party_seat_pass" : "live_watch_party_access_pass"}
+            label="What does this unlock?"
+          />
           <View style={styles.routeGateActions}>
             <TouchableOpacity
               style={styles.routeGateSecondaryButton}
@@ -4100,6 +4105,10 @@ export default function WatchPartyLiveStageScreen({
           <RouteBackedMonetizationProofCard
             config={routeProofConfig}
             surface={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_seat" : "live_access"}
+          />
+          <MoneyScopeInfoButton
+            scope={routeProofConfig?.productType === "live_watch_party_seat_pass" ? "live_watch_party_seat_pass" : "live_watch_party_access_pass"}
+            label="What does this unlock?"
           />
           <View style={styles.routeGateActions}>
             <TouchableOpacity

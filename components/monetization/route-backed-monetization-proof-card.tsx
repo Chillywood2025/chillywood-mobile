@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import type { RouteBackedMonetizationProofConfig } from "../../_lib/routeBackedMonetizationVisualProof";
+import { MoneyScopeInfoButton, type MoneyScopeKey } from "./MoneyScopeInfoButton";
 
 type Props = {
   config: RouteBackedMonetizationProofConfig | null;
@@ -31,6 +32,14 @@ const SURFACE_COPY: Record<Props["surface"], { title: string; body: string }> = 
   },
 };
 
+const SCOPE_BY_SURFACE: Record<Props["surface"], MoneyScopeKey> = {
+  event_pass: "event_pass",
+  live_access: "live_watch_party_access_pass",
+  live_seat: "live_watch_party_seat_pass",
+  paid_content: "paid_creator_video",
+  watch_party_ticket: "watch_party_ticket",
+};
+
 export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
   if (!config) return null;
   const copy = SURFACE_COPY[surface];
@@ -49,6 +58,7 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
       <Text style={styles.kicker}>ROUTE-BACKED MONETIZATION PROOF</Text>
       <Text style={styles.title}>{copy.title}</Text>
       <Text style={styles.body}>{copy.body}</Text>
+      <MoneyScopeInfoButton scope={SCOPE_BY_SURFACE[surface]} label="What does this unlock?" />
       <View style={styles.grid}>
         <View style={styles.row}>
           <Text style={styles.label}>Product</Text>

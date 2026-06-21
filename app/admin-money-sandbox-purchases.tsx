@@ -9,6 +9,7 @@ import {
   syncRevenueCatCustomerIdentity,
 } from "../_lib/revenuecat";
 import { SUPABASE_URL, supabase } from "../_lib/supabase";
+import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
 
 type SandboxProductKey =
   | "paid_content_access_sandbox_099"
@@ -68,6 +69,16 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const SANDBOX_EVENT_PASS_PROOF_SOURCE_ID = "9b2f4e7d-2e8e-4d2f-93ef-40b06d317004";
 const SANDBOX_MERCH_PRODUCT_KEY = "cw_merch_test_tee_sandbox";
 const STRIPE_MERCH_CHECKOUT_URL = `${SUPABASE_URL.replace(/\/+$/g, "")}/functions/v1/stripe-merch-checkout`;
+
+const scopeForSandboxProduct = (product: SandboxProduct): MoneyScopeKey => {
+  if (product.sourceType === "watch_party_live") return "watch_party_ticket";
+  if (product.sourceType === "live_watch_party_access") return "live_watch_party_access_pass";
+  if (product.sourceType === "live_watch_party_seat") return "live_watch_party_seat_pass";
+  if (product.sourceType === "paid_content") return "paid_creator_video";
+  if (product.sourceType === "creator_tip") return "creator_tip";
+  if (product.sourceType === "event") return "event_pass";
+  return "paid_creator_video";
+};
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
@@ -298,6 +309,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
           Use the Premium screen for the Google Play / RevenueCat sandbox subscription test and restore path. Public/default
           accounts still see Premium unavailable while the purchase shell is on hold.
         </Text>
+        <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
       </View>
 
       <View style={styles.section}>
@@ -328,6 +340,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
         <Text style={styles.codeText}>{selectedProduct.providerProductId}</Text>
         <Text style={styles.label}>Source type</Text>
         <Text style={styles.codeText}>{selectedProduct.sourceType}</Text>
+        <MoneyScopeInfoButton scope={scopeForSandboxProduct(selectedProduct)} label="What does this unlock?" />
       </View>
 
       <View style={styles.section}>
@@ -367,6 +380,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
           Stripe sandbox checkout is physical merch only. It does not create app access, RevenueCat entitlement, Premium
           entitlement, creator payout eligibility, or real fulfillment.
         </Text>
+        <MoneyScopeInfoButton scope="merch_physical_good" label="What does merch include?" />
         <View style={styles.statusBox}>
           <Text style={styles.statusText}>
             Product: {SANDBOX_MERCH_PRODUCT_KEY}{"\n"}
@@ -393,6 +407,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
           Stripe Connect payout readiness is read-only here. Internal testers cannot request, trigger, simulate, cash out,
           withdraw, transfer, or activate payouts. KYC/tax/provider status can be inspected in Money Center only as readiness.
         </Text>
+        <MoneyScopeInfoButton scope="payout_readiness" label="What does payout setup mean?" />
         <View style={styles.controlGrid}>
           {[
             ["Stripe Connect", "Readiness only"],

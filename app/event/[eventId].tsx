@@ -10,6 +10,7 @@ import {
   type PaidCreatorEventAccess,
 } from "../../_lib/paidCreatorEvents";
 import { supabase } from "../../_lib/supabase";
+import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyOfferCard, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "../../components/monetization/money-ui";
 
 type EventRow = {
@@ -167,6 +168,7 @@ export default function PaidCreatorEventRoute() {
                   includes="Access to this creator event only."
                   excludes="Chi'llywood Premium, VIP, subscriptions, paid videos, Watch-Party tickets, other events, host authority, and payouts stay separate."
                 />
+                <MoneyScopeInfoButton scope="event_pass" label="What does this unlock?" />
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Get Event Pass"

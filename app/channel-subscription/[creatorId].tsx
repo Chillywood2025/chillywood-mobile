@@ -21,6 +21,7 @@ import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRoute
 import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
 import { buildUserChannelProfile, readUserProfileByUserId } from "../../_lib/userData";
 import { useSession } from "../../_lib/session";
+import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 
 const normalizeParam = (value: string | string[] | undefined) =>
@@ -151,6 +152,7 @@ export default function ChannelSubscriptionScreen() {
               includesTestID="subscriber-area-includes-list"
               excludesTestID="subscriber-area-does-not-include-list"
             />
+            <MoneyScopeInfoButton scope="channel_subscription" label="What does this include?" />
             {access?.currentPeriodEnd ? (
               <Text style={styles.meta}>Current period ends {new Date(access.currentPeriodEnd).toLocaleString()}.</Text>
             ) : null}
@@ -196,6 +198,7 @@ export default function ChannelSubscriptionScreen() {
               includes="Subscriber access for this creator Platform when active."
               excludes="Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, payouts, and other creators stay separate."
             />
+            <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
             {needsPurchase ? (
               <TouchableOpacity

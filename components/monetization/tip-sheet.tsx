@@ -18,6 +18,7 @@ import {
 } from "../../_lib/creatorTips";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
 import { useSession } from "../../_lib/session";
+import { MoneyScopeInfoButton } from "./MoneyScopeInfoButton";
 import { CreatorMoneyHeader, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "./money-ui";
 
 type TipSheetProps = {
@@ -192,6 +193,7 @@ export function TipSheet({
             excludes="Tips do not unlock videos, events, rooms, VIP, subscriptions, badges, public rewards, or merchandise."
             excludesTestID="tip-no-content-unlock-copy"
           />
+          <MoneyScopeInfoButton scope="creator_tip" label="What am I buying?" />
 
           {notice ? <MoneySuccessReceipt title="Tip status" body={notice} testID="tip-success-receipt" /> : null}
 

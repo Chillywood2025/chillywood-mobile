@@ -21,6 +21,7 @@ import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRoute
 import { resolvePlatformDisplayIdentity } from "../../_lib/platformIdentity";
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId } from "../../_lib/userData";
+import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 
 const normalizeParam = (value: string | string[] | undefined) =>
@@ -151,6 +152,7 @@ export default function CreatorVipPassScreen() {
               includesTestID="vip-area-includes-list"
               excludesTestID="vip-area-does-not-include-list"
             />
+            <MoneyScopeInfoButton scope="vip_pass" label="What does VIP include?" />
             <View style={styles.emptyStateCard}>
               <Text style={styles.emptyStateTitle}>No VIP perks yet</Text>
               <Text style={styles.emptyStateBody}>{isOwner ? "VIP perks can be managed from Platform Studio when the perk system is backed." : "VIP perks coming later."}</Text>
@@ -193,6 +195,7 @@ export default function CreatorVipPassScreen() {
               includes="Creator-specific VIP access for this Platform when active."
               excludes="Chi'llywood Premium, subscriptions, paid videos, Watch-Party tickets, paid events, room authority, payouts, and other creators stay separate."
             />
+            <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
             <Text style={styles.meta}>VIP does not unlock Chi'llywood Premium.</Text>
             {needsPurchase ? (

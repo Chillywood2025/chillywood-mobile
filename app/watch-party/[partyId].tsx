@@ -129,6 +129,7 @@ import {
 import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
+import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
@@ -2655,6 +2656,7 @@ export default function WatchPartyRoomScreen() {
             includes="Access to this Watch-Party room target only."
             excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, event passes, LiveKit publish authority, host controls, payouts, and other rooms stay separate."
           />
+          <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this ticket unlock?" />
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           {paidTicketGate.requiresPurchase ? (
             <TouchableOpacity

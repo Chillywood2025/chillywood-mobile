@@ -67,6 +67,7 @@ import { resolveSandboxMonetizationTester } from "../../_lib/sandboxMonetization
 import { useSession } from "../../_lib/session";
 import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfile, type UserProfile } from "../../_lib/userData";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monetization/MoneyScopeInfoButton";
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 
@@ -1114,6 +1115,7 @@ export default function PublicChannelScreen() {
     const flowCards = [
       {
         title: "Tip creator",
+        scopeKey: "creator_tip" as MoneyScopeKey,
         body: "Sandbox only. No real money moves.",
         button: "Test tip",
         testID: "tester-tip-creator-button",
@@ -1122,6 +1124,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Paid video",
+        scopeKey: "paid_creator_video" as MoneyScopeKey,
         body: firstVideo ? "Open a public creator video and unlock it in sandbox mode." : "Video test unavailable - creator needs a public video.",
         button: "Unlock test video",
         testID: "tester-paid-video-unlock-button",
@@ -1132,6 +1135,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Watch-Party Ticket",
+        scopeKey: "watch_party_ticket" as MoneyScopeKey,
         body: watchPartyTicketOffer?.partyId
           ? "Get a sandbox Watch-Party ticket. No payout is created."
           : "Ticket test unavailable - creator needs a Party Room target.",
@@ -1148,6 +1152,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Event Pass",
+        scopeKey: "event_pass" as MoneyScopeKey,
         body: firstEvent ? "Get a sandbox event pass. No payout is created." : "Event pass unavailable - creator needs an event.",
         button: "Get test event pass",
         testID: "tester-event-pass-button",
@@ -1158,6 +1163,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Channel Subscription",
+        scopeKey: "channel_subscription" as MoneyScopeKey,
         body: "Creator Platform subscription test. This is not Chi'llywood Premium.",
         button: subscriptionAccess?.allowed ? "Open Subscriber Area" : "Subscribe in test mode",
         testID: "tester-channel-subscribe-button",
@@ -1166,6 +1172,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "VIP Pass",
+        scopeKey: "vip_pass" as MoneyScopeKey,
         body: "Creator-specific VIP test. Does not unlock Premium or other creators.",
         button: vipAccess?.allowed ? "Open VIP Area" : "Get test VIP",
         testID: "tester-vip-pass-button",
@@ -1185,7 +1192,10 @@ export default function PublicChannelScreen() {
           <View style={styles.sandboxFlowGrid}>
             {flowCards.map((flow) => (
               <View key={flow.title} style={[styles.sandboxFlowCard, !flow.available && styles.sandboxFlowCardDisabled]}>
-                <Text style={styles.sandboxFlowTitle}>{flow.title}</Text>
+                <View style={styles.offerHeaderRow}>
+                  <Text style={styles.sandboxFlowTitle}>{flow.title}</Text>
+                  <MoneyScopeInfoButton scope={flow.scopeKey} compact label="What does this unlock?" />
+                </View>
                 <Text style={styles.sandboxFlowBody}>{flow.body}</Text>
                 {flow.available && flow.onPress ? (
                   <TouchableOpacity
@@ -1225,6 +1235,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardBody}>
               Manage this creator Platform subscription. This is separate from Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, and payouts.
             </Text>
+            <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
               <TouchableOpacity
                 style={styles.ownerCommerceButton}
@@ -1255,6 +1266,7 @@ export default function PublicChannelScreen() {
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
+          <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
           <TouchableOpacity
             style={[styles.playButton, (subscriptionBusy || unavailable) && styles.actionButtonDisabled]}
             activeOpacity={0.86}
@@ -1290,6 +1302,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardBody}>
               Manage creator-specific VIP for this Platform. VIP does not unlock Chi'llywood Premium, subscriptions, paid videos, Watch-Party tickets, paid events, room authority, or payouts.
             </Text>
+            <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
               <TouchableOpacity
                 style={styles.ownerCommerceButton}
@@ -1320,6 +1333,7 @@ export default function PublicChannelScreen() {
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
+          <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
           <TouchableOpacity
             style={[styles.playButton, (vipBusy || unavailable) && styles.actionButtonDisabled]}
             activeOpacity={0.86}
@@ -1351,6 +1365,7 @@ export default function PublicChannelScreen() {
       const ownerOffers = [
         {
           title: "Tips",
+          scopeKey: "creator_tip" as MoneyScopeKey,
           body: "Manage contribution settings and test readback. Tips do not unlock content.",
           status: tipStatus?.canTip ? "Ready" : "Setup",
           actions: [
@@ -1362,6 +1377,7 @@ export default function PublicChannelScreen() {
         },
         {
           title: "Paid videos",
+          scopeKey: "paid_creator_video" as MoneyScopeKey,
           body: "Set prices from Content. Each unlock applies to one video only.",
           status: firstVideo ? "Content ready" : "Needs video",
           actions: [
@@ -1374,6 +1390,7 @@ export default function PublicChannelScreen() {
         },
         {
           title: "Watch-Party tickets",
+          scopeKey: "watch_party_ticket" as MoneyScopeKey,
           body: "Choose a Party Room target. Ticket access does not grant host or LiveKit authority.",
           status: watchPartyTicketOffer?.partyId ? "Target ready" : "Needs target",
           actions: [
@@ -1385,6 +1402,7 @@ export default function PublicChannelScreen() {
         },
         {
           title: "Event passes",
+          scopeKey: "event_pass" as MoneyScopeKey,
           body: "Manage event access. Each pass is for one creator event only.",
           status: firstEvent ? "Event ready" : "Needs event",
           actions: [
@@ -1396,6 +1414,7 @@ export default function PublicChannelScreen() {
         },
         {
           title: "Subscription",
+          scopeKey: "channel_subscription" as MoneyScopeKey,
           body: "Monthly creator Platform membership. This is not Chi'llywood Premium.",
           status: subscriptionOffer ? "Manage" : "Not set",
           actions: [
@@ -1408,6 +1427,7 @@ export default function PublicChannelScreen() {
         },
         {
           title: "VIP",
+          scopeKey: "vip_pass" as MoneyScopeKey,
           body: "Creator-specific VIP only. Does not unlock Premium, paid videos, tickets, or events.",
           status: vipOffer ? "Manage" : "Not set",
           actions: [
@@ -1436,6 +1456,7 @@ export default function PublicChannelScreen() {
                 <View style={styles.offerHeaderRow}>
                   <Text style={styles.offerTitle}>{offer.title}</Text>
                   <Text style={styles.offerStatusPill}>{offer.status}</Text>
+                  <MoneyScopeInfoButton scope={offer.scopeKey} compact label="What does this unlock?" />
                 </View>
                 <Text style={styles.offerBody}>{offer.body}</Text>
                 <View style={styles.offerActionRow}>
@@ -1478,6 +1499,7 @@ export default function PublicChannelScreen() {
     const supportItems = [
       {
         title: "Tip",
+        scopeKey: "creator_tip" as MoneyScopeKey,
         body: "Send a contribution. Does not unlock content.",
         price: sandboxTesterActive ? "Sandbox test" : null,
         button: sandboxTesterActive ? "Test tip" : "Tip",
@@ -1487,6 +1509,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Subscribe",
+        scopeKey: "channel_subscription" as MoneyScopeKey,
         body: "Support this Platform monthly. Does not include Premium.",
         price: subscriptionOffer ? formatChannelSubscriptionPrice(subscriptionOffer.priceCents, subscriptionOffer.currency) : null,
         button: subscriptionAccess?.allowed ? "Open Subscriber Area" : sandboxTesterActive ? "Subscribe in test mode" : "Subscribe",
@@ -1497,6 +1520,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "VIP",
+        scopeKey: "vip_pass" as MoneyScopeKey,
         body: "Creator-specific VIP. Does not unlock Premium or paid videos.",
         price: vipOffer ? formatCreatorVipPassPrice(vipOffer.priceCents, vipOffer.currency) : null,
         button: vipAccess?.allowed ? "Open VIP Area" : sandboxTesterActive ? "Get test VIP" : "Get VIP",
@@ -1507,6 +1531,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Paid video",
+        scopeKey: "paid_creator_video" as MoneyScopeKey,
         body: firstVideo ? "Unlock this video only." : "Paid video unavailable until a public video is ready.",
         price: sandboxTesterActive ? "Sandbox unlock" : null,
         button: "Unlock video",
@@ -1518,6 +1543,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Ticket",
+        scopeKey: "watch_party_ticket" as MoneyScopeKey,
         body: "Access this Watch-Party target only.",
         price: watchPartyTicketOffer ? formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency) : null,
         button: "Get ticket",
@@ -1533,6 +1559,7 @@ export default function PublicChannelScreen() {
       },
       {
         title: "Event pass",
+        scopeKey: "event_pass" as MoneyScopeKey,
         body: firstEvent ? "Access this event only." : "Event pass unavailable until an event is ready.",
         price: sandboxTesterActive ? "Sandbox pass" : null,
         button: "Get event pass",
@@ -1562,6 +1589,7 @@ export default function PublicChannelScreen() {
               <View style={styles.offerHeaderRow}>
                 <Text style={styles.offerTitle}>{item.title}</Text>
                 {sandboxTesterActive ? <Text style={styles.sandboxBadge}>Sandbox</Text> : null}
+                <MoneyScopeInfoButton scope={item.scopeKey} compact label="What does this unlock?" />
               </View>
               <Text style={styles.offerBody}>{item.body}</Text>
               {item.price ? <Text style={styles.offerMeta}>{item.price}</Text> : null}
@@ -2322,6 +2350,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.035)",
   },
   sandboxFlowTitle: {
+    flex: 1,
     color: "#F8FAFF",
     fontSize: 14,
     fontWeight: "900",

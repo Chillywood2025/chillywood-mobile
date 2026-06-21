@@ -132,6 +132,7 @@ import {
 } from "../../_lib/watchParty";
 import { buildFooterControlTokens, mapFooterControlRowStyles } from "../../components/room/control-style-tokens";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
+import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
 import { ReportSheet } from "../../components/safety/report-sheet";
@@ -8703,6 +8704,7 @@ export default function PlayerScreen() {
                   includes="Playback access to this creator video only."
                   excludes="Chi'llywood Premium, subscriptions, VIP, Watch-Party tickets, event passes, rooms, and other creator videos stay separate."
                 />
+                <MoneyScopeInfoButton scope="paid_creator_video" label="What does this unlock?" compact />
                 <TouchableOpacity
                   style={[
                     styles.playerAccessPrimaryBtn,

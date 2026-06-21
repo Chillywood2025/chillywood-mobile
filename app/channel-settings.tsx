@@ -255,6 +255,7 @@ import {
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
 import { normalizeUserProfile, readUserProfile, saveUserProfile, updateMyPlatformAccessVisibility } from "../_lib/userData";
 import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
+import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { AppActionButton, AppEmptyState, AppStickyActionBar } from "../components/ui/app-surface";
 
@@ -301,6 +302,7 @@ type SandboxTesterOfferCard = {
   configured: boolean;
   blocker?: string;
   description: string;
+  scopeKey: MoneyScopeKey;
   testID: string;
   statusLabel: string;
   actionLabel?: string;
@@ -7314,6 +7316,7 @@ export function ChannelStudioScreen() {
         description: creatorTipSettings?.tipsEnabled === true
           ? "Testers can send a sandbox tip. No money moves."
           : "Run setup to turn on the sandbox tip flow.",
+        scopeKey: "creator_tip",
         statusLabel: creatorTipSettings?.tipsEnabled === true ? "Ready" : "Needs setup",
         actionLabel: creatorTipSettings?.tipsEnabled === true ? "Preview tip flow" : undefined,
         onPress: previewCreatorPlatform,
@@ -7333,6 +7336,7 @@ export function ChannelStudioScreen() {
           : latestPublicSandboxVideo
             ? "A public video exists. Run setup to attach a sandbox unlock."
             : "Paid video needs a public safe creator video first.",
+        scopeKey: "paid_creator_video",
         statusLabel: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Ready" : latestPublicSandboxVideo ? "Needs setup" : "Blocked",
         actionLabel: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox")
           ? "Preview paid video"
@@ -7354,6 +7358,7 @@ export function ChannelStudioScreen() {
         description: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
           ? "Testers can buy a sandbox ticket before Party Waiting Room or Party Room entry."
           : "Watch-Party Ticket needs a Party Room target.",
+        scopeKey: "watch_party_ticket",
         statusLabel: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Ready" : "Blocked",
         actionLabel: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
           ? "Preview ticket flow"
@@ -7374,6 +7379,7 @@ export function ChannelStudioScreen() {
         description: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
           ? "Testers can get a sandbox event pass."
           : "Event Pass needs a creator event and sandbox offer.",
+        scopeKey: "event_pass",
         statusLabel: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Ready" : "Needs setup",
         actionLabel: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Preview event pass" : "Create event",
         onPress: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") && creatorEvents[0]
@@ -7389,6 +7395,7 @@ export function ChannelStudioScreen() {
         description: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox")
           ? "Testers can subscribe to this creator channel in sandbox mode. This is not Chi'llywood Premium."
           : "Run setup to create the sandbox channel subscription.",
+        scopeKey: "channel_subscription",
         statusLabel: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Ready" : "Needs setup",
         actionLabel: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Preview subscription" : undefined,
         onPress: previewCreatorPlatform,
@@ -7402,6 +7409,7 @@ export function ChannelStudioScreen() {
         description: creatorVipPassOffers.some((offer) => offer.status === "sandbox")
           ? "Testers can get creator-specific VIP in sandbox mode. It does not unlock Premium or other creators."
           : "Run setup to create the sandbox VIP pass.",
+        scopeKey: "vip_pass",
         statusLabel: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Ready" : "Needs setup",
         actionLabel: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Preview VIP" : undefined,
         onPress: previewCreatorPlatform,
@@ -7452,9 +7460,20 @@ export function ChannelStudioScreen() {
         body: "After proof, revoke the tester and confirm sandbox CTAs disappear.",
       },
     ] as const;
+    const scopeForFeatureKey = (key: MonetizationFeatureKey): MoneyScopeKey => {
+      if (key === "tips") return "creator_tip";
+      if (key === "paid_videos") return "paid_creator_video";
+      if (key === "paid_watch_parties") return "watch_party_ticket";
+      if (key === "channel_subscriptions") return "channel_subscription";
+      if (key === "vip_passes") return "vip_pass";
+      return "event_pass";
+    };
     const renderFeatureCard = (feature: MonetizationFeatureCatalogItem) => (
       <View key={feature.key} style={[styles.summaryCard, (feature.status === "Blocked" || feature.status === "Needs attention") && styles.summaryCardUnavailable]}>
-        <Text style={styles.summaryLabel}>{feature.title}</Text>
+        <View style={styles.scopeInfoHeaderRow}>
+          <Text style={styles.summaryLabel}>{feature.title}</Text>
+          <MoneyScopeInfoButton scope={scopeForFeatureKey(feature.key)} compact />
+        </View>
         <Text style={styles.summaryValue}>{feature.status}</Text>
         <Text style={styles.summaryBody}>{feature.creatorDescription}</Text>
         {feature.blockedReason ? <Text style={styles.noticeText}>{feature.blockedReason}</Text> : null}
@@ -7720,6 +7739,7 @@ export function ChannelStudioScreen() {
           <Text style={styles.permissionCopy}>
             Test mode - no payouts. No real charges. No creator earnings. No withdrawals.
           </Text>
+          <MoneyScopeInfoButton scope="payout_readiness" label="What does payout setup mean?" />
           {renderSummaryMetricCards(launchReadinessCards)}
           <View style={styles.summaryGrid}>
             {[
@@ -7846,7 +7866,10 @@ export function ChannelStudioScreen() {
               >
                 <View style={styles.eventCardHeader}>
                   <Text style={styles.summaryLabel}>{card.title}</Text>
-                  {renderStudioStatusPill(card.statusLabel, card.configured ? "default" : card.statusLabel === "Blocked" ? "warning" : "muted")}
+                  <View style={styles.scopeInfoHeaderRow}>
+                    <MoneyScopeInfoButton scope={card.scopeKey} compact />
+                    {renderStudioStatusPill(card.statusLabel, card.configured ? "default" : card.statusLabel === "Blocked" ? "warning" : "muted")}
+                  </View>
                 </View>
                 <Text style={styles.summaryValue}>{card.configured ? "Tester visible" : card.statusLabel}</Text>
                 <Text style={styles.summaryBody}>{card.description}</Text>
@@ -7976,6 +7999,7 @@ export function ChannelStudioScreen() {
                   <Text style={styles.eventEmptyBody}>
                     {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, buy a room ticket, subscribe to a creator, get VIP, or buy an event pass."}
                   </Text>
+                  <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
                 </View>
                 <View style={styles.summaryGrid}>
                   {monetizationFeatureCards.map(renderFeatureCard)}
@@ -7985,6 +8009,7 @@ export function ChannelStudioScreen() {
                   <Text style={styles.eventEmptyBody}>
                     Tips do not unlock perks or content. Android tester tips use Google Play / RevenueCat sandbox only. Physical merchandise uses Stripe separately.
                   </Text>
+                  <MoneyScopeInfoButton scope="creator_tip" label="What do tips unlock?" />
                 </View>
                 {renderSummaryMetricCards(tipSetupCards)}
                 <View style={styles.eventActionRow}>
@@ -8037,6 +8062,7 @@ export function ChannelStudioScreen() {
 	                  <Text style={styles.eventEmptyBody}>
 	                    {"Channel Subscriptions are monthly creator memberships in sandbox mode. They do not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels."}
 	                  </Text>
+                  <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
                   <Text style={styles.eventEmptyBody}>
                     Product: channel_subscription_sandbox_monthly_499 · Price: $4.99/month sandbox/test.
                   </Text>
@@ -8073,6 +8099,7 @@ export function ChannelStudioScreen() {
                   <Text style={styles.eventEmptyBody}>
                     VIP Passes are sandbox-only until live money is approved. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.
                   </Text>
+                  <MoneyScopeInfoButton scope="vip_pass" label="What does VIP unlock?" />
                   <Text style={styles.eventEmptyBody}>
                     Product: vip_pass_sandbox_499 · Price: $4.99 sandbox/test.
                   </Text>
@@ -8123,7 +8150,10 @@ export function ChannelStudioScreen() {
                       <View key={offer.id} style={styles.eventEmptyCard}>
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
-                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.isPaid ? "default" : "muted")}
+                          <View style={styles.scopeInfoHeaderRow}>
+                            <MoneyScopeInfoButton scope="paid_creator_video" compact />
+                            {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.isPaid ? "default" : "muted")}
+                          </View>
                         </View>
                         <Text style={styles.eventEmptyBody}>
                           paid_video · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.salesCount} sale{offer.salesCount === 1 ? "" : "s"} · {formatMonetizationCurrency(offer.totalRevenueCents, offer.currency)} sandbox gross
@@ -8148,7 +8178,10 @@ export function ChannelStudioScreen() {
                       <View key={offer.id} style={styles.eventEmptyCard}>
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
-                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                          <View style={styles.scopeInfoHeaderRow}>
+                            <MoneyScopeInfoButton scope="watch_party_ticket" compact />
+                            {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                          </View>
                         </View>
                         <Text style={styles.eventEmptyBody}>
                           paid_watch_party · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} seats sold · Party Room {offer.partyId ?? "not linked"}
@@ -8166,7 +8199,10 @@ export function ChannelStudioScreen() {
                       <View key={offer.id} style={styles.eventEmptyCard}>
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
-                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" ? "default" : "muted")}
+                          <View style={styles.scopeInfoHeaderRow}>
+                            <MoneyScopeInfoButton scope="channel_subscription" compact />
+                            {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" ? "default" : "muted")}
+                          </View>
                         </View>
                         <Text style={styles.eventEmptyBody}>
                           channel_subscription · {formatChannelSubscriptionPrice(offer.priceCents, offer.currency)} · {offer.subscriberCount} recorded subscriber signal{offer.subscriberCount === 1 ? "" : "s"}
@@ -8184,7 +8220,10 @@ export function ChannelStudioScreen() {
                       <View key={offer.id} style={styles.eventEmptyCard}>
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
-                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" ? "default" : "muted")}
+                          <View style={styles.scopeInfoHeaderRow}>
+                            <MoneyScopeInfoButton scope="vip_pass" compact />
+                            {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" ? "default" : "muted")}
+                          </View>
                         </View>
                         <Text style={styles.eventEmptyBody}>
                           vip_pass · {formatCreatorVipPassPrice(offer.priceCents, offer.currency)} · {offer.vipCount} VIP fan signal{offer.vipCount === 1 ? "" : "s"}
@@ -8202,7 +8241,10 @@ export function ChannelStudioScreen() {
                       <View key={offer.id} style={styles.eventEmptyCard}>
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
-                          {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                          <View style={styles.scopeInfoHeaderRow}>
+                            <MoneyScopeInfoButton scope="event_pass" compact />
+                            {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                          </View>
                         </View>
                         <Text style={styles.eventEmptyBody}>
                           paid_event · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.passesSold}{offer.capacityLimit ? ` / ${offer.capacityLimit}` : ""} passes sold · {formatEventTypeLabel(offer.eventType as CreatorEventType)}
@@ -8230,6 +8272,13 @@ export function ChannelStudioScreen() {
                   "Paid video unlocks, paid Watch-Party tickets, creator subscriptions, VIP passes, event passes, and merch appear here when backed rows exist.",
                   6,
                 )}
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Physical merch scope</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Merch is a physical-goods setup path only. It does not unlock Premium, VIP, subscriptions, tickets, events, LiveKit authority, or payout access.
+                  </Text>
+                  <MoneyScopeInfoButton scope="merch_physical_good" label="What does merch include?" />
+                </View>
                 {renderStudioActionRow({
                   title: "Configure supported sandbox offers",
                   body: "Use only approved sandbox tiers for backed paid videos, Watch-Party tickets, channel subscriptions, VIP passes, event passes, tips, and physical merch. Live money stays disabled.",
@@ -8324,6 +8373,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Payouts are locked.</Text>
                   <Text style={styles.eventEmptyBody}>Stripe Connect is for creator payouts only. It is not used to charge Android users for digital access.</Text>
+                  <MoneyScopeInfoButton scope="payout_readiness" label="What does payout setup mean?" />
                 </View>
                 {renderCreatorMoneyEventRows(
                   payoutEvents,
@@ -10691,6 +10741,12 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
     fontWeight: "600",
+  },
+  scopeInfoHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
   },
   audienceWorkflowLimitCard: {
     marginTop: 12,

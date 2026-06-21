@@ -66,6 +66,7 @@ import {
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
+import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
 import { PLAYER_WATCH_PARTY_SOURCE } from "../../_lib/watch-party/room-shared";
@@ -1473,6 +1474,7 @@ export default function WatchPartyIndexScreen() {
             <Text style={styles.permissionsBody}>
               Room tickets are sandbox/test only and not payable while live money is off. This ticket unlocks access to this Watch-Party room only. It does not include Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, other rooms, or Live Stage.
             </Text>
+            <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this ticket unlock?" />
             {hostLabel === "You are hosting" ? (
               <>
                 <TextInput
@@ -1750,6 +1752,7 @@ export default function WatchPartyIndexScreen() {
                     <Text style={styles.inlineTicketGateBody}>
                       This sandbox ticket unlocks this Watch-Party room only. It does not include Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, other rooms, or Live Stage.
                     </Text>
+                    <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this unlock?" compact />
                     {paidTicketNotice ? <Text style={styles.errorText}>{paidTicketNotice}</Text> : null}
                     <Pressable
                       style={({ pressed }) => [

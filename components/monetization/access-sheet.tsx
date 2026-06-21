@@ -26,6 +26,7 @@ import {
 } from "../../_lib/monetization";
 import { useOptionalBetaProgram } from "../../_lib/betaProgram";
 import { useSession } from "../../_lib/session";
+import { MoneyScopeInfoButton } from "./MoneyScopeInfoButton";
 import { MoneyOfferCard, MoneyStatusChip } from "./money-ui";
 
 export type AccessSheetReason = "premium_required" | "party_pass_required";
@@ -442,6 +443,13 @@ export function AccessSheet({
             >
               {sheetState.offer.caption ? <Text style={styles.offerCaption}>{sheetState.offer.caption}</Text> : null}
             </MoneyOfferCard>
+          ) : null}
+
+          {!deferredMonetization ? (
+            <MoneyScopeInfoButton
+              scope={reason === "premium_required" ? "premium" : "watch_party_ticket"}
+              label={reason === "premium_required" ? "What does Premium unlock?" : "What does this unlock?"}
+            />
           ) : null}
 
           {sheetState || deferredMonetization ? (
