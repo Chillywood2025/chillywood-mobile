@@ -1157,6 +1157,10 @@ export default function WatchPartyIndexScreen() {
     }
   };
 
+  const onBrowseTitles = useCallback(() => {
+    router.push("/(tabs)/explore");
+  }, [router]);
+
   if (authLoading || betaLoading) {
     return (
       <BetaAccessScreen
@@ -1227,10 +1231,6 @@ export default function WatchPartyIndexScreen() {
     setJoinCode("");
     setJoinError(null);
   };
-
-  const onBrowseTitles = useCallback(() => {
-    router.push("/(tabs)/explore");
-  }, [router]);
 
   const inferredWaitingRoomType: WatchPartyRoomType = preview?.room.roomType
     ?? preparedRoom?.room.roomType
