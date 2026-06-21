@@ -2,7 +2,6 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   type StyleProp,
@@ -10,6 +9,7 @@ import {
 } from "react-native";
 
 import { color, fontSize, fontWeight, motion, radius, spacing } from "./tokens";
+import { AppText } from "./typography";
 
 type AppTone = "default" | "accent" | "success" | "warning" | "danger" | "muted" | "premium";
 
@@ -27,7 +27,7 @@ export const AppStatusPill = ({ label, tone = "default" }: { label: string; tone
   const toneStyle = toneStyles[tone];
   return (
     <View style={[styles.statusPill, { backgroundColor: toneStyle.backgroundColor, borderColor: toneStyle.borderColor }]}>
-      <Text style={[styles.statusPillText, { color: toneStyle.color }]}>{label}</Text>
+      <AppText scale="caption" weight="900" style={[styles.statusPillText, { color: toneStyle.color }]}>{label}</AppText>
     </View>
   );
 };
@@ -70,7 +70,7 @@ export const AppActionButton = ({
       style,
     ]}
   >
-    {loading ? <ActivityIndicator color={color.textOnPrimary} size="small" /> : <Text style={styles.actionButtonText}>{label}</Text>}
+    {loading ? <ActivityIndicator color={color.textOnPrimary} size="small" /> : <AppText scale="body" weight="900" style={styles.actionButtonText}>{label}</AppText>}
   </TouchableOpacity>
 );
 
@@ -102,12 +102,12 @@ export const AppSection = ({
     <View style={styles.sectionHeader}>
       {collapsible ? (
         <View style={styles.chevronBox}>
-          <Text style={styles.chevronText}>{expanded ? "v" : ">"}</Text>
+          <AppText scale="title2" weight="900" style={styles.chevronText}>{expanded ? "v" : ">"}</AppText>
         </View>
       ) : null}
       <View style={styles.sectionCopy}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+        <AppText scale="title3" weight="900" style={styles.sectionTitle}>{title}</AppText>
+        {subtitle ? <AppText scale="subhead" weight="700" style={styles.sectionSubtitle}>{subtitle}</AppText> : null}
       </View>
       {statusLabel ? <AppStatusPill label={statusLabel} tone={statusTone} /> : null}
       {action}
@@ -145,8 +145,8 @@ export const AppEmptyState = ({
   title: string;
 }) => (
   <View style={styles.emptyState}>
-    <Text style={styles.emptyTitle}>{title}</Text>
-    <Text style={styles.emptyBody}>{body}</Text>
+    <AppText scale="title2" weight="900" style={styles.emptyTitle}>{title}</AppText>
+    <AppText scale="subhead" weight="700" style={styles.emptyBody}>{body}</AppText>
     {actionLabel && onAction ? <AppActionButton label={actionLabel} onPress={onAction} variant="ghost" /> : null}
   </View>
 );
@@ -177,18 +177,18 @@ export const AppQuickLinkCard = ({
   >
     <View style={styles.quickLinkCopy}>
       <View style={styles.quickLinkTitleRow}>
-        <Text style={styles.quickLinkTitle}>{title}</Text>
+        <AppText scale="title2" weight="900" style={styles.quickLinkTitle}>{title}</AppText>
         {statusLabel ? <AppStatusPill label={statusLabel} tone={statusTone} /> : null}
       </View>
-      <Text style={styles.quickLinkBody}>{body}</Text>
+      <AppText scale="subhead" weight="700" style={styles.quickLinkBody}>{body}</AppText>
     </View>
-    <Text style={styles.quickLinkArrow}>{">"}</Text>
+    <AppText scale="title2" weight="900" style={styles.quickLinkArrow}>{">"}</AppText>
   </TouchableOpacity>
 );
 
 export const AppStickyActionBar = ({ children, helper }: { children: React.ReactNode; helper?: string }) => (
   <View style={styles.stickyActionBar}>
-    {helper ? <Text style={styles.stickyHelper}>{helper}</Text> : null}
+    {helper ? <AppText scale="footnote" weight="700" style={styles.stickyHelper}>{helper}</AppText> : null}
     <View style={styles.stickyActionRow}>{children}</View>
   </View>
 );

@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { titles as localTitles } from "../../_data/titles";
 import {
@@ -40,6 +40,7 @@ import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { AppText } from "../../components/ui/typography";
 import type { Tables } from "../../supabase/database.types";
 
 const ACCENT = "#DC143C";
@@ -585,7 +586,7 @@ export default function TitleDetails() {
     return (
       <View style={styles.screenCenter}>
         <ActivityIndicator color={ACCENT} />
-        <Text style={styles.loadingText}>Loading Chi'llywood title…</Text>
+        <AppText scale="footnote" style={styles.loadingText}>Loading Chi'llywood title…</AppText>
       </View>
     );
   }
@@ -593,10 +594,10 @@ export default function TitleDetails() {
   if (!title) {
     return (
       <View style={styles.screenCenter}>
-        <Text style={styles.h1}>Title unavailable</Text>
-        <Text style={styles.stateText}>This title isn't available right now.</Text>
+        <AppText scale="display" weight="900" style={styles.h1}>Title unavailable</AppText>
+        <AppText scale="subhead" weight="600" style={styles.stateText}>This title isn't available right now.</AppText>
         <Pressable onPress={() => router.back()} style={styles.btnGhost}>
-          <Text style={styles.btnText}>Go back</Text>
+          <AppText scale="title2" weight="900" style={styles.btnText}>Go back</AppText>
         </Pressable>
       </View>
     );
@@ -664,11 +665,11 @@ export default function TitleDetails() {
         )}
 
         <View style={styles.content}>
-          <Text style={styles.h1}>{title.title}</Text>
+          <AppText scale="display" weight="900" style={styles.h1}>{title.title}</AppText>
           <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{infoLine}</Text>
-            <Text style={styles.metaDot}>•</Text>
-            <Text style={styles.metaText}>{addedLabel}</Text>
+            <AppText scale="subhead" weight="700" style={styles.metaText}>{infoLine}</AppText>
+            <AppText scale="subhead" weight="900" style={styles.metaDot}>•</AppText>
+            <AppText scale="subhead" weight="700" style={styles.metaText}>{addedLabel}</AppText>
           </View>
           {titleSignals.length ? (
             <View style={styles.signalRow}>
@@ -681,7 +682,9 @@ export default function TitleDetails() {
                     signal.tone === "live" && styles.signalPillLive,
                   ]}
                 >
-                  <Text
+                  <AppText
+                    scale="caption"
+                    weight={signal.tone === "default" ? "800" : "900"}
                     style={[
                       styles.signalPillText,
                       signal.tone === "premium" && styles.signalPillTextPremium,
@@ -689,48 +692,48 @@ export default function TitleDetails() {
                     ]}
                   >
                     {signal.label}
-                  </Text>
+                  </AppText>
                 </View>
               ))}
             </View>
           ) : null}
           {isPremiumTitle ? (
             <View style={styles.statusCard}>
-              <Text style={styles.statusKicker}>PREMIUM TITLE</Text>
-              <Text style={styles.statusBody}>
+              <AppText scale="caption" weight="900" style={styles.statusKicker}>PREMIUM TITLE</AppText>
+              <AppText scale="subhead" weight="600" style={styles.statusBody}>
                 {titleAccess?.isAllowed
                   ? `${titleAccess.label} access is active for this title inside ${branding.appDisplayName}.`
                   : titleAccess?.monetization.canPurchase
                     ? `Open ${blockedTitleAccessEntryLabel} to unlock this title through ${branding.appDisplayName} Premium and start playback here.`
                     : `Open ${blockedTitleAccessEntryLabel} to review the current Premium status, restore purchases, or manage your subscription for this title.`}
-              </Text>
+              </AppText>
             </View>
           ) : null}
 
           {accessError ? (
             <View style={styles.errorCard}>
-              <Text style={styles.errorCardText}>{accessError}</Text>
+              <AppText scale="subhead" weight="700" style={styles.errorCardText}>{accessError}</AppText>
             </View>
           ) : null}
 
           {liveMetadata?.liveRoomCount ? (
             <View style={styles.liveActivityCard}>
-              <Text style={styles.liveActivityKicker}>LIVE WATCH-PARTY</Text>
-              <Text style={styles.liveActivityBody}>
+              <AppText scale="caption" weight="900" style={styles.liveActivityKicker}>LIVE WATCH-PARTY</AppText>
+              <AppText scale="subhead" weight="700" style={styles.liveActivityBody}>
                 {liveMetadata.liveRoomCount === 1
                   ? "One live room is already moving around this title. Jump in through Watch-Party Live."
                   : `${liveMetadata.liveRoomCount} live rooms are already moving around this title. Jump in through Watch-Party Live.`}
-              </Text>
+              </AppText>
               <View style={styles.liveActivityMetaRow}>
-                <Text style={styles.liveActivityMetaText}>
+                <AppText scale="caption" weight="800" style={styles.liveActivityMetaText}>
                   {liveMetadata.commentCount} room comment{liveMetadata.commentCount === 1 ? "" : "s"}
-                </Text>
+                </AppText>
                 {liveMetadata.reactionsEnabled ? (
-                  <Text style={styles.liveActivityMetaText}>Reactions live</Text>
+                  <AppText scale="caption" weight="800" style={styles.liveActivityMetaText}>Reactions live</AppText>
                 ) : null}
               </View>
               <Pressable style={[styles.btnGhost, styles.liveActivityActionButton]} onPress={onOpenWatchPartyLive}>
-                <Text style={styles.btnText}>Open Watch-Party Live</Text>
+                <AppText scale="title2" weight="900" style={styles.btnText}>Open Watch-Party Live</AppText>
               </Pressable>
             </View>
           ) : null}
@@ -741,13 +744,13 @@ export default function TitleDetails() {
               onPress={onPlay}
               disabled={accessLoading}
             >
-              <Text style={styles.btnPrimaryText}>
+              <AppText scale="title2" weight="900" style={styles.btnPrimaryText}>
                 {accessLoading ? "Checking access..." : titleAccess && !titleAccess.isAllowed ? blockedTitleAccessEntryLabel : "Play"}
-              </Text>
+              </AppText>
             </Pressable>
 
             <Pressable style={styles.btnGhost} onPress={onToggleMyList} disabled={myListBusy}>
-              <Text style={styles.btnText}>{inMyList ? "✓ Favorites" : "+ Favorites"}</Text>
+              <AppText scale="title2" weight="900" style={styles.btnText}>{inMyList ? "✓ Favorites" : "+ Favorites"}</AppText>
             </Pressable>
 
             <Pressable
@@ -755,9 +758,9 @@ export default function TitleDetails() {
               onPress={onToggleLike}
               disabled={engagementLoading || engagementBusy !== null}
             >
-              <Text style={[styles.btnText, engagementState?.liked && styles.btnTextActive]}>
+              <AppText scale="title2" weight="900" style={[styles.btnText, engagementState?.liked && styles.btnTextActive]}>
                 {engagementBusy === "like" ? "Updating..." : engagementState?.liked ? "Liked" : "Like"}
-              </Text>
+              </AppText>
             </Pressable>
 
             {canMarkTitleShared ? (
@@ -766,9 +769,9 @@ export default function TitleDetails() {
                 onPress={onToggleShare}
                 disabled={engagementLoading || engagementBusy !== null}
               >
-                <Text style={[styles.btnText, engagementState?.shared && styles.btnTextActive]}>
+                <AppText scale="title2" weight="900" style={[styles.btnText, engagementState?.shared && styles.btnTextActive]}>
                   {engagementBusy === "share" ? "Updating..." : engagementState?.shared ? "Shared" : "Mark Shared"}
-                </Text>
+                </AppText>
               </Pressable>
             ) : null}
 
@@ -786,14 +789,14 @@ export default function TitleDetails() {
                 setReportVisible(true);
               }}
             >
-              <Text style={styles.btnText}>Report</Text>
+              <AppText scale="title2" weight="900" style={styles.btnText}>Report</AppText>
             </Pressable>
           </View>
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.body}>{title.synopsis ?? "No synopsis yet."}</Text>
+          <AppText scale="title3" weight="900" style={styles.sectionTitle}>About</AppText>
+          <AppText scale="body" style={styles.body}>{title.synopsis ?? "No synopsis yet."}</AppText>
 
           <Pressable onPress={() => router.back()} style={[styles.btnGhost, { marginTop: 18 }]}>
-            <Text style={styles.btnText}>Back</Text>
+            <AppText scale="title2" weight="900" style={styles.btnText}>Back</AppText>
           </Pressable>
         </View>
       </ScrollView>
