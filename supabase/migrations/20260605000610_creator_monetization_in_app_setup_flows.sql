@@ -113,7 +113,7 @@ insert into public."monetization_products" (
 values (
   'cw_merch_test_tee_sandbox',
   'merch_physical_good',
-  'Chi''llwood Test Tee',
+  'Chi''llywood Test Tee',
   'Sandbox-only physical merch setup mapping. Stripe checkout is physical goods only and creates no digital access.',
   'stripe_physical_goods',
   'cw_merch_test_tee_sandbox',

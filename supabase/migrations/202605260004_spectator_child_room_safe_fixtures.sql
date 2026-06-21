@@ -197,7 +197,7 @@ begin
     proof_viewer_user_id,
     proof_viewer_user_id,
     'spectator_fixture_content_20260526',
-    'Chi''llwood Safe Playback Fixture',
+    'Chi''llywood Safe Playback Fixture',
     'Public-safe playback fixture for Android validation. Big Buck Bunny by Blender Foundation, CC BY 3.0.',
     null,
     'public',
@@ -220,7 +220,7 @@ begin
     jsonb_build_object(
       'spectator_child_room_fixture', true,
       'fixture_scope', 'android_runtime_validation',
-      'platformName', 'Chi''llwood Safe Fixtures',
+      'platformName', 'Chi''llywood Safe Fixtures',
       'creatorName', 'Blender Foundation',
       'source_kind', 'creator_video',
       'content_title', 'Big Buck Bunny',
@@ -320,7 +320,7 @@ begin
       proof_viewer_user_id,
       proof_viewer_user_id,
       'spectator_fixture_ended_20260526',
-      'Chi''llwood Ended Source Fixture',
+      'Chi''llywood Ended Source Fixture',
       'Public-safe ended source fixture for Android validation.',
       'public',
       'public_free',
@@ -343,7 +343,7 @@ begin
       jsonb_build_object(
         'spectator_child_room_fixture', true,
         'fixture_scope', 'android_runtime_validation',
-        'platformName', 'Chi''llwood Safe Fixtures',
+        'platformName', 'Chi''llywood Safe Fixtures',
         'source_kind', 'live_stage',
         'full_room_token_for_spectators', false,
         'original_room_publish_permission', false
@@ -364,7 +364,7 @@ begin
       proof_viewer_user_id,
       proof_viewer_user_id,
       'spectator_fixture_reuse_disabled_20260526',
-      'Chi''llwood Reuse Disabled Fixture',
+      'Chi''llywood Reuse Disabled Fixture',
       'Public-safe source fixture with watch-party reuse disabled.',
       'public',
       'public_free',
@@ -387,7 +387,7 @@ begin
       jsonb_build_object(
         'spectator_child_room_fixture', true,
         'fixture_scope', 'android_runtime_validation',
-        'platformName', 'Chi''llwood Safe Fixtures',
+        'platformName', 'Chi''llywood Safe Fixtures',
         'source_kind', 'creator_video',
         'allow_watch_party_from_spectator', false
       ),
@@ -407,7 +407,7 @@ begin
       proof_viewer_user_id,
       proof_viewer_user_id,
       'spectator_fixture_private_20260526',
-      'Chi''llwood Private Source Fixture',
+      'Chi''llywood Private Source Fixture',
       'Private source fixture for denied Spectator validation.',
       'private',
       'private',
@@ -448,7 +448,7 @@ begin
       proof_viewer_user_id,
       proof_viewer_user_id,
       'spectator_fixture_blocked_20260526',
-      'Chi''llwood Blocked Source Fixture',
+      'Chi''llywood Blocked Source Fixture',
       'Public-safe source fixture blocked for the Android proof account.',
       'public',
       'public_free',
@@ -471,7 +471,7 @@ begin
       jsonb_build_object(
         'spectator_child_room_fixture', true,
         'fixture_scope', 'android_runtime_validation',
-        'platformName', 'Chi''llwood Safe Fixtures',
+        'platformName', 'Chi''llywood Safe Fixtures',
         'blocked_for_android_proof_account', true
       ),
       true,

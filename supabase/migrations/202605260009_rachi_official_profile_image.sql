@@ -63,7 +63,7 @@ begin
     0.5,
     'everyone',
     'public',
-    'Official Chi''llwood guide for updates, tips, and Chi''llwood Originals.',
+    'Official Chi''llywood guide for updates, tips, and Chi''llywood Originals.',
     'creator',
     timezone('utc'::text, now()),
     timezone('utc'::text, now())

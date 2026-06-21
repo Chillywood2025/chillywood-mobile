@@ -54,7 +54,7 @@ assertIncludes(migration, "'%test operator%'", "test operator display exclusion"
 assertIncludes(migration, "not public.public_people_search_is_internal_account_candidate", "RPC internal account helper enforcement");
 assertIncludes(migration, "profile.\"user_id\" = 'platform_rachi_official'", "explicit public Rachi exception");
 assertIncludes(migration, "explicit_official_candidates", "explicit official Rachi result");
-assertIncludes(migration, "Official Chi''llwood", "Rachi official public label");
+assertIncludes(migration, "Official Chi''llywood", "Rachi official public label");
 assertIncludes(migration, "grant execute on function public.search_public_people(text, integer) to anon", "anon execute grant");
 assertIncludes(migration, "grant execute on function public.search_public_people(text, integer) to authenticated", "authenticated execute grant");
 assertNotIncludes(migration, "auth.users", "public people search auth user table access");

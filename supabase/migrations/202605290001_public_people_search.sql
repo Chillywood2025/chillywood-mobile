@@ -99,7 +99,7 @@ as $$
     end as avatar_url,
     candidate."user_id" = 'platform_rachi_official' as is_official,
     case
-      when candidate."user_id" = 'platform_rachi_official' then 'Official Chi''llwood'
+      when candidate."user_id" = 'platform_rachi_official' then 'Official Chi''llywood'
       else null::text
     end as official_label,
     (

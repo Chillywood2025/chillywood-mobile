@@ -203,7 +203,7 @@ begin
     proof_viewer_user_id,
     proof_viewer_user_id,
     'spectator_fixture_replay_archive_20260526',
-    'Chi''llwood Replay Archive Fixture',
+    'Chi''llywood Replay Archive Fixture',
     'Public-safe replay archive fixture for Android validation. Big Buck Bunny by Blender Foundation, CC BY 3.0.',
     null,
     'public',
@@ -227,7 +227,7 @@ begin
     jsonb_build_object(
       'spectator_child_room_fixture', true,
       'fixture_scope', 'android_replay_archive_validation',
-      'platformName', 'Chi''llwood Safe Fixtures',
+      'platformName', 'Chi''llywood Safe Fixtures',
       'creatorName', 'Blender Foundation',
       'source_kind', 'replay_archive',
       'content_title', 'Big Buck Bunny',

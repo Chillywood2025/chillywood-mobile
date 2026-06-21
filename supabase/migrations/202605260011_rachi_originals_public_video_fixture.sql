@@ -90,7 +90,7 @@ begin
     ) values (
       rachi_original_video_id,
       rachi_original_owner_uuid,
-      'Chi''llwood Originals Proof Fixture',
+      'Chi''llywood Originals Proof Fixture',
       'Proof-scoped public-safe Rachi Original fixture using Big Buck Bunny by Blender Foundation, CC BY 3.0.',
       'https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4',
       'https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217',
@@ -145,7 +145,7 @@ begin
       ) values (
         $1,
         $2,
-        'Chi''llwood Originals Proof Fixture',
+        'Chi''llywood Originals Proof Fixture',
         'Proof-scoped public-safe Rachi Original fixture using Big Buck Bunny by Blender Foundation, CC BY 3.0.',
         'https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4',
         'https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217',

@@ -155,7 +155,7 @@ as $$
       'Rachi'::text as "display_name",
       null::text as "avatar_url",
       'active'::text as "profile_avatar_media_status",
-      'Official Chi''llwood guide for updates, tips, and Chi''llwood Originals.'::text as "tagline",
+      'Official Chi''llywood guide for updates, tips, and Chi''llywood Originals.'::text as "tagline",
       'creator'::text as "channel_role",
       now() as "updated_at",
       true as has_published_platform_brand,
@@ -216,7 +216,7 @@ as $$
     end as avatar_url,
     candidate."user_id" = 'platform_rachi_official' as is_official,
     case
-      when candidate."user_id" = 'platform_rachi_official' then 'Official Chi''llwood'
+      when candidate."user_id" = 'platform_rachi_official' then 'Official Chi''llywood'
       else null::text
     end as official_label,
     (

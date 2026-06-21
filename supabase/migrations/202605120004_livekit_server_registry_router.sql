@@ -277,7 +277,7 @@ insert into public."livekit_servers" (
   "metadata"
 ) values (
   'chillywood-prod-01',
-  'Chi''llwood Hetzner LiveKit 01',
+  'Chi''llywood Hetzner LiveKit 01',
   'hetzner',
   'operator-set',
   'wss://live.chillywoodstream.com',
@@ -304,7 +304,7 @@ comment on column public."livekit_servers"."internal_api_url" is
   'Server/operator-only internal API URL. Do not return this to normal app clients.';
 
 comment on table public."livekit_room_assignments" is
-  'Pins Chi''llwood app rooms to a LiveKit server. Existing assignments win; active rooms are not migrated by the router.';
+  'Pins Chi''llywood app rooms to a LiveKit server. Existing assignments win; active rooms are not migrated by the router.';
 
 comment on table public."livekit_server_heartbeats" is
   'Server heartbeat snapshots for router health/capacity decisions. Metrics may be null when not available; null metrics must not be faked.';
