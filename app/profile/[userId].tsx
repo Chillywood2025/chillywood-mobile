@@ -118,7 +118,6 @@ import {
 import {
     ActivityIndicator,
     Alert,
-    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -152,6 +151,8 @@ import {
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { AccessSheet } from "../../components/monetization/access-sheet";
+import { StableImage } from "../../components/ui/StableImage";
+import { AppText } from "../../components/ui/typography";
 
 type PublicProfileTabKey = "home" | "content" | "live" | "community" | "about";
 
@@ -3278,11 +3279,11 @@ export default function ProfileScreen() {
             <View style={{ width: 18 }} />
           </View>
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionKicker}>PROFILE</Text>
-            <Text style={styles.sectionTitle}>Profile unavailable</Text>
-            <Text style={styles.sectionBody}>
+            <AppText scale="caption" style={styles.sectionKicker}>PROFILE</AppText>
+            <AppText scale="title3" style={styles.sectionTitle}>Profile unavailable</AppText>
+            <AppText scale="body" style={styles.sectionBody}>
               This profile is not available for public browsing.
-            </Text>
+            </AppText>
           </View>
         </ScrollView>
       </View>
@@ -3291,9 +3292,15 @@ export default function ProfileScreen() {
   const renderComposerAvatar = (size: "small" | "medium" = "small") => (
     <View style={size === "small" ? styles.composerAvatar : styles.feedAvatar}>
       {profile.avatarUrl ? (
-        <Image source={{ uri: profile.avatarUrl }} style={styles.composerAvatarImage} />
+        <StableImage
+          expectedWidth="100%"
+          expectedHeight="100%"
+          source={{ uri: profile.avatarUrl }}
+          borderRadius={size === "small" ? 19 : 21}
+          resizeMode="cover"
+        />
       ) : (
-        <Text style={styles.composerAvatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
+        <AppText scale="body" style={styles.composerAvatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</AppText>
       )}
     </View>
   );
@@ -3313,8 +3320,8 @@ export default function ProfileScreen() {
         <View style={styles.feedComposerPromptRow}>
           {renderComposerAvatar("small")}
           <View style={styles.profilePostComposerCopy}>
-            <Text style={styles.profilePostComposerTitle}>Post</Text>
-            <Text style={styles.profilePostComposerMeta}>Share an update. Attach photos or files. Creator videos belong in Platform Studio.</Text>
+            <AppText scale="subhead" style={styles.profilePostComposerTitle}>Post</AppText>
+            <AppText scale="caption" style={styles.profilePostComposerMeta}>Share an update. Attach photos or files. Creator videos belong in Platform Studio.</AppText>
           </View>
         </View>
         <TextInput
@@ -3353,9 +3360,9 @@ export default function ProfileScreen() {
               <MaterialIcons name="attach-file" size={16} color="#E6ECFA" />
               <Text style={styles.profilePostAttachButtonText}>Attach</Text>
             </TouchableOpacity>
-            <Text style={styles.profilePostComposerCount}>
+            <AppText scale="caption" style={styles.profilePostComposerCount}>
               {draftLength}/{PROFILE_POST_BODY_LIMIT}
-            </Text>
+            </AppText>
           </View>
           <TouchableOpacity
             style={[
@@ -3424,10 +3431,10 @@ export default function ProfileScreen() {
       return (
         <View key={comment.id} style={[styles.profilePostCommentCard, nested && styles.profilePostReplyCard]}>
           <View style={styles.profilePostCommentHeader}>
-            <Text style={styles.profilePostCommentAuthor} numberOfLines={1}>
-              {commentAuthorLabel}
-            </Text>
-            <Text style={styles.profilePostCommentMeta}>{formatProfilePostDate(comment.createdAt)}</Text>
+              <AppText scale="footnote" style={styles.profilePostCommentAuthor} numberOfLines={1}>
+                {commentAuthorLabel}
+              </AppText>
+            <AppText scale="caption" style={styles.profilePostCommentMeta}>{formatProfilePostDate(comment.createdAt)}</AppText>
           </View>
           <LinkedText text={comment.body} style={styles.profilePostCommentBody} />
           {comment.attachments.length ? (
@@ -3488,17 +3495,17 @@ export default function ProfileScreen() {
         <View style={styles.feedPostHeader}>
           {renderComposerAvatar("medium")}
           <View style={styles.feedPostIdentity}>
-            <Text style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</Text>
-            <Text style={styles.feedPostMeta}>{formatProfilePostDate(post.createdAt)}</Text>
+            <AppText scale="subhead" style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</AppText>
+            <AppText scale="caption" style={styles.feedPostMeta}>{formatProfilePostDate(post.createdAt)}</AppText>
           </View>
           {isSelfProfile && post.visibility === "draft" ? (
             <View style={styles.feedDraftBadge}>
-              <Text style={styles.feedDraftBadgeText}>DRAFT</Text>
+              <AppText scale="caption" style={styles.feedDraftBadgeText}>DRAFT</AppText>
             </View>
           ) : null}
           {isSelfProfile && post.moderationStatus === "reported" ? (
             <View style={styles.feedDraftBadge}>
-              <Text style={styles.feedDraftBadgeText}>REPORTED</Text>
+              <AppText scale="caption" style={styles.feedDraftBadgeText}>REPORTED</AppText>
             </View>
           ) : null}
         </View>
@@ -3585,13 +3592,13 @@ export default function ProfileScreen() {
           <View style={styles.profilePostCommentsPanel}>
             {uiState.commentNotice ? (
               <View style={styles.profilePostCommentNotice}>
-                <Text style={styles.profilePostCommentNoticeText}>{uiState.commentNotice}</Text>
+                <AppText scale="footnote" style={styles.profilePostCommentNoticeText}>{uiState.commentNotice}</AppText>
               </View>
             ) : null}
             {!uiState.commentsReady ? (
               <View style={styles.profilePostCommentsLoading}>
                 <ActivityIndicator color="#DC143C" />
-                <Text style={styles.profilePostCommentMeta}>Loading comments</Text>
+                <AppText scale="caption" style={styles.profilePostCommentMeta}>Loading comments</AppText>
               </View>
             ) : comments.length ? (
               <View style={styles.profilePostCommentList}>
@@ -3605,16 +3612,16 @@ export default function ProfileScreen() {
                 ))}
               </View>
             ) : (
-              <Text style={styles.profilePostCommentEmpty}>No comments yet.</Text>
+              <AppText scale="footnote" style={styles.profilePostCommentEmpty}>No comments yet.</AppText>
             )}
             {canEngageWithPost ? (
               currentUserId ? (
                 <View style={styles.profilePostCommentComposer}>
                   {replyTarget ? (
                     <View style={styles.profilePostReplyNotice}>
-                      <Text style={styles.profilePostReplyNoticeText} numberOfLines={1}>
+                      <AppText scale="caption" style={styles.profilePostReplyNoticeText} numberOfLines={1}>
                         Replying to {getProfilePostCommentAuthorLabel(replyTarget)}
-                      </Text>
+                      </AppText>
                       <TouchableOpacity
                         activeOpacity={0.82}
                         onPress={() => clearProfilePostCommentReply(post.id)}
@@ -3661,9 +3668,9 @@ export default function ProfileScreen() {
                         <MaterialIcons name="attach-file" size={16} color="#E6ECFA" />
                         <Text style={styles.profilePostAttachButtonText}>Attach</Text>
                       </TouchableOpacity>
-                      <Text style={styles.profilePostComposerCount}>
+                      <AppText scale="caption" style={styles.profilePostComposerCount}>
                         {commentDraftLength}/{PROFILE_POST_COMMENT_BODY_LIMIT}
-                      </Text>
+                      </AppText>
                     </View>
                     <TouchableOpacity
                       style={[
@@ -3682,10 +3689,10 @@ export default function ProfileScreen() {
                   </View>
                 </View>
               ) : (
-                <Text style={styles.profilePostCommentEmpty}>Sign in to comment.</Text>
+                <AppText scale="footnote" style={styles.profilePostCommentEmpty}>Sign in to comment.</AppText>
               )
             ) : (
-              <Text style={styles.profilePostCommentEmpty}>Comments are closed for this post.</Text>
+              <AppText scale="footnote" style={styles.profilePostCommentEmpty}>Comments are closed for this post.</AppText>
             )}
           </View>
         ) : null}
@@ -3712,49 +3719,49 @@ export default function ProfileScreen() {
   const renderProfileSocialFeed = () => (
     <View style={styles.feedStack}>
       <View style={styles.profileSocialFeedHeader}>
-        <Text style={styles.profileSocialFeedKicker}>
+        <AppText scale="caption" style={styles.profileSocialFeedKicker}>
           {profileSocialFeedMode === "own_profile_social_feed" ? "YOUR FEED" : "PROFILE FEED"}
-        </Text>
-        <Text style={styles.profileSocialFeedTitle}>
+        </AppText>
+        <AppText scale="title3" style={styles.profileSocialFeedTitle}>
           {profileSocialFeedMode === "own_profile_social_feed" ? "Posts" : `${profile.displayName}'s Posts`}
-        </Text>
-        <Text style={styles.profileSocialFeedBody}>
+        </AppText>
+        <AppText scale="body" style={styles.profileSocialFeedBody}>
           {profileSocialFeedMode === "own_profile_social_feed"
             ? "Share an update, keep attachments with social posts, and catch public activity from your Chi'lly Circle and followed creators."
             : "This feed shows public posts, creator activity, and safe live or replay entries from this Profile."}
-        </Text>
+        </AppText>
       </View>
       {renderProfilePostComposer()}
       {profilePostsNotice || profileSocialFeedNotice ? (
         <View style={styles.profileComposerNotice}>
-          <Text style={styles.profileComposerNoticeText}>{profilePostsNotice ?? profileSocialFeedNotice}</Text>
+          <AppText scale="footnote" style={styles.profileComposerNoticeText}>{profilePostsNotice ?? profileSocialFeedNotice}</AppText>
         </View>
       ) : null}
       {profileSocialFeedExtras.circleBackingUnavailable ? (
         <View style={styles.profileComposerNotice}>
-          <Text style={styles.profileComposerNoticeText}>{"Chi'lly Circle activity is unavailable right now."}</Text>
+          <AppText scale="footnote" style={styles.profileComposerNoticeText}>{"Chi'lly Circle activity is unavailable right now."}</AppText>
         </View>
       ) : null}
       {!profileSocialFeedReady ? (
         <View style={styles.feedEmptyCard}>
           <ActivityIndicator color="#DC143C" />
-          <Text style={styles.feedEmptyTitle}>Loading profile feed</Text>
-          <Text style={styles.feedEmptyText}>Checking posts, public activity, and safe live entries.</Text>
+          <AppText scale="subhead" style={styles.feedEmptyTitle}>Loading profile feed</AppText>
+          <AppText scale="footnote" style={styles.feedEmptyText}>Checking posts, public activity, and safe live entries.</AppText>
         </View>
       ) : profileSocialFeedItems.length ? (
         profileSocialFeedItems.map(renderProfileSocialFeedItem)
       ) : (
         <View style={styles.feedEmptyCard}>
-          <Text style={styles.feedEmptyTitle}>
+          <AppText scale="subhead" style={styles.feedEmptyTitle}>
             {profileSocialFeedMode === "own_profile_social_feed"
               ? "No posts yet"
               : "No public posts yet"}
-          </Text>
-          <Text style={styles.feedEmptyText}>
+          </AppText>
+          <AppText scale="footnote" style={styles.feedEmptyText}>
             {profileSocialFeedMode === "own_profile_social_feed"
               ? "Share an update or attach a photo to start your Profile feed."
               : "Public updates will appear here when available."}
-          </Text>
+          </AppText>
           {profileSocialFeedMode === "own_profile_social_feed" ? (
             <TouchableOpacity
               style={styles.feedEmptyButton}
@@ -3776,11 +3783,11 @@ export default function ProfileScreen() {
 
     return (
       <View style={styles.ownerModeCard}>
-        <Text style={styles.ownerModeKicker}>OWNER HANDOFF</Text>
-        <Text style={styles.ownerModeTitle}>Keep Profile social and Platform public.</Text>
-        <Text style={styles.ownerModeBody}>
+        <AppText scale="caption" style={styles.ownerModeKicker}>OWNER HANDOFF</AppText>
+        <AppText scale="title3" style={styles.ownerModeTitle}>Keep Profile social and Platform public.</AppText>
+        <AppText scale="body" style={styles.ownerModeBody}>
           Use Platform Studio for creator operations while this route keeps posts, identity, and social actions easy to scan.
-        </Text>
+        </AppText>
         {ownerQuickActions.length ? (
           <View style={styles.ownerQuickActionRow}>
             {ownerQuickActions.map((action) => (
@@ -3816,8 +3823,8 @@ export default function ProfileScreen() {
                   card.tone === "live" && styles.ownerSignalChipLive,
                 ]}
               >
-                <Text style={styles.ownerSignalValue}>{card.value}</Text>
-                <Text style={styles.ownerSignalLabel}>{card.label}</Text>
+                <AppText scale="subhead" style={styles.ownerSignalValue}>{card.value}</AppText>
+                <AppText scale="caption" style={styles.ownerSignalLabel}>{card.label}</AppText>
               </View>
             ))}
           </View>
@@ -3826,9 +3833,9 @@ export default function ProfileScreen() {
           <View style={styles.ownerPromptStack}>
             {ownerPromptCards.map((prompt) => (
               <View key={prompt.title} style={styles.ownerPromptCard}>
-                <Text style={styles.ownerPromptKicker}>{prompt.kicker}</Text>
-                <Text style={styles.ownerPromptTitle}>{prompt.title}</Text>
-                <Text style={styles.ownerPromptBody}>{prompt.body}</Text>
+                <AppText scale="caption" style={styles.ownerPromptKicker}>{prompt.kicker}</AppText>
+                <AppText scale="subhead" style={styles.ownerPromptTitle}>{prompt.title}</AppText>
+                <AppText scale="footnote" style={styles.ownerPromptBody}>{prompt.body}</AppText>
                 {prompt.actionLabel && prompt.onPress ? (
                   <TouchableOpacity
                     style={styles.ownerPromptAction}
@@ -3862,9 +3869,12 @@ export default function ProfileScreen() {
     >
       {visibleProfileBackgroundUrl ? (
         <View style={styles.fullBackground} pointerEvents="none">
-          <Image
+          <StableImage
+            expectedWidth="100%"
+            expectedHeight="100%"
             source={{ uri: visibleProfileBackgroundUrl }}
-            style={styles.fullBackgroundImage}
+            containerStyle={styles.fullBackgroundImage}
+            borderRadius={0}
             resizeMode={resolveProfileImageResizeMode(profile.profileBackgroundFitMode)}
           />
         </View>
@@ -3902,9 +3912,12 @@ export default function ProfileScreen() {
         <View style={styles.profileCard}>
           <View style={styles.profileCover}>
             {visibleProfileBackgroundUrl ? (
-              <Image
+              <StableImage
+                expectedWidth="100%"
+                expectedHeight="100%"
                 source={{ uri: visibleProfileBackgroundUrl }}
-                style={styles.profileCoverImage}
+                containerStyle={styles.profileCoverImage}
+                borderRadius={0}
                 resizeMode={resolveProfileImageResizeMode(profile.profileBackgroundFitMode)}
               />
             ) : null}
@@ -3949,21 +3962,24 @@ export default function ProfileScreen() {
               <View style={styles.avatarWrap}>
                 <View style={styles.avatarCircle}>
                   {visibleProfileAvatarUrl ? (
-                    <Image
+                    <StableImage
+                      expectedWidth="100%"
+                      expectedHeight="100%"
                       source={{ uri: visibleProfileAvatarUrl }}
-                      style={styles.avatarImage}
+                      borderRadius={43}
                       resizeMode={resolveProfileImageResizeMode(profile.profileAvatarFitMode)}
                     />
                   ) : (
-                    <Text style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>
+                    <AppText scale="title1" style={styles.avatarInitial}>{profile.displayName.slice(0, 1).toUpperCase()}</AppText>
                   )}
                 </View>
                 {!shouldShowLockedShell && profile.isLive ? <View style={styles.avatarLiveDot} /> : null}
               </View>
             </Pressable>
             <View style={styles.profileIdentityCopy}>
-              <Text style={styles.channelLabel}>{profileLabel}</Text>
-              <Text
+              <AppText scale="caption" style={styles.channelLabel}>{profileLabel}</AppText>
+              <AppText
+                scale="title2"
                 style={styles.username}
                 numberOfLines={1}
                 ellipsizeMode="tail"
@@ -3971,24 +3987,24 @@ export default function ProfileScreen() {
                 minimumFontScale={0.72}
               >
                 {profile.displayName}
-              </Text>
-              <Text style={styles.userIdLabel} numberOfLines={1}>{channelHandle}</Text>
-              {profile.tagline && !shouldShowLockedShell ? <Text style={styles.profileTagline}>{profile.tagline}</Text> : null}
+              </AppText>
+              <AppText scale="subhead" style={styles.userIdLabel} numberOfLines={1}>{channelHandle}</AppText>
+              {profile.tagline && !shouldShowLockedShell ? <AppText scale="subhead" style={styles.profileTagline}>{profile.tagline}</AppText> : null}
               {!shouldShowLockedShell ? (
                 <View style={styles.metaRow}>
                   <View style={styles.metaPill}>
-                    <Text style={styles.metaPillText}>{roleLabel}</Text>
+                    <AppText scale="caption" style={styles.metaPillText}>{roleLabel}</AppText>
                   </View>
                   {hasLiveRouteContext ? (
                     <View style={[styles.metaPill, styles.metaPillLinked]}>
-                      <Text style={styles.metaPillText}>{routeContextLabel}</Text>
+                      <AppText scale="caption" style={styles.metaPillText}>{routeContextLabel}</AppText>
                     </View>
                   ) : null}
                   {isOfficialProfile ? (
                     <View style={[styles.metaPill, styles.metaPillOfficial]}>
-                      <Text style={[styles.metaPillText, styles.metaPillTextOfficial]}>
+                      <AppText scale="caption" style={[styles.metaPillText, styles.metaPillTextOfficial]}>
                         {profile.platformOwnershipLabel ?? officialAccount?.platformOwnershipLabel ?? "PLATFORM OWNED"}
-                      </Text>
+                      </AppText>
                     </View>
                   ) : null}
                 </View>
@@ -3997,7 +4013,7 @@ export default function ProfileScreen() {
           </View>
           {!shouldShowLockedShell ? (
             <>
-              <Text style={styles.channelSupportText}>{channelHomeBody}</Text>
+              <AppText scale="footnote" style={styles.channelSupportText}>{channelHomeBody}</AppText>
               <View style={styles.channelSignalGrid}>
                 {channelSignals.map((signal) => {
                   const signalIsPlatform = signal.label === "Platform";
@@ -4015,8 +4031,8 @@ export default function ProfileScreen() {
                       disabled={!signalIsPlatform}
                       onPress={isSelfProfile ? onPressPreviewPlatform : onPressViewChannel}
                     >
-                      <Text style={styles.channelSignalLabel}>{signal.label}</Text>
-                      <Text style={styles.channelSignalValue}>{signal.value}</Text>
+                      <AppText scale="caption" style={styles.channelSignalLabel}>{signal.label}</AppText>
+                      <AppText scale="subhead" style={styles.channelSignalValue}>{signal.value}</AppText>
                     </TouchableOpacity>
                   );
                 })}
@@ -4183,9 +4199,9 @@ export default function ProfileScreen() {
 
         {shouldShowLockedShell ? (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionKicker}>PROFILE PRIVACY</Text>
-            <Text style={styles.sectionTitle}>{getProfilePrivacyLockedTitle(profilePrivacyAccess)}</Text>
-            <Text style={styles.sectionBody}>{getProfilePrivacyLockedBody(profilePrivacyAccess)}</Text>
+            <AppText scale="caption" style={styles.sectionKicker}>PROFILE PRIVACY</AppText>
+            <AppText scale="title3" style={styles.sectionTitle}>{getProfilePrivacyLockedTitle(profilePrivacyAccess)}</AppText>
+            <AppText scale="body" style={styles.sectionBody}>{getProfilePrivacyLockedBody(profilePrivacyAccess)}</AppText>
             <View style={styles.secondaryActionRow}>
               {renderChillyCircleActions()}
             </View>
@@ -4233,37 +4249,37 @@ export default function ProfileScreen() {
                 section.accent === "official" && styles.sectionCardOfficial,
               ]}
             >
-              <Text style={styles.sectionKicker}>{section.kicker}</Text>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionBody}>{section.body}</Text>
+              <AppText scale="caption" style={styles.sectionKicker}>{section.kicker}</AppText>
+              <AppText scale="title3" style={styles.sectionTitle}>{section.title}</AppText>
+              <AppText scale="body" style={styles.sectionBody}>{section.body}</AppText>
             </View>
           )) : null}
           {activeTab === "about" ? (
             <>
               <View style={styles.channelGuideCard}>
-                <Text style={styles.channelGuideKicker}>{channelHelper.kicker}</Text>
-                <Text style={styles.channelGuideTitle}>{channelHelper.title}</Text>
-                <Text style={styles.channelGuideBody}>{channelHelper.body}</Text>
+                <AppText scale="caption" style={styles.channelGuideKicker}>{channelHelper.kicker}</AppText>
+                <AppText scale="subhead" style={styles.channelGuideTitle}>{channelHelper.title}</AppText>
+                <AppText scale="footnote" style={styles.channelGuideBody}>{channelHelper.body}</AppText>
                 {isOfficialProfile && officialGuidanceTopics.length ? (
                   <View style={styles.officialTopicRow}>
                     {officialGuidanceTopics.map((topic) => (
                       <View key={topic} style={styles.officialTopicChip}>
-                        <Text style={styles.officialTopicChipText}>{topic}</Text>
+                        <AppText scale="caption" style={styles.officialTopicChipText}>{topic}</AppText>
                       </View>
                     ))}
                   </View>
                 ) : null}
               </View>
               <View style={styles.accessCard}>
-                <Text style={styles.accessKicker}>PLATFORM ACCESS</Text>
-                <Text style={styles.accessTitle}>{accessPosture.title}</Text>
-                <Text style={styles.accessBody}>{accessPosture.body}</Text>
+                <AppText scale="caption" style={styles.accessKicker}>PLATFORM ACCESS</AppText>
+                <AppText scale="subhead" style={styles.accessTitle}>{accessPosture.title}</AppText>
+                <AppText scale="footnote" style={styles.accessBody}>{accessPosture.body}</AppText>
                 <View style={styles.accessDetailRow}>
                   {accessDetails.map((detail) => (
                     <View key={detail.label} style={styles.accessDetailCard}>
-                      <Text style={styles.accessDetailLabel}>{detail.label}</Text>
-                      <Text style={styles.accessDetailValue}>{detail.value}</Text>
-                      <Text style={styles.accessDetailBody}>{detail.body}</Text>
+                      <AppText scale="caption" style={styles.accessDetailLabel}>{detail.label}</AppText>
+                      <AppText scale="subhead" style={styles.accessDetailValue}>{detail.value}</AppText>
+                      <AppText scale="caption" style={styles.accessDetailBody}>{detail.body}</AppText>
                     </View>
                   ))}
                 </View>
@@ -4272,11 +4288,11 @@ export default function ProfileScreen() {
           ) : null}
           {activeTab === "content" ? (
             <View style={styles.quickActionsCard}>
-              <Text style={styles.quickActionsTitle}>
+              <AppText scale="subhead" style={styles.quickActionsTitle}>
                 {isSelfProfile ? "Platform Videos" : "Creator Videos"}
-              </Text>
+              </AppText>
               {!creatorVideosReady ? (
-                <Text style={styles.sectionBody}>Loading creator videos...</Text>
+                <AppText scale="body" style={styles.sectionBody}>Loading creator videos...</AppText>
               ) : creatorVideos.length ? (
                 <View style={styles.creatorVideoGrid}>
                   {creatorVideos.map((video) => (
@@ -4293,10 +4309,10 @@ export default function ProfileScreen() {
                 </View>
               ) : isSelfProfile ? (
                 <View style={styles.creatorVideoEmptyCard}>
-                  <Text style={styles.creatorVideoTitle}>Create platform content in Platform Studio</Text>
-                  <Text style={styles.creatorVideoBody}>
+                  <AppText scale="subhead" style={styles.creatorVideoTitle}>Create platform content in Platform Studio</AppText>
+                  <AppText scale="footnote" style={styles.creatorVideoBody}>
                     Creator videos, Clip Studio, Brand Studio, and readiness tools stay in Platform Studio.
-                  </Text>
+                  </AppText>
                   <TouchableOpacity
                     style={styles.ownerPromptAction}
                     activeOpacity={0.84}
@@ -4306,15 +4322,15 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 </View>
               ) : (
-                <Text style={styles.sectionBody}>
+                <AppText scale="body" style={styles.sectionBody}>
                   This Platform has not published creator videos yet.
-                </Text>
+                </AppText>
               )}
             </View>
           ) : null}
           {activeTab === "community" && communityActions.length ? (
             <View style={styles.quickActionsCard}>
-              <Text style={styles.quickActionsTitle}>Community Follow-Up</Text>
+              <AppText scale="subhead" style={styles.quickActionsTitle}>Community Follow-Up</AppText>
               <View style={styles.quickActionsRow}>
                 {communityActions.map((action) => (
                   <TouchableOpacity
@@ -4341,25 +4357,25 @@ export default function ProfileScreen() {
                       card.tone === "live" && styles.ownerStatCardLive,
                     ]}
                   >
-                    <Text style={styles.ownerStatLabel}>{card.label}</Text>
-                    <Text style={styles.ownerStatValue}>{card.value}</Text>
-                    <Text style={styles.ownerStatBody}>{card.body}</Text>
+                    <AppText scale="caption" style={styles.ownerStatLabel}>{card.label}</AppText>
+                    <AppText scale="subhead" style={styles.ownerStatValue}>{card.value}</AppText>
+                    <AppText scale="caption" style={styles.ownerStatBody}>{card.body}</AppText>
                   </View>
                 ))}
               </View>
               {!publicEventsReady ? (
                 <View style={styles.sectionCard}>
-                  <Text style={styles.sectionKicker}>EVENT STATUS</Text>
-                  <Text style={styles.sectionTitle}>Loading public event truth</Text>
-                  <Text style={styles.sectionBody}>
+                  <AppText scale="caption" style={styles.sectionKicker}>EVENT STATUS</AppText>
+                  <AppText scale="title3" style={styles.sectionTitle}>Loading public event truth</AppText>
+                  <AppText scale="body" style={styles.sectionBody}>
                     Checking public creator events before showing live, replay, and reminder state.
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
               {publicEventsReady && reminderActionNotice ? (
                 <View style={styles.sectionCard}>
-                  <Text style={styles.sectionKicker}>REMINDER STATUS</Text>
-                  <Text style={styles.sectionBody}>{reminderActionNotice}</Text>
+                  <AppText scale="caption" style={styles.sectionKicker}>REMINDER STATUS</AppText>
+                  <AppText scale="body" style={styles.sectionBody}>{reminderActionNotice}</AppText>
                 </View>
               ) : null}
               {publicEventsReady && publicEvents.length ? (
@@ -4383,9 +4399,9 @@ export default function ProfileScreen() {
                         (event.isLiveNow || event.isUpcoming) && styles.sectionCardLive,
                       ]}
                     >
-                      <Text style={styles.sectionKicker}>{formatEventTypeLabel(event.eventType).toUpperCase()}</Text>
-                      <Text style={styles.sectionTitle}>{event.eventTitle}</Text>
-                      <Text style={styles.sectionBody}>
+                      <AppText scale="caption" style={styles.sectionKicker}>{formatEventTypeLabel(event.eventType).toUpperCase()}</AppText>
+                      <AppText scale="title3" style={styles.sectionTitle}>{event.eventTitle}</AppText>
+                      <AppText scale="body" style={styles.sectionBody}>
                         {formatEventStatusLabel(event)} · Starts {formatEventDate(event.startsAt)} · Ends {formatEventDate(event.endsAt)}{"\n"}
                         {event.replay.isReplayAvailableNow
                           ? "Replay is currently available."
@@ -4396,8 +4412,8 @@ export default function ProfileScreen() {
                               : "Replay is configured but not available yet."}{"\n"}
                         {formatEventReminderLabel(event)} · {formatEventReminderEnrollmentLabel(enrollment)}
                         {event.linkedTitleId ? `\nWatch title: ${event.linkedTitleId}` : ""}
-                      </Text>
-                      <Text style={styles.actionFootnote}>{getEventReminderEnrollmentBody(enrollment)}</Text>
+                      </AppText>
+                      <AppText scale="caption" style={styles.actionFootnote}>{getEventReminderEnrollmentBody(enrollment)}</AppText>
                       <View style={styles.secondaryActionRow}>
                         <TouchableOpacity
                           style={[styles.actionChip, styles.actionChipConnected]}
@@ -4442,11 +4458,11 @@ export default function ProfileScreen() {
                 })
               ) : publicEventsReady ? (
                 <View style={styles.sectionCard}>
-                  <Text style={styles.sectionKicker}>EVENT STATUS</Text>
-                  <Text style={styles.sectionTitle}>No public event schedule yet</Text>
-                  <Text style={styles.sectionBody}>
+                  <AppText scale="caption" style={styles.sectionKicker}>EVENT STATUS</AppText>
+                  <AppText scale="title3" style={styles.sectionTitle}>No public event schedule yet</AppText>
+                  <AppText scale="body" style={styles.sectionBody}>
                     This profile does not currently have any non-draft creator events to show. The route stays honest instead of faking upcoming rooms or reminder state.
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
             </>
