@@ -1,8 +1,6 @@
 import React from "react";
 import {
-  Image,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -15,6 +13,8 @@ import {
   type ClipStudioEdit,
   type ClipStudioTemplatePreset,
 } from "../../_lib/clipStudio";
+import { StableImage } from "../ui/StableImage";
+import { AppText } from "../ui/typography";
 
 type CreatorVideoCardMode = "owner" | "public";
 
@@ -179,48 +179,54 @@ export function CreatorVideoCard({
         onPress={onOpen}
         disabled={!playable}
       >
-        {video.thumbnailUrl ? (
-          <Image source={{ uri: video.thumbnailUrl }} style={styles.thumbnail} />
-        ) : (
+        <StableImage
+          expectedWidth="100%"
+          expectedHeight="100%"
+          source={video.thumbnailUrl ? { uri: video.thumbnailUrl } : null}
+          containerStyle={styles.thumbnailFrame}
+          borderRadius={0}
+          resizeMode="cover"
+        />
+        {!video.thumbnailUrl ? (
           <View style={styles.fallbackPreview}>
-            <Text style={styles.fallbackKicker}>{"CHI'LLYWOOD CREATOR"}</Text>
-            <Text style={styles.fallbackTitle} numberOfLines={2}>{publicDisplayTitle}</Text>
+            <AppText scale="caption" style={styles.fallbackKicker}>{"CHI'LLYWOOD CREATOR"}</AppText>
+            <AppText scale="title2" style={styles.fallbackTitle} numberOfLines={2}>{publicDisplayTitle}</AppText>
           </View>
-        )}
+        ) : null}
         <View style={styles.previewShade} />
         <View style={styles.playPill}>
-          <Text style={styles.playPillText}>{playable ? "Play" : "Source Missing"}</Text>
+          <AppText scale="footnote" style={styles.playPillText}>{playable ? "Play" : "Source Missing"}</AppText>
         </View>
         <View style={styles.badgeRow}>
           <View style={[styles.badge, video.visibility === "public" ? styles.badgePublic : styles.badgeDraft]}>
-            <Text style={styles.badgeText}>{formatVisibilityLabel(video, ownerMode)}</Text>
+            <AppText scale="caption" style={styles.badgeText}>{formatVisibilityLabel(video, ownerMode)}</AppText>
           </View>
           <View style={[styles.badge, playable ? styles.badgeMediaReady : styles.badgeMediaUnavailable]}>
-            <Text style={styles.badgeText}>{playable ? "Media Ready" : "Media Unavailable"}</Text>
+            <AppText scale="caption" style={styles.badgeText}>{playable ? "Media Ready" : "Media Unavailable"}</AppText>
           </View>
           {moderationLabel ? (
             <View style={[styles.badge, styles.badgeModeration]}>
-              <Text style={styles.badgeText}>{moderationLabel}</Text>
+              <AppText scale="caption" style={styles.badgeText}>{moderationLabel}</AppText>
             </View>
           ) : null}
           {ownerClipEdit ? (
             <View style={[styles.badge, styles.badgeTemplate]}>
-              <Text style={styles.badgeText}>{ownerTemplateLabel}</Text>
+              <AppText scale="caption" style={styles.badgeText}>{ownerTemplateLabel}</AppText>
             </View>
           ) : null}
           {ownerMode && featured ? (
             <View style={[styles.badge, styles.badgeFeatured]}>
-              <Text style={styles.badgeText}>Featured</Text>
+              <AppText scale="caption" style={styles.badgeText}>Featured</AppText>
             </View>
           ) : null}
           {accessLabel ? (
             <View style={[styles.badge, styles.badgeTemplate]}>
-              <Text style={styles.badgeText}>{accessLabel}</Text>
+              <AppText scale="caption" style={styles.badgeText}>{accessLabel}</AppText>
             </View>
           ) : null}
           {publicTemplateLabel ? (
             <View style={[styles.badge, styles.badgeTemplate]}>
-              <Text style={styles.badgeText}>{publicTemplateLabel}</Text>
+              <AppText scale="caption" style={styles.badgeText}>{publicTemplateLabel}</AppText>
             </View>
           ) : null}
         </View>
@@ -237,10 +243,10 @@ export function CreatorVideoCard({
             ]}
           >
             {titleOverlayText ? (
-              <Text style={styles.ownerTitleOverlayText} numberOfLines={2}>{titleOverlayText}</Text>
+              <AppText scale="subhead" style={styles.ownerTitleOverlayText} numberOfLines={2}>{titleOverlayText}</AppText>
             ) : null}
             {titleOverlaySubtitle ? (
-              <Text style={styles.ownerTitleOverlaySubtitle} numberOfLines={2}>{titleOverlaySubtitle}</Text>
+              <AppText scale="caption" style={styles.ownerTitleOverlaySubtitle} numberOfLines={2}>{titleOverlaySubtitle}</AppText>
             ) : null}
           </View>
         ) : null}
@@ -257,63 +263,63 @@ export function CreatorVideoCard({
             ]}
           >
             {publicTitleOverlayText ? (
-              <Text style={styles.publicTitleOverlayText} numberOfLines={2}>{publicTitleOverlayText}</Text>
+              <AppText scale="subhead" style={styles.publicTitleOverlayText} numberOfLines={2}>{publicTitleOverlayText}</AppText>
             ) : null}
             {publicTitleOverlaySubtitle ? (
-              <Text style={styles.publicTitleOverlaySubtitle} numberOfLines={2}>{publicTitleOverlaySubtitle}</Text>
+              <AppText scale="caption" style={styles.publicTitleOverlaySubtitle} numberOfLines={2}>{publicTitleOverlaySubtitle}</AppText>
             ) : null}
           </View>
         ) : null}
       </TouchableOpacity>
 
       <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={2}>{publicDisplayTitle}</Text>
-        <Text style={styles.description} numberOfLines={2}>
+        <AppText scale="subhead" style={styles.title} numberOfLines={2}>{publicDisplayTitle}</AppText>
+        <AppText scale="footnote" style={styles.description} numberOfLines={2}>
           {publicDescription}
-        </Text>
+        </AppText>
         {meta.length ? (
-          <Text style={styles.meta} numberOfLines={1}>{meta.join(" · ")}</Text>
+          <AppText scale="caption" style={styles.meta} numberOfLines={1}>{meta.join(" · ")}</AppText>
         ) : null}
         {!playable ? (
-          <Text style={styles.warning}>Media unavailable: this upload is missing a playable source.</Text>
+          <AppText scale="caption" style={styles.warning}>Media unavailable: this upload is missing a playable source.</AppText>
         ) : null}
         {moderationBlocked ? (
-          <Text style={styles.warning}>This video is unavailable publicly until moderation restores it.</Text>
+          <AppText scale="caption" style={styles.warning}>This video is unavailable publicly until moderation restores it.</AppText>
         ) : null}
         {ownerMode && rawTitleDetected ? (
-          <Text style={styles.ownerGuidance}>
+          <AppText scale="caption" style={styles.ownerGuidance}>
             This title still looks like a file name. Tap Edit to rename it for viewers.
-          </Text>
+          </AppText>
         ) : null}
         {ownerMode ? (
-          <Text style={styles.ownerGuidance}>
+          <AppText scale="caption" style={styles.ownerGuidance}>
             {formatOwnerPlaybackStatus(video)}
-          </Text>
+          </AppText>
         ) : null}
         {ownerClipEdit ? (
-          <Text style={styles.ownerGuidance}>
+          <AppText scale="caption" style={styles.ownerGuidance}>
             {`Clip Studio: ${hasOwnerTitleOverlay ? "Title Card" : "No Title Card"} · ${ownerTemplateLabel}`}
-          </Text>
+          </AppText>
         ) : null}
         {ownerMode && accessLabel ? (
-          <Text style={styles.ownerGuidance}>
+          <AppText scale="caption" style={styles.ownerGuidance}>
             {accessLabel === "Paid Video" ? "Fans must unlock this video before playback. Sandbox sales are not payable." : accessLabel}
-          </Text>
+          </AppText>
         ) : null}
 
         {ownerMode ? (
           <View style={styles.actionGrid}>
             <TouchableOpacity style={styles.primaryAction} activeOpacity={0.86} onPress={onOpen} disabled={!playable}>
-              <Text style={styles.primaryActionText}>Open Player</Text>
+              <AppText scale="footnote" style={styles.primaryActionText}>Open Player</AppText>
             </TouchableOpacity>
             {onEdit ? (
               <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={onEdit}>
-                <Text style={styles.secondaryActionText}>Edit</Text>
+                <AppText scale="footnote" style={styles.secondaryActionText}>Edit</AppText>
               </TouchableOpacity>
             ) : null}
             {onEditClip ? (
               <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={onEditClip}>
-                <Text style={styles.secondaryActionText}>Edit Clip</Text>
+                <AppText scale="footnote" style={styles.secondaryActionText}>Edit Clip</AppText>
               </TouchableOpacity>
             ) : null}
             {onSetFeatured || onClearFeatured ? (
@@ -327,7 +333,7 @@ export function CreatorVideoCard({
                 onPress={featured ? onClearFeatured : onSetFeatured}
                 disabled={busy || moderationBlocked || (!featured && video.visibility !== "public")}
               >
-                <Text style={styles.secondaryActionText}>{featured ? "Remove Featured" : "Set Featured"}</Text>
+                <AppText scale="footnote" style={styles.secondaryActionText}>{featured ? "Remove Featured" : "Set Featured"}</AppText>
               </TouchableOpacity>
             ) : null}
             {onToggleVisibility ? (
@@ -337,7 +343,7 @@ export function CreatorVideoCard({
                 onPress={onToggleVisibility}
                 disabled={busy || moderationBlocked}
               >
-                <Text style={styles.secondaryActionText}>{video.visibility === "public" ? "Unpublish" : "Publish"}</Text>
+                <AppText scale="footnote" style={styles.secondaryActionText}>{video.visibility === "public" ? "Unpublish" : "Publish"}</AppText>
               </TouchableOpacity>
             ) : null}
             {onDelete ? (
@@ -347,18 +353,18 @@ export function CreatorVideoCard({
                 onPress={onDelete}
                 disabled={busy}
               >
-                <Text style={styles.secondaryActionText}>Delete</Text>
+                <AppText scale="footnote" style={styles.secondaryActionText}>Delete</AppText>
               </TouchableOpacity>
             ) : null}
           </View>
         ) : (
           <View style={styles.publicActions}>
             <TouchableOpacity style={styles.primaryAction} activeOpacity={0.86} onPress={onOpen} disabled={!playable}>
-              <Text style={styles.primaryActionText}>Watch</Text>
+              <AppText scale="footnote" style={styles.primaryActionText}>Watch</AppText>
             </TouchableOpacity>
             {onShare && shareable ? (
               <TouchableOpacity style={styles.secondaryAction} activeOpacity={0.86} onPress={onShare}>
-                <Text style={styles.secondaryActionText}>Share</Text>
+                <AppText scale="footnote" style={styles.secondaryActionText}>Share</AppText>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -384,11 +390,10 @@ const styles = StyleSheet.create({
     minHeight: 168,
     backgroundColor: "#080A10",
   },
-  thumbnail: {
+  thumbnailFrame: {
     ...StyleSheet.absoluteFillObject,
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   fallbackPreview: {
     minHeight: 168,
