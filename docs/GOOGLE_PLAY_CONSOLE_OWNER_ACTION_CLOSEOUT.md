@@ -1,16 +1,23 @@
 # Chi'llywood Google Play Console Owner Action Closeout
 
 Date: 2026-06-21
-Status: Console-ready owner action packet; app behavior unchanged
+Status: Console owner-action closeout; closed-testing package sent for review; app behavior unchanged
 
-This packet turns the Google Play readiness map into exact owner actions. It does not claim Google Play Console acceptance unless that state was directly readable. No app code, package id, runtime version, RevenueCat product, Google Play product, live-money switch, payout switch, RLS policy, or provider behavior changed.
+This packet turns the Google Play readiness map into exact owner actions and records the direct Play Console work completed through Chrome. It does not claim production approval or public-launch readiness. No app code, package id, runtime version, RevenueCat product, Google Play product, live-money switch, payout switch, RLS policy, or provider behavior changed.
 
 ## Direct Console / Provider Readback
 
 | Area | Direct read/fill result | Notes |
 | --- | --- | --- |
-| Play Console UI App content forms | Not accessible from this environment | App access, Data Safety, account deletion, content rating, target audience, ads declaration, store listing, and contact forms must be verified by the owner in Play Console. |
-| Android Publisher API | Read-only app-content status not available here | The available local tooling/service-account material can support Android Publisher work in other lanes, but App content questionnaire state is a Play Console owner action. No Play edit, upload, track mutation, or Console field mutation was made in this pass. |
+| Play Console app identity | Read directly | App name `Chi'llywood`, package `com.chillywood.mobile`, app status Draft, current track/status Internal testing, developer account `6817909936082971994`, app id `4973081175226507322`. |
+| App content overview | Read directly | Need-attention tab showed `You're all caught up`; Actioned tab showed 10 actioned declarations: Sign in details, Data safety, Content ratings, Target audience and content, Financial features, Health apps, Government apps, Advertising ID, Ads, and Privacy policy. |
+| App access/sign-in details | Read directly | Restricted app set to Yes and a Standard reviewer account is present. The reviewer password was not opened, printed, copied, or documented. |
+| Store listing | Read directly | Default store listing showed `Ready to send for review`, app name `Chi'llywood`, current short/full descriptions, icon/feature graphic, and 4 phone / 4 seven-inch tablet / 4 ten-inch tablet screenshots. |
+| Closed testing Alpha | Mutated in Console | Added United States, selected `Chi'llywood Internal Testers` email list with 17 users, set feedback email `support@chillywoodstream.com`, discarded stale draft release versionCode 15, promoted internal testing versionCode 54 / `1.0.0` into Alpha, added release notes, saved the release, and sent 13 changes for review. |
+| Publishing overview | Read directly after submission | Shows `Changes in review`, `13 changes sent for review`, and Google quick checks running before review proceeds. Managed publishing is off. |
+| Production access | Read directly | Production is inactive and production access is blocked until closed testing has at least 12 opted-in testers for at least 14 days. |
+| Play products/subscriptions | Read directly | Subscriptions listed `premium_subscription` and `channel_subscription_sandbox_monthly_499`, each with one active base plan. One-time products listed seven sandbox products with one active purchase option/offer each. |
+| Latest artifact readback | Read directly | App bundle versionCode 54 / `1.0.0` is active in internal testing and was used for the Alpha draft. Target SDK 36, minimum API 24, Play signing/protection shown. |
 | RevenueCat / Google Play production billing dashboards | Not accessed from this pass | Production Premium readiness remains owner/provider verification if paid public launch is included. Creator money production remains off. |
 | Repo/package identity | Read from repo | `app.json` uses app name `Chi'llywood`, runtime `1.0.0`, and Android package `com.chillywood.mobile`. Local Gradle `versionCode 24` is stale relative to EAS/Play history and is not the release source of truth. |
 
@@ -18,18 +25,18 @@ This packet turns the Google Play readiness map into exact owner actions. It doe
 
 | Play Console area | Current status | Filled now? | Remaining owner action | Blocking? | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| App access | Ready-to-paste instructions exist | No, owner must paste/save | Enter reviewer account email and password in Play Console only; verify account signs in on the uploaded artifact; keep admin routes private. | Yes | `docs/GOOGLE_PLAY_APP_ACCESS_DRAFT.md` |
-| Ads declaration | Ready as "No ads" if owner confirms final artifact has no active ads | No | Confirm no active ad SDK, ad delivery, paid placements, or Advertising ID requirement in the uploaded artifact, then answer Ads accordingly. | Yes | No AdMob/AppLovin/Unity ad SDK dependency found; ads defaults remain off. |
-| Content rating | Questionnaire prep ready | No | Complete IARC/Play questionnaire honestly for 18+ UGC, chat, live rooms, camera/mic, moderation/reporting, no gambling/firearm/drug sales. | Yes | `docs/GOOGLE_PLAY_READINESS_CLOSEOUT.md` |
-| Target audience and content | 18+ posture ready | No | Select adult/general audience consistent with 18+ signup/legal posture; do not claim Families/child-directed status. | Yes | Signup has 18+ and legal acceptance; legal policies state 18+. |
-| Data Safety | Worksheet ready, owner/legal/provider verify required | No | Fill Data Safety with account/profile, UGC/media, chat/messages, camera/mic/live, purchases where enabled, analytics/diagnostics, support/moderation, device identifiers where active. | Yes | `docs/GOOGLE_PLAY_DATA_SAFETY_WORKSHEET.md` |
-| Account deletion | In-app and public web paths ready | No | Enter `https://chillywoodstream.com/account-deletion`, describe Settings > Account actions > Delete Account, 30-day restore, and retention exceptions. | Yes | `app/account-deletion.tsx`, legal policy bundle, readiness docs |
-| Privacy policy | URL/content ready, legal approval still owner action | No | Enter/verify `https://chillywoodstream.com/privacy`; confirm legal/provider consistency with Data Safety. | Yes | `legal/policies.mjs`, `app/privacy.tsx` |
-| Store listing | Draft copy/checklist ready | No | Enter final short/full description, screenshots, category, contact, privacy/support/legal URLs, and 18+ positioning. | Yes | Store listing draft below |
-| Contact details | Ready values | No | Enter support contact email and verify inbox operations/SLA. | Yes | `support@chillywoodstream.com`; public support route |
-| Release track status | Not Console-read in this pass | No | Confirm latest AAB/versionCode, testing track, countries/regions, rollout state, and release notes inside Play Console. | Yes | Repo history documents prior internal builds; current Console state must be owner-verified. |
-| App signing / package identity | Package id ready; signing must be Play/EAS verified | No | Confirm uploaded artifact is `com.chillywood.mobile`, Play-managed/EAS-signed, versionName `1.0.0` or approved bump, and not a local debug artifact. | Yes | `app.json`; historical EAS/Play proof |
-| Testing/release readiness | Android-first; BrowserStack deferred until iOS | No | Run final Play-installed Android smoke and fresh creator upload-to-playback proof after Console setup. | Yes | Current release doctrine |
+| App access | Existing restricted-app reviewer account present | Verified/read; password not inspected | If Google asks, rotate/replace reviewer credential through secure owner-only channel; keep admin routes private. | Review-dependent | Play Console App access page |
+| Ads declaration | Actioned declaration present | Already actioned before this pass | Revisit only if ads/ad SDKs are enabled later. | No current blocker | App content Actioned tab |
+| Content rating | Actioned declaration present | Already actioned before this pass | Revisit only if Google flags it or product scope changes. | Review-dependent | App content Actioned tab |
+| Target audience and content | Actioned declaration present; target age 18+ appeared in publishing change set | Already actioned before this pass | Keep store copy/screenshots adult-oriented and not child-directed. | Review-dependent | Publishing overview |
+| Data Safety | Actioned declaration present | Already actioned before this pass | Respond to any Google review finding; owner/legal should keep provider disclosures current. | Review-dependent | App content Actioned tab |
+| Account deletion | Privacy/deletion posture represented in app content/listing docs | Included in submitted package | Respond to any Google review finding; keep `https://chillywoodstream.com/account-deletion` live. | Review-dependent | Publishing overview / docs |
+| Privacy policy | `https://chillywoodstream.com/privacy` in submitted change set | Submitted | Keep URL live and consistent with Data Safety. | Review-dependent | Publishing overview |
+| Store listing | Default listing ready and submitted | Submitted | Respond to any store listing review finding. | Review-dependent | Store listing and Publishing overview |
+| Contact details | Feedback email set to `support@chillywoodstream.com` for tester list | Filled for Alpha testers | Keep support inbox staffed. | No current blocker | Closed testing tester list |
+| Release track status | Closed testing Alpha submitted with v54 / `1.0.0` | Submitted for review | Monitor quick checks/review; after approval, collect tester opt-ins and 14-day closed-test evidence. | Yes for production access | Publishing overview / Dashboard |
+| App signing / package identity | Package `com.chillywood.mobile`; Play signing/protection shown on v54 release | Verified in Console | Keep using Play/EAS-signed artifacts; do not use local debug artifacts. | No current blocker | Alpha release page |
+| Testing/release readiness | Android-first closed test review started; BrowserStack deferred until iOS | In progress | Wait for review/checks, run final Play-installed Android smoke and fresh creator upload-to-playback proof after tester artifact is live. | Yes before public release | Publishing overview / release doctrine |
 | In-app products/subscriptions | App-side money proof closed; production billing governance still owner action | No | If paid public launch includes Premium, verify Google Play product/base plan, RevenueCat offering/entitlement, licensed tester path, store copy, and Data Safety. Keep creator money production off unless separately approved. | Blocking only if paid public launch includes Premium | Money proof/docs; provider status not read in this pass |
 
 ## App Access / Sign-In Details
@@ -192,25 +199,26 @@ Premium production readiness is not complete from this pass because provider das
 
 ## Release Track / Build Requirement
 
-No new AAB is required by this owner-action docs pass and no native/config change was made here.
+No new AAB was created by this owner-action pass and no native/config change was made here. Existing internal testing artifact versionCode 54 / `1.0.0` was promoted into Closed testing Alpha through Play Console.
 
 Decision for public release:
 
 - OTA is enough only for compatible installed testers receiving JS/UI updates.
-- A final public submission should use a traceable Play-installed AAB/release candidate unless the owner explicitly accepts OTA-on-current-artifact risk.
-- Owner must confirm Play Console track, versionCode, release notes, countries/regions, rollout percentage, signing, and artifact status.
+- Closed testing Alpha now uses traceable app bundle versionCode 54 / `1.0.0`.
+- Production access is still blocked until Google's closed-test requirement is met.
+- Monitor quick checks and review result for the 13 submitted changes.
 - Final Play-installed Android smoke and fresh creator upload-to-playback proof should run after the exact release candidate is installed.
 
 ## Fastest Safe Android-First Path
 
 1. Keep live money, payouts, creator money production, spendable credits, and provider refund execution off.
-2. Fill and save Play Console App content: App access, Data Safety, account deletion, content rating, target audience, ads, privacy policy, store listing/contact details.
-3. Verify provider dashboards: Supabase, Firebase, LiveKit/TURN, email/SMTP, legal/support site, RevenueCat/Google Play only if Premium paid public launch is included.
-4. Upload or select the final traceable Android release candidate.
-5. Run Play-installed Android smoke on that artifact.
+2. Monitor Google quick checks and review for the submitted 13-change closed-testing package.
+3. Get at least 12 testers opted into the closed test and keep the test running for at least 14 days.
+4. Verify provider dashboards: Supabase, Firebase, LiveKit/TURN, email/SMTP, legal/support site, RevenueCat/Google Play only if Premium paid public launch is included.
+5. Run Play-installed Android smoke on the approved tester artifact.
 6. Run fresh creator upload-to-playback proof.
 7. Confirm monitoring/rollback/support readiness.
-8. Make Android release go/no-go.
+8. Apply for/complete production access and make Android release go/no-go.
 
 BrowserStack/App Live waits until iOS integration is ready unless the owner explicitly changes that decision.
 
@@ -220,7 +228,7 @@ BrowserStack/App Live waits until iOS integration is ready unless the owner expl
 - No auth/RLS/admin behavior changed.
 - No package id/runtimeVersion changed.
 - No native build was created.
-- No Play edit, track mutation, or Console form mutation was performed.
+- Play Console track/review mutations were limited to Closed testing Alpha setup and review submission for existing versionCode 54.
 - No RevenueCat/Google Play product was changed.
 - No live money, payouts, creator money production, spendable credits, provider refunds, provider transfers, or payable balances were enabled or created.
 - No secrets, passwords, service-account JSON, API keys, provider credentials, or `supabase/.temp/` contents are documented here.

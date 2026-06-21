@@ -1,21 +1,19 @@
 # Chi'llywood Google Play Readiness Closeout
 
 Date: 2026-06-21
-Status: Android-first Play readiness map; docs/ops only
+Status: Android-first Play readiness map; Console package now submitted for review
 
-This closeout uses the current repo truth and the current official Google Play help topics for App content, Data safety, account deletion, target audience, and content rating. It does not claim Play Console acceptance because console state must be verified by the owner inside Play Console.
+This closeout uses the current repo truth and the current official Google Play help topics for App content, Data safety, account deletion, target audience, and content rating. Follow-up Chrome-backed Console work on June 21 verified the current Play Console state and sent the Android-first closed-testing package for review. It does not claim production approval or public-launch readiness.
 
 ## Executive Decision
 
 Chi'llywood is not ready for broad Google Play public release today.
 
-No app-code blocker was found in this pass. The remaining blockers are release-ops, legal/store acceptance, provider dashboard signoff, and final proof:
+No app-code blocker was found in this pass. The closed-testing review package has been sent, but the remaining blockers are release-ops, Google closed-test progression, provider dashboard signoff, and final proof:
 
-- Google Play Console App content must be verified and saved.
-- Data Safety must be owner/legal verified and accepted.
-- Account deletion URL/path must be verified and accepted.
-- Content rating and target audience must be completed honestly for an 18+ UGC/live/chat app.
-- Store listing/contact/support/privacy details must be verified.
+- Google quick checks and review must complete without blocking issues.
+- Closed testing must meet Google's production-access requirement: at least 12 opted-in testers for at least 14 days.
+- Any Google review findings must be resolved.
 - Provider dashboard signoff is needed for Supabase, Firebase, RevenueCat/Google Play, LiveKit/TURN, email/SMTP, legal site, support inbox, and rollback/monitoring.
 - Final Play-installed Android smoke is needed on the release candidate.
 - Fresh creator upload-to-playback proof remains pending.
@@ -23,7 +21,7 @@ No app-code blocker was found in this pass. The remaining blockers are release-o
 
 BrowserStack/App Live is intentionally deferred until iOS integration is ready and is not a current Android-first launch blocker unless the owner changes that decision.
 
-Follow-up owner-action closeout is tracked in `docs/GOOGLE_PLAY_CONSOLE_OWNER_ACTION_CLOSEOUT.md`. That packet gives ready-to-paste Play Console fields and marks direct Console status as owner-blocked where it was not accessible from this environment. It does not change app behavior or claim Play Console acceptance.
+Follow-up owner-action closeout is tracked in `docs/GOOGLE_PLAY_CONSOLE_OWNER_ACTION_CLOSEOUT.md`. That packet records the direct Console state and the closed-testing review submission. It does not change app behavior or claim production approval.
 
 ## Package / Build Identity
 
