@@ -2826,7 +2826,7 @@ const formatHomeCount = (value: number | null | undefined, loading: boolean) => 
   return typeof value === "number" && Number.isFinite(value) ? String(value) : "Not Connected";
 };
 
-const getLatestHomeTimestamp = (values: Array<string | null | undefined>) => {
+const getLatestHomeTimestamp = (values: (string | null | undefined)[]) => {
   const latest = values
     .map((value) => {
       const parsed = Date.parse(String(value ?? ""));

@@ -222,7 +222,7 @@ export default function ChillyCircleScreen() {
   );
 
   const suggestionGroups = useMemo(() => {
-    if (!hasSearchQuery) return [] as Array<{ label: string; kind: ChillyCircleSuggestion["kind"]; rows: ChillyCircleSuggestion[] }>;
+    if (!hasSearchQuery) return [] as { label: string; kind: ChillyCircleSuggestion["kind"]; rows: ChillyCircleSuggestion[] }[];
 
     const next = [
       {

@@ -23,7 +23,6 @@ import {
     LayoutAnimation,
     PanResponder,
     Platform,
-    Pressable,
     ScrollView,
     Share,
     StyleSheet,
@@ -2348,7 +2347,7 @@ export default function PlayerScreen() {
       };
 
       const applyPersistedSeatRequestMessages = (
-        messages: Array<{ body: string; createdAt?: string }>,
+        messages: { body: string; createdAt?: string }[],
         source: string,
       ) => {
         const authority = currentUserCanApproveSeatRequests();
@@ -2798,7 +2797,7 @@ export default function PlayerScreen() {
 
     let active = true;
     const applyPersistedHostSeatRequestMessages = (
-      messages: Array<{ body: string; createdAt?: string }>,
+      messages: { body: string; createdAt?: string }[],
       source: string,
     ) => {
       const authority = getWatchPartyHostAuthority();

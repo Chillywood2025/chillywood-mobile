@@ -63,7 +63,7 @@ const toQueryString = (params: QueryMap) => {
   });
 
   if (entries.length === 0) return "";
-  return "?" + new URLSearchParams(entries as Array<[string, string]>).toString();
+  return "?" + new URLSearchParams(entries as [string, string][]).toString();
 };
 
 export default function NotFoundScreen() {

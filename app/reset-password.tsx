@@ -37,17 +37,16 @@ type RecoveryStatus = "checking" | "ready" | "missing" | "failed";
 const PASSWORD_MIN_LENGTH = 8;
 const RESET_FLOW_SIGN_OUT_TIMEOUT_MS = 2500;
 const RECOVERY_LINK_OPEN_ERROR = "This reset link expired or could not be opened. Request a fresh link.";
-const RECOVERY_PARAM_KEYS = [
-  "access_token",
-  "code",
-  "email",
-  "error",
-  "error_code",
-  "error_description",
-  "refresh_token",
-  "token",
-  "token_hash",
-] as const;
+type RecoveryParamKey =
+  | "access_token"
+  | "code"
+  | "email"
+  | "error"
+  | "error_code"
+  | "error_description"
+  | "refresh_token"
+  | "token"
+  | "token_hash";
 
 function getPasswordUpdateErrorMessage(error: unknown) {
   const raw = String(
@@ -110,8 +109,8 @@ const readParam = (params: URLSearchParams, key: string) => {
 };
 
 const readRouteParam = (
-  params: Partial<Record<(typeof RECOVERY_PARAM_KEYS)[number], string | string[]>>,
-  key: (typeof RECOVERY_PARAM_KEYS)[number],
+  params: Partial<Record<RecoveryParamKey, string | string[]>>,
+  key: RecoveryParamKey,
 ) => {
   const value = params[key];
   const normalizedValue = Array.isArray(value) ? value[0] : value;
@@ -150,7 +149,7 @@ const parseRecoveryUrl = (url: string | null): RecoveryParams | null => {
 };
 
 const parseRecoveryRouteParams = (
-  params: Partial<Record<(typeof RECOVERY_PARAM_KEYS)[number], string | string[]>>,
+  params: Partial<Record<RecoveryParamKey, string | string[]>>,
 ): RecoveryParams | null => {
   const recovery = {
     accessToken: readRouteParam(params, "access_token"),
@@ -183,7 +182,7 @@ const clearResetFlowSession = async () => {
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const routeParams = useLocalSearchParams<
-    Partial<Record<(typeof RECOVERY_PARAM_KEYS)[number], string | string[]>>
+    Partial<Record<RecoveryParamKey, string | string[]>>
   >();
   const { isPasswordRecoverySession } = useSession();
   const insets = useSafeAreaInsets();

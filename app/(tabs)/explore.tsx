@@ -92,7 +92,7 @@ type ExploreTypeaheadSuggestion = {
   onPress: () => void;
 };
 
-const EXPLORE_SEARCH_SCOPES: Array<{ key: ExploreSearchScope; label: string }> = [
+const EXPLORE_SEARCH_SCOPES: { key: ExploreSearchScope; label: string }[] = [
   { key: "all", label: "All" },
   { key: "content", label: "Content" },
   { key: "people", label: "People" },
@@ -157,7 +157,7 @@ const buildExploreInfoLine = (item: TitleRow) => {
 };
 
 const formatTitleBadgeList = (item: TitleRow, liveMetadata?: TitleLiveMetadata | null) => {
-  const badges: Array<{ label: string; tone: "program" | "live" }> = [];
+  const badges: { label: string; tone: "program" | "live" }[] = [];
 
   if (liveMetadata?.liveRoomCount) badges.push({ label: "Live", tone: "live" });
   if (item.is_hero === true) badges.push({ label: "Hero", tone: "program" });
@@ -181,7 +181,7 @@ const matchesExploreSearch = (item: TitleRow, rawQuery: string) => {
   ].some((value) => String(value ?? "").toLowerCase().includes(query));
 };
 
-const matchesTextSearch = (rawQuery: string, values: Array<unknown>) => {
+const matchesTextSearch = (rawQuery: string, values: unknown[]) => {
   const query = getPublicSearchNeedle(rawQuery);
   if (!query) return true;
   if (isPrivateIdentifierLikePublicQuery(rawQuery)) return false;
@@ -195,7 +195,7 @@ const isPrivateIdentifierLikePublicQuery = (rawQuery: string) => {
   return queryWithoutHandlePrefix.includes("@");
 };
 
-const getTypeaheadRank = (rawQuery: string, values: Array<unknown>) => {
+const getTypeaheadRank = (rawQuery: string, values: unknown[]) => {
   const query = getPublicSearchNeedle(rawQuery);
   if (!query || isPrivateIdentifierLikePublicQuery(rawQuery)) return 99;
 
@@ -212,7 +212,7 @@ const getTypeaheadRank = (rawQuery: string, values: Array<unknown>) => {
 const sortByTypeaheadRank = <T,>(
   rawQuery: string,
   items: T[],
-  getValues: (item: T) => Array<unknown>,
+  getValues: (item: T) => unknown[],
 ) => [...items]
   .map((item) => ({ item, rank: getTypeaheadRank(rawQuery, getValues(item)) }))
   .filter((entry) => entry.rank < 99)
@@ -366,10 +366,10 @@ export default function ExploreScreen() {
   );
   const typeaheadGroups = useMemo(() => {
     if (publicSearchNeedle.length < EXPLORE_TYPEAHEAD_MIN_LENGTH || publicSearchBlocked) {
-      return [] as Array<{ key: ExploreTypeaheadGroupKey; label: string; suggestions: ExploreTypeaheadSuggestion[] }>;
+      return [] as { key: ExploreTypeaheadGroupKey; label: string; suggestions: ExploreTypeaheadSuggestion[] }[];
     }
 
-    const groups: Array<{ key: ExploreTypeaheadGroupKey; label: string; suggestions: ExploreTypeaheadSuggestion[] }> = [];
+    const groups: { key: ExploreTypeaheadGroupKey; label: string; suggestions: ExploreTypeaheadSuggestion[] }[] = [];
 
     if (showContentScope) {
       const titleSuggestions = sortByTypeaheadRank(
