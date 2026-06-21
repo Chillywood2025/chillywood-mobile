@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { titles as localTitles } from "../../_data/titles";
 import {
@@ -40,6 +40,7 @@ import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { readMyListIds, toggleMyListTitle } from "../../_lib/userData";
 import { AccessSheet, getAccessSheetEntryLabel } from "../../components/monetization/access-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
+import { StableImage } from "../../components/ui/StableImage";
 import { AppText } from "../../components/ui/typography";
 import type { Tables } from "../../supabase/database.types";
 
@@ -658,11 +659,14 @@ export default function TitleDetails() {
   return (
     <>
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 28 }}>
-        {localMatch?.poster ? (
-          <Image source={localMatch.poster} style={styles.hero} />
-        ) : (
-          <View style={styles.heroFallback} />
-        )}
+        <StableImage
+          expectedWidth="100%"
+          expectedHeight={420}
+          source={localMatch?.poster ?? null}
+          containerStyle={styles.hero}
+          borderRadius={0}
+          resizeMode="cover"
+        />
 
         <View style={styles.content}>
           <AppText scale="display" weight="900" style={styles.h1}>{title.title}</AppText>
@@ -910,8 +914,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     textAlign: "center",
   },
-  hero: { width: "100%", height: 420, resizeMode: "cover" },
-  heroFallback: { width: "100%", height: 420, backgroundColor: "#111" },
+  hero: { width: "100%", height: 420 },
   content: { paddingHorizontal: 16, paddingTop: 14 },
   h1: { color: "white", fontSize: 40, fontWeight: "900" },
   metaRow: {
