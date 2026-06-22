@@ -87,7 +87,7 @@ assertIncludes(explore, 'testID="explore-typeahead-results"', "Explore typeahead
 assertIncludes(explore, "EXPLORE_SEARCH_DEBOUNCE_MS", "Explore debounced search");
 assertIncludes(explore, "searchPublicPeople", "Explore public people search source");
 assertIncludes(explore, 'testID="explore-people-search-section"', "Explore People results section");
-assertIncludes(explore, "readPublicDiscoveryFeedItems({ surface: \"home\"", "Explore public discovery feed source");
+assertIncludes(explore, "readRankedPublicDiscoveryFeedItems({ surface: \"home\"", "Explore ranked public discovery feed source");
 assertIncludes(explore, "readLatestPublicCreatorVideos", "Explore public creator video source");
 assertIncludes(explore, "readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId", "Explore Rachi Originals source");
 assertIncludes(explore, "No public replays yet", "Explore honest replay empty state");

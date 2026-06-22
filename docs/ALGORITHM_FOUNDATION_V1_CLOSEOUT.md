@@ -4,9 +4,9 @@ Date: June 20, 2026
 
 ## Status
 
-Algorithm Foundation V1 is closed as a production-safe foundation. It is a free, rules-based, explainable ranking layer for dry-run/readback only.
+Algorithm Foundation V1 is closed as a production-safe foundation and is now active for public Home/Explore discovery ordering. It is a free, rules-based, explainable ranking layer backed by public-safe discovery rows and relationship signals where available.
 
-It is not production-wired. `algorithmRankingV1Enabled` remains `false`, and production Home, Live, Search, Creator Platform, Premium, creator monetization, Watch-Party, LiveKit, and Chi'lly Chat behavior remains unchanged.
+`algorithmRankingV1Enabled` defaults to `true`. Home and Explore use `_lib/discoveryFeed.ts` ranking for public discovery rows; Premium, creator monetization, Watch-Party, LiveKit, and Chi'lly Chat behavior remains unchanged.
 
 ## Closed Scope
 
@@ -57,9 +57,8 @@ Do not implement production feed integration without a separate scoped prompt an
 
 Future integration must include:
 
-- feature flag remains default-off before rollout
-- staged rollout plan
-- rollback switch
+- active-by-default deterministic discovery remains guarded
+- emergency fallback is incident-only, not a normal disabled rollout state
 - before/after ranking screenshots or logs
 - privacy review
 - RLS/server readback review
@@ -68,8 +67,8 @@ Future integration must include:
 - no external paid recommendation/ML/vector vendor unless separately approved
 - installed-device proof
 - BrowserStack/App Live proof if used later
-- explicit confirmation that Home, Live, Search, Platform, Premium, creator monetization, Watch-Party, LiveKit, and Chi'lly Chat behavior remains correct
+- explicit confirmation that Home, Explore, Live, Search, Platform, Premium, creator monetization, Watch-Party, LiveKit, and Chi'lly Chat behavior remains correct
 
 ## Do Not Reopen
 
-Do not reopen Algorithm Foundation V1 as a production feed replacement task. It is closed as foundation-only. Future work is production integration planning and proof, not foundation rework, unless a real regression appears.
+Do not reopen Algorithm Foundation V1 as a dry-run-only task. It is closed as the active deterministic public discovery V1 for Home and Explore. Future work is expansion proof, signal quality tuning, and runtime QA unless a real regression appears.

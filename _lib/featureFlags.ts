@@ -36,7 +36,7 @@ export const REMOTE_CONFIG_DEFAULTS: Record<
   [REMOTE_CONFIG_KEYS.watchPartyLiveHandoffV2]: false,
   [REMOTE_CONFIG_KEYS.chillyChatExpandedV1]: false,
   [REMOTE_CONFIG_KEYS.aiChatSuggestionsV1]: false,
-  [REMOTE_CONFIG_KEYS.algorithmRankingV1Enabled]: false,
+  [REMOTE_CONFIG_KEYS.algorithmRankingV1Enabled]: true,
   [REMOTE_CONFIG_KEYS.algorithmRankingFreshnessWeight]: 0.16,
   [REMOTE_CONFIG_KEYS.algorithmRankingEngagementWeight]: 0.2,
   [REMOTE_CONFIG_KEYS.algorithmRankingCompletionWeight]: 0.14,

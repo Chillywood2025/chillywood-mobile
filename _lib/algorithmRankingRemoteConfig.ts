@@ -10,7 +10,7 @@ import {
 } from "./algorithmRanking";
 
 export function readAlgorithmRankingV1RemoteFlag() {
-  return getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.algorithmRankingV1Enabled, false);
+  return getRemoteConfigBoolean(REMOTE_CONFIG_KEYS.algorithmRankingV1Enabled, true);
 }
 
 export function readAlgorithmRankingV1RemoteWeights(): AlgorithmRankingWeights {

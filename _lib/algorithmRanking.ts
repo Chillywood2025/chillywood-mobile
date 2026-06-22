@@ -1,7 +1,7 @@
 export const ALGORITHM_RANKING_V1_VERSION = "algorithm-ranking-v1-rules-2026-06-18";
 
-export const algorithmRankingV1Enabled = false;
-export const algorithmRankingV1DryRunEnabled = true;
+export const algorithmRankingV1Enabled = true;
+export const algorithmRankingV1EmergencyFallbackEnabled = false;
 
 export type AlgorithmRankingSurface =
   | "home_video"
@@ -116,6 +116,9 @@ const REPORTED_MODERATION_STATUSES = new Set([
 ]);
 
 const BLOCKED_VISIBILITY_VALUES = new Set([
+  "circle",
+  "circle_only",
+  "chilly_circle",
   "draft",
   "private",
   "deleted",

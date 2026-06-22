@@ -46,11 +46,13 @@ import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../.
 import {
     getDiscoveryAccessLabel,
     getDiscoveryLiveLabel,
+    getDiscoveryRankingReasonLabel,
     rankDiscoveryFeedItems,
-    readPublicDiscoveryFeedItems,
+    readRankedPublicDiscoveryFeedItems,
+    scoreDiscoveryFeedItem,
     type DiscoveryFeedItem,
+    type DiscoveryFeedRankingSignals,
 } from "../../_lib/discoveryFeed";
-import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { CreatorVideoCard } from "../../components/creator-media/creator-video-card";
 import { NativeAdSlot } from "../../components/ads/NativeAdSlot";
@@ -214,6 +216,7 @@ export default function HomeScreen() {
   const [rachiOriginals, setRachiOriginals] = useState<CreatorVideo[]>([]);
   const [rachiOfficialAvatarUrl, setRachiOfficialAvatarUrl] = useState("");
   const [homeDiscoveryItems, setHomeDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
+  const [homeDiscoverySignals, setHomeDiscoverySignals] = useState<DiscoveryFeedRankingSignals>({});
   const [homeDiscoveryLoading, setHomeDiscoveryLoading] = useState(true);
   const [homeDiscoveryError, setHomeDiscoveryError] = useState<string | null>(null);
   const homeConfig = resolveHomeConfig(appConfig);
@@ -308,15 +311,19 @@ export default function HomeScreen() {
     setHomeDiscoveryError(null);
 
     try {
-      const [publicEvents, circleUserIds, discoveryRows, officialPosts, officialOriginals, officialProfile] = await Promise.all([
+      const [publicEvents, rankedDiscovery, officialPosts, officialOriginals, officialProfile] = await Promise.all([
         readLatestPublicEventSummaries({ limit: 24 }),
-        readActiveFriendUserIds().catch(() => [] as string[]),
-        readPublicDiscoveryFeedItems({ surface: "home", limit: 24 }).catch(() => [] as DiscoveryFeedItem[]),
+        readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 24 }).catch(() => ({
+          items: [] as DiscoveryFeedItem[],
+          signals: {} as DiscoveryFeedRankingSignals,
+          generatedAt: new Date().toISOString(),
+          viewerSpecific: false,
+        })),
         readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 3 }).catch(() => [] as ProfilePost[]),
         readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 12 }).catch(() => [] as CreatorVideo[]),
         readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId).catch(() => null),
       ]);
-      const uniqueCircleUserIds = Array.from(new Set(circleUserIds.map((id) => String(id ?? "").trim()).filter(Boolean)));
+      const uniqueCircleUserIds = Array.from(new Set((rankedDiscovery.signals.chillyCircleUserIds ?? []).map((id) => String(id ?? "").trim()).filter(Boolean)));
       const circleUploads = uniqueCircleUserIds.length
         ? await readCreatorVideosForOwners(uniqueCircleUserIds, { limit: 12 }).catch(() => [] as CreatorVideo[])
         : [];
@@ -327,7 +334,8 @@ export default function HomeScreen() {
       setRachiOriginals(officialOriginals);
       setRachiOfficialAvatarUrl(String(officialProfile?.avatarUrl ?? RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? "").trim());
       setCircleVideos(circleUploads);
-      setHomeDiscoveryItems(rankDiscoveryFeedItems(discoveryRows, { chillyCircleUserIds: uniqueCircleUserIds }));
+      setHomeDiscoverySignals(rankedDiscovery.signals);
+      setHomeDiscoveryItems(rankDiscoveryFeedItems(rankedDiscovery.items, rankedDiscovery.signals));
     } catch {
       setHomeLiveEvents([]);
       setHomeUpcomingEvents([]);
@@ -336,6 +344,7 @@ export default function HomeScreen() {
       setRachiOfficialAvatarUrl("");
       setCircleVideos([]);
       setHomeDiscoveryItems([]);
+      setHomeDiscoverySignals({});
       setHomeDiscoveryError("Discovery feed is unavailable right now.");
     } finally {
       setHomeDiscoveryLoading(false);
@@ -577,11 +586,14 @@ export default function HomeScreen() {
     const ownerId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
     const accessLabel = getDiscoveryAccessLabel(item);
     const liveLabel = getDiscoveryLiveLabel(item);
+    const rankingReason = scoreDiscoveryFeedItem(item, homeDiscoverySignals).reason;
+    const rankingLabel = getDiscoveryRankingReasonLabel(rankingReason);
     const scheduleLabel = formatFeedDate(item.starts_at ?? item.published_at ?? item.created_at);
 
     return (
       <TouchableOpacity
         key={`feed-item-${item.id}`}
+        testID={`home-discovery-card-${rankingReason}-${item.id}`}
         style={styles.feedActivityCard}
         activeOpacity={0.88}
         onPress={() => openDiscoveryFeedItem(item)}
@@ -602,6 +614,7 @@ export default function HomeScreen() {
               {liveLabel}
             </AppText>
             <AppText scale="caption" style={styles.feedActivityBadge}>{accessLabel}</AppText>
+            <AppText scale="caption" style={styles.feedActivityBadge}>{rankingLabel}</AppText>
           </View>
         </View>
         <View style={styles.feedActivityCopy}>

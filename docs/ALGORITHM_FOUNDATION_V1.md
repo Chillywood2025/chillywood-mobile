@@ -8,7 +8,7 @@ Algorithm Foundation V1 is a free, rules-based ranking foundation. It is not ML,
 
 No paid recommendation vendor, vector database, external ML dependency, or hosted personalization service is part of V1. V1 must remain explainable and tunable: every score returns `finalScore`, `componentScores`, `penalties`, `explanation`, and `version`.
 
-V1 is foundation-only. It does not replace the current Home, Live, Public Platform, Player, Watch-Party, Premium, or creator monetization rails. Production feed replacement is off by default through `algorithmRankingV1Enabled = false`. Dry-run/local preview is allowed through fixed fixtures and explicit QA scripts.
+V1 is active for public discovery ordering on Home and Explore through `_lib/discoveryFeed.ts`. It remains deterministic and rules-based: public discovery rows are first constrained by RLS/query eligibility, then ranked with live, followed creator, Chi'lly Circle, upload recency, upcoming event, replay-ready, category, editorial/manual score, and freshness signals. `algorithmRankingV1Enabled` defaults to `true`; emergency fallback must be incident-only and must not become a normal disabled-by-default rollout flag.
 
 Admin should eventually be able to inspect why an item ranked: the current explanation array is the first readback contract for that future admin/debug surface.
 
@@ -113,12 +113,12 @@ Those future tables must not weaken RLS and must not expose private viewer data.
 
 ## Production Behavior
 
-No production feed behavior changed in this pass. Current Home/Live/Platform UI remains unchanged unless a future separately scoped flag integration is approved and proved. V1 dry-run/readback exists so the ranking rules can be inspected before any user-visible ordering changes.
+Home and Explore use ranked public discovery rows now. Public discovery remains limited to public, clean, rights-safe content; Circle-private and draft creator videos are not inserted into public discovery rows. V1 dry-run/readback remains useful for static score inspection, but it is no longer the only algorithm behavior.
 
 ## Closeout Status
 
-Algorithm Foundation V1 is closed as a production-safe foundation lane when the guard and dry-run pass. It remains disabled for production feed replacement: `algorithmRankingV1Enabled = false`, while dry-run/readback stays allowed for QA and future rollout planning.
+Algorithm Foundation V1 is closed as an active production-safe deterministic discovery lane when the guard and typecheck pass. `algorithmRankingV1Enabled` defaults to `true`; `algorithmRankingV1EmergencyFallbackEnabled` is reserved for incident fallback only.
 
-The seven-flow app-side money proof is closed separately. Algorithm V1 does not reopen money proof, does not unlock paid content, and does not change Premium, creator monetization, LiveKit, Watch-Party, Chi'lly Chat, RLS, or production feed ordering.
+The seven-flow app-side money proof is closed separately. Algorithm V1 does not reopen money proof, does not unlock paid content, and does not change Premium, creator monetization, LiveKit, Watch-Party, Chi'lly Chat, or RLS.
 
-Future production integration requires a separate approval and proof lane with the default-off feature flag preserved, staged rollout, rollback switch, privacy review, server/RLS readback review, no paid content gate bypass, no private viewer-data logging, before/after ranking evidence, installed-device proof, and BrowserStack/App Live proof if used.
+Future production expansion beyond public Home/Explore discovery requires a separate proof lane with privacy review, server/RLS readback review, no paid content gate bypass, no private viewer-data logging, before/after ranking evidence, installed-device proof, and BrowserStack/App Live proof if used.

@@ -28,9 +28,12 @@ import {
 import {
   getDiscoveryAccessLabel,
   getDiscoveryLiveLabel,
+  getDiscoveryRankingReasonLabel,
   rankDiscoveryFeedItems,
-  readPublicDiscoveryFeedItems,
+  readRankedPublicDiscoveryFeedItems,
+  scoreDiscoveryFeedItem,
   type DiscoveryFeedItem,
+  type DiscoveryFeedRankingSignals,
 } from "../../_lib/discoveryFeed";
 import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
@@ -73,6 +76,7 @@ type TitleLiveMetadata = {
 
 type ExploreBackedSections = {
   discoveryItems: DiscoveryFeedItem[];
+  discoverySignals: DiscoveryFeedRankingSignals;
   creatorVideos: CreatorVideo[];
   rachiOriginals: CreatorVideo[];
   publicEvents: CreatorEventSummary[];
@@ -119,6 +123,7 @@ const CHILLYWOOD_BACKGROUND_SOURCE = require("../../assets/images/chillywood-bra
 
 const emptyBackedSections: ExploreBackedSections = {
   discoveryItems: [],
+  discoverySignals: {},
   creatorVideos: [],
   rachiOriginals: [],
   publicEvents: [],
@@ -306,8 +311,8 @@ export default function ExploreScreen() {
   const liveTitleCount = Object.values(titleLiveMetadataById).filter((item) => item.liveRoomCount > 0).length;
 
   const rankedDiscoveryItems = useMemo(
-    () => rankDiscoveryFeedItems(sections.discoveryItems),
-    [sections.discoveryItems],
+    () => rankDiscoveryFeedItems(sections.discoveryItems, sections.discoverySignals),
+    [sections.discoveryItems, sections.discoverySignals],
   );
   const liveDiscoveryItems = useMemo(
     () => rankedDiscoveryItems
@@ -594,13 +599,18 @@ export default function ExploreScreen() {
 
     const [
       titleResult,
-      publicDiscoveryItems,
+      rankedDiscovery,
       latestCreatorVideos,
       rachiOriginals,
       publicEvents,
     ] = await Promise.all([
       fetchBackedTitles(),
-      readPublicDiscoveryFeedItems({ surface: "home", limit: 36 }).catch(() => [] as DiscoveryFeedItem[]),
+      readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 36 }).catch(() => ({
+        items: [] as DiscoveryFeedItem[],
+        signals: {} as DiscoveryFeedRankingSignals,
+        generatedAt: new Date().toISOString(),
+        viewerSpecific: false,
+      })),
       readLatestPublicCreatorVideos({ limit: 12 }).catch(() => [] as CreatorVideo[]),
       readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 12 }).catch(() => [] as CreatorVideo[]),
       readLatestPublicEventSummaries({ limit: 24 }).catch(() => [] as CreatorEventSummary[]),
@@ -609,7 +619,8 @@ export default function ExploreScreen() {
     setTitles(titleResult.titles);
     setErrorMsg(titleResult.error);
     setSections({
-      discoveryItems: publicDiscoveryItems,
+      discoveryItems: rankedDiscovery.items,
+      discoverySignals: rankedDiscovery.signals,
       creatorVideos: latestCreatorVideos,
       rachiOriginals,
       publicEvents,
@@ -767,12 +778,15 @@ export default function ExploreScreen() {
     const thumbnail = remoteImageSource(item.thumbnail_url);
     const label = labelOverride ?? getDiscoveryLiveLabel(item);
     const accessLabel = getDiscoveryAccessLabel(item);
+    const rankingReason = scoreDiscoveryFeedItem(item, sections.discoverySignals).reason;
+    const rankingLabel = getDiscoveryRankingReasonLabel(rankingReason);
     const title = String(item.title ?? "").trim() || "Untitled";
     const subtitle = String(item.subtitle ?? "").trim() || String(item.category_key ?? "").trim() || "Public discovery";
 
     return (
       <TouchableOpacity
         key={`feed-${item.id}`}
+        testID={`explore-discovery-card-${rankingReason}-${item.id}`}
         style={styles.discoveryCard}
         activeOpacity={0.88}
         onPress={() => openDiscoveryFeedItem(item)}
@@ -787,6 +801,7 @@ export default function ExploreScreen() {
         <View style={styles.smallBadgeRow}>
           <Text style={[styles.smallBadge, label === "Live" && styles.smallBadgeLive]}>{label}</Text>
           <Text style={styles.smallBadge}>{accessLabel}</Text>
+          <Text style={styles.smallBadge}>{rankingLabel}</Text>
         </View>
         <Text style={styles.discoveryCardTitle} numberOfLines={2}>{title}</Text>
         <Text style={styles.discoveryCardBody} numberOfLines={2}>{subtitle}</Text>
