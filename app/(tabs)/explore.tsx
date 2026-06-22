@@ -736,7 +736,7 @@ export default function ExploreScreen() {
     }
 
     const channelUserId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
-    if (item.item_type === "channel_update" && channelUserId) {
+    if ((item.item_type === "channel_update" || item.item_type === "creator_event") && channelUserId) {
       openChannel(channelUserId);
       return;
     }

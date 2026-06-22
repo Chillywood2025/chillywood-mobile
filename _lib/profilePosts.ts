@@ -14,7 +14,7 @@ export const PROFILE_POST_LIKES_TABLE = "profile_post_likes";
 export const PROFILE_POST_BODY_LIMIT = 500;
 export const PROFILE_POST_COMMENT_BODY_LIMIT = 500;
 
-export type ProfilePostVisibility = "public" | "draft";
+export type ProfilePostVisibility = "public";
 export type ProfilePostModerationStatus = "clean" | "reported" | "hidden" | "removed";
 
 export type ProfilePost = {
@@ -73,10 +73,6 @@ const PROFILE_POST_COMMENT_SELECT =
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 
-const normalizeVisibility = (value: unknown): ProfilePostVisibility => (
-  normalizeText(value).toLowerCase() === "draft" ? "draft" : "public"
-);
-
 const normalizeModerationStatus = (value: unknown): ProfilePostModerationStatus => {
   const normalized = normalizeText(value).toLowerCase();
   if (normalized === "reported" || normalized === "hidden" || normalized === "removed") {
@@ -92,7 +88,7 @@ const parseProfilePost = (
   id: normalizeText(row.id),
   userId: normalizeText(row.user_id),
   body: normalizeText(row.body),
-  visibility: normalizeVisibility(row.visibility),
+  visibility: "public",
   moderationStatus: normalizeModerationStatus(row.moderation_status),
   moderationReason: normalizeText(row.moderation_reason) || null,
   moderatedAt: normalizeText(row.moderated_at) || null,
@@ -165,19 +161,15 @@ export async function readProfilePosts(
   if (!normalizedUserId) return [];
 
   const limit = Math.max(1, Math.min(50, Math.floor(Number(options?.limit ?? 20))));
-  let query = supabase
+  const query = supabase
     .from(PROFILE_POSTS_TABLE)
     .select(PROFILE_POST_SELECT)
     .eq("user_id", normalizedUserId)
     .is("deleted_at", null)
+    .eq("visibility", "public")
+    .in("moderation_status", ["clean", "reported"])
     .order("created_at", { ascending: false })
     .limit(limit);
-
-  if (!options?.includeDrafts) {
-    query = query
-      .eq("visibility", "public")
-      .in("moderation_status", ["clean", "reported"]);
-  }
 
   const { data, error } = await query.returns<ProfilePostRow[]>();
   if (error || !data) return [];
@@ -190,7 +182,6 @@ export async function readProfilePosts(
 
 export async function createProfilePost(input: {
   body: string;
-  visibility?: ProfilePostVisibility;
   attachmentFile?: SocialAttachmentFile | null;
 }): Promise<ProfilePost> {
   const userId = await getRequiredUserId();
@@ -203,7 +194,7 @@ export async function createProfilePost(input: {
   const payload: ProfilePostInsert = {
     user_id: userId,
     body,
-    visibility: normalizeVisibility(input.visibility),
+    visibility: "public",
     moderation_status: "clean",
     updated_at: new Date().toISOString(),
   };
@@ -317,6 +308,36 @@ export async function readProfilePostComments(
   return data.map((row) => (
     parseProfilePostComment(row, authors, attachmentsByCommentId.get(normalizeText(row.id)) ?? [])
   ));
+}
+
+export async function readProfilePostsByIds(
+  postIds: string[],
+  options?: { limit?: number },
+): Promise<ProfilePost[]> {
+  const normalizedPostIds = Array.from(new Set(postIds.map(normalizeText).filter(Boolean)))
+    .slice(0, Math.max(1, Math.min(100, Math.floor(Number(options?.limit ?? 50)))));
+  if (!normalizedPostIds.length) return [];
+
+  const { data, error } = await supabase
+    .from(PROFILE_POSTS_TABLE)
+    .select(PROFILE_POST_SELECT)
+    .in("id", normalizedPostIds)
+    .is("deleted_at", null)
+    .eq("visibility", "public")
+    .in("moderation_status", ["clean", "reported"])
+    .returns<ProfilePostRow[]>();
+
+  if (error || !data) return [];
+  const attachmentsByPostId = await readSocialAttachmentsForSurfaces(
+    "profile_post",
+    data.map((row) => row.id),
+  );
+  const order = new Map(normalizedPostIds.map((id, index) => [id, index]));
+  return data
+    .map((row) => parseProfilePost(row, attachmentsByPostId.get(normalizeText(row.id)) ?? []))
+    .sort((left, right) => (
+      (order.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+    ));
 }
 
 export async function createProfilePostComment(input: {

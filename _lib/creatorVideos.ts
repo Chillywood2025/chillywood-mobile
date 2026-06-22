@@ -544,6 +544,30 @@ export async function readCreatorVideosForOwners(
   }).catch(() => []);
 }
 
+export async function readCreatorVideosByIds(
+  videoIds: string[],
+  options?: { limit?: number },
+): Promise<CreatorVideo[]> {
+  const normalizedVideoIds = Array.from(
+    new Set(videoIds.map(toText).filter(Boolean)),
+  ).slice(0, Math.max(1, Math.min(100, Math.floor(Number(options?.limit ?? 50)))));
+  if (!normalizedVideoIds.length) return [];
+
+  const { data, error } = await supabase
+    .from("videos")
+    .select(CREATOR_VIDEO_SELECT)
+    .in("id", normalizedVideoIds)
+    .returns<CreatorVideoRow[]>();
+
+  if (error || !data) return [];
+
+  const order = new Map(normalizedVideoIds.map((id, index) => [id, index]));
+  const parsed = await Promise.all(data.map((row) => parseCreatorVideo(row)));
+  return attachRenditionStatuses(parsed.sort((left, right) => (
+    (order.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+  )));
+}
+
 export async function readCreatorVideoForOwner(videoId: string): Promise<CreatorVideo | null> {
   const ownerId = await getRequiredUserId();
   const normalizedVideoId = toText(videoId);
@@ -612,7 +636,7 @@ function createLockedCreatorVideo(
     playbackUrl: "",
     thumbnailUrl: "",
     storageProvider: "supabase",
-    storageBucket: CREATOR_VIDEO_BUCKET,
+    storageBucket: "",
     storageObjectKey: "",
     storagePath: "",
     thumbStoragePath: "",
@@ -872,7 +896,30 @@ export async function updateCreatorVideoMetadata(
     .single();
 
   if (error || !data) throw error ?? new Error("Unable to update creator video.");
+  await syncCreatorVideoFeedItems(normalizedVideoId).catch(() => undefined);
   return parseCreatorVideo(data);
+}
+
+export async function syncCreatorVideoFeedItems(videoId: string): Promise<{
+  videoId: string;
+  visibility: CreatorVideoVisibility;
+  followersActive: boolean;
+  circleActive: boolean;
+} | null> {
+  const normalizedVideoId = toText(videoId);
+  if (!normalizedVideoId) return null;
+
+  const { data, error } = await (supabase as any).rpc("sync_creator_video_feed_items", {
+    p_video_id: normalizedVideoId,
+  });
+  if (error) throw error;
+  const row = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  return {
+    videoId: toText(row.video_id ?? row.videoId) || normalizedVideoId,
+    visibility: normalizeVisibility(row.visibility),
+    followersActive: row.followers_active === true || row.followersActive === true,
+    circleActive: row.circle_active === true || row.circleActive === true,
+  };
 }
 
 export async function moderateCreatorVideo(input: {

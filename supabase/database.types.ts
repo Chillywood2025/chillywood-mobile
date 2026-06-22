@@ -1458,6 +1458,51 @@ export type Database = {
           },
         ]
       }
+      creator_feed_items: {
+        Row: {
+          created_at: string
+          creator_user_id: string
+          id: string
+          metadata: Json
+          published_at: string
+          ranking_score: number
+          source_id: string
+          source_type: string
+          status: string
+          target_scope: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          created_at?: string
+          creator_user_id: string
+          id?: string
+          metadata?: Json
+          published_at?: string
+          ranking_score?: number
+          source_id: string
+          source_type: string
+          status?: string
+          target_scope: string
+          updated_at?: string
+          visibility: string
+        }
+        Update: {
+          created_at?: string
+          creator_user_id?: string
+          id?: string
+          metadata?: Json
+          published_at?: string
+          ranking_score?: number
+          source_id?: string
+          source_type?: string
+          status?: string
+          target_scope?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: []
+      }
       creator_monetization_configs: {
         Row: {
           created_at: string

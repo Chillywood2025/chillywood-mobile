@@ -21,6 +21,7 @@
     },
     "android": {
       "package": "com.chillywood.mobile",
+      "versionCode": 55,
       "permissions": [
         "CAMERA",
         "POST_NOTIFICATIONS",

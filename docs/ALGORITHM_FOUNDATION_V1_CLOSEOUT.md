@@ -1,6 +1,7 @@
 # Algorithm Foundation V1 Closeout
 
 Date: June 20, 2026
+Updated: June 22, 2026
 
 ## Status
 
@@ -19,14 +20,16 @@ Algorithm Foundation V1 is closed as a production-safe foundation and is now act
 - Search relevance produces explicit search-match explanation.
 - Paid offers are scoped; ranking does not unlock paid content or bypass paid gates.
 - Dry-run uses fixed public-safe fixtures, mutates no production data, and prints no private viewer data.
-- Guard `npm run guard:algorithm-ranking-v1` protects default-off status, no external recommendation vendor dependency, and no Home/Live/Public Platform production feed wiring.
+- Home and Explore use `_lib/discoveryFeed.ts` ranked public discovery rows now.
+- Runtime proof covers live-now priority, followed creator boost, Chi'lly Circle boost, recent upload, upcoming event, replay-ready/manual signals, freshness ordering, reason labels/test IDs, and public-safe exclusion rules.
+- Installed Android release-build proof rendered the ranked public Live Now row on both Home and Explore.
+- Guard `npm run guard:algorithm-ranking-v1` protects active-by-default status, emergency fallback only, no external recommendation vendor dependency, shared Home/Explore ranking helper usage, reason readback, and public-safe exclusion rules.
 
 ## Not In Scope
 
-- No production feed replacement.
-- No Home feed ordering change.
-- No Live feed ordering change.
-- No Search production ordering change.
+- No ML/personalized AI recommendation system.
+- No Live tab production ordering change.
+- No Search production ordering change beyond existing public-safe typeahead/search read models.
 - No Creator Platform production ordering change.
 - No Premium gate change.
 - No creator monetization access change.
@@ -51,11 +54,11 @@ Expected dry-run safety flags:
 
 The dry-run writes `artifacts/algorithm-ranking-dry-run.json`. For proof lanes, copy the generated JSON into the `/tmp` proof folder and avoid committing timestamp-only drift unless explicitly requested.
 
+Runtime closeout proof lives in `/tmp/chillywood-circle-private-proof-20260622-152746` and includes `algorithm-v1-runtime-proof.json`, installed-device Home/Explore Maestro logs, and installed-device screenshots. Temporary proof rows were tagged and cleaned up after proof.
+
 ## Future Production Integration Requirements
 
-Do not implement production feed integration without a separate scoped prompt and proof lane.
-
-Future integration must include:
+Future expansion beyond active public Home/Explore ordering must include:
 
 - active-by-default deterministic discovery remains guarded
 - emergency fallback is incident-only, not a normal disabled rollout state

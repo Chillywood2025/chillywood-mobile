@@ -3399,7 +3399,6 @@ export default function AdminStudioScreen() {
   const [adminOpsNotice, setAdminOpsNotice] = useState<string | null>(null);
   const [rachiPostBody, setRachiPostBody] = useState("");
   const [rachiPostReason, setRachiPostReason] = useState("Official Chi'llywood update");
-  const [rachiPostVisibility, setRachiPostVisibility] = useState<"public" | "draft">("public");
   const [rachiPostBusy, setRachiPostBusy] = useState(false);
   const [rachiNotice, setRachiNotice] = useState<string | null>(null);
   const [rachiProfileImageSavedUrl, setRachiProfileImageSavedUrl] = useState("");
@@ -6311,12 +6310,11 @@ export default function AdminStudioScreen() {
       setRachiNotice(null);
       const created = await createOfficialRachiPost({
         body,
-        visibility: rachiPostVisibility,
         reason: rachiPostReason.trim() || "Official Rachi update",
       });
       setRachiPosts((current) => [created, ...current.filter((post) => post.id !== created.id)]);
       setRachiPostBody("");
-      setRachiNotice(`${rachiPostVisibility === "draft" ? "Draft" : "Published"} Rachi update recorded with admin audit.`);
+      setRachiNotice("Published Rachi update recorded with admin audit.");
       await loadRachiOfficialSurfaces();
     } catch (error: any) {
       setRachiNotice(formatAdminOperationFailure(error, "Unable to create Rachi official update."));
@@ -6329,7 +6327,6 @@ export default function AdminStudioScreen() {
     rachiPostBody,
     rachiPostBusy,
     rachiPostReason,
-    rachiPostVisibility,
   ]);
 
   const loadSafetyReports = useCallback(async () => {
@@ -13101,21 +13098,6 @@ export default function AdminStudioScreen() {
                 value={rachiPostReason}
                 onChangeText={setRachiPostReason}
               />
-              <View style={styles.actionsRow}>
-                {(["public", "draft"] as const).map((visibility) => (
-                  <TouchableOpacity
-                    key={`rachi-visibility-${visibility}`}
-                    style={[
-                      styles.actionBtn,
-                      rachiPostVisibility === visibility && styles.actionBtnActive,
-                    ]}
-                    activeOpacity={0.86}
-                    onPress={() => setRachiPostVisibility(visibility)}
-                  >
-                    <Text style={styles.actionText}>{visibility === "public" ? "Publish" : "Draft"}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
               <TouchableOpacity
                 style={[
                   styles.ownerPrimaryButton,
@@ -13127,7 +13109,7 @@ export default function AdminStudioScreen() {
               >
                 {rachiPostBusy ? <ActivityIndicator color="#fff" size="small" /> : (
                   <Text style={styles.ownerPrimaryButtonText}>
-                    {rachiPostVisibility === "draft" ? "Save Rachi Draft" : "Publish Rachi Update"}
+                    Publish Rachi Update
                   </Text>
                 )}
               </TouchableOpacity>
@@ -13136,11 +13118,11 @@ export default function AdminStudioScreen() {
                   {rachiPosts.map((post) => (
                     <OwnerControlRow
                       key={`rachi-post-${post.id}`}
-                      title={post.visibility === "draft" ? "Draft Rachi Post" : "Published Rachi Post"}
+                      title="Published Rachi Post"
                       message={post.body}
                       meta={post.createdAt ? formatModerationTimestamp(post.createdAt) : "Time unknown"}
-                      statusLabel={post.visibility === "draft" ? "Draft" : "Public"}
-                      tone={post.visibility === "draft" ? "locked" : "success"}
+                      statusLabel="Public"
+                      tone="success"
                     />
                   ))}
                 </View>

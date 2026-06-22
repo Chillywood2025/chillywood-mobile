@@ -11,7 +11,7 @@ import {
   PROFILE_MEDIA_BUCKET,
   type ProfileMediaImageFile,
 } from "./profileMedia";
-import { readProfilePosts, type ProfilePost, type ProfilePostVisibility } from "./profilePosts";
+import { readProfilePosts, type ProfilePost } from "./profilePosts";
 import { supabase } from "./supabase";
 import { readUserProfileByUserId } from "./userData";
 
@@ -119,17 +119,13 @@ const uploadOfficialRachiProfileMedia = async (file: ProfileMediaImageFile) => {
   return { objectKey, publicUrl };
 };
 
-const normalizeVisibility = (value: unknown): ProfilePostVisibility => (
-  toText(value).toLowerCase() === "draft" ? "draft" : "public"
-);
-
 const parseOfficialRachiPostResult = (payload: Json | null): OfficialRachiPostResult => {
   const record = (payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {}) as Record<string, unknown>;
   return {
     id: toText(record.id),
     userId: toText(record.userId) || RACHI_OFFICIAL_ACCOUNT.userId,
     body: toText(record.body),
-    visibility: normalizeVisibility(record.visibility),
+    visibility: "public",
     moderationStatus: "clean",
     moderationReason: toText(record.moderationReason) || null,
     moderatedAt: toText(record.moderatedAt) || null,
@@ -154,7 +150,6 @@ const parseOfficialRachiProfileImageResult = (payload: Json | null): OfficialRac
 
 export async function createOfficialRachiPost(input: {
   body: string;
-  visibility?: ProfilePostVisibility;
   reason?: string;
 }): Promise<OfficialRachiPostResult> {
   const body = toText(input.body);
@@ -162,7 +157,7 @@ export async function createOfficialRachiPost(input: {
 
   const { data, error } = await supabase.rpc("admin_create_official_rachi_post", {
     p_body: body,
-    p_visibility: normalizeVisibility(input.visibility),
+    p_visibility: "public",
     p_reason: toText(input.reason) || "Official Rachi update",
   });
 
@@ -172,7 +167,7 @@ export async function createOfficialRachiPost(input: {
 
 export async function readOfficialRachiPosts(options?: { includeDrafts?: boolean; limit?: number }): Promise<ProfilePost[]> {
   return readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId, {
-    includeDrafts: options?.includeDrafts,
+    includeDrafts: false,
     limit: options?.limit ?? 8,
   });
 }

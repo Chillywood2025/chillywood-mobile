@@ -2,13 +2,30 @@
 
 ## Public V1 Final Regression
 
+Circle-private creator-video visibility, active deterministic Discovery Algorithm V1, and follower-feed / Chi'lly Circle feed fan-out are closed repo/backend lanes. Do not reopen those lanes unless a current regression appears. Android versionCode hygiene is repaired for the next build: native Android source now uses versionCode `55`, above the known Play/internal versionCode `54`.
+
+Feed fan-out closeout truth:
+
+- Migration `20260622223300_creator_feed_fanout_v1.sql` is the source-level feed table/RLS/trigger lane.
+- Public creator content can appear in backed follower feeds and backed Chi'lly Circle feeds.
+- Circle-private creator content can appear only in approved Chi'lly Circle member feeds.
+- Draft content remains owner-only.
+- Profile posts are posted or not posted; there is no user-facing Profile post Draft state.
+- Legacy draft Profile posts remain hidden and do not fan out.
+- No content appears on every user Profile feed.
+- Profile remains personal/social.
+- Platform remains creator media/business.
+- Money, payouts, provider behavior, Premium gates, LiveKit, Watch-Party Live, and Live Watch-Party remain off/unchanged unless a separately approved lane changes them.
+
+Next work is final Play/internal regression, fresh creator upload-to-playback proof, and any explicitly requested installed-device proof for relationship feed rails. Do not rebuild feed fan-out unless proof finds a real regression.
+
 Google Play Console owner-action closeout is documented in `docs/GOOGLE_PLAY_CONSOLE_OWNER_ACTION_CLOSEOUT.md`. The Play Console Android-first package is now in the review pipeline: App content showed no Need-attention items, Closed testing Alpha is configured for United States with the `Chi'llywood Internal Testers` list (17 users), stale Alpha draft v15 was discarded, internal testing versionCode 54 / `1.0.0` was promoted into Alpha, and 13 changes were sent for review. Publishing overview still showed Google quick checks running before review proceeds. Next work is to monitor quick checks/review outcome, get at least 12 testers opted into the closed test for at least 14 days, confirm provider dashboards/support/monitoring, then run final Play-installed Android smoke and fresh creator upload-to-playback proof. BrowserStack/App Live is intentionally deferred until iOS integration is ready and is not a current Android-first launch blocker unless the user changes that decision.
 
 Refund / credit / creator payout-hold foundation is now a remote-applied foundation-only money policy lane. `docs/REFUND_CREDIT_PAYOUT_HOLD_FOUNDATION.md`, `_lib/moneyRefundPolicy.ts`, migration `20260621091458_refund_credit_payout_hold_foundation.sql`, and `guard:refund-credit-payout-hold-policy` define future refund eligibility, non-spendable credit review, creator obligation status, and creator payout hold rules without enabling real refunds, provider refund API calls, spendable credits, payout releases, payable balances, live money, or payouts. Post-apply `supabase db push --dry-run` reports the remote database is up to date. Future production refunds/credits/payout releases require a separate provider/legal/store/admin approval lane and installed proof.
 
 Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass have reliable Android app-side proof, including Watch-Party Ticket exact-target purchase/readback and VIP provider ownership reset plus fresh first-purchase proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
 
-Algorithm Foundation V1 is closed as a production-safe foundation lane, not a launch-critical feed replacement. It is free/rules-based/not ML, has dry-run/readback and `guard:algorithm-ranking-v1`, and keeps `algorithmRankingV1Enabled=false` for production rail replacement. The closeout doc is `docs/ALGORITHM_FOUNDATION_V1_CLOSEOUT.md`. Do not wire it into Home, Live, Search, Public Platform, creator monetization, Premium, Watch-Party, LiveKit, Chi'lly Chat, or BrowserStack proof routes without a separately scoped production-integration proof prompt.
+Algorithm Foundation V1 is closed as the active deterministic public Home/Explore discovery lane. It is free/rules-based/not ML, has dry-run/readback and `guard:algorithm-ranking-v1`, uses `algorithmRankingV1Enabled=true`, and keeps emergency fallback incident-only/default-off. The closeout doc is `docs/ALGORITHM_FOUNDATION_V1_CLOSEOUT.md`. Do not reopen Algorithm V1 unless a current regression appears.
 
 Launch-blocker audit is recorded in `docs/PUBLIC_V1_FINAL_REGRESSION_AUDIT_20260616.md`. Sandbox Money Tester Experience is Play-installed Android proved for the seven app-side money flows. Sandbox proof does not enable live money or payouts, and broad public launch still requires external launch governance, Play/RevenueCat production readiness, and non-money Public V1 blockers.
 

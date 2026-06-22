@@ -37,9 +37,9 @@ import type { Tables } from "../../supabase/database.types";
 import { supabase } from "../../_lib/supabase";
 import {
     readCreatorVideos,
-    readCreatorVideosForOwners,
     type CreatorVideo,
 } from "../../_lib/creatorVideos";
+import { readCreatorRelationshipFeedVideos } from "../../_lib/creatorFeed";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
@@ -211,7 +211,10 @@ export default function HomeScreen() {
   const [, setHomeActiveTitleRoomCount] = useState(0);
   const [homeLiveEvents, setHomeLiveEvents] = useState<CreatorEventSummary[]>([]);
   const [homeUpcomingEvents, setHomeUpcomingEvents] = useState<CreatorEventSummary[]>([]);
-  const [circleVideos, setCircleVideos] = useState<CreatorVideo[]>([]);
+  const [followedFeedVideos, setFollowedFeedVideos] = useState<CreatorVideo[]>([]);
+  const [circleFeedVideos, setCircleFeedVideos] = useState<CreatorVideo[]>([]);
+  const [followedFeedPosts, setFollowedFeedPosts] = useState<ProfilePost[]>([]);
+  const [circleFeedPosts, setCircleFeedPosts] = useState<ProfilePost[]>([]);
   const [rachiOfficialPosts, setRachiOfficialPosts] = useState<ProfilePost[]>([]);
   const [rachiOriginals, setRachiOriginals] = useState<CreatorVideo[]>([]);
   const [rachiOfficialAvatarUrl, setRachiOfficialAvatarUrl] = useState("");
@@ -323,17 +326,20 @@ export default function HomeScreen() {
         readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 12 }).catch(() => [] as CreatorVideo[]),
         readUserProfileByUserId(RACHI_OFFICIAL_ACCOUNT.userId).catch(() => null),
       ]);
-      const uniqueCircleUserIds = Array.from(new Set((rankedDiscovery.signals.chillyCircleUserIds ?? []).map((id) => String(id ?? "").trim()).filter(Boolean)));
-      const circleUploads = uniqueCircleUserIds.length
-        ? await readCreatorVideosForOwners(uniqueCircleUserIds, { limit: 12 }).catch(() => [] as CreatorVideo[])
-        : [];
+      const [followedFeed, circleFeed] = await Promise.all([
+        readCreatorRelationshipFeedVideos("followers", { limit: 12 }).catch(() => null),
+        readCreatorRelationshipFeedVideos("circle", { limit: 12 }).catch(() => null),
+      ]);
 
       setHomeLiveEvents(publicEvents.filter((event) => event.isLiveNow).slice(0, 8));
       setHomeUpcomingEvents(publicEvents.filter((event) => event.isUpcoming).slice(0, 8));
       setRachiOfficialPosts(officialPosts);
       setRachiOriginals(officialOriginals);
       setRachiOfficialAvatarUrl(String(officialProfile?.avatarUrl ?? RACHI_OFFICIAL_ACCOUNT.avatarUrl ?? "").trim());
-      setCircleVideos(circleUploads);
+      setFollowedFeedVideos(followedFeed?.videos ?? []);
+      setCircleFeedVideos(circleFeed?.videos ?? []);
+      setFollowedFeedPosts(followedFeed?.profilePosts ?? []);
+      setCircleFeedPosts(circleFeed?.profilePosts ?? []);
       setHomeDiscoverySignals(rankedDiscovery.signals);
       setHomeDiscoveryItems(rankDiscoveryFeedItems(rankedDiscovery.items, rankedDiscovery.signals));
     } catch {
@@ -342,7 +348,10 @@ export default function HomeScreen() {
       setRachiOfficialPosts([]);
       setRachiOriginals([]);
       setRachiOfficialAvatarUrl("");
-      setCircleVideos([]);
+      setFollowedFeedVideos([]);
+      setCircleFeedVideos([]);
+      setFollowedFeedPosts([]);
+      setCircleFeedPosts([]);
       setHomeDiscoveryItems([]);
       setHomeDiscoverySignals({});
       setHomeDiscoveryError("Discovery feed is unavailable right now.");
@@ -426,6 +435,15 @@ export default function HomeScreen() {
     });
   }
 
+  function openProfile(userId?: string | null) {
+    const safeUserId = String(userId ?? "").trim();
+    if (!safeUserId) return;
+    router.push({
+      pathname: "/profile/[userId]",
+      params: { userId: safeUserId },
+    });
+  }
+
   function openRachiProfile() {
     router.push({
       pathname: "/profile/[userId]",
@@ -453,7 +471,7 @@ export default function HomeScreen() {
     }
 
     const channelUserId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
-    if (item.item_type === "channel_update" && channelUserId) {
+    if ((item.item_type === "channel_update" || item.item_type === "creator_event") && channelUserId) {
       openChannel(channelUserId);
       return;
     }
@@ -715,6 +733,8 @@ export default function HomeScreen() {
     emptyTitle: string;
     emptyText: string;
     keyPrefix: string;
+    loadingTitle?: string;
+    loadingText?: string;
   }) {
     return (
       <AppSection
@@ -725,7 +745,10 @@ export default function HomeScreen() {
       >
 
         {input.loading ? (
-          <AppEmptyState title="Checking public uploads" body="Only real public creator uploads appear here." />
+          <AppEmptyState
+            title={input.loadingTitle ?? "Checking creator posts"}
+            body={input.loadingText ?? "Only backed relationship feed items appear here."}
+          />
         ) : input.videos.length ? (
           <FlatList
             horizontal
@@ -746,6 +769,83 @@ export default function HomeScreen() {
               </View>
             )}
           />
+        ) : (
+          <AppEmptyState title={input.emptyTitle} body={input.emptyText} />
+        )}
+      </AppSection>
+    );
+  }
+
+  function renderRelationshipPostCard(post: ProfilePost, keyPrefix: string) {
+    const body = post.body.trim() || "Profile update";
+    return (
+      <TouchableOpacity
+        key={`${keyPrefix}-post-${post.id}`}
+        style={styles.feedEventCard}
+        activeOpacity={0.88}
+        onPress={() => openProfile(post.userId)}
+        accessibilityRole="button"
+        accessibilityLabel="Open Profile post"
+      >
+        <View style={styles.feedEventBadgeRow}>
+          <AppText scale="caption" style={styles.feedEventBadge}>Profile Post</AppText>
+          <AppText scale="caption" style={styles.feedEventBadge}>Posted</AppText>
+        </View>
+        <AppText scale="subhead" style={styles.feedEventTitle} numberOfLines={2}>
+          Profile update
+        </AppText>
+        <AppText scale="footnote" style={styles.feedEventCopy} numberOfLines={3}>
+          {body}
+        </AppText>
+        <AppText scale="caption" style={styles.feedEventMeta} numberOfLines={1}>
+          {formatFeedDate(post.createdAt)}
+        </AppText>
+      </TouchableOpacity>
+    );
+  }
+
+  function renderRelationshipFeedRail(input: {
+    title: string;
+    subtitle: string;
+    videos: CreatorVideo[];
+    posts: ProfilePost[];
+    loading?: boolean;
+    loadingTitle: string;
+    loadingText: string;
+    emptyTitle: string;
+    emptyText: string;
+    keyPrefix: string;
+  }) {
+    const hasRows = input.videos.length > 0 || input.posts.length > 0;
+    return (
+      <AppSection
+        statusLabel={input.loading ? "Loading" : hasRows ? "Ready" : "Empty"}
+        statusTone={input.loading ? "muted" : hasRows ? "success" : "muted"}
+        subtitle={input.subtitle}
+        title={input.title}
+      >
+        {input.loading ? (
+          <AppEmptyState title={input.loadingTitle} body={input.loadingText} />
+        ) : hasRows ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.feedActivityRow}
+          >
+            {input.posts.map((post) => renderRelationshipPostCard(post, input.keyPrefix))}
+            {input.videos.map((video) => (
+              <View key={`${input.keyPrefix}-video-${video.id}`} style={styles.followingVideoCardWrap}>
+                <CreatorVideoCard
+                  video={video}
+                  mode="public"
+                  onOpen={() => openCreatorVideo(video)}
+                  onShare={isCreatorVideoPubliclyShareable(video) ? () => {
+                    void shareCreatorVideo(video);
+                  } : undefined}
+                />
+              </View>
+            ))}
+          </ScrollView>
         ) : (
           <AppEmptyState title={input.emptyTitle} body={input.emptyText} />
         )}
@@ -895,14 +995,30 @@ export default function HomeScreen() {
             keyPrefix: "rachi-original",
           })}
 
-          {renderCreatorVideoRail({
-            title: "From Your Chi'lly Circle",
-            subtitle: "Public uploads from active Circle connections when privacy allows.",
-            videos: circleVideos,
+          {renderRelationshipFeedRail({
+            title: "From Creators You Follow",
+            subtitle: "Posted Profile updates and public creator videos from Platforms you follow.",
+            videos: followedFeedVideos,
+            posts: followedFeedPosts,
             loading: homeDiscoveryLoading,
-            emptyTitle: "No public Circle activity yet",
-            emptyText: "Private Circle activity stays private; only public creator uploads can appear here.",
-            keyPrefix: "circle-video",
+            loadingTitle: "Checking follower feed",
+            loadingText: "Only backed posted updates and public creator content from Platforms you follow appear here.",
+            emptyTitle: "No follower feed posts yet",
+            emptyText: "Posted Profile updates and public creator content appear here after followed creators publish.",
+            keyPrefix: "followed-feed-video",
+          })}
+
+          {renderRelationshipFeedRail({
+            title: "From Your Chi'lly Circle",
+            subtitle: "Posted Profile updates and creator videos available through approved Circle relationships.",
+            videos: circleFeedVideos,
+            posts: circleFeedPosts,
+            loading: homeDiscoveryLoading,
+            loadingTitle: "Checking Chi'lly Circle feed",
+            loadingText: "Only backed posted updates, public creator videos, or Circle-private videos allowed by your Circle relationship appear here.",
+            emptyTitle: "No Circle feed posts yet",
+            emptyText: "Circle feed posts appear here only when approved Chi'lly Circle and profile/video access rules allow them.",
+            keyPrefix: "circle-feed-video",
           })}
 
           {renderHomeEventRail({

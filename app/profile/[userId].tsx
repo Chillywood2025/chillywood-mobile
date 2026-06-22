@@ -798,7 +798,7 @@ export default function ProfileScreen() {
       };
     }
 
-    void readProfilePosts(userId, { includeDrafts: isSelfProfile, limit: 24 })
+    void readProfilePosts(userId, { includeDrafts: false, limit: 24 })
       .then((posts) => {
         if (!active) return;
         setProfilePosts(posts);
@@ -2035,7 +2035,6 @@ export default function ProfileScreen() {
       setProfilePostsNotice(null);
       const post = await createProfilePost({
         body,
-        visibility: "public",
         attachmentFile: profilePostAttachmentFile,
       });
       setProfilePosts((current) => [post, ...current.filter((entry) => entry.id !== post.id)]);
@@ -3498,11 +3497,6 @@ export default function ProfileScreen() {
             <AppText scale="subhead" style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</AppText>
             <AppText scale="caption" style={styles.feedPostMeta}>{formatProfilePostDate(post.createdAt)}</AppText>
           </View>
-          {isSelfProfile && post.visibility === "draft" ? (
-            <View style={styles.feedDraftBadge}>
-              <AppText scale="caption" style={styles.feedDraftBadgeText}>DRAFT</AppText>
-            </View>
-          ) : null}
           {isSelfProfile && post.moderationStatus === "reported" ? (
             <View style={styles.feedDraftBadge}>
               <AppText scale="caption" style={styles.feedDraftBadgeText}>REPORTED</AppText>
