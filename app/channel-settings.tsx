@@ -335,7 +335,8 @@ type MonetizationSectionId =
   | "transactions"
   | "payouts"
   | "tax_legal"
-  | "providers";
+  | "providers"
+  | "testing_proof";
 type MoneyTransactionFilter = "all" | "tips" | "videos" | "rooms" | "subscriptions" | "vip" | "events" | "merch";
 type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scenePresets" | "preview" | "defaults";
 type ClipStudioSectionId = "media" | "cover" | "title" | "templates" | "format" | "brand" | "save" | "advanced";
@@ -1088,11 +1089,46 @@ const normalizeMonetizationSectionId = (value: unknown): MonetizationSectionId |
     return "providers";
   }
   if (normalized === "future" || normalized === "tools" || normalized === "technical" || normalized === "checks") return "providers";
+  if (
+    normalized === "testing"
+    || normalized === "testing-proof"
+    || normalized === "testing_proof"
+    || normalized === "advanced"
+    || normalized === "advanced-testing"
+    || normalized === "advanced_testing"
+    || normalized === "sandbox"
+    || normalized === "proof"
+  ) return "testing_proof";
+  return null;
+};
+
+const normalizeMoneyManageTarget = (value: unknown): MonetizationFeatureKey | null => {
+  const normalized = String(Array.isArray(value) ? value[0] : value ?? "").trim().toLowerCase();
+  if (normalized === "tips" || normalized === "tip") return "tips";
+  if (normalized === "paid_videos" || normalized === "paid-video" || normalized === "paid_video") return "paid_videos";
+  if (
+    normalized === "paid_watch_parties"
+    || normalized === "paid-watch-parties"
+    || normalized === "watch_party_ticket"
+    || normalized === "watch-party-ticket"
+    || normalized === "watch_party_tickets"
+    || normalized === "watch-party-tickets"
+  ) return "paid_watch_parties";
+  if (
+    normalized === "channel_subscriptions"
+    || normalized === "channel-subscriptions"
+    || normalized === "channel_subscription"
+    || normalized === "channel-subscription"
+    || normalized === "platform_subscription"
+    || normalized === "platform-subscription"
+  ) return "channel_subscriptions";
+  if (normalized === "vip_passes" || normalized === "vip-passes" || normalized === "vip_pass" || normalized === "vip-pass") return "vip_passes";
+  if (normalized === "paid_events" || normalized === "paid-events" || normalized === "event_pass" || normalized === "event-pass") return "paid_events";
   return null;
 };
 
 const createInitialMonetizationSections = (tab: unknown, focus: unknown) => {
-  const sections = new Set<MonetizationSectionId>(["overview"]);
+  const sections = new Set<MonetizationSectionId>(["overview", "ways_to_earn"]);
   const routedSection = normalizeMonetizationSectionId(tab) ?? normalizeMonetizationSectionId(focus);
   if (routedSection) sections.add(routedSection);
   return sections;
@@ -1172,9 +1208,13 @@ const getVideoLifecycleCopy = (input: {
   };
 };
 
+const createInitialMoneyManageTarget = (manage: unknown): MonetizationFeatureKey | null => (
+  normalizeMoneyManageTarget(manage)
+);
+
 export function ChannelStudioScreen() {
   const router = useRouter();
-  const routeParams = useLocalSearchParams<{ tab?: string; focus?: string; action?: string }>();
+  const routeParams = useLocalSearchParams<{ tab?: string; focus?: string; action?: string; manage?: string }>();
   const { isLoading: authLoading, isSignedIn, user } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const routeAction = String(Array.isArray(routeParams.action) ? routeParams.action[0] : routeParams.action ?? "").trim();
@@ -1190,6 +1230,10 @@ export function ChannelStudioScreen() {
   const [expandedMonetizationSections, setExpandedMonetizationSections] = useState<ReadonlySet<MonetizationSectionId>>(
     () => createInitialMonetizationSections(routeParams.tab, routeParams.focus),
   );
+  const [activeMoneyManageTarget, setActiveMoneyManageTarget] = useState<MonetizationFeatureKey | null>(
+    () => createInitialMoneyManageTarget(routeParams.manage),
+  );
+  const [moneyManageNotice, setMoneyManageNotice] = useState<string | null>(null);
   const [activeBrandSheetSection, setActiveBrandSheetSection] = useState<BrandStudioSectionId | null>(
     () => Array.from(createInitialBrandSections(routeParams.tab, routeParams.focus))[0] ?? null,
   );
@@ -1337,7 +1381,7 @@ export function ChannelStudioScreen() {
   const subscriberMutationSupport = getChannelSubscriberRelationshipActionSupport();
   const openStudioTab = (
     tab: StudioTabId,
-    options?: { filter?: ContentStatusFilter; focus?: string },
+    options?: { filter?: ContentStatusFilter; focus?: string; manage?: MonetizationFeatureKey },
   ) => {
     setActiveStudioTab(tab);
     if (options?.filter) setContentStatusFilter(options.filter);
@@ -1346,10 +1390,12 @@ export function ChannelStudioScreen() {
       if (routedSection) {
         setExpandedMonetizationSections((current) => new Set([...current, routedSection]));
       }
+      if (options?.manage) setActiveMoneyManageTarget(options.manage);
     }
     router.setParams({
       tab,
       focus: options?.focus ?? "",
+      manage: options?.manage ?? "",
     });
   };
   const showStudioUnavailable = (title: string, body: string) => {
@@ -1401,8 +1447,13 @@ export function ChannelStudioScreen() {
     if (nextTab === "monetization" && monetizationSection) {
       setExpandedMonetizationSections((current) => new Set([...current, monetizationSection]));
     }
+    const manageTarget = normalizeMoneyManageTarget(routeParams.manage);
+    if (nextTab === "monetization" && manageTarget) {
+      setActiveMoneyManageTarget(manageTarget);
+      setExpandedMonetizationSections((current) => new Set([...current, "ways_to_earn"]));
+    }
     if (routeAction === "upload") setContentStatusFilter("all");
-  }, [routeAction, routeParams.focus, routeParams.tab]);
+  }, [routeAction, routeParams.focus, routeParams.manage, routeParams.tab]);
 
   useEffect(() => {
     if (activeStudioTab !== "monetization") return;
@@ -7228,43 +7279,6 @@ export function ChannelStudioScreen() {
     const merchEvents = creatorMoneyAuditEvents.filter((event) => event.category === "merch");
     const payoutEvents = creatorMoneyAuditEvents.filter((event) => event.category === "payouts");
     const providerEvents = creatorMoneyAuditEvents.filter((event) => event.category === "provider_readiness" || event.category === "webhooks");
-    const sandboxActivityCount = creatorMoneyAuditEvents.filter((event) => event.environment === "sandbox").length;
-    const launchReadinessCards: readonly SummaryMetricCard[] = [
-      {
-        label: "Sandbox Testing",
-        value: "Check setup",
-        body: "Use the Sandbox Tester Experience below to prepare and prove creator purchase flows.",
-      },
-      {
-        label: "Live Money",
-        value: "Off",
-        body: "No real charges, sales, withdrawals, transfers, or live creator earnings are enabled.",
-        tone: "unavailable",
-      },
-      {
-        label: "Payouts",
-        value: "Off",
-        body: "No cash-out, withdrawal, transfer, payout release, or payout balance is available.",
-        tone: "unavailable",
-      },
-      {
-        label: "Test transactions",
-        value: sandboxActivityCount ? `${sandboxActivityCount} recorded` : "None yet",
-        body: "Test transactions only. They do not create payable creator balances.",
-      },
-      {
-        label: "Creator earnings",
-        value: "No real earnings yet",
-        body: "No payable creator balance is shown from sandbox or setup activity.",
-        tone: "unavailable",
-      },
-      {
-        label: "Remaining checks",
-        value: "Refund/cancel testing still needed",
-        body: "Provider refund, revoke, and subscription lifecycle proof still need safe provider tooling.",
-        tone: "unavailable",
-      },
-    ];
     const featureStatusByKey: Record<MonetizationFeatureKey, MonetizationFeatureStatus> = {
       tips: tipFeatureStatus,
       paid_videos: paidContentFlag.state === "locked" ? "Blocked" : creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Active" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : paidContentFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
@@ -7300,6 +7314,125 @@ export function ChannelStudioScreen() {
         && hasPlayableCreatorVideoSource(video)
       ))
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] ?? null;
+    const hasPaidVideoOffer = creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox");
+    const hasPaidWatchPartyOffer = creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out");
+    const hasChannelSubscriptionOffer = creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox");
+    const hasVipPassOffer = creatorVipPassOffers.some((offer) => offer.status === "sandbox");
+    const hasPaidEventOffer = creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out");
+    const setMoneyManageFocus = (
+      target: MonetizationFeatureKey,
+      sections: readonly MonetizationSectionId[],
+      notice: string,
+    ) => {
+      setActiveMoneyManageTarget(target);
+      setMoneyManageNotice(notice);
+      setExpandedMonetizationSections((current) => new Set([...current, ...sections]));
+      router.setParams({
+        tab: "monetization",
+        focus: sections[0] ?? "ways_to_earn",
+        manage: target,
+      });
+    };
+    const handleManageMoneyFeature = (feature: MonetizationFeatureCatalogItem) => {
+      trackEvent("money_feature_card_pressed", {
+        blocked_reason: feature.blockedReason ?? null,
+        creator_id: user?.id ?? null,
+        feature_key: feature.key,
+        route_name: "channel-studio",
+        source_surface: "money_center",
+      });
+      if (feature.status === "Blocked" || feature.status === "Needs attention") {
+        trackEvent("money_provider_blocked_state_seen", {
+          blocked_reason: feature.blockedReason ?? feature.status,
+          creator_id: user?.id ?? null,
+          feature_key: feature.key,
+          route_name: "channel-studio",
+          source_surface: "money_center",
+        });
+      }
+
+      if (feature.key === "tips") {
+        const needsPayoutSetup = !tipProviderReady;
+        setMoneyManageFocus(
+          "tips",
+          needsPayoutSetup ? ["ways_to_earn", "payouts"] : ["ways_to_earn"],
+          needsPayoutSetup
+            ? "Tips need payout setup. Review Connect payouts and Enable Tips below."
+            : "Tips setup is focused below. Use Enable Tips, Pause Tips, or Refresh status.",
+        );
+        return;
+      }
+
+      if (feature.key === "paid_videos") {
+        if (!latestPublicSandboxVideo) {
+          setActiveMoneyManageTarget("paid_videos");
+          setMoneyManageNotice("Publish a public creator video first, then return to Money Center to attach a paid-video offer.");
+          setVideoNotice("Publish a video before enabling paid unlocks.");
+          openStudioTab("content", { filter: "all", focus: "upload" });
+          return;
+        }
+        setMoneyManageFocus(
+          "paid_videos",
+          ["ways_to_earn"],
+          hasPaidVideoOffer
+            ? "Paid Video Manager is open below. Choose a video to manage its paid unlock."
+            : "Paid Video Manager is open below. Choose a public video before enabling paid unlocks.",
+        );
+        return;
+      }
+
+      if (feature.key === "paid_watch_parties") {
+        if (!hasPaidWatchPartyOffer) {
+          setActiveMoneyManageTarget("paid_watch_parties");
+          setMoneyManageNotice("Create or link a Watch-Party target before a ticket offer can be managed.");
+          router.push({ pathname: "/watch-party", params: { mode: "live", source: "money-center" } });
+          return;
+        }
+        setMoneyManageFocus(
+          "paid_watch_parties",
+          ["ways_to_earn"],
+          "Watch-Party Ticket Manager is open below. Ticket access still routes through Party Waiting Room to Party Room.",
+        );
+        return;
+      }
+
+      if (feature.key === "channel_subscriptions") {
+        setMoneyManageFocus(
+          "channel_subscriptions",
+          ["ways_to_earn"],
+          hasChannelSubscriptionOffer
+            ? "Channel Subscription Manager is open below with Manage and Pause actions."
+            : "Channel Subscription Manager is open below. Enable it to create the sandbox offer.",
+        );
+        return;
+      }
+
+      if (feature.key === "vip_passes") {
+        setMoneyManageFocus(
+          "vip_passes",
+          ["ways_to_earn"],
+          hasVipPassOffer
+            ? "VIP Pass Manager is open below with Manage and Pause actions."
+            : "VIP Pass Manager is open below. Enable it to create the sandbox offer.",
+        );
+        return;
+      }
+
+      if (!creatorEvents.length) {
+        setActiveMoneyManageTarget("paid_events");
+        setMoneyManageNotice("Create a creator event first, then return to Money Center to attach an event pass.");
+        setEventNotice("Create an event before enabling paid event passes.");
+        openStudioTab("live", { focus: "events" });
+        return;
+      }
+      setMoneyManageFocus(
+        "paid_events",
+        ["ways_to_earn"],
+        hasPaidEventOffer
+          ? "Event Pass Manager is open below. Use the event actions to adjust the linked event."
+          : "Event Pass Manager is open below. Choose an event before enabling paid event passes.",
+      );
+    };
     const previewCreatorPlatform = () => {
       if (!user?.id) return;
       router.push({ pathname: "/channel/[userId]", params: { userId: String(user.id), preview: "public" } });
@@ -7325,25 +7458,25 @@ export function ChannelStudioScreen() {
       {
         key: "paid_video",
         title: "Paid Video",
-        configured: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox"),
-        blocker: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox")
+        configured: hasPaidVideoOffer,
+        blocker: hasPaidVideoOffer
           ? undefined
           : latestPublicSandboxVideo
             ? "Run setup to attach a sandbox paid-video offer."
             : "Publish a creator video before testers can unlock paid video.",
-        description: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox")
+        description: hasPaidVideoOffer
           ? "Testers can unlock one public creator video in sandbox mode."
           : latestPublicSandboxVideo
             ? "A public video exists. Run setup to attach a sandbox unlock."
             : "Paid video needs a public safe creator video first.",
         scopeKey: "paid_creator_video",
-        statusLabel: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Ready" : latestPublicSandboxVideo ? "Needs setup" : "Blocked",
-        actionLabel: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox")
+        statusLabel: hasPaidVideoOffer ? "Ready" : latestPublicSandboxVideo ? "Needs setup" : "Blocked",
+        actionLabel: hasPaidVideoOffer
           ? "Preview paid video"
           : latestPublicSandboxVideo
             ? "Fix missing setup"
             : "Open Content",
-        onPress: creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") && latestPublicSandboxVideo
+        onPress: hasPaidVideoOffer && latestPublicSandboxVideo
           ? () => router.push({ pathname: "/player/[id]", params: { id: latestPublicSandboxVideo.id, source: "creator-video" } })
           : () => setActiveStudioTab("content"),
         testID: "money-sandbox-paid-video-card",
@@ -7351,19 +7484,19 @@ export function ChannelStudioScreen() {
       {
         key: "watch_party_ticket",
         title: "Watch-Party Ticket",
-        configured: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out"),
-        blocker: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+        configured: hasPaidWatchPartyOffer,
+        blocker: hasPaidWatchPartyOffer
           ? undefined
           : "Create a Party Room before testers can buy a ticket.",
-        description: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+        description: hasPaidWatchPartyOffer
           ? "Testers can buy a sandbox ticket before Party Waiting Room or Party Room entry."
           : "Watch-Party Ticket needs a Party Room target.",
         scopeKey: "watch_party_ticket",
-        statusLabel: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Ready" : "Blocked",
-        actionLabel: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+        statusLabel: hasPaidWatchPartyOffer ? "Ready" : "Blocked",
+        actionLabel: hasPaidWatchPartyOffer
           ? "Preview ticket flow"
           : "Create Party Room target",
-        actionTestID: creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+        actionTestID: hasPaidWatchPartyOffer
           ? undefined
           : "money-sandbox-create-party-room-target-button",
         onPress: () => router.push({ pathname: "/watch-party", params: { mode: "live", source: "money-sandbox" } }),
@@ -7372,17 +7505,17 @@ export function ChannelStudioScreen() {
       {
         key: "event_pass",
         title: "Event Pass",
-        configured: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out"),
-        blocker: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+        configured: hasPaidEventOffer,
+        blocker: hasPaidEventOffer
           ? undefined
           : "Create a creator event first, or run setup to create the sandbox event demo.",
-        description: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out")
+        description: hasPaidEventOffer
           ? "Testers can get a sandbox event pass."
           : "Event Pass needs a creator event and sandbox offer.",
         scopeKey: "event_pass",
-        statusLabel: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Ready" : "Needs setup",
-        actionLabel: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Preview event pass" : "Create event",
-        onPress: creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") && creatorEvents[0]
+        statusLabel: hasPaidEventOffer ? "Ready" : "Needs setup",
+        actionLabel: hasPaidEventOffer ? "Preview event pass" : "Create event",
+        onPress: hasPaidEventOffer && creatorEvents[0]
           ? () => router.push(`/event/${creatorEvents[0].id}` as Parameters<typeof router.push>[0])
           : () => setActiveStudioTab("live"),
         testID: "money-sandbox-event-pass-card",
@@ -7390,28 +7523,28 @@ export function ChannelStudioScreen() {
       {
         key: "channel_subscription",
         title: "Channel Subscription",
-        configured: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox"),
-        blocker: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? undefined : "No sandbox subscription offer.",
-        description: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox")
+        configured: hasChannelSubscriptionOffer,
+        blocker: hasChannelSubscriptionOffer ? undefined : "No sandbox subscription offer.",
+        description: hasChannelSubscriptionOffer
           ? "Testers can subscribe to this creator channel in sandbox mode. This is not Chi'llywood Premium."
           : "Run setup to create the sandbox channel subscription.",
         scopeKey: "channel_subscription",
-        statusLabel: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Ready" : "Needs setup",
-        actionLabel: creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Preview subscription" : undefined,
+        statusLabel: hasChannelSubscriptionOffer ? "Ready" : "Needs setup",
+        actionLabel: hasChannelSubscriptionOffer ? "Preview subscription" : undefined,
         onPress: previewCreatorPlatform,
         testID: "money-sandbox-channel-subscription-card",
       },
       {
         key: "vip_pass",
         title: "VIP Pass",
-        configured: creatorVipPassOffers.some((offer) => offer.status === "sandbox"),
-        blocker: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? undefined : "No sandbox VIP offer.",
-        description: creatorVipPassOffers.some((offer) => offer.status === "sandbox")
+        configured: hasVipPassOffer,
+        blocker: hasVipPassOffer ? undefined : "No sandbox VIP offer.",
+        description: hasVipPassOffer
           ? "Testers can get creator-specific VIP in sandbox mode. It does not unlock Premium or other creators."
           : "Run setup to create the sandbox VIP pass.",
         scopeKey: "vip_pass",
-        statusLabel: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Ready" : "Needs setup",
-        actionLabel: creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Preview VIP" : undefined,
+        statusLabel: hasVipPassOffer ? "Ready" : "Needs setup",
+        actionLabel: hasVipPassOffer ? "Preview VIP" : undefined,
         onPress: previewCreatorPlatform,
         testID: "money-sandbox-vip-pass-card",
       },
@@ -7469,8 +7602,17 @@ export function ChannelStudioScreen() {
       return "event_pass";
     };
     const renderFeatureCard = (feature: MonetizationFeatureCatalogItem) => (
-      <View key={feature.key} style={[styles.summaryCard, (feature.status === "Blocked" || feature.status === "Needs attention") && styles.summaryCardUnavailable]}>
-        <View style={styles.scopeInfoHeaderRow}>
+      <View
+        key={feature.key}
+        style={[
+          styles.summaryCard,
+          styles.moneyFeatureCard,
+          activeMoneyManageTarget === feature.key && styles.moneyFocusedCard,
+          (feature.status === "Blocked" || feature.status === "Needs attention") && styles.summaryCardUnavailable,
+        ]}
+        testID={`money-feature-card-${feature.key}`}
+      >
+        <View style={styles.moneyFeatureHeaderRow}>
           <Text style={styles.summaryLabel}>{feature.title}</Text>
           <MoneyScopeInfoButton scope={scopeForFeatureKey(feature.key)} compact />
         </View>
@@ -7480,34 +7622,374 @@ export function ChannelStudioScreen() {
         <TouchableOpacity
           style={styles.eventActionButton}
           activeOpacity={0.86}
-          onPress={() => {
-            trackEvent("money_feature_card_pressed", {
-              blocked_reason: feature.blockedReason ?? null,
-              creator_id: user?.id ?? null,
-              feature_key: feature.key,
-              route_name: "channel-studio",
-              source_surface: "money_center",
-            });
-            if (feature.status === "Blocked" || feature.status === "Needs attention") {
-              trackEvent("money_provider_blocked_state_seen", {
-                blocked_reason: feature.blockedReason ?? feature.status,
-                creator_id: user?.id ?? null,
-                feature_key: feature.key,
-                route_name: "channel-studio",
-                source_surface: "money_center",
-              });
-            }
-            if (feature.manageTarget === "tips" || feature.manageTarget === "ways_to_earn") {
-              setExpandedMonetizationSections((current) => new Set([...current, "ways_to_earn"]));
-              return;
-            }
-            setExpandedMonetizationSections((current) => new Set([...current, "offers"]));
-          }}
+          onPress={() => handleManageMoneyFeature(feature)}
+          hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel={`${feature.creatorActionLabel} ${feature.title}`}
+          testID={`money-feature-${feature.key}-cta`}
         >
           <Text style={styles.eventActionButtonText}>{feature.creatorActionLabel}</Text>
         </TouchableOpacity>
       </View>
     );
+    const renderActiveMoneyManagerPanel = () => {
+      if (!activeMoneyManageTarget) return null;
+
+      const managerTitleByTarget: Record<MonetizationFeatureKey, string> = {
+        tips: "Tips Manager",
+        paid_videos: "Paid Video Manager",
+        paid_watch_parties: "Watch-Party Ticket Manager",
+        channel_subscriptions: "Channel Subscription Manager",
+        vip_passes: "VIP Pass Manager",
+        paid_events: "Event Pass Manager",
+      };
+      const managerScopeByTarget: Record<MonetizationFeatureKey, MoneyScopeKey> = {
+        tips: "creator_tip",
+        paid_videos: "paid_creator_video",
+        paid_watch_parties: "watch_party_ticket",
+        channel_subscriptions: "channel_subscription",
+        vip_passes: "vip_pass",
+        paid_events: "event_pass",
+      };
+
+      const renderManagerBody = () => {
+        if (activeMoneyManageTarget === "tips") {
+          return (
+            <>
+              {renderSummaryMetricCards(tipSetupCards)}
+              <View style={styles.eventActionRow}>
+                {creatorTipSettings?.status !== "active" ? (
+                  <TouchableOpacity
+                    style={[styles.eventPrimaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={tipSettingsBusy}
+                    onPress={() => handleSaveTipSettings(true)}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel="Enable Tips"
+                    testID="money-manager-tips-enable-button"
+                  >
+                    {tipSettingsBusy ? (
+                      <View style={styles.eventPrimaryButtonBusyRow}>
+                        <ActivityIndicator color="#fff" />
+                        <Text style={styles.eventPrimaryButtonText}>Saving tips</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.eventPrimaryButtonText}>Enable Tips</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.eventSecondaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={tipSettingsBusy}
+                    onPress={() => handleSaveTipSettings(false)}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel="Pause Tips"
+                    testID="money-manager-tips-pause-button"
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Pause Tips</Text>
+                  </TouchableOpacity>
+                )}
+                {!tipProviderReady ? (
+                  <TouchableOpacity
+                    style={[styles.eventSecondaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={payoutSetupBusy !== null}
+                    onPress={handleStartPayoutProviderSetup}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel="Connect payouts"
+                    testID="money-manager-tips-connect-payouts-button"
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Connect payouts</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
+                  activeOpacity={0.88}
+                  disabled={payoutSetupBusy !== null}
+                  onPress={handleRefreshPayoutProviderStatus}
+                  hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                  accessibilityRole="button"
+                  accessibilityLabel="Refresh payout status"
+                  testID="money-manager-tips-refresh-payouts-button"
+                >
+                  <Text style={styles.eventSecondaryButtonText}>Refresh payout status</Text>
+                </TouchableOpacity>
+              </View>
+              {!tipProviderReady ? (
+                <Text style={styles.noticeText}>Connect payouts before fans can send tips. Tips remain contribution-only and unlock nothing.</Text>
+              ) : null}
+              {tipSettingsNotice ? <Text style={styles.noticeText}>{tipSettingsNotice}</Text> : null}
+            </>
+          );
+        }
+
+        if (activeMoneyManageTarget === "paid_videos") {
+          const manageableVideos = creatorVideos.filter((video) => (
+            video.visibility === "public"
+            && ["clean", "reported"].includes(video.moderationStatus)
+            && hasPlayableCreatorVideoSource(video)
+          ));
+          return (
+            <>
+              {!manageableVideos.length ? (
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Publish a video before enabling paid unlocks.</Text>
+                  <Text style={styles.eventEmptyBody}>Paid Video needs a public, playable creator video before an unlock offer can be managed.</Text>
+                </View>
+              ) : (
+                <View style={styles.eventList}>
+                  {manageableVideos.slice(0, 4).map((video) => {
+                    const offer = creatorPaidVideoOffers.find((entry) => entry.videoId === video.id);
+                    return (
+                      <View key={video.id} style={styles.eventEmptyCard}>
+                        <View style={styles.eventCardHeader}>
+                          <Text style={styles.eventEmptyTitle}>{video.title || "Untitled video"}</Text>
+                          {renderStudioStatusPill(offer?.status === "sandbox" ? "Paid unlock" : "Ready", offer?.status === "sandbox" ? "default" : "muted")}
+                        </View>
+                        <Text style={styles.eventEmptyBody}>
+                          {offer
+                            ? `${formatMonetizationCurrency(offer.priceCents, offer.currency)} paid unlock is configured.`
+                            : "No paid unlock is attached yet."}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.eventSecondaryButton}
+                          activeOpacity={0.86}
+                          onPress={() => onEditVideo(video)}
+                          hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Manage paid unlock for ${video.title || "video"}`}
+                          testID="money-manager-paid-video-edit-button"
+                        >
+                          <Text style={styles.eventSecondaryButtonText}>Open video setup</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.eventPrimaryButton}
+                activeOpacity={0.88}
+                onPress={() => {
+                  setVideoNotice("Publish a video before enabling paid unlocks.");
+                  openStudioTab("content", { filter: "all", focus: "upload" });
+                }}
+                hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityLabel="Open Content to publish a video"
+                testID="money-manager-paid-videos-open-content-button"
+              >
+                <Text style={styles.eventPrimaryButtonText}>Open Content</Text>
+              </TouchableOpacity>
+            </>
+          );
+        }
+
+        if (activeMoneyManageTarget === "paid_watch_parties") {
+          return (
+            <>
+              {hasPaidWatchPartyOffer ? (
+                <View style={styles.eventList}>
+                  {creatorPaidWatchPartyOffers.map((offer) => (
+                    <View key={offer.id} style={styles.eventEmptyCard}>
+                      <View style={styles.eventCardHeader}>
+                        <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
+                        {renderStudioStatusPill(offer.status === "sandbox" ? "Ticket ready" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                      </View>
+                      <Text style={styles.eventEmptyBody}>
+                        {formatMonetizationCurrency(offer.priceCents, offer.currency)} · Party Room {offer.partyId ?? "not linked"} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} seats sold.
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Watch-Party target needed.</Text>
+                  <Text style={styles.eventEmptyBody}>Create or link a Party Room target before a ticket offer can be managed.</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.eventPrimaryButton}
+                activeOpacity={0.88}
+                onPress={() => router.push({ pathname: "/watch-party", params: { mode: "live", source: "money-center" } })}
+                hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                accessibilityRole="button"
+                accessibilityLabel="Create Watch-Party target"
+                testID="money-manager-watch-party-create-target-button"
+              >
+                <Text style={styles.eventPrimaryButtonText}>Create Watch-Party target</Text>
+              </TouchableOpacity>
+            </>
+          );
+        }
+
+        if (activeMoneyManageTarget === "channel_subscriptions") {
+          return (
+            <>
+              <View style={styles.eventEmptyCard}>
+                <Text style={styles.eventEmptyTitle}>Channel Subscription setup</Text>
+                <Text style={styles.eventEmptyBody}>
+                  Creator-specific monthly membership. This is not Chi'llywood Premium and does not include VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.
+                </Text>
+              </View>
+              <View style={styles.eventActionRow}>
+                <TouchableOpacity
+                  style={[styles.eventPrimaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
+                  activeOpacity={0.88}
+                  disabled={channelSubscriptionSaving}
+                  onPress={() => handleSaveChannelSubscription(true)}
+                  hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                  accessibilityRole="button"
+                  accessibilityLabel={hasChannelSubscriptionOffer ? "Manage Channel Subscription" : "Enable Channel Subscription"}
+                  testID="money-manager-channel-subscription-enable-button"
+                >
+                  {channelSubscriptionSaving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.eventPrimaryButtonText}>{hasChannelSubscriptionOffer ? "Manage Channel Subscription" : "Enable Channel Subscription"}</Text>
+                  )}
+                </TouchableOpacity>
+                {hasChannelSubscriptionOffer ? (
+                  <TouchableOpacity
+                    style={[styles.eventSecondaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={channelSubscriptionSaving}
+                    onPress={() => handleSaveChannelSubscription(false)}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel="Pause Channel Subscription"
+                    testID="money-manager-channel-subscription-pause-button"
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Pause Subscription</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              {channelSubscriptionNotice ? <Text style={styles.noticeText}>{channelSubscriptionNotice}</Text> : null}
+            </>
+          );
+        }
+
+        if (activeMoneyManageTarget === "vip_passes") {
+          return (
+            <>
+              <View style={styles.eventEmptyCard}>
+                <Text style={styles.eventEmptyTitle}>VIP Pass setup</Text>
+                <Text style={styles.eventEmptyBody}>
+                  VIP is creator-specific and separate from Chi'llywood Premium, channel subscriptions, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, and other creators.
+                </Text>
+              </View>
+              <View style={styles.eventActionRow}>
+                <TouchableOpacity
+                  style={[styles.eventPrimaryButton, vipPassSaving && styles.eventPrimaryButtonDisabled]}
+                  activeOpacity={0.88}
+                  disabled={vipPassSaving}
+                  onPress={() => handleSaveVipPass(true)}
+                  hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                  accessibilityRole="button"
+                  accessibilityLabel={hasVipPassOffer ? "Manage VIP Pass" : "Enable VIP Pass"}
+                  testID="money-manager-vip-pass-enable-button"
+                >
+                  {vipPassSaving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.eventPrimaryButtonText}>{hasVipPassOffer ? "Manage VIP Pass" : "Enable VIP Pass"}</Text>
+                  )}
+                </TouchableOpacity>
+                {hasVipPassOffer ? (
+                  <TouchableOpacity
+                    style={[styles.eventSecondaryButton, vipPassSaving && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={vipPassSaving}
+                    onPress={() => handleSaveVipPass(false)}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel="Pause VIP Pass"
+                    testID="money-manager-vip-pass-pause-button"
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Pause VIP Pass</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              {vipPassNotice ? <Text style={styles.noticeText}>{vipPassNotice}</Text> : null}
+            </>
+          );
+        }
+
+        return (
+          <>
+            {!creatorEvents.length ? (
+              <View style={styles.eventEmptyCard}>
+                <Text style={styles.eventEmptyTitle}>Create an event before enabling paid event passes.</Text>
+                <Text style={styles.eventEmptyBody}>Event Pass needs an existing creator event before paid access can be managed.</Text>
+              </View>
+            ) : (
+              <View style={styles.eventList}>
+                {creatorEvents.slice(0, 4).map((event) => {
+                  const offer = creatorPaidEventOffers.find((entry) => entry.creatorEventId === event.id);
+                  return (
+                    <View key={event.id} style={styles.eventEmptyCard}>
+                      <View style={styles.eventCardHeader}>
+                        <Text style={styles.eventEmptyTitle}>{event.eventTitle}</Text>
+                        {renderStudioStatusPill(offer?.status === "sandbox" ? "Pass ready" : "Ready", offer?.status === "sandbox" ? "default" : "muted")}
+                      </View>
+                      <Text style={styles.eventEmptyBody}>
+                        {offer
+                          ? `${formatMonetizationCurrency(offer.priceCents, offer.currency)} event pass is configured.`
+                          : "No event pass is attached yet."}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.eventSecondaryButton}
+                        activeOpacity={0.86}
+                        onPress={() => onEditEvent(event)}
+                        hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Manage event pass for ${event.eventTitle}`}
+                        testID="money-manager-paid-event-edit-button"
+                      >
+                        <Text style={styles.eventSecondaryButtonText}>Open event setup</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.eventPrimaryButton}
+              activeOpacity={0.88}
+              onPress={() => {
+                setEventNotice("Create an event before enabling paid event passes.");
+                openStudioTab("live", { focus: "events" });
+              }}
+              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel="Open event creation"
+              testID="money-manager-paid-events-open-live-button"
+            >
+              <Text style={styles.eventPrimaryButtonText}>Open Event Creation</Text>
+            </TouchableOpacity>
+          </>
+        );
+      };
+
+      return (
+        <View style={[styles.panel, styles.moneyFocusedCard]} testID={`money-manager-${activeMoneyManageTarget}`}>
+          <View style={styles.panelHeader}>
+            <View style={styles.panelHeaderCopy}>
+              <Text style={styles.panelTitle}>{managerTitleByTarget[activeMoneyManageTarget]}</Text>
+              <Text style={styles.panelSubtitle}>
+                {moneyManageNotice ?? "Manage this creator monetization flow without changing provider or payout behavior."}
+              </Text>
+            </View>
+            <MoneyScopeInfoButton scope={managerScopeByTarget[activeMoneyManageTarget]} compact />
+          </View>
+          {renderManagerBody()}
+        </View>
+      );
+    };
     const offerRows: readonly SummaryMetricCard[] = [
       { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
       { label: "Paid Watch-Party tickets", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox ticket${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
@@ -7732,21 +8214,19 @@ export function ChannelStudioScreen() {
           <View style={styles.panelHeader}>
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>Money Center</Text>
-              <Text style={styles.panelSubtitle}>Set up sandbox creator purchase tests while live money stays locked.</Text>
+              <Text style={styles.panelSubtitle}>Creator dashboard for earnings readiness, offers, transactions, and payouts.</Text>
             </View>
             {renderStudioStatusPill(`Sandbox ${sandboxSetupStatus}`, sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially Ready" ? "warning" : "muted")}
           </View>
           <Text style={styles.permissionCopy}>
-            Test mode - no payouts. No real charges. No creator earnings. No withdrawals.
+            Test mode: no real charges, no creator earnings, no withdrawals.
           </Text>
-          <MoneyScopeInfoButton scope="payout_readiness" label="What does payout setup mean?" />
-          {renderSummaryMetricCards(launchReadinessCards)}
           <View style={styles.summaryGrid}>
             {[
-              { label: "Sandbox Testing", value: `${sandboxConfiguredCount} of ${sandboxTesterOfferCards.length} ready` },
+              { label: "Available balance", value: "Not payable" },
+              { label: "Ways to Earn", value: `${monetizationFeatureCards.filter((card) => card.status === "Active").length} active` },
               { label: "Live Money", value: "Off" },
               { label: "Payouts", value: "Off" },
-              { label: "Next Step", value: sandboxNextStep },
             ].map((item) => (
               <View key={item.label} style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>{item.label}</Text>
@@ -7759,199 +8239,52 @@ export function ChannelStudioScreen() {
               style={styles.eventPrimaryButton}
               activeOpacity={0.88}
               onPress={() => {
-                setExpandedMonetizationSections(new Set<MonetizationSectionId>([
-                  "overview",
-                  "ways_to_earn",
-                  "offers",
-                  "transactions",
-                  "payouts",
-                  "providers",
-                ]));
+                setExpandedMonetizationSections((current) => new Set([...current, "ways_to_earn"]));
               }}
+              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel="Open Ways to Earn"
             >
-              <Text style={styles.eventPrimaryButtonText}>Check readiness</Text>
+              <Text style={styles.eventPrimaryButtonText}>Open Ways to Earn</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.eventSecondaryButton}
               activeOpacity={0.88}
               onPress={() => router.push("/subscribe" as Parameters<typeof router.push>[0])}
+              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel="Manage Premium"
             >
               <Text style={styles.eventSecondaryButtonText}>Manage Premium</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View
-          style={styles.panel}
-          testID="money-sandbox-setup-section"
-          accessibilityLabel="Sandbox Tester Experience"
-        >
-          <View style={styles.panelHeader}>
-            <View style={styles.panelHeaderCopy}>
-              <Text style={styles.panelTitle}>Sandbox Tester Experience</Text>
-              <Text style={styles.panelSubtitle}>
-                Set up test-only creator purchase flows for tester accounts. No live money, no payouts.
-              </Text>
-            </View>
-            {renderStudioStatusPill(sandboxSetupStatus, sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially Ready" ? "warning" : "muted")}
-          </View>
-          <View style={styles.sandboxSafetyBanner}>
-            <Text style={styles.sandboxSafetyTitle}>Test mode - no payouts</Text>
-            <Text style={styles.sandboxSafetyBody}>No real charges. No creator earnings. No withdrawals.</Text>
-          </View>
-          <View style={styles.summaryGrid}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Sandbox Testing</Text>
-              <Text style={styles.summaryValue}>{sandboxSetupStatus}</Text>
-              <Text style={styles.summaryBody}>
-                {sandboxConfiguredCount} of {sandboxTesterOfferCards.length} flows ready.
-              </Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Tester Access</Text>
-              <Text style={styles.summaryValue}>{sandboxTesterRows.length > 0 ? `Active testers: ${sandboxTesterRows.length}` : "No active testers"}</Text>
-              <Text style={styles.summaryBody}>
-                Tester access allows sandbox/test-only monetization flows. It does not grant owner, payout, or live-money permissions.
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.sectionLabel}>Setup checklist</Text>
-          <View style={styles.summaryGrid}>
-            {sandboxChecklist.map((step, index) => (
-              <View key={step.label} style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>{index + 1}. {step.label}</Text>
-                <Text style={styles.summaryValue}>{step.status}</Text>
-                <Text style={styles.summaryBody}>{step.body}</Text>
-              </View>
-            ))}
-          </View>
-          <View style={styles.summaryGrid}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Live Money</Text>
-              <Text style={styles.summaryValue}>Off</Text>
-              <Text style={styles.summaryBody}>Provider details stay behind the advanced section.</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Payouts</Text>
-              <Text style={styles.summaryValue}>Off</Text>
-              <Text style={styles.summaryBody}>Cash-out, transfer, and payout release stay locked.</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Purchase provider</Text>
-              <Text style={styles.summaryValue}>Google Play sandbox</Text>
-              <Text style={styles.summaryBody}>
-                Android digital tests use Google Play / RevenueCat. Merchandise stays in the separate Stripe lane.
-              </Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Next Step</Text>
-              <Text style={styles.summaryValue}>{sandboxNextStep}</Text>
-              <Text style={styles.summaryBody}>
-                {hasOwnerOperatorStudioAccess ? "Owner setup mode." : sandboxTesterActive ? "Tester access active." : "No tester access on this account."}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.sectionLabel}>Offer setup</Text>
-          <View style={styles.summaryGrid}>
-            {sandboxTesterOfferCards.map((card) => (
-              <View
-                key={card.key}
-                style={[
-                  styles.summaryCard,
-                  styles.sandboxOfferCard,
-                  card.configured ? styles.sandboxOfferCardReady : styles.sandboxOfferCardBlocked,
-                ]}
-                testID={card.testID}
-                accessibilityLabel={`${card.title} sandbox offer status`}
-              >
-                <View style={styles.eventCardHeader}>
-                  <Text style={styles.summaryLabel}>{card.title}</Text>
-                  <View style={styles.scopeInfoHeaderRow}>
-                    <MoneyScopeInfoButton scope={card.scopeKey} compact />
-                    {renderStudioStatusPill(card.statusLabel, card.configured ? "default" : card.statusLabel === "Blocked" ? "warning" : "muted")}
-                  </View>
-                </View>
-                <Text style={styles.summaryValue}>{card.configured ? "Tester visible" : card.statusLabel}</Text>
-                <Text style={styles.summaryBody}>{card.description}</Text>
-                <Text style={styles.eventEmptyBody}>Sandbox only · No payouts</Text>
-                {card.blocker ? <Text style={styles.noticeText}>{card.blocker}</Text> : null}
-                {card.actionLabel && card.onPress ? (
-                  <TouchableOpacity
-                    style={styles.eventActionButton}
-                    activeOpacity={0.86}
-                    onPress={card.onPress}
-                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-                    testID={card.actionTestID}
-                    accessibilityRole="button"
-                    accessibilityLabel={card.actionLabel}
-                  >
-                    <Text style={styles.eventActionButtonText}>{card.actionLabel}</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            ))}
-          </View>
-          <View style={styles.eventActionRow}>
-            <TouchableOpacity
-              style={[styles.eventPrimaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
-              activeOpacity={0.88}
-              disabled={sandboxSetupBusy}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              onPress={handleSetupSandboxTesterExperience}
-              testID="money-sandbox-setup-button"
-              accessibilityRole="button"
-              accessibilityLabel="Set up sandbox offers"
-            >
-              {sandboxSetupBusy ? (
-                <View style={styles.eventPrimaryButtonBusyRow}>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={styles.eventPrimaryButtonText}>{sandboxSetupButtonLabel}</Text>
-                </View>
-              ) : (
-                <Text style={styles.eventPrimaryButtonText}>{sandboxSetupButtonLabel}</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.eventSecondaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
-              activeOpacity={0.88}
-              disabled={sandboxSetupBusy}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              onPress={handleRefreshSandboxTesterExperience}
-              testID="money-sandbox-refresh-button"
-              accessibilityRole="button"
-              accessibilityLabel="Refresh sandbox status"
-            >
-              <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.eventActionRow}>
-            <TouchableOpacity
-              style={styles.eventSecondaryButton}
-              activeOpacity={0.88}
-              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-              onPress={previewCreatorPlatform}
-              testID="money-sandbox-open-tester-preview-button"
-              accessibilityRole="button"
-              accessibilityLabel="Open tester preview"
-            >
-              <Text style={styles.eventSecondaryButtonText}>Open tester preview</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.eventSecondaryButton}
-              activeOpacity={0.88}
-              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-              onPress={openMoneyTransactions}
-              testID="money-sandbox-manage-testers-button"
-              accessibilityRole="button"
-              accessibilityLabel="View tester access"
-            >
-              <Text style={styles.eventSecondaryButtonText}>View tester access</Text>
-            </TouchableOpacity>
-          </View>
-          {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
-        </View>
-
         <View style={styles.studioAccordionStack}>
+          {renderMonetizationAccordion({
+            id: "ways_to_earn",
+            title: "Ways to Earn",
+            summary: "The six creator monetization flows in one setup view.",
+            status: monetizationActive ? "Active" : "Needs attention",
+            statusTone: monetizationActive ? "default" : "muted",
+            children: (
+              <>
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, buy a room ticket, subscribe to a creator, get VIP, or buy an event pass."}
+                  </Text>
+                  <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
+                </View>
+                <View style={styles.summaryGrid}>
+                  {monetizationFeatureCards.map(renderFeatureCard)}
+                </View>
+              </>
+            ),
+          })}
+
+          {renderActiveMoneyManagerPanel()}
+
           {renderMonetizationAccordion({
             id: "overview",
             title: "Overview",
@@ -7987,155 +8320,6 @@ export function ChannelStudioScreen() {
           })}
 
           {renderMonetizationAccordion({
-            id: "ways_to_earn",
-            title: "Ways to Earn",
-            summary: "The six creator monetization flows in one setup view.",
-            status: monetizationActive ? "Active" : "Needs attention",
-            statusTone: monetizationActive ? "default" : "muted",
-            children: (
-              <>
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, buy a room ticket, subscribe to a creator, get VIP, or buy an event pass."}
-                  </Text>
-                  <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
-                </View>
-                <View style={styles.summaryGrid}>
-                  {monetizationFeatureCards.map(renderFeatureCard)}
-                </View>
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Tips setup</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    Tips do not unlock perks or content. Android tester tips use Google Play / RevenueCat sandbox only. Physical merchandise uses Stripe separately.
-                  </Text>
-                  <MoneyScopeInfoButton scope="creator_tip" label="What do tips unlock?" />
-                </View>
-                {renderSummaryMetricCards(tipSetupCards)}
-                <View style={styles.eventActionRow}>
-                  {creatorTipSettings?.status !== "active" ? (
-                    <TouchableOpacity
-                      style={[styles.eventPrimaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
-                      activeOpacity={0.88}
-                      disabled={tipSettingsBusy}
-                      onPress={() => handleSaveTipSettings(true)}
-                    >
-                      {tipSettingsBusy ? (
-                        <View style={styles.eventPrimaryButtonBusyRow}>
-                          <ActivityIndicator color="#fff" />
-                          <Text style={styles.eventPrimaryButtonText}>Saving tips</Text>
-                        </View>
-                      ) : (
-                        <Text style={styles.eventPrimaryButtonText}>Enable Tips</Text>
-                      )}
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.eventSecondaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
-                      activeOpacity={0.88}
-                      disabled={tipSettingsBusy}
-                      onPress={() => handleSaveTipSettings(false)}
-                    >
-                      <Text style={styles.eventSecondaryButtonText}>Pause Tips</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    style={[styles.eventSecondaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
-                    activeOpacity={0.88}
-                    disabled={payoutSetupBusy !== null}
-                    onPress={handleStartPayoutProviderSetup}
-                  >
-                    <Text style={styles.eventSecondaryButtonText}>Connect payouts</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
-                    activeOpacity={0.88}
-                    disabled={payoutSetupBusy !== null}
-                    onPress={handleRefreshPayoutProviderStatus}
-                  >
-                    <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
-                  </TouchableOpacity>
-                </View>
-                {tipSettingsNotice ? <Text style={styles.noticeText}>{tipSettingsNotice}</Text> : null}
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Channel Subscription setup</Text>
-	                  <Text style={styles.eventEmptyBody}>
-	                    {"Channel Subscriptions are monthly creator memberships in sandbox mode. They do not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels."}
-	                  </Text>
-                  <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
-                  <Text style={styles.eventEmptyBody}>
-                    Product: channel_subscription_sandbox_monthly_499 · Price: $4.99/month sandbox/test.
-                  </Text>
-                </View>
-                <View style={styles.eventActionRow}>
-                  <TouchableOpacity
-                    style={[styles.eventPrimaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
-                    activeOpacity={0.88}
-                    disabled={channelSubscriptionSaving}
-                    onPress={() => handleSaveChannelSubscription(true)}
-                  >
-                    {channelSubscriptionSaving ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.eventPrimaryButtonText}>
-                        {creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Manage Channel Subscription" : "Enable Channel Subscription"}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                  {creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? (
-                    <TouchableOpacity
-                      style={[styles.eventSecondaryButton, channelSubscriptionSaving && styles.eventPrimaryButtonDisabled]}
-                      activeOpacity={0.88}
-                      disabled={channelSubscriptionSaving}
-                      onPress={() => handleSaveChannelSubscription(false)}
-                    >
-                      <Text style={styles.eventSecondaryButtonText}>Pause Subscription</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-                {channelSubscriptionNotice ? <Text style={styles.noticeText}>{channelSubscriptionNotice}</Text> : null}
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>VIP Pass setup</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    VIP Passes are sandbox-only until live money is approved. VIP is creator-specific and does not include Chi&apos;llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators&apos; channels.
-                  </Text>
-                  <MoneyScopeInfoButton scope="vip_pass" label="What does VIP unlock?" />
-                  <Text style={styles.eventEmptyBody}>
-                    Product: vip_pass_sandbox_499 · Price: $4.99 sandbox/test.
-                  </Text>
-                </View>
-                <View style={styles.eventActionRow}>
-                  <TouchableOpacity
-                    style={[styles.eventPrimaryButton, vipPassSaving && styles.eventPrimaryButtonDisabled]}
-                    activeOpacity={0.88}
-                    disabled={vipPassSaving}
-                    onPress={() => handleSaveVipPass(true)}
-                  >
-                    {vipPassSaving ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.eventPrimaryButtonText}>
-                        {creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Manage VIP Pass" : "Enable VIP Pass"}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                  {creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? (
-                    <TouchableOpacity
-                      style={[styles.eventSecondaryButton, vipPassSaving && styles.eventPrimaryButtonDisabled]}
-                      activeOpacity={0.88}
-                      disabled={vipPassSaving}
-                      onPress={() => handleSaveVipPass(false)}
-                    >
-                      <Text style={styles.eventSecondaryButtonText}>Pause VIP Pass</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-                {vipPassNotice ? <Text style={styles.noticeText}>{vipPassNotice}</Text> : null}
-              </>
-            ),
-          })}
-
-          {renderMonetizationAccordion({
             id: "offers",
             title: "Offers",
             summary: "Paid creator offers in one consolidated list.",
@@ -8147,7 +8331,10 @@ export function ChannelStudioScreen() {
                 {creatorPaidVideoOffers.length ? (
                   <View style={styles.eventList}>
                     {creatorPaidVideoOffers.map((offer) => (
-                      <View key={offer.id} style={styles.eventEmptyCard}>
+                      <View
+                        key={offer.id}
+                        style={[styles.eventEmptyCard, activeMoneyManageTarget === "paid_videos" && styles.moneyFocusedCard]}
+                      >
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
                           <View style={styles.scopeInfoHeaderRow}>
@@ -8175,7 +8362,10 @@ export function ChannelStudioScreen() {
                 {creatorPaidWatchPartyOffers.length ? (
                   <View style={styles.eventList}>
                     {creatorPaidWatchPartyOffers.map((offer) => (
-                      <View key={offer.id} style={styles.eventEmptyCard}>
+                      <View
+                        key={offer.id}
+                        style={[styles.eventEmptyCard, activeMoneyManageTarget === "paid_watch_parties" && styles.moneyFocusedCard]}
+                      >
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
                           <View style={styles.scopeInfoHeaderRow}>
@@ -8196,7 +8386,10 @@ export function ChannelStudioScreen() {
                 {creatorChannelSubscriptionOffers.length ? (
                   <View style={styles.eventList}>
                     {creatorChannelSubscriptionOffers.map((offer) => (
-                      <View key={offer.id} style={styles.eventEmptyCard}>
+                      <View
+                        key={offer.id}
+                        style={[styles.eventEmptyCard, activeMoneyManageTarget === "channel_subscriptions" && styles.moneyFocusedCard]}
+                      >
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
                           <View style={styles.scopeInfoHeaderRow}>
@@ -8217,7 +8410,10 @@ export function ChannelStudioScreen() {
                 {creatorVipPassOffers.length ? (
                   <View style={styles.eventList}>
                     {creatorVipPassOffers.map((offer) => (
-                      <View key={offer.id} style={styles.eventEmptyCard}>
+                      <View
+                        key={offer.id}
+                        style={[styles.eventEmptyCard, activeMoneyManageTarget === "vip_passes" && styles.moneyFocusedCard]}
+                      >
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
                           <View style={styles.scopeInfoHeaderRow}>
@@ -8238,7 +8434,10 @@ export function ChannelStudioScreen() {
                 {creatorPaidEventOffers.length ? (
                   <View style={styles.eventList}>
                     {creatorPaidEventOffers.map((offer) => (
-                      <View key={offer.id} style={styles.eventEmptyCard}>
+                      <View
+                        key={offer.id}
+                        style={[styles.eventEmptyCard, activeMoneyManageTarget === "paid_events" && styles.moneyFocusedCard]}
+                      >
                         <View style={styles.eventCardHeader}>
                           <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
                           <View style={styles.scopeInfoHeaderRow}>
@@ -8421,6 +8620,172 @@ export function ChannelStudioScreen() {
                   6,
                 )}
               </>
+            ),
+          })}
+
+          {renderMonetizationAccordion({
+            id: "testing_proof",
+            title: "Testing & Proof",
+            summary: "Sandbox tester setup, checklist, and proof-only status for internal QA.",
+            status: sandboxSetupStatus,
+            statusTone: sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially Ready" ? "warning" : "muted",
+            children: (
+              <View testID="money-sandbox-setup-section" accessibilityLabel="Sandbox Tester Experience">
+                <View style={styles.sandboxSafetyBanner}>
+                  <Text style={styles.sandboxSafetyTitle}>Test mode - no payouts</Text>
+                  <Text style={styles.sandboxSafetyBody}>No real charges. No creator earnings. No withdrawals.</Text>
+                </View>
+                <View style={styles.summaryGrid}>
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>Sandbox Testing</Text>
+                    <Text style={styles.summaryValue}>{sandboxSetupStatus}</Text>
+                    <Text style={styles.summaryBody}>
+                      {sandboxConfiguredCount} of {sandboxTesterOfferCards.length} flows ready.
+                    </Text>
+                  </View>
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>Tester Access</Text>
+                    <Text style={styles.summaryValue}>{sandboxTesterRows.length > 0 ? `Active testers: ${sandboxTesterRows.length}` : "No active testers"}</Text>
+                    <Text style={styles.summaryBody}>
+                      Tester access allows sandbox/test-only monetization flows. It does not grant owner, payout, or live-money permissions.
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.sectionLabel}>Setup checklist</Text>
+                <View style={styles.summaryGrid}>
+                  {sandboxChecklist.map((step, index) => (
+                    <View key={step.label} style={styles.summaryCard}>
+                      <Text style={styles.summaryLabel}>{index + 1}. {step.label}</Text>
+                      <Text style={styles.summaryValue}>{step.status}</Text>
+                      <Text style={styles.summaryBody}>{step.body}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={styles.summaryGrid}>
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>Live Money</Text>
+                    <Text style={styles.summaryValue}>Off</Text>
+                    <Text style={styles.summaryBody}>Provider details stay behind the advanced section.</Text>
+                  </View>
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>Payouts</Text>
+                    <Text style={styles.summaryValue}>Off</Text>
+                    <Text style={styles.summaryBody}>Cash-out, transfer, and payout release stay locked.</Text>
+                  </View>
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>Purchase provider</Text>
+                    <Text style={styles.summaryValue}>Google Play sandbox</Text>
+                    <Text style={styles.summaryBody}>
+                      Android digital tests use Google Play / RevenueCat. Merchandise stays in the separate Stripe lane.
+                    </Text>
+                  </View>
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryLabel}>Next Step</Text>
+                    <Text style={styles.summaryValue}>{sandboxNextStep}</Text>
+                    <Text style={styles.summaryBody}>
+                      {hasOwnerOperatorStudioAccess ? "Owner setup mode." : sandboxTesterActive ? "Tester access active." : "No tester access on this account."}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.sectionLabel}>Offer setup</Text>
+                <View style={styles.summaryGrid}>
+                  {sandboxTesterOfferCards.map((card) => (
+                    <View
+                      key={card.key}
+                      style={[
+                        styles.summaryCard,
+                        styles.sandboxOfferCard,
+                        card.configured ? styles.sandboxOfferCardReady : styles.sandboxOfferCardBlocked,
+                      ]}
+                      testID={card.testID}
+                      accessibilityLabel={`${card.title} sandbox offer status`}
+                    >
+                      <View style={styles.eventCardHeader}>
+                        <Text style={styles.summaryLabel}>{card.title}</Text>
+                        <View style={styles.scopeInfoHeaderRow}>
+                          <MoneyScopeInfoButton scope={card.scopeKey} compact />
+                          {renderStudioStatusPill(card.statusLabel, card.configured ? "default" : card.statusLabel === "Blocked" ? "warning" : "muted")}
+                        </View>
+                      </View>
+                      <Text style={styles.summaryValue}>{card.configured ? "Tester visible" : card.statusLabel}</Text>
+                      <Text style={styles.summaryBody}>{card.description}</Text>
+                      <Text style={styles.eventEmptyBody}>Sandbox only · No payouts</Text>
+                      {card.blocker ? <Text style={styles.noticeText}>{card.blocker}</Text> : null}
+                      {card.actionLabel && card.onPress ? (
+                        <TouchableOpacity
+                          style={styles.eventActionButton}
+                          activeOpacity={0.86}
+                          onPress={card.onPress}
+                          hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                          testID={card.actionTestID}
+                          accessibilityRole="button"
+                          accessibilityLabel={card.actionLabel}
+                        >
+                          <Text style={styles.eventActionButtonText}>{card.actionLabel}</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+                <View style={styles.eventActionRow}>
+                  <TouchableOpacity
+                    style={[styles.eventPrimaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={sandboxSetupBusy}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    onPress={handleSetupSandboxTesterExperience}
+                    testID="money-sandbox-setup-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Set up sandbox offers"
+                  >
+                    {sandboxSetupBusy ? (
+                      <View style={styles.eventPrimaryButtonBusyRow}>
+                        <ActivityIndicator color="#fff" />
+                        <Text style={styles.eventPrimaryButtonText}>{sandboxSetupButtonLabel}</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.eventPrimaryButtonText}>{sandboxSetupButtonLabel}</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.eventSecondaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={sandboxSetupBusy}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    onPress={handleRefreshSandboxTesterExperience}
+                    testID="money-sandbox-refresh-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Refresh sandbox status"
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.eventActionRow}>
+                  <TouchableOpacity
+                    style={styles.eventSecondaryButton}
+                    activeOpacity={0.88}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    onPress={previewCreatorPlatform}
+                    testID="money-sandbox-open-tester-preview-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Open tester preview"
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Open tester preview</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.eventSecondaryButton}
+                    activeOpacity={0.88}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    onPress={openMoneyTransactions}
+                    testID="money-sandbox-manage-testers-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="View tester access"
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>View tester access</Text>
+                  </TouchableOpacity>
+                </View>
+                {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
+              </View>
             ),
           })}
         </View>
@@ -10693,6 +11058,30 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.03)",
   },
+  moneyFeatureCard: {
+    flexBasis: "47%",
+    minWidth: 154,
+  },
+  moneyFeatureHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  moneyFocusedCard: {
+    borderColor: "rgba(220,20,60,0.52)",
+    backgroundColor: "rgba(220,20,60,0.12)",
+  },
+  moneyManageNoticeCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(242,194,91,0.36)",
+    backgroundColor: "rgba(242,194,91,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 10,
+    gap: 4,
+  },
   sandboxSafetyBanner: {
     borderRadius: 14,
     borderWidth: 1,
@@ -10730,6 +11119,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 0.8,
+    flexShrink: 1,
   },
   summaryValue: {
     color: "#F3F6FF",
@@ -10747,6 +11137,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
+    flexShrink: 0,
   },
   audienceWorkflowLimitCard: {
     marginTop: 12,
@@ -10779,6 +11170,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
   },
   eventCardCopy: {
     flex: 1,
@@ -10866,6 +11258,7 @@ const styles = StyleSheet.create({
     color: "#F3F6FF",
     fontSize: 14,
     fontWeight: "900",
+    flexShrink: 1,
   },
   eventEmptyBody: {
     color: "#ACB5C9",
@@ -10875,6 +11268,7 @@ const styles = StyleSheet.create({
   },
   eventActionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginTop: 4,
   },
@@ -10906,6 +11300,7 @@ const styles = StyleSheet.create({
   },
   eventPrimaryButton: {
     flex: 1,
+    minWidth: 132,
     borderRadius: 14,
     backgroundColor: "#DC143C",
     paddingVertical: 14,
@@ -10927,6 +11322,8 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   eventSecondaryButton: {
+    flexGrow: 1,
+    minWidth: 132,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",

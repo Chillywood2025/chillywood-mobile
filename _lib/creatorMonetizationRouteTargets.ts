@@ -8,26 +8,25 @@ export const CREATOR_MONEY_ROUTE_TARGETS = {
     viewerTarget: "tip_sheet",
   },
   paidVideo: {
-    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "offers", manage: "paid_video" } },
+    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "offers", manage: "paid_videos" } },
     viewerTarget: "/player/[id]",
   },
   watchPartyTicket: {
-    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "offers", manage: "watch_party_ticket" } },
+    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "offers", manage: "paid_watch_parties" } },
     viewerTarget: "/watch-party/[partyId]",
   },
   eventPass: {
-    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "offers", manage: "event_pass" } },
+    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "offers", manage: "paid_events" } },
     viewerTarget: "/event/[eventId]",
   },
   platformSubscription: {
-    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "offers", manage: "platform_subscription" } },
+    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "ways_to_earn", manage: "channel_subscriptions" } },
     viewerTarget: "/channel-subscription/[creatorId]",
   },
   vipPass: {
-    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "offers", manage: "vip_pass" } },
+    ownerTarget: { pathname: "/channel-studio", params: { tab: "monetization", focus: "ways_to_earn", manage: "vip_passes" } },
     viewerTarget: "/vip-pass/[creatorId]",
   },
 } as const;
 
 export type CreatorMoneyRouteTargetKey = keyof typeof CREATOR_MONEY_ROUTE_TARGETS;
-

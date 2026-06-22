@@ -1,6 +1,6 @@
 # Money Center UI Polish Proof
 
-Updated June 4, 2026.
+Updated June 22, 2026.
 
 This file records the repo-side UI polish state for Money Center launch readiness. It is a review-readiness and proof-index lane, not a production-money lane.
 
@@ -11,6 +11,32 @@ Latest Public V1 RC sweep: `docs/PUBLIC_V1_MONEY_PROOF_RC_SWEEP.md`, with Androi
 Owner/Admin tab interaction follow-up: `docs/OWNER_ADMIN_TABS_UI_UX_POLISH.md` adds reusable collapsible sections, modern action buttons, whole-card quick links, compact protected-rule lists, permission draft summaries, and elevated save/reset action bars in `app/admin.tsx`. This follow-up modernizes adjacent Owner/Admin tabs such as Users, Roles & Permissions, Permission Templates, and Live Cost Guard without changing Money Center truth, production money state, payout state, provider rail policy, or admin authority.
 
 ## Creator Money Center
+
+June 22, 2026 creator-dashboard polish:
+
+- The main creator path now starts with the Money Center summary, then puts `Ways to Earn` directly in the core accordion stack instead of burying it under sandbox/tester proof.
+- The top safety copy is one concise banner: `Test mode: no real charges, no creator earnings, no withdrawals.`
+- `Sandbox Tester Experience`, setup checklist, tester access, sandbox offer setup, and repeated proof/readiness cards now live lower in collapsed `Testing & Proof`.
+- Six Ways to Earn cards remain: Tips, Paid Videos, Paid Watch-Parties, Channel Subscriptions, VIP Passes, and Paid Events.
+- Each Ways to Earn card has one CTA with a real `handleManageMoneyFeature(...)` target and visible `moneyManageNotice` feedback.
+- Tips `Fix issue` focuses the Tips setup area and, when payout setup is missing, also opens the Payouts section with `Connect payouts`.
+- Paid Videos route/focus Content when no public video exists, or focus Offers when a paid-video setup target exists.
+- Paid Watch-Parties route to the existing Watch-Party creation path when no room target exists, or focus Offers when ticket setup exists.
+- Channel Subscriptions and VIP Passes focus their setup cards and expose Enable/Manage/Pause actions.
+- Paid Events route/focus Live/Event creation when no creator event exists, or focus Offers when event-pass setup exists.
+- Compact money-scope info buttons now render as a smaller visible 30px icon with accessible hitSlop, and card headers use shrink/wrap layout to avoid overlap on narrow Android widths.
+- Route targets now use the Money Center feature keys, so `/channel-studio?tab=monetization&focus=ways_to_earn&manage=tips` lands on Monetization, opens Ways to Earn, highlights Tips, and shows the relevant setup/fix area.
+
+Manual proof plan:
+
+- Device/simulator target: Play-installed Android internal/closed-test build or a dev client on the same runtime when only JS UI proof is needed.
+- Path: Profile or Platform owner action -> Platform Studio -> Monetization / Money Center.
+- Expected: Ways to Earn is visible near the top after the summary/overview.
+- Expected: compact info icons do not overlap titles in two-column cards or narrow Android widths.
+- Expected: Manage Paid Videos focuses paid-video setup/Content path when a public video is missing or focuses Offers when available.
+- Expected: Fix issue on Tips focuses Tips/Payout setup and shows Connect payouts / Enable Tips.
+- Expected: sandbox/testing proof is collapsed lower under Testing & Proof.
+- Expected: no payment, payout, provider, Premium, RLS, or LiveKit behavior changes.
 
 The Creator Money Center now presents a compact launch-readiness summary before the detailed sections:
 

@@ -390,7 +390,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   buttonCompact: {
-    width: 44,
+    width: 30,
+    height: 30,
+    minWidth: 30,
+    minHeight: 30,
     paddingHorizontal: 0,
   },
   buttonPressed: {
@@ -437,8 +440,8 @@ const styles = StyleSheet.create({
   },
   iconText: {
     color: "#D6F8FF",
-    fontSize: 16,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 17,
     fontWeight: "900",
   },
   kicker: {
