@@ -33,6 +33,7 @@ type CreatorVideoCardProps = {
   onToggleVisibility?: () => void;
   onDelete?: () => void;
   onShare?: () => void;
+  onOpenActions?: () => void;
 };
 
 const formatVisibilityLabel = (video: CreatorVideo, ownerMode: boolean) => (
@@ -138,6 +139,7 @@ export function CreatorVideoCard({
   onToggleVisibility,
   onDelete,
   onShare,
+  onOpenActions,
 }: CreatorVideoCardProps) {
   const moderationLabel = formatModerationLabel(video);
   const fileSize = formatFileSize(video.fileSizeBytes);
@@ -176,8 +178,10 @@ export function CreatorVideoCard({
       <TouchableOpacity
         style={styles.preview}
         activeOpacity={0.88}
-        onPress={onOpen}
-        disabled={!playable}
+        onPress={playable ? onOpen : ownerMode ? onOpenActions : undefined}
+        onLongPress={ownerMode ? onOpenActions : undefined}
+        disabled={!playable && !ownerMode}
+        accessibilityLabel={ownerMode ? `Open ${displayTitle}. Hold for content actions.` : `Open ${publicDisplayTitle}`}
       >
         <StableImage
           expectedWidth="100%"
@@ -197,6 +201,19 @@ export function CreatorVideoCard({
         <View style={styles.playPill}>
           <AppText scale="footnote" style={styles.playPillText}>{playable ? "Play" : "Source Missing"}</AppText>
         </View>
+        {ownerMode && onOpenActions ? (
+          <TouchableOpacity
+            style={styles.overflowButton}
+            activeOpacity={0.84}
+            onPress={onOpenActions}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Open actions for ${displayTitle}`}
+            testID="creator-video-card-overflow-button"
+          >
+            <AppText scale="title3" style={styles.overflowText}>•••</AppText>
+          </TouchableOpacity>
+        ) : null}
         <View style={styles.badgeRow}>
           <View style={[styles.badge, video.visibility === "public" ? styles.badgePublic : styles.badgeDraft]}>
             <AppText scale="caption" style={styles.badgeText}>{formatVisibilityLabel(video, ownerMode)}</AppText>
@@ -435,11 +452,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
   },
+  overflowButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(5,7,12,0.72)",
+  },
+  overflowText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    lineHeight: 20,
+    fontWeight: "900",
+    marginTop: -4,
+  },
   badgeRow: {
     position: "absolute",
     top: 12,
     left: 12,
-    right: 12,
+    right: 58,
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,

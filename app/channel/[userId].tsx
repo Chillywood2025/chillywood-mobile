@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Modal,
   ScrollView,
   Share,
   StyleSheet,
@@ -49,7 +48,7 @@ import {
 } from "../../_lib/paidWatchPartyTickets";
 import { formatClipStudioTemplateLabel, type ClipStudioTemplatePreset } from "../../_lib/clipStudio";
 import { CREATOR_MONEY_ROUTE_TARGETS } from "../../_lib/creatorMonetizationRouteTargets";
-import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
+import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { deleteCreatorVideo, readCreatorVideos, updateCreatorVideoMetadata, type CreatorVideo } from "../../_lib/creatorVideos";
 import { readPublicEventSummaries, type CreatorEventSummary } from "../../_lib/liveEvents";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
@@ -69,6 +68,7 @@ import { buildUserChannelProfile, readUserProfileByUserId, type UserChannelProfi
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monetization/MoneyScopeInfoButton";
 import { TipSheet } from "../../components/monetization/tip-sheet";
+import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
 
 type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked";
@@ -421,13 +421,29 @@ export default function PublicChannelScreen() {
     setVideos(nextVideos);
   };
 
-  const updateSelectedVideoVisibility = async (video: CreatorVideo, visibility: "draft" | "public") => {
+  const updateSelectedVideoVisibility = async (
+    video: CreatorVideo,
+    visibility: CreatorContentActionSheetVisibilityAction,
+  ) => {
     if (!showOwnerControls || videoActionBusy) return;
+    if (visibility === "private") {
+      Alert.alert(
+        "Private to Chi'lly Circle",
+        "Circle-only creator-video access is not backed yet. Use Save as Draft for owner-only content until Circle feeds and access checks are ready.",
+      );
+      return;
+    }
     try {
       setVideoActionBusy(true);
       await updateCreatorVideoMetadata(video.id, { visibility });
       setSelectedVideoAction(null);
       await refreshPublicVideos();
+      Alert.alert(
+        visibility === "public" ? "Make Public" : "Save as Draft",
+        visibility === "public"
+          ? "Public on your Platform. Eligible for followers, Chi'lly Circle members, Explore, and Home only where backed by discovery rules. It is not posted to everybody's Profile feed."
+          : "Saved as Draft. Only you can see it in Platform Studio.",
+      );
     } catch (error) {
       Alert.alert(
         "Update video",
@@ -436,6 +452,34 @@ export default function PublicChannelScreen() {
     } finally {
       setVideoActionBusy(false);
     }
+  };
+
+  const shareSelectedVideo = async (video: CreatorVideo) => {
+    if (!isCreatorVideoPubliclyShareable(video)) {
+      Alert.alert("Share unavailable", "Only public, shareable creator videos can be shared.");
+      return;
+    }
+    try {
+      await Share.share({
+        message: `Watch ${video.title} on Chi'llywood: ${buildCreatorVideoDeepLink(video.id)}`,
+      });
+      setSelectedVideoAction(null);
+    } catch {
+      Alert.alert("Share unavailable", "Unable to open sharing right now.");
+    }
+  };
+
+  const createEventFromVideo = (video: CreatorVideo) => {
+    setSelectedVideoAction(null);
+    openStudio({
+      tab: "live",
+      focus: "schedule",
+      sourceVideoId: video.id,
+      eventTitle: video.title,
+      description: video.description,
+      thumbnail: video.thumbnailUrl,
+      suggestedEventType: "watch_party_live",
+    });
   };
 
   const confirmDeleteSelectedVideo = (video: CreatorVideo) => {
@@ -1138,8 +1182,8 @@ export default function PublicChannelScreen() {
         scopeKey: "watch_party_ticket" as MoneyScopeKey,
         body: watchPartyTicketOffer?.partyId
           ? "Get a sandbox Watch-Party Seat Pass. No payout is created."
-          : "Ticket test unavailable - creator needs a Party Room target.",
-        button: "Get test ticket",
+          : "Seat Pass test unavailable - creator needs a Party Room target.",
+        button: "Get test Seat",
         testID: "tester-watch-party-ticket-button",
         onPress: () => {
           if (!watchPartyTicketOffer?.partyId) return;
@@ -1542,11 +1586,11 @@ export default function PublicChannelScreen() {
         },
       },
       {
-        title: "Ticket",
+        title: "Seat Pass",
         scopeKey: "watch_party_ticket" as MoneyScopeKey,
         body: "Access this Watch-Party target only.",
         price: watchPartyTicketOffer ? formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency) : null,
-        button: "Get ticket",
+        button: "Get Seat",
         testID: sandboxTesterActive ? "tester-watch-party-ticket-button" : "platform-support-ticket-button",
         available: !!watchPartyTicketOffer?.partyId,
         onPress: () => {
@@ -1715,125 +1759,44 @@ export default function PublicChannelScreen() {
           onClose={() => setTipSheetVisible(false)}
         />
       ) : null}
-      <Modal
+      <CreatorContentActionSheet
         visible={!!selectedVideoAction}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
+        video={selectedVideoAction}
+        busy={videoActionBusy}
+        isFeatured={!!selectedVideoAction && spotlightVideoId === selectedVideoAction.id}
+        circleOnlyBacked={false}
+        onClose={() => {
           if (!videoActionBusy) setSelectedVideoAction(null);
         }}
-      >
-        <View style={styles.videoActionBackdrop}>
-          <TouchableOpacity
-            style={styles.videoActionDismiss}
-            activeOpacity={1}
-            onPress={() => {
-              if (!videoActionBusy) setSelectedVideoAction(null);
-            }}
-          />
-          {selectedVideoAction ? (
-            <View style={styles.videoActionSheet}>
-              <Text style={styles.cardKicker}>Platform content</Text>
-              <Text style={styles.videoActionTitle} numberOfLines={2}>{selectedVideoAction.title}</Text>
-              <Text style={styles.cardBody}>Owner actions stay hidden from public viewers.</Text>
-              <TouchableOpacity
-                style={styles.videoActionButton}
-                activeOpacity={0.86}
-                onPress={() => {
-                  const video = selectedVideoAction;
-                  setSelectedVideoAction(null);
-                  openPlayer(video);
-                }}
-                testID="platform-content-open-button"
-                accessibilityRole="button"
-                accessibilityLabel="Open Platform content in Player"
-              >
-                <Text style={styles.videoActionButtonText}>Open in Player</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.videoActionButton}
-                activeOpacity={0.86}
-                onPress={() => {
-                  const videoId = selectedVideoAction.id;
-                  setSelectedVideoAction(null);
-                  openStudio({ tab: "content", videoId });
-                }}
-                testID="platform-content-edit-button"
-                accessibilityRole="button"
-                accessibilityLabel="Edit Platform content details"
-              >
-                <Text style={styles.videoActionButtonText}>Edit details</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.videoActionButton}
-                activeOpacity={0.86}
-                onPress={() => {
-                  const videoId = selectedVideoAction.id;
-                  setSelectedVideoAction(null);
-                  router.push({
-                    ...CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget,
-                    params: {
-                      ...CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget.params,
-                      videoId,
-                    },
-                  } as unknown as Parameters<typeof router.push>[0]);
-                }}
-                testID="platform-content-set-price-button"
-                accessibilityRole="button"
-                accessibilityLabel="Manage paid video offer"
-              >
-                <Text style={styles.videoActionButtonText}>Set price / manage paid offer</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.videoActionButton}
-                activeOpacity={0.86}
-                onPress={() => {
-                  const spotlightVideoId = selectedVideoAction.id;
-                  setSelectedVideoAction(null);
-                  openStudio({ tab: "brand", spotlightVideoId });
-                }}
-                testID="platform-content-feature-button"
-                accessibilityRole="button"
-                accessibilityLabel="Feature Platform content"
-              >
-                <Text style={styles.videoActionButtonText}>Feature in Platform Studio</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.videoActionButton}
-                activeOpacity={0.86}
-                disabled={videoActionBusy}
-                onPress={() => updateSelectedVideoVisibility(selectedVideoAction, "draft")}
-                testID="platform-content-visibility-button"
-                accessibilityRole="button"
-                accessibilityLabel="Move Platform content to draft"
-              >
-                <Text style={styles.videoActionButtonText}>Unpublish / move to draft</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.videoActionButton, styles.videoActionButtonDanger]}
-                activeOpacity={0.86}
-                disabled={videoActionBusy}
-                onPress={() => confirmDeleteSelectedVideo(selectedVideoAction)}
-                testID="platform-content-delete-button"
-                accessibilityRole="button"
-                accessibilityLabel="Delete Platform content"
-              >
-                <Text style={styles.videoActionButtonText}>Delete</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.videoActionCancelButton}
-                activeOpacity={0.86}
-                disabled={videoActionBusy}
-                onPress={() => setSelectedVideoAction(null)}
-                accessibilityRole="button"
-                accessibilityLabel="Close Platform content actions"
-              >
-                <Text style={styles.videoActionButtonText}>{videoActionBusy ? "Working..." : "Cancel"}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-        </View>
-      </Modal>
+        onOpenPlayer={(video) => {
+          setSelectedVideoAction(null);
+          openPlayer(video);
+        }}
+        onEditDetails={(video) => {
+          setSelectedVideoAction(null);
+          openStudio({ tab: "content", videoId: video.id });
+        }}
+        onSetVisibility={updateSelectedVideoVisibility}
+        onSetPrice={(video) => {
+          setSelectedVideoAction(null);
+          router.push({
+            ...CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget,
+            params: {
+              ...CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget.params,
+              videoId: video.id,
+            },
+          } as unknown as Parameters<typeof router.push>[0]);
+        }}
+        onCreateEvent={createEventFromVideo}
+        onFeature={(video) => {
+          setSelectedVideoAction(null);
+          openStudio({ tab: "brand", spotlightVideoId: video.id });
+        }}
+        onShare={(video) => {
+          void shareSelectedVideo(video);
+        }}
+        onDelete={confirmDeleteSelectedVideo}
+      />
     </View>
   );
 }
@@ -2637,58 +2600,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(16,20,29,0.72)",
     paddingHorizontal: 17,
     paddingVertical: 4,
-  },
-  videoActionBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.56)",
-  },
-  videoActionDismiss: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  videoActionSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "#0B1018",
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 30,
-    gap: 10,
-  },
-  videoActionTitle: {
-    color: "#F8FAFF",
-    fontSize: 22,
-    lineHeight: 27,
-    fontWeight: "900",
-  },
-  videoActionButton: {
-    minHeight: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.13)",
-    paddingHorizontal: 14,
-  },
-  videoActionButtonDanger: {
-    borderColor: "rgba(255,92,122,0.35)",
-    backgroundColor: "rgba(220,20,60,0.18)",
-  },
-  videoActionCancelButton: {
-    minHeight: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#DC143C",
-    paddingHorizontal: 14,
-  },
-  videoActionButtonText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
   },
   aboutRow: {
     gap: 5,

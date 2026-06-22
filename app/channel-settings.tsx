@@ -10,6 +10,7 @@ import {
   Linking,
   Modal,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -54,6 +55,7 @@ import {
   readCreatorMonetizationFoundationSummary,
   type CreatorMonetizationFoundationSummary,
 } from "../_lib/creatorMonetization";
+import { CREATOR_MONEY_ROUTE_TARGETS } from "../_lib/creatorMonetizationRouteTargets";
 import { saveCreatorSandboxMonetizationConfig } from "../_lib/creatorMonetizationSetup";
 import {
   listMyPaidVideoOffers,
@@ -201,6 +203,10 @@ import {
   type CreatorVideoVisibility,
 } from "../_lib/creatorVideos";
 import {
+  buildCreatorVideoDeepLink,
+  isCreatorVideoPubliclyShareable,
+} from "../_lib/creatorVideoLinks";
+import {
   CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH,
   CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH,
   formatClipStudioFormatLabel,
@@ -255,6 +261,7 @@ import {
 import type { UserChannelRole, UserProfile } from "../_lib/userData";
 import { normalizeUserProfile, readUserProfile, saveUserProfile, updateMyPlatformAccessVisibility } from "../_lib/userData";
 import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
+import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../components/creator-media/CreatorContentActionSheet";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { AppActionButton, AppEmptyState, AppStickyActionBar } from "../components/ui/app-surface";
@@ -1214,7 +1221,18 @@ const createInitialMoneyManageTarget = (manage: unknown): MonetizationFeatureKey
 
 export function ChannelStudioScreen() {
   const router = useRouter();
-  const routeParams = useLocalSearchParams<{ tab?: string; focus?: string; action?: string; manage?: string }>();
+  const routeParams = useLocalSearchParams<{
+    tab?: string;
+    focus?: string;
+    action?: string;
+    manage?: string;
+    sourceVideoId?: string;
+    eventTitle?: string;
+    description?: string;
+    thumbnail?: string;
+    suggestedEventType?: string;
+    spotlightVideoId?: string;
+  }>();
   const { isLoading: authLoading, isSignedIn, user } = useSession();
   const { accessState, isLoading: betaLoading, isActive } = useBetaProgram();
   const routeAction = String(Array.isArray(routeParams.action) ? routeParams.action[0] : routeParams.action ?? "").trim();
@@ -1330,12 +1348,15 @@ export function ChannelStudioScreen() {
   const [videosLoadError, setVideosLoadError] = useState<string | null>(null);
   const [videoSaving, setVideoSaving] = useState(false);
   const [videoNotice, setVideoNotice] = useState<string | null>(null);
+  const [selectedContentActionVideo, setSelectedContentActionVideo] = useState<CreatorVideo | null>(null);
   const [videoEditor, setVideoEditor] = useState<ChannelVideoEditorState>(createEmptyVideoEditorState);
   const [selectedVideoFile, setSelectedVideoFile] = useState<CreatorVideoFile | null>(null);
   const [clipNotice, setClipNotice] = useState<string | null>(null);
   const [clipSaving, setClipSaving] = useState(false);
   const clipSaveInFlightRef = useRef(false);
   const brandProfileSaveInFlightRef = useRef(false);
+  const sourceVideoEventPrefillRef = useRef<string | null>(null);
+  const spotlightRouteAppliedRef = useRef<string | null>(null);
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
   const [selectedClipVideoFile, setSelectedClipVideoFile] = useState<CreatorVideoFile | null>(null);
   const [selectedClipCoverFile, setSelectedClipCoverFile] = useState<CreatorVideoFile | null>(null);
@@ -1463,6 +1484,36 @@ export function ChannelStudioScreen() {
       source_surface: "platform_studio",
     });
   }, [activeStudioTab, user?.id]);
+
+  useEffect(() => {
+    const sourceVideoId = String(Array.isArray(routeParams.sourceVideoId) ? routeParams.sourceVideoId[0] : routeParams.sourceVideoId ?? "").trim();
+    if (!sourceVideoId || sourceVideoEventPrefillRef.current === sourceVideoId) return;
+    sourceVideoEventPrefillRef.current = sourceVideoId;
+    const routedEventTitle = String(Array.isArray(routeParams.eventTitle) ? routeParams.eventTitle[0] : routeParams.eventTitle ?? "").trim();
+    const suggestedEventType = String(Array.isArray(routeParams.suggestedEventType) ? routeParams.suggestedEventType[0] : routeParams.suggestedEventType ?? "").trim();
+    const safeEventType: CreatorEventType = suggestedEventType === "live_watch_party" || suggestedEventType === "watch_party_live"
+      ? suggestedEventType
+      : "watch_party_live";
+
+    setActiveStudioTab("live");
+    setEventEditor({
+      ...createEmptyEventEditorState(),
+      eventTitle: routedEventTitle ? `${routedEventTitle} Live Event` : "Creator Content Event",
+      eventType: safeEventType,
+      status: "draft",
+      linkedTitleId: "",
+    });
+    setEventNotice("Event draft prefilled from creator content. Confirm event type, start/end time, visibility, and access before saving.");
+    router.setParams({
+      tab: "live",
+      focus: "schedule",
+      sourceVideoId: "",
+      eventTitle: "",
+      description: "",
+      thumbnail: "",
+      suggestedEventType: "",
+    });
+  }, [routeParams.description, routeParams.eventTitle, routeParams.sourceVideoId, routeParams.suggestedEventType, router]);
 
   useEffect(() => {
     if (!canUseChannelSettings) {
@@ -3286,6 +3337,31 @@ export function ChannelStudioScreen() {
     }
   };
 
+  useEffect(() => {
+    const routedSpotlightVideoId = String(
+      Array.isArray(routeParams.spotlightVideoId)
+        ? routeParams.spotlightVideoId[0]
+        : routeParams.spotlightVideoId ?? "",
+    ).trim();
+    if (!routedSpotlightVideoId || spotlightRouteAppliedRef.current === routedSpotlightVideoId) return;
+    if (videosLoading) return;
+
+    const routedVideo = creatorVideos.find((video) => video.id === routedSpotlightVideoId) ?? null;
+    spotlightRouteAppliedRef.current = routedSpotlightVideoId;
+    setActiveStudioTab("content");
+    setContentStatusFilter("all");
+
+    if (!routedVideo) {
+      setVideoNotice("Feature request could not find that creator video in your Content library.");
+      router.setParams({ spotlightVideoId: "" });
+      return;
+    }
+
+    void publishSpotlightVideo(routedVideo).finally(() => {
+      router.setParams({ spotlightVideoId: "" });
+    });
+  }, [creatorVideos, publishSpotlightVideo, routeParams.spotlightVideoId, router, videosLoading]);
+
   const pickPlatformBrandAsset = async (assetType: PlatformBrandAssetType) => {
     const ownerUserId = String(user?.id ?? "").trim();
     if (!ownerUserId) {
@@ -3865,14 +3941,22 @@ export function ChannelStudioScreen() {
     void saveClipStudio("public");
   };
 
-  const runVideoVisibilityUpdate = async (video: CreatorVideo) => {
-    const nextVisibility = video.visibility === "public" ? "draft" : "public";
+  const runVideoVisibilityUpdate = async (
+    video: CreatorVideo,
+    targetVisibility?: Exclude<CreatorContentActionSheetVisibilityAction, "private">,
+  ) => {
+    const nextVisibility = targetVisibility ?? (video.visibility === "public" ? "draft" : "public");
     try {
       setVideoSaving(true);
       setVideoNotice(nextVisibility === "public" ? "Publishing video..." : "Moving video to draft...");
-      const updatedVideo = await updateCreatorVideoMetadata(video.id, { visibility: nextVisibility });
+      await updateCreatorVideoMetadata(video.id, { visibility: nextVisibility });
       await loadCreatorVideos();
-      setVideoNotice(nextVisibility === "public" ? "Video published." : "Video moved to draft.");
+      setSelectedContentActionVideo(null);
+      setVideoNotice(
+        nextVisibility === "public"
+          ? "Public on your Platform. Eligible for followers, Chi'lly Circle members, Explore, and Home only where backed by discovery rules. It is not posted to everybody's Profile feed."
+          : "Saved as Draft. Only you can see it in Platform Studio.",
+      );
     } catch (error) {
       setVideoNotice(formatCreatorVideoUiError(error, "Unable to update video visibility right now."));
     } finally {
@@ -3914,6 +3998,62 @@ export function ChannelStudioScreen() {
     );
   };
 
+  const onSetContentActionVisibility = (
+    video: CreatorVideo,
+    visibility: CreatorContentActionSheetVisibilityAction,
+  ) => {
+    if (visibility === "private") {
+      setVideoNotice("Private to Chi'lly Circle needs backed Circle-only creator-video access before it can be used. Save as Draft remains owner-only.");
+      setSelectedContentActionVideo(null);
+      return;
+    }
+    void runVideoVisibilityUpdate(video, visibility);
+  };
+
+  const onSetContentActionPrice = (video: CreatorVideo) => {
+    setSelectedContentActionVideo(null);
+    router.push({
+      ...CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget,
+      params: {
+        ...CREATOR_MONEY_ROUTE_TARGETS.paidVideo.ownerTarget.params,
+        videoId: video.id,
+      },
+    } as unknown as Parameters<typeof router.push>[0]);
+  };
+
+  const onCreateEventFromVideo = (video: CreatorVideo) => {
+    setSelectedContentActionVideo(null);
+    openStudioTab("live", { focus: "schedule" });
+    setEventEditor({
+      ...createEmptyEventEditorState(),
+      eventTitle: `${video.title} Live Event`,
+      eventType: "watch_party_live",
+      status: "draft",
+      linkedTitleId: "",
+    });
+    setEventNotice("Event draft prefilled from creator content. Confirm event type, start/end time, visibility, and access before saving.");
+  };
+
+  const onShareContentActionVideo = async (video: CreatorVideo) => {
+    if (!isCreatorVideoPubliclyShareable(video)) {
+      setVideoNotice("Only public, shareable creator videos can be shared.");
+      return;
+    }
+    try {
+      await Share.share({
+        message: `Watch ${video.title} on Chi'llywood: ${buildCreatorVideoDeepLink(video.id)}`,
+      });
+      setSelectedContentActionVideo(null);
+    } catch {
+      setVideoNotice("Unable to open sharing right now.");
+    }
+  };
+
+  const onFeatureContentActionVideo = (video: CreatorVideo) => {
+    setSelectedContentActionVideo(null);
+    void publishSpotlightVideo(video);
+  };
+
   const onDeleteVideo = (video: CreatorVideo) => {
     Alert.alert(
       "Delete Video",
@@ -3930,6 +4070,7 @@ export function ChannelStudioScreen() {
                 setVideoNotice(null);
                 await deleteCreatorVideo(video);
                 await loadCreatorVideos();
+                setSelectedContentActionVideo(null);
                 if (videoEditor.editingVideoId === video.id) resetVideoEditor();
                 setVideoNotice("Creator video deleted.");
               } catch (error) {
@@ -4855,6 +4996,7 @@ export function ChannelStudioScreen() {
               }}
               onToggleVisibility={() => onToggleVideoVisibility(video)}
               onDelete={() => onDeleteVideo(video)}
+              onOpenActions={() => setSelectedContentActionVideo(video)}
             />
           ))}
         </View>
@@ -9544,6 +9686,32 @@ export function ChannelStudioScreen() {
         ) : null}
       </ScrollView>
     </ImageBackground>
+    <CreatorContentActionSheet
+      visible={selectedContentActionVideo !== null}
+      video={selectedContentActionVideo}
+      busy={videoSaving || brandSaving}
+      isFeatured={!!selectedContentActionVideo && activeBrandProfile?.spotlightVideoId === selectedContentActionVideo.id}
+      circleOnlyBacked={false}
+      onClose={() => {
+        if (!videoSaving && !brandSaving) setSelectedContentActionVideo(null);
+      }}
+      onOpenPlayer={(video) => {
+        setSelectedContentActionVideo(null);
+        router.push({ pathname: "/player/[id]", params: { id: video.id, source: "creator-video" } });
+      }}
+      onEditDetails={(video) => {
+        setSelectedContentActionVideo(null);
+        onEditVideo(video);
+      }}
+      onSetVisibility={onSetContentActionVisibility}
+      onSetPrice={onSetContentActionPrice}
+      onCreateEvent={onCreateEventFromVideo}
+      onFeature={onFeatureContentActionVideo}
+      onShare={(video) => {
+        void onShareContentActionVideo(video);
+      }}
+      onDelete={onDeleteVideo}
+    />
     <Modal
       visible={selectedCreatorMoneyAuditEvent !== null}
       animationType="slide"

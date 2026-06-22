@@ -60,7 +60,7 @@ assertIncludes(liveTab, "emptyState", "Live screen Empty state pattern");
 assertIncludes(liveTab, "Start or join a people-first live room.", "Live Watch-Party user copy");
 assertIncludes(liveTab, "Use a room code for an existing content-first Watch-Party Live room.", "Watch-Party Live user copy");
 assertIncludes(liveTab, "Choose a title or creator video first, then start Watch-Party Live from the player.", "Browse Titles user copy");
-assertIncludes(liveTab, "Paid Watch-Party tickets stay in Party Waiting Room to Party Room, not Live Stage.", "Party Room separation");
+assertIncludes(liveTab, "Paid Watch-Party Seat Passes stay in Party Waiting Room to Party Room, not Live Stage.", "Party Room separation");
 assertIncludes(liveTab, "requireLiveFirstPremium", "Live tab Premium/runtime preflight");
 assertIncludes(liveTab, 'params: { mode: "live", source: "bottom-live-tab" }', "Live tab route mapping");
 assertIncludes(liveTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Live tab Chi'llywood background");
