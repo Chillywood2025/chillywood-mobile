@@ -68,7 +68,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
   },
   {
     key: "watch_party_live_ticket_sandbox_099",
-    label: "Watch-Party Live ticket",
+    label: "Watch-Party Live Seat Pass",
     sourceType: "watch_party_live",
     productType: "watch_party_live_ticket",
     providerProductId: "cw_watch_party_live_ticket_sandbox_099",
@@ -119,7 +119,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     priceLabel: "$4.99/month sandbox/test",
     providerRail: "revenuecat_google_play",
     unlocks: "Creates subscriber status for this creator channel only.",
-    safety: "Does not unlock Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, LiveKit authority, or other creators.",
+    safety: "Does not unlock Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, LiveKit authority, or other creators.",
   },
   {
     key: "vip_pass_sandbox_499",
@@ -130,7 +130,7 @@ export const APPROVED_CREATOR_SANDBOX_TIERS: CreatorMonetizationSetupTier[] = [
     priceLabel: "$4.99 sandbox/test",
     providerRail: "revenuecat_google_play",
     unlocks: "Creates VIP status for this creator channel only.",
-    safety: "Does not unlock Premium, paid videos, event passes, channel subscriptions, Watch-Party tickets, LiveKit authority, or other creators.",
+    safety: "Does not unlock Premium, paid videos, event passes, channel subscriptions, Watch-Party Seat Passes, LiveKit authority, or other creators.",
   },
   {
     key: "event_pass_sandbox_099",

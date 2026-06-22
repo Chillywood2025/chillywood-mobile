@@ -405,7 +405,7 @@ Public V1 burn-down proof path: `/tmp/chillywood-public-v1-blocker-burndown-proo
 Claimed Public V1 burn-down screenshots:
 - `04-explore-current.png` / `.xml`: rebuilt Explore with backed sections and bottom nav Home / Explore / Live / Library.
 - `05-library-backed-sections.png` / `.xml`: Library with Saved, Continue Watching, and Platforms backed sections or honest empty states.
-- `06-player-normal-mode.png` / `.xml`: normal title Player with `CHI'LLYWOOD · PLAYER` and `Title Player` mode label.
+- `06-player-normal-mode.png` / `.xml`: normal title Player with `Chi'llywood · PLAYER` and `Title Player` mode label.
 - `09-host-preflight-details.png` / `.xml`: title-linked Watch-Party Live host preflight rows.
 - `10-home-bottom-nav-top-avatar.png` / `.xml`: Home bottom nav plus `Open your Profile` top avatar entry.
 - `11-top-avatar-profile-route.png` / `.xml`: top avatar opened canonical Profile.

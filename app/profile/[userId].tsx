@@ -3275,7 +3275,7 @@ export default function ProfileScreen() {
             <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
               <Text style={styles.backArrow}>←</Text>
             </TouchableOpacity>
-            <Text style={styles.kicker}>{"CHI'LLYWOOD · PROFILE"}</Text>
+            <Text style={styles.kicker}>{"Chi'llywood · PROFILE"}</Text>
             <View style={{ width: 18 }} />
           </View>
           <View style={styles.sectionCard}>
@@ -3905,7 +3905,7 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>{"CHI'LLYWOOD · PROFILE"}</Text>
+          <Text style={styles.kicker}>{"Chi'llywood · PROFILE"}</Text>
           <View style={{ width: 18 }} />
         </View>
 

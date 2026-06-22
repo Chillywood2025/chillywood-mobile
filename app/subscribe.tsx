@@ -359,7 +359,7 @@ export default function SubscribeScreen() {
 
       <MoneyScopeStrip
         includes="App-wide Chi'llywood Premium access for supported Premium features and creator tools."
-        excludes="Creator subscriptions, VIP passes, tips, paid videos, Watch-Party tickets, and paid events are separate creator products."
+        excludes="Creator subscriptions, VIP passes, tips, paid videos, Watch-Party Seat Passes, and paid events are separate creator products."
       />
       <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
 
@@ -403,7 +403,7 @@ export default function SubscribeScreen() {
             {hasPremium ? (
               <MoneySuccessReceipt
                 title="Premium active"
-                body="Your app-wide Premium status is active. Creator subscriptions, VIP, paid videos, tickets, events, and tips still stay separate."
+                body="Your app-wide Premium status is active. Creator subscriptions, VIP, paid videos, room passes, events, and tips still stay separate."
               />
             ) : null}
             <StatusLine

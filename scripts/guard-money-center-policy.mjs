@@ -54,10 +54,10 @@ assertIncludes(packageJson, "guard:money-center-policy", "package guard script")
 [
   "Accept tips from fans.",
   "Charge fans to unlock selected videos.",
-  "Sell access to hosted Watch-Party rooms.",
+  "Sell Seat Pass access to hosted Watch-Party rooms.",
   "Offer monthly creator membership.",
   "Sell creator-specific VIP status and access.",
-  "Sell tickets to live events and premieres.",
+  "Sell Event Passes to live events and premieres.",
 ].forEach((label) => {
   assertIncludes(monetizationFeatureCatalog, label, `shared monetization feature catalog ${label}`);
 });
@@ -74,7 +74,7 @@ assertIncludes(channelSettings, "testID={`money-feature-${feature.key}-cta`}", "
 assertIncludes(channelSettings, "testID={`money-manager-${activeMoneyManageTarget}`}", "Money Center manager panel test id");
 assertIncludes(channelSettings, "money-manager-tips-connect-payouts-button", "Tips manager connect payouts action");
 assertIncludes(channelSettings, "money-manager-paid-videos-open-content-button", "Paid Videos manager content action");
-assertIncludes(channelSettings, "money-manager-watch-party-create-target-button", "Watch-Party Ticket manager target action");
+assertIncludes(channelSettings, "money-manager-watch-party-create-target-button", "Watch-Party Seat Pass manager target action");
 assertIncludes(channelSettings, "money-manager-channel-subscription-enable-button", "Channel Subscription manager action");
 assertIncludes(channelSettings, "money-manager-vip-pass-enable-button", "VIP Pass manager action");
 assertIncludes(channelSettings, "money-manager-paid-events-open-live-button", "Event Pass manager event action");

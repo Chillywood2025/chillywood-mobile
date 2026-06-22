@@ -1134,10 +1134,10 @@ export default function PublicChannelScreen() {
         available: !!firstVideo,
       },
       {
-        title: "Watch-Party Ticket",
+        title: "Watch-Party Seat Pass",
         scopeKey: "watch_party_ticket" as MoneyScopeKey,
         body: watchPartyTicketOffer?.partyId
-          ? "Get a sandbox Watch-Party ticket. No payout is created."
+          ? "Get a sandbox Watch-Party Seat Pass. No payout is created."
           : "Ticket test unavailable - creator needs a Party Room target.",
         button: "Get test ticket",
         testID: "tester-watch-party-ticket-button",
@@ -1233,7 +1233,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "Subscription offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage this creator Platform subscription. This is separate from Chi&apos;llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, and payouts.
+              Manage this creator Platform subscription. This is separate from Chi&apos;llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, and payouts.
             </Text>
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1262,7 +1262,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator membership</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
 	          <Text style={styles.cardBody}>
-	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. No live payout. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.`}
+	            {`Sandbox Test: subscribe to this creator Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. No live payout. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.`}
 	          </Text>
           {subscriptionNotice ? <Text style={styles.metaText}>{subscriptionNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1300,7 +1300,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "VIP offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage creator-specific VIP for this Platform. VIP does not unlock Chi&apos;llywood Premium, subscriptions, paid videos, Watch-Party tickets, paid events, room authority, or payouts.
+              Manage creator-specific VIP for this Platform. VIP does not unlock Chi&apos;llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, or payouts.
             </Text>
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1329,7 +1329,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>Creator-specific VIP</Text>
           <Text style={styles.cardTitle}>{offer.title}</Text>
           <Text style={styles.cardBody}>
-            {`Sandbox Test: get VIP for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP does not unlock Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, subscriptions, LiveKit authority, room permissions, or other creators.`}
+            {`Sandbox Test: get VIP for this creator Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. No live payout. VIP does not unlock Chi'llywood Premium, paid videos, paid Watch-Party Seat Passes, paid events, subscriptions, LiveKit authority, room permissions, or other creators.`}
           </Text>
           {vipNotice ? <Text style={styles.metaText}>{vipNotice}</Text> : null}
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
@@ -1389,13 +1389,13 @@ export default function PublicChannelScreen() {
           ],
         },
         {
-          title: "Watch-Party tickets",
+          title: "Watch-Party Seat Passes",
           scopeKey: "watch_party_ticket" as MoneyScopeKey,
-          body: "Choose a Party Room target. Ticket access does not grant host or LiveKit authority.",
+          body: "Choose a Party Room target. Seat Pass access does not grant host or LiveKit authority.",
           status: watchPartyTicketOffer?.partyId ? "Target ready" : "Needs target",
           actions: [
             {
-              label: watchPartyTicketOffer?.partyId ? "Manage ticket target" : "Choose Party Room target",
+              label: watchPartyTicketOffer?.partyId ? "Manage Seat Pass target" : "Choose Party Room target",
               onPress: () => router.push(CREATOR_MONEY_ROUTE_TARGETS.watchPartyTicket.ownerTarget as unknown as Parameters<typeof router.push>[0]),
             },
           ],
@@ -1428,7 +1428,7 @@ export default function PublicChannelScreen() {
         {
           title: "VIP",
           scopeKey: "vip_pass" as MoneyScopeKey,
-          body: "Creator-specific VIP only. Does not unlock Premium, paid videos, tickets, or events.",
+          body: "Creator-specific VIP only. Does not unlock Premium, paid videos, room passes, or events.",
           status: vipOffer ? "Manage" : "Not set",
           actions: [
             {
@@ -1580,7 +1580,7 @@ export default function PublicChannelScreen() {
           <Text style={styles.cardKicker}>{sandboxTesterActive ? "Sandbox tester" : "Creator support"}</Text>
           <Text style={styles.cardTitle}>{sandboxTesterActive ? "Test purchases. No real money moves." : "Choose exactly what you want to support."}</Text>
           <Text style={styles.cardBody}>
-            Premium, subscriptions, VIP, tips, videos, tickets, and event passes are separate.
+            Premium, subscriptions, VIP, tips, videos, room passes, and event passes are separate.
           </Text>
         </View>
         <View style={styles.supportList}>

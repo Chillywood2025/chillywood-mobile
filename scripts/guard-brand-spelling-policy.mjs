@@ -37,14 +37,11 @@ const textExtensions = new Set([
   ".yml",
 ]);
 
-const forbidden = [
-  "Chi" + "'llwood",
-  "Chi" + "\u2019llwood",
-  "Chi" + "\u2018llywood",
-  "Chi" + "''llwood",
-  "Chill" + "ywood Originals",
-  "Chi" + "'llwood Originals Proof Fixture",
-];
+const canonicalBrand = "Chi" + "'llywood";
+const visibleBrandPattern = /\b[Cc][Hh][Ii](?:['\u2019\u2018`\u00b4\s-]*)[Ll]{1,3}(?:['\u2019\u2018`\u00b4\s-]*)[Yy]?(?:['\u2019\u2018`\u00b4\s-]*)[Ww][Oo][Oo][Dd]\b/gu;
+
+const technicalLowercaseContextPattern =
+  /(?:com\.chillywood\.mobile|chillywood-mobile|chillywoodstream\.com|chillywood\.test|chillywood-[a-z0-9-]+\.(?:png|jpg|jpeg|webp|svg)|[./@_-]chillywood|chillywood[./@_-])/u;
 
 function shouldSkip(relativePath) {
   if (excludedPaths.has(relativePath)) return true;
@@ -67,6 +64,28 @@ function* walk(dir) {
   }
 }
 
+function isAllowedTechnicalMatch(relativePath, candidate, line) {
+  if (candidate === "Chi''llywood" && (relativePath.endsWith(".sql") || relativePath.endsWith(".mjs"))) {
+    return true;
+  }
+
+  if (candidate !== candidate.toLowerCase()) return false;
+  const lowercaseLine = line.toLowerCase();
+
+  if (
+    relativePath.endsWith(".sql")
+    && /(?:'chillywood'|'chillywood\.rachi'|'official chillywood')/u.test(lowercaseLine)
+  ) {
+    return true;
+  }
+  if (technicalLowercaseContextPattern.test(lowercaseLine)) return true;
+  if (new RegExp("`[^`]*" + candidate + "[^`]*`", "u").test(line)) return true;
+  if (candidate.includes("-") && /\b(?:href|id)=["'][^"']*chi-llwood/u.test(lowercaseLine)) return true;
+  if (relativePath === "_lib/usernameHandles.ts") return true;
+
+  return false;
+}
+
 const violations = [];
 
 for (const filePath of walk(repoRoot)) {
@@ -74,10 +93,12 @@ for (const filePath of walk(repoRoot)) {
   const text = readFileSync(filePath, "utf8");
   const lines = text.split(/\r?\n/);
   lines.forEach((line, index) => {
-    for (const needle of forbidden) {
-      if (line.includes(needle)) {
-        violations.push(`${relativePath}:${index + 1}: ${needle}`);
-      }
+    for (const match of line.matchAll(visibleBrandPattern)) {
+      const candidate = match[0];
+      if (candidate === canonicalBrand) continue;
+      if (isAllowedTechnicalMatch(relativePath, candidate, line)) continue;
+      if (relativePath === "scripts/guard-brand-spelling-policy.mjs") continue;
+      violations.push(`${relativePath}:${index + 1}: ${candidate}`);
     }
   });
 }

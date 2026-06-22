@@ -157,7 +157,7 @@ export default function LiveTabScreen() {
                 <Text style={styles.detailText}>Live Watch-Party is the primary people-first live-room path.</Text>
                 <Text style={styles.detailText}>Enter Watch-Party Code opens the existing room-code utility for Watch-Party Live rooms.</Text>
                 <Text style={styles.detailText}>Browse Titles starts from content before Watch-Party Live.</Text>
-                <Text style={styles.detailText}>Paid Watch-Party tickets stay in Party Waiting Room to Party Room, not Live Stage.</Text>
+                <Text style={styles.detailText}>Paid Watch-Party Seat Passes stay in Party Waiting Room to Party Room, not Live Stage.</Text>
               </View>
             ) : null}
           </View>

@@ -255,7 +255,7 @@ export function SupportScreen() {
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.kicker}>
-            {closedBeta ? "CHI'LLYWOOD · CLOSED BETA" : "CHI'LLYWOOD · SUPPORT"}
+            {closedBeta ? "Chi'llywood · CLOSED BETA" : "Chi'llywood · SUPPORT"}
           </Text>
           <View style={{ width: 18 }} />
         </View>

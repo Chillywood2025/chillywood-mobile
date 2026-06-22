@@ -26,7 +26,10 @@ type ParticipantDetailSheetProps = {
   followActionBusy?: boolean;
   onToggleFollow?: () => void;
   onViewProfile?: () => void;
+  onOpenChat?: () => void;
+  onTipCreator?: () => void;
   onReportParticipant?: () => void;
+  reportActionLabel?: string;
   onClose: () => void;
   isFeatured?: boolean;
   isRequesting?: boolean;
@@ -46,7 +49,10 @@ export function ParticipantDetailSheet({
   followActionBusy = false,
   onToggleFollow,
   onViewProfile,
+  onOpenChat,
+  onTipCreator,
   onReportParticipant,
+  reportActionLabel = "Report Participant",
   onClose,
   isFeatured = false,
   isRequesting = false,
@@ -146,13 +152,33 @@ export function ParticipantDetailSheet({
             </TouchableOpacity>
           ) : null}
 
+          {onOpenChat ? (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              activeOpacity={0.82}
+              onPress={onOpenChat}
+            >
+              <Text style={styles.actionBtnText}>Chi'lly Chat</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {onTipCreator ? (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnPrimary]}
+              activeOpacity={0.82}
+              onPress={onTipCreator}
+            >
+              <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>Tip Creator</Text>
+            </TouchableOpacity>
+          ) : null}
+
           {onReportParticipant ? (
             <TouchableOpacity
               style={styles.actionBtn}
               activeOpacity={0.82}
               onPress={onReportParticipant}
             >
-              <Text style={styles.actionBtnText}>Report Participant</Text>
+              <Text style={styles.actionBtnText}>{reportActionLabel}</Text>
             </TouchableOpacity>
           ) : null}
 

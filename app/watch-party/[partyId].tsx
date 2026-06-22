@@ -53,6 +53,11 @@ import {
 } from "../../_lib/accessEntitlements";
 import { trackEvent } from "../../_lib/analytics";
 import { getBetaAccessBlockCopy, useBetaProgram } from "../../_lib/betaProgram";
+import { getOrCreateDirectThread } from "../../_lib/chat";
+import {
+  readCreatorTipPublicStatus,
+  type CreatorTipPublicStatus,
+} from "../../_lib/creatorTips";
 import { prepareLiveKitJoinBoundary } from "../../_lib/livekit/join-boundary";
 import {
     reportDebugError,
@@ -132,6 +137,7 @@ import { AccessSheet, type AccessSheetReason } from "../../components/monetizati
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyScopeStrip, MoneyStatusChip } from "../../components/monetization/money-ui";
 import { RouteBackedMonetizationProofCard } from "../../components/monetization/route-backed-monetization-proof-card";
+import { TipSheet } from "../../components/monetization/tip-sheet";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
@@ -360,6 +366,9 @@ export default function WatchPartyRoomScreen() {
   const [isSpeakingById, setIsSpeakingById] = useState<Record<string, boolean>>({});
   const [tapPulseById, setTapPulseById] = useState<Record<string, boolean>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<LiveBubbleParticipant | null>(null);
+  const [roomTipStatus, setRoomTipStatus] = useState<CreatorTipPublicStatus | null>(null);
+  const [roomTipTarget, setRoomTipTarget] = useState<{ id: string; name: string; avatarUrl?: string | null } | null>(null);
+  const [roomTipSheetVisible, setRoomTipSheetVisible] = useState(false);
   const [hiddenParticipantIds, setHiddenParticipantIds] = useState<Record<string, boolean>>({});
   const [pinnedParticipantId, setPinnedParticipantId] = useState("");
   const [pinActionParticipantId, setPinActionParticipantId] = useState("");
@@ -798,8 +807,8 @@ export default function WatchPartyRoomScreen() {
           setPaidTicketGate(ticketAccess);
           setPaidTicketNotice(
             ticketAccess.requiresPurchase
-              ? "Buy your ticket before entering the Party Room."
-              : "This room ticket is not available right now.",
+              ? "Reserve your seat before entering the Party Room."
+              : "This Seat Pass is not available right now.",
           );
           setLoading(false);
           trackEvent("money_provider_blocked_state_seen", {
@@ -1893,7 +1902,7 @@ export default function WatchPartyRoomScreen() {
         setJoinRetryToken((value) => value + 1);
       }
     } catch {
-      setPaidTicketNotice("Room ticket checkout could not start. Try again later.");
+      setPaidTicketNotice("Seat Pass checkout could not start. Try again later.");
     } finally {
       setPaidTicketBusy(false);
     }
@@ -2468,6 +2477,65 @@ export default function WatchPartyRoomScreen() {
         fallbackDisplayName: "Participant",
       })
     : null;
+  const selectedParticipantIsHostCreator = !!selectedParticipantUserId
+    && !!room?.hostUserId
+    && selectedParticipantUserId === room.hostUserId
+    && selectedParticipantUserId !== currentUserBubbleId;
+  const canTipSelectedCreator = selectedParticipantIsHostCreator && roomTipStatus?.canTip === true;
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedParticipantIsHostCreator || !selectedParticipantUserId) {
+      setRoomTipStatus(null);
+      return () => {
+        active = false;
+      };
+    }
+    readCreatorTipPublicStatus(selectedParticipantUserId)
+      .then((status) => {
+        if (active) setRoomTipStatus(status);
+      })
+      .catch(() => {
+        if (active) setRoomTipStatus(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedParticipantIsHostCreator, selectedParticipantUserId]);
+
+  const openSelectedParticipantChat = useCallback(async () => {
+    if (!selectedParticipantProfile?.id) return;
+    try {
+      const thread = await getOrCreateDirectThread({
+        userId: selectedParticipantProfile.id,
+        displayName: selectedParticipantProfile.displayName,
+        avatarUrl: selectedParticipantProfile.avatarUrl,
+        tagline: selectedParticipantProfile.tagline,
+      });
+      closeParticipantModal();
+      router.push({
+        pathname: "/chat/[threadId]",
+        params: { threadId: thread.threadId },
+      });
+    } catch (error) {
+      Alert.alert(
+        "Chi'lly Chat",
+        error instanceof Error && error.message ? error.message : "Unable to open Chi'lly Chat right now.",
+      );
+    }
+  }, [closeParticipantModal, router, selectedParticipantProfile]);
+
+  const openSelectedCreatorTipSheet = useCallback(() => {
+    if (!canTipSelectedCreator || !selectedParticipantProfile?.id) return;
+    setRoomTipTarget({
+      id: selectedParticipantProfile.id,
+      name: selectedParticipantProfile.displayName || "Creator",
+      avatarUrl: selectedParticipantProfile.avatarUrl,
+    });
+    setRoomTipSheetVisible(true);
+    closeParticipantModal();
+  }, [canTipSelectedCreator, closeParticipantModal, selectedParticipantProfile]);
+
   const onSubmitReport = useCallback(async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
     if (!reportTarget) return;
     setReportBusy(true);
@@ -2642,21 +2710,21 @@ export default function WatchPartyRoomScreen() {
         <View style={styles.errorCard} testID="watch-party-ticket-lock-card">
           <View style={styles.ticketGateHeaderRow}>
             <Text style={styles.errorTitle}>
-              {paidTicketGate.requiresPurchase ? "Buy Room Ticket" : "Room ticket unavailable"}
+              {paidTicketGate.requiresPurchase ? "Reserve Seat" : "Seat Pass unavailable"}
             </Text>
-            <MoneyStatusChip label={paidTicketGate.requiresPurchase ? "Ticketed" : "Unavailable"} tone={paidTicketGate.requiresPurchase ? "premium" : "warning"} />
+            <MoneyStatusChip label={paidTicketGate.requiresPurchase ? "Seat Pass" : "Unavailable"} tone={paidTicketGate.requiresPurchase ? "premium" : "warning"} />
           </View>
           <Text style={styles.ticketPrice}>{priceLabel}</Text>
           <Text style={styles.errorBody}>
             {paidTicketGate.requiresPurchase
-              ? `This ticket unlocks access to this Watch-Party room only for ${priceLabel}. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.`
-              : "This paid Watch-Party ticket is not available right now."}
+              ? `This Seat Pass unlocks access to this Watch-Party room only for ${priceLabel}. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.`
+              : "This paid Watch-Party Seat Pass is not available right now."}
           </Text>
           <MoneyScopeStrip
             includes="Access to this Watch-Party room target only."
             excludes="Chi'llywood Premium, subscriptions, VIP, paid videos, event passes, LiveKit publish authority, host controls, payouts, and other rooms stay separate."
           />
-          <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this ticket unlock?" />
+          <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Seat Pass unlock?" />
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           {paidTicketGate.requiresPurchase ? (
             <TouchableOpacity
@@ -2666,10 +2734,10 @@ export default function WatchPartyRoomScreen() {
               disabled={paidTicketBusy}
               testID="watch-party-ticket-purchase-button"
               accessibilityRole="button"
-              accessibilityLabel="Get Watch-Party Room Ticket"
+              accessibilityLabel="Get Watch-Party Seat Pass"
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                {paidTicketBusy ? "Opening Google Play" : "Get Room Ticket"}
+                {paidTicketBusy ? "Opening Google Play" : "Get Seat"}
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -3649,6 +3717,8 @@ export default function WatchPartyRoomScreen() {
         onToggleFollow={selectedParticipantFollowAction.toggle}
         safeAreaBottom={safeAreaInsets.bottom}
         onClose={closeParticipantModal}
+        onOpenChat={canShowProfileAction ? openSelectedParticipantChat : undefined}
+        onTipCreator={canTipSelectedCreator ? openSelectedCreatorTipSheet : undefined}
         onReportParticipant={selectedParticipantUserId ? () => {
           trackModerationActionUsed({
             surface: "watch-party-room",
@@ -3666,6 +3736,7 @@ export default function WatchPartyRoomScreen() {
           });
           setReportVisible(true);
         } : undefined}
+        reportActionLabel="Report/Block"
         onViewProfile={canShowProfileAction ? () => {
           if (!selectedParticipantProfile?.id) return;
           closeParticipantModal();
@@ -3685,6 +3756,18 @@ export default function WatchPartyRoomScreen() {
           });
         } : undefined}
       />
+
+      {roomTipTarget ? (
+        <TipSheet
+          visible={roomTipSheetVisible}
+          creatorId={roomTipTarget.id}
+          creatorName={roomTipTarget.name}
+          creatorAvatarUrl={roomTipTarget.avatarUrl}
+          sourceSurface="watch_party_host_tile"
+          tipStatus={roomTipStatus}
+          onClose={() => setRoomTipSheetVisible(false)}
+        />
+      ) : null}
 
       <InternalInviteSheet
         visible={inviteSheetVisible}

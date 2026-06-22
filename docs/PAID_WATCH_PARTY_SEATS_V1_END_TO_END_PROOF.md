@@ -4,11 +4,11 @@ Last updated: June 12, 2026
 
 ## Status
 
-Paid Watch-Party Seats / Room Tickets V1 is implemented repo-side and remote-applied to Supabase project `bmkkhihfbmsnnmcqkoly`. Play/internal v44 proved the first RevenueCat / Google Play sandbox purchase path, provider-created ticket/transaction rows, paid-fan Party Room entry, seat-limit sold-out state, second authenticated unpaid normal-route denial, and Money Center RPC transaction readback. Play/internal v45 proved the direct Party Room deep-link gate fix and a fresh paid-ticket purchase/entry path.
+Paid Watch-Party Seats / Room Passes V1 is implemented repo-side and remote-applied to Supabase project `bmkkhihfbmsnnmcqkoly`. Historical schema/RPC/product identifiers still use `ticket` internally, but user-facing Chi'llywood copy must say Seat, Seat Pass, Room Pass, Reserve Seat, Get Seat, or Join Paid Watch-Party. Play/internal v44 proved the first RevenueCat / Google Play sandbox purchase path, provider-created internal ticket/transaction rows, paid-fan Party Room entry, seat-limit sold-out state, second authenticated unpaid normal-route denial, and Money Center RPC transaction readback. Play/internal v45 proved the direct Party Room deep-link gate fix and a fresh paid Seat Pass purchase/entry path.
 
 Visual Money Center screenshot and provider refund/revoke proof remain deferred. Money Center RPC readback passed for the exact v45 transaction.
 
-Live money remains disabled. Room tickets are sandbox/not-payable only.
+Live money remains disabled. Seat Passes are sandbox/not-payable only.
 
 ## Provider Path
 
@@ -16,7 +16,7 @@ Live money remains disabled. Room tickets are sandbox/not-payable only.
 - Product key: `watch_party_live_ticket_sandbox_099`
 - Provider product id: `cw_watch_party_live_ticket_sandbox_099`
 - Stripe Tips is not used.
-- Premium is separate and does not unlock creator room tickets.
+- Premium is separate and does not unlock creator Seat Passes.
 
 ## Implemented
 
@@ -33,31 +33,31 @@ Live money remains disabled. Room tickets are sandbox/not-payable only.
   - `list_my_paid_watch_party_transactions`
 - Provider bridge:
   - Existing `revenuecat-webhook` verifies RevenueCat / Google Play events.
-  - Verified `watch_party_live_ticket` access grants are mirrored into room tickets and creator room-ticket transactions.
-  - Seat-limit oversell guard blocks active ticket creation when the offer is sold out.
+  - Verified `watch_party_live_ticket` access grants are mirrored into Seat Passes and creator room-pass transactions.
+  - Seat-limit oversell guard blocks active Seat Pass creation when the offer is sold out.
 - Client:
-  - Party Waiting Room checks paid-ticket access before routing to Party Room.
+  - Party Waiting Room checks paid Seat Pass access before routing to Party Room.
   - Party Room blocks unpaid paid-room direct links before camera/mic permission startup after v45 proof.
-  - Host can create a sandbox $0.99 room-ticket offer from Party Waiting Room after a Party Room code exists.
-  - Fan CTA is `Buy Room Ticket`.
+  - Host can create a sandbox $0.99 Seat Pass offer from Party Waiting Room after a Party Room code exists.
+  - Fan CTA is `Reserve Seat`.
   - Money Center Offers and Transactions read Paid Watch-Party rows separately from Tips and Paid Videos.
 
 ## Routing Truth
 
 Paid Watch-Party seats route:
 
-`Watch-Party Live / Player / Title surface -> Buy Room Ticket -> Party Waiting Room -> Party Room`
+`Watch-Party Live / Player / Title surface -> Reserve Seat / Get Seat -> Party Waiting Room -> Party Room`
 
-They do not route to Live Stage. Live Watch-Party / Live Stage behavior was not changed.
+The paid product is access to the parent Watch-Party room target. Party Waiting Room and Party Room are route stages inside that target, not separate paid products. They do not route to Live Stage. Live Watch-Party / Live Stage behavior was not changed.
 
 ## Security
 
-- Creators manage room-ticket offers through guarded RPC only.
+- Creators manage Room Pass offers through guarded RPC only.
 - Authenticated clients have `SELECT` only on `paid_watch_party_offers`; they cannot directly mutate `seats_sold`.
-- Clients cannot directly create active tickets.
-- Clients cannot directly mark room-ticket transactions paid.
-- Verified provider events are required before active tickets are created.
-- Ticket metadata is constrained to avoid secrets, raw provider payloads, LiveKit publish authority, host controls, or admin power.
+- Clients cannot directly create active Seat Passes.
+- Clients cannot directly mark room-pass transactions paid.
+- Verified provider events are required before active Seat Passes are created.
+- Seat Pass metadata is constrained to avoid secrets, raw provider payloads, LiveKit publish authority, host controls, or admin power.
 - Sandbox rows are not payable and do not create payout, cash-out, withdrawal, transfer, Premium, Tips, Paid Video, VIP, subscription, event, or LiveKit authority.
 
 ## Remote Apply Status
@@ -93,7 +93,7 @@ Remote readback confirmed:
 
 ## Proof Status
 
-Partial proof ran on Play/internal v38 and v40. Play/internal v44 ran the real ticket purchase proof.
+Partial proof ran on Play/internal v38 and v40. Play/internal v44 ran the real Seat Pass purchase proof.
 
 Passed so far:
 
@@ -119,7 +119,7 @@ v44 Join Now handler proof:
   - `join_now_paid_offer_detected`
   - `join_now_ticket_missing`
   - `join_now_route_waiting_room`
-- Visible UI showed `Room ticket required`, the no-Premium/no-other-access copy, and reachable `Buy Room Ticket`.
+- Visible UI showed `Seat Pass required`, the no-Premium/no-other-access copy, and reachable `Reserve Seat`.
 - DB readback for `N3CXJD` showed offer status `sandbox`, price `99`, currency `usd`, seat limit `1`, seats sold `0`, product key `watch_party_live_ticket_sandbox_099`, provider product id `cw_watch_party_live_ticket_sandbox_099`, and resolver access `allowed=false`, `reason=ticket_required`, `requiresPurchase=true`.
 - Proof files: `/tmp/chillywood-watch-party-ticket-proof-v44/01-after-join-now-ticket-gate.png`, `/tmp/chillywood-watch-party-ticket-proof-v44/02-ticket-gate-buy-button-visible.png`, `/tmp/chillywood-watch-party-ticket-proof-v44/03-join-now-branch-logs.txt`, `/tmp/chillywood-watch-party-ticket-proof-v44/04-room-offer-readback.json`.
 
@@ -133,7 +133,7 @@ v44 purchase proof:
   - Offer moved to `sold_out`, `seats_sold=1`
   - Resolver returned `allowed=true`, `reason=ticket_confirmed`
 - Fresh purchase fixture `ZT5MWV` / offer `143fdf4e-e235-4f98-81a4-e22194a8550a` was created to finish entry proof before expiration.
-- Google Play Billing sheet opened for `Watch-Party ticket sandbox` / `$0.99` / test card.
+- Google Play Billing sheet opened for `Watch-Party Seat Pass sandbox` / `$0.99` / test card.
 - Purchase intent `60cac129-dbc3-43c3-9300-4d654ce12f8a` moved to `consumed`.
 - Provider event id recorded on the transaction: `f3016f01-2514-40d7-b29d-103d3ced6fc2`.
 - Creator room-ticket transaction `fff398a9-59f6-452a-81f7-1c8e7ad04e50` was created as `paid`, `environment=sandbox`, `payout_status=not_payable`.
@@ -145,9 +145,9 @@ v44 purchase proof:
 
 Second unpaid / seat-limit proof:
 
-- Authenticated second unpaid tester `c2afa6cc-52f2-4714-b972-89863582d05a` had zero active tickets for offer `143fdf4e-e235-4f98-81a4-e22194a8550a`.
+- Authenticated second unpaid tester `c2afa6cc-52f2-4714-b972-89863582d05a` had zero active Seat Passes for offer `143fdf4e-e235-4f98-81a4-e22194a8550a`.
 - Resolver returned `allowed=false`, `reason=sold_out`, `requiresPurchase=false`.
-- Normal Find Room -> Join Now path stayed blocked with `This room ticket is not available right now.`
+- Normal Find Room -> Join Now path stayed blocked with `This Seat Pass is not available right now.`
 - Logs showed `join_now_ticket_missing` and `join_now_route_waiting_room` with reason `sold_out`.
 - Server seat-limit state stayed `seats_sold=1` / `seat_limit=1`; no oversell occurred.
 
@@ -167,8 +167,8 @@ v45 direct-link fix and purchase proof:
 - Play internal submission: `50f966fb-1c05-49f7-8ebe-32d1f0c1d6c2`
 - Device install: `R5CR120QCBF`, package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `45`
 - Fresh fixture: room `WNFUUF`, offer `ba02fbe7-97a7-4871-86f3-9ca62a141d76`, product `cw_watch_party_live_ticket_sandbox_099`, product key `watch_party_live_ticket_sandbox_099`, seat limit `1`
-- Unpaid direct-link proof: tester `c2afa6cc-52f2-4714-b972-89863582d05a` had resolver `allowed=false`, `reason=ticket_required`; direct link rendered `Buy Room Ticket` and no-Premium/no-other-access copy before camera permission, membership, presence, or room controls.
-- Google Play Billing sheet opened for `Watch-Party ticket sandbox`, `$0.99`, test card.
+- Unpaid direct-link proof: tester `c2afa6cc-52f2-4714-b972-89863582d05a` had resolver `allowed=false`, `reason=ticket_required`; direct link rendered `Reserve Seat` and no-Premium/no-other-access copy before camera permission, membership, presence, or room controls.
+- Google Play Billing sheet opened for `Watch-Party Seat Pass sandbox`, `$0.99`, test card.
 - Provider event `f768e840-3208-4251-ac84-95358987eb8b` created transaction `912a9d0a-3621-4070-826d-be2035856e47` as `paid`, `payout_status=not_payable`, provider `revenuecat_google_play`.
 - Active ticket `8c2906da-8d02-43b2-afb9-9a7ba514fba2` was created with provider transaction `9CDB9B27-362C-478B-BCA3-8241C876D10D`.
 - Offer moved to `sold_out`, `seats_sold=1`, `seat_limit=1`; no oversell occurred.

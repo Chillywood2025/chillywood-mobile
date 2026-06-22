@@ -148,7 +148,7 @@ export default function ChannelSubscriptionScreen() {
 	            </Text>
             <MoneyScopeStrip
               includes="Subscriber access for this creator Platform."
-              excludes="This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators."
+              excludes="This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, payouts, or other creators."
               includesTestID="subscriber-area-includes-list"
               excludesTestID="subscriber-area-does-not-include-list"
             />
@@ -191,12 +191,12 @@ export default function ChannelSubscriptionScreen() {
             <Text style={styles.title}>{offer?.title ?? "Channel Subscription"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Subscribe to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.`
+                ? `Subscribe to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.`
                 : "This creator subscription is not available right now."}
             </Text>
             <MoneyScopeStrip
               includes="Subscriber access for this creator Platform when active."
-              excludes="Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, paid events, payouts, and other creators stay separate."
+              excludes="Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, payouts, and other creators stay separate."
             />
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}

@@ -10805,7 +10805,7 @@ export default function AdminStudioScreen() {
               rows={[
                 { label: "Approved tester access", value: "Owner, Operator, runtime allowlist, active beta/internal tester, or approved proof account" },
                 { label: "Premium", value: "Google Play / RevenueCat sandbox only; public shell remains closed" },
-                { label: "Digital access", value: "Tips, tickets, access passes, seats, paid content, and event passes use sandbox intents" },
+                { label: "Digital access", value: "Tips, room passes, access passes, seats, paid content, and event passes use sandbox intents" },
                 { label: "Physical merch", value: "Stripe sandbox physical goods only; no digital access" },
                 { label: "Payout readiness", value: "Read-only Stripe Connect status; no payout execution" },
                 { label: "Tester authority", value: "No admin, mod, host, speaker, LiveKit publish, payout, or safety-bypass authority" },
@@ -10814,7 +10814,7 @@ export default function AdminStudioScreen() {
             <OwnerDetailGrid
               rows={[
                 { label: "Creator tip", value: "Ledger-only / sandbox / not payable" },
-                { label: "Watch-Party ticket", value: "Viewer/listener entry only; host approval still wins" },
+                { label: "Watch-Party Seat Pass", value: "Viewer/listener entry only; host approval still wins" },
                 { label: "Live access pass", value: "Entry/viewing only; no speaker or host power" },
                 { label: "Live seat pass", value: "Seat eligibility only; canPublish remains false until host approval" },
                 { label: "Paid content", value: "Grant applies only when content safety state allows playback" },
@@ -10959,7 +10959,7 @@ export default function AdminStudioScreen() {
             <OwnerDetailGrid
               rows={[
                 { label: "Tips", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "tips_enabled").state) },
-                { label: "Watch-Party tickets", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_tickets_enabled").state) },
+                { label: "Watch-Party Seat Passes", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_tickets_enabled").state) },
                 { label: "Watch-Party seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "watch_party_seats_enabled").state) },
                 { label: "Live Watch-Party access", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "live_watch_party_access_enabled").state) },
                 { label: "Live Watch-Party seats", value: formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "live_watch_party_seats_enabled").state) },

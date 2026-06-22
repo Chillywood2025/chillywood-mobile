@@ -148,7 +148,7 @@ export default function CreatorVipPassScreen() {
             </Text>
             <MoneyScopeStrip
               includes="Creator-specific VIP access for this Platform."
-              excludes="Chi'llywood Premium, subscriptions, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, room permissions, payouts, or other creators."
+              excludes="Chi'llywood Premium, subscriptions, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, room permissions, payouts, or other creators."
               includesTestID="vip-area-includes-list"
               excludesTestID="vip-area-does-not-include-list"
             />
@@ -188,12 +188,12 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.title}>{offer?.title ?? "VIP Pass"}</Text>
             <Text style={styles.body}>
               {needsPurchase
-                ? `Get VIP access for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, Watch-Party tickets, paid events, subscriptions, or other creators.`
+                ? `Get VIP access for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, Watch-Party Seat Passes, paid events, subscriptions, or other creators.`
                 : "This creator has not enabled VIP yet."}
             </Text>
             <MoneyScopeStrip
               includes="Creator-specific VIP access for this Platform when active."
-              excludes="Chi'llywood Premium, subscriptions, paid videos, Watch-Party tickets, paid events, room authority, payouts, and other creators stay separate."
+              excludes="Chi'llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, payouts, and other creators stay separate."
             />
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}

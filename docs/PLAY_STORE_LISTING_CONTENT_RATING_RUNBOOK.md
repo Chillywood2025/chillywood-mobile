@@ -262,7 +262,7 @@ This audit covers repo assets and references only. It does not replace final dev
 | --- | --- |
 | Product name | `app.json`, app copy, legal pages, support copy, and route copy consistently use `Chi'llywood`. |
 | Logo asset | No separate reusable `logo` or `wordmark` file was found by repo search. The icon/splash/adaptive assets appear to carry the app mark, but a standalone store wordmark source is not documented. |
-| UI usage | Login uses text `CHI'LLYWOOD`; many app surfaces use text branding rather than a shared logo component. |
+| UI usage | Login uses text `Chi'llywood`; many app surfaces use text branding rather than a shared logo component. |
 | Store risk | Feature graphic creation needs an approved high-resolution logo/wordmark source. Do not rebuild it from screenshots. |
 | Next action | Design owner should identify or create the canonical Chi'llywood wordmark/logo source, then use it consistently for feature graphic, store screenshots, splash review, and future brand kit. |
 

@@ -15,8 +15,8 @@ const SURFACE_COPY: Record<Props["surface"], { title: string; body: string }> = 
     body: "Paid access unlocks this content only if it remains public and safe.",
   },
   watch_party_ticket: {
-    title: "Watch-Party ticket sandbox gate",
-    body: "Ticket access allows viewer entry only. Speaker controls still require host approval.",
+    title: "Watch-Party Seat Pass sandbox gate",
+    body: "Seat Pass access allows viewer entry only. Speaker controls still require host approval.",
   },
   live_access: {
     title: "Live access sandbox gate",

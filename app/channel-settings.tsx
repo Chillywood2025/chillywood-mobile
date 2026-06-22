@@ -1855,7 +1855,7 @@ export function ChannelStudioScreen() {
     try {
       await saveChannelSubscriptionOffer({
         description:
-          "Subscribe to this creator's channel. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party tickets, paid events, or other creators' channels.",
+          "Subscribe to this creator's channel. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators' channels.",
         status: enabled ? "sandbox" : "paused",
         title: "Channel subscription",
       });
@@ -1887,7 +1887,7 @@ export function ChannelStudioScreen() {
     try {
       await saveCreatorVipPassOffer({
         description:
-          "VIP is a creator-specific status for this channel only. It does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, or other creators' channels.",
+          "VIP is a creator-specific status for this channel only. It does not include Chi'llywood Premium, paid videos, paid Watch-Party Seat Passes, paid events, channel subscriptions, or other creators' channels.",
         status: enabled ? "sandbox" : "paused",
         title: "VIP Pass",
       });
@@ -2009,10 +2009,10 @@ export function ChannelStudioScreen() {
           priceCents: 99,
           seatLimit: existingWatchPartyOffer.seatLimit ?? 25,
           status: "sandbox",
-          title: existingWatchPartyOffer.title || "Sandbox Watch-Party Ticket",
+          title: existingWatchPartyOffer.title || "Sandbox Watch-Party Seat Pass",
         });
         await saveCreatorSandboxMonetizationConfig({
-          displayName: "Sandbox Watch-Party Ticket",
+          displayName: "Sandbox Watch-Party Seat Pass",
           metadata: {
             no_live_payout: true,
             party_id: savedWatchPartyOffer.partyId,
@@ -2022,12 +2022,12 @@ export function ChannelStudioScreen() {
           sourceId: savedWatchPartyOffer.id,
           sourceType: "watch_party_live",
         });
-        completed.push("Watch-Party Ticket");
+        completed.push("Watch-Party Seat Pass");
       } catch {
-        blockers.push("Watch-Party Ticket needs a valid creator-owned Party Room.");
+        blockers.push("Watch-Party Seat Pass needs a valid creator-owned Party Room.");
       }
     } else {
-      blockers.push("Create one Party Room before a Watch-Party Ticket can be configured.");
+      blockers.push("Create one Party Room before a Watch-Party Seat Pass can be configured.");
     }
 
     let eventForPass = creatorEvents
@@ -2080,7 +2080,7 @@ export function ChannelStudioScreen() {
     try {
       const savedChannelSubscriptionOffer = await saveChannelSubscriptionOffer({
         description:
-          "Sandbox creator-channel subscription test flow. This is not Chi'llywood Premium and does not include VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.",
+          "Sandbox creator-channel subscription test flow. This is not Chi'llywood Premium and does not include VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.",
         status: "sandbox",
         title: "Channel subscription",
       });
@@ -2102,7 +2102,7 @@ export function ChannelStudioScreen() {
     try {
       const savedVipOffer = await saveCreatorVipPassOffer({
         description:
-          "Sandbox creator-specific VIP test flow. This does not include Chi'llywood Premium, paid videos, paid Watch-Party tickets, paid events, channel subscriptions, or other creators.",
+          "Sandbox creator-specific VIP test flow. This does not include Chi'llywood Premium, paid videos, paid Watch-Party Seat Passes, paid events, channel subscriptions, or other creators.",
         status: "sandbox",
         title: "VIP Pass",
       });
@@ -6059,7 +6059,7 @@ export function ChannelStudioScreen() {
           <Image source={{ uri: latestCreatorVideo.thumbnailUrl }} style={styles.latestContentThumb} />
         ) : (
           <View style={styles.latestContentFallback}>
-            <Text style={styles.latestContentFallbackText}>{"CHI'LLYWOOD"}</Text>
+            <Text style={styles.latestContentFallbackText}>{"Chi'llywood"}</Text>
           </View>
         )}
         <View style={styles.latestContentBody}>
@@ -7384,14 +7384,14 @@ export function ChannelStudioScreen() {
       if (feature.key === "paid_watch_parties") {
         if (!hasPaidWatchPartyOffer) {
           setActiveMoneyManageTarget("paid_watch_parties");
-          setMoneyManageNotice("Create or link a Watch-Party target before a ticket offer can be managed.");
+          setMoneyManageNotice("Create or link a Watch-Party target before a Seat Pass offer can be managed.");
           router.push({ pathname: "/watch-party", params: { mode: "live", source: "money-center" } });
           return;
         }
         setMoneyManageFocus(
           "paid_watch_parties",
           ["ways_to_earn"],
-          "Watch-Party Ticket Manager is open below. Ticket access still routes through Party Waiting Room to Party Room.",
+          "Watch-Party Seat Pass Manager is open below. Seat Pass access still routes through Party Waiting Room to Party Room.",
         );
         return;
       }
@@ -7483,18 +7483,18 @@ export function ChannelStudioScreen() {
       },
       {
         key: "watch_party_ticket",
-        title: "Watch-Party Ticket",
+        title: "Watch-Party Seat Pass",
         configured: hasPaidWatchPartyOffer,
         blocker: hasPaidWatchPartyOffer
           ? undefined
-          : "Create a Party Room before testers can buy a ticket.",
+          : "Create a Party Room before testers can reserve a seat.",
         description: hasPaidWatchPartyOffer
-          ? "Testers can buy a sandbox ticket before Party Waiting Room or Party Room entry."
-          : "Watch-Party Ticket needs a Party Room target.",
+          ? "Testers can get a sandbox Seat Pass before Party Waiting Room or Party Room entry."
+          : "Watch-Party Seat Pass needs a Party Room target.",
         scopeKey: "watch_party_ticket",
         statusLabel: hasPaidWatchPartyOffer ? "Ready" : "Blocked",
         actionLabel: hasPaidWatchPartyOffer
-          ? "Preview ticket flow"
+          ? "Preview Seat Pass flow"
           : "Create Party Room target",
         actionTestID: hasPaidWatchPartyOffer
           ? undefined
@@ -7638,7 +7638,7 @@ export function ChannelStudioScreen() {
       const managerTitleByTarget: Record<MonetizationFeatureKey, string> = {
         tips: "Tips Manager",
         paid_videos: "Paid Video Manager",
-        paid_watch_parties: "Watch-Party Ticket Manager",
+        paid_watch_parties: "Watch-Party Seat Pass Manager",
         channel_subscriptions: "Channel Subscription Manager",
         vip_passes: "VIP Pass Manager",
         paid_events: "Event Pass Manager",
@@ -7798,7 +7798,7 @@ export function ChannelStudioScreen() {
                     <View key={offer.id} style={styles.eventEmptyCard}>
                       <View style={styles.eventCardHeader}>
                         <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
-                        {renderStudioStatusPill(offer.status === "sandbox" ? "Ticket ready" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                        {renderStudioStatusPill(offer.status === "sandbox" ? "Seat Pass ready" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
                       </View>
                       <Text style={styles.eventEmptyBody}>
                         {formatMonetizationCurrency(offer.priceCents, offer.currency)} · Party Room {offer.partyId ?? "not linked"} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} seats sold.
@@ -7809,7 +7809,7 @@ export function ChannelStudioScreen() {
               ) : (
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Watch-Party target needed.</Text>
-                  <Text style={styles.eventEmptyBody}>Create or link a Party Room target before a ticket offer can be managed.</Text>
+                  <Text style={styles.eventEmptyBody}>Create or link a Party Room target before a Seat Pass offer can be managed.</Text>
                 </View>
               )}
               <TouchableOpacity
@@ -7833,7 +7833,7 @@ export function ChannelStudioScreen() {
               <View style={styles.eventEmptyCard}>
                 <Text style={styles.eventEmptyTitle}>Channel Subscription setup</Text>
                 <Text style={styles.eventEmptyBody}>
-                  Creator-specific monthly membership. This is not Chi'llywood Premium and does not include VIP, paid videos, paid Watch-Party tickets, paid events, or other creators.
+                  Creator-specific monthly membership. This is not Chi'llywood Premium and does not include VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.
                 </Text>
               </View>
               <View style={styles.eventActionRow}>
@@ -7879,7 +7879,7 @@ export function ChannelStudioScreen() {
               <View style={styles.eventEmptyCard}>
                 <Text style={styles.eventEmptyTitle}>VIP Pass setup</Text>
                 <Text style={styles.eventEmptyBody}>
-                  VIP is creator-specific and separate from Chi'llywood Premium, channel subscriptions, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, and other creators.
+                  VIP is creator-specific and separate from Chi'llywood Premium, channel subscriptions, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, and other creators.
                 </Text>
               </View>
               <View style={styles.eventActionRow}>
@@ -7992,10 +7992,10 @@ export function ChannelStudioScreen() {
     };
     const offerRows: readonly SummaryMetricCard[] = [
       { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
-      { label: "Paid Watch-Party tickets", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox ticket${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
-      { label: "Channel subscriptions", value: creatorChannelSubscriptionOffers.length ? `${creatorChannelSubscriptionOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: channelSubscriptionPaidTransactions.length ? `${channelSubscriptionPaidTransactions.length} verified sandbox subscription transaction${channelSubscriptionPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(channelSubscriptionGrossCents, "usd")}. Channel subscriptions unlock only this creator's subscriber area.` : "Offer type: channel_subscription. Separate from Chi'llywood Premium, VIP, paid videos, Watch-Party tickets, and paid events.", tone: creatorChannelSubscriptionOffers.length ? "default" : "unavailable" },
-      { label: "VIP passes", value: creatorVipPassOffers.length ? `${creatorVipPassOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: vipPaidTransactions.length ? `${vipPaidTransactions.length} verified sandbox VIP purchase${vipPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(vipGrossCents, "usd")}. VIP unlocks only this creator channel VIP area.` : "Offer type: vip_pass. VIP stays separate from Chi'llywood Premium, paid videos, Watch-Party tickets, paid events, channel subscriptions, and Tips.", tone: creatorVipPassOffers.length ? "default" : "unavailable" },
-      { label: "Paid event passes", value: creatorPaidEventOffers.length ? `${creatorPaidEventOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: paidEventPaidTransactions.length ? `${paidEventPaidTransactions.length} verified sandbox event pass${paidEventPaidTransactions.length === 1 ? "" : "es"} totaling ${formatMonetizationCurrency(paidEventGrossCents, "usd")}. Event passes unlock only the linked creator event.` : "Offer type: paid_event. Event passes unlock only the linked creator event and stay separate from Premium, VIP, paid videos, and Watch-Party tickets.", tone: creatorPaidEventOffers.length ? "default" : "unavailable" },
+      { label: "Paid Watch-Party Seat Passes", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox Seat Pass purchase${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
+      { label: "Channel subscriptions", value: creatorChannelSubscriptionOffers.length ? `${creatorChannelSubscriptionOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: channelSubscriptionPaidTransactions.length ? `${channelSubscriptionPaidTransactions.length} verified sandbox subscription transaction${channelSubscriptionPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(channelSubscriptionGrossCents, "usd")}. Channel subscriptions unlock only this creator's subscriber area.` : "Offer type: channel_subscription. Separate from Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, and paid events.", tone: creatorChannelSubscriptionOffers.length ? "default" : "unavailable" },
+      { label: "VIP passes", value: creatorVipPassOffers.length ? `${creatorVipPassOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: vipPaidTransactions.length ? `${vipPaidTransactions.length} verified sandbox VIP purchase${vipPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(vipGrossCents, "usd")}. VIP unlocks only this creator channel VIP area.` : "Offer type: vip_pass. VIP stays separate from Chi'llywood Premium, paid videos, Watch-Party Seat Passes, paid events, channel subscriptions, and Tips.", tone: creatorVipPassOffers.length ? "default" : "unavailable" },
+      { label: "Paid event passes", value: creatorPaidEventOffers.length ? `${creatorPaidEventOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: paidEventPaidTransactions.length ? `${paidEventPaidTransactions.length} verified sandbox event pass${paidEventPaidTransactions.length === 1 ? "" : "es"} totaling ${formatMonetizationCurrency(paidEventGrossCents, "usd")}. Event passes unlock only the linked creator event.` : "Offer type: paid_event. Event passes unlock only the linked creator event and stay separate from Premium, VIP, paid videos, and Watch-Party Seat Passes.", tone: creatorPaidEventOffers.length ? "default" : "unavailable" },
       { label: "Physical merch", value: merchStatus, body: "Offer type: merch. Physical goods stay separate from Android digital access.", tone: sectionTone(merchStatus) === "default" ? "default" : "unavailable" },
     ];
     const transactionFilters: readonly { id: MoneyTransactionFilter; label: string }[] = [
@@ -8094,7 +8094,7 @@ export function ChannelStudioScreen() {
             <View key={transaction.id} style={styles.eventEmptyCard}>
               <View style={styles.eventCardHeader}>
                 <Text style={styles.eventEmptyTitle}>
-                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} room ticket
+                  {formatMonetizationCurrency(transaction.amountCents, transaction.currency)} Seat Pass
                 </Text>
                 {renderStudioStatusPill(transaction.status === "paid" ? "Paid" : transaction.status, transaction.status === "paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "revoked" ? "warning" : "muted")}
               </View>
@@ -8102,7 +8102,7 @@ export function ChannelStudioScreen() {
                 {transaction.roomTitle} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
               </Text>
               <Text style={styles.eventEmptyBody}>
-                Paid Watch-Party tickets unlock only this Party Waiting Room and Party Room. Premium, Tips, Paid Videos, VIP, subscriptions, events, and Live Stage stay separate. Payout status: {transaction.payoutStatus}.
+                Paid Watch-Party Seat Passes unlock only this Party Waiting Room and Party Room. Premium, Tips, Paid Videos, VIP, subscriptions, events, and Live Stage stay separate. Payout status: {transaction.payoutStatus}.
               </Text>
             </View>
           ))}
@@ -8130,7 +8130,7 @@ export function ChannelStudioScreen() {
                   {readbackStatus.accessCopy}
                 </Text>
                 <Text style={styles.eventEmptyBody}>
-                  Channel subscriptions unlock only this creator channel subscriber area. Premium, VIP, Paid Videos, Watch-Party tickets, Paid Events, and Tips stay separate. Payout status: {transaction.payoutStatus}.
+                  Channel subscriptions unlock only this creator channel subscriber area. Premium, VIP, Paid Videos, Watch-Party Seat Passes, Paid Events, and Tips stay separate. Payout status: {transaction.payoutStatus}.
                 </Text>
               </View>
             );
@@ -8154,7 +8154,7 @@ export function ChannelStudioScreen() {
                 {transaction.title} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
               </Text>
               <Text style={styles.eventEmptyBody}>
-                VIP unlocks only this creator channel VIP state. Premium, Tips, Paid Videos, Watch-Party tickets, Paid Events, Channel Subscriptions, LiveKit authority, and room permissions stay separate. Payout status: {transaction.payoutStatus}.
+                VIP unlocks only this creator channel VIP state. Premium, Tips, Paid Videos, Watch-Party Seat Passes, Paid Events, Channel Subscriptions, LiveKit authority, and room permissions stay separate. Payout status: {transaction.payoutStatus}.
               </Text>
             </View>
           ))}
@@ -8177,7 +8177,7 @@ export function ChannelStudioScreen() {
                 {transaction.eventTitle} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
               </Text>
               <Text style={styles.eventEmptyBody}>
-                Paid Events unlock only this creator event. Premium, Tips, Paid Videos, Watch-Party tickets, VIP, and subscriptions stay separate. Payout status: {transaction.payoutStatus}.
+                Paid Events unlock only this creator event. Premium, Tips, Paid Videos, Watch-Party Seat Passes, VIP, and subscriptions stay separate. Payout status: {transaction.payoutStatus}.
               </Text>
             </View>
           ))}
@@ -8272,7 +8272,7 @@ export function ChannelStudioScreen() {
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
                   <Text style={styles.eventEmptyBody}>
-                    {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, buy a room ticket, subscribe to a creator, get VIP, or buy an event pass."}
+                    {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, get a Seat Pass, subscribe to a creator, get VIP, or buy an event pass."}
                   </Text>
                   <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
                 </View>
@@ -8401,7 +8401,7 @@ export function ChannelStudioScreen() {
                           channel_subscription · {formatChannelSubscriptionPrice(offer.priceCents, offer.currency)} · {offer.subscriberCount} recorded subscriber signal{offer.subscriberCount === 1 ? "" : "s"}
                         </Text>
                         <Text style={styles.eventEmptyBody}>
-                          Subscriber access is decided by the effective access gate, not by stale provider rows. Premium, VIP, Paid Videos, Watch-Party tickets, Paid Events, and Tips stay separate.
+                          Subscriber access is decided by the effective access gate, not by stale provider rows. Premium, VIP, Paid Videos, Watch-Party Seat Passes, Paid Events, and Tips stay separate.
                         </Text>
                       </View>
                     ))}
@@ -8425,7 +8425,7 @@ export function ChannelStudioScreen() {
                           vip_pass · {formatCreatorVipPassPrice(offer.priceCents, offer.currency)} · {offer.vipCount} VIP fan signal{offer.vipCount === 1 ? "" : "s"}
                         </Text>
                         <Text style={styles.eventEmptyBody}>
-                          VIP unlocks only this creator channel VIP area. Premium, Paid Videos, Watch-Party tickets, Paid Events, Channel Subscriptions, Tips, LiveKit authority, and room permissions stay separate.
+                          VIP unlocks only this creator channel VIP area. Premium, Paid Videos, Watch-Party Seat Passes, Paid Events, Channel Subscriptions, Tips, LiveKit authority, and room permissions stay separate.
                         </Text>
                       </View>
                     ))}
@@ -8449,7 +8449,7 @@ export function ChannelStudioScreen() {
                           paid_event · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.passesSold}{offer.capacityLimit ? ` / ${offer.capacityLimit}` : ""} passes sold · {formatEventTypeLabel(offer.eventType as CreatorEventType)}
                         </Text>
                         <Text style={styles.eventEmptyBody}>
-                          Event passes unlock only this creator event. Premium, VIP, Paid Videos, Watch-Party tickets, Tips, and subscriptions stay separate.
+                          Event passes unlock only this creator event. Premium, VIP, Paid Videos, Watch-Party Seat Passes, Tips, and subscriptions stay separate.
                         </Text>
                         <TouchableOpacity
                           style={styles.eventSecondaryButton}
@@ -8468,19 +8468,19 @@ export function ChannelStudioScreen() {
                 {renderCreatorMoneyEventRows(
                   [...digitalEvents, ...merchEvents],
                   "No offers yet",
-                  "Paid video unlocks, paid Watch-Party tickets, creator subscriptions, VIP passes, event passes, and merch appear here when backed rows exist.",
+                  "Paid video unlocks, paid Watch-Party Seat Passes, creator subscriptions, VIP passes, event passes, and merch appear here when backed rows exist.",
                   6,
                 )}
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Physical merch scope</Text>
                   <Text style={styles.eventEmptyBody}>
-                    Merch is a physical-goods setup path only. It does not unlock Premium, VIP, subscriptions, tickets, events, LiveKit authority, or payout access.
+                    Merch is a physical-goods setup path only. It does not unlock Premium, VIP, subscriptions, room passes, events, LiveKit authority, or payout access.
                   </Text>
                   <MoneyScopeInfoButton scope="merch_physical_good" label="What does merch include?" />
                 </View>
                 {renderStudioActionRow({
                   title: "Configure supported sandbox offers",
-                  body: "Use only approved sandbox tiers for backed paid videos, Watch-Party tickets, channel subscriptions, VIP passes, event passes, tips, and physical merch. Live money stays disabled.",
+                  body: "Use only approved sandbox tiers for backed paid videos, Watch-Party Seat Passes, channel subscriptions, VIP passes, event passes, tips, and physical merch. Live money stays disabled.",
                   value: "Offers",
                   onPress: () => setExpandedMonetizationSections((current) => new Set([...current, "offers"])),
                 })}
@@ -8517,7 +8517,7 @@ export function ChannelStudioScreen() {
                 {renderCreatorMoneyEventRows(
                   filteredTransactionEvents,
                   "No transactions yet",
-                  "Tips, video unlocks, room tickets, subscriptions, VIP purchases, event passes, merch, refunds, failed payments, and chargebacks will appear here when supported.",
+                  "Tips, video unlocks, Seat Passes, subscriptions, VIP purchases, event passes, merch, refunds, failed payments, and chargebacks will appear here when supported.",
                   8,
                 )}
               </>
@@ -8963,7 +8963,7 @@ export function ChannelStudioScreen() {
         </View>
         {paidEventOffer ? (
           <Text style={styles.eventCardBody}>
-            Paid Event: {paidEventOffer.status === "sandbox" ? "Sandbox" : paidEventOffer.status} · {formatMonetizationCurrency(paidEventOffer.priceCents, paidEventOffer.currency)} · {paidEventOffer.passesSold}{paidEventOffer.capacityLimit ? ` / ${paidEventOffer.capacityLimit}` : ""} passes sold. Premium, Tips, Paid Videos, Watch-Party tickets, VIP, and subscriptions stay separate.
+            Paid Event: {paidEventOffer.status === "sandbox" ? "Sandbox" : paidEventOffer.status} · {formatMonetizationCurrency(paidEventOffer.priceCents, paidEventOffer.currency)} · {paidEventOffer.passesSold}{paidEventOffer.capacityLimit ? ` / ${paidEventOffer.capacityLimit}` : ""} passes sold. Premium, Tips, Paid Videos, Watch-Party Seat Passes, VIP, and subscriptions stay separate.
           </Text>
         ) : null}
       </View>

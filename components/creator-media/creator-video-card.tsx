@@ -189,7 +189,7 @@ export function CreatorVideoCard({
         />
         {!video.thumbnailUrl ? (
           <View style={styles.fallbackPreview}>
-            <AppText scale="caption" style={styles.fallbackKicker}>{"CHI'LLYWOOD CREATOR"}</AppText>
+            <AppText scale="caption" style={styles.fallbackKicker}>{"Chi'llywood CREATOR"}</AppText>
             <AppText scale="title2" style={styles.fallbackTitle} numberOfLines={2}>{publicDisplayTitle}</AppText>
           </View>
         ) : null}

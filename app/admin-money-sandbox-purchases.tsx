@@ -29,7 +29,7 @@ type SandboxProduct = {
 const SANDBOX_PRODUCTS: SandboxProduct[] = [
   {
     key: "watch_party_live_ticket_sandbox_099",
-    label: "Watch-Party Live ticket",
+    label: "Watch-Party Live Seat Pass",
     sourceType: "watch_party_live",
     providerProductId: "cw_watch_party_live_ticket_sandbox_099",
   },

@@ -156,7 +156,7 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
   },
   watch_party_ticket: {
     key: "watch_party_ticket",
-    title: "Watch-Party Ticket",
+    title: "Watch-Party Seat Pass",
     policySummary: "Refund eligible before room entry/use when the room is canceled, unavailable, or platform fault blocks access.",
     defaultRemedy: "cash_refund_review",
     eligibleBeforeUse: ["not_started", "access_granted"],
@@ -165,9 +165,9 @@ export const MONEY_REFUND_POLICIES: Record<MoneyRefundPolicyKey, MoneyRefundPoli
     payoutHoldRequired: true,
     providerActionRequired: true,
     creditFirst: false,
-    userCopy: "Ticket access is for one room target only.",
+    userCopy: "Seat Pass access is for one room target only.",
     creatorCopy: "Creator payout is held until the room obligation and refund window clear.",
-    adminCopy: "Ticket grants entry only; it does not grant host, speaker, moderator, admin, or LiveKit publish authority.",
+    adminCopy: "Seat Pass grants entry only; it does not grant host, speaker, moderator, admin, or LiveKit publish authority.",
   },
   live_watch_party_access_pass: {
     key: "live_watch_party_access_pass",

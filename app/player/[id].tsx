@@ -320,28 +320,28 @@ const getPlayerSurfacePresentation = (mode: PlayerSurfaceMode) => {
   switch (mode) {
     case "watch-party-live-shared":
       return {
-        kicker: "CHI'LLYWOOD · WATCH-PARTY LIVE",
+        kicker: "Chi'llywood · WATCH-PARTY LIVE",
         label: "Shared Player",
       };
     case "live-watch-party-stage":
       return {
-        kicker: "CHI'LLYWOOD · LIVE WATCH-PARTY",
+        kicker: "Chi'llywood · LIVE WATCH-PARTY",
         label: "Live Stage",
       };
     case "standalone-creator-video":
       return {
-        kicker: "CHI'LLYWOOD · CREATOR VIDEO",
+        kicker: "Chi'llywood · CREATOR VIDEO",
         label: "Creator Video",
       };
     case "spectator-child-playback":
       return {
-        kicker: "CHI'LLYWOOD · SPECTATOR",
+        kicker: "Chi'llywood · SPECTATOR",
         label: "Spectator Playback",
       };
     case "standalone-title":
     default:
       return {
-        kicker: "CHI'LLYWOOD · PLAYER",
+        kicker: "Chi'llywood · PLAYER",
         label: "Title Player",
       };
   }
@@ -8701,7 +8701,7 @@ export default function PlayerScreen() {
                 ) : null}
                 <MoneyScopeStrip
                   includes="Playback access to this creator video only."
-                  excludes="Chi'llywood Premium, subscriptions, VIP, Watch-Party tickets, event passes, rooms, and other creator videos stay separate."
+                  excludes="Chi'llywood Premium, subscriptions, VIP, Watch-Party Seat Passes, event passes, rooms, and other creator videos stay separate."
                 />
                 <MoneyScopeInfoButton scope="paid_creator_video" label="What does this unlock?" compact />
                 <TouchableOpacity
