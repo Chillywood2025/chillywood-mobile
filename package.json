@@ -30,6 +30,7 @@
     "guard:creator-monetization-policy": "node ./scripts/guard-creator-monetization-policy.mjs",
     "guard:payment-rail-policy": "node ./scripts/guard-payment-rail-policy.mjs",
     "guard:money-center-policy": "node ./scripts/guard-money-center-policy.mjs",
+    "guard:creator-video-circle-visibility": "node ./scripts/guard-creator-video-circle-visibility.mjs",
     "guard:money-access-grants-policy": "node ./scripts/guard-money-access-grants-policy.mjs",
     "guard:refund-credit-payout-hold-policy": "node ./scripts/guard-refund-credit-payout-hold-policy.mjs",
     "guard:stripe-connect-policy": "node ./scripts/guard-stripe-connect-policy.mjs",

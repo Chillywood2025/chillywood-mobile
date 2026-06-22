@@ -6099,6 +6099,24 @@ export default function PlayerScreen() {
     && creatorVideo?.paidContentAccess?.resolverStatus === "resolved"
     && creatorVideo.paidContentAccess.requiresPurchase
     && !creatorVideo.paidContentAccess.allowed;
+  const creatorVideoVisibilityLocked = isCreatorVideoPlayback
+    && creatorVideo?.visibilityAccess?.allowed === false;
+  const creatorVideoVisibilityLockedTitle = creatorVideoVisibilityLocked
+    ? creatorVideo?.visibilityAccess?.reason === "draft_owner_only"
+      ? "Draft creator video"
+      : creatorVideo?.visibilityAccess?.reason === "blocked"
+        ? "Creator video unavailable"
+        : "Private to Chi'lly Circle"
+    : "";
+  const creatorVideoVisibilityLockedBody = creatorVideoVisibilityLocked
+    ? creatorVideo?.visibilityAccess?.reason === "draft_owner_only"
+      ? "This video is saved as a draft. Only the creator can see it in Platform Studio."
+      : creatorVideo?.visibilityAccess?.reason === "circle_member_required" || creatorVideo?.visibilityAccess?.reason === "signed_out_requires_circle"
+        ? "This video is private to the creator's Chi'lly Circle. Approved Circle members can watch it where Circle content is backed."
+        : creatorVideo?.visibilityAccess?.reason === "blocked"
+          ? "This creator video is unavailable for this account."
+          : "This creator video is private or unavailable."
+    : "";
   const creatorVideoPaidContentPriceLabel = creatorVideoPaidContentLocked
     && creatorVideo?.paidContentAccess?.priceCents
     ? formatMonetizationCurrency(
@@ -8645,7 +8663,9 @@ export default function PlayerScreen() {
                   {isCreatorVideoPlaybackUnavailable || isPlatformVideoUnavailable || isSpectatorPlaybackUnavailable ? null : <ActivityIndicator color={ACCENT} />}
                   <Text style={styles.videoLoadingText}>
                     {isCreatorVideoPlaybackUnavailable
-                      ? creatorVideoPaidContentLocked
+                      ? creatorVideoVisibilityLocked
+                        ? creatorVideoVisibilityLockedTitle
+                        : creatorVideoPaidContentLocked
                         ? "Paid creator content"
                         : "Creator video unavailable"
                       : isSpectatorPlaybackUnavailable
@@ -8660,6 +8680,8 @@ export default function PlayerScreen() {
                     <Text style={styles.videoLoadingSubtext}>
                       {creatorVideoPaidContentLocked
                         ? `Unlock ${creatorVideo?.title ?? "this creator video"}${creatorVideoPaidContentPriceLabel ? ` for ${creatorVideoPaidContentPriceLabel}` : ""}. This purchase unlocks this creator video only. It does not include Premium, subscriptions, VIP, live rooms, Watch-Party seats, or other creator content.`
+                        : creatorVideoVisibilityLocked
+                          ? creatorVideoVisibilityLockedBody
                         : playbackLoadError
                         ? "This upload could not be loaded. Re-upload or repair the video file."
                         : "This upload does not have a playable source yet."}

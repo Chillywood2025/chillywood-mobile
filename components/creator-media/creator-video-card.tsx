@@ -37,7 +37,11 @@ type CreatorVideoCardProps = {
 };
 
 const formatVisibilityLabel = (video: CreatorVideo, ownerMode: boolean) => (
-  video.visibility === "public" ? (ownerMode ? "Published" : "Public") : "Draft"
+  video.visibility === "public"
+    ? (ownerMode ? "Published" : "Public")
+    : video.visibility === "circle"
+      ? "Chi'lly Circle"
+      : "Draft"
 );
 
 const formatModerationLabel = (video: CreatorVideo) => {
@@ -215,7 +219,7 @@ export function CreatorVideoCard({
           </TouchableOpacity>
         ) : null}
         <View style={styles.badgeRow}>
-          <View style={[styles.badge, video.visibility === "public" ? styles.badgePublic : styles.badgeDraft]}>
+          <View style={[styles.badge, video.visibility === "public" ? styles.badgePublic : video.visibility === "circle" ? styles.badgeCircle : styles.badgeDraft]}>
             <AppText scale="caption" style={styles.badgeText}>{formatVisibilityLabel(video, ownerMode)}</AppText>
           </View>
           <View style={[styles.badge, playable ? styles.badgeMediaReady : styles.badgeMediaUnavailable]}>
@@ -490,6 +494,9 @@ const styles = StyleSheet.create({
   },
   badgePublic: {
     borderColor: "rgba(45,153,92,0.5)",
+  },
+  badgeCircle: {
+    borderColor: "rgba(126,215,255,0.48)",
   },
   badgeDraft: {
     borderColor: "rgba(115,134,255,0.42)",

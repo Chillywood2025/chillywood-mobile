@@ -31,7 +31,7 @@ export const CREATOR_VIDEO_SIGNED_URL_SECONDS = 60 * 60;
 export const CREATOR_VIDEO_CHANNEL_MOVIE_UPLOAD_LIMIT_BYTES = 5 * 1024 * 1024 * 1024;
 export const CREATOR_VIDEO_MAX_RUNTIME_LABEL = "2 hr 30 min";
 
-export type CreatorVideoVisibility = "draft" | "public";
+export type CreatorVideoVisibility = "draft" | "circle" | "public";
 export type CreatorVideoModerationStatus =
   | "clean"
   | "pending_review"
@@ -56,6 +56,31 @@ export type CreatorVideoPublicClipMetadata = {
   titlePosition: CreatorVideoPublicClipTitlePosition;
   titleStyle: CreatorVideoPublicClipTitleStyle;
   templatePreset: CreatorVideoPublicClipTemplatePreset | null;
+};
+
+export type CreatorVideoVisibilityAccessReason =
+  | "public_allowed"
+  | "owner_allowed"
+  | "circle_member_allowed"
+  | "signed_out_requires_circle"
+  | "circle_member_required"
+  | "draft_owner_only"
+  | "blocked"
+  | "moderation_unavailable"
+  | "media_unavailable"
+  | "not_found"
+  | "unavailable";
+
+export type CreatorVideoVisibilityAccess = {
+  allowed: boolean;
+  visibility: CreatorVideoVisibility;
+  reason: CreatorVideoVisibilityAccessReason;
+  isOwner: boolean;
+  isBlocked: boolean;
+  isCircleMember: boolean;
+  hasPlayableSource: boolean;
+  viewerUserId: string | null;
+  ownerUserId: string | null;
 };
 
 export type CreatorVideoFile = {
@@ -87,6 +112,7 @@ export type CreatorVideo = {
   playbackResolution: VodPlaybackResolution | null;
   playbackQualityLabel: string | null;
   paidContentAccess: CreatorContentAccessResolution | null;
+  visibilityAccess: CreatorVideoVisibilityAccess | null;
   renditionStatuses: VodRenditionStatusItem[];
   publicClipMetadata: CreatorVideoPublicClipMetadata | null;
   createdAt: string;
@@ -175,9 +201,46 @@ export const getCreatorVideoStorageLimitMessage = (size?: number | null) => {
     : "This movie is above the current upload limit. Increase the creator video upload limit, then try again.";
 };
 
-const normalizeVisibility = (value: unknown): CreatorVideoVisibility => (
-  toText(value).toLowerCase() === "public" ? "public" : "draft"
-);
+const normalizeVisibility = (value: unknown): CreatorVideoVisibility => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === "public") return "public";
+  if (normalized === "circle" || normalized === "circle_only" || normalized === "private") return "circle";
+  return "draft";
+};
+
+const normalizeVisibilityAccessReason = (value: unknown): CreatorVideoVisibilityAccessReason => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "public_allowed"
+    || normalized === "owner_allowed"
+    || normalized === "circle_member_allowed"
+    || normalized === "signed_out_requires_circle"
+    || normalized === "circle_member_required"
+    || normalized === "draft_owner_only"
+    || normalized === "blocked"
+    || normalized === "moderation_unavailable"
+    || normalized === "media_unavailable"
+    || normalized === "not_found"
+  ) {
+    return normalized;
+  }
+  return "unavailable";
+};
+
+const normalizeVisibilityAccess = (value: unknown): CreatorVideoVisibilityAccess => {
+  const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    allowed: row.allowed === true,
+    visibility: normalizeVisibility(row.visibility),
+    reason: normalizeVisibilityAccessReason(row.reason),
+    isOwner: row.is_owner === true || row.isOwner === true,
+    isBlocked: row.is_blocked === true || row.isBlocked === true,
+    isCircleMember: row.is_circle_member === true || row.isCircleMember === true,
+    hasPlayableSource: row.has_playable_source === true || row.hasPlayableSource === true,
+    viewerUserId: toText(row.viewer_user_id ?? row.viewerUserId) || null,
+    ownerUserId: toText(row.owner_user_id ?? row.ownerUserId) || null,
+  };
+};
 
 const normalizeModerationStatus = (value: unknown): CreatorVideoModerationStatus => {
   const normalized = toText(value).toLowerCase();
@@ -350,6 +413,7 @@ async function parseCreatorVideo(
     playbackResolution: null,
     playbackQualityLabel: null,
     paidContentAccess: null,
+    visibilityAccess: null,
     renditionStatuses: [],
     publicClipMetadata: null,
     createdAt: toText(row.created_at) || new Date().toISOString(),
@@ -396,6 +460,7 @@ const parsePublicCreatorVideoCard = (row: PublicCreatorVideoCardRow): CreatorVid
   playbackResolution: null,
   playbackQualityLabel: null,
   paidContentAccess: null,
+  visibilityAccess: null,
   renditionStatuses: [],
   publicClipMetadata: parsePublicClipMetadata(row),
   createdAt: toText(row.createdAt) || new Date().toISOString(),
@@ -446,13 +511,6 @@ export async function readCreatorVideos(
 ): Promise<CreatorVideo[]> {
   const normalizedOwnerId = toText(ownerId);
   if (!normalizedOwnerId) return [];
-  if (!options?.includeDrafts) {
-    return readPublicCreatorVideoCards({
-      action: "list_by_owner",
-      ownerId: normalizedOwnerId,
-      limit: options?.limit ?? 24,
-    }).catch(() => []);
-  }
 
   let query = supabase
     .from("videos")
@@ -460,6 +518,9 @@ export async function readCreatorVideos(
     .eq("owner_id", normalizedOwnerId)
     .order("created_at", { ascending: false })
     .limit(options?.limit ?? 24);
+  if (!options?.includeDrafts) {
+    query = query.neq("visibility", "draft");
+  }
 
   const { data, error } = await query.returns<CreatorVideoRow[]>();
   if (error || !data) return [];
@@ -511,9 +572,71 @@ export async function readLatestPublicCreatorVideos(
   }).catch(() => []);
 }
 
+export async function resolveCreatorVideoVisibilityAccess(videoId: string): Promise<CreatorVideoVisibilityAccess | null> {
+  const normalizedVideoId = toText(videoId);
+  if (!normalizedVideoId) return null;
+
+  const { data, error } = await (supabase as any).rpc("resolve_creator_video_visibility_access", {
+    p_video_id: normalizedVideoId,
+  });
+  if (error) throw error;
+  return normalizeVisibilityAccess(data);
+}
+
+function createLockedCreatorVideo(
+  videoId: string,
+  access: CreatorVideoVisibilityAccess,
+): CreatorVideo {
+  const title = access.reason === "draft_owner_only"
+    ? "Draft creator video"
+    : access.reason === "blocked"
+      ? "Creator video unavailable"
+      : "Private creator video";
+  const description = access.reason === "circle_member_required" || access.reason === "signed_out_requires_circle"
+    ? "This creator video is private to the creator's Chi'lly Circle."
+    : access.reason === "draft_owner_only"
+      ? "This creator video is saved as a draft and only the creator can view it."
+      : "This creator video is unavailable.";
+  const now = new Date().toISOString();
+
+  return {
+    id: videoId,
+    ownerId: access.ownerUserId ?? "",
+    title,
+    description,
+    visibility: access.visibility,
+    moderationStatus: access.reason === "moderation_unavailable" ? "hidden" : "clean",
+    moderationReason: null,
+    moderatedAt: null,
+    moderatedBy: null,
+    playbackUrl: "",
+    thumbnailUrl: "",
+    storageProvider: "supabase",
+    storageBucket: CREATOR_VIDEO_BUCKET,
+    storageObjectKey: "",
+    storagePath: "",
+    thumbStoragePath: "",
+    mimeType: "",
+    fileSizeBytes: null,
+    playbackResolution: createUnavailableVodPlaybackResolution(videoId, access.reason),
+    playbackQualityLabel: null,
+    paidContentAccess: null,
+    visibilityAccess: access,
+    renditionStatuses: [],
+    publicClipMetadata: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export async function readCreatorVideoForPlayer(videoId: string): Promise<CreatorVideo | null> {
   const normalizedVideoId = toText(videoId);
   if (!normalizedVideoId) return null;
+
+  const visibilityAccess = await resolveCreatorVideoVisibilityAccess(normalizedVideoId).catch(() => null);
+  if (visibilityAccess && !visibilityAccess.allowed) {
+    return createLockedCreatorVideo(normalizedVideoId, visibilityAccess);
+  }
 
   const { data, error } = await supabase
     .from("videos")
@@ -526,47 +649,73 @@ export async function readCreatorVideoForPlayer(videoId: string): Promise<Creato
   if (error || !data) return null;
   const row = data as CreatorVideoRow;
   const parsed = await parseCreatorVideo(row, { resolveLegacyPlaybackUrl: false });
+  const parsedWithAccess = {
+    ...parsed,
+    visibilityAccess: visibilityAccess ?? {
+      allowed: true,
+      visibility: parsed.visibility,
+      reason: parsed.visibility === "circle" ? "circle_member_allowed" as const : "public_allowed" as const,
+      isOwner: false,
+      isBlocked: false,
+      isCircleMember: parsed.visibility === "circle",
+      hasPlayableSource: !!(parsed.storagePath || parsed.storageObjectKey),
+      viewerUserId: null,
+      ownerUserId: parsed.ownerId,
+    },
+  };
 
   const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
   const viewerUserId = toText(authData.user?.id);
-  const viewerOwnsVideo = !!viewerUserId && viewerUserId === parsed.ownerId;
-  if (parsed.visibility !== "public" && !viewerOwnsVideo) return null;
+  const viewerOwnsVideo = !!viewerUserId && viewerUserId === parsedWithAccess.ownerId;
+  if (parsedWithAccess.visibility === "draft" && !viewerOwnsVideo) {
+    return createLockedCreatorVideo(normalizedVideoId, {
+      allowed: false,
+      visibility: "draft",
+      reason: "draft_owner_only",
+      isOwner: false,
+      isBlocked: false,
+      isCircleMember: false,
+      hasPlayableSource: false,
+      viewerUserId: viewerUserId || null,
+      ownerUserId: parsedWithAccess.ownerId,
+    });
+  }
 
   const paidContentAccess = await resolveCreatorContentAccess({
     contentType: "creator_video",
-    contentId: parsed.id,
+    contentId: parsedWithAccess.id,
   });
   if (paidContentAccess.resolverStatus === "resolved" && !paidContentAccess.allowed) {
     return {
-      ...parsed,
+      ...parsedWithAccess,
       playbackUrl: "",
-      playbackResolution: createUnavailableVodPlaybackResolution(parsed.id, paidContentAccess.reason),
+      playbackResolution: createUnavailableVodPlaybackResolution(parsedWithAccess.id, paidContentAccess.reason),
       playbackQualityLabel: null,
       paidContentAccess,
     };
   }
 
   const playbackResolution = await resolveSignedVideoPlaybackSource({
-    videoId: parsed.id,
-    storageProvider: parsed.storageProvider,
-    fallbackBucket: parsed.storageBucket,
+    videoId: parsedWithAccess.id,
+    storageProvider: parsedWithAccess.storageProvider,
+    fallbackBucket: parsedWithAccess.storageBucket,
   });
   const legacyPlaybackUrl = !playbackResolution.defaultPlaybackUrl && (
     playbackResolution.legacyPlaybackAllowed
     || playbackResolution.legacyQualityEnforcement === "resolver_unavailable"
   )
     ? await createCreatorVideoPlaybackUrl({
-      id: parsed.id,
-      storageProvider: parsed.storageProvider,
-      storageBucket: parsed.storageBucket,
-      storageObjectKey: parsed.storageObjectKey,
-      storagePath: parsed.storagePath,
+      id: parsedWithAccess.id,
+      storageProvider: parsedWithAccess.storageProvider,
+      storageBucket: parsedWithAccess.storageBucket,
+      storageObjectKey: parsedWithAccess.storageObjectKey,
+      storagePath: parsedWithAccess.storagePath,
       playbackUrl: toText(row.playback_url),
     })
     : "";
 
   return {
-    ...parsed,
+    ...parsedWithAccess,
     playbackUrl: playbackResolution.defaultPlaybackUrl || legacyPlaybackUrl,
     playbackResolution,
     playbackQualityLabel: playbackResolution.defaultPlaybackQuality ?? (legacyPlaybackUrl ? "legacy_single_file" : null),

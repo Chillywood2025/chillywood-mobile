@@ -157,7 +157,7 @@ export function resolveSpectatorPlaybackState(
     return blockedReadout(
       "blocked_ticketed",
       "Spectator playback is ticketed.",
-      "Ticketed public playback needs purchase access before it can be shown here.",
+      "Seat Pass public playback needs purchase access before it can be shown here.",
       decision,
     );
   }

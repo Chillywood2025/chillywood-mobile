@@ -278,7 +278,7 @@ export default function PublicChannelScreen() {
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
       const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextWatchPartyTicketOffer, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
-        readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []),
+        readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50 }).catch(() => []),
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
@@ -321,6 +321,9 @@ export default function PublicChannelScreen() {
     const withoutFeatured = videos.filter((video) => video.id !== featuredVideo.id);
     return withoutFeatured.length ? withoutFeatured : videos;
   }, [featuredVideo, videos]);
+  const platformVideoVisibilityLabel = (video: CreatorVideo) => (
+    video.visibility === "public" ? "Public" : video.visibility === "circle" ? "Chi'lly Circle" : "Draft"
+  );
   const liveNowEvents = useMemo(() => events.filter((event) => event.isLiveNow), [events]);
   const upcomingEvents = useMemo(() => events.filter((event) => event.isUpcoming), [events]);
   const isOfficialChannel = channel?.identityKind === "official_platform";
@@ -417,7 +420,7 @@ export default function PublicChannelScreen() {
 
   const refreshPublicVideos = async () => {
     if (!routeUserId) return;
-    const nextVideos = await readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []);
+    const nextVideos = await readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50 }).catch(() => []);
     setVideos(nextVideos);
   };
 
@@ -426,23 +429,18 @@ export default function PublicChannelScreen() {
     visibility: CreatorContentActionSheetVisibilityAction,
   ) => {
     if (!showOwnerControls || videoActionBusy) return;
-    if (visibility === "private") {
-      Alert.alert(
-        "Private to Chi'lly Circle",
-        "Circle-only creator-video access is not backed yet. Use Save as Draft for owner-only content until Circle feeds and access checks are ready.",
-      );
-      return;
-    }
     try {
       setVideoActionBusy(true);
       await updateCreatorVideoMetadata(video.id, { visibility });
       setSelectedVideoAction(null);
       await refreshPublicVideos();
       Alert.alert(
-        visibility === "public" ? "Make Public" : "Save as Draft",
+        visibility === "public" ? "Make Public" : visibility === "circle" ? "Make Private for Chi'lly Circle" : "Save as Draft",
         visibility === "public"
           ? "Public on your Platform. Eligible for followers, Chi'lly Circle members, Explore, and Home only where backed by discovery rules. It is not posted to everybody's Profile feed."
-          : "Saved as Draft. Only you can see it in Platform Studio.",
+          : visibility === "circle"
+            ? "Private to your Chi'lly Circle. Circle members can see it where Circle content is backed. It is not public discovery."
+            : "Saved as Draft. Only you can see it in Platform Studio.",
       );
     } catch (error) {
       Alert.alert(
@@ -995,7 +993,7 @@ export default function PublicChannelScreen() {
         ) : null}
         <View style={styles.metaRow}>
           {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
-          <Text style={styles.publicChip}>Public</Text>
+          <Text style={styles.publicChip}>{platformVideoVisibilityLabel(video)}</Text>
         </View>
         <TouchableOpacity style={styles.playButton} activeOpacity={0.86} onPress={() => openPlayer(video)}>
           <Text style={styles.playButtonText}>Play</Text>
@@ -1034,7 +1032,7 @@ export default function PublicChannelScreen() {
         ) : null}
         <View style={styles.metaRow}>
           {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
-          <Text style={styles.publicChip}>Public</Text>
+          <Text style={styles.publicChip}>{platformVideoVisibilityLabel(video)}</Text>
         </View>
         <TouchableOpacity style={styles.shelfPlayButton} activeOpacity={0.86} onPress={() => openPlayer(video)}>
           <Text style={styles.playButtonText}>Play</Text>
@@ -1044,7 +1042,7 @@ export default function PublicChannelScreen() {
   );
 
   const renderFeatured = () => (
-    <AppSection title="Featured" statusLabel={featuredVideo ? "Public" : "Empty"} statusTone={featuredVideo ? "success" : "muted"}>
+    <AppSection title="Featured" statusLabel={featuredVideo ? platformVideoVisibilityLabel(featuredVideo) : "Empty"} statusTone={featuredVideo ? "success" : "muted"}>
       {featuredVideo ? (
         renderFeaturedVideoCard(featuredVideo)
       ) : (
@@ -1059,7 +1057,7 @@ export default function PublicChannelScreen() {
   );
 
   const renderLatestUploads = () => (
-    <AppSection title="Latest Uploads" statusLabel={latestUploadVideos.length ? "Public" : "Empty"} statusTone={latestUploadVideos.length ? "success" : "muted"}>
+    <AppSection title="Latest Uploads" statusLabel={latestUploadVideos.length ? "Backed" : "Empty"} statusTone={latestUploadVideos.length ? "success" : "muted"}>
       {latestUploadVideos.length ? (
         <ScrollView
           horizontal
@@ -1070,7 +1068,7 @@ export default function PublicChannelScreen() {
           {latestUploadVideos.map((video) => renderLatestUploadCard(video))}
         </ScrollView>
       ) : (
-        <AppEmptyState title="No public uploads yet" body="Public videos appear here after this creator publishes them." />
+        <AppEmptyState title="No visible uploads yet" body="Public videos appear here after this creator publishes them. Chi'lly Circle videos appear only for approved Circle members." />
       )}
     </AppSection>
   );
@@ -1764,7 +1762,6 @@ export default function PublicChannelScreen() {
         video={selectedVideoAction}
         busy={videoActionBusy}
         isFeatured={!!selectedVideoAction && spotlightVideoId === selectedVideoAction.id}
-        circleOnlyBacked={false}
         onClose={() => {
           if (!videoActionBusy) setSelectedVideoAction(null);
         }}

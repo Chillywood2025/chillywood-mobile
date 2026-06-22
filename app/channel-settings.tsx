@@ -320,7 +320,7 @@ type SandboxTesterOfferCard = {
 type SandboxSetupLifecycle = "idle" | "setting_up" | "complete" | "partial" | "failed" | "timed_out";
 
 type StudioTabId = "home" | "content" | "clip" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
-type ContentStatusFilter = "all" | "published" | "drafts";
+type ContentStatusFilter = "all" | "published" | "circle" | "drafts";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 type VideoLifecycleState = "idle" | "file_selected" | "uploading" | "succeeded" | "failed";
@@ -862,6 +862,7 @@ const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
 const CONTENT_STATUS_FILTERS: readonly { id: ContentStatusFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "published", label: "Published" },
+  { id: "circle", label: "Chi'lly Circle" },
   { id: "drafts", label: "Drafts" },
 ];
 
@@ -3943,19 +3944,27 @@ export function ChannelStudioScreen() {
 
   const runVideoVisibilityUpdate = async (
     video: CreatorVideo,
-    targetVisibility?: Exclude<CreatorContentActionSheetVisibilityAction, "private">,
+    targetVisibility?: CreatorContentActionSheetVisibilityAction,
   ) => {
     const nextVisibility = targetVisibility ?? (video.visibility === "public" ? "draft" : "public");
     try {
       setVideoSaving(true);
-      setVideoNotice(nextVisibility === "public" ? "Publishing video..." : "Moving video to draft...");
+      setVideoNotice(
+        nextVisibility === "public"
+          ? "Publishing video..."
+          : nextVisibility === "circle"
+            ? "Making video private to Chi'lly Circle..."
+            : "Moving video to draft...",
+      );
       await updateCreatorVideoMetadata(video.id, { visibility: nextVisibility });
       await loadCreatorVideos();
       setSelectedContentActionVideo(null);
       setVideoNotice(
         nextVisibility === "public"
           ? "Public on your Platform. Eligible for followers, Chi'lly Circle members, Explore, and Home only where backed by discovery rules. It is not posted to everybody's Profile feed."
-          : "Saved as Draft. Only you can see it in Platform Studio.",
+          : nextVisibility === "circle"
+            ? "Private to your Chi'lly Circle. Circle members can see it where Circle content is backed. It is not public discovery."
+            : "Saved as Draft. Only you can see it in Platform Studio.",
       );
     } catch (error) {
       setVideoNotice(formatCreatorVideoUiError(error, "Unable to update video visibility right now."));
@@ -3985,7 +3994,7 @@ export function ChannelStudioScreen() {
 
     Alert.alert(
       "Publish Video",
-      `Publish "${video.title}" to your public platform? Public videos can appear on your Profile/Platform and open in Player.`,
+      `Publish "${video.title}" to your public Platform? Public videos can appear on your Platform and open in Player where discovery rules allow.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -4002,11 +4011,6 @@ export function ChannelStudioScreen() {
     video: CreatorVideo,
     visibility: CreatorContentActionSheetVisibilityAction,
   ) => {
-    if (visibility === "private") {
-      setVideoNotice("Private to Chi'lly Circle needs backed Circle-only creator-video access before it can be used. Save as Draft remains owner-only.");
-      setSelectedContentActionVideo(null);
-      return;
-    }
     void runVideoVisibilityUpdate(video, visibility);
   };
 
@@ -4720,6 +4724,7 @@ export function ChannelStudioScreen() {
     [platformBranding?.avatar, platformBranding?.logo, platformBranding?.watermark],
   );
   const publishedVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
+  const circleVideoCount = creatorVideos.filter((video) => video.visibility === "circle").length;
   const draftVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
   const latestCreatorVideo = useMemo(
     () => [...creatorVideos].sort((a, b) => getCreatorVideoCreatedTimestamp(b) - getCreatorVideoCreatedTimestamp(a))[0] ?? null,
@@ -4744,6 +4749,7 @@ export function ChannelStudioScreen() {
     return creatorVideos
       .filter((video) => {
         if (contentStatusFilter === "published" && video.visibility !== "public") return false;
+        if (contentStatusFilter === "circle" && video.visibility !== "circle") return false;
         if (contentStatusFilter === "drafts" && video.visibility !== "draft") return false;
         if (!query) return true;
         return `${video.title} ${video.description}`.toLowerCase().includes(query);
@@ -4810,6 +4816,12 @@ export function ChannelStudioScreen() {
       tab: "content",
     },
     {
+      label: "Circle",
+      value: videosLoading ? "..." : String(circleVideoCount),
+      body: circleVideoCount ? "Private to Chi'lly Circle" : "No Circle-private videos",
+      tab: "content",
+    },
+    {
       label: "Events",
       value: eventsLoading ? "..." : String(upcomingEvents.length),
       body: upcomingEvents.length ? "Upcoming" : "No events scheduled",
@@ -4832,6 +4844,11 @@ export function ChannelStudioScreen() {
       label: "Drafts",
       value: videosLoading ? "..." : String(draftVideoCount),
       body: "Owner-only creator uploads loaded for this Platform.",
+    },
+    {
+      label: "Chi'lly Circle",
+      value: videosLoading ? "..." : String(circleVideoCount),
+      body: "Circle-private videos loaded for this Platform Studio.",
     },
     ...(audienceFollowerCount == null ? [] : [{
       label: "Followers",
@@ -4863,6 +4880,8 @@ export function ChannelStudioScreen() {
   const renderContentPanel = () => {
     const filteredEmptyCopy = contentStatusFilter === "published"
       ? "No published videos yet. Publish a draft when it is ready."
+      : contentStatusFilter === "circle"
+        ? "No Chi'lly Circle videos yet. Use Make Private for Chi'lly Circle on owned content when it should be member-only."
       : contentStatusFilter === "drafts"
         ? "No drafts right now."
         : "No platform videos yet. Use Clip Studio to add your first video.";
@@ -4872,11 +4891,11 @@ export function ChannelStudioScreen() {
       <View style={styles.panelHeader}>
         <View style={styles.panelHeaderCopy}>
           <Text style={styles.panelTitle}>Content</Text>
-          <Text style={styles.panelSubtitle}>Manage your platform videos, drafts, and published uploads.</Text>
+          <Text style={styles.panelSubtitle}>Manage your platform videos, drafts, Chi'lly Circle videos, and published uploads.</Text>
         </View>
       </View>
       <Text style={styles.permissionCopy}>
-        Add and publish Platform videos through Clip Studio. Drafts stay visible only to you; public videos can appear as Featured and Latest Uploads.
+        Add and publish Platform videos through Clip Studio. Drafts stay visible only to you; Chi'lly Circle videos stay member-only; public videos can appear as Featured and Latest Uploads.
       </Text>
 
       <View style={styles.studioHeaderActions}>
@@ -4901,7 +4920,7 @@ export function ChannelStudioScreen() {
           <Text style={styles.summaryValue}>
             {videosLoading ? "..." : String(publishedVideoCount)}
           </Text>
-          <Text style={styles.summaryBody}>visible to public profile visitors</Text>
+          <Text style={styles.summaryBody}>visible on your public Platform</Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Drafts</Text>
@@ -4909,6 +4928,13 @@ export function ChannelStudioScreen() {
             {videosLoading ? "..." : String(draftVideoCount)}
           </Text>
           <Text style={styles.summaryBody}>owner-only until published</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Chi'lly Circle</Text>
+          <Text style={styles.summaryValue}>
+            {videosLoading ? "..." : String(circleVideoCount)}
+          </Text>
+          <Text style={styles.summaryBody}>member-only, not public discovery</Text>
         </View>
       </View>
 
@@ -5059,7 +5085,7 @@ export function ChannelStudioScreen() {
           />
           <Text style={styles.sectionLabel}>Visibility</Text>
           <View style={styles.chipRow}>
-            {(["draft", "public"] as const).map((value) => (
+            {(["draft", "circle", "public"] as const).map((value) => (
               <TouchableOpacity
                 key={value}
                 style={[styles.chip, videoEditor.visibility === value && styles.chipActive]}
@@ -5067,7 +5093,7 @@ export function ChannelStudioScreen() {
                 disabled={videoSaving}
               >
                 <Text style={[styles.chipText, videoEditor.visibility === value && styles.chipTextActive]}>
-                  {value.toUpperCase()}
+                  {value === "circle" ? "CHI'LLY CIRCLE" : value.toUpperCase()}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -6185,7 +6211,9 @@ export function ChannelStudioScreen() {
       ? "Unavailable"
       : latestCreatorVideo.visibility === "public"
         ? "Published"
-        : "Draft";
+        : latestCreatorVideo.visibility === "circle"
+          ? "Chi'lly Circle"
+          : "Draft";
     const actionLabel = playable && latestCreatorVideo.visibility === "public" ? "Open Player" : "Edit Clip";
     const onPressAction = () => {
       if (actionLabel === "Open Player") {
@@ -9691,7 +9719,6 @@ export function ChannelStudioScreen() {
       video={selectedContentActionVideo}
       busy={videoSaving || brandSaving}
       isFeatured={!!selectedContentActionVideo && activeBrandProfile?.spotlightVideoId === selectedContentActionVideo.id}
-      circleOnlyBacked={false}
       onClose={() => {
         if (!videoSaving && !brandSaving) setSelectedContentActionVideo(null);
       }}

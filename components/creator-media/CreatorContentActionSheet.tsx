@@ -13,14 +13,13 @@ import type { CreatorVideo } from "../../_lib/creatorVideos";
 import { isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
 import { AppText } from "../ui/typography";
 
-export type CreatorContentActionSheetVisibilityAction = "draft" | "public" | "private";
+export type CreatorContentActionSheetVisibilityAction = "draft" | "circle" | "public";
 
 export type CreatorContentActionSheetProps = {
   visible: boolean;
   video: CreatorVideo | null;
   busy?: boolean;
   isFeatured?: boolean;
-  circleOnlyBacked?: boolean;
   onClose: () => void;
   onOpenPlayer: (video: CreatorVideo) => void;
   onEditDetails: (video: CreatorVideo) => void;
@@ -46,7 +45,6 @@ export function CreatorContentActionSheet({
   video,
   busy = false,
   isFeatured = false,
-  circleOnlyBacked = false,
   onClose,
   onOpenPlayer,
   onEditDetails,
@@ -94,7 +92,7 @@ export function CreatorContentActionSheet({
             {video?.title || "Creator content"}
           </AppText>
           <AppText scale="footnote" style={styles.body}>
-            Owner actions apply only to this content item. Private to Chi'lly Circle is unavailable until Circle-only creator-video access is backed.
+            Owner actions apply only to this content item. Drafts stay owner-only, Chi'lly Circle content stays member-only, and public content stays eligible only where backed.
           </AppText>
 
           <ScrollView style={styles.actionScroll} contentContainerStyle={styles.actionList}>
@@ -103,9 +101,9 @@ export function CreatorContentActionSheet({
             <SheetAction label="Save as Draft" disabled={!video || busy || video.visibility === "draft"} onPress={() => run((selected) => onSetVisibility(selected, "draft"))} />
             <SheetAction
               label="Make Private for Chi'lly Circle"
-              disabled={!video || busy || !circleOnlyBacked}
-              detail={circleOnlyBacked ? undefined : "Needs backed Circle-only video access"}
-              onPress={() => run((selected) => onSetVisibility(selected, "private"))}
+              disabled={!video || busy || video.visibility === "circle" || blocked}
+              detail={blocked ? "Unavailable while moderation blocks this video" : undefined}
+              onPress={() => run((selected) => onSetVisibility(selected, "circle"))}
             />
             <SheetAction label="Make Public" disabled={!video || busy || video.visibility === "public" || blocked} onPress={() => run((selected) => onSetVisibility(selected, "public"))} />
             <SheetAction label="Set price / manage paid unlock" disabled={!video || busy} onPress={() => run(onSetPrice)} />
