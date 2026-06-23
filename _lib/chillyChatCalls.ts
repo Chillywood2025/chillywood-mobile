@@ -183,6 +183,20 @@ const parseEvent = (row: CallEventRow | null): ChillyChatCallEvent | null => {
   };
 };
 
+async function dispatchChillyChatCallPush(input: {
+  action: "incoming" | "missed";
+  inviteId: string;
+}) {
+  const inviteId = toText(input.inviteId);
+  if (!inviteId) return;
+  await supabase.functions.invoke("chilly-chat-call-dispatch", {
+    body: {
+      action: input.action,
+      inviteId,
+    },
+  });
+}
+
 export async function createChillyChatCallInvite(input: {
   threadId: string;
   communicationRoomId: string;
@@ -218,6 +232,10 @@ export async function createChillyChatCallInvite(input: {
       callType: input.callType,
       eventType: "started",
       threadId: input.threadId,
+    }).catch(() => null);
+    void dispatchChillyChatCallPush({
+      action: "incoming",
+      inviteId: invite.id,
     }).catch(() => null);
   }
   return invite;
@@ -295,7 +313,14 @@ export async function updateChillyChatCallInviteStatus(input: {
               : "ended",
     threadId: input.invite.threadId,
   }).catch(() => null);
-  return parseInvite(data ?? null);
+  const updatedInvite = parseInvite(data ?? null);
+  if (updatedInvite && input.status === "missed") {
+    void dispatchChillyChatCallPush({
+      action: "missed",
+      inviteId: updatedInvite.id,
+    }).catch(() => null);
+  }
+  return updatedInvite;
 }
 
 export async function insertChillyChatCallEvent(input: {

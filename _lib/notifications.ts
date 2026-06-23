@@ -1232,6 +1232,66 @@ export async function requestAndroidPushPermissionAndRegister(): Promise<PushReg
   }
 }
 
+export async function refreshAndroidPushRegistrationIfGranted(): Promise<PushRegistrationState> {
+  if (Platform.OS === "web" || !Device.isDevice) {
+    return {
+      message: "Push notifications require a physical mobile device.",
+      permissionState: "unsupported",
+      provider: "expo",
+      status: "unsupported",
+      tokenFingerprint: null,
+    };
+  }
+
+  if (Platform.OS !== "android") {
+    return {
+      message: "Android notifications are production-ready now. iOS/APNs remains later.",
+      permissionState: "unsupported",
+      provider: "expo",
+      status: "unsupported",
+      tokenFingerprint: null,
+    };
+  }
+
+  await configureNotificationRuntime();
+  const current = await Notifications.getPermissionsAsync();
+  if (!current.granted) {
+    return {
+      message: "Notifications are not enabled for this device.",
+      permissionState: current.canAskAgain ? "undetermined" : "denied",
+      provider: "expo",
+      status: "denied",
+      tokenFingerprint: null,
+    };
+  }
+
+  const projectId = readExpoProjectId();
+  if (!projectId) {
+    return {
+      message: "Expo project id is missing from this build, so push token registration cannot complete.",
+      permissionState: "granted",
+      provider: "expo",
+      status: "blocked",
+      tokenFingerprint: null,
+    };
+  }
+
+  try {
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    const rawToken = normalizeText(token.data);
+    if (!rawToken) throw new Error("Expo returned an empty push token.");
+    return registerPushTokenWithBackend({ permissionStatus: "granted", token: rawToken });
+  } catch {
+    return {
+      message: "Unable to refresh the production push token for this Android build.",
+      permissionState: "granted",
+      provider: "expo",
+      status: "error",
+      tokenFingerprint: null,
+    };
+  }
+}
+
 export async function revokeCurrentPushInstall(): Promise<PushRegistrationState> {
   if (Platform.OS === "web") {
     return {

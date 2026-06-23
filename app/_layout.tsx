@@ -23,7 +23,7 @@ import { bootstrapFirebaseRemoteConfig, getRemoteConfigBoolean } from "../_lib/f
 import { bootstrapLiveKitFoundation } from "../_lib/livekit/bootstrap";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
-import { configureNotificationRuntime, subscribeToNotificationResponses } from "../_lib/notifications";
+import { configureNotificationRuntime, refreshAndroidPushRegistrationIfGranted, subscribeToNotificationResponses } from "../_lib/notifications";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
@@ -284,6 +284,7 @@ function RouteAnalyticsBridge() {
 
   useEffect(() => {
     void configureNotificationRuntime();
+    void refreshAndroidPushRegistrationIfGranted();
     const subscription = subscribeToNotificationResponses((path) => {
       router.push(path as Parameters<typeof router.push>[0]);
     });
