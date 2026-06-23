@@ -21,6 +21,7 @@ import {
   readPublicDiscoveryFeedItem,
   type DiscoveryFeedItem,
 } from "../../_lib/discoveryFeed";
+import { readCircleSpectatorFeedItem } from "../../_lib/circleSpectatorFeed";
 import { resolveSpectatorAccess, type SpectatorAccessDecision } from "../../_lib/spectatorAccess";
 import {
   readSpectatorPlaybackReadout,
@@ -38,6 +39,7 @@ import { useSession } from "../../_lib/session";
 import { ReportSheet } from "../../components/safety/report-sheet";
 
 type LoadState = "loading" | "ready" | "unavailable";
+type SpectatorAccessLane = "public" | "circle";
 
 const normalizeRouteParam = (value: string | string[] | undefined) =>
   String(Array.isArray(value) ? value[0] : value ?? "").trim();
@@ -64,6 +66,7 @@ export default function SpectatorMetadataScreen() {
   const [item, setItem] = useState<DiscoveryFeedItem | null>(null);
   const [decision, setDecision] = useState<SpectatorAccessDecision | null>(null);
   const [playback, setPlayback] = useState<SpectatorPlaybackReadout | null>(null);
+  const [accessLane, setAccessLane] = useState<SpectatorAccessLane>("public");
   const [startingAction, setStartingAction] = useState<SpectatorLaunchAction | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
@@ -76,13 +79,17 @@ export default function SpectatorMetadataScreen() {
       setItem(null);
       setDecision(null);
       setPlayback(null);
+      setAccessLane("public");
 
       if (!itemId) {
         setLoadState("unavailable");
         return;
       }
 
-      const nextItem = await readPublicDiscoveryFeedItem(itemId).catch(() => null);
+      const publicItem = await readPublicDiscoveryFeedItem(itemId).catch(() => null);
+      const circleItem = publicItem ? null : await readCircleSpectatorFeedItem(itemId).catch(() => null);
+      const nextItem = publicItem ?? circleItem;
+      const nextLane: SpectatorAccessLane = circleItem ? "circle" : "public";
       if (!active) return;
 
       if (!nextItem) {
@@ -90,13 +97,16 @@ export default function SpectatorMetadataScreen() {
         return;
       }
 
-      const nextDecision = resolveSpectatorAccess(nextItem);
+      const nextDecision = resolveSpectatorAccess(nextItem, {
+        circleAccess: nextLane === "circle" ? "allowed" : undefined,
+      });
       const fallbackPlayback = resolveSpectatorPlaybackState(nextItem, nextDecision);
       const nextPlayback = await readSpectatorPlaybackReadout(nextItem, nextDecision).catch(() => fallbackPlayback);
       if (!active) return;
       setItem(nextItem);
       setDecision(nextDecision);
       setPlayback(nextPlayback);
+      setAccessLane(nextLane);
       setLoadState(nextDecision.canShowMetadata ? "ready" : "unavailable");
     };
 
@@ -226,14 +236,14 @@ export default function SpectatorMetadataScreen() {
         {loadState === "loading" ? (
           <>
             <ActivityIndicator color="#E50914" />
-            <Text style={styles.centerTitle}>Checking public metadata</Text>
+            <Text style={styles.centerTitle}>Checking spectator metadata</Text>
             <Text style={styles.centerBody}>No room token, mic, camera, or playback is requested.</Text>
           </>
         ) : (
           <>
             <Text style={styles.centerTitle}>Spectator view unavailable</Text>
             <Text style={styles.centerBody}>
-              This item is private, protected, blocked, or not available for public metadata.
+              This item is private to the creator's Chi'lly Circle, protected, blocked, or unavailable.
             </Text>
           </>
         )}
@@ -245,7 +255,7 @@ export default function SpectatorMetadataScreen() {
     return renderUnavailable();
   }
 
-  const title = String(item.title ?? "").trim() || "Public discovery item";
+  const title = String(item.title ?? "").trim() || (accessLane === "circle" ? "Chi'lly Circle spectator item" : "Public discovery item");
   const subtitle = String(item.subtitle ?? "").trim();
   const scheduledAt = item.starts_at ?? item.published_at ?? item.created_at;
   const canOpenChannel = !!getPrimaryActorId(item);
@@ -411,7 +421,7 @@ export default function SpectatorMetadataScreen() {
       <ReportSheet
         visible={reportVisible}
         title="Report spectator source"
-        description="Send a safety report for this public spectator source."
+        description="Send a safety report for this spectator source."
         busy={reportBusy}
         onClose={() => setReportVisible(false)}
         onSubmit={submitReport}

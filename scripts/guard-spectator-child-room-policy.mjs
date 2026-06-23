@@ -87,7 +87,7 @@ const spectatorLaunchCopySurface = `${spectatorRoute}\n${launchHelper}`;
 [
   "Start Watch-Party Live",
   "Start Live Watch-Party",
-  "Watch with your Chi’lly Circle",
+  "Watch with your Chi'lly Circle",
   "Source live has ended",
   "This live can’t be used for a watch party",
   "Share",

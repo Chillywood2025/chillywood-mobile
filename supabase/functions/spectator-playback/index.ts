@@ -67,6 +67,20 @@ type PlaybackRecordRow = {
   visibility: string | null;
   watch_party_room_id: string | null;
 };
+type CircleSpectatorFeedItemRow = {
+  access_type: string | null;
+  allow_spectator_view: boolean | null;
+  creator_user_id: string | null;
+  host_user_id: string | null;
+  id: string;
+  is_spectator_enabled: boolean | null;
+  is_spectator_playback_enabled: boolean | null;
+  moderation_status: string | null;
+  playback_record_id: string | null;
+  rights_status: string | null;
+  status: string | null;
+  visibility: string | null;
+};
 type PublicSafePlaybackRecordRow = PlaybackRecordRow & {
   playlist_path: string;
 };
@@ -497,6 +511,53 @@ const functionBaseUrl = (req: Request) => {
 const controlledPlaylistUrl = (req: Request, recordId: string) =>
   `${functionBaseUrl(req)}/records/${encodeURIComponent(recordId)}/index.m3u8`;
 
+const base64UrlEncode = (value: ArrayBuffer | Uint8Array | string) => {
+  const bytes = typeof value === "string"
+    ? textEncoder.encode(value)
+    : value instanceof Uint8Array
+      ? value
+      : new Uint8Array(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+};
+
+const base64UrlDecodeText = (value: string) => {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  try {
+    const binary = atob(padded);
+    return String.fromCharCode(...Array.from(binary).map((character) => character.charCodeAt(0)));
+  } catch {
+    return "";
+  }
+};
+
+const signCirclePlaybackToken = async (recordId: string, userId: string, expiresAtMillis: number) => {
+  const payload = `${recordId}.${userId}.${expiresAtMillis}`;
+  const signature = await hmacSha256(textEncoder.encode(readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY")), payload);
+  return `${base64UrlEncode(payload)}.${base64UrlEncode(signature)}`;
+};
+
+const verifyCirclePlaybackToken = async (token: string, recordId: string) => {
+  const [encodedPayload, encodedSignature] = toText(token).split(".");
+  if (!encodedPayload || !encodedSignature) return null;
+  const payload = base64UrlDecodeText(encodedPayload);
+  const [tokenRecordId, userId, expiresAtText] = payload.split(".");
+  const expiresAtMillis = Number(expiresAtText);
+  if (tokenRecordId !== recordId || !userId || !Number.isFinite(expiresAtMillis) || expiresAtMillis <= Date.now()) {
+    return null;
+  }
+  const expectedSignature = await hmacSha256(textEncoder.encode(readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY")), payload);
+  if (base64UrlEncode(expectedSignature) !== encodedSignature) return null;
+  return { userId };
+};
+
+const controlledCirclePlaylistUrl = async (req: Request, recordId: string, userId: string) => {
+  const token = await signCirclePlaybackToken(recordId, userId, Date.now() + 5 * 60_000);
+  return `${controlledPlaylistUrl(req, recordId)}?circleToken=${encodeURIComponent(token)}`;
+};
+
 const baseState = (state: string, title: string, copy: string, extra: JsonObject = {}) => ({
   canRenderPlayback: false,
   copy,
@@ -539,6 +600,58 @@ const readDiscoveryItem = async (adminClient: SupabaseClientLike, itemId: string
   return (data ?? null) as DiscoveryFeedItemRow | null;
 };
 
+const readCircleSpectatorItem = async (adminClient: SupabaseClientLike, itemId: string) => {
+  const { data, error } = await adminClient
+    .from("circle_spectator_feed_items")
+    .select(
+      [
+        "id",
+        "creator_user_id",
+        "host_user_id",
+        "playback_record_id",
+        "visibility",
+        "access_type",
+        "status",
+        "moderation_status",
+        "rights_status",
+        "is_spectator_enabled",
+        "is_spectator_playback_enabled",
+        "allow_spectator_view",
+      ].join(","),
+    )
+    .eq("id", itemId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Circle spectator item read failed: ${error.message}`);
+  return (data ?? null) as CircleSpectatorFeedItemRow | null;
+};
+
+const canReadCircleSpectatorItem = async (
+  adminClient: SupabaseClientLike,
+  itemId: string,
+  viewerUserId: string,
+) => {
+  const { data, error } = await adminClient.rpc("can_read_circle_spectator_feed_item", {
+    p_item_id: itemId,
+    p_viewer_user_id: viewerUserId,
+  });
+  if (error) return false;
+  return data === true;
+};
+
+const canReadCirclePlaybackRecord = async (
+  adminClient: SupabaseClientLike,
+  recordId: string,
+  viewerUserId: string,
+) => {
+  const { data, error } = await adminClient.rpc("can_read_circle_spectator_playback_record", {
+    p_record_id: recordId,
+    p_viewer_user_id: viewerUserId,
+  });
+  if (error) return false;
+  return data === true;
+};
+
 const discoveryBlockState = (item: DiscoveryFeedItemRow | null) => {
   if (!item) return null;
   if (item.is_publicly_discoverable !== true || item.visibility !== "public" || item.moderation_status !== "clean") {
@@ -566,7 +679,7 @@ const discoveryBlockState = (item: DiscoveryFeedItemRow | null) => {
     return baseState(
       "blocked_ticketed",
       "Spectator playback is ticketed.",
-      "Ticketed public playback needs a backed ticketing flow before it can be exposed.",
+      "Seat Pass public playback needs a backed purchase flow before it can be exposed.",
     );
   }
   if (item.requires_premium_to_join || item.access_type === "premium_only") {
@@ -598,6 +711,48 @@ const discoveryBlockState = (item: DiscoveryFeedItemRow | null) => {
     );
   }
 
+  return null;
+};
+
+const circleBlockState = (
+  item: CircleSpectatorFeedItemRow | null,
+  viewerAllowed: boolean,
+) => {
+  if (!item) return null;
+  if (!viewerAllowed) {
+    return baseState(
+      "blocked_private",
+      "Spectator playback is private.",
+      "This item is private to the creator's Chi'lly Circle.",
+    );
+  }
+  if (
+    item.status !== "active"
+    || item.visibility !== "circle"
+    || item.access_type !== "circle"
+    || item.moderation_status !== "clean"
+    || !isPublicSafeRights(item.rights_status)
+  ) {
+    return baseState(
+      "blocked_not_public_safe",
+      "Spectator playback is blocked.",
+      "This Chi'lly Circle spectator item is not safety-cleared.",
+    );
+  }
+  if (!item.is_spectator_enabled || !item.allow_spectator_view) {
+    return baseState(
+      "not_configured",
+      "Spectator playback is not configured.",
+      "Private spectator metadata is available, but playback has not been enabled.",
+    );
+  }
+  if (!item.is_spectator_playback_enabled) {
+    return baseState(
+      "waiting_for_egress",
+      "Spectator playback is waiting on Egress/HLS proof.",
+      "A Chi'lly Circle playback record has not been approved for this item yet.",
+    );
+  }
   return null;
 };
 
@@ -698,6 +853,30 @@ const isPublicSafeSession = (session: BroadcastSessionRow | null): session is Pu
   && !!isApprovedHlsPlaylistUrl(session.hls_playback_url)
   && !isProofRoomId(session.source_room_id ?? session.watch_party_room_id ?? session.creator_event_id);
 
+const isCircleSafeRecord = (record: PlaybackRecordRow | null): record is PublicSafePlaybackRecordRow => !!record
+  && record.visibility === "circle"
+  && record.playback_status === "live"
+  && !!toText(record.playlist_path)
+  && record.is_publicly_watchable === false
+  && record.is_spectator_playback_enabled === true
+  && isPublicSafeRights(record.rights_status)
+  && record.access_type === "circle"
+  && record.requires_premium === false
+  && record.requires_ticket === false
+  && !isProofRoomId(record.source_room_id);
+
+const isCircleSafeSession = (session: BroadcastSessionRow | null) => !!session
+  && session.is_publicly_watchable === false
+  && session.is_spectator_playback_enabled === true
+  && isPublicSafeRights(session.rights_status)
+  && session.access_type === "circle"
+  && session.requires_premium === false
+  && session.requires_ticket === false
+  && session.playback_url_status === "circle_safe_available"
+  && (session.metadata?.circle_spectator_approved === true || session.metadata?.circle_spectator_approved === "true")
+  && !!isApprovedHlsPlaylistUrl(session.hls_playback_url)
+  && !isProofRoomId(session.source_room_id ?? session.watch_party_room_id ?? session.creator_event_id);
+
 const blockedStateForRecord = (
   record: PlaybackRecordRow | null,
   session: BroadcastSessionRow | null,
@@ -736,7 +915,7 @@ const blockedStateForRecord = (
     return baseState(
       "blocked_ticketed",
       "Spectator playback is ticketed.",
-      "Ticketed public playback needs a backed ticketing flow before it can be exposed.",
+      "Seat Pass public playback needs a backed purchase flow before it can be exposed.",
     );
   }
   if (record.requires_premium || session?.requires_premium || record.access_type === "premium_only" || session?.access_type === "premium_only") {
@@ -780,6 +959,7 @@ const resolvePlaybackState = (
   record: PlaybackRecordRow | null,
   session: BroadcastSessionRow | null,
   itemBlock: JsonObject | null,
+  circleUserId?: string | null,
 ) => {
   const itemBlockState = toText(itemBlock?.state);
   if (itemBlock && (
@@ -806,6 +986,19 @@ const resolvePlaybackState = (
     };
   }
 
+  if (circleUserId && isCircleSafeRecord(record) && isCircleSafeSession(session)) {
+    return {
+      canRenderPlayback: true,
+      copy: "This item is private to your Chi'lly Circle and remains watch-only for spectators.",
+      fullRoomTokenForSpectators: false,
+      playbackUrl: null,
+      publicHlsBaseUrlUsed: false,
+      rawHlsUrlReturned: false,
+      state: "available",
+      title: "Circle spectator playback is available.",
+    };
+  }
+
   return blockedStateForRecord(record, session, itemBlock);
 };
 
@@ -814,19 +1007,33 @@ const readState = async (req: Request, adminClient: SupabaseClientLike, payload:
   const sourceRoomId = requestedSourceRoomId(payload);
   const broadcastSessionId = requestedBroadcastSessionId(payload);
   const item = itemId ? await readDiscoveryItem(adminClient, itemId) : null;
-  const itemBlock = discoveryBlockState(item);
+  const { supabaseAnonKey, supabaseUrl } = createAuthClient();
+  const authResult = item ? null : await authenticateRequest(req, supabaseUrl, supabaseAnonKey);
+  const circleItem = !item && itemId ? await readCircleSpectatorItem(adminClient, itemId) : null;
+  const circleUser = authResult && !("error" in authResult) ? authResult.user : null;
+  const circleAllowed = circleItem && circleUser
+    ? await canReadCircleSpectatorItem(adminClient, circleItem.id, circleUser.id)
+    : false;
+  const itemBlock = item ? discoveryBlockState(item) : circleBlockState(circleItem, circleAllowed);
   const sourceRoomIds = [
     sourceRoomId,
     item?.room_id,
     item?.source_id,
     item?.event_id,
     item?.id,
+    circleItem?.id,
   ].map(toText).filter(Boolean);
-  const record = await readPlaybackRecordForState(adminClient, { broadcastSessionId, sourceRoomIds });
+  const record = circleItem?.playback_record_id
+    ? await readPlaybackRecordById(adminClient, circleItem.playback_record_id)
+    : await readPlaybackRecordForState(adminClient, { broadcastSessionId, sourceRoomIds });
   const session = record ? await readBroadcastSession(adminClient, record.broadcast_session_id) : null;
+  const state = resolvePlaybackState(req, record, session, itemBlock, circleAllowed && circleUser ? circleUser.id : null);
 
   return {
-    ...resolvePlaybackState(req, record, session, itemBlock),
+    ...state,
+    ...(state.canRenderPlayback === true && circleAllowed && circleUser && record?.id
+      ? { playbackUrl: await controlledCirclePlaylistUrl(req, record.id, circleUser.id) }
+      : {}),
     broadcastSessionId: record?.broadcast_session_id ?? null,
     recordId: record?.id ?? null,
   };
@@ -1144,12 +1351,19 @@ const rewritePlaylist = (req: Request, recordId: string, playlist: string) =>
   playlist.split(/\r?\n/).map((line) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) return line;
-    return `${functionBaseUrl(req)}/records/${encodeURIComponent(recordId)}/segment?path=${encodeURIComponent(trimmed)}`;
+    const circleToken = new URL(req.url).searchParams.get("circleToken");
+    const tokenQuery = circleToken ? `&circleToken=${encodeURIComponent(circleToken)}` : "";
+    return `${functionBaseUrl(req)}/records/${encodeURIComponent(recordId)}/segment?path=${encodeURIComponent(trimmed)}${tokenQuery}`;
   }).join("\n");
 
 const handlePlaylistFetch = async (req: Request, adminClient: SupabaseClientLike, recordId: string) => {
   const { record, session } = await readRecordAndSession(adminClient, recordId);
-  const state = resolvePlaybackState(req, record, session, null);
+  const circleToken = new URL(req.url).searchParams.get("circleToken");
+  const circleTokenPayload = circleToken ? await verifyCirclePlaybackToken(circleToken, recordId) : null;
+  const circleAllowed = circleTokenPayload
+    ? await canReadCirclePlaybackRecord(adminClient, recordId, circleTokenPayload.userId)
+    : false;
+  const state = resolvePlaybackState(req, record, session, null, circleAllowed ? circleTokenPayload?.userId : null);
   if (state.canRenderPlayback !== true || !record || !session) {
     return jsonResponse(403, {
       ...state,
@@ -1208,7 +1422,12 @@ const handleSegmentFetch = async (
   segmentPath: string | null,
 ) => {
   const { record, session } = await readRecordAndSession(adminClient, recordId);
-  const state = resolvePlaybackState(req, record, session, null);
+  const circleToken = new URL(req.url).searchParams.get("circleToken");
+  const circleTokenPayload = circleToken ? await verifyCirclePlaybackToken(circleToken, recordId) : null;
+  const circleAllowed = circleTokenPayload
+    ? await canReadCirclePlaybackRecord(adminClient, recordId, circleTokenPayload.userId)
+    : false;
+  const state = resolvePlaybackState(req, record, session, null, circleAllowed ? circleTokenPayload?.userId : null);
   if (state.canRenderPlayback !== true || !record || !session) {
     return jsonResponse(403, {
       ...state,

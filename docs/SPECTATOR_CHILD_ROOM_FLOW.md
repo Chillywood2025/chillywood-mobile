@@ -3,12 +3,30 @@
 June 3, 2026 money-access note: ticket/access/seat grant readiness does not change Spectator child-room behavior. Access grants may later allow viewing/entry only when policy allows; they never expose original LiveKit tokens, speaker credentials, host controls, raw HLS/storage paths, or publish authority.
 
 ## Purpose
-Spectator is the public-safe watch-only discovery surface. It can show approved public playback and metadata, then let a signed-in viewer start their own child room around that source.
+Spectator has two backed watch-only lanes:
+
+- Public Spectator is the public-safe discovery surface. It can show approved public playback and metadata, then let a signed-in viewer start their own child room around that source.
+- Circle Spectator is private to approved Chi'lly Circle members. It can show approved Circle-private playback and metadata only through backed Circle-gated reads, then let an authorized signed-in member start their own child room when the source allows it.
 
 Spectator is not participant entry into the original room. A spectator never receives the original room's full LiveKit token, publish grants, speaker credentials, host controls, private room ids, member lists, raw playback storage paths, or raw private HLS paths.
 
+## Circle Spectator
+Circle Spectator is backed by `circle_spectator_feed_items`, active Chi'lly Circle membership, channel-audience blocks, and controlled `spectator-playback` resolver URLs. It does not write Circle-private rows to discovery_feed_items, public Home discovery, or public Explore.
+
+Circle Spectator rules:
+
+- Private to approved Chi'lly Circle members; private does not mean owner-only.
+- Owner/host/channel owner can read their own Circle spectator row.
+- Signed-out viewers, non-members, pending/removed Circle relationships, and blocked viewers are denied.
+- Active rows require `visibility = circle`, `access_type = circle`, clean moderation, spectator enabled, and rights-safe status.
+- Playback records use `visibility = circle`; they are not public-watchable and are available only through a short-lived controlled resolver URL issued after server-side Circle access passes.
+- Public discovery remains public-only through `discovery_feed_items`; public Home/Explore must not read Circle spectator rows.
+- Home may show member-only rails such as `From Your Chi'lly Circle`, `Circle Live Now`, and `Circle Watch-Party Ready`.
+- Paid access, Premium, or room access cannot bypass Chi'lly Circle membership.
+
 ## Spectator vs Participant
 - Spectator watches a public-safe controlled playback endpoint and can share/report/view the source Platform.
+- Circle Spectator watches a Circle-gated controlled playback endpoint and cannot public-share the private source.
 - Participant joins a room through the room route and its existing membership, Premium, request-seat, request-speaker, and host-approval flows.
 - Starting a child room from Spectator does not upgrade the viewer in the original room. Joining or speaking in the original room still uses the existing request/approve path before any upgraded token is issued.
 - Spectator child-room start from an eligible Chi'llywood source does not force a new rights form. Source eligibility remains the gate. Spectator pages do not show Rights Disclosure unless separately approved later. Visible Rights Disclosure UI is disabled for now across Spectator, Watch-Party Live, and Live Watch-Party surfaces; dormant backend disclosure helpers/tables, if kept, do not bypass source eligibility, DMCA, Premium, or LiveKit boundaries.
@@ -53,14 +71,14 @@ The client shows honest disabled copy, but the Edge Function is the authority. I
 
 - signed-in viewer
 - source exists
-- source is public discovery, public visibility, clean moderation, and public-safe rights
+- source is either public discovery/public visibility/clean moderation/public-safe rights, or a Circle spectator row readable by the owner/host/channel or active Chi'lly Circle member
 - source is not Premium-only, ticketed, subscription-only, private, deleted, blocked for the viewer, or ended without replay permission
 - creator/source flags allow spectator view and the requested child-room type
 - runtime controls allow the requested room type
 - Premium gate policy remains aligned with the current Premium proof-hold helper
 - rate limits for repeated actor attempts and child rooms per source
-- `spectator_hls_playback_records` has public-safe live playback
-- the backing `room_broadcast_sessions` row is public-safe approved
+- `spectator_hls_playback_records` has public-safe live playback for public sources or Circle-safe live playback for Circle sources
+- the backing `room_broadcast_sessions` row is public-safe approved or Circle-safe approved
 
 Clean denial errors are `sign_in_required`, `premium_required`, `source_not_public`, `source_reuse_disabled`, `source_not_found`, `source_ended`, `blocked`, and `rate_limited`.
 

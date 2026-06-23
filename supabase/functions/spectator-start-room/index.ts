@@ -57,6 +57,36 @@ type DiscoveryFeedItemRow = {
   title: string | null;
   visibility: string | null;
 };
+type CircleSpectatorFeedItemRow = {
+  access_type: string | null;
+  allow_live_reaction_rooms: boolean | null;
+  allow_replay_watch_party: boolean | null;
+  allow_spectator_view: boolean | null;
+  allow_watch_party_from_spectator: boolean | null;
+  channel_user_id: string | null;
+  creator_user_id: string | null;
+  ended_at: string | null;
+  event_id: string | null;
+  host_user_id: string | null;
+  id: string;
+  is_spectator_enabled: boolean | null;
+  is_spectator_playback_enabled: boolean | null;
+  item_type: string | null;
+  live_state: string | null;
+  metadata: JsonObject | null;
+  moderation_status: string | null;
+  playback_record_id: string | null;
+  requires_premium_to_join: boolean | null;
+  requires_subscription_to_watch: boolean | null;
+  requires_ticket_to_watch: boolean | null;
+  rights_status: string | null;
+  room_id: string | null;
+  source_id: string | null;
+  source_room_id: string | null;
+  source_type: string | null;
+  title: string | null;
+  visibility: string | null;
+};
 
 type PlaybackRecordRow = {
   access_type: string | null;
@@ -363,6 +393,94 @@ const readDiscoveryItem = async (adminClient: SupabaseClientLike, itemId: string
   return (data ?? null) as DiscoveryFeedItemRow | null;
 };
 
+const adaptCircleSpectatorItem = (item: CircleSpectatorFeedItemRow): DiscoveryFeedItemRow => ({
+  access_type: "circle",
+  allow_live_reaction_rooms: item.allow_live_reaction_rooms,
+  allow_public_share: false,
+  allow_replay_watch_party: item.allow_replay_watch_party,
+  allow_spectator_view: item.allow_spectator_view,
+  allow_watch_party_from_spectator: item.allow_watch_party_from_spectator,
+  channel_user_id: item.channel_user_id ?? item.creator_user_id,
+  ended_at: item.ended_at,
+  event_id: item.event_id,
+  host_user_id: item.host_user_id,
+  id: item.id,
+  is_publicly_discoverable: false,
+  is_spectator_enabled: item.is_spectator_enabled,
+  is_spectator_playback_enabled: item.is_spectator_playback_enabled,
+  item_type: item.item_type,
+  live_state: item.live_state,
+  metadata: {
+    ...(item.metadata ?? {}),
+    circle_spectator_feed: true,
+    playback_record_id: item.playback_record_id,
+  },
+  moderation_status: item.moderation_status,
+  owner_user_id: item.creator_user_id,
+  requires_premium_to_join: item.requires_premium_to_join,
+  requires_subscription_to_watch: item.requires_subscription_to_watch,
+  requires_ticket_to_watch: item.requires_ticket_to_watch,
+  rights_status: item.rights_status,
+  room_id: item.room_id ?? item.source_room_id,
+  source_id: item.source_id ?? item.source_room_id,
+  source_type: item.source_type,
+  title: item.title,
+  visibility: "circle",
+});
+
+const readCircleSpectatorItem = async (adminClient: SupabaseClientLike, itemId: string) => {
+  const { data, error } = await adminClient
+    .from("circle_spectator_feed_items")
+    .select([
+      "access_type",
+      "allow_live_reaction_rooms",
+      "allow_replay_watch_party",
+      "allow_spectator_view",
+      "allow_watch_party_from_spectator",
+      "channel_user_id",
+      "creator_user_id",
+      "ended_at",
+      "event_id",
+      "host_user_id",
+      "id",
+      "is_spectator_enabled",
+      "is_spectator_playback_enabled",
+      "item_type",
+      "live_state",
+      "metadata",
+      "moderation_status",
+      "playback_record_id",
+      "requires_premium_to_join",
+      "requires_subscription_to_watch",
+      "requires_ticket_to_watch",
+      "rights_status",
+      "room_id",
+      "source_id",
+      "source_room_id",
+      "source_type",
+      "title",
+      "visibility",
+    ].join(","))
+    .eq("id", itemId)
+    .maybeSingle();
+
+  if (error) throw new Error(`circle_source_read_failed:${error.message}`);
+  return data ? adaptCircleSpectatorItem(data as CircleSpectatorFeedItemRow) : null;
+};
+
+const canReadCircleSpectatorItem = async (
+  adminClient: SupabaseClientLike,
+  itemId: string,
+  viewerUserId: string,
+) => {
+  const { data, error } = await adminClient.rpc("can_read_circle_spectator_feed_item", {
+    p_item_id: itemId,
+    p_viewer_user_id: viewerUserId,
+  });
+  if (error) return false;
+  return data === true;
+};
+
 const readViewerBlock = async (adminClient: SupabaseClientLike, itemId: string, userId: string) => {
   const { data, error } = await adminClient
     .from("discovery_feed_item_blocks")
@@ -426,6 +544,17 @@ const isPublicSafeItem = (item: DiscoveryFeedItemRow) => (
   && item.requires_subscription_to_watch === false
 );
 
+const isCircleSafeItem = (item: DiscoveryFeedItemRow) => (
+  item.is_publicly_discoverable !== true
+  && item.visibility === "circle"
+  && item.moderation_status === "clean"
+  && PUBLIC_SAFE_RIGHTS.has(toText(item.rights_status))
+  && item.access_type === "circle"
+  && item.requires_premium_to_join === false
+  && item.requires_ticket_to_watch === false
+  && item.requires_subscription_to_watch === false
+);
+
 const isPublicSafePlayback = (playback: PlaybackRecordRow | null) => !!playback
   && playback.visibility === "public"
   && playback.playback_status === "live"
@@ -434,6 +563,17 @@ const isPublicSafePlayback = (playback: PlaybackRecordRow | null) => !!playback
   && playback.is_spectator_playback_enabled === true
   && PUBLIC_SAFE_RIGHTS.has(toText(playback.rights_status))
   && playback.access_type === "public_free"
+  && playback.requires_premium === false
+  && playback.requires_ticket === false;
+
+const isCircleSafePlayback = (playback: PlaybackRecordRow | null) => !!playback
+  && playback.visibility === "circle"
+  && playback.playback_status === "live"
+  && !!toText(playback.playlist_path)
+  && playback.is_publicly_watchable === false
+  && playback.is_spectator_playback_enabled === true
+  && PUBLIC_SAFE_RIGHTS.has(toText(playback.rights_status))
+  && playback.access_type === "circle"
   && playback.requires_premium === false
   && playback.requires_ticket === false;
 
@@ -481,6 +621,17 @@ const isPublicSafeBroadcastSession = (session: BroadcastSessionRow | null) => !!
   && session.requires_ticket === false
   && session.playback_url_status === "public_safe_available"
   && (session.metadata?.d7f_public_safe_approved === true || session.metadata?.d7f_public_safe_approved === "true")
+  && isApprovedPlaylistUrl(session.hls_playback_url);
+
+const isCircleSafeBroadcastSession = (session: BroadcastSessionRow | null) => !!session
+  && session.is_publicly_watchable === false
+  && session.is_spectator_playback_enabled === true
+  && PUBLIC_SAFE_RIGHTS.has(toText(session.rights_status))
+  && session.access_type === "circle"
+  && session.requires_premium === false
+  && session.requires_ticket === false
+  && session.playback_url_status === "circle_safe_available"
+  && (session.metadata?.circle_spectator_approved === true || session.metadata?.circle_spectator_approved === "true")
   && isApprovedPlaylistUrl(session.hls_playback_url);
 
 const readParentLink = async (adminClient: SupabaseClientLike, item: DiscoveryFeedItemRow) => {
@@ -587,12 +738,20 @@ const resolveEligibility = async (
   config: AppConfigRow | null,
 ): Promise<EligibilityResult> => {
   if (!item) return { ok: false, reason: "source_not_found", status: 404 };
-  if (!isPublicSafeItem(item) || item.allow_spectator_view !== true) {
+  const isCircleItem = item.visibility === "circle" || item.access_type === "circle";
+  if (isCircleItem) {
+    const circleAllowed = await canReadCircleSpectatorItem(adminClient, item.id, user.id);
+    if (!circleAllowed) return { ok: false, reason: "blocked", status: 403 };
+  }
+
+  if (!(isPublicSafeItem(item) || isCircleSafeItem(item)) || item.allow_spectator_view !== true) {
     return { ok: false, reason: "source_not_public", status: 403 };
   }
 
-  const blocked = await readViewerBlock(adminClient, item.id, user.id);
-  if (blocked) return { ok: false, reason: "blocked", status: 403 };
+  if (!isCircleItem) {
+    const blocked = await readViewerBlock(adminClient, item.id, user.id);
+    if (blocked) return { ok: false, reason: "blocked", status: 403 };
+  }
 
   const liveState = toText(item.live_state);
   if (liveState === "ended" && item.allow_replay_watch_party !== true) {
@@ -628,7 +787,8 @@ const resolveEligibility = async (
   if (!rateLimitAllowed) return { ok: false, reason: "rate_limited", status: 429 };
 
   const playback = await readPlaybackRecord(adminClient, item);
-  if (!isPublicSafePlayback(playback)) {
+  const playbackAllowed = isCircleItem ? isCircleSafePlayback(playback) : isPublicSafePlayback(playback);
+  if (!playbackAllowed) {
     return playback?.playback_status === "ended"
       ? { ok: false, reason: "source_ended", status: 409 }
       : { ok: false, reason: "source_reuse_disabled", status: 403 };
@@ -636,7 +796,10 @@ const resolveEligibility = async (
 
   const safePlayback = playback as PlaybackRecordRow;
   const broadcastSession = await readBroadcastSession(adminClient, safePlayback);
-  if (!isPublicSafeBroadcastSession(broadcastSession)) {
+  const broadcastAllowed = isCircleItem
+    ? isCircleSafeBroadcastSession(broadcastSession)
+    : isPublicSafeBroadcastSession(broadcastSession);
+  if (!broadcastAllowed) {
     return { ok: false, reason: "source_reuse_disabled", status: 403 };
   }
 
@@ -802,10 +965,11 @@ Deno.serve(async (req): Promise<Response> => {
       sourceItemId: itemId,
     });
 
-    const [item, config] = await Promise.all([
+    const [publicItem, config] = await Promise.all([
       readDiscoveryItem(adminClient, itemId),
       readAppConfig(adminClient).catch(() => null),
     ]);
+    const item = publicItem ?? await readCircleSpectatorItem(adminClient, itemId);
 
     const eligibility = await resolveEligibility(adminClient, action, item, user, config);
     if (!eligibility.ok) {

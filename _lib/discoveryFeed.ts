@@ -110,6 +110,17 @@ export function isFeedItemPubliclyDiscoverable(item: Pick<
     && isPublicSpectatorSafeRightsStatus(item.rights_status);
 }
 
+export function isCircleSpectatorFeedItemEligibleForRanking(item: Pick<
+  DiscoveryFeedItem,
+  "is_publicly_discoverable" | "visibility" | "moderation_status" | "rights_status" | "is_spectator_enabled"
+>) {
+  return item.is_publicly_discoverable !== true
+    && (item.visibility === "circle" || item.visibility === "chilly_circle")
+    && item.moderation_status === "clean"
+    && item.is_spectator_enabled === true
+    && isPublicSpectatorSafeRightsStatus(item.rights_status);
+}
+
 export function isDiscoveryFeedItemEligibleForRanking(item: Pick<
   DiscoveryFeedItem,
   "is_publicly_discoverable" | "visibility" | "moderation_status" | "rights_status"
@@ -128,6 +139,7 @@ export function getDiscoveryAccessLabel(item: Pick<
   if (item.requires_ticket_to_watch || item.access_type === "ticketed") return "Ticketed";
   if (item.requires_subscription_to_watch || item.access_type === "subscriber_only_later") return "Subscriber";
   if (item.requires_premium_to_join || item.access_type === "premium_only") return "Premium";
+  if (item.access_type === "circle" || item.visibility === "circle" || item.visibility === "chilly_circle") return "Chi'lly Circle";
   if (item.access_type === "public_free" || item.visibility === "public") return "Public";
   if (item.access_type === "invite_only" || item.visibility === "invite_only") return "Invite Only";
   return "Private";
@@ -328,6 +340,62 @@ export function scoreDiscoveryFeedItem(
   };
 }
 
+export function scoreCircleSpectatorFeedItem(
+  item: Pick<
+    DiscoveryFeedItem,
+    | "is_publicly_discoverable"
+    | "visibility"
+    | "moderation_status"
+    | "rights_status"
+    | "is_spectator_enabled"
+    | "live_state"
+    | "item_type"
+    | "channel_user_id"
+    | "owner_user_id"
+    | "host_user_id"
+    | "category_key"
+    | "published_at"
+    | "starts_at"
+    | "created_at"
+    | "ranking_score"
+    | "ranking_reason"
+    | "metadata"
+  >,
+  signals: DiscoveryFeedRankingSignals = {},
+) {
+  if (!isCircleSpectatorFeedItemEligibleForRanking(item)) {
+    return {
+      reason: "manual_foundation" as DiscoveryRankingReason,
+      score: 0,
+      excluded: true,
+    };
+  }
+
+  const reason = resolveDiscoveryRankingReason(item, signals);
+  const configuredScore = typeof item.ranking_score === "number" && Number.isFinite(item.ranking_score)
+    ? item.ranking_score
+    : 0;
+  const reasonScore: Record<DiscoveryRankingReason, number> = {
+    live_now: 1000,
+    followed_channel: 820,
+    chilly_circle: 860,
+    recent_upload: 620,
+    upcoming_event: 600,
+    replay_ready: 560,
+    category_match: 400,
+    editorial_pick: 340,
+    trending_lightweight: 0,
+    manual_foundation: 260,
+  };
+  const freshnessScore = calculateDiscoveryFreshnessScore(item);
+
+  return {
+    reason,
+    score: configuredScore + reasonScore[reason] + freshnessScore,
+    excluded: false,
+  };
+}
+
 export function rankDiscoveryFeedItems<T extends DiscoveryFeedItem>(
   items: T[],
   signals: DiscoveryFeedRankingSignals = {},
@@ -335,6 +403,20 @@ export function rankDiscoveryFeedItems<T extends DiscoveryFeedItem>(
   return items.filter(isDiscoveryFeedItemEligibleForRanking).sort((left, right) => {
     const leftScore = scoreDiscoveryFeedItem(left, signals).score;
     const rightScore = scoreDiscoveryFeedItem(right, signals).score;
+    if (leftScore !== rightScore) return rightScore - leftScore;
+    const leftTime = Date.parse(normalizeText(left.starts_at) || normalizeText(left.published_at) || normalizeText(left.created_at));
+    const rightTime = Date.parse(normalizeText(right.starts_at) || normalizeText(right.published_at) || normalizeText(right.created_at));
+    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+  });
+}
+
+export function rankCircleSpectatorFeedItems<T extends DiscoveryFeedItem>(
+  items: T[],
+  signals: DiscoveryFeedRankingSignals = {},
+) {
+  return items.filter(isCircleSpectatorFeedItemEligibleForRanking).sort((left, right) => {
+    const leftScore = scoreCircleSpectatorFeedItem(left, signals).score;
+    const rightScore = scoreCircleSpectatorFeedItem(right, signals).score;
     if (leftScore !== rightScore) return rightScore - leftScore;
     const leftTime = Date.parse(normalizeText(left.starts_at) || normalizeText(left.published_at) || normalizeText(left.created_at));
     const rightTime = Date.parse(normalizeText(right.starts_at) || normalizeText(right.published_at) || normalizeText(right.created_at));

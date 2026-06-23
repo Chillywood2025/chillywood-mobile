@@ -3006,6 +3006,147 @@ export type Database = {
           },
         ]
       }
+      circle_spectator_feed_items: {
+        Row: {
+          access_type: string
+          allow_live_reaction_rooms: boolean
+          allow_replay_watch_party: boolean
+          allow_spectator_view: boolean
+          allow_watch_party_from_spectator: boolean
+          broadcast_session_id: string | null
+          category_key: string | null
+          channel_user_id: string | null
+          created_at: string
+          creator_user_id: string
+          ended_at: string | null
+          event_id: string | null
+          host_user_id: string | null
+          id: string
+          is_spectator_enabled: boolean
+          is_spectator_playback_enabled: boolean
+          item_type: string
+          live_state: string
+          metadata: Json
+          moderation_status: string
+          playback_record_id: string | null
+          published_at: string
+          ranking_reason: string | null
+          ranking_score: number
+          requires_premium_to_join: boolean
+          requires_subscription_to_watch: boolean
+          requires_ticket_to_watch: boolean
+          rights_status: string
+          room_id: string | null
+          source_id: string | null
+          source_room_id: string | null
+          source_type: string
+          starts_at: string | null
+          status: string
+          subtitle: string | null
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          access_type?: string
+          allow_live_reaction_rooms?: boolean
+          allow_replay_watch_party?: boolean
+          allow_spectator_view?: boolean
+          allow_watch_party_from_spectator?: boolean
+          broadcast_session_id?: string | null
+          category_key?: string | null
+          channel_user_id?: string | null
+          created_at?: string
+          creator_user_id: string
+          ended_at?: string | null
+          event_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          is_spectator_enabled?: boolean
+          is_spectator_playback_enabled?: boolean
+          item_type: string
+          live_state?: string
+          metadata?: Json
+          moderation_status?: string
+          playback_record_id?: string | null
+          published_at?: string
+          ranking_reason?: string | null
+          ranking_score?: number
+          requires_premium_to_join?: boolean
+          requires_subscription_to_watch?: boolean
+          requires_ticket_to_watch?: boolean
+          rights_status?: string
+          room_id?: string | null
+          source_id?: string | null
+          source_room_id?: string | null
+          source_type: string
+          starts_at?: string | null
+          status?: string
+          subtitle?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          access_type?: string
+          allow_live_reaction_rooms?: boolean
+          allow_replay_watch_party?: boolean
+          allow_spectator_view?: boolean
+          allow_watch_party_from_spectator?: boolean
+          broadcast_session_id?: string | null
+          category_key?: string | null
+          channel_user_id?: string | null
+          created_at?: string
+          creator_user_id?: string
+          ended_at?: string | null
+          event_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          is_spectator_enabled?: boolean
+          is_spectator_playback_enabled?: boolean
+          item_type?: string
+          live_state?: string
+          metadata?: Json
+          moderation_status?: string
+          playback_record_id?: string | null
+          published_at?: string
+          ranking_reason?: string | null
+          ranking_score?: number
+          requires_premium_to_join?: boolean
+          requires_subscription_to_watch?: boolean
+          requires_ticket_to_watch?: boolean
+          rights_status?: string
+          room_id?: string | null
+          source_id?: string | null
+          source_room_id?: string | null
+          source_type?: string
+          starts_at?: string | null
+          status?: string
+          subtitle?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circle_spectator_feed_items_broadcast_session_fkey"
+            columns: ["broadcast_session_id"]
+            isOneToOne: false
+            referencedRelation: "room_broadcast_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circle_spectator_feed_items_playback_record_fkey"
+            columns: ["playback_record_id"]
+            isOneToOne: false
+            referencedRelation: "spectator_hls_playback_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discovery_feed_item_blocks: {
         Row: {
           blocked_user_id: string

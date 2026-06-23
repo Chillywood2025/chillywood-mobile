@@ -40,6 +40,7 @@ import {
     type CreatorVideo,
 } from "../../_lib/creatorVideos";
 import { readCreatorRelationshipFeedVideos } from "../../_lib/creatorFeed";
+import { readRankedCircleSpectatorFeedItems } from "../../_lib/circleSpectatorFeed";
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { readProfilePosts, type ProfilePost } from "../../_lib/profilePosts";
 import { buildCreatorVideoDeepLink, isCreatorVideoPubliclyShareable } from "../../_lib/creatorVideoLinks";
@@ -49,6 +50,7 @@ import {
     getDiscoveryRankingReasonLabel,
     rankDiscoveryFeedItems,
     readRankedPublicDiscoveryFeedItems,
+    scoreCircleSpectatorFeedItem,
     scoreDiscoveryFeedItem,
     type DiscoveryFeedItem,
     type DiscoveryFeedRankingSignals,
@@ -215,11 +217,13 @@ export default function HomeScreen() {
   const [circleFeedVideos, setCircleFeedVideos] = useState<CreatorVideo[]>([]);
   const [followedFeedPosts, setFollowedFeedPosts] = useState<ProfilePost[]>([]);
   const [circleFeedPosts, setCircleFeedPosts] = useState<ProfilePost[]>([]);
+  const [circleSpectatorItems, setCircleSpectatorItems] = useState<DiscoveryFeedItem[]>([]);
   const [rachiOfficialPosts, setRachiOfficialPosts] = useState<ProfilePost[]>([]);
   const [rachiOriginals, setRachiOriginals] = useState<CreatorVideo[]>([]);
   const [rachiOfficialAvatarUrl, setRachiOfficialAvatarUrl] = useState("");
   const [homeDiscoveryItems, setHomeDiscoveryItems] = useState<DiscoveryFeedItem[]>([]);
   const [homeDiscoverySignals, setHomeDiscoverySignals] = useState<DiscoveryFeedRankingSignals>({});
+  const [circleSpectatorSignals, setCircleSpectatorSignals] = useState<DiscoveryFeedRankingSignals>({});
   const [homeDiscoveryLoading, setHomeDiscoveryLoading] = useState(true);
   const [homeDiscoveryError, setHomeDiscoveryError] = useState<string | null>(null);
   const homeConfig = resolveHomeConfig(appConfig);
@@ -314,13 +318,19 @@ export default function HomeScreen() {
     setHomeDiscoveryError(null);
 
     try {
-      const [publicEvents, rankedDiscovery, officialPosts, officialOriginals, officialProfile] = await Promise.all([
+      const [publicEvents, rankedDiscovery, rankedCircleSpectator, officialPosts, officialOriginals, officialProfile] = await Promise.all([
         readLatestPublicEventSummaries({ limit: 24 }),
         readRankedPublicDiscoveryFeedItems({ surface: "home", limit: 24 }).catch(() => ({
           items: [] as DiscoveryFeedItem[],
           signals: {} as DiscoveryFeedRankingSignals,
           generatedAt: new Date().toISOString(),
           viewerSpecific: false,
+        })),
+        readRankedCircleSpectatorFeedItems({ limit: 16 }).catch(() => ({
+          items: [] as DiscoveryFeedItem[],
+          signals: {} as DiscoveryFeedRankingSignals,
+          generatedAt: new Date().toISOString(),
+          viewerSpecific: true as const,
         })),
         readProfilePosts(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 3 }).catch(() => [] as ProfilePost[]),
         readCreatorVideos(RACHI_OFFICIAL_ACCOUNT.userId, { includeDrafts: false, limit: 12 }).catch(() => [] as CreatorVideo[]),
@@ -340,7 +350,9 @@ export default function HomeScreen() {
       setCircleFeedVideos(circleFeed?.videos ?? []);
       setFollowedFeedPosts(followedFeed?.profilePosts ?? []);
       setCircleFeedPosts(circleFeed?.profilePosts ?? []);
+      setCircleSpectatorItems(rankedCircleSpectator.items);
       setHomeDiscoverySignals(rankedDiscovery.signals);
+      setCircleSpectatorSignals(rankedCircleSpectator.signals);
       setHomeDiscoveryItems(rankDiscoveryFeedItems(rankedDiscovery.items, rankedDiscovery.signals));
     } catch {
       setHomeLiveEvents([]);
@@ -352,8 +364,10 @@ export default function HomeScreen() {
       setCircleFeedVideos([]);
       setFollowedFeedPosts([]);
       setCircleFeedPosts([]);
+      setCircleSpectatorItems([]);
       setHomeDiscoveryItems([]);
       setHomeDiscoverySignals({});
+      setCircleSpectatorSignals({});
       setHomeDiscoveryError("Discovery feed is unavailable right now.");
     } finally {
       setHomeDiscoveryLoading(false);
@@ -537,6 +551,14 @@ export default function HomeScreen() {
     () => homeDiscoveryItems.filter((item) => item.live_state === "scheduled").slice(0, 8),
     [homeDiscoveryItems],
   );
+  const circleLiveSpectatorItems = useMemo(
+    () => circleSpectatorItems.filter((item) => item.live_state === "live").slice(0, 8),
+    [circleSpectatorItems],
+  );
+  const circleWatchPartySpectatorItems = useMemo(
+    () => circleSpectatorItems.filter((item) => item.live_state !== "live").slice(0, 8),
+    [circleSpectatorItems],
+  );
 
   function renderHomeHero() {
     const heroItem = continueWatchingHeroItem;
@@ -604,7 +626,10 @@ export default function HomeScreen() {
     const ownerId = String(item.channel_user_id ?? item.owner_user_id ?? item.host_user_id ?? "").trim();
     const accessLabel = getDiscoveryAccessLabel(item);
     const liveLabel = getDiscoveryLiveLabel(item);
-    const rankingReason = scoreDiscoveryFeedItem(item, homeDiscoverySignals).reason;
+    const isCircleSpectatorItem = item.visibility === "circle" || item.visibility === "chilly_circle" || item.access_type === "circle";
+    const rankingReason = isCircleSpectatorItem
+      ? scoreCircleSpectatorFeedItem(item, circleSpectatorSignals).reason
+      : scoreDiscoveryFeedItem(item, homeDiscoverySignals).reason;
     const rankingLabel = getDiscoveryRankingReasonLabel(rankingReason);
     const scheduleLabel = formatFeedDate(item.starts_at ?? item.published_at ?? item.created_at);
 
@@ -1019,6 +1044,24 @@ export default function HomeScreen() {
             emptyTitle: "No Circle feed posts yet",
             emptyText: "Circle feed posts appear here only when approved Chi'lly Circle and profile/video access rules allow them.",
             keyPrefix: "circle-feed-video",
+          })}
+
+          {renderHomeEventRail({
+            title: "Circle Live Now",
+            subtitle: "Private spectator lives available through your approved Chi'lly Circle relationships.",
+            feedItems: circleLiveSpectatorItems,
+            events: [],
+            emptyTitle: "No Circle lives right now",
+            emptyText: "Circle-private spectator lives appear here only when your approved Chi'lly Circle access allows them.",
+          })}
+
+          {renderHomeEventRail({
+            title: "Circle Watch-Party Ready",
+            subtitle: "Watch-only spectator sources available to your Chi'lly Circle.",
+            feedItems: circleWatchPartySpectatorItems,
+            events: [],
+            emptyTitle: "No Circle watch-party sources yet",
+            emptyText: "Circle-private spectator sources appear here only when backed access and playback rules allow them.",
           })}
 
           {renderHomeEventRail({

@@ -10,7 +10,7 @@ export type SpectatorLaunchEligibility = {
   kind: SpectatorLaunchKind;
   primaryAction: SpectatorLaunchAction;
   primaryLabel: "Start Watch-Party Live" | "Start Live Watch-Party";
-  secondaryLabel: "Watch with your Chi’lly Circle";
+  secondaryLabel: "Watch with your Chi'lly Circle";
   reactionLabel: "Start Reaction Room" | null;
   canStartWatchPartyLive: boolean;
   canStartLiveWatchParty: boolean;
@@ -72,6 +72,10 @@ export const resolveSpectatorLaunchEligibility = (
   const primaryLabel = isLive ? "Start Live Watch-Party" : "Start Watch-Party Live";
   const canRenderPlayback = playback?.canRenderPlayback === true && !!toText(playback.playbackUrl);
   const publicSafe = !!item && isFeedItemPubliclyDiscoverable(item);
+  const circleSafe = !!item
+    && (item.visibility === "circle" || item.visibility === "chilly_circle" || item.access_type === "circle")
+    && item.moderation_status === "clean"
+    && item.is_spectator_enabled === true;
   const sourceEnded = item?.live_state === "ended" || playback?.state === "ended";
   const protectedSource = item?.visibility === "private"
     || item?.access_type === "private"
@@ -83,14 +87,14 @@ export const resolveSpectatorLaunchEligibility = (
     && item?.is_spectator_enabled === true
     && item?.is_spectator_playback_enabled === true;
   const canStartWatchPartyLive = !isLive
-    && publicSafe
+    && (publicSafe || circleSafe)
     && spectatorAllowed
     && item?.allow_watch_party_from_spectator === true
     && !protectedSource
     && !sourceEnded
     && canRenderPlayback;
   const canStartLiveWatchParty = isLive
-    && publicSafe
+    && (publicSafe || circleSafe)
     && spectatorAllowed
     && item?.allow_live_reaction_rooms === true
     && !protectedSource
@@ -100,7 +104,7 @@ export const resolveSpectatorLaunchEligibility = (
   let disabledReason: string | null = null;
   if (sourceEnded) {
     disabledReason = "Source live has ended";
-  } else if (!publicSafe || protectedSource || !spectatorAllowed || !canRenderPlayback) {
+  } else if ((!publicSafe && !circleSafe) || protectedSource || !spectatorAllowed || !canRenderPlayback) {
     disabledReason = WATCH_PARTY_REUSE_DISABLED_COPY;
   } else if (isLive && item?.allow_live_reaction_rooms !== true) {
     disabledReason = WATCH_PARTY_REUSE_DISABLED_COPY;
@@ -112,7 +116,7 @@ export const resolveSpectatorLaunchEligibility = (
     kind,
     primaryAction,
     primaryLabel,
-    secondaryLabel: "Watch with your Chi’lly Circle",
+    secondaryLabel: "Watch with your Chi'lly Circle",
     reactionLabel: isLive ? "Start Reaction Room" : null,
     canStartWatchPartyLive,
     canStartLiveWatchParty,

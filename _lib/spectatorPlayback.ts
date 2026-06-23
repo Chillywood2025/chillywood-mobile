@@ -1,7 +1,7 @@
 import type { DiscoveryFeedItem } from "./discoveryFeed";
 import { isFeedItemPubliclyDiscoverable, isPublicSpectatorSafeRightsStatus } from "./discoveryFeed";
 import type { SpectatorAccessDecision } from "./spectatorAccess";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 
 export type SpectatorPlaybackState =
   | "loading"
@@ -98,6 +98,10 @@ const blockedReadout = (
   rawHlsUrlVisibleToUsers: false,
 });
 
+const isCircleSpectatorItem = (item: DiscoveryFeedItem) => (
+  item.visibility === "circle" || item.visibility === "chilly_circle" || item.access_type === "circle"
+);
+
 export function resolveSpectatorPlaybackState(
   item: DiscoveryFeedItem | null,
   decision: SpectatorAccessDecision | null,
@@ -116,6 +120,98 @@ export function resolveSpectatorPlaybackState(
       fullRoomTokenForSpectators: false,
       rawHlsUrlVisibleToUsers: false,
     };
+  }
+
+  if (isCircleSpectatorItem(item)) {
+    if (!decision.eligible || decision.reason === "circle_member_required") {
+      return blockedReadout(
+        "blocked_private",
+        "Spectator playback is private.",
+        "This item is private to the creator's Chi'lly Circle.",
+        decision,
+      );
+    }
+
+    const rightsStatus = normalizeText(item.rights_status) || decision.rightsStatus;
+    if (!isPublicSpectatorSafeRightsStatus(rightsStatus)) {
+      return blockedReadout(
+        rightsStatus.includes("protected") ? "blocked_protected" : "blocked_title_rights",
+        "Spectator playback is blocked by rights.",
+        "This content is not available for Chi'lly Circle spectator playback.",
+        decision,
+      );
+    }
+
+    if (decision.requiresTicket) {
+      return blockedReadout(
+        "blocked_ticketed",
+        "Spectator playback is gated.",
+        "Paid access cannot bypass Chi'lly Circle membership.",
+        decision,
+      );
+    }
+
+    if (decision.requiresPremium) {
+      return blockedReadout(
+        "blocked_premium_full_room",
+        "Full room access requires Premium.",
+        "Spectator playback cannot bypass full-room gates.",
+        decision,
+      );
+    }
+
+    if (item.live_state === "ended") {
+      return blockedReadout(
+        "ended",
+        "This broadcast has ended.",
+        "No Chi'lly Circle replay is available from spectator metadata.",
+        decision,
+      );
+    }
+
+    const serverState = normalizeText(source.serverReadout?.state) as SpectatorPlaybackState;
+    const controlledPlaybackUrl = isControlledPlaybackUrl(source.serverReadout?.playbackUrl);
+    if (serverState === "available" && controlledPlaybackUrl && source.serverReadout?.canRenderPlayback === true) {
+      return {
+        state: "available",
+        title: normalizeText(source.serverReadout.title) || "Circle spectator playback is available.",
+        copy: normalizeText(source.serverReadout.copy)
+          || "This item is private to your Chi'lly Circle and remains watch-only for spectators.",
+        guardrails: WATCH_ONLY_GUARDRAILS,
+        canRenderPlayback: true,
+        playbackUrl: controlledPlaybackUrl,
+        fullRoomRequiresPremium: decision.requiresPremium,
+        fullRoomRequiresTicket: decision.requiresTicket,
+        fullRoomTokenForSpectators: false,
+        rawHlsUrlVisibleToUsers: false,
+      };
+    }
+
+    if (!item.is_spectator_enabled) {
+      return blockedReadout(
+        "not_configured",
+        "Spectator playback is not configured.",
+        "Private to your Chi'lly Circle, but spectator playback has not been enabled for this item.",
+        decision,
+      );
+    }
+
+    if (!item.is_spectator_playback_enabled) {
+      return blockedReadout(
+        "waiting_for_egress",
+        "Spectator playback is still preparing.",
+        "This Chi'lly Circle spectator item is not ready for watch-only playback yet.",
+        decision,
+      );
+    }
+
+    const serverCopy = normalizeText(source.serverReadout?.copy);
+    return blockedReadout(
+      serverState || "waiting_for_egress",
+      normalizeText(source.serverReadout?.title) || "Spectator playback is still preparing.",
+      serverCopy || "Playback is marked as intended, but no approved controlled playback endpoint is available to render.",
+      decision,
+    );
   }
 
   if (!isFeedItemPubliclyDiscoverable(item)) {
@@ -239,6 +335,8 @@ export async function readSpectatorPlaybackReadout(
   }
 
   try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
     const response = await fetch(SPECTATOR_PLAYBACK_FUNCTION_URL, {
       body: JSON.stringify({
         itemId: item.id,
@@ -246,6 +344,7 @@ export async function readSpectatorPlaybackReadout(
       }),
       headers: {
         apikey: SUPABASE_ANON_KEY,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         "Content-Type": "application/json",
       },
       method: "POST",

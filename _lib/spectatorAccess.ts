@@ -7,6 +7,7 @@ export type SpectatorAccessReason =
   | "spectator_not_enabled"
   | "protected_title_blocked"
   | "private_or_invite_only"
+  | "circle_member_required"
   | "ticket_required"
   | "subscription_required"
   | "premium_required_for_full_room"
@@ -41,13 +42,20 @@ type SpectatorItemInput = Pick<
 
 export function resolveSpectatorAccess(
   item: SpectatorItemInput,
-  options?: { viewerIsPremium?: boolean; hasTicket?: boolean; hasSubscription?: boolean; isInvited?: boolean },
+  options?: {
+    viewerIsPremium?: boolean;
+    hasTicket?: boolean;
+    hasSubscription?: boolean;
+    isInvited?: boolean;
+    circleAccess?: "allowed" | "locked";
+  },
 ): SpectatorAccessDecision {
   const accessLabel = getDiscoveryAccessLabel(item);
   const rightsStatus = String(item.rights_status ?? "").trim() || "unknown_block_public_spectator";
   const accessType = String(item.access_type ?? "").trim() || "private";
   const requiresPremium = !!item.requires_premium_to_join || accessType === "premium_only";
   const requiresTicket = !!item.requires_ticket_to_watch || accessType === "ticketed";
+  const isCirclePrivate = item.visibility === "circle" || item.visibility === "chilly_circle" || accessType === "circle";
 
   const base = {
     accessType,
@@ -56,6 +64,62 @@ export function resolveSpectatorAccess(
     requiresTicket,
     canShowPlayback: false,
   };
+
+  if (isCirclePrivate) {
+    if (options?.circleAccess !== "allowed") {
+      return {
+        ...base,
+        eligible: false,
+        reason: "circle_member_required",
+        canShowMetadata: true,
+        canJoinFullRoom: false,
+        safeCopy: "This item is private to the creator's Chi'lly Circle.",
+      };
+    }
+
+    if (item.moderation_status !== "clean" || !isPublicSpectatorSafeRightsStatus(rightsStatus)) {
+      return {
+        ...base,
+        eligible: false,
+        reason: "protected_title_blocked",
+        canShowMetadata: false,
+        canJoinFullRoom: false,
+        safeCopy: "Circle spectator video is blocked until safety and rights are cleared.",
+      };
+    }
+
+    if (!item.is_spectator_enabled) {
+      return {
+        ...base,
+        eligible: true,
+        reason: "spectator_not_enabled",
+        canShowMetadata: true,
+        canJoinFullRoom: false,
+        safeCopy: "Private to your Chi'lly Circle. Spectator playback is not enabled for this item.",
+      };
+    }
+
+    if (!item.is_spectator_playback_enabled) {
+      return {
+        ...base,
+        eligible: true,
+        reason: "playback_not_connected",
+        canShowMetadata: true,
+        canJoinFullRoom: false,
+        safeCopy: "Private to your Chi'lly Circle. Playback is still preparing.",
+      };
+    }
+
+    return {
+      ...base,
+      eligible: true,
+      reason: "metadata_available",
+      canShowMetadata: true,
+      canShowPlayback: false,
+      canJoinFullRoom: false,
+      safeCopy: "Private to your Chi'lly Circle. Watch-only spectator details are available.",
+    };
+  }
 
   if (!isFeedItemPubliclyDiscoverable(item)) {
     return {
