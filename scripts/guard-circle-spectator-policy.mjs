@@ -17,6 +17,7 @@ const assertNotIncludes = (source, needle, label) => {
 };
 
 const migration = read("supabase/migrations/20260622230809_circle_spectator_feed_v1.sql");
+const childRoomCircleMigration = read("supabase/migrations/20260623001500_allow_circle_spectator_child_room_sources.sql");
 const discovery = read("_lib/discoveryFeed.ts");
 const circleFeed = read("_lib/circleSpectatorFeed.ts");
 const access = read("_lib/spectatorAccess.ts");
@@ -41,6 +42,16 @@ const packageJson = read("package.json");
   "circle_spectator_approved",
   "circle_safe_available",
 ].forEach((needle) => assertIncludes(migration, needle, "Circle spectator migration"));
+
+[
+  "drop constraint if exists \"spectator_child_room_sources_source_item_id_fkey\"",
+  "circle_spectator_feed_items",
+  "can_read_circle_spectator_feed_item",
+  "playback.\"visibility\" = 'circle'",
+  "playback.\"is_publicly_watchable\" = false",
+  "discovery_feed_items",
+  "item.\"visibility\" = 'public'",
+].forEach((needle) => assertIncludes(childRoomCircleMigration, needle, "Circle spectator child-room migration"));
 
 assertNotIncludes(migration, "insert into public.\"discovery_feed_items\"", "Circle spectator migration");
 assertNotIncludes(migration, "is_publicly_discoverable\" = true", "Circle spectator migration");
