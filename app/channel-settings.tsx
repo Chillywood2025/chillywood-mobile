@@ -2369,6 +2369,7 @@ export function ChannelStudioScreen() {
 
     if (!canUseChannelSettings || !user?.id) {
       setCreatorVideos([]);
+      setCreatorReplays([]);
       setVideosLoadError(null);
       setVideosLoading(false);
       return () => {
@@ -2378,10 +2379,14 @@ export function ChannelStudioScreen() {
 
     setVideosLoading(true);
     setVideosLoadError(null);
-    void readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 })
-      .then(async (videos) => {
+    void Promise.all([
+      readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 }),
+      readCreatorReplayLibraryItems(String(user.id)),
+    ])
+      .then(async ([videos, replays]) => {
         if (!active) return;
         setCreatorVideos(videos);
+        setCreatorReplays(replays);
         const editMap = await readClipStudioEditsForVideos(videos.map((video) => video.id)).catch(() => new Map());
         if (!active) return;
         setCreatorVideoClipEdits(Object.fromEntries(editMap));
@@ -2390,6 +2395,7 @@ export function ChannelStudioScreen() {
       .catch(() => {
         if (!active) return;
         setCreatorVideos([]);
+        setCreatorReplays([]);
         setCreatorVideoClipEdits({});
         setVideosLoadError("Unable to load creator videos right now. Check your connection and retry.");
         setVideosLoading(false);
@@ -5165,12 +5171,11 @@ export function ChannelStudioScreen() {
               </View>
               <View style={styles.creatorReplayActions}>
                 <TouchableOpacity
-                  style={[styles.segmentButton, replay.saveStatus !== "ready" && styles.segmentButtonDisabled]}
+                  style={styles.segmentButton}
                   activeOpacity={0.86}
-                  disabled={replay.saveStatus !== "ready"}
-                  onPress={() => setVideoNotice("Ready replay playback uses the controlled playback resolver. A standalone replay Player route is not enabled yet.")}
+                  onPress={() => router.push({ pathname: "/player/replay/[replayId]", params: { replayId: replay.id } } as unknown as Parameters<typeof router.push>[0])}
                 >
-                  <Text style={styles.segmentButtonText}>Open</Text>
+                  <Text style={styles.segmentButtonText}>{replay.saveStatus === "ready" ? "Open" : "View State"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.segmentButton}

@@ -311,11 +311,27 @@ const requestSaveReplay = async (
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await adminClient
+  const { data: existingReplay, error: existingReplayError } = await adminClient
     .from("creator_replay_library_items")
-    .upsert(replayPayload, { onConflict: "broadcast_session_id" })
-    .select("id,save_status,visibility,playback_record_id")
-    .single();
+    .select("id")
+    .eq("broadcast_session_id", session.id)
+    .maybeSingle();
+  if (existingReplayError) throw new Error(`creator_replay_read_failed:${existingReplayError.message}`);
+
+  const replayWrite = existingReplay?.id
+    ? adminClient
+      .from("creator_replay_library_items")
+      .update(replayPayload)
+      .eq("id", existingReplay.id)
+      .select("id,save_status,visibility,playback_record_id")
+      .single()
+    : adminClient
+      .from("creator_replay_library_items")
+      .insert(replayPayload)
+      .select("id,save_status,visibility,playback_record_id")
+      .single();
+
+  const { data, error } = await replayWrite;
   if (error) throw new Error(`creator_replay_upsert_failed:${error.message}`);
 
   await markRoomEnded(adminClient, partyId);

@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_FUNCTIONS_URL } from "./supabase";
 
 export const CREATOR_REPLAY_LIBRARY_ITEMS_TABLE = "creator_replay_library_items";
 
@@ -52,7 +52,29 @@ export type SaveReplayResult = {
   visibility?: CreatorReplayVisibility;
 };
 
+export type CreatorReplayPlaybackState =
+  | "processing"
+  | "ready"
+  | "failed"
+  | "unavailable"
+  | "locked_private"
+  | "blocked_by_rights"
+  | "error";
+
+export type CreatorReplayPlaybackReadout = {
+  accessReason?: string;
+  canRenderPlayback: boolean;
+  copy: string;
+  fullRoomTokenForSpectators: false;
+  liveKitPublishAuthorityGranted: false;
+  playbackUrl: string | null;
+  rawHlsUrlReturned: false;
+  state: CreatorReplayPlaybackState;
+  title: string;
+};
+
 const normalizeText = (value: unknown) => String(value ?? "").trim();
+const CREATOR_REPLAY_PLAYBACK_FUNCTION_URL = `${SUPABASE_FUNCTIONS_URL.replace(/\/+$/g, "")}/functions/v1/creator-replay-playback`;
 
 const normalizeSourceType = (value: unknown): CreatorReplaySourceType => (
   normalizeText(value) === "live_stage" ? "live_stage" : "watch_party_live"
@@ -84,6 +106,37 @@ const normalizeMoneyStatus = (value: unknown): CreatorReplayLibraryItem["moneySt
   if (normalized === "paid") return "paid";
   if (normalized === "paid_unavailable") return "paid_unavailable";
   return "free";
+};
+
+const normalizePlaybackState = (value: unknown): CreatorReplayPlaybackState => {
+  const normalized = normalizeText(value);
+  if (
+    normalized === "processing"
+    || normalized === "ready"
+    || normalized === "failed"
+    || normalized === "unavailable"
+    || normalized === "locked_private"
+    || normalized === "blocked_by_rights"
+  ) return normalized;
+  return "error";
+};
+
+const isControlledReplayPlaybackUrl = (value: unknown) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return null;
+  try {
+    const parsed = new URL(normalized);
+    const expectedBase = new URL(CREATOR_REPLAY_PLAYBACK_FUNCTION_URL);
+    const expectedPath = `${expectedBase.pathname.replace(/\/+$/g, "")}/records/`;
+    return parsed.protocol === "https:"
+      && parsed.origin === expectedBase.origin
+      && parsed.pathname.startsWith(expectedPath)
+      && parsed.pathname.endsWith("/index.m3u8")
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 const parseReplayItem = (row: Record<string, unknown>): CreatorReplayLibraryItem => ({
@@ -193,4 +246,58 @@ export async function updateCreatorReplayLibraryItem(
     .update(payload)
     .eq("id", replayItemId);
   if (error) throw new Error(error.message || "Unable to update replay.");
+}
+
+export async function resolveCreatorReplayPlayback(replayId: string): Promise<CreatorReplayPlaybackReadout> {
+  const normalizedReplayId = normalizeText(replayId);
+  if (!normalizedReplayId) {
+    return {
+      canRenderPlayback: false,
+      copy: "Replay id is missing.",
+      fullRoomTokenForSpectators: false,
+      liveKitPublishAuthorityGranted: false,
+      playbackUrl: null,
+      rawHlsUrlReturned: false,
+      state: "unavailable",
+      title: "Replay unavailable",
+    };
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  const response = await fetch(CREATOR_REPLAY_PLAYBACK_FUNCTION_URL, {
+    body: JSON.stringify({ replayId: normalizedReplayId }),
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      apikey: SUPABASE_ANON_KEY,
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok || !payload) {
+    return {
+      canRenderPlayback: false,
+      copy: normalizeText(payload?.message) || "Replay playback is unavailable right now.",
+      fullRoomTokenForSpectators: false,
+      liveKitPublishAuthorityGranted: false,
+      playbackUrl: null,
+      rawHlsUrlReturned: false,
+      state: "error",
+      title: "Replay unavailable",
+    };
+  }
+
+  const controlledPlaybackUrl = isControlledReplayPlaybackUrl(payload.playbackUrl);
+  return {
+    accessReason: normalizeText(payload.accessReason) || undefined,
+    canRenderPlayback: payload.canRenderPlayback === true && !!controlledPlaybackUrl,
+    copy: normalizeText(payload.copy) || "Replay playback is controlled and watch-only.",
+    fullRoomTokenForSpectators: false,
+    liveKitPublishAuthorityGranted: false,
+    playbackUrl: controlledPlaybackUrl,
+    rawHlsUrlReturned: false,
+    state: normalizePlaybackState(payload.state),
+    title: normalizeText(payload.title) || "Saved Replay",
+  };
 }

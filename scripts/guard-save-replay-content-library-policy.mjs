@@ -21,12 +21,15 @@ const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const replayLib = read("_lib/creatorReplays.ts");
 const migration = read("supabase/migrations/20260623025334_save_replay_content_library_v1.sql");
 const saveReplayFunction = read("supabase/functions/request-save-replay/index.ts");
+const replayPlayerRoute = read("app/player/replay/[replayId].tsx");
+const replayPlaybackFunction = read("supabase/functions/creator-replay-playback/index.ts");
 
 assertIncludes(tabLayout, "title: 'Saved'", "bottom tab viewer Library label");
 assertIncludes(viewerLibrary, "My Library", "viewer Library screen header");
 assertIncludes(viewerLibrary, "Saved titles, watch progress, followed Platforms, and saved replays live here.", "viewer Library scope copy");
 assertIncludes(studio, "Content Library", "Platform Studio Content Library copy");
 assertIncludes(studio, "Save Replay sends host replays here first.", "Save Replay Content Library destination copy");
+assertIncludes(studio, 'pathname: "/player/replay/[replayId]"', "Content Library replay Open route");
 
 [watchParty, liveStage].forEach((source, index) => {
   const label = index === 0 ? "Watch-Party Live host ending flow" : "Live Stage host ending flow";
@@ -67,7 +70,30 @@ assertIncludes(saveReplayFunction, 'sourceType === "watch_party_live" && toText(
 assertIncludes(replayLib, "CREATOR_REPLAY_LIBRARY_ITEMS_TABLE", "creator replay helper");
 assertIncludes(replayLib, "readCreatorReplayLibraryItems", "Content Library replay reads");
 assertIncludes(replayLib, "updateCreatorReplayLibraryItem", "Content Library replay actions");
+assertIncludes(replayLib, "resolveCreatorReplayPlayback", "creator replay playback resolver");
+assertIncludes(replayLib, "creator-replay-playback", "controlled replay playback function route");
 assertIncludes(packageJson, "guard:save-replay-content-library-policy", "package.json script");
+
+[
+  "resolveCreatorReplayPlayback",
+  "VideoView",
+  "Controlled replay playback only.",
+  "No raw HLS URL, storage path, LiveKit token, full-room token, publish authority, or host controls",
+].forEach((needle) => assertIncludes(replayPlayerRoute, needle, "replay Player route"));
+
+[
+  "creator_replay_library_items",
+  "can_read_creator_replay_library_item",
+  "is_creator_replay_viewer_blocked",
+  "creator-replay-playback",
+  "rawHlsUrlReturned: false",
+  "fullRoomTokenForSpectators: false",
+  "liveKitPublishAuthorityGranted: false",
+  "sourceType === \"watch_party_live\" && toText(room.source_type) === \"platform_title\"",
+].forEach((needle) => {
+  if (needle.includes("sourceType")) return;
+  assertIncludes(replayPlaybackFunction, needle, "creator replay playback function");
+});
 
 [
   "participantToken",
@@ -78,6 +104,7 @@ assertIncludes(packageJson, "guard:save-replay-content-library-policy", "package
 ].forEach((needle) => {
   assertNotIncludes(replayLib, needle, "creator replay mobile helper");
   assertNotIncludes(studio, needle, "Content Library UI");
+  assertNotIncludes(replayPlayerRoute, needle, "replay Player route");
 });
 
 [
@@ -93,5 +120,6 @@ assertIncludes(packageJson, "guard:save-replay-content-library-policy", "package
 
 assertNotIncludes(studio, "raw_hls_url", "Content Library UI");
 assertNotIncludes(replayLib, "hls_playback_url", "creator replay helper");
+assertNotIncludes(replayPlayerRoute, "hls_playback_url", "replay Player route");
 
 console.log("Save Replay Content Library policy guard passed.");

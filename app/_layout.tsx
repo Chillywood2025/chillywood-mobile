@@ -51,6 +51,13 @@ const PUBLIC_LEGAL_PATHS = new Set([
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
 
+const isCreatorReplayPlayerDeepLink = (url?: string | null) => {
+  const normalized = String(url ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+
+  return normalized.includes("://player/replay/") || normalized.includes(":///player/replay/");
+};
+
 const hasAuthLinkLikeParams = (params: Record<string, unknown>) => {
   const type = String(params.type ?? "").trim().toLowerCase();
   const flow = String(params.flow ?? "").trim().toLowerCase();
@@ -459,6 +466,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="player/[id]" />
+        <Stack.Screen name="player/replay/[replayId]" />
         <Stack.Screen name="title/[id]" />
         <Stack.Screen name="watch-party/index" />
         <Stack.Screen name="watch-party/[partyId]" />
@@ -515,15 +523,44 @@ function AuthRouteGate() {
   const params = useGlobalSearchParams();
   const segments = useSegments();
   const { isLoading, isPasswordRecoverySession, isSignedIn } = useSession();
+  const [initialReplayDeepLink, setInitialReplayDeepLink] = useState<boolean | null>(null);
 
   const redirectTo = serializeRedirectTarget(pathname, params as Record<string, unknown>);
   const authRedirectTo = String(params.redirectTo ?? "").trim() || "/";
   const insideAuthGroup = segments[0] === "(auth)";
   const insideTabsGroup = segments[0] === "(tabs)" || pathname === "/";
   const insideResetPassword = pathname === "/reset-password";
+  const waitingForInitialReplayDeepLink = !isSignedIn && insideTabsGroup && initialReplayDeepLink === null;
+  const allowInitialReplayDeepLink = !isSignedIn && insideTabsGroup && initialReplayDeepLink === true;
+
+  useEffect(() => {
+    let active = true;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    Linking.getInitialURL()
+      .then((url) => {
+        if (!active) return;
+        const isReplayDeepLink = isCreatorReplayPlayerDeepLink(url);
+        setInitialReplayDeepLink(isReplayDeepLink);
+        if (isReplayDeepLink) {
+          timeout = setTimeout(() => {
+            if (active) setInitialReplayDeepLink(false);
+          }, 1800);
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        setInitialReplayDeepLink(false);
+      });
+
+    return () => {
+      active = false;
+      if (timeout) clearTimeout(timeout);
+    };
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;
+    if (waitingForInitialReplayDeepLink || allowInitialReplayDeepLink) return;
 
     if (!isSignedIn && insideTabsGroup) {
       router.replace({
@@ -541,11 +578,12 @@ function AuthRouteGate() {
     if (isSignedIn && insideAuthGroup) {
       router.replace(authRedirectTo as Parameters<typeof router.replace>[0]);
     }
-  }, [authRedirectTo, insideAuthGroup, insideResetPassword, insideTabsGroup, isLoading, isPasswordRecoverySession, isSignedIn, redirectTo, router]);
+  }, [allowInitialReplayDeepLink, authRedirectTo, insideAuthGroup, insideResetPassword, insideTabsGroup, isLoading, isPasswordRecoverySession, isSignedIn, redirectTo, router, waitingForInitialReplayDeepLink]);
 
   if (isLoading) return <AuthBootScreen />;
   if (
-    (!isSignedIn && insideTabsGroup)
+    waitingForInitialReplayDeepLink
+    || (!allowInitialReplayDeepLink && !isSignedIn && insideTabsGroup)
     || (isSignedIn && isPasswordRecoverySession && !insideResetPassword)
     || (isSignedIn && insideAuthGroup)
   ) {
