@@ -55,7 +55,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="my-list"
         options={{
-          title: 'Library',
+          title: 'Saved',
           tabBarButtonTestID: 'main-tab-library',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="bookmark.fill" color={color} />,
         }}

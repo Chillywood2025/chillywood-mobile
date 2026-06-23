@@ -58,6 +58,7 @@
     "guard:content-rights-policy": "node ./scripts/guard-content-rights-policy.mjs",
     "guard:spectator-child-room-policy": "node ./scripts/guard-spectator-child-room-policy.mjs",
     "guard:circle-spectator-policy": "node ./scripts/guard-circle-spectator-policy.mjs",
+    "guard:save-replay-content-library-policy": "node ./scripts/guard-save-replay-content-library-policy.mjs",
     "guard:livekit-simulcast-dynacast-policy": "node ./scripts/guard-livekit-simulcast-dynacast-policy.mjs",
     "guard:watch-party-live-audio-mix": "node ./scripts/guard-watch-party-live-audio-mix.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",

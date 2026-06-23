@@ -309,11 +309,11 @@ export default function MyListScreen() {
             contentContainerStyle={styles.content}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E50914" />}
           >
-            <MainTabTopBar surface="library" label="LIBRARY" style={styles.mainTabTopBar} />
+            <MainTabTopBar surface="library" label="SAVED" style={styles.mainTabTopBar} />
             <View style={styles.headerBlock}>
-              <Text style={styles.header}>Library</Text>
+              <Text style={styles.header}>My Library</Text>
               <Text style={styles.headerBody}>
-                Your saved titles, watch progress, and followed Platforms live here. Replays, events, and clips appear when they are saved.
+                Saved titles, watch progress, followed Platforms, and saved replays live here.
               </Text>
               <View style={styles.libraryScopeRow}>
                 <View style={styles.scopePill}>

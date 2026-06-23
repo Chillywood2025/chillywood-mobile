@@ -207,6 +207,15 @@ import {
   isCreatorVideoPubliclyShareable,
 } from "../_lib/creatorVideoLinks";
 import {
+  formatCreatorReplaySourceLabel,
+  formatCreatorReplayStatusLabel,
+  formatCreatorReplayVisibilityLabel,
+  readCreatorReplayLibraryItems,
+  updateCreatorReplayLibraryItem,
+  type CreatorReplayLibraryItem,
+  type CreatorReplayVisibility,
+} from "../_lib/creatorReplays";
+import {
   CLIP_STUDIO_SUBTITLE_OVERLAY_MAX_LENGTH,
   CLIP_STUDIO_TITLE_OVERLAY_MAX_LENGTH,
   formatClipStudioFormatLabel,
@@ -320,7 +329,7 @@ type SandboxTesterOfferCard = {
 type SandboxSetupLifecycle = "idle" | "setting_up" | "complete" | "partial" | "failed" | "timed_out";
 
 type StudioTabId = "home" | "content" | "clip" | "live" | "audience" | "monetization" | "moderation" | "insights" | "brand";
-type ContentStatusFilter = "all" | "published" | "circle" | "drafts";
+type ContentStatusFilter = "all" | "uploads" | "replays" | "published" | "circle" | "drafts" | "paid" | "events" | "processing" | "needs_attention";
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 type VideoLifecycleState = "idle" | "file_selected" | "uploading" | "succeeded" | "failed";
@@ -861,9 +870,15 @@ const STUDIO_TABS: readonly { id: StudioTabId; label: string }[] = [
 
 const CONTENT_STATUS_FILTERS: readonly { id: ContentStatusFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "published", label: "Published" },
-  { id: "circle", label: "Chi'lly Circle" },
+  { id: "uploads", label: "Uploads" },
+  { id: "replays", label: "Replays" },
   { id: "drafts", label: "Drafts" },
+  { id: "circle", label: "Chi'lly Circle" },
+  { id: "published", label: "Public" },
+  { id: "paid", label: "Paid" },
+  { id: "events", label: "Events" },
+  { id: "processing", label: "Processing" },
+  { id: "needs_attention", label: "Needs Attention" },
 ];
 
 const CONTENT_SORT_OPTIONS: readonly { id: ContentSortId; label: string }[] = [
@@ -1334,6 +1349,7 @@ export function ChannelStudioScreen() {
   const [channelAccessResolution, setChannelAccessResolution] = useState<ChannelAccessResolution | null>(null);
   const [creatorEvents, setCreatorEvents] = useState<CreatorEventSummary[]>([]);
   const [creatorVideos, setCreatorVideos] = useState<CreatorVideo[]>([]);
+  const [creatorReplays, setCreatorReplays] = useState<CreatorReplayLibraryItem[]>([]);
   const [creatorVideoClipEdits, setCreatorVideoClipEdits] = useState<Record<string, ClipStudioEdit>>({});
   const [creatorReminderSummaries, setCreatorReminderSummaries] = useState<CreatorEventReminderSummary[]>([]);
   const [audienceMembers, setAudienceMembers] = useState<ChannelAudienceMemberSummary[]>([]);
@@ -2794,6 +2810,7 @@ export function ChannelStudioScreen() {
   const loadCreatorVideos = async () => {
     if (!user?.id) {
       setCreatorVideos([]);
+      setCreatorReplays([]);
       setVideosLoadError(null);
       return [];
     }
@@ -2801,13 +2818,18 @@ export function ChannelStudioScreen() {
     setVideosLoading(true);
     setVideosLoadError(null);
     try {
-      const videos = await readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 });
+      const [videos, replays] = await Promise.all([
+        readCreatorVideos(String(user.id), { includeDrafts: true, limit: 50 }),
+        readCreatorReplayLibraryItems(String(user.id)),
+      ]);
       setCreatorVideos(videos);
+      setCreatorReplays(replays);
       const editMap = await readClipStudioEditsForVideos(videos.map((video) => video.id)).catch(() => new Map());
       setCreatorVideoClipEdits(Object.fromEntries(editMap));
       return videos;
     } catch (error) {
       setCreatorVideos([]);
+      setCreatorReplays([]);
       setCreatorVideoClipEdits({});
       setVideosLoadError(formatCreatorVideoUiError(
         error,
@@ -4058,6 +4080,60 @@ export function ChannelStudioScreen() {
     void publishSpotlightVideo(video);
   };
 
+  const updateReplayVisibility = async (replay: CreatorReplayLibraryItem, visibility: CreatorReplayVisibility) => {
+    try {
+      setVideoSaving(true);
+      setVideoNotice(
+        visibility === "public"
+          ? "Making replay public..."
+          : visibility === "circle"
+            ? "Making replay private to Chi'lly Circle..."
+            : "Moving replay to Draft...",
+      );
+      await updateCreatorReplayLibraryItem(replay.id, { visibility });
+      if (user?.id) setCreatorReplays(await readCreatorReplayLibraryItems(String(user.id)));
+      setVideoNotice(
+        visibility === "public"
+          ? "Public on your Platform. Eligible for Home and Explore only when ready, clean, and rights-safe."
+          : visibility === "circle"
+            ? "Private to your Chi'lly Circle. Circle members can see it where Circle content is backed. It is not public discovery."
+            : "Saved as Draft. Only you can see it in Platform Studio.",
+      );
+    } catch (error) {
+      setVideoNotice(error instanceof Error ? error.message : "Unable to update replay visibility right now.");
+    } finally {
+      setVideoSaving(false);
+    }
+  };
+
+  const deleteReplay = (replay: CreatorReplayLibraryItem) => {
+    Alert.alert(
+      "Delete Replay",
+      `Remove "${replay.title}" from Content Library?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                setVideoSaving(true);
+                await updateCreatorReplayLibraryItem(replay.id, { saveStatus: "deleted" });
+                if (user?.id) setCreatorReplays(await readCreatorReplayLibraryItems(String(user.id)));
+                setVideoNotice("Replay deleted from Content Library.");
+              } catch (error) {
+                setVideoNotice(error instanceof Error ? error.message : "Unable to delete replay right now.");
+              } finally {
+                setVideoSaving(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   const onDeleteVideo = (video: CreatorVideo) => {
     Alert.alert(
       "Delete Video",
@@ -4726,6 +4802,16 @@ export function ChannelStudioScreen() {
   const publishedVideoCount = creatorVideos.filter((video) => video.visibility === "public").length;
   const circleVideoCount = creatorVideos.filter((video) => video.visibility === "circle").length;
   const draftVideoCount = creatorVideos.filter((video) => video.visibility === "draft").length;
+  const replayCount = creatorReplays.length;
+  const processingReplayCount = creatorReplays.filter((replay) => (
+    replay.saveStatus === "processing_replay"
+    || replay.saveStatus === "recording_active"
+    || replay.saveStatus === "recording_stopping"
+    || replay.saveStatus === "requested"
+  )).length;
+  const needsAttentionReplayCount = creatorReplays.filter((replay) => (
+    replay.saveStatus === "failed" || replay.saveStatus === "recording_not_started" || replay.moderationStatus === "hidden"
+  )).length;
   const latestCreatorVideo = useMemo(
     () => [...creatorVideos].sort((a, b) => getCreatorVideoCreatedTimestamp(b) - getCreatorVideoCreatedTimestamp(a))[0] ?? null,
     [creatorVideos],
@@ -4751,6 +4837,8 @@ export function ChannelStudioScreen() {
         if (contentStatusFilter === "published" && video.visibility !== "public") return false;
         if (contentStatusFilter === "circle" && video.visibility !== "circle") return false;
         if (contentStatusFilter === "drafts" && video.visibility !== "draft") return false;
+        if (contentStatusFilter === "replays" || contentStatusFilter === "processing" || contentStatusFilter === "needs_attention" || contentStatusFilter === "events") return false;
+        if (contentStatusFilter === "paid" && !paidVideoOfferByVideoId.get(video.id)?.isPaid) return false;
         if (!query) return true;
         return `${video.title} ${video.description}`.toLowerCase().includes(query);
       })
@@ -4758,7 +4846,27 @@ export function ChannelStudioScreen() {
         const diff = getCreatorVideoCreatedTimestamp(a) - getCreatorVideoCreatedTimestamp(b);
         return contentSort === "oldest" ? diff : -diff;
       });
-  }, [contentSearchQuery, contentSort, contentStatusFilter, creatorVideos]);
+  }, [contentSearchQuery, contentSort, contentStatusFilter, creatorVideos, paidVideoOfferByVideoId]);
+  const filteredCreatorReplays = useMemo(() => {
+    const query = contentSearchQuery.trim().toLowerCase();
+    return creatorReplays
+      .filter((replay) => {
+        if (contentStatusFilter === "uploads" || contentStatusFilter === "events" || contentStatusFilter === "paid") return false;
+        if (contentStatusFilter === "published" && replay.visibility !== "public") return false;
+        if (contentStatusFilter === "circle" && replay.visibility !== "circle") return false;
+        if (contentStatusFilter === "drafts" && replay.visibility !== "draft") return false;
+        if (contentStatusFilter === "processing" && !["requested", "recording_active", "recording_stopping", "processing_replay"].includes(replay.saveStatus)) return false;
+        if (contentStatusFilter === "needs_attention" && !["failed", "recording_not_started"].includes(replay.saveStatus) && replay.moderationStatus !== "hidden") return false;
+        if (!query) return true;
+        return `${replay.title} ${replay.description ?? ""}`.toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
+        const aTime = new Date(a.createdAt || a.updatedAt).getTime();
+        const bTime = new Date(b.createdAt || b.updatedAt).getTime();
+        const diff = (Number.isFinite(aTime) ? aTime : 0) - (Number.isFinite(bTime) ? bTime : 0);
+        return contentSort === "oldest" ? diff : -diff;
+      });
+  }, [contentSearchQuery, contentSort, contentStatusFilter, creatorReplays]);
   const videoLifecycleCopy = getVideoLifecycleCopy({
     editingVideoId: videoEditor.editingVideoId,
     selectedFile: selectedVideoFile,
@@ -4884,18 +4992,25 @@ export function ChannelStudioScreen() {
         ? "No Chi'lly Circle videos yet. Use Make Private for Chi'lly Circle on owned content when it should be member-only."
       : contentStatusFilter === "drafts"
         ? "No drafts right now."
+      : contentStatusFilter === "replays"
+        ? "No saved replays yet. Host-ended live sessions can be saved to Content Library when recording is backed."
+      : contentStatusFilter === "processing"
+        ? "No replay processing jobs right now."
+      : contentStatusFilter === "needs_attention"
+        ? "No Content Library items need attention right now."
         : "No platform videos yet. Use Clip Studio to add your first video.";
+    const hasContentRows = filteredCreatorVideos.length > 0 || filteredCreatorReplays.length > 0;
 
     return (
     <View style={[styles.panel, styles.creatorContentPanel]}>
       <View style={styles.panelHeader}>
         <View style={styles.panelHeaderCopy}>
-          <Text style={styles.panelTitle}>Content</Text>
-          <Text style={styles.panelSubtitle}>Manage your platform videos, drafts, Chi'lly Circle videos, and published uploads.</Text>
+          <Text style={styles.panelTitle}>Content Library</Text>
+          <Text style={styles.panelSubtitle}>Manage uploads, saved live replays, drafts, Chi'lly Circle media, paid videos, clips, and event content.</Text>
         </View>
       </View>
       <Text style={styles.permissionCopy}>
-        Add and publish Platform videos through Clip Studio. Drafts stay visible only to you; Chi'lly Circle videos stay member-only; public videos can appear as Featured and Latest Uploads.
+        Add and publish Platform videos through Clip Studio. Save Replay sends host replays here first. Drafts stay visible only to you; Chi'lly Circle items stay member-only, not public discovery; public ready media can appear as Featured and Latest Uploads.
       </Text>
 
       <View style={styles.studioHeaderActions}>
@@ -4911,9 +5026,9 @@ export function ChannelStudioScreen() {
 
       <View style={styles.summaryGrid}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Videos</Text>
-          <Text style={styles.summaryValue}>{videosLoading ? "..." : String(creatorVideos.length)}</Text>
-          <Text style={styles.summaryBody}>creator-owned uploads in this platform library</Text>
+          <Text style={styles.summaryLabel}>Items</Text>
+          <Text style={styles.summaryValue}>{videosLoading ? "..." : String(creatorVideos.length + replayCount)}</Text>
+          <Text style={styles.summaryBody}>uploads and saved replays in Content Library</Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Published</Text>
@@ -4923,18 +5038,18 @@ export function ChannelStudioScreen() {
           <Text style={styles.summaryBody}>visible on your public Platform</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Drafts</Text>
+          <Text style={styles.summaryLabel}>Replays</Text>
           <Text style={styles.summaryValue}>
-            {videosLoading ? "..." : String(draftVideoCount)}
+            {videosLoading ? "..." : String(replayCount)}
           </Text>
-          <Text style={styles.summaryBody}>owner-only until published</Text>
+          <Text style={styles.summaryBody}>{processingReplayCount ? `${processingReplayCount} processing` : "saved host replay items"}</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Chi'lly Circle</Text>
+          <Text style={styles.summaryLabel}>Needs Attention</Text>
           <Text style={styles.summaryValue}>
-            {videosLoading ? "..." : String(circleVideoCount)}
+            {videosLoading ? "..." : String(needsAttentionReplayCount)}
           </Text>
-          <Text style={styles.summaryBody}>member-only, not public discovery</Text>
+          <Text style={styles.summaryBody}>failed, hidden, or unrecorded replay items</Text>
         </View>
       </View>
 
@@ -4980,11 +5095,11 @@ export function ChannelStudioScreen() {
         ))}
       </View>
 
-      <Text style={styles.sectionLabel}>Creator Library</Text>
+      <Text style={styles.sectionLabel}>Content Library</Text>
       {videosLoading ? (
         <View style={styles.loadingCard}>
           <ActivityIndicator color="#fff" />
-          <Text style={styles.loadingText}>Loading creator videos...</Text>
+          <Text style={styles.loadingText}>Loading Content Library...</Text>
         </View>
       ) : videosLoadError ? (
         <AppEmptyState
@@ -4995,7 +5110,7 @@ export function ChannelStudioScreen() {
           }}
           title="Creator videos couldn't refresh"
         />
-      ) : creatorVideos.length && filteredCreatorVideos.length ? (
+      ) : hasContentRows ? (
         <View style={styles.eventList}>
           {filteredCreatorVideos.map((video) => (
             <CreatorVideoCard
@@ -5025,11 +5140,78 @@ export function ChannelStudioScreen() {
               onOpenActions={() => setSelectedContentActionVideo(video)}
             />
           ))}
+          {filteredCreatorReplays.map((replay) => (
+            <View key={replay.id} style={styles.creatorReplayCard}>
+              <View style={styles.creatorReplayHeader}>
+                <View style={styles.creatorReplayThumb}>
+                  <Text style={styles.creatorReplayThumbText}>Replay</Text>
+                </View>
+                <View style={styles.creatorReplayCopy}>
+                  <Text style={styles.creatorReplayKicker}>{formatCreatorReplaySourceLabel(replay.sourceType)}</Text>
+                  <Text style={styles.creatorReplayTitle} numberOfLines={2}>{replay.title}</Text>
+                  <Text style={styles.creatorReplayMeta}>
+                    {formatCreatorReplayVisibilityLabel(replay.visibility)} · {formatCreatorReplayStatusLabel(replay.saveStatus)} · {replay.moneyStatus === "paid" ? "Paid" : "Free"}
+                  </Text>
+                  <Text style={styles.creatorReplayBody} numberOfLines={2}>
+                    {replay.saveStatus === "ready" && replay.playbackRecordId
+                      ? "Ready with a controlled playback reference. Raw HLS stays server-side."
+                      : replay.saveStatus === "failed"
+                        ? "Replay processing failed. Retry appears only when backend retry is available."
+                        : replay.saveStatus === "recording_not_started"
+                          ? "Replay was not recording for this session."
+                          : "Replay is processing. You'll see it here when it's ready."}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.creatorReplayActions}>
+                <TouchableOpacity
+                  style={[styles.segmentButton, replay.saveStatus !== "ready" && styles.segmentButtonDisabled]}
+                  activeOpacity={0.86}
+                  disabled={replay.saveStatus !== "ready"}
+                  onPress={() => setVideoNotice("Ready replay playback uses the controlled playback resolver. A standalone replay Player route is not enabled yet.")}
+                >
+                  <Text style={styles.segmentButtonText}>Open</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.segmentButton}
+                  activeOpacity={0.86}
+                  onPress={() => { void updateReplayVisibility(replay, "draft"); }}
+                  disabled={videoSaving}
+                >
+                  <Text style={styles.segmentButtonText}>Move to Draft</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.segmentButton}
+                  activeOpacity={0.86}
+                  onPress={() => { void updateReplayVisibility(replay, "circle"); }}
+                  disabled={videoSaving}
+                >
+                  <Text style={styles.segmentButtonText}>Chi'lly Circle</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.segmentButton}
+                  activeOpacity={0.86}
+                  onPress={() => { void updateReplayVisibility(replay, "public"); }}
+                  disabled={videoSaving || replay.saveStatus !== "ready"}
+                >
+                  <Text style={styles.segmentButtonText}>Make Public</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.segmentButton, styles.segmentButtonDanger]}
+                  activeOpacity={0.86}
+                  onPress={() => deleteReplay(replay)}
+                  disabled={videoSaving}
+                >
+                  <Text style={styles.segmentButtonText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
         </View>
-      ) : creatorVideos.length ? (
+      ) : creatorVideos.length || creatorReplays.length ? (
         <AppEmptyState title="No matching videos" body={filteredEmptyCopy} />
       ) : (
-        <AppEmptyState title="No Platform videos yet" body="Use Clip Studio to add your first Platform video." />
+        <AppEmptyState title="No Content Library items yet" body="Use Clip Studio to add your first Platform video or save a host replay when recording is backed." />
       )}
 
       {videoEditor.editingVideoId ? (
@@ -10679,6 +10861,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(220,20,60,0.55)",
     backgroundColor: "rgba(220,20,60,0.24)",
   },
+  segmentButtonDisabled: {
+    opacity: 0.46,
+  },
+  segmentButtonDanger: {
+    borderColor: "rgba(255,107,129,0.38)",
+    backgroundColor: "rgba(255,107,129,0.12)",
+  },
   segmentButtonText: {
     color: "#B9C3D9",
     fontSize: 12,
@@ -10686,6 +10875,67 @@ const styles = StyleSheet.create({
   },
   segmentButtonTextActive: {
     color: "#fff",
+  },
+  creatorReplayCard: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    padding: 12,
+    gap: 12,
+  },
+  creatorReplayHeader: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+  creatorReplayThumb: {
+    width: 74,
+    aspectRatio: 1,
+    borderRadius: 14,
+    backgroundColor: "rgba(220,20,60,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(220,20,60,0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  creatorReplayThumbText: {
+    color: "#FFD6DE",
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  creatorReplayCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  creatorReplayKicker: {
+    color: "#91A3C2",
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  creatorReplayTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  creatorReplayMeta: {
+    color: "#D7DEF0",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  creatorReplayBody: {
+    color: "#9EAAC2",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  creatorReplayActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
   },
   heroTruthGrid: {
     flexDirection: "row",

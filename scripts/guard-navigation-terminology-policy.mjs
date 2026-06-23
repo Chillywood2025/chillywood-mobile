@@ -40,13 +40,14 @@ const navDoc = read("docs/NAVIGATION_TERMINOLOGY_MAP.md");
   "title: 'Home'",
   "title: 'Explore'",
   "title: 'Live'",
-  "title: 'Library'",
+  "title: 'Saved'",
 ].forEach((label) => assertIncludes(tabs, label, "bottom navigation"));
 
 assertIncludes(tabs, 'name="profile"', "hidden Profile tab route registration");
 assertIncludes(tabs, "href: null", "Profile hidden from bottom navigation");
 assertNotIncludes(tabs, "Admin", "normal bottom navigation");
 assertNotIncludes(tabs, "My List", "bottom navigation label");
+assertNotIncludes(tabs, "title: 'Library'", "bottom navigation label");
 assertNotIncludes(tabs, "title: 'Profile'", "normal bottom navigation label");
 assertIncludes(iconSymbol, "'play.circle.fill': 'live-tv'", "Live bottom-nav icon");
 
@@ -73,9 +74,9 @@ assertIncludes(liveTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Live tab Chi'llywood ba
 
 assertIncludes(profileTab, "Profile is your social identity", "Profile/Platform separation");
 assertIncludes(profileTab, "Platform and Platform Studio stay separate", "Profile tab creator surface separation");
-assertIncludes(libraryTab, "Library", "Library label");
-assertIncludes(libraryTab, "Your saved titles, watch progress, and followed Platforms live here.", "Library saved scope copy");
-assertIncludes(libraryTab, "Replays, events, and clips appear when they are saved.", "no fake Library sections");
+assertIncludes(libraryTab, "My Library", "Library screen header");
+assertIncludes(libraryTab, "Saved titles, watch progress, followed Platforms, and saved replays live here.", "Library saved scope copy");
+assertNotIncludes(libraryTab, "creator-owned draft", "viewer Library must not become creator Content Library");
 assertIncludes(libraryTab, "readMergedWatchProgress", "Library backed continue watching");
 assertIncludes(libraryTab, "readFollowedChannelUserIds", "Library backed followed Platforms");
 assertIncludes(libraryTab, "CHILLYWOOD_BACKGROUND_SOURCE", "Library Chi'llywood background");

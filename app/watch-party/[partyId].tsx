@@ -131,6 +131,7 @@ import {
   resolveWatchPartySourceId,
   resolveWatchPartySourceType,
 } from "../../_lib/watchPartyContentSources";
+import { requestSaveReplay } from "../../_lib/creatorReplays";
 import { isReactNativeNewArchitecture } from "../../_lib/reactNativeRuntime";
 import { LiveBottomStrip, type LiveBottomStripParticipant } from "../../components/room/live-bottom-strip";
 import { AccessSheet, type AccessSheetReason } from "../../components/monetization/access-sheet";
@@ -352,6 +353,7 @@ export default function WatchPartyRoomScreen() {
   const [messages, setMessages] = useState<LocalMsg[]>([]);
   const [chatDraft, setChatDraft] = useState("");
   const [chatSending, setChatSending] = useState(false);
+  const [saveReplayEnding, setSaveReplayEnding] = useState(false);
   const [chatError, setChatError] = useState("");
   const [chatAttachmentFile, setChatAttachmentFile] = useState<SocialAttachmentFile | null>(null);
   const [chatAttachmentSheetVisible, setChatAttachmentSheetVisible] = useState(false);
@@ -1763,6 +1765,76 @@ export default function WatchPartyRoomScreen() {
     );
   }, [partyId, returnToWatchPartyEntry]);
 
+  const endPartyRoomWithoutSaving = useCallback(async () => {
+    if (!partyId || saveReplayEnding) return;
+    try {
+      setSaveReplayEnding(true);
+      await requestSaveReplay({
+        action: "end_without_saving",
+        partyId,
+        sourceType: "watch_party_live",
+      });
+      returnToWatchPartyEntry();
+    } catch (error) {
+      Alert.alert(
+        "Could not end room",
+        error instanceof Error ? error.message : "Try again or leave the room view.",
+      );
+    } finally {
+      setSaveReplayEnding(false);
+    }
+  }, [partyId, returnToWatchPartyEntry, saveReplayEnding]);
+
+  const endPartyRoomAndSaveReplay = useCallback(async () => {
+    if (!partyId || saveReplayEnding) return;
+    try {
+      setSaveReplayEnding(true);
+      const result = await requestSaveReplay({
+        action: "request_save_replay",
+        partyId,
+        sourceType: "watch_party_live",
+        title: room?.titleId ? `Watch-Party Live Replay ${room.titleId}` : `Watch-Party Live Replay ${partyId}`,
+      });
+      Alert.alert(
+        "Replay is processing",
+        result.message || "Replay is processing. You'll see it in Content Library when it's ready.",
+        [{ text: "OK", onPress: returnToWatchPartyEntry }],
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Replay could not be saved right now.";
+      if (message.includes("Replay was not recording")) {
+        Alert.alert(
+          "Replay was not recording for this session. End without saving?",
+          "This session does not have a saveable replay recording.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "End Without Saving", style: "destructive", onPress: () => { void endPartyRoomWithoutSaving(); } },
+          ],
+        );
+      } else {
+        Alert.alert("Save Replay unavailable", message);
+      }
+    } finally {
+      setSaveReplayEnding(false);
+    }
+  }, [endPartyRoomWithoutSaving, partyId, returnToWatchPartyEntry, room?.titleId, saveReplayEnding]);
+
+  const onEndPartyRoomAsHost = useCallback(() => {
+    if (myRoleRef.current !== "host") {
+      onLeavePartyRoom();
+      return;
+    }
+    Alert.alert(
+      "Save Replay?",
+      "The replay will be saved to your Content Library first. You can keep it Draft, make it private to your Chi'lly Circle, or make it Public later.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "End Without Saving", style: "destructive", onPress: () => { void endPartyRoomWithoutSaving(); } },
+        { text: "End & Save Replay", onPress: () => { void endPartyRoomAndSaveReplay(); } },
+      ],
+    );
+  }, [endPartyRoomAndSaveReplay, endPartyRoomWithoutSaving, onLeavePartyRoom]);
+
   const onResolveAccessGate = useCallback(async (action: "purchase" | "restore") => {
     if (!accessGate) {
       return {
@@ -3029,10 +3101,13 @@ export default function WatchPartyRoomScreen() {
           <TouchableOpacity
             style={[styles.partyRoomDockButton, styles.partyRoomDockButtonLeave]}
             activeOpacity={0.84}
-            onPress={onLeavePartyRoom}
+            onPress={isHost ? onEndPartyRoomAsHost : onLeavePartyRoom}
+            disabled={saveReplayEnding}
           >
             <MaterialIcons name="logout" size={18} color="#FFE7EC" />
-            <Text style={[styles.partyRoomDockButtonText, styles.partyRoomDockButtonTextLeave]}>Leave</Text>
+            <Text style={[styles.partyRoomDockButtonText, styles.partyRoomDockButtonTextLeave]}>
+              {saveReplayEnding ? "Ending" : isHost ? "End" : "Leave"}
+            </Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.partyRoomActionDockNote}>

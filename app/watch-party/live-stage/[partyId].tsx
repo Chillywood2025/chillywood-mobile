@@ -141,6 +141,7 @@ import {
   isLiveEffectAppliedToCamera,
 } from "../../../_lib/liveEffects";
 import { isReactNativeNewArchitecture } from "../../../_lib/reactNativeRuntime";
+import { requestSaveReplay } from "../../../_lib/creatorReplays";
 import {
     buildOrderedParticipantsWithSelf,
     buildParticipantProfileParams,
@@ -804,6 +805,7 @@ export default function WatchPartyLiveStageScreen({
   const [hybridCommentDraft, setHybridCommentDraft] = useState("");
   const [hybridCommentError, setHybridCommentError] = useState("");
   const [hybridCommentSending, setHybridCommentSending] = useState(false);
+  const [saveReplayEnding, setSaveReplayEnding] = useState(false);
 
   useEffect(() => {
     if (!isFocused || Platform.OS === "web") return undefined;
@@ -2499,10 +2501,10 @@ export default function WatchPartyLiveStageScreen({
   const hybridCommentCountLabel = hybridComments.length === 1 ? "1 comment" : `${hybridComments.length} comments`;
   const hybridCommentPlaceholder = isHost ? "Comment as host" : "Add a comment";
   const hybridCommentDisabled = (!hybridCommentDraft.trim() && !hybridCommentAttachmentFile) || hybridCommentSending;
-  const stageEffectsTitle = canUseStageEffects ? CHILLYFECTS_BRAND_NAME : "Chi’llyfects catalog";
+  const stageEffectsTitle = canUseStageEffects ? CHILLYFECTS_BRAND_NAME : "Chi'llyfects catalog";
   const stageEffectsBody = canUseStageEffects
-    ? "Chi’llyfects can be previewed here. Live camera effects are still being prepared."
-    : "Viewers can browse the Chi’llyfects catalog. Camera Chi’llyfects require a speaker or host camera role.";
+    ? "Chi'llyfects can be previewed here. Live camera effects are still being prepared."
+    : "Viewers can browse the Chi'llyfects catalog. Camera Chi'llyfects require a speaker or host camera role.";
   const stageEffectsHelper = getLiveEffectStatusCopy(selectedStageEffect);
   const stageTopChromeStatusLabel = `${lowerCommunityCountLabel} · ${liveStageProtectionStatus}${controlsLocked ? " · Controls locked" : ""}`;
 
@@ -2717,6 +2719,76 @@ export default function WatchPartyLiveStageScreen({
   const leaveLiveRoom = useCallback(() => {
     router.push({ pathname: "/watch-party", params: { mode: "live" } });
   }, [router]);
+
+  const endLiveRoomWithoutSaving = useCallback(async () => {
+    if (!partyId || saveReplayEnding) return;
+    try {
+      setSaveReplayEnding(true);
+      await requestSaveReplay({
+        action: "end_without_saving",
+        partyId,
+        sourceType: "live_stage",
+      });
+      leaveLiveRoom();
+    } catch (error) {
+      Alert.alert(
+        "Could not end room",
+        error instanceof Error ? error.message : "Try again or leave the room view.",
+      );
+    } finally {
+      setSaveReplayEnding(false);
+    }
+  }, [leaveLiveRoom, partyId, saveReplayEnding]);
+
+  const endLiveRoomAndSaveReplay = useCallback(async () => {
+    if (!partyId || saveReplayEnding) return;
+    try {
+      setSaveReplayEnding(true);
+      const result = await requestSaveReplay({
+        action: "request_save_replay",
+        partyId,
+        sourceType: "live_stage",
+        title: `Live Stage Replay ${partyId}`,
+      });
+      Alert.alert(
+        "Replay is processing",
+        result.message || "Replay is processing. You'll see it in Content Library when it's ready.",
+        [{ text: "OK", onPress: leaveLiveRoom }],
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Replay could not be saved right now.";
+      if (message.includes("Replay was not recording")) {
+        Alert.alert(
+          "Replay was not recording for this session. End without saving?",
+          "This session does not have a saveable replay recording.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "End Without Saving", style: "destructive", onPress: () => { void endLiveRoomWithoutSaving(); } },
+          ],
+        );
+      } else {
+        Alert.alert("Save Replay unavailable", message);
+      }
+    } finally {
+      setSaveReplayEnding(false);
+    }
+  }, [endLiveRoomWithoutSaving, leaveLiveRoom, partyId, saveReplayEnding]);
+
+  const onEndLiveRoomAsHost = useCallback(() => {
+    if (!isHost) {
+      leaveLiveRoom();
+      return;
+    }
+    Alert.alert(
+      "Save Replay?",
+      "The replay will be saved to your Content Library first. You can keep it Draft, make it private to your Chi'lly Circle, or make it Public later.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "End Without Saving", style: "destructive", onPress: () => { void endLiveRoomWithoutSaving(); } },
+        { text: "End & Save Replay", onPress: () => { void endLiveRoomAndSaveReplay(); } },
+      ],
+    );
+  }, [endLiveRoomAndSaveReplay, endLiveRoomWithoutSaving, isHost, leaveLiveRoom]);
 
   const onShareLiveRoom = useCallback(async () => {
     if (!liveRoomShareCode) return;
@@ -3475,6 +3547,16 @@ export default function WatchPartyLiveStageScreen({
             <TouchableOpacity style={styles.liveRoomActionBtn} activeOpacity={0.84} onPress={onToggleLiveRoomCapture}>
               <Text style={styles.liveRoomActionText}>
                 {room?.capturePolicy === "host_managed" ? "Best-effort capture" : "Host-managed capture"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.liveRoomActionBtn, styles.liveRoomActionBtnGhost]}
+              activeOpacity={0.84}
+              onPress={onEndLiveRoomAsHost}
+              disabled={saveReplayEnding}
+            >
+              <Text style={[styles.liveRoomActionText, styles.liveRoomActionTextGhost]}>
+                {saveReplayEnding ? "Ending" : "End room"}
               </Text>
             </TouchableOpacity>
           </>
