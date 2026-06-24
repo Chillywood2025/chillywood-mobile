@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { ResizeMode, Video } from "expo-av";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -333,6 +334,7 @@ type ContentStatusFilter = "all" | "uploads" | "replays" | "published" | "circle
 type ContentSortId = "newest" | "oldest";
 type CreatorAnalyticsMetricKey = keyof CreatorAnalyticsReadModel["dataStatus"];
 type VideoLifecycleState = "idle" | "file_selected" | "uploading" | "succeeded" | "failed";
+type CreatorVideoSourceTarget = "legacy_video" | "clip_video";
 type ClipStudioSaveState =
   | "idle"
   | "selecting_video"
@@ -511,6 +513,12 @@ const isSupportedCreatorVideoFile = (file: CreatorVideoFile) => {
   if (!mimeType && !extension) return !!file.uri;
 
   return false;
+};
+
+const getFileNameFromUri = (uri?: string | null, fallback = "video") => {
+  const normalized = String(uri ?? "").split("?")[0]?.split("#")[0] ?? "";
+  const rawName = decodeURIComponent(normalized.split("/").filter(Boolean).pop() ?? "").trim();
+  return rawName || fallback;
 };
 
 const formatCreatorVideoUiError = (error: unknown, fallback: string, fileSize?: number | null) => {
@@ -1368,6 +1376,7 @@ export function ChannelStudioScreen() {
   const [selectedContentActionVideo, setSelectedContentActionVideo] = useState<CreatorVideo | null>(null);
   const [videoEditor, setVideoEditor] = useState<ChannelVideoEditorState>(createEmptyVideoEditorState);
   const [selectedVideoFile, setSelectedVideoFile] = useState<CreatorVideoFile | null>(null);
+  const [uploadSourceTarget, setUploadSourceTarget] = useState<CreatorVideoSourceTarget | null>(null);
   const [clipNotice, setClipNotice] = useState<string | null>(null);
   const [clipSaving, setClipSaving] = useState(false);
   const clipSaveInFlightRef = useRef(false);
@@ -2875,84 +2884,119 @@ export function ChannelStudioScreen() {
     setVideoLifecycleState(nextLifecycleState);
   };
 
-  const onPickVideoFile = async () => {
-    try {
-      setVideoNotice(null);
-      logCreatorVideoUploadUi("picker_open");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
+  const openUploadSourceChooser = (target: CreatorVideoSourceTarget) => {
+    setUploadSourceTarget(target);
+  };
 
-      if (result.canceled) {
-        logCreatorVideoUploadUi("picker_canceled");
-        setVideoNotice("No video selected. Open Clip Studio when you're ready to add a Platform video.");
-        setVideoLifecycleState("idle");
-        return;
-      }
-      const asset = result.assets[0];
-      if (!asset?.uri) {
-        logCreatorVideoUploadUi("picker_missing_asset");
-        setVideoNotice("Choose a video file before uploading.");
-        setVideoLifecycleState("failed");
-        return;
-      }
+  const applyLegacyCreatorVideoFile = (pickedFile: CreatorVideoFile) => {
+    if (!pickedFile.uri) {
+      logCreatorVideoUploadUi("picker_missing_asset");
+      setVideoNotice("Choose a video file before uploading.");
+      setVideoLifecycleState("failed");
+      return;
+    }
 
-      const pickedFile = {
-        uri: asset.uri,
-        name: asset.name,
-        mimeType: asset.mimeType,
-        size: asset.size,
-      };
-
-      if (!isSupportedCreatorVideoFile(pickedFile)) {
-        logCreatorVideoUploadUi("picker_unsupported", {
-          name: pickedFile.name ?? "unnamed",
-          mimeType: pickedFile.mimeType ?? null,
-        });
-        setSelectedVideoFile(null);
-        setVideoNotice("Choose an MP4, MOV, WebM, or M4V video file.");
-        setVideoLifecycleState("failed");
-        return;
-      }
-
-      if (isCreatorVideoFileOverChannelMovieLimit(pickedFile, maxUploadSizeMb)) {
-        logCreatorVideoUploadUi("picker_too_large", {
-          name: pickedFile.name ?? "unnamed",
-          size: pickedFile.size ?? null,
-        });
-        setSelectedVideoFile(null);
-        setVideoNotice(getCreatorVideoTooLargeMessage(pickedFile.size, maxUploadSizeMb));
-        setVideoLifecycleState("failed");
-        return;
-      }
-
-      setSelectedVideoFile(pickedFile);
-      setVideoLifecycleState("file_selected");
-      logCreatorVideoUploadUi("picker_selected", {
+    if (!isSupportedCreatorVideoFile(pickedFile)) {
+      logCreatorVideoUploadUi("picker_unsupported", {
         name: pickedFile.name ?? "unnamed",
         mimeType: pickedFile.mimeType ?? null,
+      });
+      setSelectedVideoFile(null);
+      setVideoNotice("Choose an MP4, MOV, WebM, or M4V video file.");
+      setVideoLifecycleState("failed");
+      return;
+    }
+
+    if (isCreatorVideoFileOverChannelMovieLimit(pickedFile, maxUploadSizeMb)) {
+      logCreatorVideoUploadUi("picker_too_large", {
+        name: pickedFile.name ?? "unnamed",
         size: pickedFile.size ?? null,
       });
-      setVideoNotice(`Selected ${pickedFile.name || "video file"}. Open Clip Studio to finish details and save.`);
-      if (!videoEditor.title.trim() && asset.name) {
-        updateVideoEditor({ title: asset.name.replace(/\.[^.]+$/, "") });
-      }
-    } catch (error) {
-      logCreatorVideoUploadUi("picker_failed", {
-        message: error instanceof Error ? error.message : "unknown",
-      });
-      setVideoNotice("Unable to open the video picker right now.");
+      setSelectedVideoFile(null);
+      setVideoNotice(getCreatorVideoTooLargeMessage(pickedFile.size, maxUploadSizeMb));
       setVideoLifecycleState("failed");
+      return;
+    }
+
+    setSelectedVideoFile(pickedFile);
+    setVideoLifecycleState("file_selected");
+    logCreatorVideoUploadUi("picker_selected", {
+      name: pickedFile.name ?? "unnamed",
+      mimeType: pickedFile.mimeType ?? null,
+      size: pickedFile.size ?? null,
+    });
+    setVideoNotice(`Selected ${pickedFile.name || "video file"}. Open Clip Studio to finish details and save.`);
+    if (!videoEditor.title.trim() && pickedFile.name) {
+      updateVideoEditor({ title: pickedFile.name.replace(/\.[^.]+$/, "") });
     }
   };
 
-  const onPickClipVideoFile = async () => {
+  const applyClipStudioVideoFile = (pickedFile: CreatorVideoFile) => {
+    if (!pickedFile.uri) {
+      setClipSaveState("save_failed");
+      setClipNotice("Choose a video before opening Clip Studio preview.");
+      logClipStudioUi("clip_video_select_failed", { reason: "missing_uri" });
+      return;
+    }
+
+    if (!isSupportedCreatorVideoFile(pickedFile)) {
+      setSelectedClipVideoFile(null);
+      setClipSaveState("save_failed");
+      setClipNotice("Choose an MP4, MOV, WebM, or M4V video file.");
+      logClipStudioUi("clip_video_select_failed", { reason: "unsupported_type" });
+      return;
+    }
+
+    if (isCreatorVideoFileOverChannelMovieLimit(pickedFile, maxUploadSizeMb)) {
+      setSelectedClipVideoFile(null);
+      setClipSaveState("save_failed");
+      setClipNotice(getCreatorVideoTooLargeMessage(pickedFile.size, maxUploadSizeMb));
+      logClipStudioUi("clip_video_select_failed", { reason: "too_large", size: pickedFile.size ?? null });
+      return;
+    }
+
+    setSelectedClipVideoFile(pickedFile);
+    setSelectedClipCoverFile(null);
+    setClipSavedVideoId(null);
+    setClipSaveState("video_selected");
+    setClipEditor((current) => ({
+      ...current,
+      editingVideoId: null,
+      videoPreviewUrl: "",
+      title: current.title.trim() || (pickedFile.name ? pickedFile.name.replace(/\.[^.]+$/, "") : current.title),
+      visibility: "draft",
+      coverStoragePath: null,
+      coverMimeType: null,
+      coverFileSizeBytes: null,
+      coverPreviewUrl: "",
+    }));
+    setClipNotice("Video selected. Preview, cover, format, and metadata can be saved as a draft.");
+    logClipStudioUi("clip_video_selected", {
+      source: "upload_source_chooser",
+      mimeType: pickedFile.mimeType ?? null,
+      size: pickedFile.size ?? null,
+    });
+  };
+
+  const applySelectedCreatorVideoFile = (target: CreatorVideoSourceTarget, pickedFile: CreatorVideoFile) => {
+    if (target === "clip_video") {
+      applyClipStudioVideoFile(pickedFile);
+      return;
+    }
+    applyLegacyCreatorVideoFile(pickedFile);
+  };
+
+  const pickCreatorVideoFromFiles = async (target: CreatorVideoSourceTarget) => {
     try {
-      setClipSaveState("selecting_video");
-      setClipNotice(null);
-      logClipStudioUi("clip_video_select_started");
+      if (target === "clip_video") {
+        setClipSaveState("selecting_video");
+        setClipNotice(null);
+        logClipStudioUi("clip_video_select_started", { source: "files" });
+      } else {
+        setVideoNotice(null);
+        logCreatorVideoUploadUi("picker_open", { source: "files" });
+      }
+
       const result = await DocumentPicker.getDocumentAsync({
         type: ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"],
         copyToCacheDirectory: true,
@@ -2960,68 +3004,113 @@ export function ChannelStudioScreen() {
       });
 
       if (result.canceled) {
-        setClipSaveState((current) => (clipEditor.editingVideoId || selectedClipVideoFile ? "ready_to_save" : current === "selecting_video" ? "idle" : current));
-        setClipNotice("No video selected. Choose Video when you're ready.");
-        logClipStudioUi("clip_video_select_canceled");
+        if (target === "clip_video") {
+          setClipSaveState((current) => (clipEditor.editingVideoId || selectedClipVideoFile ? "ready_to_save" : current === "selecting_video" ? "idle" : current));
+          setClipNotice("No video selected. Choose Video when you're ready.");
+          logClipStudioUi("clip_video_select_canceled", { source: "files" });
+        } else {
+          logCreatorVideoUploadUi("picker_canceled", { source: "files" });
+          setVideoNotice("No video selected. Open Clip Studio when you're ready to add a Platform video.");
+          setVideoLifecycleState("idle");
+        }
         return;
       }
 
       const asset = result.assets[0];
-      const pickedFile: CreatorVideoFile = {
+      applySelectedCreatorVideoFile(target, {
         uri: asset?.uri ?? "",
-        name: asset?.name,
+        name: asset?.name ?? getFileNameFromUri(asset?.uri, "video"),
         mimeType: asset?.mimeType,
         size: asset?.size,
-      };
-
-      if (!pickedFile.uri) {
-        setClipSaveState("save_failed");
-        setClipNotice("Choose a video before opening Clip Studio preview.");
-        logClipStudioUi("clip_video_select_failed", { reason: "missing_uri" });
-        return;
-      }
-
-      if (!isSupportedCreatorVideoFile(pickedFile)) {
-        setSelectedClipVideoFile(null);
-        setClipSaveState("save_failed");
-        setClipNotice("Choose an MP4, MOV, WebM, or M4V video file.");
-        logClipStudioUi("clip_video_select_failed", { reason: "unsupported_type" });
-        return;
-      }
-
-      if (isCreatorVideoFileOverChannelMovieLimit(pickedFile, maxUploadSizeMb)) {
-        setSelectedClipVideoFile(null);
-        setClipSaveState("save_failed");
-        setClipNotice(getCreatorVideoTooLargeMessage(pickedFile.size, maxUploadSizeMb));
-        logClipStudioUi("clip_video_select_failed", { reason: "too_large", size: pickedFile.size ?? null });
-        return;
-      }
-
-      setSelectedClipVideoFile(pickedFile);
-      setSelectedClipCoverFile(null);
-      setClipSavedVideoId(null);
-      setClipSaveState("video_selected");
-      setClipEditor((current) => ({
-        ...current,
-        editingVideoId: null,
-        videoPreviewUrl: "",
-        title: current.title.trim() || (asset?.name ? asset.name.replace(/\.[^.]+$/, "") : current.title),
-        visibility: "draft",
-        coverStoragePath: null,
-        coverMimeType: null,
-        coverFileSizeBytes: null,
-        coverPreviewUrl: "",
-      }));
-      setClipNotice("Video selected. Preview, cover, format, and metadata can be saved as a draft.");
-      logClipStudioUi("clip_video_selected", {
-        mimeType: pickedFile.mimeType ?? null,
-        size: pickedFile.size ?? null,
       });
-    } catch {
-      setClipSaveState("save_failed");
-      setClipNotice("Unable to open the video picker right now.");
-      logClipStudioUi("clip_video_select_failed", { reason: "picker_unavailable" });
+    } catch (error) {
+      if (target === "clip_video") {
+        setClipSaveState("save_failed");
+        setClipNotice("Unable to open the video picker right now.");
+        logClipStudioUi("clip_video_select_failed", { reason: "picker_unavailable", source: "files" });
+      } else {
+        logCreatorVideoUploadUi("picker_failed", {
+          source: "files",
+          message: error instanceof Error ? error.message : "unknown",
+        });
+        setVideoNotice("Unable to open the video picker right now.");
+        setVideoLifecycleState("failed");
+      }
     }
+  };
+
+  const pickCreatorVideoFromGallery = async (target: CreatorVideoSourceTarget) => {
+    try {
+      if (target === "clip_video") {
+        setClipSaveState("selecting_video");
+        setClipNotice(null);
+        logClipStudioUi("clip_video_select_started", { source: "gallery" });
+      } else {
+        setVideoNotice(null);
+        logCreatorVideoUploadUi("picker_open", { source: "gallery" });
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["videos"],
+        allowsMultipleSelection: false,
+        allowsEditing: false,
+        quality: 1,
+        videoExportPreset: ImagePicker.VideoExportPreset.Passthrough,
+        legacy: false,
+      });
+
+      if (result.canceled) {
+        if (target === "clip_video") {
+          setClipSaveState((current) => (clipEditor.editingVideoId || selectedClipVideoFile ? "ready_to_save" : current === "selecting_video" ? "idle" : current));
+          setClipNotice("No video selected. Choose Video when you're ready.");
+          logClipStudioUi("clip_video_select_canceled", { source: "gallery" });
+        } else {
+          logCreatorVideoUploadUi("picker_canceled", { source: "gallery" });
+          setVideoNotice("No video selected. Open Clip Studio when you're ready to add a Platform video.");
+          setVideoLifecycleState("idle");
+        }
+        return;
+      }
+
+      const asset = result.assets[0];
+      applySelectedCreatorVideoFile(target, {
+        uri: asset?.uri ?? "",
+        name: asset?.fileName ?? getFileNameFromUri(asset?.uri, "gallery-video"),
+        mimeType: asset?.mimeType,
+        size: asset?.fileSize,
+      });
+    } catch (error) {
+      if (target === "clip_video") {
+        setClipSaveState("save_failed");
+        setClipNotice("Unable to open Photos / Gallery right now. Try Files if the video is saved elsewhere.");
+        logClipStudioUi("clip_video_select_failed", { reason: "gallery_unavailable" });
+      } else {
+        logCreatorVideoUploadUi("picker_failed", {
+          source: "gallery",
+          message: error instanceof Error ? error.message : "unknown",
+        });
+        setVideoNotice("Unable to open Photos / Gallery right now. Try Files if the video is saved elsewhere.");
+        setVideoLifecycleState("failed");
+      }
+    }
+  };
+
+  const runUploadSourceChoice = (source: "gallery" | "files") => {
+    const target = uploadSourceTarget;
+    setUploadSourceTarget(null);
+    if (!target) return;
+    requestAnimationFrame(() => {
+      if (source === "gallery") void pickCreatorVideoFromGallery(target);
+      else void pickCreatorVideoFromFiles(target);
+    });
+  };
+
+  const onPickVideoFile = () => {
+    openUploadSourceChooser("legacy_video");
+  };
+
+  const onPickClipVideoFile = () => {
+    openUploadSourceChooser("clip_video");
   };
 
   const onPickClipCoverFile = async () => {
@@ -5020,7 +5109,13 @@ export function ChannelStudioScreen() {
       </Text>
 
       <View style={styles.studioHeaderActions}>
-        <AppActionButton label="Add Video" onPress={openClipStudioForNew} variant="primary" />
+        <AppActionButton
+          accessibilityLabel="Add Video to Content Library"
+          label="Add Video"
+          onPress={openClipStudioForNew}
+          testID="content-library-add-video-button"
+          variant="primary"
+        />
         <Text style={styles.studioActionButtonCopy}>Clip Studio · up to {CREATOR_VIDEO_MAX_RUNTIME_LABEL}</Text>
       </View>
 
@@ -5552,6 +5647,9 @@ export function ChannelStudioScreen() {
                     activeOpacity={0.88}
                     onPress={onPickClipVideoFile}
                     disabled={clipSaving}
+                    testID="clip-studio-choose-full-video-button"
+                    accessibilityRole="button"
+                    accessibilityLabel={selectedClipVideoFile || hasSavedVideo ? "Replace Video" : "Choose Full Video"}
                   >
                     <Text style={styles.studioActionButtonText}>{selectedClipVideoFile || hasSavedVideo ? "Replace Video" : "Choose Full Video"}</Text>
                     <Text style={styles.studioActionButtonCopy}>Up to {CREATOR_VIDEO_MAX_RUNTIME_LABEL}</Text>
@@ -9927,6 +10025,57 @@ export function ChannelStudioScreen() {
       onDelete={onDeleteVideo}
     />
     <Modal
+      visible={uploadSourceTarget !== null}
+      animationType="fade"
+      transparent
+      onRequestClose={() => setUploadSourceTarget(null)}
+    >
+      <View
+        style={styles.uploadSourceBackdrop}
+        testID="creator-upload-source-sheet"
+        accessibilityLabel="Choose upload source"
+      >
+        <View style={styles.uploadSourceSheet}>
+          <Text style={styles.uploadSourceTitle}>Choose upload source</Text>
+          <Text style={styles.uploadSourceBody}>
+            Select a video from your gallery or browse files on this device.
+          </Text>
+          <TouchableOpacity
+            style={[styles.uploadSourceButton, styles.uploadSourceButtonPrimary]}
+            activeOpacity={0.88}
+            onPress={() => runUploadSourceChoice("gallery")}
+            testID="creator-upload-source-gallery-button"
+            accessibilityRole="button"
+            accessibilityLabel="Choose from Photos or Gallery"
+          >
+            <Text style={styles.uploadSourceButtonText}>Photos / Gallery</Text>
+            <Text style={styles.uploadSourceButtonMeta}>Open your video gallery</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.uploadSourceButton}
+            activeOpacity={0.88}
+            onPress={() => runUploadSourceChoice("files")}
+            testID="creator-upload-source-files-button"
+            accessibilityRole="button"
+            accessibilityLabel="Choose from Files"
+          >
+            <Text style={styles.uploadSourceButtonText}>Files</Text>
+            <Text style={styles.uploadSourceButtonMeta}>Browse device storage</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.uploadSourceCancelButton}
+            activeOpacity={0.88}
+            onPress={() => setUploadSourceTarget(null)}
+            testID="creator-upload-source-cancel-button"
+            accessibilityRole="button"
+            accessibilityLabel="Cancel upload source chooser"
+          >
+            <Text style={styles.uploadSourceCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+    <Modal
       visible={selectedCreatorMoneyAuditEvent !== null}
       animationType="slide"
       transparent
@@ -11918,6 +12067,67 @@ const styles = StyleSheet.create({
   closeText: {
     color: "#E6EAF3",
     fontSize: 11,
+    fontWeight: "900",
+  },
+  uploadSourceBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.66)",
+  },
+  uploadSourceSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "#090D15",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 28,
+    gap: 12,
+  },
+  uploadSourceTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  uploadSourceBody: {
+    color: "#B8C1D6",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  uploadSourceButton: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 3,
+  },
+  uploadSourceButtonPrimary: {
+    borderColor: "rgba(220,20,60,0.55)",
+    backgroundColor: "rgba(220,20,60,0.2)",
+  },
+  uploadSourceButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  uploadSourceButtonMeta: {
+    color: "#AAB4C8",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  uploadSourceCancelButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+  },
+  uploadSourceCancelText: {
+    color: "#DDE4F3",
+    fontSize: 13,
     fontWeight: "900",
   },
   uploadLifecycleInline: {
