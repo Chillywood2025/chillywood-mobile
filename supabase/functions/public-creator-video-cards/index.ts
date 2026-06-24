@@ -22,6 +22,7 @@ type PublicCreatorVideoRow = {
   moderation_reason: string | null;
   moderated_at: string | null;
   moderated_by: string | null;
+  scan_status: string | null;
   storage_provider: string | null;
   storage_bucket: string | null;
   thumb_storage_path: string | null;
@@ -65,6 +66,7 @@ const SIGNED_URL_SECONDS = 60 * 60;
 const CLIP_TITLE_MAX_LENGTH = 80;
 const CLIP_SUBTITLE_MAX_LENGTH = 140;
 const PUBLIC_MODERATION_STATUSES = ["clean", "reported"];
+const PUBLIC_SCAN_STATUSES = ["clean", "manual_review"];
 const PUBLIC_CREATOR_VIDEO_SELECT = [
   "id",
   "owner_id",
@@ -77,6 +79,7 @@ const PUBLIC_CREATOR_VIDEO_SELECT = [
   "moderation_reason",
   "moderated_at",
   "moderated_by",
+  "scan_status",
   "storage_provider",
   "storage_bucket",
   "thumb_storage_path",
@@ -491,6 +494,7 @@ Deno.serve(async (req): Promise<Response> => {
         .select(PUBLIC_CREATOR_VIDEO_SELECT)
         .eq("visibility", "public")
         .in("moderation_status", PUBLIC_MODERATION_STATUSES)
+        .in("scan_status", PUBLIC_SCAN_STATUSES)
         .order("created_at", { ascending: false })
         .limit(limit);
 
@@ -517,6 +521,7 @@ Deno.serve(async (req): Promise<Response> => {
           .select(PUBLIC_CREATOR_VIDEO_SELECT)
           .eq("visibility", "public")
           .in("moderation_status", PUBLIC_MODERATION_STATUSES)
+          .in("scan_status", PUBLIC_SCAN_STATUSES)
           .in("owner_id", regularOwnerIds)
           .order("created_at", { ascending: false })
           .limit(limit)
@@ -531,6 +536,7 @@ Deno.serve(async (req): Promise<Response> => {
             .select(PUBLIC_CREATOR_VIDEO_SELECT)
             .eq("visibility", "public")
             .in("moderation_status", PUBLIC_MODERATION_STATUSES)
+            .in("scan_status", PUBLIC_SCAN_STATUSES)
             .in("id", officialRachiVideoIds)
             .order("created_at", { ascending: false })
             .limit(limit)
@@ -558,6 +564,7 @@ Deno.serve(async (req): Promise<Response> => {
         .select(PUBLIC_CREATOR_VIDEO_SELECT)
         .eq("visibility", "public")
         .in("moderation_status", PUBLIC_MODERATION_STATUSES)
+        .in("scan_status", PUBLIC_SCAN_STATUSES)
         .order("created_at", { ascending: false })
         .limit(limit)
         .returns<PublicCreatorVideoRow[]>();

@@ -20,6 +20,7 @@ const assertNotIncludes = (content, needle, label) => {
 };
 
 const migration = read("supabase/migrations/202605140010_vod_quality_ladder_resolver.sql");
+const scanSafeResolverMigration = read("supabase/migrations/20260623170000_creator_media_scan_safe_playback_resolver.sql");
 const vodLib = read("_lib/vodQuality.ts");
 const creatorVideos = read("_lib/creatorVideos.ts");
 const mediaStorageFunction = read("supabase/functions/media-storage/index.ts");
@@ -39,6 +40,8 @@ assertIncludes(migration, "'pending_renditions'", "legacy fallback truth");
 assertIncludes(migration, "video_renditions_select_owner_operator", "rendition RLS");
 assertIncludes(migration, "video_renditions_no_direct_client_insert", "no direct client insert");
 assertIncludes(migration, "creator_videos_storage_select_premium_renditions", "premium storage policy");
+assertIncludes(scanSafeResolverMigration, "public.media_scan_public_safe(v_video.\"scan_status\")", "scan-safe resolver");
+assertIncludes(scanSafeResolverMigration, "public.media_scan_public_safe(rendition.\"scan_status\")", "scan-safe resolver");
 
 assertIncludes(vodLib, "VOD_FREE_PLAYBACK_QUALITY_LABELS = [\"360p\", \"480p\"]", "VOD lib");
 assertIncludes(vodLib, "VOD_PREMIUM_PLAYBACK_QUALITY_LABELS = [\"720p\", \"1080p\"]", "VOD lib");

@@ -178,7 +178,7 @@ Any generated route, room, or screen is incomplete unless it includes role-aware
 - do not make direct screen-level SDK calls
 - launch ad cap: base active session allows 3 interstitial plus 1 native/feed; after 2 active browsing hours allow +2 interstitial plus +1 native/feed; daily cap is 6 interstitial plus 3 native/feed
 - Premium/ad-free users are always ineligible for ads and must not increment ad counters
-- ads must not appear inside active LiveKit rooms, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, immediately at app launch, in Admin, in Platform Studio, in Chat, or in Profile/composer contexts unless explicitly redesigned later
+- ads must not appear during LiveKit room sessions, during active video playback, while typing/commenting, during upload, on subscribe/payment screens, immediately at app launch, in Admin, in Platform Studio, in Chat, or in Profile/composer contexts unless explicitly redesigned later
 - rewarded ads and carefully integrated native ads are preferred over disruptive formats
 - aggressive or unexpected full-screen interstitials are not approved doctrine
 - launch app ads are platform money at first; RevenueCat remains Premium subscription truth only and does not take ad revenue

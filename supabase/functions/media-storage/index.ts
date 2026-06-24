@@ -33,6 +33,7 @@ const SOCIAL_ATTACHMENT_MAX_BYTES = 250 * 1024 * 1024;
 const CREATOR_VIDEO_UPLOAD_EXPIRES_SECONDS = 2 * 60 * 60;
 const SOCIAL_ATTACHMENT_UPLOAD_EXPIRES_SECONDS = 30 * 60;
 const DOWNLOAD_EXPIRES_SECONDS = 60 * 60;
+const PUBLIC_SCAN_STATUSES = new Set(["clean", "manual_review"]);
 
 const CREATOR_VIDEO_MIME_TYPES = new Set([
   "video/mp4",
@@ -116,6 +117,7 @@ const isSafeObjectKey = (value: string) => (
 );
 
 const objectKeyOwner = (objectKey: string) => objectKey.split("/")[0] ?? "";
+const isPublicScanSafe = (value: unknown) => PUBLIC_SCAN_STATUSES.has(toText(value));
 
 const encodeS3Path = (objectKey: string) => objectKey
   .split("/")
@@ -471,35 +473,6 @@ const validateUpload = (input: {
   return { ok: true };
 };
 
-const userHasPlatformRole = async (
-  adminClient: SupabaseClient,
-  user: AuthenticatedMediaUser,
-  roles: string[],
-) => {
-  const userQuery = await adminClient
-    .from("platform_role_memberships")
-    .select("id,role")
-    .eq("status", "active")
-    .in("role", roles)
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-
-  if (userQuery.data?.id) return true;
-  if (!user.email) return false;
-
-  const emailQuery = await adminClient
-    .from("platform_role_memberships")
-    .select("id")
-    .eq("status", "active")
-    .in("role", roles)
-    .ilike("email", user.email)
-    .limit(1)
-    .maybeSingle();
-
-  return !!emailQuery.data?.id;
-};
-
 const userHasActivePremiumEntitlement = async (
   adminClient: SupabaseClient,
   userId: string,
@@ -538,7 +511,7 @@ const readCreatorVideoForObject = async (
   if (!recordId) return null;
   const { data } = await adminClient
     .from("videos")
-    .select("id,owner_id,visibility,moderation_status,storage_provider,storage_bucket,storage_object_key,storage_path")
+    .select("id,owner_id,visibility,moderation_status,scan_status,storage_provider,storage_bucket,storage_object_key,storage_path")
     .eq("id", recordId)
     .maybeSingle();
   if (!data) return null;
@@ -551,6 +524,7 @@ const readCreatorVideoForObject = async (
     owner_id: string;
     visibility: string;
     moderation_status: string;
+    scan_status: string;
   };
 };
 
@@ -563,7 +537,7 @@ const readCreatorVideoRenditionForObject = async (
   if (!recordId) return null;
   const { data: storagePathRendition } = await adminClient
     .from("video_renditions")
-    .select("id,video_id,owner_id,quality_label,status,access_tier,storage_bucket,storage_path,manifest_path")
+    .select("id,video_id,owner_id,quality_label,status,access_tier,scan_status,storage_bucket,storage_path,manifest_path")
     .eq("video_id", recordId)
     .eq("storage_bucket", bucket)
     .eq("storage_path", objectKey)
@@ -573,7 +547,7 @@ const readCreatorVideoRenditionForObject = async (
   if (!rendition) {
     const { data: manifestPathRendition } = await adminClient
       .from("video_renditions")
-      .select("id,video_id,owner_id,quality_label,status,access_tier,storage_bucket,storage_path,manifest_path")
+      .select("id,video_id,owner_id,quality_label,status,access_tier,scan_status,storage_bucket,storage_path,manifest_path")
       .eq("video_id", recordId)
       .eq("storage_bucket", bucket)
       .eq("manifest_path", objectKey)
@@ -585,7 +559,7 @@ const readCreatorVideoRenditionForObject = async (
 
   const { data: video } = await adminClient
     .from("videos")
-    .select("id,owner_id,visibility,moderation_status")
+    .select("id,owner_id,visibility,moderation_status,scan_status")
     .eq("id", recordId)
     .maybeSingle();
   if (!video) return null;
@@ -597,8 +571,10 @@ const readCreatorVideoRenditionForObject = async (
     qualityLabel: toText(rendition.quality_label),
     status: toText(rendition.status),
     accessTier: toText(rendition.access_tier),
+    scanStatus: toText(rendition.scan_status),
     visibility: toText(video.visibility),
     moderationStatus: toText(video.moderation_status),
+    videoScanStatus: toText(video.scan_status),
   };
 };
 
@@ -633,7 +609,10 @@ const canReadCreatorVideoRendition = async (
   if (rendition.status !== "ready") return false;
   if (rendition.ownerId === user.id) return true;
   if (await ownerMediaBlockedForStaff(adminClient, user, rendition.ownerId)) return false;
-  const publicSafe = rendition.visibility === "public" && ["clean", "reported"].includes(rendition.moderationStatus);
+  const publicSafe = rendition.visibility === "public"
+    && ["clean", "reported"].includes(rendition.moderationStatus)
+    && isPublicScanSafe(rendition.videoScanStatus)
+    && isPublicScanSafe(rendition.scanStatus);
   if (rendition.qualityLabel === "original") {
     if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
       await writePrivateMediaAccessAudit(adminClient, user, {
@@ -675,6 +654,7 @@ const canReadCreatorVideo = async (
   if (
     toText(video.visibility) === "public"
     && ["clean", "reported"].includes(toText(video.moderation_status))
+    && isPublicScanSafe(video.scan_status)
   ) {
     return true;
   }
@@ -727,7 +707,7 @@ const readSocialAttachmentForObject = async (
   if (!recordId) return null;
   const { data } = await adminClient
     .from("social_attachments")
-    .select("id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,moderation_status,deleted_at")
+    .select("id,owner_user_id,surface_type,surface_id,storage_provider,storage_bucket,storage_object_key,storage_path,moderation_status,scan_status,deleted_at")
     .eq("id", recordId)
     .maybeSingle();
   if (!data) return null;
@@ -741,6 +721,7 @@ const readSocialAttachmentForObject = async (
     owner_user_id: string;
     surface_type: string;
     surface_id: string;
+    scan_status: string;
   };
 };
 
@@ -797,12 +778,12 @@ const canReadSocialAttachmentSurface = async (
     if (!videoId) return false;
     const video = await adminClient
       .from("videos")
-      .select("id")
+      .select("id,scan_status")
       .eq("id", videoId)
       .eq("visibility", "public")
       .in("moderation_status", ["clean", "reported"])
       .maybeSingle();
-    return !!video.data?.id;
+    return !!video.data?.id && isPublicScanSafe(video.data.scan_status);
   }
 
   if (surfaceType === "chat_message") {
@@ -845,6 +826,20 @@ const canReadSocialAttachment = async (
   const attachment = await readSocialAttachmentForObject(adminClient, recordId, bucket, objectKey);
   if (!attachment) return false;
   if (toText(attachment.owner_user_id) === user.id) return true;
+  if (!isPublicScanSafe(attachment.scan_status)) {
+    if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {
+      await writePrivateMediaAccessAudit(adminClient, user, {
+        action: "media_download_url",
+        objectKey,
+        ownerId: toText(attachment.owner_user_id),
+        recordId,
+        securityContext,
+        surfaceType: "social_attachment",
+      });
+      return true;
+    }
+    return false;
+  }
   if (await canReadSocialAttachmentSurface(adminClient, user, attachment)) return true;
   if (await ownerMediaBlockedForStaff(adminClient, user, toText(attachment.owner_user_id))) return false;
   if (await userHasScopedStaffPermission(adminClient, user, ["content_moderation", "reports_review"])) {

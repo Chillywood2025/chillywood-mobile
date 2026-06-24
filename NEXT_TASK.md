@@ -129,16 +129,16 @@ Required outcome:
 - Admin/operator scan readout is sanitized and does not reveal storage paths or secrets.
 
 Wave 2 status:
-- Verdict:
-- Commit:
-- Proof artifacts:
-- Device/build:
-- Seeded users used:
-- Media ids:
-- Storage objects:
-- Code changes:
-- Remaining blockers:
-- Safety confirmation:
+- Verdict: Partial — backend/API proof covered safe non-zero creator media upload, metadata, draft/public transitions, non-owner denial, comments/replies, VOD resolver behavior for an existing public clean fixture, and cleanup. Installed Android proved current APK launch and public creator-video Player routing, but owner-side installed upload/file-picker proof, attachment-heavy Android proof, real rendition files, and scanner/operator failure-mode proof remain pending.
+- Commit: Pending current Wave 2 commit.
+- Proof artifacts: `/tmp/chillywood-wave2-creator-media-pipeline-proof-20260623-221042/`.
+- Device/build: Physical Android `R5CR120QCBF`, package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, direct APK install timestamp `2026-06-23 21:56:38`; app launch and public Player deep link proved.
+- Seeded users used: local ignored proof env owner suffix `e66c6f72`; viewer suffix `75d4c718`; no credentials, JWTs, service-role keys, signed URLs, or passwords committed.
+- Media ids: existing public clean fixture `c1a45740-26cc-4a64-91da-caf16284fc33`; temporary draft upload `11748b3a-c79b-4903-8298-f1ce0b3e0f99` created and deleted during proof.
+- Storage objects: temporary non-zero proof MP4 uploaded under owner-prefixed `creator-videos` storage path and removed during cleanup; only redacted object key is in artifacts.
+- Code changes: tightened creator media scan-safe gates for public creator card reads, `media-storage` creator-video/rendition/social-attachment download authorization, creator-video table/storage RLS helper, visibility resolver, and VOD playback resolver; added guard coverage.
+- Remaining blockers: Play/internal installed proof is still unavailable on the attached device; owner authenticated Android Studio upload/file-picker proof was not completed; real VOD rendition ladder files were not present for full free/Premium quality proof; Android attachment-heavy comment upload was not completed; scanner-down/operator failure-mode proof and EICAR simulation were not run; new migration/function changes need deployment before the remote pending-scan exposure found during proof is closed in production.
+- Safety confirmation: No payment, Premium entitlement, live money, payout, RevenueCat, Stripe, Google Play, LiveKit authority, auth/reset, or route ownership behavior changed; no RLS weakening; no fake media rows, fake scan success, fake rendition success, secrets, credentials, signed storage URLs, push tokens, or LiveKit tokens were committed.
 
 ### Wave 3 — Capacity + Calls + Notifications + Network Recovery
 
@@ -626,7 +626,7 @@ Current truth:
 
 Next proof:
 
-- Use a current active room only if it is still active; otherwise create a fresh paid room and offer before proof.
+- Use a current paid room target only if it is still valid; otherwise create a fresh paid room target and offer before proof.
 - Capture visual Money Center Transactions readback for transaction `912a9d0a-3621-4070-826d-be2035856e47` only if the historical fixture is still valid, or capture a fresh equivalent transaction if a new fixture is needed.
 - Refund/revoke proof is attempted only if provider tooling gives a safe path; otherwise document the exact blocker.
 
