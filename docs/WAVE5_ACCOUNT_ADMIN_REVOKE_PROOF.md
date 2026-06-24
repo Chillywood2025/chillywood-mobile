@@ -63,11 +63,29 @@ This lane did not:
 - weaken RLS, Premium gates, LiveKit authority, participant caps, scan gates, or auth/reset behavior;
 - create fake production UI users or public proof/debug UI.
 
-## Remaining Wave 5 Blockers
+## Wave 5.1 App-Controlled Launch Blockers
 
-- Permanent account purge/de-identification job and operational runbook proof.
-- Full disabled/deactivated account private-feature denial sweep across rooms, calls, chat, upload, comments, and notifications.
-- Real provider refund execution path remains external/manual and pending.
-- Installed Android account deletion/restore visual proof if required for the next Play/internal build.
-- Admin/operator support action proof for suspend/deactivate remains pending unless an approved operator path is opened.
-- Wave 4 password reset/auth email provider proof remains pending outside Wave 5.
+Future session: Wave 5.1 — Disabled/Deactivated Access + Admin Suspend Proof.
+
+Wave 5.1 must cover:
+
+- disabled/deactivated private-feature denial sweep;
+- chat denial;
+- call denial;
+- room creation/join denial;
+- LiveKit/token denial;
+- seat request denial;
+- upload denial;
+- comment/reply denial;
+- private-feature notification prevention;
+- admin/operator suspend/deactivate support-action proof;
+- non-admin denial;
+- audit/support readback;
+- restore/reactivation behavior if already supported.
+
+## Carry-Forward External / Policy Blockers
+
+- Wave 4 password reset/auth email provider proof.
+- Real provider refund execution.
+- Installed Android account deletion/restore visual proof.
+- Permanent purge/de-identification proof until product/legal policy is finalized.
