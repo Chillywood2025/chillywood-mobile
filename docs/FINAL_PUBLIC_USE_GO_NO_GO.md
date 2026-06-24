@@ -4,7 +4,7 @@ Date: 2026-06-24
 
 Verdict: Partial / Not Ready.
 
-The app is not a public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the known app-controlled disabled/deactivated account lifecycle blockers. Firebase dashboard receipt is now browser-proved. The remaining known blockers are external/provider proof, installed-device visual proof, Play/internal runtime proof, and product/legal policy decisions.
+The app is not a broad public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the known app-controlled disabled/deactivated account lifecycle blockers. Firebase dashboard receipt is browser-proved. Play/internal versionCode `55` runtime proof is now closed. The remaining known blockers are external/provider proof, installed-device visual proof, and product/legal policy decisions.
 
 Latest Wave 6 artifact:
 
@@ -25,6 +25,10 @@ Latest full launch-condition closeout artifact:
 Latest Play/internal v55+ closeout artifact:
 
 - `/tmp/app-play-internal-v55-plus-proof-20260624-143940/`
+
+Latest Play v55 upload/install proof artifact:
+
+- `/tmp/app-play-v55-upload-install-proof-20260624-154317/`
 
 ## Wave Summary
 
@@ -56,7 +60,7 @@ Latest Play/internal v55+ closeout artifact:
 
 - Installed Android account deletion/restore visual proof is `Pending installed proof`: backend/runtime schedule, restore, and public fail-closed behavior are proved, but the installed UI sweep still needs a disposable proof account.
 - Installed blocked-viewer visual proof is `Pending installed proof`: backend/runtime block enforcement is proved, but installed visual proof still needs blocker, blocked viewer, and unrelated viewer proof sessions.
-- Play/internal installed proof remains `Pending installed proof` wherever prior lanes used direct APK, backend/API, or headless proof instead of installer `com.android.vending`. Browser readback shows Play internal testing and Closed testing Alpha are active, but both expanded release summaries are versionCode `54`; the latest visible Play app bundle is also versionCode `54`. The attached device has versionCode `55` with installer `null`, so the launch-candidate Play/internal pass condition is not met.
+- Play/internal versionCode `55` runtime proof is `Closed`: Play internal testing exposed versionCode `55`, the attached device installed/updated package `com.chillywood.mobile` from Google Play, and final readback showed versionCode `55`, versionName `1.0.0`, installer `com.android.vending`, last update `2026-06-24 15:45:06`.
 
 ### Product / Legal Policy Blockers
 
@@ -103,7 +107,7 @@ Latest Play/internal v55+ closeout artifact:
 | Abuse/spam incident response | Wave 4 controls and proof docs exist. | Password reset/auth email provider proof pending. | Partial |
 | Account deletion/support incident response | Account/legal runbook and Wave 5/5.1 proof exist. | Permanent purge/de-identification and installed visual proof remain pending. | Partial |
 | Premium/provider incident response | Money/support/refund playbooks exist; live money stays off. | Real provider refund execution pending/manual. | Partial |
-| App release rollback | Android/EAS runbook documents OTA/native build limits. | Play/internal proof remains pending where required. | Partial |
+| App release rollback | Android/EAS runbook documents OTA/native build limits. | Play/internal versionCode `55` runtime proof is closed; keep normal release rollback smoke in future candidate proofs. | Partial |
 | Function/migration rollback | Recent migrations are tracked in docs/proof reports. | No universal automated rollback guarantee is claimed. | Partial |
 | Safe degradation | Runtime config, media, Premium, LiveKit, notifications, and money paths fail safely where proved. | Release monitoring proof pending. | Partial |
 
@@ -131,20 +135,20 @@ Latest Play/internal v55+ closeout artifact:
 | Firebase dashboard receipt proof | external/provider dashboard proof | Firebase packages/config/redaction are repo-proved. | Browser readback confirmed Firebase Console receipt for Analytics dashboard activity, Crashlytics Android release `1.0.0 (55)`, and Performance Monitoring app/network traces for Android release `1.0.0 (55)`. No private Console screenshots were saved. | Dashboard receipt blocker is closed; continue normal release telemetry privacy checks. | Keep sanitized dashboard receipt notes in final proof artifacts. | Closed |
 | Installed Android account deletion/restore visual proof | installed-device proof | Backend/runtime account deletion/restore proof is passed. | Installed visual proof remains pending; the launch-candidate installed proof did not mutate account deletion state and requires an approved proof-account installed session plus explicit mutation approval. | Should close before broad public launch. Not an app-code blocker because backend/runtime proof already passed. | Run installed visual proof before broad public launch, or accept backend/runtime proof and carry installed visual proof to final release smoke. | Pending installed proof |
 | Installed Android blocked-viewer visual proof | installed-device proof | Backend/runtime blocked-user enforcement is passed. | Installed blocked-viewer visual proof remains pending; the launch-candidate installed proof did not switch installed proof users and requires blocker, blocked-viewer, and unrelated-viewer installed sessions or a safe account-switching harness. | Should close before broad public launch. Not an app-code blocker because backend/runtime blocking proof already passed. | Run installed visual proof before broad public launch, or accept backend/runtime proof and carry installed visual proof to final release smoke. | Pending installed proof |
-| Play/internal proof where prior lanes used direct APK/backend proof | installed Play/internal proof | Browser readback shows Play internal testing and Closed testing Alpha are active, but both expanded release summaries are versionCode `54`; latest visible Play app bundles are versionCode `54` active, then older inactive bundles. Device readback remains package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`; direct APK smoke passes but is not Play/internal proof. | Play/internal installed proof remains required for broad public launch because Play does not expose versionCode `55` or newer and the current installed runtime is not installer `com.android.vending`. | Must close before broad public launch because store/runtime proof should match the distributed app path. | Upload/release/promote versionCode `55` or newer through Play internal or closed testing, verify tester/device eligibility, then install/update from Play and rerun readback and smoke. | Pending installed proof |
+| Play/internal proof where prior lanes used direct APK/backend proof | installed Play/internal proof | Play internal testing exposes versionCode `55`, and the attached device readback shows package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `com.android.vending`, last update `2026-06-24 15:45:06`. Signed-out privacy/support route smoke, signed-out private-chat denial, Premium gate smoke, and route fatal-log scans passed on the Play-installed runtime. Signed-in Home/Settings visual smoke did not complete because credential-entry automation did not reach Home on the fresh Play install. | The hard Play/internal runtime pass condition is met. Signed-in visual smoke remains a release-smoke follow-up, not a Play installer blocker. | Store/runtime proof now matches the distributed internal testing path for versionCode `55`. | Keep normal signed-in release smoke in future installed visual proof lanes. | Closed |
 | Permanent purge/de-identification policy | product/legal policy | Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore. | Permanent purge/de-identification policy remains pending. No permanent purge/de-identification job or legal retention policy proof is claimed. | Not automatically an app-code No-Go. It becomes a No-Go only if owner/legal policy requires permanent purge before public use. | Finalize whether permanent purge/de-identification is required before launch, post-launch, or handled manually/legal-request-only. | Pending policy decision |
 
 ## Launch Condition Decision
 
 | Launch path | Decision | Conditions |
 | --- | --- | --- |
-| Broad public launch | No-Go / Not yet | Keep `Partial / Not Ready` until the remaining external/provider, Play/internal runtime, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. |
+| Broad public launch | No-Go / Not yet | Keep `Partial / Not Ready` until the remaining external/provider, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. |
 | Closed/internal testing | Conditional Go | Reasonable if the owner accepts backend/runtime proof for the remaining installed visual items, accepts the current Firebase browser receipt plus repo redaction proof, and keeps provider refunds manual/external. |
-| Production prep / release-candidate proof | Conditional Go | Continue release-candidate proof, but do not convert to broad launch until Play/internal runtime proof, required visual proofs or waivers, Firebase receipt decision, refund wording, and purge/de-identification policy decision are recorded. |
+| Production prep / release-candidate proof | Conditional Go | Continue release-candidate proof, but do not convert to broad launch until required visual proofs or waivers, refund wording, and purge/de-identification policy decision are recorded. |
 
 Required before broad public launch:
 
-- Play/internal installed proof for the launch-candidate runtime.
+- Play/internal installed proof for the launch-candidate runtime is closed for versionCode `55`.
 - Installed account deletion/restore visual proof, unless the owner accepts backend proof as sufficient.
 - Installed blocked-viewer visual proof, unless the owner accepts backend proof as sufficient.
 - Firebase dashboard receipt is closed by browser readback; keep release telemetry privacy checks in final smoke.
@@ -161,12 +165,14 @@ Accepted carry-forward candidates:
 
 Final Go/No-Go: Partial / Not Ready.
 
-App-controlled Wave 5.1 blockers are closed. Do not launch broadly until the remaining external/provider, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.
+App-controlled Wave 5.1 blockers are closed, and Play/internal versionCode `55` runtime proof is closed. Do not launch broadly until the remaining external/provider, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.
 
-Latest launch-candidate installed proof result: direct APK launch smoke passed on physical Android (`R5CR120QCBF / SM-N986U1`) for package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, with no fatal launch crash in the captured logcat window; Home was visible and Settings opened from Home. This does not close Play/internal proof.
+Earlier launch-candidate installed proof result: direct APK launch smoke passed on physical Android (`R5CR120QCBF / SM-N986U1`) for package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, with no fatal launch crash in the captured logcat window; Home was visible and Settings opened from Home. This evidence is superseded for Play/internal runtime proof by the Play v55 upload/install result below.
 
-Latest focused Play/internal installed smoke result: direct APK smoke still passes from artifact `/tmp/app-play-internal-installed-smoke-proof-20260624-141445-rerun/`, but Play/internal remains pending because installer readback is `null`, not `com.android.vending`.
+Earlier focused Play/internal installed smoke result: direct APK smoke passed from artifact `/tmp/app-play-internal-installed-smoke-proof-20260624-141445-rerun/`, but did not close Play/internal proof because installer readback was `null`, not `com.android.vending`. This is superseded by the Play v55 upload/install result below.
 
-Latest full launch-condition closeout result: browser readback closed Firebase dashboard receipt and confirmed the Play internal testing track is active, but the visible Play internal release is versionCode `54` while the attached launch-candidate runtime is versionCode `55` with installer `null`. Play/internal installed proof remains pending until the launch-candidate version is installed from Play internal testing with installer `com.android.vending`.
+Earlier full launch-condition closeout result: browser readback closed Firebase dashboard receipt and confirmed the Play internal testing track was active, but the visible Play internal release was versionCode `54` while the attached launch-candidate runtime was versionCode `55` with installer `null`. This Play/internal blocker is superseded by the Play v55 upload/install result below.
 
-Latest Play/internal v55+ closeout result: browser readback confirmed Play internal testing and Closed testing Alpha are active, but both tester tracks still expose versionCode `54`; the latest visible Play bundle is versionCode `54`, and no versionCode `55` or newer Play bundle was visible. The attached runtime remains versionCode `55` with installer `null`. Play/internal installed proof remains pending until versionCode `55` or newer is delivered through Play and read back on-device with installer `com.android.vending`.
+Earlier Play/internal v55+ closeout result: browser readback confirmed Play internal testing and Closed testing Alpha were active, but both tester tracks still exposed versionCode `54`; the latest visible Play bundle was versionCode `54`, and no versionCode `55` or newer Play bundle was visible. This is superseded by the Play v55 upload/install result below.
+
+Latest Play v55 upload/install result: EAS production store build `8c80ac61-97f5-4e29-9814-f1b774ac81d9` from commit `1bc1afb` produced versionCode `55` / versionName `1.0.0` and was submitted to Google Play internal testing through submission `b8158df2-a5c1-4a2f-a16a-1bfa19b7d84c`. Browser readback showed Play internal testing available to testers with versionCode `55`. The direct APK was removed from the attached Android device, Google Play installed versionCode `54`, then Google Play updated the device to package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `com.android.vending`, last update `2026-06-24 15:45:06`. Signed-out privacy/support route smoke, signed-out private-chat denial, Premium gate smoke, and route fatal-log scans passed. Signed-in Home/Settings visual smoke remains pending because proof credential-entry automation did not reach Home on the fresh Play install.

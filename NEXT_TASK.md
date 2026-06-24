@@ -406,7 +406,7 @@ Wave 6 status:
   - Permanent purge/de-identification policy: `Pending policy decision`; current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore.
   - Installed Android account deletion/restore visual proof: `Pending installed proof`; backend/runtime account deletion/restore proof is passed.
   - Installed Android blocked-viewer visual proof: `Pending installed proof`; backend/runtime blocked-user enforcement is passed.
-  - Play/internal proof where prior lanes used direct APK/backend proof: `Pending installed proof`; required before broad public launch unless explicitly accepted as temporary.
+  - Play/internal proof where prior lanes used direct APK/backend proof: superseded by Play v55 Upload/Install Closeout below; versionCode `55` is now installed from Google Play with installer `com.android.vending`.
   - Firebase dashboard receipt proof: `Closed` by later browser readback; Firebase packages/config/redaction are repo-proved, and Console receipt is now documented in the full launch-condition closeout artifact.
 - Launch Candidate Installed Proof:
   - Artifact: `/tmp/app-launch-candidate-installed-proof-20260624T191018Z/`.
@@ -438,7 +438,14 @@ Wave 6 status:
   - Device/build: physical Android `R5CR120QCBF / SM-N986U1`, package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, first install `2026-06-22 15:54:35`, last update `2026-06-24 11:25:01`.
   - Play/internal launch-candidate runtime proof remains `Pending installed proof`: the attached v55 runtime is direct-installed, not Play-installed, and Play Console does not currently expose v55+ to internal or closed testers.
   - Required owner/release action: upload/release/promote versionCode `55` or newer through Play internal or closed testing, verify tester/device eligibility, install/update from Play, then rerun package readback and smoke. Do not classify any direct APK or adb install as Play/internal proof.
-- Launch Condition Decision: broad public launch is `No-Go / Not yet`; closed/internal testing is `Conditional Go`; production prep / release-candidate proof is `Conditional Go`. No remaining blocker is currently classified as an app-controlled backend safety blocker. Final Go/No-Go stays `Partial / Not Ready` until the remaining external/provider, Play/internal runtime, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk.
+- Play v55 Upload/Install Closeout:
+  - Artifact: `/tmp/app-play-v55-upload-install-proof-20260624-154317/`.
+  - Release/build: EAS production store build `8c80ac61-97f5-4e29-9814-f1b774ac81d9` from commit `1bc1afb`, versionCode `55`, versionName `1.0.0`, submitted to Google Play internal testing through submission `b8158df2-a5c1-4a2f-a16a-1bfa19b7d84c`.
+  - Browser readback: Play internal testing became available to testers with versionCode `55`.
+  - Device/build: physical Android `R5CR120QCBF / SM-N986U1`, package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `com.android.vending`, first install `2026-06-24 15:44:19`, last update `2026-06-24 15:45:06`.
+  - Play/internal launch-candidate runtime proof: `Pass` — versionCode `55` installed from Google Play with installer `com.android.vending`.
+  - Play/internal smoke: `Partial` — launch and route smoke captured no fatal crash; signed-out privacy/support routes opened, signed-out private chat denied safely by routing to sign-in, and Premium route smoke did not bypass entitlement. Signed-in Home/Settings visual smoke remains pending because proof credential-entry automation did not reach Home on the fresh Play install.
+- Launch Condition Decision: broad public launch is `No-Go / Not yet`; closed/internal testing is `Conditional Go`; production prep / release-candidate proof is `Conditional Go`. No remaining blocker is currently classified as an app-controlled backend safety blocker, and Play/internal versionCode `55` runtime proof is closed. Final Go/No-Go stays `Partial / Not Ready` until the remaining external/provider, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk.
 - Safety confirmation: No secrets, credentials, service-role keys, provider/payment keys, push tokens, LiveKit tokens, signed URLs, proof passwords, local env files, payment changes, Premium pricing/product changes, live money, payout activation, RLS weakening, LiveKit authority loosening, participant cap increase, scan gate weakening, auth/reset weakening, fake proof users in production UI, or broad route ownership changes.
 
 ## Public V1 Final Regression
