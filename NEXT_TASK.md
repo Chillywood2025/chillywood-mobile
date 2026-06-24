@@ -209,17 +209,20 @@ Required outcome:
 - App background, phone lock, app restart, network drop, host disconnect, viewer rejoin, stale membership, stale room, and call invite expiration behavior are proved or honestly marked pending.
 
 Wave 3 status:
-- Verdict:
-- Commit:
-- Proof artifacts:
-- Device/build:
-- Seeded users used:
-- Room ids:
-- Call invite ids:
-- Notification ids:
-- Code changes:
-- Remaining blockers:
-- Safety confirmation:
+- Verdict: Partial — the core Wave 3 foundations are already closed in focused prior lanes, but the whole grouped wave remains Partial because real-device passive viewer scaling, TURN/cellular allocation, broader notification-category runtime proof, and network/background/restart recovery sweeps are still not fully proved.
+- Commit: Chi'lly Chat call push proof `e12435c`; LiveKit server metrics readback `e2b0517`; LiveKit passive viewer load proof `ea0e9d9`; this Wave 3 tracker update commit pending.
+- Proof artifacts: older baseline report `artifacts/capacity-notifications-seeded-users-20260623/REPORT.md`; LiveKit metrics and passive-load proof are recorded in `docs/LIVEKIT_PRODUCTION_READINESS_RUNBOOK.md`; Chi'lly Chat call push proof is represented by the committed dispatcher/guard path and prior installed-device call-push closeout.
+- Device/build: prior installed-device proofs used physical Android `R5CR120QCBF / SM_N986U1`, package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, direct APK where Play/internal proof was not available. Do not claim Play/internal proof unless installer readback is `com.android.vending`.
+- Seeded users used: local ignored proof env users from `docs/SEEDED_PROOF_HARNESS.md` where available; no proof credentials, JWTs, push tokens, LiveKit participant tokens, or service-role keys are committed.
+- Room ids: LiveKit passive-load proof run `livekit-passive-load-20260624003534` against `chillywood-prod-01`; synthetic room used one synthetic publishing host and 10 synthetic passive LiveKit Node RTC subscribers through the deployed token endpoint.
+- Call invite ids: backend/provider Chi'lly Chat call push proof used safe proof fixtures and proved voice/video dispatch, missed dispatch, blocked/nonmember denial, signed-out denial, and token leakage checks; exact invite ids remain in redacted proof artifacts, not in source.
+- Notification ids: Android channels proved for `chilly_chat_messages`, `chilly_chat_calls_v2`, `chilly_chat_missed_calls`, and default activity; incoming calls use `chilly_chat_calls_v2`, missed calls use `chilly_chat_missed_calls`, and stale `chilly_chat_calls` is not the new call-push channel.
+- Code changes: completed before this tracker update. `e12435c` added server-side Chi'lly Chat call dispatch and push policy guard; `e2b0517` added LiveKit metrics schema/function/script/guard; `ea0e9d9` added passive viewer load proof tooling/guard. No participant caps, Premium gates, money, payouts, or unrelated LiveKit authority were changed.
+- Capacity truth: active camera/mic seats remain capped at 4. Safe current claim is `4 active camera/mic seats plus 10 synthetic passive viewers/subscribers proved under measured chillywood-prod-01 conditions`. This is not proof of 10 real mobile devices and does not close TURN/cellular allocation.
+- Notification truth: Chi'lly Chat foreground call behavior and Android background call push/ringing path are closed for the focused call lane; broader categories such as chat-message push, Save Replay ready, comment/reply, mention, moderation/report, Premium/payment, and system/admin announcements remain pending unless separately backed/proved.
+- Network/recovery truth: stale room handling, old-room guards, refresh policy, and room/token fail-safe guards pass, but full installed background/phone-lock/restart/network-drop/host-disconnect/viewer-rejoin recovery remains pending beyond the focused proofs already recorded.
+- Remaining blockers: real-device passive viewer proof; TURN/cellular allocation proof; two-or-more real-device media performance proof; broader notification matrix runtime proof; fresh-install/upgraded-install channel migration proof; app background/phone lock/app restart/network drop/host disconnect/viewer rejoin sweep; Play/internal installed proof where specifically required.
+- Safety confirmation: No RevenueCat, Stripe, Google Play billing, payouts, live money, Premium entitlement behavior, creator monetization, RLS, auth/reset routing, scan gates, active speaker caps, Watch-Party route ownership, or unrelated LiveKit authority changed. No service-role keys, push tokens, LiveKit tokens, participant tokens, TURN credentials, signed storage URLs, raw HLS URLs, proof credentials, or provider secrets were committed.
 
 ### Wave 4 — Abuse / Spam / Rate Limits
 
