@@ -4,7 +4,7 @@ Date: 2026-06-24
 
 Verdict: Partial / Not Ready.
 
-Chi'llywood is not a public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the known app-controlled disabled/deactivated account lifecycle blockers. The remaining known blockers are external/provider proof, installed-device visual proof, dashboard receipt proof, and product/legal policy decisions.
+The app is not a public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the known app-controlled disabled/deactivated account lifecycle blockers. The remaining known blockers are external/provider proof, installed-device visual proof, dashboard receipt proof, and product/legal policy decisions.
 
 Latest Wave 6 artifact:
 
@@ -111,14 +111,38 @@ Latest Wave 6 artifact:
 | Blocker | Type | Current status | Proof/result | Launch impact | Required next action | Final classification |
 | --- | --- | --- | --- | --- | --- | --- |
 | Password reset/auth email provider proof | external/provider | App reset route safety and historical forgot-password proof exist. | No safe disposable inbox/provider run was available in this closeout pass; no owner inbox was used. | Account recovery provider proof remains a launch governance risk. | Run a disposable non-admin inbox proof on the Play/internal runtime or document owner acceptance. | Pending external/provider |
-| Real provider refund execution | external/provider | Refund/revoke app and sandbox access behavior is proved; real provider refund execution is not integrated or run. | Docs and guards keep refund execution manual/external; no provider refund API was called. | Automated refunds cannot be claimed. | Keep manual support process or open a separate provider refund proof lane. | Pending external/provider |
-| Permanent purge/de-identification policy | policy decision | Scheduled deletion, restore, public fail-closed visibility, and disabled/private-feature denial are proved. | No permanent purge/de-identification job or legal retention policy proof is claimed. | Product/legal must decide whether launch can proceed with scheduled deletion plus later purge work. | Finalize legal/product retention and de-identification policy, then prove the operational path. | Pending policy decision |
-| Installed account deletion/restore visual proof | installed proof | Backend/runtime account deletion schedule, restore, and public fail-closed behavior are proved. | No installed Android account deletion/restore visual sweep was run in this pass. | Visual proof gap remains for release-candidate signoff. | Run installed Android proof with a disposable deletion/restore proof account. | Pending installed proof |
-| Installed blocked-viewer visual proof | installed proof | Backend/runtime blocked-user harassment prevention is proved across chat, calls, comments, rooms, and Profile/Platform actions. | No installed Android blocked-viewer visual sweep was run in this pass. | Visual proof gap remains if owner requires installed UI evidence. | Run installed Android proof with blocked viewer, blocker, and unrelated viewer proof accounts. | Pending installed proof |
-| Firebase dashboard receipt proof | external/dashboard | Firebase Analytics, Crashlytics, and Performance packages/config/runbooks exist; email identity removal remains in code. | No Firebase Console receipt was captured in this pass. | Monitoring receipt remains pending, but no telemetry secret leak was found by static scan. | Capture sanitized Firebase dashboard receipt from a release-like build, without private data screenshots. | Pending external/provider |
+| Real provider refund execution path | external/provider / manual operation | Refund/revoke app and sandbox access behavior is proved; real provider refund execution is not automated/proved. | Refund handling remains manual/external; no provider refund API was called. The app must not claim instant provider refund execution. | Can be accepted as a launch condition only if app/support copy clearly does not promise instant or automatic refunds. | Keep provider refunds manual/external for launch, or open a future provider-refund integration proof lane. | Pending external/provider |
+| Firebase dashboard receipt proof | external/provider dashboard proof | Firebase packages/config/redaction are repo-proved. | Console dashboard receipt remains pending; no Firebase Console receipt was captured in this pass. | Prefer close before public launch. Can be accepted for closed/internal testing if repo-level Firebase proof is accepted. | Verify Firebase Console dashboard receipt before launch, or accept as post-launch monitoring follow-up. | Pending external/provider |
+| Installed Android account deletion/restore visual proof | installed-device proof | Backend/runtime account deletion/restore proof is passed. | Installed visual proof remains pending; no installed Android account deletion/restore visual sweep was run in this pass. | Should close before broad public launch. Not an app-code blocker because backend/runtime proof already passed. | Run installed visual proof before broad public launch, or accept backend/runtime proof and carry installed visual proof to final release smoke. | Pending installed proof |
+| Installed Android blocked-viewer visual proof | installed-device proof | Backend/runtime blocked-user enforcement is passed. | Installed blocked-viewer visual proof remains pending; no installed Android blocked-viewer visual sweep was run in this pass. | Should close before broad public launch. Not an app-code blocker because backend/runtime blocking proof already passed. | Run installed visual proof before broad public launch, or accept backend/runtime proof and carry installed visual proof to final release smoke. | Pending installed proof |
+| Play/internal proof where prior lanes used direct APK/backend proof | installed Play/internal proof | Some prior lanes used direct APK, backend/API, or headless proof instead of the distributed Play/internal path. | Play/internal installed proof remains required for broad public launch where prior proof used direct APK/backend proof. | Must close before broad public launch because store/runtime proof should match the distributed app path. | Run Play/internal installed smoke for the launch-candidate runtime, or explicitly accept direct APK proof as temporary. | Pending installed proof |
+| Permanent purge/de-identification policy | product/legal policy | Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore. | Permanent purge/de-identification policy remains pending. No permanent purge/de-identification job or legal retention policy proof is claimed. | Not automatically an app-code No-Go. It becomes a No-Go only if owner/legal policy requires permanent purge before public use. | Finalize whether permanent purge/de-identification is required before launch, post-launch, or handled manually/legal-request-only. | Pending policy decision |
+
+## Launch Condition Decision
+
+| Launch path | Decision | Conditions |
+| --- | --- | --- |
+| Broad public launch | No-Go / Not yet | Keep `Partial / Not Ready` until the remaining external/provider, installed-proof, dashboard, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. |
+| Closed/internal testing | Conditional Go | Reasonable if the owner accepts backend/runtime proof for the remaining installed visual items, accepts repo-level Firebase config/redaction without dashboard receipt, and keeps provider refunds manual/external. |
+| Production prep / release-candidate proof | Conditional Go | Continue release-candidate proof, but do not convert to broad launch until Play/internal runtime proof, required visual proofs or waivers, Firebase receipt decision, refund wording, and purge/de-identification policy decision are recorded. |
+
+Required before broad public launch:
+
+- Play/internal installed proof for the launch-candidate runtime.
+- Installed account deletion/restore visual proof, unless the owner accepts backend proof as sufficient.
+- Installed blocked-viewer visual proof, unless the owner accepts backend proof as sufficient.
+- Firebase dashboard receipt, unless the owner accepts repo-level Firebase proof for launch.
+- Provider refund manual/external wording confirmed.
+- Permanent purge/de-identification policy decision documented.
+
+Accepted carry-forward candidates:
+
+- Provider refund execution, if manual/external copy is accurate.
+- Permanent purge/de-identification, if owner/legal classifies it post-launch/manual.
+- Firebase dashboard receipt for closed/internal testing only; it is not ideal for broad launch.
 
 ## Final Recommendation
 
 Final Go/No-Go: Partial / Not Ready.
 
-App-controlled Wave 5.1 blockers are closed. Do not launch broadly until the remaining external/provider, installed-proof, and policy blockers are either proved or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.
+App-controlled Wave 5.1 blockers are closed. Do not launch broadly until the remaining external/provider, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.

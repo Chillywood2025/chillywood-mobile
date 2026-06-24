@@ -101,9 +101,10 @@ The Wave 5.1 pass did not run provider refunds, activate live money, change Prem
 
 ## Carry-Forward External / Policy Blockers
 
-- Wave 4 password reset/auth email provider proof.
-- Real provider refund execution.
-- Installed Android account deletion/restore visual proof.
-- Permanent purge/de-identification proof until product/legal policy is finalized.
-- Installed Android blocked-viewer visual proof, if owner requires installed UI evidence beyond the already-proved backend/runtime block enforcement.
-- Firebase dashboard receipt proof for Analytics/Crashlytics/Performance.
+- Password reset/auth email provider proof: Pending external/provider.
+- Real provider refund execution path: Pending external/provider / manual operation. Provider refund execution is not automated/proved, refund handling remains manual/external, and the app must not claim instant provider refund execution.
+- Installed Android account deletion/restore visual proof: Pending installed proof. Backend/runtime account deletion/restore proof is passed.
+- Installed Android blocked-viewer visual proof: Pending installed proof. Backend/runtime blocked-user enforcement is passed.
+- Play/internal proof where prior lanes used direct APK/backend proof: Pending installed proof before broad public launch, unless explicitly accepted as temporary.
+- Permanent purge/de-identification policy: Pending policy decision. Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore.
+- Firebase dashboard receipt proof for Analytics/Crashlytics/Performance: Pending external/provider dashboard proof. Firebase packages/config/redaction are repo-proved; Console dashboard receipt remains pending.

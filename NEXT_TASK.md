@@ -402,12 +402,13 @@ Wave 6 status:
 - Code changes: added read-only Wave 6 final readiness proof script and final Go/No-Go doc; removed signed-in email identity from Firebase Analytics user properties, Crashlytics attributes, and the dev analytics identity mirror.
 - Final Blocker Closeout after Wave 5.1: app-controlled Wave 5.1 blockers are closed. Remaining known blockers are classified as:
   - Password reset/auth email provider proof: `Pending external/provider`.
-  - Real provider refund execution: `Pending external/provider`; current path remains manual/external or not implemented, and automated refunds cannot be claimed.
-  - Permanent purge/de-identification: `Pending policy decision`.
-  - Installed Android account deletion/restore visual proof: `Pending installed proof`.
-  - Installed Android blocked-viewer visual proof: `Pending installed proof`.
-  - Firebase dashboard receipt proof: `Pending external/provider`.
-- Remaining blockers: no known app-controlled blocker from Wave 5.1 scope; external/provider, installed-proof, dashboard receipt, and policy blockers above remain. Final Go/No-Go stays `Partial / Not Ready` until those are proved or explicitly accepted by the owner with documented risk.
+  - Real provider refund execution path: `Pending external/provider`; provider refund execution is not automated/proved, refund handling remains manual/external, and the app must not claim instant provider refund execution.
+  - Permanent purge/de-identification policy: `Pending policy decision`; current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore.
+  - Installed Android account deletion/restore visual proof: `Pending installed proof`; backend/runtime account deletion/restore proof is passed.
+  - Installed Android blocked-viewer visual proof: `Pending installed proof`; backend/runtime blocked-user enforcement is passed.
+  - Play/internal proof where prior lanes used direct APK/backend proof: `Pending installed proof`; required before broad public launch unless explicitly accepted as temporary.
+  - Firebase dashboard receipt proof: `Pending external/provider`; Firebase packages/config/redaction are repo-proved, but Console dashboard receipt remains pending.
+- Launch Condition Decision: broad public launch is `No-Go / Not yet`; closed/internal testing is `Conditional Go`; production prep / release-candidate proof is `Conditional Go`. No remaining blocker is currently classified as an app-controlled backend safety blocker. Final Go/No-Go stays `Partial / Not Ready` until the remaining external/provider, installed-proof, dashboard receipt, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk.
 - Safety confirmation: No secrets, credentials, service-role keys, provider/payment keys, push tokens, LiveKit tokens, signed URLs, proof passwords, local env files, payment changes, Premium pricing/product changes, live money, payout activation, RLS weakening, LiveKit authority loosening, participant cap increase, scan gate weakening, auth/reset weakening, fake proof users in production UI, or broad route ownership changes.
 
 ## Public V1 Final Regression
