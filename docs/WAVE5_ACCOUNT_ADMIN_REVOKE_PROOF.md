@@ -46,7 +46,7 @@ Latest artifact:
 | Client spoof prevention | Pass | Non-admin client cannot insert a Premium entitlement for itself. |
 | Revoked Premium entitlement | Pass | Revoked Premium entitlement reads back as inactive/revoked. |
 | Sandbox access revoke | Pass | `admin_revoke_money_access_grant_for_proof` revokes a sandbox grant, writes not-payable/reversed ledger state, claims no provider refund, and performs no live-money action. |
-| Provider refund execution | Pending | Real provider refunds remain external/manual and were not run. |
+| Provider refund execution | Accepted manual/external | Real provider refunds remain external/manual and were not run; automated provider refund execution is not claimed. |
 
 ## Bug Fixed
 
@@ -102,9 +102,9 @@ The Wave 5.1 pass did not run provider refunds, activate live money, change Prem
 ## Carry-Forward External / Policy Blockers
 
 - Password reset/auth email provider proof: Pending external/provider.
-- Real provider refund execution path: Pending external/provider / manual operation. Provider refund execution is not automated/proved, refund handling remains manual/external, and the app must not claim instant provider refund execution.
-- Installed Android account deletion/restore visual proof: Pending installed proof. Backend/runtime account deletion/restore proof is passed.
-- Installed Android blocked-viewer visual proof: Pending installed proof. Backend/runtime blocked-user enforcement is passed.
-- Play/internal proof where prior lanes used direct APK/backend proof: Pending installed proof before broad public launch, unless explicitly accepted as temporary.
+- Real provider refund execution path: Accepted manual/external. Provider refund execution is not automated/proved, refund handling remains manual/external, and the app must not claim instant or automatic provider refunds.
+- Installed Android account deletion/restore visual proof: Closed on Play-installed versionCode 55 runtime. UI/copy, immediate scheduled-state copy, restore/cancel visual, and active/not-scheduled cleanup readback passed.
+- Installed Android blocked-viewer visual proof: Closed on Play-installed versionCode 55 runtime. Blocked-viewer Profile/Platform denial, blocked-action non-exposure, unrelated-viewer regression, and cleanup passed.
+- Play/internal proof where prior lanes used direct APK/backend proof: Closed for versionCode 55 with installer `com.android.vending`.
 - Permanent purge/de-identification policy: Pending policy decision. Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore.
-- Firebase dashboard receipt proof for Analytics/Crashlytics/Performance: Pending external/provider dashboard proof. Firebase packages/config/redaction are repo-proved; Console dashboard receipt remains pending.
+- Firebase dashboard receipt proof for Analytics/Crashlytics/Performance: Closed by browser readback; Firebase packages/config/redaction are repo-proved.

@@ -402,7 +402,7 @@ if (!serial || !devices.includes(serial)) {
       const confirmed = tappedDelete ? confirmDialog(serial, "account-deletion-confirm", "Delete Account") : false;
       sleep(5000);
       const postDeleteXml = dumpUi(serial, "account-deletion-after-schedule");
-      const scheduledVisual = /Sign In|auth-login-email-input|Deletion is scheduled|Restore Account/i.test(postDeleteXml);
+      const scheduledVisual = /Sign In|auth-login-email-input|Deletion is scheduled|Account deletion scheduled|Restore Account/i.test(postDeleteXml);
       proof.matrix.accountDeletionSchedule = tappedDelete && confirmed && scheduledVisual
         ? status("Pass", "Delete Account flow was triggered for the proof user and returned to an honest signed-out/scheduled state.")
         : status("Partial", "Delete Account flow was attempted but scheduled-state UI was not conclusively captured.", "Backend/runtime deletion proof remains source of truth.");

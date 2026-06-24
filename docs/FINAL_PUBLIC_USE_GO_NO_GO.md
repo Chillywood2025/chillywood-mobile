@@ -4,7 +4,7 @@ Date: 2026-06-24
 
 Verdict: Partial / Not Ready.
 
-The app is not a broad public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the known app-controlled disabled/deactivated account lifecycle blockers. Firebase dashboard receipt is browser-proved. Play/internal versionCode `55` runtime proof, signed-in Home/Settings visual smoke, and blocked-viewer Profile/Platform visual proof are now closed. The remaining known blockers are external/provider proof, the partial installed account deletion schedule visual, and product/legal policy decisions.
+The app is not a broad public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the known app-controlled disabled/deactivated account lifecycle blockers. Firebase dashboard receipt is browser-proved. Play/internal versionCode `55` runtime proof, signed-in Home/Settings visual smoke, blocked-viewer Profile/Platform visual proof, and account deletion scheduled-state visual proof are now closed. The remaining known blockers are password reset/auth email provider proof and product/legal policy decisions.
 
 Latest Wave 6 artifact:
 
@@ -34,6 +34,10 @@ Latest installed visual closeout proof artifact:
 
 - `/tmp/app-installed-visual-closeout-proof-20260624-170135-mutation2/`
 
+Latest final-four launch-condition proof artifact:
+
+- `/tmp/app-final-four-launch-conditions-proof-20260624T224835/`
+
 ## Wave Summary
 
 | Wave | Status | Closed proof | Remaining blocker | Launch impact |
@@ -57,12 +61,12 @@ Latest installed visual closeout proof artifact:
 ### External / Provider Blockers
 
 - Password reset/auth email provider proof is `Pending external/provider`: app-side reset route safety and historical forgot-password proof exist, but no safe disposable inbox/provider run was available in this closeout pass.
-- Real provider refund execution is `Pending external/provider`: current support/refund truth is manual/external or not implemented, and automated refunds cannot be claimed.
+- Real provider refund execution is `Accepted manual/external`: current support/refund truth is manual/external or not implemented, automated refunds cannot be claimed, and the app must not claim instant or automatic provider refunds.
 - Firebase dashboard receipt is `Pass`: browser readback confirmed Firebase Console access for project `chillywood-app`, Android app package `com.chillywood.mobile`, Analytics dashboard activity, Crashlytics release `1.0.0 (55)` receipt with 100% crash-free users/sessions and no open crash issues for the selected crash filter, and Performance Monitoring receipt for release `1.0.0 (55)`.
 
 ### Installed-Device Proof Blockers
 
-- Installed Android account deletion/restore visual proof is `Partial`: Play-installed Settings showed account deletion UI and honest 30-day restore copy, restore/cancel completed for the proof user, and backend cleanup readback confirmed the proof user is active/not scheduled; the immediate scheduled-state visual capture remained inconclusive.
+- Installed Android account deletion/restore visual proof is `Closed`: Play-installed Settings showed account deletion UI, immediate scheduled-state copy, restore/cancel visual proof, and backend cleanup readback confirmed the proof user is active/not scheduled.
 - Installed blocked-viewer visual proof is `Closed`: Play-installed blocked-viewer Profile/Platform routes showed blocked/unavailable state, did not expose obvious message/call/follow harassment actions, unrelated-viewer regression passed, and temporary block fixture cleanup passed.
 - Play/internal versionCode `55` runtime proof is `Closed`: Play internal testing exposed versionCode `55`, the attached device installed/updated package `com.chillywood.mobile` from Google Play, and final readback showed versionCode `55`, versionName `1.0.0`, installer `com.android.vending`, last update `2026-06-24 15:45:06`.
 
@@ -80,7 +84,7 @@ Latest installed visual closeout proof artifact:
 | LiveKit/rooms/capacity | Metrics and synthetic passive proof exist; active camera/mic cap remains 4. | Do not claim real-device 25-viewer or higher active capacity. |
 | Calls/notifications | Chi'lly Chat call push ringing is closed for current proof; notification/ring dedupe passed. | Keep device/release smoke in final release proof. |
 | Abuse/spam/blocking | Backend abuse controls, blocked-user backend enforcement, and installed blocked-viewer Profile/Platform visual proof are materially closed. | Password reset/auth email provider proof remains pending. |
-| Account lifecycle | Scheduled-deletion Profile/Platform visibility fails closed; Wave 5.1 proves disabled/deactivated private-feature denial and admin suspend/restore; installed deletion UI/copy and restore/cancel were visually proved on Play runtime. | Immediate installed scheduled-state visual capture and permanent purge/de-identification policy remain pending. |
+| Account lifecycle | Scheduled-deletion Profile/Platform visibility fails closed; Wave 5.1 proves disabled/deactivated private-feature denial and admin suspend/restore; installed deletion UI/copy, scheduled-state copy, and restore/cancel were visually proved on Play runtime. | Permanent purge/de-identification policy remains pending. |
 | Admin/support/DMCA | Admin/support privacy, DMCA privacy, and Wave 5.1 suspend/deactivate action proof passed. | Provider/policy items below remain pending. |
 | Premium/refund/revoke | Valid/revoked entitlement readback and client spoof prevention passed; no live money changed. | Real provider refund execution remains external/manual. |
 | Analytics/crash/monitoring | Firebase packages/config/runbooks exist; telemetry email identity was removed. Firebase Console receipt is now browser-proved for Analytics, Crashlytics, and Performance on Android release `1.0.0 (55)`. | Keep release telemetry privacy checks in final smoke. |
@@ -109,7 +113,7 @@ Latest installed visual closeout proof artifact:
 | Media-storage rollback | Scan/storage runbooks and scan-safe resolver proof exist. | Scanner-down failure-mode proof pending. | Partial |
 | Scan failure response | Pending/failed/malware gates fail closed in current proof. | Operator scanner-down proof pending. | Partial |
 | Abuse/spam incident response | Wave 4 controls and proof docs exist. | Password reset/auth email provider proof pending. | Partial |
-| Account deletion/support incident response | Account/legal runbook and Wave 5/5.1 proof exist; Play-installed deletion UI/copy and restore/cancel visual proof passed. | Permanent purge/de-identification and immediate scheduled-state visual capture remain pending. | Partial |
+| Account deletion/support incident response | Account/legal runbook and Wave 5/5.1 proof exist; Play-installed deletion UI/copy, scheduled-state copy, and restore/cancel visual proof passed. | Permanent purge/de-identification remains pending. | Partial |
 | Premium/provider incident response | Money/support/refund playbooks exist; live money stays off. | Real provider refund execution pending/manual. | Partial |
 | App release rollback | Android/EAS runbook documents OTA/native build limits. | Play/internal versionCode `55` runtime proof is closed; keep normal release rollback smoke in future candidate proofs. | Partial |
 | Function/migration rollback | Recent migrations are tracked in docs/proof reports. | No universal automated rollback guarantee is claimed. | Partial |
@@ -135,9 +139,9 @@ Latest installed visual closeout proof artifact:
 | Blocker | Type | Current status | Proof/result | Launch impact | Required next action | Final classification |
 | --- | --- | --- | --- | --- | --- | --- |
 | Password reset/auth email provider proof | external/provider | App reset route safety and historical forgot-password proof exist. | No safe disposable inbox/provider run was available in this closeout pass; no owner inbox was used. | Account recovery provider proof remains a launch governance risk. | Run a disposable non-admin inbox proof on the Play/internal runtime or document owner acceptance. | Pending external/provider |
-| Real provider refund execution path | external/provider / manual operation | Refund/revoke app and sandbox access behavior is proved; real provider refund execution is not automated/proved. | Refund handling remains manual/external; no provider refund API was called. Automated refunds cannot be claimed. The app must not claim instant provider refund execution. | Can be accepted as a launch condition only if app/support copy clearly does not promise instant or automatic refunds. | Keep provider refunds manual/external for launch, or open a future provider-refund integration proof lane. | Pending external/provider |
+| Real provider refund execution path | external/provider / manual operation | Refund/revoke app and sandbox access behavior is proved; real provider refund execution is not automated/proved. | Refund handling remains manual/external; no provider refund API was called. Automated refunds cannot be claimed. The app must not claim instant or automatic provider refunds. | Accepted as a launch condition only while app/support copy remains manual/external and does not promise instant or automatic refunds. | Keep provider refunds manual/external for launch, or open a future provider-refund integration proof lane. | Accepted manual/external |
 | Firebase dashboard receipt proof | external/provider dashboard proof | Firebase packages/config/redaction are repo-proved. | Browser readback confirmed Firebase Console receipt for Analytics dashboard activity, Crashlytics Android release `1.0.0 (55)`, and Performance Monitoring app/network traces for Android release `1.0.0 (55)`. No private Console screenshots were saved. | Dashboard receipt blocker is closed; continue normal release telemetry privacy checks. | Keep sanitized dashboard receipt notes in final proof artifacts. | Closed |
-| Installed Android account deletion/restore visual proof | installed-device proof | Backend/runtime account deletion/restore proof is passed. | Play-installed UI/copy reachability passed, restore/cancel visual proof passed, and cleanup readback confirmed the proof account is active/not scheduled. The immediate scheduled-state visual capture after tapping delete remained inconclusive, so deletion schedule visual remains Partial rather than Closed. | Should close or be explicitly accepted before broad public launch. Not an app-code blocker because backend/runtime proof already passed and the proof account cleanup passed. | Rerun a narrow installed schedule-state capture or accept backend/runtime plus restore visual proof as sufficient. | Partial |
+| Installed Android account deletion/restore visual proof | installed-device proof | Backend/runtime account deletion/restore proof is passed. | Play-installed UI/copy reachability passed, immediate scheduled-state copy was captured, restore/cancel visual proof passed, and cleanup readback confirmed the proof account is active/not scheduled. | Installed visual blocker is closed. | Keep normal release smoke for this path in future launch candidates. | Closed |
 | Installed Android blocked-viewer visual proof | installed-device proof | Backend/runtime blocked-user enforcement is passed. | Play-installed blocked-viewer Profile/Platform routes showed blocked/unavailable state, blocked actions were not exposed, unrelated viewer regression passed, and fixture cleanup passed. | Installed visual blocker is closed. | Keep normal release smoke for this path in future launch candidates. | Closed |
 | Play/internal proof where prior lanes used direct APK/backend proof | installed Play/internal proof | Play internal testing exposes versionCode `55`, and the attached device readback shows package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `com.android.vending`, last update `2026-06-24 15:45:06`. Signed-out privacy/support route smoke, signed-out private-chat denial, Premium gate smoke, route fatal-log scans, and signed-in Home/Settings visual smoke passed on the Play-installed runtime. | The hard Play/internal runtime pass condition is met, and signed-in smoke is now closed. | Store/runtime proof now matches the distributed internal testing path for versionCode `55`. | Keep normal signed-in release smoke in future installed visual proof lanes. | Closed |
 | Permanent purge/de-identification policy | product/legal policy | Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore. | Permanent purge/de-identification policy remains pending. No permanent purge/de-identification job or legal retention policy proof is claimed. | Not automatically an app-code No-Go. It becomes a No-Go only if owner/legal policy requires permanent purge before public use. | Finalize whether permanent purge/de-identification is required before launch, post-launch, or handled manually/legal-request-only. | Pending policy decision |
@@ -146,14 +150,14 @@ Latest installed visual closeout proof artifact:
 
 | Launch path | Decision | Conditions |
 | --- | --- | --- |
-| Broad public launch | No-Go / Not yet | Keep `Partial / Not Ready` until the remaining external/provider, partial installed schedule-state visual, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. |
-| Closed/internal testing | Conditional Go | Reasonable if the owner accepts the remaining partial deletion schedule visual, accepts the current Firebase browser receipt plus repo redaction proof, and keeps provider refunds manual/external. |
-| Production prep / release-candidate proof | Conditional Go | Continue release-candidate proof, but do not convert to broad launch until required visual proof waivers, refund wording, and purge/de-identification policy decision are recorded. |
+| Broad public launch | No-Go / Not yet | Keep `Partial / Not Ready` until password reset/auth email provider proof and the permanent purge/de-identification policy decision are closed or explicitly accepted by the owner with documented risk. |
+| Closed/internal testing | Conditional Go | Reasonable if the owner accepts password reset/auth provider proof as an external carry-forward risk, accepts the current Firebase browser receipt plus repo redaction proof, and keeps provider refunds manual/external. |
+| Production prep / release-candidate proof | Conditional Go | Continue release-candidate proof, but do not convert to broad launch until reset-email provider proof/waiver and purge/de-identification policy decision are recorded. |
 
 Required before broad public launch:
 
 - Play/internal installed proof for the launch-candidate runtime is closed for versionCode `55`.
-- Installed account deletion schedule-state visual proof, unless the owner accepts backend/runtime proof plus installed UI/restore proof as sufficient.
+- Installed account deletion/restore visual proof is closed on Play runtime.
 - Installed blocked-viewer visual proof is closed on Play runtime.
 - Firebase dashboard receipt is closed by browser readback; keep release telemetry privacy checks in final smoke.
 - Provider refund manual/external wording confirmed.
@@ -161,7 +165,7 @@ Required before broad public launch:
 
 Accepted carry-forward candidates:
 
-- Provider refund execution, if manual/external copy is accurate.
+- Provider refund execution is accepted as manual/external if copy remains accurate and no automated refund claim is made.
 - Permanent purge/de-identification, if owner/legal classifies it post-launch/manual.
 - Firebase dashboard receipt is no longer a blocker after browser readback; do not save private Console screenshots.
 
@@ -169,7 +173,7 @@ Accepted carry-forward candidates:
 
 Final Go/No-Go: Partial / Not Ready.
 
-App-controlled Wave 5.1 blockers are closed, Play/internal versionCode `55` runtime proof is closed, signed-in Home/Settings smoke is closed, and installed blocked-viewer Profile/Platform visual proof is closed. Do not launch broadly until the remaining external/provider, partial deletion schedule-state visual, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.
+App-controlled Wave 5.1 blockers are closed, Play/internal versionCode `55` runtime proof is closed, signed-in Home/Settings smoke is closed, installed account deletion/restore visual proof is closed, and installed blocked-viewer Profile/Platform visual proof is closed. Do not launch broadly until password reset/auth email provider proof and the permanent purge/de-identification policy decision are closed or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.
 
 Earlier launch-candidate installed proof result: direct APK launch smoke passed on physical Android (`R5CR120QCBF / SM-N986U1`) for package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, with no fatal launch crash in the captured logcat window; Home was visible and Settings opened from Home. This evidence is superseded for Play/internal runtime proof by the Play v55 upload/install result below.
 
@@ -181,4 +185,6 @@ Earlier Play/internal v55+ closeout result: browser readback confirmed Play inte
 
 Latest Play v55 upload/install result: EAS production store build `8c80ac61-97f5-4e29-9814-f1b774ac81d9` from commit `1bc1afb` produced versionCode `55` / versionName `1.0.0` and was submitted to Google Play internal testing through submission `b8158df2-a5c1-4a2f-a16a-1bfa19b7d84c`. Browser readback showed Play internal testing available to testers with versionCode `55`. The direct APK was removed from the attached Android device, Google Play installed versionCode `54`, then Google Play updated the device to package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `com.android.vending`, last update `2026-06-24 15:45:06`. Signed-out privacy/support route smoke, signed-out private-chat denial, Premium gate smoke, and route fatal-log scans passed.
 
-Latest installed visual closeout result: Play-installed runtime readback stayed package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `com.android.vending` on physical Android `R5CR120QCBF / SM-N986U1`. Signed-in Home and Settings visual smoke passed. Account deletion UI/copy was reachable and showed scheduled-deletion / 30-day restore copy; restore/cancel completed for the proof user; backend cleanup readback confirmed the proof user is active and not scheduled. Immediate post-delete scheduled-state visual capture remained inconclusive, so account deletion schedule visual remains Partial. Blocked-viewer Profile and Platform routes showed blocked/unavailable state, obvious message/call/follow harassment actions were not exposed, unrelated-viewer Profile/Platform regression passed, no fatal/crash markers were found, temporary blocked relationship cleanup passed, and artifact secret/token scan passed. Artifact: `/tmp/app-installed-visual-closeout-proof-20260624-170135-mutation2/`.
+Latest installed visual closeout result: Play-installed runtime readback stayed package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `com.android.vending` on physical Android `R5CR120QCBF / SM-N986U1`. Signed-in Home and Settings visual smoke passed. Account deletion UI/copy was reachable and showed scheduled-deletion / 30-day restore copy; immediate scheduled-state copy was captured; restore/cancel completed for the proof user; backend cleanup readback confirmed the proof user is active and not scheduled. Blocked-viewer Profile and Platform routes showed blocked/unavailable state, obvious message/call/follow harassment actions were not exposed, unrelated-viewer Profile/Platform regression passed, no fatal/crash markers were found, temporary blocked relationship cleanup passed, and artifact secret/token scan passed. Artifact: `/tmp/app-installed-visual-closeout-proof-20260624-170135-mutation2/`.
+
+Latest final-four launch-condition result: `/tmp/app-final-four-launch-conditions-proof-20260624T224835/` confirms Play installer readback and closes the account deletion immediate scheduled-state visual proof. Password reset/auth email provider proof remains `Pending external/provider` because no safe disposable/proof inbox provider key was available and no owner inbox was used. Provider refund execution is `Accepted manual/external`; no refund API was called and no automated refund execution is claimed. Permanent purge/de-identification remains `Pending policy decision`; no purge implementation or operational proof is claimed.

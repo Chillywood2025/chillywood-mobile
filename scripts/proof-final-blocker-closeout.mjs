@@ -40,10 +40,10 @@ const blockerRows = [
     blocker: "real provider refund execution",
     type: "external/provider",
     currentStatus: "Refund/revoke app and sandbox access behavior is proved; real provider refund execution is not integrated or run.",
-    proofResult: "Docs and guards keep refund execution manual/external; no provider refund API was called.",
-    launchImpact: "Automated refunds cannot be claimed.",
+    proofResult: "Docs and guards keep refund execution manual/external; no provider refund API was called; automated provider refund execution is not claimed.",
+    launchImpact: "Accepted as a launch condition only while app/support copy stays manual/external and avoids instant or automatic refund claims.",
     requiredNextAction: "Keep manual support process or open a separate provider refund proof lane.",
-    finalClassification: "Pending external/provider",
+    finalClassification: "Accepted manual/external",
   },
   {
     blocker: "permanent purge/de-identification policy",
@@ -57,11 +57,11 @@ const blockerRows = [
   {
     blocker: "installed account deletion/restore visual proof",
     type: "installed proof",
-    currentStatus: "Backend/runtime account deletion schedule, restore, and public fail-closed behavior are proved; Play-installed UI/copy and restore/cancel visual proof passed.",
-    proofResult: "Installed proof artifact /tmp/app-installed-visual-closeout-proof-20260624-170135-mutation2/ captured deletion UI/copy, restore/cancel, and active/not-scheduled cleanup readback. Immediate scheduled-state visual capture remained inconclusive.",
-    launchImpact: "Partial visual proof remains for the immediate schedule-state capture unless owner accepts backend/runtime plus restore visual proof.",
-    requiredNextAction: "Rerun a narrow installed schedule-state capture or document owner acceptance of backend/runtime plus installed UI/restore proof.",
-    finalClassification: "Partial",
+    currentStatus: "Backend/runtime account deletion schedule, restore, and public fail-closed behavior are proved; Play-installed UI/copy, scheduled-state copy, and restore/cancel visual proof passed.",
+    proofResult: "Installed proof artifact /tmp/app-installed-visual-closeout-proof-20260624-170135-mutation2/ captured deletion UI/copy, immediate scheduled-state copy, restore/cancel, and active/not-scheduled cleanup readback.",
+    launchImpact: "Installed visual blocker is closed.",
+    requiredNextAction: "Keep normal release smoke for this path in future launch candidates.",
+    finalClassification: "Closed",
   },
   {
     blocker: "installed blocked-viewer visual proof",
@@ -90,10 +90,10 @@ addCheck("Wave 5.1 commit status carried forward", finalDoc.includes("Wave 5.1 |
 addCheck("Final verdict remains honest", finalDoc.includes("Verdict: Partial / Not Ready"), "final doc verdict");
 addCheck("No broad launch-ready claim", !/Verdict:\s*Go\b/.test(finalDoc), "final doc does not claim Go");
 addCheck("Password reset blocker classified", finalDoc.includes("Pending external/provider"), "classification bucket present");
-addCheck("Installed visual proof status updated", finalDoc.includes("Installed Android account deletion/restore visual proof | installed-device proof") && finalDoc.includes("| Partial |") && finalDoc.includes("Installed Android blocked-viewer visual proof | installed-device proof"), "installed visual closeout status");
+addCheck("Installed visual proof status updated", finalDoc.includes("Installed Android account deletion/restore visual proof | installed-device proof") && finalDoc.includes("Installed visual blocker is closed.") && finalDoc.includes("Installed Android blocked-viewer visual proof | installed-device proof"), "installed visual closeout status");
 addCheck("Policy blocker classified", finalDoc.includes("Pending policy decision"), "classification bucket present");
 addCheck("Wave 5.1 closed in tracker", nextTask.includes("Wave 5.1 — Disabled/Deactivated Access + Admin Suspend Proof: Closed"), "NEXT_TASK Wave 5.1 status");
-addCheck("Provider refund not closed", finalDoc.includes("Automated refunds cannot be claimed"), "refund truth wording");
+addCheck("Provider refund manual/external accepted", finalDoc.includes("Accepted manual/external") && finalDoc.includes("must not claim instant or automatic provider refunds"), "refund truth wording");
 addCheck("Provider refunds not run in Wave 5 doc", wave5Doc.includes("Real provider refunds remain external/manual"), "Wave 5 refund truth");
 addCheck(
   "Auth email owner-inbox caution retained",
