@@ -187,6 +187,7 @@ export default function ResetPasswordScreen() {
   const { isPasswordRecoverySession } = useSession();
   const insets = useSafeAreaInsets();
   const handledRecoveryKeyRef = useRef<string | null>(null);
+  const expiredActionPendingRef = useRef(false);
   const [status, setStatus] = useState<RecoveryStatus>("checking");
   const [statusMessage, setStatusMessage] = useState("Checking your reset link...");
   const [newPassword, setNewPassword] = useState("");
@@ -255,23 +256,32 @@ export default function ResetPasswordScreen() {
     setStatusMessage("This reset link is missing or expired. Request a fresh password reset email.");
   }, []);
 
-  const requestNewResetEmail = useCallback(async () => {
+  const requestNewResetEmail = useCallback(() => {
+    if (expiredActionPendingRef.current) return;
+    expiredActionPendingRef.current = true;
     setStatus("checking");
     setStatusMessage("Opening password reset request...");
-
-    await clearResetFlowSession();
 
     const email = routeRecoveryParams?.email?.trim();
     const params = new URLSearchParams({ redirectTo: "/(auth)/login" });
     if (email) params.set("email", email);
     router.replace(`/forgot-password?${params.toString()}` as Href);
+
+    void clearResetFlowSession().finally(() => {
+      expiredActionPendingRef.current = false;
+    });
   }, [routeRecoveryParams?.email, router]);
 
-  const backToSignIn = useCallback(async () => {
+  const backToSignIn = useCallback(() => {
+    if (expiredActionPendingRef.current) return;
+    expiredActionPendingRef.current = true;
     setStatus("checking");
     setStatusMessage("Returning to sign in...");
-    await clearResetFlowSession();
     router.replace("/(auth)/login");
+
+    void clearResetFlowSession().finally(() => {
+      expiredActionPendingRef.current = false;
+    });
   }, [router]);
 
   const consumeRecoveryParams = useCallback(async (recovery: RecoveryParams | null) => {
@@ -581,6 +591,7 @@ export default function ResetPasswordScreen() {
               <Pressable
                 style={styles.button}
                 onPress={requestNewResetEmail}
+                onPressIn={requestNewResetEmail}
                 accessibilityRole="button"
                 accessibilityLabel="Request new reset email"
                 testID="reset-password-request-new-email-button"
@@ -590,6 +601,7 @@ export default function ResetPasswordScreen() {
               <Pressable
                 style={styles.secondaryButton}
                 onPress={backToSignIn}
+                onPressIn={backToSignIn}
                 accessibilityRole="button"
                 accessibilityLabel="Back to sign in"
                 testID="reset-password-back-to-sign-in-button"

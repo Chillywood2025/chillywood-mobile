@@ -37,6 +37,7 @@ const PUBLIC_LEGAL_PATHS = new Set([
   "/privacy",
   "/terms",
   "/account-deletion",
+  "/support",
   "/community-guidelines",
   "/creator-rules",
   "/copyright",
@@ -50,6 +51,36 @@ const PUBLIC_LEGAL_PATHS = new Set([
 ]);
 
 const isPublicLegalPath = (pathname?: string | null) => !!pathname && PUBLIC_LEGAL_PATHS.has(pathname);
+
+const normalizePublicLegalRoutePath = (value?: string | null) => {
+  const normalized = String(value ?? "").trim().toLowerCase().replace(/\/+$/u, "");
+  if (!normalized) return null;
+
+  const candidate = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  return PUBLIC_LEGAL_PATHS.has(candidate) ? candidate : null;
+};
+
+const getPublicLegalRouteFromUrl = (url: string | null) => {
+  if (!url) return null;
+
+  try {
+    const parsedUrl = new URL(url);
+    const isAppLink = parsedUrl.protocol === "chillywoodmobile:";
+    const isWebLink = (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:")
+      && parsedUrl.hostname === "chillywoodstream.com";
+    if (!isAppLink && !isWebLink) return null;
+
+    const params = getUrlSearchParamsWithFragment(parsedUrl);
+    if (hasAuthLinkLikeParams(Object.fromEntries(params.entries()))) return null;
+
+    const hostRoute = isAppLink ? normalizePublicLegalRoutePath(parsedUrl.hostname) : null;
+    const pathRoute = normalizePublicLegalRoutePath(parsedUrl.pathname);
+
+    return hostRoute ?? pathRoute;
+  } catch {
+    return null;
+  }
+};
 
 const isCreatorReplayPlayerDeepLink = (url?: string | null) => {
   const normalized = String(url ?? "").trim().toLowerCase();
@@ -277,6 +308,7 @@ function RouteAnalyticsBridge() {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const router = useRouter();
+  const handledInitialUrlRef = useRef(false);
 
   useEffect(() => {
     trackScreen(pathname, sanitizeRouteAnalyticsParams(pathname, params as Record<string, unknown>));
@@ -296,6 +328,12 @@ function RouteAnalyticsBridge() {
   useEffect(() => {
     let active = true;
 
+    const routePublicLegalUrl = (url: string | null) => {
+      const publicLegalRoute = getPublicLegalRouteFromUrl(url);
+      if (!publicLegalRoute || pathname === publicLegalRoute) return false;
+      router.replace(publicLegalRoute as Parameters<typeof router.replace>[0]);
+      return true;
+    };
     const routeRecoveryUrl = (url: string | null) => {
       const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
       if (!recoveryRoute || pathname === "/reset-password") return;
@@ -307,24 +345,31 @@ function RouteAnalyticsBridge() {
       router.replace(callbackRoute as Parameters<typeof router.replace>[0]);
     };
 
-    Linking.getInitialURL()
-      .then((url) => {
-        if (!active) return;
-        const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
-        if (recoveryRoute) {
-          routeRecoveryUrl(url);
-          return;
-        }
+    if (!handledInitialUrlRef.current) {
+      handledInitialUrlRef.current = true;
+      Linking.getInitialURL()
+        .then((url) => {
+          if (!active) return;
+          if (routePublicLegalUrl(url)) return;
 
-        routeAuthCallbackUrl(url);
-      })
-      .catch((error) => {
-        reportRuntimeError("auth-password-recovery-route", error, {
-          source: "root-layout",
+          const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
+          if (recoveryRoute) {
+            routeRecoveryUrl(url);
+            return;
+          }
+
+          routeAuthCallbackUrl(url);
+        })
+        .catch((error) => {
+          reportRuntimeError("auth-password-recovery-route", error, {
+            source: "root-layout",
+          });
         });
-      });
+    }
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
+      if (routePublicLegalUrl(url)) return;
+
       const recoveryRoute = getPasswordRecoveryRouteFromUrl(url);
       if (recoveryRoute) {
         routeRecoveryUrl(url);
@@ -540,6 +585,13 @@ function AuthRouteGate() {
     Linking.getInitialURL()
       .then((url) => {
         if (!active) return;
+        const publicLegalRoute = getPublicLegalRouteFromUrl(url);
+        if (publicLegalRoute) {
+          setInitialReplayDeepLink(false);
+          router.replace(publicLegalRoute as Parameters<typeof router.replace>[0]);
+          return;
+        }
+
         const isReplayDeepLink = isCreatorReplayPlayerDeepLink(url);
         setInitialReplayDeepLink(isReplayDeepLink);
         if (isReplayDeepLink) {
@@ -557,7 +609,7 @@ function AuthRouteGate() {
       active = false;
       if (timeout) clearTimeout(timeout);
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (isLoading) return;

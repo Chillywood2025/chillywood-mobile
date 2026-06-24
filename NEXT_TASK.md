@@ -90,12 +90,12 @@ Required outcome:
 
 Wave 1 status:
 - Verdict: Partial
-- Commit: pending
-- Proof artifacts: `/tmp/chillywood-wave1-installed-auth-deeplink-proof-20260623-205523`
-- Device/build: Physical Android `R5CR120QCBF` / `SM_N986U1`, package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `55`, installer `null` / direct APK install, last update `2026-06-23 21:12:56`.
+- Commit: `cce95c5` initial Wave 1 proof; follow-up legal/reset fallback fix in current commit.
+- Proof artifacts: `/tmp/chillywood-wave1-installed-auth-deeplink-proof-20260623-205523`; `/tmp/chillywood-wave1-followup-legal-reset-proof-20260623-214029`.
+- Device/build: Physical Android `R5CR120QCBF` / `SM_N986U1`, package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `55`, installer `null` / direct APK install, last update `2026-06-23 21:49:14`.
 - Seeded users used: Existing owner/proof login from ignored local proof-account env keys; no credentials committed.
-- Code changes: Added Public Platform `platform-content-open-button` proof selector required by `guard:route-contracts`; no behavior change.
-- Remaining blockers: Play/internal installer proof unavailable on the attached device; disposable proof inbox/reset email link proof unavailable; expired reset-link fallback buttons did not activate in installed Android proof; signed-out public legal deep links redirected safely to Sign In instead of opening public legal screens directly.
+- Code changes: Added Public Platform `platform-content-open-button` proof selector required by `guard:route-contracts`; fixed explicit public legal/support signed-out deep-link allowlist handling; fixed expired reset-link fallback actions so Request New Reset Email opens the reset request flow and Back to Sign In opens login on installed Android.
+- Remaining blockers: Play/internal installer proof unavailable on the attached device; disposable proof inbox/reset email link proof unavailable, so real reset email delivery/password update proof remains pending.
 - Safety confirmation: No secrets, credentials, service-role keys, auth tokens, push tokens, LiveKit tokens, payment changes, Premium behavior changes, RLS changes, LiveKit authority changes, live money/payout activation, or unrelated route ownership changes.
 
 ### Wave 2 — Creator Media Pipeline
