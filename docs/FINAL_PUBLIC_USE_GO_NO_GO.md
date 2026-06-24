@@ -14,6 +14,10 @@ Latest launch-candidate installed proof artifact:
 
 - `/tmp/app-launch-candidate-installed-proof-20260624T191018Z/`
 
+Latest Play/internal installed smoke proof artifact:
+
+- `/tmp/app-play-internal-installed-smoke-proof-20260624-141445-rerun/`
+
 ## Wave Summary
 
 | Wave | Status | Closed proof | Remaining blocker | Launch impact |
@@ -44,7 +48,7 @@ Latest launch-candidate installed proof artifact:
 
 - Installed Android account deletion/restore visual proof is `Pending installed proof`: backend/runtime schedule, restore, and public fail-closed behavior are proved, but the installed UI sweep still needs a disposable proof account.
 - Installed blocked-viewer visual proof is `Pending installed proof`: backend/runtime block enforcement is proved, but installed visual proof still needs blocker, blocked viewer, and unrelated viewer proof sessions.
-- Play/internal installed proof remains `Pending installed proof` wherever prior lanes used direct APK, backend/API, or headless proof instead of installer `com.android.vending`. The latest physical-device launch-candidate smoke proved only direct APK launch: package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, device `R5CR120QCBF / SM-N986U1`.
+- Play/internal installed proof remains `Pending installed proof` wherever prior lanes used direct APK, backend/API, or headless proof instead of installer `com.android.vending`. The latest focused Play/internal smoke proof again proved only direct APK launch: package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, device `R5CR120QCBF / SM-N986U1`.
 
 ### Product / Legal Policy Blockers
 
@@ -119,7 +123,7 @@ Latest launch-candidate installed proof artifact:
 | Firebase dashboard receipt proof | external/provider dashboard proof | Firebase packages/config/redaction are repo-proved. | Console dashboard receipt remains pending; no Firebase Console receipt was available to the installed proof script. | Prefer close before public launch. Can be accepted for closed/internal testing if repo-level Firebase proof is accepted. | Verify Firebase Console dashboard receipt before launch, or accept as post-launch monitoring follow-up. | Pending external/provider |
 | Installed Android account deletion/restore visual proof | installed-device proof | Backend/runtime account deletion/restore proof is passed. | Installed visual proof remains pending; the launch-candidate installed proof did not mutate account deletion state and requires an approved proof-account installed session plus explicit mutation approval. | Should close before broad public launch. Not an app-code blocker because backend/runtime proof already passed. | Run installed visual proof before broad public launch, or accept backend/runtime proof and carry installed visual proof to final release smoke. | Pending installed proof |
 | Installed Android blocked-viewer visual proof | installed-device proof | Backend/runtime blocked-user enforcement is passed. | Installed blocked-viewer visual proof remains pending; the launch-candidate installed proof did not switch installed proof users and requires blocker, blocked-viewer, and unrelated-viewer installed sessions or a safe account-switching harness. | Should close before broad public launch. Not an app-code blocker because backend/runtime blocking proof already passed. | Run installed visual proof before broad public launch, or accept backend/runtime proof and carry installed visual proof to final release smoke. | Pending installed proof |
-| Play/internal proof where prior lanes used direct APK/backend proof | installed Play/internal proof | Physical-device launch-candidate smoke passed for direct APK runtime: package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, no fatal launch crash in captured logcat. | Play/internal installed proof remains required for broad public launch because the current installed runtime is not installer `com.android.vending`. | Must close before broad public launch because store/runtime proof should match the distributed app path. | Run Play/internal installed smoke for the launch-candidate runtime, or explicitly accept direct APK proof as temporary. | Pending installed proof |
+| Play/internal proof where prior lanes used direct APK/backend proof | installed Play/internal proof | Physical-device Play/internal smoke artifact `/tmp/app-play-internal-installed-smoke-proof-20260624-141445-rerun/` passed only direct APK runtime smoke: package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, Home visible, Settings opened, no fatal launch crash, clean artifact scan. | Play/internal installed proof remains required for broad public launch because the current installed runtime is not installer `com.android.vending`. | Must close before broad public launch because store/runtime proof should match the distributed app path. | Install/update through Play internal testing, then rerun readback and smoke. | Pending installed proof |
 | Permanent purge/de-identification policy | product/legal policy | Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore. | Permanent purge/de-identification policy remains pending. No permanent purge/de-identification job or legal retention policy proof is claimed. | Not automatically an app-code No-Go. It becomes a No-Go only if owner/legal policy requires permanent purge before public use. | Finalize whether permanent purge/de-identification is required before launch, post-launch, or handled manually/legal-request-only. | Pending policy decision |
 
 ## Launch Condition Decision
@@ -152,3 +156,5 @@ Final Go/No-Go: Partial / Not Ready.
 App-controlled Wave 5.1 blockers are closed. Do not launch broadly until the remaining external/provider, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.
 
 Latest launch-candidate installed proof result: direct APK launch smoke passed on physical Android (`R5CR120QCBF / SM-N986U1`) for package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, with no fatal launch crash in the captured logcat window; Home was visible and Settings opened from Home. This does not close Play/internal proof.
+
+Latest focused Play/internal installed smoke result: direct APK smoke still passes from artifact `/tmp/app-play-internal-installed-smoke-proof-20260624-141445-rerun/`, but Play/internal remains pending because installer readback is `null`, not `com.android.vending`.
