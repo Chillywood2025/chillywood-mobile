@@ -408,6 +408,14 @@ Wave 6 status:
   - Installed Android blocked-viewer visual proof: `Pending installed proof`; backend/runtime blocked-user enforcement is passed.
   - Play/internal proof where prior lanes used direct APK/backend proof: `Pending installed proof`; required before broad public launch unless explicitly accepted as temporary.
   - Firebase dashboard receipt proof: `Pending external/provider`; Firebase packages/config/redaction are repo-proved, but Console dashboard receipt remains pending.
+- Launch Candidate Installed Proof:
+  - Artifact: `/tmp/app-launch-candidate-installed-proof-20260624T191018Z/`.
+  - Device/build: physical Android `R5CR120QCBF / SM-N986U1`, Android 11, package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, first install `2026-06-22 15:54:35`, last update `2026-06-24 11:25:01`.
+  - Direct APK installed smoke: `Pass`; installed app launched with no fatal crash in the captured logcat window, Home was visible, Settings opened from Home, and artifact token/secret scan was clean.
+  - Play/internal launch-candidate installed smoke: `Pending installed proof`; current installer readback is `null`, not `com.android.vending`.
+  - Installed account deletion/restore visual proof: `Pending installed proof`; backend/runtime proof remains the source of truth, and installed mutation requires an approved proof-account session plus explicit mutation approval.
+  - Installed blocked-viewer visual proof: `Pending installed proof`; backend/runtime block enforcement remains the source of truth, and installed visual proof requires blocker, blocked-viewer, and unrelated-viewer installed sessions or a safe account-switching harness.
+  - Firebase dashboard receipt proof: `Pending external/provider`; Firebase packages/config/redaction remain repo-proved, but no safe Console dashboard receipt was available.
 - Launch Condition Decision: broad public launch is `No-Go / Not yet`; closed/internal testing is `Conditional Go`; production prep / release-candidate proof is `Conditional Go`. No remaining blocker is currently classified as an app-controlled backend safety blocker. Final Go/No-Go stays `Partial / Not Ready` until the remaining external/provider, installed-proof, dashboard receipt, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk.
 - Safety confirmation: No secrets, credentials, service-role keys, provider/payment keys, push tokens, LiveKit tokens, signed URLs, proof passwords, local env files, payment changes, Premium pricing/product changes, live money, payout activation, RLS weakening, LiveKit authority loosening, participant cap increase, scan gate weakening, auth/reset weakening, fake proof users in production UI, or broad route ownership changes.
 
