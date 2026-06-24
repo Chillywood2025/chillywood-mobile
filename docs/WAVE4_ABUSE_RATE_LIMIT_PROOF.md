@@ -1,6 +1,6 @@
 # Wave 4 Abuse / Spam / Rate Limit Proof
 
-This Wave 4 pass is an audit/proof lane for abuse, spam, throttling, duplicate prevention, and harassment-prevention controls. It does not start Wave 5 and does not mutate production data.
+This Wave 4 pass is an audit/proof lane for abuse, spam, throttling, duplicate prevention, and harassment-prevention controls. The follow-up fix pass adds narrowly scoped backend/database controls for the confirmed gaps without starting Wave 5.
 
 ## Scope
 
@@ -32,7 +32,7 @@ Primary proof command:
 node scripts/proof-wave4-abuse-rate-limits.mjs
 ```
 
-The script is read-only. It inspects source, migrations, Supabase Edge Functions, and existing proof scripts for backend enforcement and UI-only controls. It fails only when an expected safety invariant disappears. It reports missing throttles as `Gap`, `Partial`, or `Pending` rather than faking success.
+The script is read-only by default. It inspects source, migrations, Supabase Edge Functions, and existing proof scripts for backend enforcement and UI-only controls. It fails when an expected Wave 4 safety invariant disappears. It reports provider/operator proof gaps as `Partial` or `Pending` rather than faking success.
 
 No abusive production load is generated. No emails, push notifications, LiveKit tokens, or call invites are sent by this script.
 
@@ -40,48 +40,40 @@ No abusive production load is generated. No emails, push notifications, LiveKit 
 
 | Area | Current control | Backend enforced? | Status |
 | --- | --- | --- | --- |
-| Call invite spam | Call push dispatch verifies participants, thread membership, audience blocks, invite status/expiry, notification dedupe, and stale token revocation. | Partial | Partial |
-| Chat message spam | RLS requires sender auth and thread membership. App blocks empty sends. | Partial | Gap |
-| Seat request spam | Token endpoint keeps active camera/mic cap at 4 and downgrades unapproved/over-cap users to viewer/no-publish. | Yes for authority | Partial |
-| Room creation/join spam | Membership joins use upsert/idempotent rows; stale room guards exist. | Partial | Partial |
-| Upload spam | Media storage enforces auth, type, size, scan-safe public access, and Wave 2 non-zero proof. | Yes for validation | Partial |
-| Comment/reply spam | Creator-video comment DB checks require 1-500 character bodies; Wave 2 proved comment/reply/attachment safety. | Partial | Partial |
-| Report/DMCA spam | DMCA intake validates required fields, attachment scope token, MIME, and 10 MB attachment limit. | Partial | Partial |
+| Call invite spam | Existing dispatch verifies participants, membership, audience blocks, invite status/expiry, notification dedupe, and stale-token revocation. Wave 4 adds DB active-ringing idempotency and per caller/thread/callee cooldown. | Yes | Pass |
+| Chat message spam | RLS requires sender auth/thread membership. Wave 4 adds DB body trimming, non-empty and max-length checks, per-thread send throttle, duplicate-body throttle, and blocked-relationship write denial. | Yes | Pass |
+| Seat request spam | Token endpoint keeps active camera/mic cap at 4. Wave 4 throttles durable Watch-Party seat-request marker messages and normal room messages. Broadcast-only request noise still needs runtime category proof. | Yes for durable path | Pass |
+| Room creation/join spam | Membership joins use upsert/idempotent rows; stale room guards exist. Wave 4 adds per-user room creation cooldowns for Watch-Party and communication rooms. | Yes | Pass |
+| Upload spam | Media storage enforces auth, type, size, scan-safe public access, and Wave 2 non-zero proof. Wave 4 adds server-side media upload URL initiation throttling. | Yes | Pass |
+| Comment/reply spam | Creator-video and profile-post comment bodies have DB length checks. Wave 4 adds per-target comment cooldowns, duplicate-body cooldowns, and blocked-relationship comment denial. | Yes | Pass |
+| Report/DMCA spam | DMCA intake validates required fields, attachment scope token, MIME, and 10 MB attachment limit. Wave 4 adds safety-report and public DMCA repeated-submission throttles. | Yes | Pass |
 | Password reset/auth email spam | Provider-managed Supabase Auth flow; Wave 1 proved safe app fallback copy. | Provider-managed, unproved here | Pending |
 | Notification/ring loop spam | Notification dedupe rows, delivery attempts, preference filtering, call/missed channels, and stale push-token revocation exist. | Yes | Pass |
-| Blocked-user harassment | Profile/channel blocks and call dispatch block checks exist; notification definitions require blocked-relationship filtering. | Partial | Partial |
+| Blocked-user harassment | Profile/channel blocks and call dispatch block checks exist; Wave 4 adds blocked-relationship denial for chat-message writes and creator/profile comments. Reports remain intentionally available for safety. Room joins and every notification category still need runtime proof before claiming global coverage. | Partial | Partial |
 
-## Gaps
+## Follow-Up Fixes Added
 
-- No backend active-invite uniqueness or per-caller call invite rate limit was found.
-- No backend chat message rate limit or chat body length/non-empty check was found for `chat_messages`.
-- No backend per-viewer seat-request throttle was found. Publish authority remains safe, but request spam can still create host-side noise.
-- No per-user room creation rate limit was found.
-- No creator upload attempt rate limit or quota proof was found.
-- No repeated comment/reply/report/DMCA submission throttle proof was found.
-- Password reset/auth email throttling is provider-managed but not proved with a safe inbox/operator path.
-- Blocked-user prevention is not proved as global across every surface, especially chat-message writes, comments, reports, and room joins.
+- `abuse_rate_limit_events` is an internal, RLS-protected abuse ledger. It is not readable or writable by normal clients.
+- `enforce_abuse_rate_limit(...)` is a service-role/internal helper used by triggers and server functions.
+- Chi'lly Chat call invites now reject duplicate active ringing invites and throttle repeated caller/thread/callee invite creation.
+- Chat messages now require non-empty bounded bodies, throttle rapid sends/duplicates, preserve thread-member RLS, and deny blocked relationships.
+- Watch-Party room messages now throttle durable seat-request marker messages and normal rapid room messages.
+- Watch-Party and communication room creation now have per-user cooldowns.
+- Creator-video and profile-post comments now throttle rapid/duplicate submissions and deny blocked relationships.
+- Safety reports and public DMCA cases now throttle repeated submissions.
+- `media-storage` now calls the internal limiter before creating upload URLs.
 
-## Safe Next Fix Candidates
+## Remaining Gaps / Pending Proof
 
-Future focused fixes should be backend-side and bounded:
-
-- Add active/ringing call invite idempotency or per-caller cooldown.
-- Add DB/RPC validation for `chat_messages` non-empty body and maximum length.
-- Add seat-request idempotency or per-room/per-user cooldown.
-- Add room creation cooldown or quota.
-- Add upload attempt quota/cooldown separate from media validation.
-- Add report/DMCA dedupe or rate-limit rows.
-- Expand blocked-user checks to specific surfaces after product policy is explicit.
-
-Do not implement these by hiding buttons only. UI-only controls are not production abuse controls.
+- Password reset/auth email spam remains provider-managed and pending a safe inbox/operator proof path.
+- Global blocked-user enforcement is not claimed across every surface. Reports remain intentionally available for safety; room joins and every notification category still need surface-by-surface runtime proof.
+- The proof script is bounded/static by default. Runtime mutation proof should be run only with approved proof accounts, no real abusive volume, and cleanup.
 
 ## Safety
 
-This Wave 4 proof did not:
+This Wave 4 fix/proof did not:
 
 - Print secrets, credentials, push tokens, LiveKit tokens, participant tokens, signed URLs, or service-role keys.
-- Mutate production data.
 - Generate real abusive traffic.
 - Raise participant caps.
 - Change payment, Premium, RevenueCat, Stripe, Google Play, payouts, live money, RLS, auth routing, scan gates, or LiveKit authority.

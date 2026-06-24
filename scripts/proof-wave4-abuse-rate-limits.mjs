@@ -36,6 +36,8 @@ const files = {
   notificationMigration: assertFile("supabase/migrations/202605120003_d9_notifications_activity_production.sql"),
   notificationDispatch: assertFile("supabase/functions/notification-dispatch/index.ts"),
   mediaScanMigration: assertFile("supabase/migrations/20260530191115_media_malware_scanning_pipeline.sql"),
+  abuseMigration: assertFile("supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql"),
+  abuseRepairMigration: assertFile("supabase/migrations/20260624130902_wave4_abuse_rate_limit_trigger_repairs.sql"),
   dmcaMigration: assertFile("supabase/migrations/202605220002_dmca_attachments_uploader_counter_notice.sql"),
   profileGuard: assertFile("scripts/guard-profile-production-policy.mjs"),
   callPushGuard: assertFile("scripts/guard-chilly-chat-call-push-policy.mjs"),
@@ -58,6 +60,79 @@ requireInvariant(
     "DeviceNotRegistered",
   ]),
   "call dispatch must enforce participants, thread membership, audience blocks, notification dedupe, and stale token revocation",
+);
+
+requireInvariant(
+  includesAll(files.abuseMigration, [
+    "abuse_rate_limit_events",
+    "enforce_abuse_rate_limit",
+    "has_channel_audience_block_between",
+    "enforce_chat_messages_abuse_guard",
+    "blocked_relationship",
+    "chat_message_body_required",
+    "chat_message_body_too_long",
+    "enforce_chat_call_invites_abuse_guard",
+    "active_call_invite_exists",
+    "enforce_watch_party_room_messages_abuse_guard",
+    "seat_request_marker",
+    "enforce_watch_party_rooms_abuse_guard",
+    "enforce_communication_rooms_abuse_guard",
+    "enforce_creator_video_comments_abuse_guard",
+    "enforce_profile_post_comments_abuse_guard",
+    "enforce_safety_reports_abuse_rate_limit",
+    "enforce_dmca_cases_abuse_guard",
+  ]),
+  "Wave 4 abuse/rate-limit migration must include internal ledger, chat/call/seat/room/upload-adjacent/comment/report/DMCA controls",
+);
+
+requireInvariant(
+  !files.abuseMigration.includes('grant execute on function public."has_channel_audience_block_between"(text, text) to authenticated'),
+  "block-relationship helper must not be exposed as an authenticated relationship-probing RPC",
+);
+
+requireInvariant(
+  includesAll(files.abuseRepairMigration, [
+    "enforce_watch_party_rooms_abuse_guard",
+    "watch_party_room_create",
+    "enforce_communication_rooms_abuse_guard",
+    "communication_room_create",
+    "enforce_creator_video_comments_abuse_guard",
+    "from public.\"videos\" video",
+    "enforce_profile_post_comments_abuse_guard",
+    "from public.\"profile_posts\" post",
+    "blocked_relationship",
+  ]),
+  "Wave 4 repair migration must keep room throttles narrow and move blocked-relationship checks onto comment triggers",
+);
+
+requireInvariant(
+  !files.abuseRepairMigration.includes('where video."id" = new."video_id"') ||
+    !files.abuseRepairMigration
+      .slice(
+        files.abuseRepairMigration.indexOf('create or replace function public."enforce_watch_party_rooms_abuse_guard"'),
+        files.abuseRepairMigration.indexOf('create or replace function public."enforce_communication_rooms_abuse_guard"'),
+      )
+      .includes('new."video_id"'),
+  "Watch-Party room creation throttle must not reference creator-video columns",
+);
+
+requireInvariant(
+  !files.abuseRepairMigration
+    .slice(
+      files.abuseRepairMigration.indexOf('create or replace function public."enforce_communication_rooms_abuse_guard"'),
+      files.abuseRepairMigration.indexOf('create or replace function public."enforce_creator_video_comments_abuse_guard"'),
+    )
+    .includes('new."post_id"'),
+  "Communication room creation throttle must not reference profile-post comment columns",
+);
+
+requireInvariant(
+  includesAll(files.mediaStorage, [
+    "enforceMediaStorageAbuseLimit",
+    "enforce_abuse_rate_limit",
+    "rate_limited",
+  ]),
+  "media-storage must enforce upload initiation rate limits server-side",
 );
 
 requireInvariant(
@@ -135,55 +210,66 @@ if (hardFailures.length > 0) {
 const rows = [
   {
     row: "call invite spam",
-    currentControl: "Call push dispatch verifies caller/callee membership, blocks audience-blocked pairs, ignores expired/non-ringing invites, dedupes notification events, revokes DeviceNotRegistered tokens, and records terminal invite states.",
+    currentControl: "Call push dispatch verifies caller/callee membership, blocks audience-blocked pairs, ignores expired/non-ringing invites, dedupes notification events, revokes DeviceNotRegistered tokens, and records terminal invite states. Wave 4 DB trigger blocks duplicate active ringing invites and enforces a short caller/callee cooldown.",
     backendEnforced: true,
     uiEnforced: true,
-    proofMethod: "Static backend/source audit; no abusive mutation loop.",
+    proofMethod: "Static backend/source audit plus migration invariant check; no abusive mutation loop.",
     evidence: [
       "supabase/functions/chilly-chat-call-dispatch/index.ts",
       "supabase/migrations/202606100001_chilly_chat_call_invites_and_ringtones.sql",
+      "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
       "_lib/chillyChatCalls.ts",
     ],
-    status: "Partial",
-    gap: "No backend active-invite uniqueness or per-caller invite rate limit was found; repeated invite row creation remains a production gap even though duplicate ringing/push is guarded.",
+    status: "Pass",
+    gap: "Bounded runtime mutation proof should still be rerun after migration deployment; no production spam loop was generated by this script.",
   },
   {
     row: "chat message spam",
-    currentControl: "Chat message RLS requires sender auth and thread membership; app blocks empty sends.",
+    currentControl: "Chat message RLS requires sender auth and thread membership. Wave 4 DB trigger trims and blocks empty/oversized bodies, bounds rapid sends per thread, and bounds exact duplicate text.",
     backendEnforced: true,
     uiEnforced: true,
-    proofMethod: "Static RLS/client audit.",
-    evidence: ["supabase/migrations/202604190004_baseline_current_schema_truth.sql", "_lib/chat.ts"],
-    status: "Gap",
-    gap: "No backend chat message rate limit or chat_messages body length/non-empty check was found.",
+    proofMethod: "Static RLS/client audit plus migration invariant check.",
+    evidence: [
+      "supabase/migrations/202604190004_baseline_current_schema_truth.sql",
+      "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
+      "_lib/chat.ts",
+    ],
+    status: "Pass",
+    gap: "Runtime mutation proof should still be rerun after migration deployment.",
   },
   {
     row: "seat request spam",
-    currentControl: "LiveKit token endpoint caps active camera/mic seats at 4 and downgrades unapproved/over-cap speakers to viewer/no-publish.",
+    currentControl: "LiveKit token endpoint caps active camera/mic seats at 4 and downgrades unapproved/over-cap speakers to viewer/no-publish. Wave 4 DB trigger throttles durable seat-request marker spam in room messages.",
     backendEnforced: true,
     uiEnforced: true,
     proofMethod: "Static token contract audit plus existing seat-request proof scripts.",
     evidence: [
       "supabase/functions/livekit-token/index.ts",
+      "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
       "scripts/proof-live-stage-seat-approval.mjs",
       "scripts/proof-watch-party-seat-request.mjs",
     ],
-    status: "Partial",
-    gap: "No backend per-viewer seat-request spam throttle was found. Publish authority stays safe, but request spam can still create host-side noise unless bounded elsewhere.",
+    status: "Pass",
+    gap: "The throttle covers the backed durable marker path. Realtime broadcast-only noise remains bounded by client behavior and should be revisited if broadcast abuse appears.",
   },
   {
     row: "room creation/join spam",
-    currentControl: "Room membership writes use party/user upserts; stale/inactive room checks and router fail-safe guards exist.",
+    currentControl: "Room membership writes use party/user upserts; stale/inactive room checks and router fail-safe guards exist. Wave 4 triggers throttle Watch-Party room and communication-room creation.",
     backendEnforced: true,
     uiEnforced: true,
     proofMethod: "Static room helper/router guard audit.",
-    evidence: ["_lib/watchParty.ts", "scripts/guard-old-room-handling.mjs", "scripts/proof-livekit-router.mjs"],
-    status: "Partial",
-    gap: "No per-user room creation rate limit was found. Join duplication is bounded by membership upsert/keys, but creation spam remains a gap.",
+    evidence: [
+      "_lib/watchParty.ts",
+      "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
+      "scripts/guard-old-room-handling.mjs",
+      "scripts/proof-livekit-router.mjs",
+    ],
+    status: "Pass",
+    gap: "Runtime mutation proof should still be rerun after migration deployment.",
   },
   {
     row: "upload spam",
-    currentControl: "media-storage enforces auth, supported MIME, size limits, scan-safe public access, and Wave 2 proved non-zero upload/readback/cleanup.",
+    currentControl: "media-storage enforces auth, supported MIME, size limits, scan-safe public access, Wave 2 proved non-zero upload/readback/cleanup, and Wave 4 adds server-side upload URL initiation throttling.",
     backendEnforced: true,
     uiEnforced: true,
     proofMethod: "Static media-storage audit plus Wave 2 proof script coverage.",
@@ -192,34 +278,36 @@ const rows = [
       "scripts/proof-wave2-automated-creator-upload.mjs",
       "scripts/proof-wave2-final-creator-media-closure.mjs",
     ],
-    status: "Partial",
-    gap: "No creator upload attempt rate limit or quota proof was found. Validation is strong, throttling is pending.",
+    status: "Pass",
+    gap: "Runtime proof depends on deploying the changed media-storage function.",
   },
   {
     row: "comment/reply spam",
-    currentControl: "Creator-video comment bodies have 1-500 character DB checks; owner/non-owner delete behavior and attachment validation were proved in Wave 2.",
+    currentControl: "Creator-video and profile-post comment bodies have 1-500 character DB checks; owner/non-owner delete behavior and attachment validation were proved in Wave 2. Wave 4 adds per-target and duplicate comment cooldown triggers.",
     backendEnforced: true,
     uiEnforced: true,
     proofMethod: "Static DB/proof-script audit.",
     evidence: [
       "supabase/migrations/202604290001_public_v1_social_basics.sql",
+      "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
       "scripts/proof-wave2-final-creator-media-closure.mjs",
     ],
-    status: "Partial",
-    gap: "No repeated comment/reply rate limit was found.",
+    status: "Pass",
+    gap: "Runtime mutation proof should still be rerun after migration deployment.",
   },
   {
     row: "report/DMCA spam",
-    currentControl: "DMCA intake validates required fields, public attachment token scope, attachment MIME, and 10 MB attachment limit; safety report UI has busy-state duplicate protection.",
+    currentControl: "DMCA intake validates required fields, public attachment token scope, attachment MIME, and 10 MB attachment limit; safety report UI has busy-state duplicate protection. Wave 4 adds backend safety-report and public DMCA repeated-submission throttles.",
     backendEnforced: true,
     uiEnforced: true,
     proofMethod: "Static DMCA/report UI audit.",
     evidence: [
       "supabase/migrations/202605220002_dmca_attachments_uploader_counter_notice.sql",
+      "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
       "app/player/[id].tsx",
     ],
-    status: "Partial",
-    gap: "No backend repeated report/DMCA submission rate limit or dedupe proof was found.",
+    status: "Pass",
+    gap: "Runtime mutation proof should still be rerun after migration deployment. Reports remain allowed for blocked users when needed for safety.",
   },
   {
     row: "password reset/auth email spam",
@@ -247,17 +335,18 @@ const rows = [
   },
   {
     row: "blocked-user harassment",
-    currentControl: "Profile/channel audience block policy gates public profile/platform surfaces and Chi'lly Chat call dispatch; notification definitions require blocked-relationship filtering.",
+    currentControl: "Profile/channel audience block policy gates public profile/platform surfaces and Chi'lly Chat call dispatch; Wave 4 DB triggers block chat-message writes and creator/profile comments across blocked relationships; notification definitions require blocked-relationship filtering.",
     backendEnforced: true,
     uiEnforced: true,
     proofMethod: "Static profile/call/notification policy audit.",
     evidence: [
       "scripts/guard-profile-production-policy.mjs",
       "supabase/functions/chilly-chat-call-dispatch/index.ts",
+      "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
       "_lib/notifications.ts",
     ],
     status: "Partial",
-    gap: "Block policy is not proved as globally enforced across chat-message writes, comments, reports, room joins, and every notification category.",
+    gap: "Reports remain intentionally available for safety. Room joins and every notification category still need surface-by-surface runtime proof before claiming global blocked-user enforcement.",
   },
 ];
 
@@ -276,4 +365,25 @@ const result = {
   },
 };
 
+const proofDir = process.env.WAVE4_PROOF_DIR
+  || path.join("/tmp", `app-wave4-abuse-rate-limit-fix-proof-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`);
+fs.mkdirSync(proofDir, { recursive: true });
+fs.writeFileSync(path.join(proofDir, "wave4-abuse-rate-limit-proof.json"), `${JSON.stringify(result, null, 2)}\n`);
+fs.writeFileSync(
+  path.join(proofDir, "README.md"),
+  [
+    "# Wave 4 Abuse Rate Limit Fix Proof",
+    "",
+    "Generated by `node scripts/proof-wave4-abuse-rate-limits.mjs`.",
+    "",
+    "- Mutation performed: false",
+    "- Secrets printed: false",
+    "- Tokens printed: false",
+    "- The script verifies source/migration/function invariants for Wave 4 abuse controls.",
+    "- Runtime mutation proof must be run only with safe proof fixtures and approved credentials.",
+    "",
+  ].join("\n"),
+);
+
 console.log(JSON.stringify(result, null, 2));
+console.error(`Wave 4 proof artifact: ${proofDir}`);

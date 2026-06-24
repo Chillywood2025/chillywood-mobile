@@ -442,6 +442,46 @@ const safeWriteMediaSecurityEvent = async (
   }
 };
 
+const enforceMediaStorageAbuseLimit = async (
+  adminClient: SupabaseClient,
+  input: {
+    user: AuthenticatedMediaUser;
+    surfaceType: MediaStorageSurfaceType;
+    action: MediaStorageAction;
+    recordId: string;
+  },
+) => {
+  if (input.action !== "create_upload_url") return;
+  const limit = input.surfaceType === "creator_video" ? 8 : 20;
+  const windowSeconds = input.surfaceType === "creator_video" ? 3600 : 600;
+  const targetKey = input.surfaceType === "creator_video"
+    ? "creator_video"
+    : `social_attachment:${input.recordId || "new"}`;
+  const { error } = await adminClient.rpc("enforce_abuse_rate_limit", {
+    p_actor_user_id: input.user.id,
+    p_action_key: "media_upload_url",
+    p_target_key: targetKey,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+    p_metadata: {
+      source: "media-storage",
+      surface_type: input.surfaceType,
+    },
+  });
+
+  if (error) {
+    if (String(error.message ?? "").toLowerCase().includes("rate_limited")) {
+      return {
+        error: json(429, {
+          error: "rate_limited",
+          message: "Media upload is busy right now. Please try again in a moment.",
+        }),
+      };
+    }
+    throw new Error(`Media upload rate-limit check failed: ${error.message}`);
+  }
+};
+
 const validateUpload = (input: {
   surfaceType: MediaStorageSurfaceType;
   objectKey: string;
@@ -950,6 +990,14 @@ Deno.serve(async (req): Promise<Response> => {
         userId: user.id,
       });
       if ("error" in uploadValidation) return uploadValidation.error ?? json(400, { error: "invalid_upload" });
+
+      const abuseLimit = await enforceMediaStorageAbuseLimit(adminClient, {
+        action,
+        recordId,
+        surfaceType,
+        user,
+      });
+      if (abuseLimit && "error" in abuseLimit) return abuseLimit.error;
 
       const expiresSeconds = surfaceType === "creator_video"
         ? CREATOR_VIDEO_UPLOAD_EXPIRES_SECONDS
