@@ -39,11 +39,13 @@ const files = {
   abuseMigration: assertFile("supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql"),
   abuseRepairMigration: assertFile("supabase/migrations/20260624130902_wave4_abuse_rate_limit_trigger_repairs.sql"),
   abuseCommentTypeRepairMigration: assertFile("supabase/migrations/20260624132543_wave4_comment_block_type_repair.sql"),
+  roomBlockMigration: assertFile("supabase/migrations/20260624143000_wave4_room_level_block_policy.sql"),
   dmcaMigration: assertFile("supabase/migrations/202605220002_dmca_attachments_uploader_counter_notice.sql"),
   profileGuard: assertFile("scripts/guard-profile-production-policy.mjs"),
   callPushGuard: assertFile("scripts/guard-chilly-chat-call-push-policy.mjs"),
   uploadProof: assertFile("scripts/proof-wave2-automated-creator-upload.mjs"),
   finalMediaProof: assertFile("scripts/proof-wave2-final-creator-media-closure.mjs"),
+  roomBlockProof: assertFile("scripts/proof-wave4-room-level-blocks.mjs"),
 };
 
 const hardFailures = [];
@@ -135,6 +137,42 @@ requireInvariant(
     "enforce_profile_post_comments_abuse_guard",
   ]),
   "Wave 4 comment block repair must cast owner ids to text before calling the block helper",
+);
+
+requireInvariant(
+  includesAll(files.roomBlockMigration, [
+    "watch_party_room_actor_blocked_by_host",
+    "enforce_watch_party_room_membership_block_guard",
+    "blocked_from_room",
+    "enforce_watch_party_room_messages_abuse_guard",
+    "seat_request_marker",
+    "watch_party_room_memberships_self_insert_policy",
+  ]),
+  "Wave 4.2 room-level block migration must deny blocker-owned room joins and seat-request markers",
+);
+
+requireInvariant(
+  includesAll(files.livekitToken, [
+    "isWatchPartyActorBlockedByHost",
+    "blocked_from_room",
+    "channel_audience_blocks",
+    "blocked_user_id",
+  ]),
+  "livekit-token must deny blocked users before issuing Watch-Party/Live Stage tokens",
+);
+
+requireInvariant(
+  includesAll(files.roomBlockProof, [
+    "liveStageJoin",
+    "watchPartyLiveJoin",
+    "liveStageLiveKitToken",
+    "watchPartyLiveLiveKitToken",
+    "liveStageSeatRequestNotification",
+    "watchPartyLiveSeatRequestNotification",
+    "unrelatedLiveStageJoin",
+    "unrelatedWatchPartyLiveJoin",
+  ]),
+  "Wave 4.2 proof script must cover blocked and unrelated room paths for both live surfaces",
 );
 
 requireInvariant(
@@ -251,30 +289,34 @@ const rows = [
   },
   {
     row: "seat request spam",
-    currentControl: "LiveKit token endpoint caps active camera/mic seats at 4 and downgrades unapproved/over-cap speakers to viewer/no-publish. Wave 4 DB trigger throttles durable seat-request marker spam in room messages.",
+    currentControl: "LiveKit token endpoint caps active camera/mic seats at 4 and downgrades unapproved/over-cap speakers to viewer/no-publish. Wave 4 DB trigger throttles durable seat-request marker spam in room messages. Wave 4.2 blocks blocker-owned room seat-request markers from blocked users.",
     backendEnforced: true,
     uiEnforced: true,
-    proofMethod: "Static token contract audit plus existing seat-request proof scripts.",
+    proofMethod: "Static token contract audit plus existing seat-request proof scripts and Wave 4.2 room-block proof.",
     evidence: [
       "supabase/functions/livekit-token/index.ts",
       "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
+      "supabase/migrations/20260624143000_wave4_room_level_block_policy.sql",
       "scripts/proof-live-stage-seat-approval.mjs",
       "scripts/proof-watch-party-seat-request.mjs",
+      "scripts/proof-wave4-room-level-blocks.mjs",
     ],
     status: "Pass",
     gap: "The throttle covers the backed durable marker path. Realtime broadcast-only noise remains bounded by client behavior and should be revisited if broadcast abuse appears.",
   },
   {
     row: "room creation/join spam",
-    currentControl: "Room membership writes use party/user upserts; stale/inactive room checks and router fail-safe guards exist. Wave 4 triggers throttle Watch-Party room and communication-room creation.",
+    currentControl: "Room membership writes use party/user upserts; stale/inactive room checks and router fail-safe guards exist. Wave 4 triggers throttle Watch-Party room and communication-room creation. Wave 4.2 blocks blocked users from joining blocker-owned Live Stage and Watch-Party Live rooms.",
     backendEnforced: true,
     uiEnforced: true,
-    proofMethod: "Static room helper/router guard audit.",
+    proofMethod: "Static room helper/router guard audit plus Wave 4.2 room-block proof.",
     evidence: [
       "_lib/watchParty.ts",
       "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
+      "supabase/migrations/20260624143000_wave4_room_level_block_policy.sql",
       "scripts/guard-old-room-handling.mjs",
       "scripts/proof-livekit-router.mjs",
+      "scripts/proof-wave4-room-level-blocks.mjs",
     ],
     status: "Pass",
     gap: "Runtime mutation proof should still be rerun after migration deployment.",
@@ -347,18 +389,20 @@ const rows = [
   },
   {
     row: "blocked-user harassment",
-    currentControl: "Profile/channel audience block policy gates public profile/platform surfaces and Chi'lly Chat call dispatch; Wave 4 DB triggers block chat-message writes and creator/profile comments across blocked relationships; notification definitions require blocked-relationship filtering.",
+    currentControl: "Profile/channel audience block policy gates public profile/platform surfaces and Chi'lly Chat call dispatch; Wave 4 DB triggers block chat-message writes and creator/profile comments across blocked relationships. Wave 4.2 blocks blocker-owned room joins, LiveKit token issuance, and seat-request markers, and proves no host room/seat-request notification is created by blocked attempts.",
     backendEnforced: true,
     uiEnforced: true,
-    proofMethod: "Static profile/call/notification policy audit.",
+    proofMethod: "Static profile/call/notification policy audit plus Wave 4.2 room-block proof.",
     evidence: [
       "scripts/guard-profile-production-policy.mjs",
       "supabase/functions/chilly-chat-call-dispatch/index.ts",
       "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
+      "supabase/migrations/20260624143000_wave4_room_level_block_policy.sql",
       "_lib/notifications.ts",
+      "scripts/proof-wave4-room-level-blocks.mjs",
     ],
-    status: "Partial",
-    gap: "Reports remain intentionally available for safety. Room joins and every notification category still need surface-by-surface runtime proof before claiming global blocked-user enforcement.",
+    status: "Pass",
+    gap: "Reports remain intentionally available for safety. Installed profile/platform route proof remains a later route-proof concern if required.",
   },
 ];
 

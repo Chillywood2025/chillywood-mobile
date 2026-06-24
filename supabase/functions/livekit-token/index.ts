@@ -564,6 +564,25 @@ async function userCanAccessChatThread(
   return !membership.error && !!membership.data;
 }
 
+async function isWatchPartyActorBlockedByHost(
+  adminClient: SupabaseClientLike,
+  room: Extract<ResolvedRoomRecord, { kind: "watch-party" }>,
+  userId: string,
+) {
+  const actorUserId = sanitizeText(userId);
+  if (!actorUserId || actorUserId === room.hostUserId) return false;
+
+  const block = await adminClient
+    .from("channel_audience_blocks")
+    .select("channel_user_id")
+    .eq("channel_user_id", room.hostUserId)
+    .eq("blocked_user_id", actorUserId)
+    .maybeSingle();
+
+  if (block.error) return false;
+  return !!block.data;
+}
+
 async function resolveEffectiveParticipantRole(
   adminClient: SupabaseClientLike,
   room: ResolvedRoomRecord,
@@ -602,6 +621,16 @@ async function resolveEffectiveParticipantRole(
   }
 
   if (room.kind === "watch-party") {
+    const blockedByHost = await isWatchPartyActorBlockedByHost(adminClient, room, userId);
+    if (blockedByHost) {
+      return {
+        ok: false,
+        error: "blocked_from_room",
+        message: "This Chi'llywood room is not available for the current authenticated user.",
+        status: 403,
+      };
+    }
+
     const memberships = await fetchWatchPartyMemberships(adminClient, room.roomName);
     if (!memberships) {
       return {
