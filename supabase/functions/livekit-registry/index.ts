@@ -24,6 +24,8 @@ const JSON_HEADERS = {
 
 const VALID_PROVIDERS = new Set(["hetzner", "ovh", "local", "other"]);
 const VALID_STATUSES = new Set(["active", "disabled", "draining", "maintenance", "offline", "standby"]);
+const VALID_LIVEKIT_NODE_STATUSES = new Set(["unknown", "healthy", "degraded", "unavailable", "offline"]);
+const VALID_TURN_STATUSES = new Set(["unknown", "configured", "not_configured", "unavailable", "proof_pending"]);
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
@@ -42,6 +44,16 @@ const toNumber = (value: unknown): number | null => {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toNonnegativeNumber = (value: unknown): number | null => {
+  const parsed = toNumber(value);
+  return parsed !== null && parsed >= 0 ? parsed : null;
+};
+
+const toPercent = (value: unknown): number | null => {
+  const parsed = toNumber(value);
+  return parsed !== null && parsed >= 0 && parsed <= 100 ? parsed : null;
 };
 
 const toPositiveInteger = (value: unknown, fallback: number) => {
@@ -75,6 +87,31 @@ const safeMetadata = (metadata: unknown): JsonObject => {
       })
       .slice(0, 24),
   );
+};
+
+const safeLabel = (value: unknown, options: Set<string>) => {
+  const normalized = toText(value).toLowerCase();
+  return options.has(normalized) ? normalized : null;
+};
+
+const safeMetricsSource = (value: unknown) => {
+  const normalized = toText(value).toLowerCase().replace(/[^a-z0-9_.:-]/g, "-").slice(0, 80);
+  if (!normalized) return null;
+  if (
+    normalized.includes("secret")
+    || normalized.includes("token")
+    || normalized.includes("password")
+    || normalized.includes("key")
+    || normalized.includes("url")
+  ) return null;
+  return normalized;
+};
+
+const safeIsoTime = (value: unknown, fallback: string) => {
+  const raw = toText(value);
+  if (!raw) return fallback;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
 };
 
 const authenticateRequest = async (
@@ -207,14 +244,22 @@ const sanitizeServer = (row: JsonObject) => ({
   displayName: toText(row.display_name),
   drainReason: toText(row.drain_reason) || null,
   drainStartedAt: toText(row.drain_started_at) || null,
+  diskUsagePercent: toNumber(row.disk_usage_percent),
   id: toText(row.id),
   lastAssignmentAt: toText(row.last_assignment_at) || null,
   lastHeartbeatAt: toText(row.last_heartbeat_at) || null,
+  livekitNodeStatus: toText(row.livekit_node_status) || null,
   maxEgressMbps: toNumber(row.max_egress_mbps),
   maxParticipants: Number(row.max_participants ?? 0),
   maxPublishers: toNumber(row.max_publishers),
   maxRooms: Number(row.max_rooms ?? 0),
+  memoryTotalMb: toNumber(row.memory_total_mb),
+  memoryUsedMb: toNumber(row.memory_used_mb),
   metadata: safeMetadata(row.metadata),
+  metricsCollectedAt: toText(row.metrics_collected_at) || null,
+  metricsSource: toText(row.metrics_source) || null,
+  networkRxBps: toNumber(row.network_rx_bps),
+  networkTxBps: toNumber(row.network_tx_bps),
   packetLossPercent: toNumber(row.packet_loss_percent),
   provider: toText(row.provider),
   publicWsUrl: toText(row.public_ws_url),
@@ -222,6 +267,7 @@ const sanitizeServer = (row: JsonObject) => ({
   region: toText(row.region),
   serverId: toText(row.server_id),
   status: toText(row.status),
+  turnStatus: toText(row.turn_status) || null,
   updatedAt: toText(row.updated_at) || null,
   weight: Number(row.weight ?? 0),
 });
@@ -416,18 +462,28 @@ const recordHeartbeat = async (
 
   const nowIso = new Date().toISOString();
   const serverRowId = toText((serverQuery.data as JsonObject).id);
+  const metricsCollectedAt = safeIsoTime(payload.metrics_collected_at ?? payload.metricsCollectedAt, nowIso);
   const heartbeat = {
     active_participants: Math.max(0, Number(payload.active_participants ?? payload.activeParticipants ?? 0)),
     active_publishers: Math.max(0, Number(payload.active_publishers ?? payload.activePublishers ?? 0)),
     active_rooms: Math.max(0, Number(payload.active_rooms ?? payload.activeRooms ?? 0)),
-    bandwidth_in_mbps: toNumber(payload.bandwidth_in_mbps ?? payload.bandwidthInMbps),
-    bandwidth_out_mbps: toNumber(payload.bandwidth_out_mbps ?? payload.bandwidthOutMbps),
-    cpu_percent: toNumber(payload.cpu_percent ?? payload.cpuPercent),
-    disconnect_rate: toNumber(payload.disconnect_rate ?? payload.disconnectRate),
+    bandwidth_in_mbps: toNonnegativeNumber(payload.bandwidth_in_mbps ?? payload.bandwidthInMbps),
+    bandwidth_out_mbps: toNonnegativeNumber(payload.bandwidth_out_mbps ?? payload.bandwidthOutMbps),
+    cpu_percent: toPercent(payload.cpu_percent ?? payload.cpuPercent),
+    disconnect_rate: toNonnegativeNumber(payload.disconnect_rate ?? payload.disconnectRate),
+    disk_usage_percent: toPercent(payload.disk_usage_percent ?? payload.diskUsagePercent),
     heartbeat_at: nowIso,
-    packet_loss_percent: toNumber(payload.packet_loss_percent ?? payload.packetLossPercent),
-    ram_percent: toNumber(payload.ram_percent ?? payload.ramPercent),
+    livekit_node_status: safeLabel(payload.livekit_node_status ?? payload.livekitNodeStatus, VALID_LIVEKIT_NODE_STATUSES),
+    memory_total_mb: toNonnegativeNumber(payload.memory_total_mb ?? payload.memoryTotalMb),
+    memory_used_mb: toNonnegativeNumber(payload.memory_used_mb ?? payload.memoryUsedMb),
+    metrics_collected_at: metricsCollectedAt,
+    metrics_source: safeMetricsSource(payload.metrics_source ?? payload.metricsSource),
+    network_rx_bps: toNonnegativeNumber(payload.network_rx_bps ?? payload.networkRxBps),
+    network_tx_bps: toNonnegativeNumber(payload.network_tx_bps ?? payload.networkTxBps),
+    packet_loss_percent: toPercent(payload.packet_loss_percent ?? payload.packetLossPercent),
+    ram_percent: toPercent(payload.ram_percent ?? payload.ramPercent),
     server_id: serverRowId,
+    turn_status: safeLabel(payload.turn_status ?? payload.turnStatus, VALID_TURN_STATUSES),
   };
 
   const insert = await adminClient
@@ -446,9 +502,18 @@ const recordHeartbeat = async (
       current_publishers: heartbeat.active_publishers,
       current_rooms: heartbeat.active_rooms,
       disconnect_rate: heartbeat.disconnect_rate,
+      disk_usage_percent: heartbeat.disk_usage_percent,
       last_heartbeat_at: nowIso,
+      livekit_node_status: heartbeat.livekit_node_status,
+      memory_total_mb: heartbeat.memory_total_mb,
+      memory_used_mb: heartbeat.memory_used_mb,
+      metrics_collected_at: heartbeat.metrics_collected_at,
+      metrics_source: heartbeat.metrics_source,
+      network_rx_bps: heartbeat.network_rx_bps,
+      network_tx_bps: heartbeat.network_tx_bps,
       packet_loss_percent: heartbeat.packet_loss_percent,
       ram_percent: heartbeat.ram_percent,
+      turn_status: heartbeat.turn_status,
     })
     .eq("id", serverRowId)
     .select("*")
@@ -462,6 +527,11 @@ const recordHeartbeat = async (
       active_participants: heartbeat.active_participants,
       active_publishers: heartbeat.active_publishers,
       active_rooms: heartbeat.active_rooms,
+      has_resource_metrics: heartbeat.cpu_percent !== null
+        || heartbeat.ram_percent !== null
+        || heartbeat.memory_used_mb !== null
+        || heartbeat.network_tx_bps !== null,
+      metrics_source: heartbeat.metrics_source,
     },
     reason: `heartbeat:${serverId}`,
     serverRowId,

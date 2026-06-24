@@ -61,9 +61,28 @@ LIVEKIT_ACTIVE_PARTICIPANTS="8" \
 LIVEKIT_ACTIVE_PUBLISHERS="2" \
 LIVEKIT_CPU_PERCENT="35" \
 LIVEKIT_RAM_PERCENT="62" \
+LIVEKIT_MEMORY_USED_MB="4096" \
+LIVEKIT_MEMORY_TOTAL_MB="8192" \
+LIVEKIT_DISK_USAGE_PERCENT="44" \
+LIVEKIT_NETWORK_RX_BPS="125000" \
+LIVEKIT_NETWORK_TX_BPS="250000" \
+LIVEKIT_NODE_STATUS="healthy" \
+LIVEKIT_TURN_STATUS="proof_pending" \
+LIVEKIT_METRICS_SOURCE="operator-monitoring" \
 DRY_RUN=0 \
 ./ops/livekit-registry/heartbeat-livekit.sh
 ```
+
+Supported non-secret metrics fields:
+
+- Counts: `LIVEKIT_ACTIVE_ROOMS`, `LIVEKIT_ACTIVE_PARTICIPANTS`, `LIVEKIT_ACTIVE_PUBLISHERS`
+- Percentages: `LIVEKIT_CPU_PERCENT`, `LIVEKIT_RAM_PERCENT`, `LIVEKIT_DISK_USAGE_PERCENT`, `LIVEKIT_PACKET_LOSS_PERCENT`
+- Network: `LIVEKIT_BANDWIDTH_IN_MBPS`, `LIVEKIT_BANDWIDTH_OUT_MBPS`, `LIVEKIT_NETWORK_RX_BPS`, `LIVEKIT_NETWORK_TX_BPS`
+- Memory: `LIVEKIT_MEMORY_USED_MB`, `LIVEKIT_MEMORY_TOTAL_MB`
+- Safe status labels: `LIVEKIT_NODE_STATUS` (`healthy`, `degraded`, `unavailable`, `offline`, `unknown`) and `LIVEKIT_TURN_STATUS` (`configured`, `not_configured`, `unavailable`, `proof_pending`, `unknown`)
+- Source/time: `LIVEKIT_METRICS_SOURCE`, `LIVEKIT_METRICS_COLLECTED_AT`
+
+Do not put LiveKit API secrets, TURN credentials, internal URLs, database passwords, heartbeat secrets, or participant tokens into any metrics field. Missing metrics should be left unset/null; they must not be invented to justify higher capacity claims.
 
 Dry-run is default:
 
@@ -127,3 +146,22 @@ Remote activation proof has passed for the current one-box production path:
 - Draining blocks new assignments while existing assigned rooms still resolve.
 - Dummy standby/offline/full/stale records were proof-only and are disabled after proof.
 - No autoscaling, provisioning, active-room migration, room deletion, participant disconnect, D7F spectator token change, or user-facing UI change was added.
+
+## Metrics Readback Proof
+
+Run the local deterministic proof after schema/function changes:
+
+```bash
+npm run proof:livekit-server-metrics
+npm run guard:livekit-server-metrics-policy
+```
+
+If an owner/operator access token is available in the shell, the proof script can also read the deployed registry without printing the token:
+
+```bash
+LIVEKIT_REGISTRY_FUNCTION_URL="https://PROJECT.supabase.co/functions/v1/livekit-registry" \
+LIVEKIT_REGISTRY_OPERATOR_ACCESS_TOKEN="$OWNER_OR_OPERATOR_SUPABASE_ACCESS_TOKEN" \
+npm run proof:livekit-server-metrics
+```
+
+This proof is a metrics-readback proof only. It does not prove 10 passive viewers, higher active camera/mic seats, TURN allocation, or real host CPU/RAM/bandwidth unless those values were collected from the production host by an approved operator.

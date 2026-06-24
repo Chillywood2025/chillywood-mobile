@@ -153,6 +153,49 @@ Remote activation proof completed:
 
 Keep the heartbeat running from server-side monitoring or a wrapper around `ops/livekit-registry/heartbeat-livekit.sh`. If the heartbeat goes stale, new room token issuance intentionally fails safe instead of falling back to a hardcoded LiveKit URL.
 
+### Server Metrics Readback V1
+
+Current metrics lane owners:
+
+- Migration: `supabase/migrations/20260623143000_livekit_server_metrics_readback.sql`
+- Operator function: `supabase/functions/livekit-registry/index.ts`
+- Heartbeat helper: `ops/livekit-registry/heartbeat-livekit.sh`
+- Guard: `npm run guard:livekit-server-metrics-policy`
+- Proof: `npm run proof:livekit-server-metrics`
+
+The registry stores and returns only non-secret metrics through owner/operator paths:
+
+- Server identity: `serverId`, display name, status, public WebSocket URL, last heartbeat, and update time.
+- LiveKit counts: current/active rooms, participants, and publishers.
+- Host metrics: CPU percent, RAM percent, memory used/total MB, disk percent, bandwidth Mbps, network rx/tx Bps, packet loss, and disconnect rate.
+- Safe labels only: LiveKit node status and TURN status. TURN credentials, API secrets, participant tokens, internal URLs, and database secrets are never stored in metrics rows.
+- Collection metadata: safe metrics source label and collection timestamp.
+
+Routing behavior is intentionally unchanged:
+
+1. New rooms still require an active fresh heartbeat and capacity headroom.
+2. Stale, draining, offline, maintenance, disabled, standby, full, or over-threshold servers remain ineligible for new rooms.
+3. Existing assigned rooms keep the existing assignment rules.
+4. Missing detailed CPU/RAM/network/TURN metrics do not by themselves change current routing eligibility, but they also do not prove higher capacity.
+5. No 10-passive-viewer capacity is claimed from this metrics lane.
+
+Operator proof commands:
+
+```bash
+npm run proof:livekit-server-metrics
+npm run guard:livekit-server-metrics-policy
+```
+
+Optional deployed registry readback, with the token kept only in the operator shell:
+
+```bash
+LIVEKIT_REGISTRY_FUNCTION_URL="https://PROJECT.supabase.co/functions/v1/livekit-registry" \
+LIVEKIT_REGISTRY_OPERATOR_ACCESS_TOKEN="$OWNER_OR_OPERATOR_SUPABASE_ACCESS_TOKEN" \
+npm run proof:livekit-server-metrics
+```
+
+Production capacity is not raised until an approved operator posts real host metrics from `chillywood-prod-01` and the separate 10-passive-viewer load proof passes with CPU/RAM/network/TURN observations saved.
+
 ## May 13, 2026 Production Proof Follow-Up
 
 Passed from this local/dev-device proof environment:
