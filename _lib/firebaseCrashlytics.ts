@@ -102,10 +102,6 @@ export async function identifyFirebaseCrashlyticsUser(identity: { id: string; em
 
   try {
     await crashlyticsModule().setUserId(identity.id);
-    const email = String(identity.email ?? "").trim();
-    if (email) {
-      await crashlyticsModule().setAttribute("email", email.slice(0, 100));
-    }
   } catch (error) {
     maybeWarn("identify-user", error);
   }
@@ -117,7 +113,6 @@ export async function clearFirebaseCrashlyticsUser() {
 
   try {
     await crashlyticsModule().setUserId("");
-    await crashlyticsModule().setAttribute("email", "");
   } catch (error) {
     maybeWarn("clear-user", error);
   }

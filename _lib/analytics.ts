@@ -59,7 +59,6 @@ export function identifyUser(identity: { id: string; email?: string | null }) {
   sink.identifyUser?.(identity);
   maybeDevMirror("identify_user", {
     id: identity.id,
-    email: identity.email ?? null,
   });
 }
 

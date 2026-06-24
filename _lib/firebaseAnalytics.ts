@@ -64,9 +64,7 @@ export async function identifyFirebaseAnalyticsUser(identity: { id: string; emai
 
   try {
     await analyticsModule().setUserId(identity.id);
-    await analyticsModule().setUserProperties({
-      email: identity.email ?? null,
-    });
+    await analyticsModule().setUserProperties({});
   } catch (error) {
     maybeWarn("identify-user", error);
   }
@@ -78,9 +76,7 @@ export async function clearFirebaseAnalyticsUser() {
 
   try {
     await analyticsModule().setUserId(null);
-    await analyticsModule().setUserProperties({
-      email: null,
-    });
+    await analyticsModule().setUserProperties({});
     await analyticsModule().resetAnalyticsData();
   } catch (error) {
     maybeWarn("clear-user", error);

@@ -395,13 +395,13 @@ Required outcome:
   - Blocked
 
 Wave 6 status:
-- Verdict:
-- Commit:
-- Proof artifacts:
-- Device/build:
-- Code changes:
-- Remaining blockers:
-- Safety confirmation:
+- Verdict: Partial — legal/copy/runbook/analytics readiness is audited, public legal route contracts remain explicit, money/refund/payout copy stays honest, and telemetry email identity was removed from Firebase Analytics/Crashlytics. Final Go/No-Go remains `Partial / Not Ready`.
+- Commit: current Wave 6 proof commit pending.
+- Proof artifacts: `docs/FINAL_PUBLIC_USE_GO_NO_GO.md`; `scripts/proof-wave6-final-readiness.mjs`; latest read-only artifact `/tmp/app-wave6-final-readiness-proof-20260624T162117/`.
+- Device/build: source package id `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`; no installed Android behavior proof was required because this was a documentation/proof plus narrow telemetry-redaction lane.
+- Code changes: added read-only Wave 6 final readiness proof script and final Go/No-Go doc; removed signed-in email identity from Firebase Analytics user properties, Crashlytics attributes, and the dev analytics identity mirror.
+- Remaining blockers: Wave 5.1 disabled/deactivated private-feature denial sweep; Wave 5.1 admin/operator suspend/deactivate support-action proof; Wave 4 password reset/auth email provider proof; real provider refund execution; installed Android account deletion/restore visual proof; permanent purge/de-identification proof until product/legal policy is finalized; installed blocked-viewer visual proof if required for launch.
+- Safety confirmation: No secrets, credentials, service-role keys, provider/payment keys, push tokens, LiveKit tokens, signed URLs, proof passwords, local env files, payment changes, Premium pricing/product changes, live money, payout activation, RLS weakening, LiveKit authority loosening, participant cap increase, scan gate weakening, auth/reset weakening, fake proof users in production UI, or broad route ownership changes.
 
 ## Public V1 Final Regression
 
