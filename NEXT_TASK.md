@@ -60,12 +60,12 @@ Seeded proof users should cover at minimum:
 - proof_admin_operator_001, only if a safe operator proof path already exists
 
 Wave 0 status:
-- Verdict:
-- Commit:
-- Proof artifacts:
-- Seeded users:
-- Cleanup status:
-- Remaining blockers:
+- Verdict: Partial
+- Commit: `Create seeded production proof harness`
+- Proof artifacts: `docs/SEEDED_PROOF_HARNESS.md`; `scripts/proof-seeded-harness.mjs`
+- Seeded users: canonical proof labels documented; existing ignored local proof env key names identified for host/creator/free viewer/viewer 02-09/blocked/Circle/member/non-member/subscriber/VIP fixtures; no new auth users created in this pass
+- Cleanup status: no database/auth/provider/LiveKit/push/payment mutations performed, so there is nothing to revoke from Wave 0
+- Remaining blockers: `proof_deleted_pending_001` is not created; some relationship/access labels have email/user id key names but no declared password key; Premium/subscriber/VIP/paid/room/event/operator roles still require future wave-specific exact-target temporary grants or provider-backed proof
 
 ### Wave 1 — Installed Build + Auth + Signed-Out Deep Links
 
