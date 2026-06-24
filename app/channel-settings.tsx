@@ -7942,7 +7942,7 @@ export function ChannelStudioScreen() {
         configured: hasPaidWatchPartyOffer,
         blocker: hasPaidWatchPartyOffer
           ? undefined
-          : "Create a Party Room before testers can reserve a seat.",
+          : "Create a Party Room before testers can buy a ticket.",
         description: hasPaidWatchPartyOffer
           ? "Testers can get a sandbox Seat Pass before Party Waiting Room or Party Room entry."
           : "Watch-Party Seat Pass needs a Party Room target.",

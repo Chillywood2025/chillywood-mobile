@@ -14,6 +14,7 @@
     "proof:livekit-passive-viewer-load": "node ./scripts/proof-livekit-passive-viewer-load.mjs",
     "proof:wave4-room-level-blocks": "node ./scripts/proof-wave4-room-level-blocks.mjs",
     "proof:wave4-profile-platform-blocked-routes": "node ./scripts/proof-wave4-profile-platform-blocked-routes.mjs",
+    "proof:wave5-account-admin-revoke": "node ./scripts/proof-wave5-account-admin-revoke.mjs",
     "proof:watch-party-seat-request": "node ./scripts/proof-watch-party-seat-request.mjs",
     "proof:live-stage-seat-approval": "node ./scripts/proof-live-stage-seat-approval.mjs",
     "firebase:test-lab:preflight": "node ./scripts/firebase-test-lab-smoke.mjs",
