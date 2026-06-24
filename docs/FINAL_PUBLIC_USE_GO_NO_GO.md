@@ -4,7 +4,7 @@ Date: 2026-06-24
 
 Verdict: Partial / Not Ready.
 
-Chi'llywood is not a public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the app-controlled disabled/deactivated account lifecycle blockers. Several provider, installed-device, and policy proofs remain pending.
+Chi'llywood is not a public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the known app-controlled disabled/deactivated account lifecycle blockers. The remaining known blockers are external/provider proof, installed-device visual proof, dashboard receipt proof, and product/legal policy decisions.
 
 Latest Wave 6 artifact:
 
@@ -32,19 +32,19 @@ Latest Wave 6 artifact:
 
 ### External / Provider Blockers
 
-- Password reset/auth email provider proof.
-- Real provider refund execution path remains external/manual.
-- Firebase Crashlytics/Performance dashboard receipt remains proof-pending.
+- Password reset/auth email provider proof is `Pending external/provider`: app-side reset route safety and historical forgot-password proof exist, but no safe disposable inbox/provider run was available in this closeout pass.
+- Real provider refund execution is `Pending external/provider`: current support/refund truth is manual/external or not implemented, and automated refunds cannot be claimed.
+- Firebase Crashlytics/Performance dashboard receipt is `Pending external/provider`: Firebase packages/config/runbooks exist, but no sanitized Firebase Console receipt was captured in this closeout pass.
 
 ### Installed-Device Proof Blockers
 
-- Installed Android account deletion/restore visual proof.
-- Installed blocked-viewer visual proof.
-- Play/internal installed proof where prior lanes used direct APK or backend proof.
+- Installed Android account deletion/restore visual proof is `Pending installed proof`: backend/runtime schedule, restore, and public fail-closed behavior are proved, but the installed UI sweep still needs a disposable proof account.
+- Installed blocked-viewer visual proof is `Pending installed proof`: backend/runtime block enforcement is proved, but installed visual proof still needs blocker, blocked viewer, and unrelated viewer proof sessions.
+- Play/internal installed proof remains `Pending installed proof` wherever prior lanes used direct APK, backend/API, or headless proof instead of installer `com.android.vending`.
 
 ### Product / Legal Policy Blockers
 
-- Permanent account purge/de-identification proof until product/legal policy is finalized.
+- Permanent account purge/de-identification is `Pending policy decision`: scheduled deletion, restore, public fail-closed visibility, and disabled private-feature denial are proved; permanent purge/de-identification policy and operational proof are not.
 - Final attorney/legal review and Play Console acceptance remain outside repo proof.
 
 ## Public-Use Risk Summary
@@ -73,7 +73,7 @@ Latest Wave 6 artifact:
 | DMCA route | Copyright and copyright-report routes public; DMCA privacy passed in Wave 5. | Pass |
 | Premium/refund copy | Refund playbook avoids guaranteed refund promises and keeps provider refunds pending/manual. | Pass |
 | Creator money/payout copy | Money policy docs and guards keep live money/payouts off. | Pass |
-| Account deletion/deactivation copy | Deletion schedule/restore truth is documented; permanent purge and disabled/deactivated sweep pending. | Partial |
+| Account deletion/deactivation copy | Deletion schedule/restore truth is documented; disabled/deactivated denial is closed by Wave 5.1; permanent purge/de-identification policy remains pending. | Partial |
 | Media scan/rights copy | Scan gates and DMCA/media rights docs exist; scanner-down proof remains pending. | Partial |
 | Private data exposure | Public Profile/Platform scheduled-deletion visibility fails closed; telemetry email identity removed. | Pass |
 
@@ -108,16 +108,17 @@ Latest Wave 6 artifact:
 
 ## Final Blocker Matrix
 
-| Blocker | Type | Launch impact | Required owner decision | Status |
-| --- | --- | --- | --- | --- |
-| Password reset/auth email provider proof | external/provider | Account recovery proof gap. | Provide safe inbox/provider proof path. | Pending |
-| Real provider refund execution | external/provider | Refund automation cannot be claimed. | Keep manual/external or open provider proof lane. | Pending |
-| Installed deletion/restore visual proof | installed proof | Device proof gap. | Run Play/internal or direct APK visual proof. | Pending |
-| Permanent purge/de-identification policy | policy | Legal/product policy gap. | Finalize policy and prove operational path. | Pending |
-| Installed blocked-viewer visual proof | installed proof | Visual proof gap; backend behavior is proved. | Run installed visual proof if launch-critical. | Pending |
+| Blocker | Type | Current status | Proof/result | Launch impact | Required next action | Final classification |
+| --- | --- | --- | --- | --- | --- | --- |
+| Password reset/auth email provider proof | external/provider | App reset route safety and historical forgot-password proof exist. | No safe disposable inbox/provider run was available in this closeout pass; no owner inbox was used. | Account recovery provider proof remains a launch governance risk. | Run a disposable non-admin inbox proof on the Play/internal runtime or document owner acceptance. | Pending external/provider |
+| Real provider refund execution | external/provider | Refund/revoke app and sandbox access behavior is proved; real provider refund execution is not integrated or run. | Docs and guards keep refund execution manual/external; no provider refund API was called. | Automated refunds cannot be claimed. | Keep manual support process or open a separate provider refund proof lane. | Pending external/provider |
+| Permanent purge/de-identification policy | policy decision | Scheduled deletion, restore, public fail-closed visibility, and disabled/private-feature denial are proved. | No permanent purge/de-identification job or legal retention policy proof is claimed. | Product/legal must decide whether launch can proceed with scheduled deletion plus later purge work. | Finalize legal/product retention and de-identification policy, then prove the operational path. | Pending policy decision |
+| Installed account deletion/restore visual proof | installed proof | Backend/runtime account deletion schedule, restore, and public fail-closed behavior are proved. | No installed Android account deletion/restore visual sweep was run in this pass. | Visual proof gap remains for release-candidate signoff. | Run installed Android proof with a disposable deletion/restore proof account. | Pending installed proof |
+| Installed blocked-viewer visual proof | installed proof | Backend/runtime blocked-user harassment prevention is proved across chat, calls, comments, rooms, and Profile/Platform actions. | No installed Android blocked-viewer visual sweep was run in this pass. | Visual proof gap remains if owner requires installed UI evidence. | Run installed Android proof with blocked viewer, blocker, and unrelated viewer proof accounts. | Pending installed proof |
+| Firebase dashboard receipt proof | external/dashboard | Firebase Analytics, Crashlytics, and Performance packages/config/runbooks exist; email identity removal remains in code. | No Firebase Console receipt was captured in this pass. | Monitoring receipt remains pending, but no telemetry secret leak was found by static scan. | Capture sanitized Firebase dashboard receipt from a release-like build, without private data screenshots. | Pending external/provider |
 
 ## Final Recommendation
 
 Final Go/No-Go: Partial / Not Ready.
 
-Do not launch broadly until Wave 5.1 is resolved or explicitly waived by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.
+App-controlled Wave 5.1 blockers are closed. Do not launch broadly until the remaining external/provider, installed-proof, and policy blockers are either proved or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, and provider claims qualified exactly to the proof that exists.

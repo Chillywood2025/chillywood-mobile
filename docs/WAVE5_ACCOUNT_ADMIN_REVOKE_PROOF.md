@@ -105,3 +105,5 @@ The Wave 5.1 pass did not run provider refunds, activate live money, change Prem
 - Real provider refund execution.
 - Installed Android account deletion/restore visual proof.
 - Permanent purge/de-identification proof until product/legal policy is finalized.
+- Installed Android blocked-viewer visual proof, if owner requires installed UI evidence beyond the already-proved backend/runtime block enforcement.
+- Firebase dashboard receipt proof for Analytics/Crashlytics/Performance.

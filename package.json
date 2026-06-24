@@ -17,6 +17,7 @@
     "proof:wave5-account-admin-revoke": "node ./scripts/proof-wave5-account-admin-revoke.mjs",
     "proof:wave5-disabled-admin-actions": "node ./scripts/proof-wave5-disabled-admin-actions.mjs",
     "proof:wave6-final-readiness": "node ./scripts/proof-wave6-final-readiness.mjs",
+    "proof:final-blocker-closeout": "node ./scripts/proof-final-blocker-closeout.mjs",
     "proof:watch-party-seat-request": "node ./scripts/proof-watch-party-seat-request.mjs",
     "proof:live-stage-seat-approval": "node ./scripts/proof-live-stage-seat-approval.mjs",
     "firebase:test-lab:preflight": "node ./scripts/firebase-test-lab-smoke.mjs",
