@@ -88,6 +88,9 @@ function envPresence(keys) {
 const finalDoc = readLocal("docs/FINAL_PUBLIC_USE_GO_NO_GO.md");
 const nextTask = readLocal("NEXT_TASK.md");
 const wave5Doc = readLocal("docs/WAVE5_ACCOUNT_ADMIN_REVOKE_PROOF.md");
+const purgePolicyDoc = existsSync(path.join(root, "docs/ACCOUNT_PURGE_DEIDENTIFICATION_POLICY.md"))
+  ? readLocal("docs/ACCOUNT_PURGE_DEIDENTIFICATION_POLICY.md")
+  : "";
 
 const devicesResult = run("adb", ["devices"]);
 const devices = devicesResult.ok ? parseDevices(devicesResult.stdout) : [];
@@ -197,10 +200,18 @@ const matrix = {
     "Keep support/refund copy manual/external, or open a future provider-refund integration proof lane.",
   ),
   permanentPurgeDeidentification: status(
-    "Pending policy decision",
-    "Permanent purge/de-identification is not implemented/proved. Current proved account lifecycle covers scheduled deletion, restore/cancel, public hiding, disabled access denial, and admin/operator suspend/restore.",
-    "Owner/legal must decide whether permanent purge is required before broad public launch or accepted as a post-launch/manual legal-request policy.",
-    "Record owner/legal decision.",
+    finalDoc.includes("Closed for proof-account policy implementation") && purgePolicyDoc.includes("Verdict: Closed for proof-account policy implementation")
+      ? "Pass"
+      : "Pending policy decision",
+    finalDoc.includes("Closed for proof-account policy implementation") && purgePolicyDoc.includes("Verdict: Closed for proof-account policy implementation")
+      ? "Proof-account purge/de-identification policy implementation is closed. No real-user broad auto-purge job or legal compliance claim is made."
+      : "Permanent purge/de-identification is not implemented/proved. Current proved account lifecycle covers scheduled deletion, restore/cancel, public hiding, disabled access denial, and admin/operator suspend/restore.",
+    finalDoc.includes("Closed for proof-account policy implementation") && purgePolicyDoc.includes("Verdict: Closed for proof-account policy implementation")
+      ? ""
+      : "Owner/legal must decide whether permanent purge is required before broad public launch or accepted as a post-launch/manual legal-request policy.",
+    finalDoc.includes("Closed for proof-account policy implementation") && purgePolicyDoc.includes("Verdict: Closed for proof-account policy implementation")
+      ? "Keep owner/legal review for any broader production automation or legal compliance promise."
+      : "Record owner/legal decision.",
   ),
 };
 
@@ -256,7 +267,7 @@ writeText("README.md", [
   `Version: ${packageReadback?.versionCode ?? "unknown"} / ${packageReadback?.versionName ?? "unknown"}`,
   `Installer: ${packageReadback?.installer ?? "unknown"}`,
   "",
-  "This proof does not execute provider refunds, send password reset emails, print reset links, print credentials, or implement permanent purge/de-identification.",
+  "This proof does not execute provider refunds, send password reset emails, print reset links, print credentials, or run real-user broad purge/de-identification.",
   "",
   "Matrix:",
   ...Object.entries(matrix).map(([key, value]) => `- ${key}: ${value.status} — ${value.result}${value.blocker ? ` Blocker: ${value.blocker}` : ""}${value.ownerAction ? ` Owner action: ${value.ownerAction}` : ""}`),

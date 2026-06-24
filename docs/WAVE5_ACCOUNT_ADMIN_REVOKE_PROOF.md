@@ -1,6 +1,6 @@
 # Wave 5 Account / Admin / Revoke Proof
 
-Status: Partial as of June 24, 2026. Wave 5.1 app-controlled disabled/admin blockers are closed; external/provider/policy blockers remain.
+Status: Partial as of June 24, 2026. Wave 5.1 app-controlled disabled/admin blockers are closed; password reset/auth email provider proof remains external.
 
 This Wave 5 lane covers account lifecycle, Admin/support access, and refund/revoke/entitlement behavior. It does not activate live money, payouts, cash-out, withdrawals, payable balances, production purchase buttons, provider refunds, or creator monetization.
 
@@ -33,7 +33,7 @@ Latest artifact:
 | Public Profile hiding | Pass | Scheduled-deletion profile is hidden from another signed-in proof user. |
 | Public Platform hiding | Pass | `resolve_platform_visibility_access` returns denied with `account_deletion_scheduled`. |
 | Restore deletion | Pass | `restore_scheduled_account_deletion` restores the proof account inside the restore window. |
-| Permanent purge/de-identification | Pending | No permanent purge job/runbook was executed or claimed in this lane. |
+| Permanent purge/de-identification | Pass for proof-account policy implementation | The dedicated proof-account lane defines the policy boundary and proves owner/operator-only de-identification for a disposable proof account after scheduled deletion with explicit proof override. No broad production auto-purge or legal compliance claim is made. |
 | Global deleted/deactivated private-feature denial | Pass | Wave 5.1 proves backend denial for suspended/restricted proof accounts across private chat, call, room, LiveKit/token, upload, creator media, comment/reply, and notification-source paths. |
 | Admin Users read model | Pass | Owner/operator proof account can read the admin Users read model. |
 | Non-admin admin denial | Pass | Non-admin proof account is denied admin Users read model access. |
@@ -106,5 +106,5 @@ The Wave 5.1 pass did not run provider refunds, activate live money, change Prem
 - Installed Android account deletion/restore visual proof: Closed on Play-installed versionCode 55 runtime. UI/copy, immediate scheduled-state copy, restore/cancel visual, and active/not-scheduled cleanup readback passed.
 - Installed Android blocked-viewer visual proof: Closed on Play-installed versionCode 55 runtime. Blocked-viewer Profile/Platform denial, blocked-action non-exposure, unrelated-viewer regression, and cleanup passed.
 - Play/internal proof where prior lanes used direct APK/backend proof: Closed for versionCode 55 with installer `com.android.vending`.
-- Permanent purge/de-identification policy: Pending policy decision. Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, and admin suspend/restore.
+- Permanent purge/de-identification: Closed for proof-account policy implementation. `docs/ACCOUNT_PURGE_DEIDENTIFICATION_POLICY.md`, migration `20260624231731_account_purge_deidentification_proof.sql`, repair migrations `20260624232323_account_purge_deidentification_username_repair.sql` and `20260624232653_account_purge_deidentification_uuid_repair.sql`, and artifact `/tmp/app-account-purge-deidentification-proof-20260624233257/` prove disposable proof-account de-identification, dry-run behavior, owner/operator-only access, denial safeguards, public fail-closed readback, private-feature denial, and audit/support privacy. No real-user purge, broad auto-purge job, provider refund, or live-money action is claimed.
 - Firebase dashboard receipt proof for Analytics/Crashlytics/Performance: Closed by browser readback; Firebase packages/config/redaction are repo-proved.

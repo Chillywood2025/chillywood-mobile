@@ -83,7 +83,7 @@ for (const route of publicLegalRoutes) {
   "Wave 5.1 — Disabled/Deactivated Access + Admin Suspend Proof",
   "password reset/auth email provider proof",
   "real provider refund execution",
-  "permanent purge/de-identification proof",
+  "proof-account purge/de-identification",
 ].forEach((needle) => expectText("known_blockers", needle, nextTask, needle, "Final Go/No-Go blocker visibility"));
 
 expectText("legal_copy", "refund support no guarantee posture", refundSupport, "without promising outcomes", "Refund copy consistency");
@@ -150,14 +150,14 @@ const result = {
     {
       blocker: "Wave 5.1 disabled/deactivated private-feature denial sweep",
       type: "app-controlled",
-      launchImpact: "Public launch blocker until proved or explicitly waived by owner.",
-      status: "Pending",
+      launchImpact: "Closed by Wave 5.1 runtime proof.",
+      status: "Closed",
     },
     {
       blocker: "Wave 5.1 admin/operator suspend/deactivate support-action proof",
       type: "app-controlled",
-      launchImpact: "Public launch blocker until proved or explicitly waived by owner.",
-      status: "Pending",
+      launchImpact: "Closed by Wave 5.1 runtime proof.",
+      status: "Closed",
     },
     {
       blocker: "password reset/auth email provider proof",
@@ -168,20 +168,20 @@ const result = {
     {
       blocker: "real provider refund execution",
       type: "external/provider",
-      launchImpact: "Manual/external path pending; do not claim automated refunds.",
-      status: "Pending",
+      launchImpact: "Manual/external path accepted; do not claim automated refunds.",
+      status: "Accepted manual/external",
     },
     {
       blocker: "installed deletion/restore visual proof",
       type: "installed proof",
-      launchImpact: "Current repo/backend proof exists; installed visual proof pending.",
-      status: "Pending",
+      launchImpact: "Closed on Play-installed runtime.",
+      status: "Closed",
     },
     {
       blocker: "permanent purge/de-identification policy",
-      type: "policy",
-      launchImpact: "Product/legal decision pending.",
-      status: "Pending",
+      type: "account lifecycle proof",
+      launchImpact: "Closed for proof-account implementation; no real-user broad auto-purge job or legal compliance claim is made.",
+      status: "Closed for proof-account policy implementation",
     },
   ],
 };

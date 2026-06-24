@@ -19,6 +19,7 @@
     "proof:wave6-final-readiness": "node ./scripts/proof-wave6-final-readiness.mjs",
     "proof:final-blocker-closeout": "node ./scripts/proof-final-blocker-closeout.mjs",
     "proof:final-four-launch-conditions": "node ./scripts/proof-final-four-launch-conditions.mjs",
+    "proof:account-purge-deidentification": "node ./scripts/proof-account-purge-deidentification.mjs",
     "proof:launch-candidate-installed": "node ./scripts/proof-launch-candidate-installed.mjs",
     "proof:watch-party-seat-request": "node ./scripts/proof-watch-party-seat-request.mjs",
     "proof:live-stage-seat-approval": "node ./scripts/proof-live-stage-seat-approval.mjs",

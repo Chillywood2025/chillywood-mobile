@@ -47,12 +47,12 @@ const blockerRows = [
   },
   {
     blocker: "permanent purge/de-identification policy",
-    type: "policy decision",
-    currentStatus: "Scheduled deletion, restore, public fail-closed visibility, and disabled/private-feature denial are proved.",
-    proofResult: "No permanent purge/de-identification job or legal retention policy proof is claimed.",
-    launchImpact: "Product/legal must decide whether launch can proceed with scheduled deletion plus later purge work.",
-    requiredNextAction: "Finalize legal/product retention and de-identification policy, then prove the operational path.",
-    finalClassification: "Pending policy decision",
+    type: "account lifecycle proof",
+    currentStatus: "Scheduled deletion, restore, public fail-closed visibility, disabled/private-feature denial, and proof-account de-identification are proved.",
+    proofResult: "Policy doc, owner/operator-only RPC, dry-run, proof-only disposable-account mutation, denial safeguards, audit/support privacy, public fail-closed, and private-feature denial are proved. No real-user purge, broad auto-purge job, or legal compliance claim is made.",
+    launchImpact: "Proof-account implementation blocker is closed. Broader production automation remains future owner/legal work only if desired.",
+    requiredNextAction: "Keep owner/legal review for any broader production automation or legal compliance promise.",
+    finalClassification: "Closed for proof-account policy implementation",
   },
   {
     blocker: "installed account deletion/restore visual proof",
@@ -91,7 +91,7 @@ addCheck("Final verdict remains honest", finalDoc.includes("Verdict: Partial / N
 addCheck("No broad launch-ready claim", !/Verdict:\s*Go\b/.test(finalDoc), "final doc does not claim Go");
 addCheck("Password reset blocker classified", finalDoc.includes("Pending external/provider"), "classification bucket present");
 addCheck("Installed visual proof status updated", finalDoc.includes("Installed Android account deletion/restore visual proof | installed-device proof") && finalDoc.includes("Installed visual blocker is closed.") && finalDoc.includes("Installed Android blocked-viewer visual proof | installed-device proof"), "installed visual closeout status");
-addCheck("Policy blocker classified", finalDoc.includes("Pending policy decision"), "classification bucket present");
+addCheck("Purge proof-account implementation classified", finalDoc.includes("Closed for proof-account policy implementation"), "proof-account purge classification present");
 addCheck("Wave 5.1 closed in tracker", nextTask.includes("Wave 5.1 — Disabled/Deactivated Access + Admin Suspend Proof: Closed"), "NEXT_TASK Wave 5.1 status");
 addCheck("Provider refund manual/external accepted", finalDoc.includes("Accepted manual/external") && finalDoc.includes("must not claim instant or automatic provider refunds"), "refund truth wording");
 addCheck("Provider refunds not run in Wave 5 doc", wave5Doc.includes("Real provider refunds remain external/manual"), "Wave 5 refund truth");
