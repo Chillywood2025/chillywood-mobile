@@ -11,6 +11,7 @@
     "proof:session": "node ./scripts/start-proof-session.mjs",
     "proof:livekit-router": "node ./scripts/proof-livekit-router.mjs",
     "proof:livekit-server-metrics": "node ./scripts/proof-livekit-server-metrics.mjs",
+    "proof:livekit-passive-viewer-load": "node ./scripts/proof-livekit-passive-viewer-load.mjs",
     "proof:watch-party-seat-request": "node ./scripts/proof-watch-party-seat-request.mjs",
     "proof:live-stage-seat-approval": "node ./scripts/proof-live-stage-seat-approval.mjs",
     "firebase:test-lab:preflight": "node ./scripts/firebase-test-lab-smoke.mjs",
@@ -63,6 +64,7 @@
     "guard:chilly-chat-call-push-policy": "node ./scripts/guard-chilly-chat-call-push-policy.mjs",
     "guard:livekit-simulcast-dynacast-policy": "node ./scripts/guard-livekit-simulcast-dynacast-policy.mjs",
     "guard:livekit-server-metrics-policy": "node ./scripts/guard-livekit-server-metrics-policy.mjs",
+    "guard:livekit-passive-load-policy": "node ./scripts/guard-livekit-passive-load-policy.mjs",
     "guard:watch-party-live-audio-mix": "node ./scripts/guard-watch-party-live-audio-mix.mjs",
     "guard:vod-quality-policy": "node ./scripts/guard-vod-quality-policy.mjs",
     "guard:watch-party-livekit": "node ./scripts/guard-watch-party-livekit-camera.mjs && npm run guard:live-stage-contract && npm run guard:live-stage-approved-seats",
@@ -145,6 +147,7 @@
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
+    "@livekit/rtc-node": "^0.13.29",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",

@@ -2,6 +2,8 @@
 
 ## Public V1 Final Regression
 
+LiveKit server metrics readback and 10-passive-viewer synthetic load proof are closed. Safe current claim: 4 active camera/mic seats plus 10 synthetic passive viewers/subscribers are proved under measured `chillywood-prod-01` conditions. The active camera/mic seat cap remains 4. Real-device passive viewer scaling and TURN/cellular allocation proof remain separate pending lanes; do not raise active publisher caps or claim 10 real-device viewers from the synthetic proof.
+
 Circle-private creator-video visibility, active deterministic Discovery Algorithm V1, and follower-feed / Chi'lly Circle feed fan-out are closed repo/backend lanes. Do not reopen those lanes unless a current regression appears. Android versionCode hygiene is repaired for the next build: native Android source now uses versionCode `55`, above the known Play/internal versionCode `54`.
 
 Feed fan-out closeout truth:

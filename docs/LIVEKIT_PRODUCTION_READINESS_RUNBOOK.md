@@ -196,6 +196,45 @@ npm run proof:livekit-server-metrics
 
 Production capacity is not raised until an approved operator posts real host metrics from `chillywood-prod-01` and the separate 10-passive-viewer load proof passes with CPU/RAM/network/TURN observations saved.
 
+### 10 Synthetic Passive Subscriber Proof
+
+Date: 2026-06-24.
+
+Proof command:
+
+```bash
+LIVEKIT_PASSIVE_LOAD_HEARTBEAT_COMMAND="ssh chillywood@87.99.145.160 'sudo /opt/chillywood/bin/livekit-registry-heartbeat.sh'" \
+npm run proof:livekit-passive-viewer-load
+```
+
+Result: passed for proof run `livekit-passive-load-20260624003534` against `chillywood-prod-01`.
+
+What passed:
+
+- one synthetic host connected through the deployed `livekit-token` endpoint and published synthetic microphone plus camera tracks;
+- 10 synthetic passive LiveKit Node RTC subscribers connected through the same deployed token endpoint;
+- all passive viewer tokens had `canPublish=false`;
+- one passive publish attempt was denied;
+- 20 host-track subscriptions were observed across the 10 subscribers;
+- the room held for 180 seconds with zero early passive disconnects;
+- before/during/after heartbeat readback posted real host CPU/RAM/network counts and LiveKit room/participant/publisher counts;
+- cleanup returned LiveKit readback to zero rooms, zero participants, and zero publishers;
+- no participant tokens, LiveKit API keys/secrets, Supabase service-role keys, TURN credentials, or private host config were printed.
+
+Measured readback:
+
+| Window | CPU | RAM | Network rx/tx Bps | Rooms | Participants | Publishers | TURN |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Before | 1% | 35.37% | 0 / 0 | 0 | 0 | 0 | proof_pending |
+| During | 1.02% | 35.7% | 6008 / 14530 | 1 | 11 | 1 | proof_pending |
+| After | 0.5% | 35.81% | 132 / 0 | 0 | 0 | 0 | proof_pending |
+
+Qualified capacity truth:
+
+- Active camera/mic seats remain capped at 4. This proof did not raise active speaker/publisher limits.
+- Chi'llywood can now claim: 4 active camera/mic seats plus 10 synthetic passive viewers/subscribers proved under measured `chillywood-prod-01` conditions.
+- Real-device passive viewer scaling, cellular/TURN allocation, and broader production load/cost testing remain separate proof lanes.
+
 ## May 13, 2026 Production Proof Follow-Up
 
 Passed from this local/dev-device proof environment:
