@@ -66,8 +66,38 @@ No abusive production load is generated. No emails, push notifications, LiveKit 
 ## Remaining Gaps / Pending Proof
 
 - Password reset/auth email spam remains provider-managed and pending a safe inbox/operator proof path.
-- Global blocked-user enforcement is not claimed across every surface. Reports remain intentionally available for safety; room joins and every notification category still need surface-by-surface runtime proof.
-- The proof script is bounded/static by default. Runtime mutation proof should be run only with approved proof accounts, no real abusive volume, and cleanup.
+- Runtime mutation proof with approved proof accounts passed for call invite creation, chat messages, durable seat-request markers, room creation, media upload URL initiation, creator-video comments/replies, safety reports, public DMCA submissions, and blocked-user chat/call/comment notification prevention.
+- Global blocked-user enforcement is not claimed across every surface. Reports remain intentionally available for safety; room joins, blocker-owned room seat requests, and seat-request notification categories remain Partial until product policy explicitly requires global room-level block denial.
+
+## Wave 4.1 Runtime Proof
+
+Primary runtime proof command:
+
+```sh
+node scripts/proof-wave4-runtime-mutation-and-blocks.mjs --run
+```
+
+Latest runtime artifact:
+
+- `/tmp/app-wave4-runtime-mutation-block-proof-20260624132830`
+
+Runtime proof used approved local proof-account env keys and wrote sanitized JSON only. It did not print credentials, service-role keys, push tokens, LiveKit tokens, signed URLs, proof passwords, or provider secrets.
+
+Results:
+
+- Call invite creation: first invite allowed, duplicate active invite blocked, cooldown enforced.
+- Chat messages: valid message allowed; empty, oversized, rapid, duplicate, and non-member writes blocked.
+- Seat-request markers: durable marker throttle enforced.
+- Room creation: Watch-Party and communication room creation cooldowns enforced; joins remain idempotent by existing policy.
+- Upload URL initiation: zero-byte upload now blocks before signing; rapid upload URL initiation throttles.
+- Comments/replies: valid comment/reply allowed; empty and duplicate/rapid comments blocked.
+- Reports/DMCA: valid report/DMCA allowed; third same-target report/DMCA throttled.
+- Blocked-user runtime: blocked chat write denied, blocked call dispatch suppresses push/ring, blocked creator-video comment denied, chat/call/comment notification creation prevented by failed source action.
+
+Bug fixed during runtime proof:
+
+- `media-storage` accepted zero-byte upload URL requests because validation only checked maximum size. It now returns `empty_file` for `sizeBytes <= 0`.
+- Creator/profile comment blocked-relationship triggers compared a text user id to a uuid owner id. The repair migration casts owner ids to text before calling the internal block helper.
 
 ## Safety
 

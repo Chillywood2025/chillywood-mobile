@@ -497,6 +497,10 @@ const validateUpload = (input: {
     return { error: json(403, { error: "invalid_owner_prefix", message: "Media object key must belong to the signed-in user." }) };
   }
 
+  if (input.sizeBytes <= 0) {
+    return { error: json(400, { error: "empty_file", message: "This media file is empty." }) };
+  }
+
   const maxBytes = input.surfaceType === "creator_video" ? CREATOR_VIDEO_MAX_BYTES : SOCIAL_ATTACHMENT_MAX_BYTES;
   if (input.sizeBytes > maxBytes) {
     return { error: json(413, { error: "file_too_large", message: "This media file is too large for this surface." }) };

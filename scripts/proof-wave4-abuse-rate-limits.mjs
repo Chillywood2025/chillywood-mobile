@@ -38,6 +38,7 @@ const files = {
   mediaScanMigration: assertFile("supabase/migrations/20260530191115_media_malware_scanning_pipeline.sql"),
   abuseMigration: assertFile("supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql"),
   abuseRepairMigration: assertFile("supabase/migrations/20260624130902_wave4_abuse_rate_limit_trigger_repairs.sql"),
+  abuseCommentTypeRepairMigration: assertFile("supabase/migrations/20260624132543_wave4_comment_block_type_repair.sql"),
   dmcaMigration: assertFile("supabase/migrations/202605220002_dmca_attachments_uploader_counter_notice.sql"),
   profileGuard: assertFile("scripts/guard-profile-production-policy.mjs"),
   callPushGuard: assertFile("scripts/guard-chilly-chat-call-push-policy.mjs"),
@@ -127,9 +128,20 @@ requireInvariant(
 );
 
 requireInvariant(
+  includesAll(files.abuseCommentTypeRepairMigration, [
+    'video."owner_id"::text',
+    'post."user_id"::text',
+    "enforce_creator_video_comments_abuse_guard",
+    "enforce_profile_post_comments_abuse_guard",
+  ]),
+  "Wave 4 comment block repair must cast owner ids to text before calling the block helper",
+);
+
+requireInvariant(
   includesAll(files.mediaStorage, [
     "enforceMediaStorageAbuseLimit",
     "enforce_abuse_rate_limit",
+    "empty_file",
     "rate_limited",
   ]),
   "media-storage must enforce upload initiation rate limits server-side",
