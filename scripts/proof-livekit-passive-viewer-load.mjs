@@ -24,10 +24,12 @@ const execFileAsync = promisify(execFile);
 const ENV_FILES = [".env.local", ".env.browserstack-monetization.local"];
 const DEFAULT_HOLD_MS = 180_000;
 const MIN_HOLD_MS = 60_000;
-const PASSIVE_VIEWER_COUNT = 10;
+const DEFAULT_PASSIVE_VIEWER_COUNT = 10;
+const MAX_PASSIVE_VIEWER_COUNT = 25;
 const SERVER_ID = "chillywood-prod-01";
 const EXPECTED_SERVER_URL = "wss://live.chillywoodstream.com";
 const TOKEN_LIKE_PATTERN = /([A-Za-z0-9._~+/=-]{32,})/g;
+const SUPPORTED_SURFACES = new Set(["live-stage", "watch-party-live"]);
 
 const redact = (value) => String(value ?? "").replace(TOKEN_LIKE_PATTERN, "[redacted]");
 const suffix = (value) => String(value ?? "").slice(-8) || "unknown";
@@ -68,6 +70,15 @@ const requireEnv = (env, key) => {
   return value;
 };
 
+const optionalEnv = (env, key) => String(env[key] ?? "").trim();
+
+const parseIntegerEnv = (env, key, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) => {
+  const raw = optionalEnv(env, key);
+  const parsed = raw ? Number.parseInt(raw, 10) : fallback;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+};
+
 const proofRunId = `livekit-passive-load-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
 const env = loadEnv();
 const supabaseUrl = requireEnv(env, "SUPABASE_URL");
@@ -81,6 +92,16 @@ const registryFunctionUrl = env.LIVEKIT_REGISTRY_FUNCTION_URL
 const holdMs = Math.max(
   MIN_HOLD_MS,
   Number.parseInt(env.LIVEKIT_PASSIVE_LOAD_HOLD_MS || String(DEFAULT_HOLD_MS), 10) || DEFAULT_HOLD_MS,
+);
+const requestedSurface = optionalEnv(env, "LIVEKIT_PASSIVE_LOAD_SURFACE") || "live-stage";
+if (!SUPPORTED_SURFACES.has(requestedSurface)) {
+  throw new Error("LIVEKIT_PASSIVE_LOAD_SURFACE must be live-stage or watch-party-live.");
+}
+const PASSIVE_VIEWER_COUNT = parseIntegerEnv(
+  env,
+  "LIVEKIT_PASSIVE_VIEWER_COUNT",
+  DEFAULT_PASSIVE_VIEWER_COUNT,
+  { min: 1, max: MAX_PASSIVE_VIEWER_COUNT },
 );
 const heartbeatCommand = String(env.LIVEKIT_PASSIVE_LOAD_HEARTBEAT_COMMAND || "").trim();
 
@@ -100,9 +121,10 @@ const result = {
     expectedServerUrl: EXPECTED_SERVER_URL,
     holdMs,
     method: "synthetic_livekit_node_rtc_subscribers_with_deployed_token_endpoint",
+    surface: requestedSurface,
   },
   setup: {
-    createdTempViewer: false,
+    createdTempViewers: 0,
     proofRoomId: null,
     viewerCount: 0,
   },
@@ -135,7 +157,7 @@ const result = {
   cleanup: {
     disconnectedRooms: 0,
     proofRoomEnded: false,
-    tempViewerDeleted: false,
+    tempViewersDeleted: 0,
     tempOperatorGrantRestored: false,
     tempOperatorRoleRestored: false,
   },
@@ -145,7 +167,7 @@ const result = {
 
 const cleanupTasks = [];
 const openRooms = [];
-let tempViewer = null;
+const tempViewers = [];
 let tempOperatorRoleSnapshot = null;
 let tempOperatorGrantSnapshot = null;
 let operatorReadbackPrepared = false;
@@ -183,8 +205,9 @@ async function signIn(email, password) {
   return { accessToken: data.session.access_token, userId: data.user.id, email };
 }
 
-async function ensureTempViewer() {
-  const email = `livekit.passive.${proofRunId}@proof.chillywood.test`;
+async function createTempViewer(index) {
+  const paddedIndex = String(index + 1).padStart(3, "0");
+  const email = `livekit.passive.${proofRunId}.${paddedIndex}@proof.chillywood.test`;
   const password = `Proof-${randomBytes(18).toString("base64url")}!`;
   const created = await admin.auth.admin.createUser({
     email,
@@ -198,13 +221,9 @@ async function ensureTempViewer() {
   if (created.error || !created.data.user?.id) {
     throw new Error(`Temp viewer create failed: ${created.error?.message || "missing user"}`);
   }
-  tempViewer = { email, password, userId: created.data.user.id };
-  result.setup.createdTempViewer = true;
-  registerCleanup(async () => {
-    if (!tempViewer?.userId) return;
-    const deleted = await admin.auth.admin.deleteUser(tempViewer.userId);
-    if (!deleted.error) result.cleanup.tempViewerDeleted = true;
-  });
+  const tempViewer = { email, password, userId: created.data.user.id };
+  tempViewers.push(tempViewer);
+  result.setup.createdTempViewers = tempViewers.length;
   return tempViewer;
 }
 
@@ -214,23 +233,39 @@ async function createProofAccounts() {
     password: requireEnv(env, "CHILLYWOOD_E2E_OWNER_PASSWORD"),
     userId: requireEnv(env, "CHILLYWOOD_E2E_OWNER_USER_ID"),
   };
-  const viewers = [
+  const viewerKeys = [
     ["CHILLYWOOD_E2E_VIEWER_EMAIL", "CHILLYWOOD_E2E_VIEWER_PASSWORD", "CHILLYWOOD_E2E_VIEWER_USER_ID"],
-    ["CHILLYWOOD_E2E_VIEWER_02_EMAIL", "CHILLYWOOD_E2E_VIEWER_02_PASSWORD", "CHILLYWOOD_E2E_VIEWER_02_USER_ID"],
-    ["CHILLYWOOD_E2E_VIEWER_03_EMAIL", "CHILLYWOOD_E2E_VIEWER_03_PASSWORD", "CHILLYWOOD_E2E_VIEWER_03_USER_ID"],
-    ["CHILLYWOOD_E2E_VIEWER_04_EMAIL", "CHILLYWOOD_E2E_VIEWER_04_PASSWORD", "CHILLYWOOD_E2E_VIEWER_04_USER_ID"],
-    ["CHILLYWOOD_E2E_VIEWER_05_EMAIL", "CHILLYWOOD_E2E_VIEWER_05_PASSWORD", "CHILLYWOOD_E2E_VIEWER_05_USER_ID"],
-    ["CHILLYWOOD_E2E_VIEWER_06_EMAIL", "CHILLYWOOD_E2E_VIEWER_06_PASSWORD", "CHILLYWOOD_E2E_VIEWER_06_USER_ID"],
-    ["CHILLYWOOD_E2E_VIEWER_07_EMAIL", "CHILLYWOOD_E2E_VIEWER_07_PASSWORD", "CHILLYWOOD_E2E_VIEWER_07_USER_ID"],
-    ["CHILLYWOOD_E2E_VIEWER_08_EMAIL", "CHILLYWOOD_E2E_VIEWER_08_PASSWORD", "CHILLYWOOD_E2E_VIEWER_08_USER_ID"],
-    ["CHILLYWOOD_E2E_VIEWER_09_EMAIL", "CHILLYWOOD_E2E_VIEWER_09_PASSWORD", "CHILLYWOOD_E2E_VIEWER_09_USER_ID"],
-  ].map(([emailKey, passwordKey, userIdKey]) => ({
-    email: requireEnv(env, emailKey),
-    password: requireEnv(env, passwordKey),
-    userId: requireEnv(env, userIdKey),
-  }));
+    ...Array.from({ length: MAX_PASSIVE_VIEWER_COUNT - 1 }, (_, index) => {
+      const keyIndex = String(index + 2).padStart(2, "0");
+      return [
+        `CHILLYWOOD_E2E_VIEWER_${keyIndex}_EMAIL`,
+        `CHILLYWOOD_E2E_VIEWER_${keyIndex}_PASSWORD`,
+        `CHILLYWOOD_E2E_VIEWER_${keyIndex}_USER_ID`,
+      ];
+    }),
+  ];
+  const viewers = [];
+  for (const [emailKey, passwordKey, userIdKey] of viewerKeys) {
+    if (viewers.length >= PASSIVE_VIEWER_COUNT) break;
+    const email = optionalEnv(env, emailKey);
+    const password = optionalEnv(env, passwordKey);
+    const userId = optionalEnv(env, userIdKey);
+    if (!email || !password || !userId) continue;
+    viewers.push({ email, password, userId });
+  }
 
-  viewers.push(await ensureTempViewer());
+  while (viewers.length < PASSIVE_VIEWER_COUNT) {
+    viewers.push(await createTempViewer(viewers.length));
+  }
+
+  registerCleanup(async () => {
+    for (const viewer of tempViewers) {
+      if (!viewer?.userId) continue;
+      const deleted = await admin.auth.admin.deleteUser(viewer.userId);
+      if (!deleted.error) result.cleanup.tempViewersDeleted += 1;
+    }
+  });
+
   result.setup.viewerCount = viewers.length;
   return { host, viewers };
 }
@@ -238,11 +273,16 @@ async function createProofAccounts() {
 async function createProofRoom(host, viewers) {
   const roomId = `LKLOAD${Date.now().toString(36).toUpperCase()}`.slice(0, 24);
   const timestamp = nowIso();
+  const isWatchPartyLiveSurface = requestedSurface === "watch-party-live";
+  const proofTitleId = `proof-title-${proofRunId}`;
   const insertedRoom = await admin
     .from("watch_party_rooms")
     .insert({
       party_id: roomId,
-      room_type: "live",
+      room_type: isWatchPartyLiveSurface ? "title" : "live",
+      title_id: isWatchPartyLiveSurface ? proofTitleId : null,
+      source_type: isWatchPartyLiveSurface ? "platform_title" : null,
+      source_id: isWatchPartyLiveSurface ? proofTitleId : null,
       host_user_id: host.userId,
       playback_state: "playing",
       is_active: true,
@@ -327,7 +367,7 @@ async function requestToken(session, roomId, role) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      surface: "live-stage",
+      surface: requestedSurface,
       roomName: roomId,
       participantIdentity: session.userId,
       participantName: role === "host" ? "Proof Host" : `Passive Viewer ${suffix(session.userId)}`,
@@ -335,6 +375,7 @@ async function requestToken(session, roomId, role) {
       metadata: {
         proofMethod: "synthetic_passive_load",
         proofRunId,
+        proofSurface: requestedSurface,
       },
     }),
   });
