@@ -212,6 +212,14 @@ async function hasAudienceBlock(adminClient: SupabaseClientLike, callerUserId: s
   return !!calleeBlockedCaller?.length;
 }
 
+async function isAccountAccessRestricted(adminClient: SupabaseClientLike, userId: string) {
+  const { data, error } = await adminClient.rpc("is_account_access_restricted", {
+    p_user_id: userId,
+  });
+  if (error) throw new Error(`Account status check failed: ${error.message}`);
+  return data === true;
+}
+
 async function readPreferences(adminClient: SupabaseClientLike, userId: string) {
   const { data } = await adminClient
     .from("notification_preferences")
@@ -584,6 +592,17 @@ Deno.serve(async (req): Promise<Response> => {
     if (await hasAudienceBlock(adminClient, callerUserId, calleeUserId)) {
       return jsonResponse(200, {
         blockedReason: "audience_block",
+        eligible: false,
+        pushSent: false,
+      });
+    }
+
+    if (
+      await isAccountAccessRestricted(adminClient, callerUserId)
+      || await isAccountAccessRestricted(adminClient, calleeUserId)
+    ) {
+      return jsonResponse(403, {
+        blockedReason: "account_access_restricted",
         eligible: false,
         pushSent: false,
       });

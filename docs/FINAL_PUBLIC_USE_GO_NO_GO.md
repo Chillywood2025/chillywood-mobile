@@ -4,7 +4,7 @@ Date: 2026-06-24
 
 Verdict: Partial / Not Ready.
 
-Chi'llywood is not a public launch candidate yet. The proof waves materially improved production safety, but app-controlled account lifecycle blockers remain deferred to Wave 5.1, and several provider, installed-device, and policy proofs remain pending.
+Chi'llywood is not a public launch candidate yet. The proof waves materially improved production safety, and Wave 5.1 closed the app-controlled disabled/deactivated account lifecycle blockers. Several provider, installed-device, and policy proofs remain pending.
 
 Latest Wave 6 artifact:
 
@@ -20,16 +20,15 @@ Latest Wave 6 artifact:
 | Wave 3 | Partial | Chi'lly Chat push ringing, LiveKit metrics, 10 synthetic passive subscribers, notification/capacity truth tracked. | Real-device passive scaling and some recovery matrices remain pending. | Capacity claims must stay qualified. |
 | Wave 3.5 | Partial | 25 synthetic passive viewers proved for Live Stage and Watch-Party Live; active camera/mic cap remains 4. | Not 25 real phones and not 25 active publishers. | Safe claim is synthetic/headless only. |
 | Wave 4 | Partial | Backend abuse controls, runtime mutation proof, room-level blocks, Profile/Platform backend block enforcement. | Password reset/auth email provider proof and installed blocked-viewer visual proof pending. | App-controlled abuse/blocking work is materially closed, but provider/visual proof remains. |
-| Wave 5 | Partial | Account deletion visibility, Admin/support privacy, DMCA privacy, Premium revoke, sandbox access revoke. | Wave 5.1 app-controlled blockers plus external/provider/policy blockers. | Not launch-ready until Wave 5.1 is resolved or explicitly waived. |
-| Wave 5.1 | Deferred | None in this pass. | Disabled/deactivated private-feature denial sweep and admin/operator suspend/deactivate support-action proof. | App-controlled launch blocker. |
+| Wave 5 | Partial | Account deletion visibility, Admin/support privacy, DMCA privacy, Premium revoke, sandbox access revoke. | External/provider/policy blockers below remain. | Account lifecycle safety materially improved; not launch-ready until remaining external/policy/installed blockers are handled or explicitly waived. |
+| Wave 5.1 | Closed | Disabled/deactivated private-feature denial sweep, admin/operator suspend/deactivate proof, non-admin denial, sanitized audit readback, restore/reactivation, support/report preservation. | None in app-controlled Wave 5.1 scope. | App-controlled account lifecycle launch blocker closed. |
 | Wave 6 | Partial | Legal/copy/runbook/analytics readiness audit, telemetry email redaction fix, final matrix. | Launch blockers below remain. | Final recommendation remains Partial / Not Ready. |
 
 ## Launch Blockers
 
 ### App-Controlled Blockers
 
-- Wave 5.1 disabled/deactivated private-feature denial sweep across chat, calls, room creation/join, LiveKit/token issuance, seat requests, upload, comments/replies, and private-feature notifications.
-- Wave 5.1 admin/operator suspend/deactivate support-action proof, including non-admin denial, audit/support readback, and restore/reactivation behavior if already supported.
+- No remaining app-controlled blocker is claimed from Wave 5.1 scope. Disabled/deactivated private-feature denial and admin/operator suspend/deactivate support-action proof are closed by Wave 5.1 runtime proof.
 
 ### External / Provider Blockers
 
@@ -57,8 +56,8 @@ Latest Wave 6 artifact:
 | LiveKit/rooms/capacity | Metrics and synthetic passive proof exist; active camera/mic cap remains 4. | Do not claim real-device 25-viewer or higher active capacity. |
 | Calls/notifications | Chi'lly Chat call push ringing is closed for current proof; notification/ring dedupe passed. | Keep device/release smoke in final release proof. |
 | Abuse/spam/blocking | Backend abuse controls and blocked-user backend enforcement are materially closed. | Installed blocked-viewer visual proof remains pending. |
-| Account lifecycle | Scheduled-deletion Profile/Platform visibility fails closed. | Wave 5.1 disabled/deactivated feature denial and admin suspend/deactivate proof are launch blockers. |
-| Admin/support/DMCA | Admin/support privacy and DMCA privacy passed. | Suspend/deactivate action proof remains pending. |
+| Account lifecycle | Scheduled-deletion Profile/Platform visibility fails closed; Wave 5.1 proves disabled/deactivated private-feature denial and admin suspend/restore. | Installed deletion/restore visual proof and permanent purge/de-identification policy remain pending. |
+| Admin/support/DMCA | Admin/support privacy, DMCA privacy, and Wave 5.1 suspend/deactivate action proof passed. | Provider/policy items below remain pending. |
 | Premium/refund/revoke | Valid/revoked entitlement readback and client spoof prevention passed; no live money changed. | Real provider refund execution remains external/manual. |
 | Analytics/crash/monitoring | Firebase packages/config/runbooks exist; telemetry email identity was removed. | Dashboard receipt and release telemetry proof remain pending. |
 | Rollback/incident response | Runbooks exist for Android/EAS, LiveKit/TURN, media scanning, account/legal, money/support. | Some operational owner/provider rollback proof remains pending. |
@@ -86,7 +85,7 @@ Latest Wave 6 artifact:
 | Media-storage rollback | Scan/storage runbooks and scan-safe resolver proof exist. | Scanner-down failure-mode proof pending. | Partial |
 | Scan failure response | Pending/failed/malware gates fail closed in current proof. | Operator scanner-down proof pending. | Partial |
 | Abuse/spam incident response | Wave 4 controls and proof docs exist. | Password reset/auth email provider proof pending. | Partial |
-| Account deletion/support incident response | Account/legal runbook and Wave 5 proof exist. | Wave 5.1 suspend/deactivate proof pending. | Partial |
+| Account deletion/support incident response | Account/legal runbook and Wave 5/5.1 proof exist. | Permanent purge/de-identification and installed visual proof remain pending. | Partial |
 | Premium/provider incident response | Money/support/refund playbooks exist; live money stays off. | Real provider refund execution pending/manual. | Partial |
 | App release rollback | Android/EAS runbook documents OTA/native build limits. | Play/internal proof remains pending where required. | Partial |
 | Function/migration rollback | Recent migrations are tracked in docs/proof reports. | No universal automated rollback guarantee is claimed. | Partial |
@@ -111,8 +110,6 @@ Latest Wave 6 artifact:
 
 | Blocker | Type | Launch impact | Required owner decision | Status |
 | --- | --- | --- | --- | --- |
-| Wave 5.1 disabled/deactivated denial | app-controlled | Public launch blocker. | Run Wave 5.1 or explicitly waive with documented risk. | Pending |
-| Wave 5.1 admin suspend/deactivate proof | app-controlled | Public launch blocker. | Run Wave 5.1 or explicitly waive with documented risk. | Pending |
 | Password reset/auth email provider proof | external/provider | Account recovery proof gap. | Provide safe inbox/provider proof path. | Pending |
 | Real provider refund execution | external/provider | Refund automation cannot be claimed. | Keep manual/external or open provider proof lane. | Pending |
 | Installed deletion/restore visual proof | installed proof | Device proof gap. | Run Play/internal or direct APK visual proof. | Pending |

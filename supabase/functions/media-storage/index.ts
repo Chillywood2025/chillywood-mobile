@@ -482,6 +482,17 @@ const enforceMediaStorageAbuseLimit = async (
   }
 };
 
+const isAccountAccessRestricted = async (
+  adminClient: SupabaseClient,
+  userId: string,
+) => {
+  const { data, error } = await adminClient.rpc("is_account_access_restricted", {
+    p_user_id: userId,
+  });
+  if (error) throw new Error(`Account status check failed: ${error.message}`);
+  return data === true;
+};
+
 const validateUpload = (input: {
   surfaceType: MediaStorageSurfaceType;
   objectKey: string;
@@ -976,6 +987,21 @@ Deno.serve(async (req): Promise<Response> => {
       source: "media-storage",
       userId: user.id,
     });
+
+    if (await isAccountAccessRestricted(adminClient, user.id)) {
+      await safeWriteMediaSecurityEvent(adminClient, user, {
+        action,
+        objectKey,
+        recordId,
+        result: "denied",
+        securityContext,
+        surfaceType,
+      });
+      return json(403, {
+        error: "account_access_restricted",
+        message: "This account cannot use private media features right now. Visit Support if you think this is a mistake.",
+      });
+    }
 
     if (action === "create_upload_url") {
       const mimeType = toText(payload.mimeType).toLowerCase() || "application/octet-stream";

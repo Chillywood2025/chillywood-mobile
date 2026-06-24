@@ -446,6 +446,17 @@ async function authenticateRequest(req: Request, supabaseUrl: string, supabaseAn
   return { user: data.user as LiveKitAuthenticatedUser };
 }
 
+async function isAccountAccessRestricted(
+  adminClient: SupabaseClientLike,
+  userId: string,
+) {
+  const { data, error } = await adminClient.rpc("is_account_access_restricted", {
+    p_user_id: userId,
+  });
+  if (error) throw new Error(`Account status check failed: ${error.message}`);
+  return data === true;
+}
+
 const writeLiveKitTokenRequestAudit = async (
   adminClient: SupabaseClientLike,
   input: {
@@ -791,6 +802,15 @@ Deno.serve(async (req): Promise<Response> => {
       });
       return json(status, payload);
     };
+
+    if (await isAccountAccessRestricted(adminClient, userId)) {
+      return await auditAndJson(403, {
+        error: "account_access_restricted",
+        message: "This account cannot join private live rooms or calls right now. Visit Support if you think this is a mistake.",
+      }, {
+        action: "unknown",
+      });
+    }
 
     const payload = await req.json().catch(() => null) as TokenRequestPayload | null;
     if (!payload || typeof payload !== "object") {

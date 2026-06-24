@@ -1,6 +1,6 @@
 # Wave 5 Account / Admin / Revoke Proof
 
-Status: Partial as of June 24, 2026.
+Status: Partial as of June 24, 2026. Wave 5.1 app-controlled disabled/admin blockers are closed; external/provider/policy blockers remain.
 
 This Wave 5 lane covers account lifecycle, Admin/support access, and refund/revoke/entitlement behavior. It does not activate live money, payouts, cash-out, withdrawals, payable balances, production purchase buttons, provider refunds, or creator monetization.
 
@@ -34,7 +34,7 @@ Latest artifact:
 | Public Platform hiding | Pass | `resolve_platform_visibility_access` returns denied with `account_deletion_scheduled`. |
 | Restore deletion | Pass | `restore_scheduled_account_deletion` restores the proof account inside the restore window. |
 | Permanent purge/de-identification | Pending | No permanent purge job/runbook was executed or claimed in this lane. |
-| Global deleted/deactivated private-feature denial | Pending | Scheduled deletion hides public Profile/Platform and app signs out, but a broader disabled/deactivated account enforcement sweep is not claimed. |
+| Global deleted/deactivated private-feature denial | Pass | Wave 5.1 proves backend denial for suspended/restricted proof accounts across private chat, call, room, LiveKit/token, upload, creator media, comment/reply, and notification-source paths. |
 | Admin Users read model | Pass | Owner/operator proof account can read the admin Users read model. |
 | Non-admin admin denial | Pass | Non-admin proof account is denied admin Users read model access. |
 | Support/report submission | Pass | A proof safety report can be submitted with public-safe fields and cleaned up. |
@@ -63,25 +63,41 @@ This lane did not:
 - weaken RLS, Premium gates, LiveKit authority, participant caps, scan gates, or auth/reset behavior;
 - create fake production UI users or public proof/debug UI.
 
-## Wave 5.1 App-Controlled Launch Blockers
+## Wave 5.1 Disabled/Admin Proof
 
-Future session: Wave 5.1 — Disabled/Deactivated Access + Admin Suspend Proof.
+Closed in the Wave 5.1 follow-up.
 
-Wave 5.1 must cover:
+Latest artifact:
 
-- disabled/deactivated private-feature denial sweep;
-- chat denial;
-- call denial;
-- room creation/join denial;
-- LiveKit/token denial;
-- seat request denial;
-- upload denial;
-- comment/reply denial;
-- private-feature notification prevention;
-- admin/operator suspend/deactivate support-action proof;
-- non-admin denial;
-- audit/support readback;
-- restore/reactivation behavior if already supported.
+- `/tmp/app-wave5-disabled-admin-actions-proof-20260624172202/`
+
+Runtime proof results:
+
+- owner/operator suspend/deactivate action: Pass;
+- non-admin suspend/deactivate denial: Pass;
+- sanitized owner/operator audit readback: Pass;
+- restore/reactivation behavior: Pass;
+- restricted account chat thread creation and message sending denial: Pass;
+- restricted account voice/video call invite/ring source denial: Pass;
+- restricted account communication room creation and membership denial: Pass;
+- restricted account Watch-Party room creation and membership denial: Pass;
+- restricted account LiveKit token denial before token mint: Pass;
+- restricted account seat/camera request marker denial: Pass;
+- restricted account media upload URL initiation denial: Pass;
+- restricted account creator-video metadata/publish denial: Pass;
+- restricted account creator-video comment/reply denial: Pass;
+- private-feature notification prevention: Pass by source-write denial before notification-producing state exists;
+- support/report intake preservation: Pass.
+
+Migrations/functions added or updated for Wave 5.1:
+
+- `20260624171153_wave5_1_account_access_restrictions.sql`
+- `20260624171939_wave5_1_account_support_audit_readback.sql`
+- `livekit-token`
+- `media-storage`
+- `chilly-chat-call-dispatch`
+
+The Wave 5.1 pass did not run provider refunds, activate live money, change Premium pricing/products, loosen LiveKit authority, raise participant caps, weaken RLS, weaken scan gates, or change auth/reset behavior.
 
 ## Carry-Forward External / Policy Blockers
 
