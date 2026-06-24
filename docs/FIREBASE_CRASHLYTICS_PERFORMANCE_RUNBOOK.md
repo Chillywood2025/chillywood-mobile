@@ -88,8 +88,8 @@ Repo-backed truth:
 - `_lib/firebaseCrashlytics.ts` lazily loads Crashlytics on native platforms only.
 - `bootstrapFirebaseCrashlytics()` enables collection and writes a bootstrap log.
 - `recordFirebaseCrashlyticsError()` records non-fatal errors with a scope string and sanitized stringified metadata.
-- `identifyFirebaseCrashlyticsUser()` sets the authenticated user id and an email attribute when available.
-- `clearFirebaseCrashlyticsUser()` clears user id/email attributes on sign-out.
+- `identifyFirebaseCrashlyticsUser()` sets the authenticated user id without signed-in email identity.
+- `clearFirebaseCrashlyticsUser()` clears user identity on sign-out.
 - `runFirebaseCrashlyticsNonFatalTest()` records a controlled non-fatal test error.
 - `triggerFirebaseCrashlyticsTestCrash()` calls Crashlytics `crash()`, but this must be used only in an approved proof session.
 - `didFirebaseCrashlyticsCrashPreviously()` can read whether the previous execution ended in a crash.
@@ -103,10 +103,10 @@ Readiness status:
 - Crashlytics bootstrap is wired into the app shell.
 - Non-fatal recording helper exists.
 - Forced crash helper exists but is dev-only and must not be run without approval.
-- Dashboard receipt is not proved.
-- Release/preview build receipt is not proved.
+- Dashboard receipt is browser-proved for Android release `1.0.0 (55)`.
+- Approved non-fatal/forced-crash proof is not run; forced crash still requires explicit owner approval.
 
-Proof status: Implemented / Proof Pending.
+Proof status: Implemented / Dashboard Receipt Proved.
 
 ## Performance Monitoring Readiness
 
@@ -126,25 +126,25 @@ Readiness status:
 - App-shell bootstrap is wired.
 - Manual custom trace helper exists.
 - Dev-only proof helper exists.
-- Dashboard receipt is not proved.
-- Release/preview build receipt is not proved.
+- Dashboard receipt is browser-proved for Analytics, Crashlytics, and Performance on Android release `1.0.0 (55)`.
+- Approved non-fatal/forced-crash proof is not run; forced crash still requires explicit owner approval.
 
-Proof status: Implemented / Proof Pending.
+Proof status: Implemented / Dashboard Receipt Proved.
 
 ## Config And Package Checklist
 
 | Check | Repo result | Status |
 | --- | --- | --- |
-| Android package matches Firebase app | `google-services.json` package is `com.chillywood.mobile` | Implemented / Proof Pending |
-| Firebase Android config file present | `google-services.json` exists | Implemented / Proof Pending |
-| Firebase app plugin configured | `@react-native-firebase/app` in `app.config.ts` | Implemented / Proof Pending |
-| Crashlytics plugin configured | `@react-native-firebase/crashlytics` in `app.config.ts` | Implemented / Proof Pending |
-| Performance plugin configured | `@react-native-firebase/perf` in `app.config.ts` | Implemented / Proof Pending |
-| Crashlytics package installed | `@react-native-firebase/crashlytics` in `package.json` | Implemented / Proof Pending |
-| Performance package installed | `@react-native-firebase/perf` in `package.json` | Implemented / Proof Pending |
-| Crashlytics collection posture visible | `firebase.json` enables auto collection and debug setting | Implemented / Proof Pending |
-| Release build proof | Not run in this lane | Proof Pending |
-| Firebase Console receipt | Not verified in this lane | Proof Pending |
+| Android package matches Firebase app | `google-services.json` package is `com.chillywood.mobile` | Implemented / Dashboard Receipt Proved |
+| Firebase Android config file present | `google-services.json` exists | Implemented / Dashboard Receipt Proved |
+| Firebase app plugin configured | `@react-native-firebase/app` in `app.config.ts` | Implemented / Dashboard Receipt Proved |
+| Crashlytics plugin configured | `@react-native-firebase/crashlytics` in `app.config.ts` | Implemented / Dashboard Receipt Proved |
+| Performance plugin configured | `@react-native-firebase/perf` in `app.config.ts` | Implemented / Dashboard Receipt Proved |
+| Crashlytics package installed | `@react-native-firebase/crashlytics` in `package.json` | Implemented / Dashboard Receipt Proved |
+| Performance package installed | `@react-native-firebase/perf` in `package.json` | Implemented / Dashboard Receipt Proved |
+| Crashlytics collection posture visible | `firebase.json` enables auto collection and debug setting | Implemented / Dashboard Receipt Proved |
+| Release build proof | Browser readback showed Android release `1.0.0 (55)` in Crashlytics and Performance | Proved |
+| Firebase Console receipt | Browser readback confirmed Analytics activity, Crashlytics release receipt, and Performance traces | Proved |
 
 ## Privacy And Logging Checklist
 
@@ -157,14 +157,13 @@ Repo findings:
 - Player source and Watch-Party diagnostic logs were already moved behind dev-only logging in prior launch-readiness work.
 - Firebase helper warnings are dev-only.
 - Crashlytics receives runtime errors through `recordFirebaseCrashlyticsError()` in production by design.
-- Crashlytics user identity currently includes user id and email attribute when a signed-in email exists.
-- Firebase Analytics also sets user id and email user property.
+- Crashlytics and Firebase Analytics no longer set signed-in email identity after the Wave 6 telemetry redaction fix; user id may still be used where configured.
 - Performance network probe uses the Supabase anon key as a request header but does not log it. It is dev proof tooling, not a release user action.
 
 Privacy and safety requirements before Public v1:
 
 - Privacy Policy and Play Data Safety must disclose diagnostics/crash/performance collection if Firebase remains enabled.
-- Privacy Policy and Play Data Safety must disclose user id/email association with diagnostics/analytics if that posture remains.
+- Privacy Policy and Play Data Safety must disclose diagnostics/analytics identity posture if Firebase remains enabled.
 - No signed media URLs, Supabase JWTs, LiveKit participant tokens, RevenueCat receipts, purchase tokens, service-role keys, or Google service/private keys should be passed as Crashlytics metadata.
 - Future report calls must keep metadata small and non-secret.
 - Release log audit must still check native SDK logs, including RevenueCat billing logs, because that belongs partly to the billing lane and was not changed here.
@@ -247,12 +246,12 @@ Do not mark Performance Done until the dashboard receipt is captured.
 
 | Area | Status | Reason | Next action |
 | --- | --- | --- | --- |
-| Firebase Android config | Implemented / Proof Pending | Config file exists and package identity matches, but dashboard/project ownership proof is external | Firebase owner verifies Console app/package and config provenance |
-| Crashlytics package/plugin | Implemented / Proof Pending | Package and config plugin are present | Build release-like app and verify dashboard receipt |
-| Crashlytics bootstrap | Implemented / Proof Pending | App shell calls bootstrap and non-fatal helper exists | Run approved non-fatal proof |
+| Firebase Android config | Implemented / Dashboard Receipt Proved | Config file exists and package identity matches browser-proved Console app/package | Keep config provenance in release records |
+| Crashlytics package/plugin | Implemented / Dashboard Receipt Proved | Package and config plugin are present; dashboard receipt is browser-proved | Run approved non-fatal proof only if owner requests it |
+| Crashlytics bootstrap | Implemented / Dashboard Receipt Proved | App shell calls bootstrap and non-fatal helper exists | Run approved non-fatal proof only if owner requests it |
 | Crashlytics forced crash | Proof Pending | Helper exists dev-only; no crash was run | Run only after explicit approval |
-| Performance package/plugin | Implemented / Proof Pending | Package and config plugin are present | Build release-like app and verify dashboard receipt |
-| Performance bootstrap trace | Implemented / Proof Pending | `app_runtime_bootstrap` is wired | Verify trace appears in Firebase Console |
+| Performance package/plugin | Implemented / Dashboard Receipt Proved | Package and config plugin are present; dashboard receipt is browser-proved | Keep release smoke telemetry checks |
+| Performance bootstrap trace | Implemented / Dashboard Receipt Proved | `app_runtime_bootstrap` is wired; dashboard showed app start and network traces | Keep release smoke telemetry checks |
 | Performance network/custom probe | Implemented / Proof Pending | Dev-only probe exists | Run in approved internal/dev proof build |
 | Privacy/Data Safety disclosure | External Setup Pending | Firebase diagnostics/performance/analytics must be reconciled with policy copy | Legal/privacy owner updates Play Data Safety and Privacy Policy truth |
 | Release log audit | Proof Pending | Static search found no Firebase-lane blocker, but release logs were not captured | Run bounded release log audit during release smoke |
@@ -272,12 +271,12 @@ Stop and do not mark Done if:
 
 ## Exact Next Action
 
-After the Android preview/release build lane is ready, run a bounded Firebase proof session:
+After the next Play/internal or release-candidate build is available, run only the remaining bounded Firebase follow-up if owner wants deeper telemetry proof:
 
 1. Build/install a preview or release-like Android build from current `main`.
 2. Confirm Firebase Console project `chillywood-app` and package `com.chillywood.mobile`.
 3. Run approved Crashlytics non-fatal proof.
 4. Run forced crash proof only with explicit owner approval.
 5. Navigate the app to generate Performance events and run the dev/internal Performance probe if that build supports it.
-6. Save dashboard screenshots/log summaries under `/tmp/chillywood-firebase-proof-*`.
-7. Update the launch trackers from Proof Pending to Done only after Firebase Console receipt exists.
+6. Save only sanitized dashboard notes or redacted screenshots under `/tmp/chillywood-firebase-proof-*`.
+7. Do not rerun forced-crash proof without explicit owner approval.

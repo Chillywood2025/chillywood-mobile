@@ -108,7 +108,7 @@ expectFile("analytics_crash", "google-services.json", "Firebase config presence"
 expectText("analytics_crash", "Firebase Analytics package", read("package.json"), "@react-native-firebase/analytics", "Analytics provider presence");
 expectText("analytics_crash", "Firebase Crashlytics package", read("package.json"), "@react-native-firebase/crashlytics", "Crash provider presence");
 expectText("analytics_crash", "Firebase Performance package", read("package.json"), "@react-native-firebase/perf", "Monitoring provider presence");
-expectText("analytics_crash", "Crashlytics runbook proof-pending posture", firebaseRunbook, "Dashboard receipt is not proved", "Dashboard proof honesty");
+expectText("analytics_crash", "Crashlytics runbook dashboard receipt posture", firebaseRunbook, "Dashboard Receipt Proved", "Dashboard proof honesty");
 expectText("analytics_crash", "Crash redaction patterns", firebaseCrashlytics, "SENSITIVE_TEXT_PATTERNS", "Secret redaction");
 expectText("analytics_crash", "Runtime error redaction patterns", read("_lib/logger.ts"), "SENSITIVE_TEXT_PATTERNS", "Secret redaction");
 expectNoText("analytics_crash", "Analytics email user property removed", firebaseAnalytics, "email:", "Telemetry privacy");

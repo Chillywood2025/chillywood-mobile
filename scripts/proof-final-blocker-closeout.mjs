@@ -76,10 +76,10 @@ const blockerRows = [
     blocker: "Firebase dashboard receipt proof",
     type: "external/dashboard",
     currentStatus: "Firebase Analytics, Crashlytics, and Performance packages/config/runbooks exist; email identity removal remains in code.",
-    proofResult: "No Firebase Console receipt was captured in this pass.",
-    launchImpact: "Monitoring receipt remains pending, but no telemetry secret leak was found by static scan.",
-    requiredNextAction: "Capture sanitized Firebase dashboard receipt from a release-like build, without private data screenshots.",
-    finalClassification: "Pending external/provider",
+    proofResult: "Browser readback confirmed Firebase Console receipt for Analytics dashboard activity, Crashlytics Android release 1.0.0 (55), and Performance Monitoring app/network traces for Android release 1.0.0 (55). No private Console screenshots were saved.",
+    launchImpact: "Dashboard receipt blocker is closed; keep normal release telemetry privacy checks in final smoke.",
+    requiredNextAction: "Keep sanitized dashboard receipt notes in final proof artifacts and do not save private Console screenshots.",
+    finalClassification: "Closed",
   },
 ];
 
@@ -102,7 +102,7 @@ addCheck(
   "auth email safety wording",
 );
 addCheck("Firebase packages present", packageJson.includes("@react-native-firebase/analytics") && packageJson.includes("@react-native-firebase/crashlytics") && packageJson.includes("@react-native-firebase/perf"), "Firebase analytics/crash/perf package entries");
-addCheck("Firebase dashboard receipt not overclaimed", firebaseRunbook.includes("Dashboard receipt is not proved") || finalDoc.includes("No Firebase Console receipt was captured"), "dashboard receipt pending posture");
+addCheck("Firebase dashboard receipt closed by browser readback", finalDoc.includes("Browser readback confirmed Firebase Console receipt"), "dashboard receipt browser proof");
 addCheck("Refund support avoids guarantee", refundSupport.includes("without promising outcomes"), "support playbook refund caution");
 addCheck("Account deletion restore window documented", accountLegal.includes("30-day restore window"), "account legal runbook deletion truth");
 

@@ -407,7 +407,7 @@ Wave 6 status:
   - Installed Android account deletion/restore visual proof: `Pending installed proof`; backend/runtime account deletion/restore proof is passed.
   - Installed Android blocked-viewer visual proof: `Pending installed proof`; backend/runtime blocked-user enforcement is passed.
   - Play/internal proof where prior lanes used direct APK/backend proof: `Pending installed proof`; required before broad public launch unless explicitly accepted as temporary.
-  - Firebase dashboard receipt proof: `Pending external/provider`; Firebase packages/config/redaction are repo-proved, but Console dashboard receipt remains pending.
+  - Firebase dashboard receipt proof: `Closed` by later browser readback; Firebase packages/config/redaction are repo-proved, and Console receipt is now documented in the full launch-condition closeout artifact.
 - Launch Candidate Installed Proof:
   - Artifact: `/tmp/app-launch-candidate-installed-proof-20260624T191018Z/`.
   - Device/build: physical Android `R5CR120QCBF / SM-N986U1`, Android 11, package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, first install `2026-06-22 15:54:35`, last update `2026-06-24 11:25:01`.
@@ -415,15 +415,24 @@ Wave 6 status:
   - Play/internal launch-candidate installed smoke: `Pending installed proof`; current installer readback is `null`, not `com.android.vending`.
   - Installed account deletion/restore visual proof: `Pending installed proof`; backend/runtime proof remains the source of truth, and installed mutation requires an approved proof-account session plus explicit mutation approval.
   - Installed blocked-viewer visual proof: `Pending installed proof`; backend/runtime block enforcement remains the source of truth, and installed visual proof requires blocker, blocked-viewer, and unrelated-viewer installed sessions or a safe account-switching harness.
-  - Firebase dashboard receipt proof: `Pending external/provider`; Firebase packages/config/redaction remain repo-proved, but no safe Console dashboard receipt was available.
+  - Firebase dashboard receipt proof: `Closed` by later browser readback; Firebase packages/config/redaction remain repo-proved, and Console receipt is now documented in the full launch-condition closeout artifact.
 - Focused Play/Internal Installed Smoke Proof:
   - Artifact: `/tmp/app-play-internal-installed-smoke-proof-20260624-141445-rerun/`.
   - Device/build: physical Android `R5CR120QCBF / SM-N986U1`, Android 11, package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, first install `2026-06-22 15:54:35`, last update `2026-06-24 11:25:01`.
   - Play/internal installed proof: `Pending installed proof`; required pass condition was not met because installer is `null`, not `com.android.vending`.
   - Direct APK installed smoke remains `Pass`; installed app launched with no fatal crash in the captured logcat window, Home was visible, Settings opened from Home, and artifact token/secret scan was clean.
   - Signed-out legal/support, signed-out private-denial, and Premium-gate installed smoke were not reclassified as Play/internal proof because the installed source is not Play/internal. Existing route-contract/runtime guards remain validation support, but Play/internal proof still requires a Play-installed runtime.
-  - Firebase dashboard receipt proof remains `Pending external/provider`; no safe Console dashboard receipt was available.
-- Launch Condition Decision: broad public launch is `No-Go / Not yet`; closed/internal testing is `Conditional Go`; production prep / release-candidate proof is `Conditional Go`. No remaining blocker is currently classified as an app-controlled backend safety blocker. Final Go/No-Go stays `Partial / Not Ready` until the remaining external/provider, installed-proof, dashboard receipt, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk.
+  - Firebase dashboard receipt proof is now `Closed` by browser readback in the full launch-condition closeout artifact.
+- Full Launch Condition Closeout:
+  - Artifact: `/tmp/app-full-launch-condition-closeout-proof-20260624-142550/`.
+  - Play Console browser readback: internal testing track is active and available to internal testers; latest visible internal release is `1.0.0`, released Jun 19, with versionCode `54`. Tester list exists, but the exact attached-device Google account was not verified because that would require private account inspection or owner confirmation.
+  - Play/internal installed proof remains `Pending installed proof`: the launch-candidate repo/device versionCode is `55`, the Play internal visible release is versionCode `54`, and the attached device still reports installer `null`.
+  - Firebase dashboard receipt proof is `Closed`: browser readback confirmed Firebase Console access for project `chillywood-app`, Android app package `com.chillywood.mobile`, Analytics dashboard activity, Crashlytics release `1.0.0 (55)` with 100% crash-free users/sessions and no open crash issues for the selected crash filter, and Performance Monitoring app/network traces for release `1.0.0 (55)`. No private Console screenshots were saved.
+  - Installed account deletion/restore visual proof remains `Pending installed proof`: installed session was not verified as an approved deletion/restore proof user, and no explicit mutation approval was provided.
+  - Installed blocked-viewer visual proof remains `Pending installed proof`: blocker, blocked-viewer, and unrelated-viewer installed sessions or a safe account-switching harness were not available.
+  - Permanent purge/de-identification remains `Pending policy decision`: current proof covers scheduled deletion/restore, public hiding, disabled/deactivated denial, and admin suspend/restore; no purge implementation was approved in this pass.
+  - Provider refund execution remains manual/external / pending provider automation; no real refund was executed, and the app must not claim instant or automatic provider refunds.
+- Launch Condition Decision: broad public launch is `No-Go / Not yet`; closed/internal testing is `Conditional Go`; production prep / release-candidate proof is `Conditional Go`. No remaining blocker is currently classified as an app-controlled backend safety blocker. Final Go/No-Go stays `Partial / Not Ready` until the remaining external/provider, Play/internal runtime, installed-proof, and policy/legal blockers are closed or explicitly accepted by the owner with documented risk.
 - Safety confirmation: No secrets, credentials, service-role keys, provider/payment keys, push tokens, LiveKit tokens, signed URLs, proof passwords, local env files, payment changes, Premium pricing/product changes, live money, payout activation, RLS weakening, LiveKit authority loosening, participant cap increase, scan gate weakening, auth/reset weakening, fake proof users in production UI, or broad route ownership changes.
 
 ## Public V1 Final Regression
