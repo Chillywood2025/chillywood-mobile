@@ -1,5 +1,380 @@
 # NEXT TASK
 
+## Sequential Production Proof Waves — Android First
+
+Purpose:
+
+This section tracks the remaining production-readiness proof lanes in grouped waves. The original 0–17 items are preserved inside these waves. Codex must work one wave at a time, report honestly, and check items off only when proof is complete.
+
+Rules:
+
+- Run one wave at a time.
+- Do not start the next wave until the current wave is reported, committed, and the tracked working tree is clean.
+- Use seeded proof users instead of random manual accounts.
+- Prefer proof/audit first.
+- Only make code changes if a real bug or missing production gap is found.
+- Keep fixes small and focused.
+- Do not raise participant caps without proof.
+- Do not enable live money, payouts, cash-out, withdrawals, payable balances, production buy buttons, or real payout movement.
+- Do not weaken Premium gates, RLS, route ownership, LiveKit authority, auth routing, or reset-password safety.
+- Do not commit secrets, service-role keys, push tokens, LiveKit tokens, raw HLS URLs, signed storage URLs, proof credentials, SMTP keys, provider secrets, or tester passwords.
+- BrowserStack remains deferred unless explicitly approved by the owner.
+- Android-first remains the current production proof path.
+- One physical Android device is available; use backend/API/headless proof where multi-device proof is impossible.
+- Separate proof status into:
+  - installed physical Android proof
+  - backend/API fixture proof
+  - headless/load proof
+  - not proved
+- Do not fake production closeout.
+
+### Wave 0 — Seeded Proof Harness
+
+- [ ] 0. Seeded Proof Harness
+
+Required outcome:
+- Reusable proof-only users exist or are documented.
+- Roles, temp grants, proof IDs, expiration rules, and cleanup rules exist.
+- Proof users are clearly marked as test/proof accounts.
+- No real user data is used.
+- No credentials or secrets are committed.
+- Later waves can reuse the same seeded users.
+
+Seeded proof users should cover at minimum:
+- proof_host_001
+- proof_creator_001
+- proof_free_viewer_001
+- proof_premium_viewer_001
+- proof_blocked_001
+- proof_circle_member_001
+- proof_circle_non_member_001
+- proof_call_caller_001
+- proof_call_recipient_001
+- proof_busy_call_user_001
+- proof_paid_video_buyer_001
+- proof_ticket_buyer_001
+- proof_event_pass_buyer_001
+- proof_subscriber_001
+- proof_vip_001
+- proof_deleted_pending_001
+- proof_admin_operator_001, only if a safe operator proof path already exists
+
+Wave 0 status:
+- Verdict:
+- Commit:
+- Proof artifacts:
+- Seeded users:
+- Cleanup status:
+- Remaining blockers:
+
+### Wave 1 — Installed Build + Auth + Signed-Out Deep Links
+
+Covers original lanes:
+- [ ] 1. Installed Build + Runtime Truth
+- [ ] 2. Auth + Signed-Out + Deep-Link Safety
+
+Required outcome:
+- Current installed Android build is identified by package id, versionCode, installer, runtime version, commit, and EAS update group if applicable.
+- App launches.
+- Home opens.
+- Settings opens.
+- Sign-in works.
+- Sign-out works.
+- Signup smoke passes if needed.
+- Forgot/reset password opens reset-password screen, allows password update, clears recovery session, returns to login, and does not auto-enter Home before update.
+- Signed-out public routes expose only allowed public content.
+- Signed-out private routes deny safely.
+- Deep links route safely through login when required.
+- Notification/deep-link handoff does not leak sensitive params.
+- No access token, refresh token, reset token, token hash, push token, LiveKit token, signed URL, or credential appears in logs or artifacts.
+
+Wave 1 status:
+- Verdict:
+- Commit:
+- Proof artifacts:
+- Device/build:
+- Seeded users used:
+- Code changes:
+- Remaining blockers:
+- Safety confirmation:
+
+### Wave 2 — Creator Media Pipeline
+
+Covers original lanes:
+- [ ] 3. Creator Upload-to-Playback
+- [ ] 4. VOD / Rendition Access Proof
+- [ ] 5. Attachment-Heavy Comments
+- [ ] 6. Malware Scan Gates
+
+Required outcome:
+- Creator uploads a real non-zero video from installed Android or a clearly documented safe proof path.
+- Metadata saves.
+- Draft/private/unpublished content stays hidden from non-owners.
+- Published clean content appears on public Platform.
+- Viewer playback works.
+- Non-owner cannot edit/delete owner media.
+- Owner can unpublish/delete and storage cleanup is proved or honestly reported pending.
+- Free viewer rendition rules are enforced.
+- Premium viewer rendition rules are enforced if a safe Premium proof user exists.
+- Missing renditions show honest pending/unavailable state.
+- Raw master/original files do not leak.
+- Comments, replies, links, and attachments work where Public V1 requires them.
+- Large files are blocked safely.
+- Unsupported files are blocked safely.
+- Deleted/hidden/reported attachments disappear where required.
+- Scan-pending media does not appear publicly.
+- Clean scanned media appears.
+- Blocked/malware media stays hidden.
+- Scanner-down behavior fails safe.
+- Admin/operator scan readout is sanitized and does not reveal storage paths or secrets.
+
+Wave 2 status:
+- Verdict:
+- Commit:
+- Proof artifacts:
+- Device/build:
+- Seeded users used:
+- Media ids:
+- Storage objects:
+- Code changes:
+- Remaining blockers:
+- Safety confirmation:
+
+### Wave 3 — Capacity + Calls + Notifications + Network Recovery
+
+Covers original lanes:
+- [ ] 7. Capacity + LiveKit + Chi'lly Chat Calls + Notifications
+- [ ] 9. Network / Background / Restart Recovery
+- [ ] 10. Android Notification Channel Upgrade Behavior
+
+Required outcome:
+- Current real/proved limits are documented for:
+  - Live Stage total participants
+  - Live Stage active camera/mic seats
+  - Live Stage passive viewers/listeners
+  - Live Watch-Party total participants
+  - Live Watch-Party active camera/mic seats
+  - Watch-Party Live total participants
+  - Watch-Party Live active camera/mic seats
+  - Party Room shared-player participants
+  - Chi'lly Chat voice call participants
+  - Chi'lly Chat video call participants
+  - chat thread participants
+- Configured app cap, backend/token cap, UI/display cap, active media cap, proved runtime cap, and unproved theoretical cap are separated.
+- Host join, viewer join, speaker request, host approve, camera publish, mic publish, 5th speaker denial, blocked user denial, Circle member/non-member behavior, reconnect, room cleanup, and 10-passive-viewer headless/load proof are attempted where possible.
+- Server CPU/RAM/bandwidth/TURN metrics are captured if available. If unavailable, report metrics unavailable and do not claim scale readiness.
+- Chi'lly Chat proves or reports pending:
+  - voice invite
+  - video invite
+  - foreground incoming sheet
+  - background push/ring
+  - killed-app tap routing
+  - accept
+  - decline
+  - missed timeout
+  - busy
+  - caller cancel
+  - end call
+  - max 4 participants
+  - 5th participant denial
+  - call history card
+- Notification matrix includes:
+  - chat message
+  - voice call incoming ring
+  - video call incoming ring
+  - missed call
+  - declined/canceled/busy call state
+  - followed creator live
+  - Circle friend live
+  - event starts soon
+  - public upload
+  - replay later / replay ready
+  - Save Replay processing/ready if implemented
+  - comment/reply if implemented
+  - mention if implemented
+  - moderation/report status if implemented
+  - Premium/payment if implemented
+  - system/admin announcement if implemented
+- Android notification channels are proved:
+  - chilly_chat_messages
+  - chilly_chat_calls_v2
+  - chilly_chat_missed_calls
+- Fresh install and upgraded install behavior are separated.
+- Old `chilly_chat_calls` channel does not incorrectly silence or override `chilly_chat_calls_v2`.
+- Background call notification uses `chilly_chat_calls_v2`, not generic/default channel.
+- Message notifications do not use call ringtone.
+- Missed-call notifications use missed-call channel.
+- Foreground, background, killed app, locked screen, permission denied, permission allowed, vibration on/off, ringtone on/off, and Silent / Vibrate Only are documented where possible.
+- App background, phone lock, app restart, network drop, host disconnect, viewer rejoin, stale membership, stale room, and call invite expiration behavior are proved or honestly marked pending.
+
+Wave 3 status:
+- Verdict:
+- Commit:
+- Proof artifacts:
+- Device/build:
+- Seeded users used:
+- Room ids:
+- Call invite ids:
+- Notification ids:
+- Code changes:
+- Remaining blockers:
+- Safety confirmation:
+
+### Wave 4 — Abuse / Spam / Rate Limits
+
+Covers original lane:
+- [ ] 8. Abuse / Spam / Rate Limits
+
+Required outcome:
+- Prove or report gaps for:
+  - call invite spam
+  - chat spam
+  - seat request spam
+  - room creation spam
+  - upload spam
+  - report spam
+  - DMCA/report form spam
+  - password-reset spam
+  - duplicate notification prevention
+  - blocked-user harassment prevention
+  - muted/blocked users triggering calls or notifications
+  - excessive push/ring loops
+- Backend-side controls must be identified separately from UI-only controls.
+- If rate limits are missing, report them as production gaps instead of faking success.
+
+Wave 4 status:
+- Verdict:
+- Commit:
+- Proof artifacts:
+- Seeded users used:
+- Abuse cases tested:
+- Code changes:
+- Remaining blockers:
+- Safety confirmation:
+
+### Wave 5 — Account Lifecycle + Admin/Support + Refund/Revoke
+
+Covers original lanes:
+- [ ] 11. Account Deletion / Restore
+- [ ] 12. Support / Admin Operations
+- [ ] 13. Refund / Revoke / Expired-Access Proof
+
+Required outcome:
+- Account deletion request works from the intended in-app path.
+- 30-day restore window behavior works if currently implemented.
+- Restore works if currently implemented.
+- Deleted/disabled account behavior is clear.
+- Deleted users cannot receive calls/notifications if that is the intended production rule.
+- Posts, comments, uploads, chats, reports, purchases, moderation records, and legal/audit records behave according to policy.
+- Admin/support can find:
+  - users
+  - reports
+  - failed uploads
+  - notification attempts
+  - purchase/access issues
+  - failed LiveKit/token issues if visible
+- Admin/support can hide/remove/restore content where backed.
+- Admin/support can revoke bad proof/temp grants.
+- Non-admin access is denied.
+- Audit trails exist for sensitive actions.
+- Refund/revoke/expired-access proof covers where provider tooling allows:
+  - Premium
+  - paid video
+  - Watch-Party ticket
+  - event pass
+  - channel subscription
+  - VIP
+  - duplicate webhook
+  - late webhook
+  - refund
+  - revoke
+  - expiration
+  - access removal
+- Do not fake provider events.
+- Do not manually mutate access as proof.
+
+Wave 5 status:
+- Verdict:
+- Commit:
+- Proof artifacts:
+- Seeded users used:
+- Account ids:
+- Provider/order ids if safe:
+- Code changes:
+- Remaining blockers:
+- Safety confirmation:
+
+### Wave 6 — Legal Consistency + Rollback + Analytics + Final Go/No-Go
+
+Covers original lanes:
+- [ ] 14. Legal / Support Copy Consistency
+- [ ] 15. Rollback / Incident / Kill-Switch Proof
+- [ ] 16. Analytics / Crashlytics No-Secret Proof
+- [ ] 17. Final Combined Go / No-Go Regression
+
+Required outcome:
+- Legal/support copy matches current app behavior.
+- Platform terminology is current.
+- Privacy/support text matches real providers and data flows.
+- Money/payout copy does not promise unavailable live money or payouts.
+- Rollback path is documented and proved where possible for:
+  - bad EAS update
+  - bad Play/internal build
+  - bad Supabase Edge Function deploy
+  - bad migration/read regression
+  - bad notification dispatcher
+  - bad LiveKit room behavior
+- Kill switches or safe-disable paths are documented for:
+  - Live Stage
+  - Watch-Party Live
+  - notifications
+  - money surfaces
+  - paid creator features
+  - creator upload/display if needed
+- Known-good build/update/function versions are recorded.
+- Crash/errors are visible and useful.
+- Analytics/Crashlytics/logs do not expose:
+  - access tokens
+  - refresh tokens
+  - reset tokens
+  - token hashes
+  - push tokens
+  - LiveKit tokens
+  - signed storage URLs
+  - service-role keys
+  - provider secrets
+  - proof credentials
+- Final combined regression covers:
+  - fresh install
+  - login
+  - upload
+  - playback
+  - chat
+  - call
+  - notifications
+  - Live Stage
+  - Watch-Party Live
+  - Save Replay
+  - paid access
+  - refund/revoke
+  - account deletion
+  - admin/support
+  - signed-out deep links
+  - crash/log safety
+- Final decision must be one:
+  - Launch candidate
+  - Partial
+  - Blocked
+
+Wave 6 status:
+- Verdict:
+- Commit:
+- Proof artifacts:
+- Device/build:
+- Code changes:
+- Remaining blockers:
+- Safety confirmation:
+
 ## Public V1 Final Regression
 
 LiveKit server metrics readback and 10-passive-viewer synthetic load proof are closed. Safe current claim: 4 active camera/mic seats plus 10 synthetic passive viewers/subscribers are proved under measured `chillywood-prod-01` conditions. The active camera/mic seat cap remains 4. Real-device passive viewer scaling and TURN/cellular allocation proof remain separate pending lanes; do not raise active publisher caps or claim 10 real-device viewers from the synthetic proof.
