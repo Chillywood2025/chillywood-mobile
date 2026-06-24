@@ -57,20 +57,20 @@ const blockerRows = [
   {
     blocker: "installed account deletion/restore visual proof",
     type: "installed proof",
-    currentStatus: "Backend/runtime account deletion schedule, restore, and public fail-closed behavior are proved.",
-    proofResult: "No installed Android account deletion/restore visual sweep was run in this pass.",
-    launchImpact: "Visual proof gap remains for release-candidate signoff.",
-    requiredNextAction: "Run installed Android proof with a disposable deletion/restore proof account.",
-    finalClassification: "Pending installed proof",
+    currentStatus: "Backend/runtime account deletion schedule, restore, and public fail-closed behavior are proved; Play-installed UI/copy and restore/cancel visual proof passed.",
+    proofResult: "Installed proof artifact /tmp/app-installed-visual-closeout-proof-20260624-170135-mutation2/ captured deletion UI/copy, restore/cancel, and active/not-scheduled cleanup readback. Immediate scheduled-state visual capture remained inconclusive.",
+    launchImpact: "Partial visual proof remains for the immediate schedule-state capture unless owner accepts backend/runtime plus restore visual proof.",
+    requiredNextAction: "Rerun a narrow installed schedule-state capture or document owner acceptance of backend/runtime plus installed UI/restore proof.",
+    finalClassification: "Partial",
   },
   {
     blocker: "installed blocked-viewer visual proof",
     type: "installed proof",
     currentStatus: "Backend/runtime blocked-user harassment prevention is proved across chat, calls, comments, rooms, and Profile/Platform actions.",
-    proofResult: "No installed Android blocked-viewer visual sweep was run in this pass.",
-    launchImpact: "Visual proof gap remains if owner requires installed UI evidence.",
-    requiredNextAction: "Run installed Android proof with blocked viewer, blocker, and unrelated viewer proof accounts.",
-    finalClassification: "Pending installed proof",
+    proofResult: "Installed proof artifact /tmp/app-installed-visual-closeout-proof-20260624-170135-mutation2/ captured blocked-viewer Profile/Platform denial, blocked-action non-exposure, unrelated-viewer regression, and cleanup.",
+    launchImpact: "Installed visual blocker is closed.",
+    requiredNextAction: "Keep normal release smoke for this path in future launch candidates.",
+    finalClassification: "Closed",
   },
   {
     blocker: "Firebase dashboard receipt proof",
@@ -90,7 +90,7 @@ addCheck("Wave 5.1 commit status carried forward", finalDoc.includes("Wave 5.1 |
 addCheck("Final verdict remains honest", finalDoc.includes("Verdict: Partial / Not Ready"), "final doc verdict");
 addCheck("No broad launch-ready claim", !/Verdict:\s*Go\b/.test(finalDoc), "final doc does not claim Go");
 addCheck("Password reset blocker classified", finalDoc.includes("Pending external/provider"), "classification bucket present");
-addCheck("Installed proof blocker classified", finalDoc.includes("Pending installed proof"), "classification bucket present");
+addCheck("Installed visual proof status updated", finalDoc.includes("Installed Android account deletion/restore visual proof | installed-device proof") && finalDoc.includes("| Partial |") && finalDoc.includes("Installed Android blocked-viewer visual proof | installed-device proof"), "installed visual closeout status");
 addCheck("Policy blocker classified", finalDoc.includes("Pending policy decision"), "classification bucket present");
 addCheck("Wave 5.1 closed in tracker", nextTask.includes("Wave 5.1 — Disabled/Deactivated Access + Admin Suspend Proof: Closed"), "NEXT_TASK Wave 5.1 status");
 addCheck("Provider refund not closed", finalDoc.includes("Automated refunds cannot be claimed"), "refund truth wording");
@@ -133,7 +133,7 @@ const result = {
   mutationPerformed: false,
   noProviderRefundsRun: true,
   noInboxEmailsSent: true,
-  noInstalledDeviceProofRun: true,
+  noInstalledDeviceProofRun: false,
   blockerRows,
   checks,
   secretScan: {
@@ -152,7 +152,7 @@ writeFileSync(path.join(artifactDir, "README.md"), [
   "",
   `Generated: ${now.toISOString()}`,
   "",
-  "This is a read-only proof/classification pass. It does not send auth emails, execute provider refunds, run installed-device actions, mutate Supabase, or change app behavior.",
+  "This is a read-only proof/classification pass. It does not send auth emails, execute provider refunds, mutate Supabase, or change app behavior. Installed-device proof status is read from the recorded installed visual closeout artifact.",
   "",
   "Final Go/No-Go: Partial / Not Ready",
   "",
