@@ -49,7 +49,7 @@ No abusive production load is generated. No emails, push notifications, LiveKit 
 | Report/DMCA spam | DMCA intake validates required fields, attachment scope token, MIME, and 10 MB attachment limit. Wave 4 adds safety-report and public DMCA repeated-submission throttles. | Yes | Pass |
 | Password reset/auth email spam | Provider-managed Supabase Auth flow; Wave 1 proved safe app fallback copy. | Provider-managed, unproved here | Pending |
 | Notification/ring loop spam | Notification dedupe rows, delivery attempts, preference filtering, call/missed channels, and stale push-token revocation exist. | Yes | Pass |
-| Blocked-user harassment | Profile/channel blocks and call dispatch block checks exist; Wave 4 adds blocked-relationship denial for chat-message writes and creator/profile comments. Wave 4.2 adds blocker-owned room join/token/seat-request denial and proves no room/seat-request notification is created by blocked attempts. Reports remain intentionally available for safety. | Yes for covered runtime surfaces | Pass |
+| Blocked-user harassment | Profile/channel blocks and call dispatch block checks exist; Wave 4 adds blocked-relationship denial for chat-message writes and creator/profile comments. Wave 4.2 adds blocker-owned room join/token/seat-request denial and proves no room/seat-request notification is created by blocked attempts. Wave 4.3 adds backend follow/audience-request denial for blocked Profile/Platform relationship actions and proves unrelated viewers remain allowed. Reports remain intentionally available for safety. | Yes for covered runtime surfaces | Pass |
 
 ## Follow-Up Fixes Added
 
@@ -62,6 +62,7 @@ No abusive production load is generated. No emails, push notifications, LiveKit 
 - Blocker-owned room membership inserts/updates now deny active/reconnecting memberships for users blocked by the room host.
 - Watch-Party room messages, including durable seat-request markers, now deny users blocked by the room host.
 - `livekit-token` now denies blocked users from minting Live Stage or Watch-Party Live tokens for blocker-owned rooms, even if a stale active membership exists.
+- Profile/Platform follow and audience-request writes now deny blocked relationships through backend triggers, so hidden or disabled UI is not the only barrier.
 - Creator-video and profile-post comments now throttle rapid/duplicate submissions and deny blocked relationships.
 - Safety reports and public DMCA cases now throttle repeated submissions.
 - `media-storage` now calls the internal limiter before creating upload URLs.
@@ -70,7 +71,8 @@ No abusive production load is generated. No emails, push notifications, LiveKit 
 
 - Password reset/auth email spam remains provider-managed and pending a safe inbox/operator proof path.
 - Runtime mutation proof with approved proof accounts passed for call invite creation, chat messages, durable seat-request markers, room creation, media upload URL initiation, creator-video comments/replies, safety reports, public DMCA submissions, and blocked-user chat/call/comment notification prevention.
-- Wave 4.2 room-level blocked-user enforcement passed for blocker-owned Live Stage and Watch-Party Live joins, stale LiveKit token attempts, seat-request markers, and room/seat-request notification prevention. Reports remain intentionally available for safety. Installed profile/platform blocked-route proof remains separate route proof if later required.
+- Wave 4.2 room-level blocked-user enforcement passed for blocker-owned Live Stage and Watch-Party Live joins, stale LiveKit token attempts, seat-request markers, and room/seat-request notification prevention. Reports remain intentionally available for safety.
+- Wave 4.3 profile/platform blocked-route proof adds backend follow/request trigger enforcement and a bounded runtime proof for blocked Profile/Platform actions, unrelated viewer regression, notification suppression by failed source action, and safety-report preservation. Installed screenshots remain dependent on a device session logged in as the blocked proof user.
 
 ## Wave 4.1 Runtime Proof
 
@@ -121,6 +123,26 @@ Results:
 - Watch-Party Live seat request: blocked viewer seat-request marker denied and host notification count unchanged.
 - Unrelated viewer: join and seat-request paths preserved for both surfaces.
 - Safety/report and public legal/support routes were not changed.
+
+## Wave 4.3 Profile / Platform Block Proof
+
+Primary Profile/Platform block proof command:
+
+```sh
+node scripts/proof-wave4-profile-platform-blocked-routes.mjs --run
+```
+
+Runtime proof uses approved local proof-account env keys and writes sanitized JSON only. It must not print credentials, service-role keys, push tokens, LiveKit tokens, signed URLs, proof passwords, or provider secrets.
+
+Expected results:
+
+- Blocked Profile/Platform follow: denied with `blocked_relationship`.
+- Blocked Platform audience request: denied with `blocked_relationship`.
+- Blocked profile-post/content comment bypass: denied with `blocked_relationship`.
+- Blocked action notifications: source action fails before a host notification can be created.
+- Unrelated valid viewer: follow, audience request, and comment paths remain allowed.
+- Safety/report: blocked user can still file a safety report; public legal/support routes are unchanged.
+- Installed route screenshots/UI dumps remain best-effort and require the physical Android session to be logged in as the blocked proof user.
 
 Bug fixed during runtime proof:
 

@@ -34,6 +34,7 @@ export type ChannelAudienceActionReason =
   | "missing_channel_user_id"
   | "missing_target_user_id"
   | "self_target"
+  | "blocked_relationship"
   | "already_following"
   | "not_following"
   | "request_pending"
@@ -451,6 +452,21 @@ export async function followChannel(channelUserId: string): Promise<ChannelAudie
     });
   }
 
+  const blockedRow = await readBlockRow(context.channelUserId, context.viewerUserId).catch(() => null);
+  if (blockedRow) {
+    return buildActionResult({
+      action: "follow",
+      status: "blocked",
+      reason: "blocked_relationship",
+      message: "This Platform cannot be followed while an audience block exists between these accounts.",
+      actorScope: context.actorScope,
+      requiredScope: "viewer",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId: context.viewerUserId,
+    });
+  }
+
   const existing = await readFollowerRow(context.channelUserId, context.viewerUserId);
   if (existing) {
     return buildActionResult({
@@ -505,6 +521,9 @@ export async function readMyChannelFollowState(channelUserId: string): Promise<C
   if (!context.channelUserId) return "unavailable";
   if (!context.viewerUserId) return "signed_out";
   if (context.viewerUserId === context.channelUserId) return "self";
+
+  const blockedRow = await readBlockRow(context.channelUserId, context.viewerUserId).catch(() => null);
+  if (blockedRow) return "unavailable";
 
   const existing = await readFollowerRow(context.channelUserId, context.viewerUserId);
   return existing ? "following" : "not_following";
@@ -832,6 +851,22 @@ export async function createChannelAudienceRequest(input: {
       status: "blocked",
       reason: "self_target",
       message: "You cannot create an audience request for your own channel.",
+      actorScope: context.actorScope,
+      requiredScope: "viewer",
+      channelUserId: context.channelUserId,
+      viewerUserId: context.viewerUserId,
+      targetUserId: context.viewerUserId,
+      requestKind,
+    });
+  }
+
+  const blockedRow = await readBlockRow(context.channelUserId, context.viewerUserId).catch(() => null);
+  if (blockedRow) {
+    return buildActionResult({
+      action: "create_request",
+      status: "blocked",
+      reason: "blocked_relationship",
+      message: "Audience requests are unavailable while a Platform audience block exists between these accounts.",
       actorScope: context.actorScope,
       requiredScope: "viewer",
       channelUserId: context.channelUserId,

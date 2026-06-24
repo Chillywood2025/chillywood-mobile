@@ -40,12 +40,14 @@ const files = {
   abuseRepairMigration: assertFile("supabase/migrations/20260624130902_wave4_abuse_rate_limit_trigger_repairs.sql"),
   abuseCommentTypeRepairMigration: assertFile("supabase/migrations/20260624132543_wave4_comment_block_type_repair.sql"),
   roomBlockMigration: assertFile("supabase/migrations/20260624143000_wave4_room_level_block_policy.sql"),
+  profilePlatformBlockMigration: assertFile("supabase/migrations/20260624144500_wave4_profile_platform_blocked_route_policy.sql"),
   dmcaMigration: assertFile("supabase/migrations/202605220002_dmca_attachments_uploader_counter_notice.sql"),
   profileGuard: assertFile("scripts/guard-profile-production-policy.mjs"),
   callPushGuard: assertFile("scripts/guard-chilly-chat-call-push-policy.mjs"),
   uploadProof: assertFile("scripts/proof-wave2-automated-creator-upload.mjs"),
   finalMediaProof: assertFile("scripts/proof-wave2-final-creator-media-closure.mjs"),
   roomBlockProof: assertFile("scripts/proof-wave4-room-level-blocks.mjs"),
+  profilePlatformBlockProof: assertFile("scripts/proof-wave4-profile-platform-blocked-routes.mjs"),
 };
 
 const hardFailures = [];
@@ -173,6 +175,31 @@ requireInvariant(
     "unrelatedWatchPartyLiveJoin",
   ]),
   "Wave 4.2 proof script must cover blocked and unrelated room paths for both live surfaces",
+);
+
+requireInvariant(
+  includesAll(files.profilePlatformBlockMigration, [
+    "enforce_channel_follow_block_guard",
+    "enforce_channel_audience_request_block_guard",
+    "has_channel_audience_block_between",
+    "blocked_relationship",
+    "channel_followers",
+    "channel_audience_requests",
+  ]),
+  "Wave 4.3 migration must deny blocked Profile/Platform follow and audience-request writes",
+);
+
+requireInvariant(
+  includesAll(files.profilePlatformBlockProof, [
+    "blocked follow from Profile/Platform",
+    "blocked audience request from Platform",
+    "blocked profile-post comment bypass",
+    "unrelated viewer follow",
+    "unrelated viewer audience request",
+    "safety report route",
+    "notificationsSuppressed",
+  ]),
+  "Wave 4.3 proof script must cover blocked Profile/Platform actions, unrelated viewer regression, notifications, and safety route preservation",
 );
 
 requireInvariant(
@@ -389,20 +416,22 @@ const rows = [
   },
   {
     row: "blocked-user harassment",
-    currentControl: "Profile/channel audience block policy gates public profile/platform surfaces and Chi'lly Chat call dispatch; Wave 4 DB triggers block chat-message writes and creator/profile comments across blocked relationships. Wave 4.2 blocks blocker-owned room joins, LiveKit token issuance, and seat-request markers, and proves no host room/seat-request notification is created by blocked attempts.",
+    currentControl: "Profile/channel audience block policy gates public profile/platform surfaces and Chi'lly Chat call dispatch; Wave 4 DB triggers block chat-message writes and creator/profile comments across blocked relationships. Wave 4.2 blocks blocker-owned room joins, LiveKit token issuance, and seat-request markers, and proves no host room/seat-request notification is created by blocked attempts. Wave 4.3 blocks Profile/Platform follow and audience-request writes across blocked relationships.",
     backendEnforced: true,
     uiEnforced: true,
-    proofMethod: "Static profile/call/notification policy audit plus Wave 4.2 room-block proof.",
+    proofMethod: "Static profile/call/notification policy audit plus Wave 4.2 room-block proof and Wave 4.3 Profile/Platform block proof.",
     evidence: [
       "scripts/guard-profile-production-policy.mjs",
       "supabase/functions/chilly-chat-call-dispatch/index.ts",
       "supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql",
       "supabase/migrations/20260624143000_wave4_room_level_block_policy.sql",
+      "supabase/migrations/20260624144500_wave4_profile_platform_blocked_route_policy.sql",
       "_lib/notifications.ts",
       "scripts/proof-wave4-room-level-blocks.mjs",
+      "scripts/proof-wave4-profile-platform-blocked-routes.mjs",
     ],
     status: "Pass",
-    gap: "Reports remain intentionally available for safety. Installed profile/platform route proof remains a later route-proof concern if required.",
+    gap: "Reports remain intentionally available for safety. Installed screenshots require a device session logged in as the blocked proof user; backend route/action proof is covered.",
   },
 ];
 
