@@ -260,14 +260,24 @@ Required outcome:
 - If rate limits are missing, report them as production gaps instead of faking success.
 
 Wave 4 status:
-- Verdict:
-- Commit:
-- Proof artifacts:
-- Seeded users used:
+- Verdict: Partial — backend access controls, notification dedupe, media validation, scan gates, LiveKit publish authority caps, and several UI duplicate guards are present, but broad per-user/per-action throttling is not complete. Missing backend throttles are documented as production gaps rather than marked closed.
+- Commit: current Wave 4 proof/tracker commit pending.
+- Proof artifacts: `docs/WAVE4_ABUSE_RATE_LIMIT_PROOF.md`; `scripts/proof-wave4-abuse-rate-limits.mjs`; runtime proof folder `/tmp/app-wave4-abuse-rate-limit-proof-*` from the validation pass.
+- Seeded users used: no new users were created; this was a bounded static/backend audit using the Wave 0 seeded-user harness and existing ignored proof env key inventory.
 - Abuse cases tested:
-- Code changes:
-- Remaining blockers:
-- Safety confirmation:
+  - Call invite spam: Partial. Call push dispatch enforces caller/callee membership, thread membership, audience blocks, invite status/expiry, notification dedupe, and stale token revocation. No backend active-invite uniqueness or per-caller invite cooldown was found.
+  - Chat spam: Gap. Chat RLS requires sender auth and thread membership, and the app blocks empty sends, but no backend chat message rate limit or `chat_messages` body length/non-empty check was found.
+  - Seat request spam: Partial. LiveKit token issuance keeps active camera/mic capped at 4 and downgrades unapproved/over-cap users to viewer/no-publish. No backend seat-request spam throttle was found.
+  - Room creation/join spam: Partial. Membership joins use upsert/idempotent rows and stale room guards exist. No per-user room creation rate limit was found.
+  - Upload spam: Partial. `media-storage` enforces auth, supported type, size, scan-safe public access, and Wave 2 non-zero proof. No upload attempt quota/cooldown proof was found.
+  - Comment/reply spam: Partial. Creator-video comments have DB body length checks and Wave 2 proved comment/reply/attachment safety. No repeated comment/reply rate limit was found.
+  - Report/DMCA spam: Partial. DMCA intake validates required fields, attachment scope token, MIME, and 10 MB attachment limit. No repeated report/DMCA submission throttle proof was found.
+  - Password-reset/auth email spam: Pending. Supabase Auth/provider throttling is expected but not proved with a safe inbox/operator path in this lane.
+  - Duplicate notification prevention and ring loops: Pass for backed dispatch paths. `notification_event_dedupes`, delivery attempts, preference filtering, call/missed channels, and `DeviceNotRegistered` token revocation exist. Broader notification runtime sweeps remain Wave 3 pending.
+  - Blocked-user harassment prevention: Partial. Profile/channel block policy and Chi'lly Chat call dispatch block checks exist, but global blocked-user enforcement is not proved across chat-message writes, comments, reports, room joins, and every notification category.
+- Code changes: added read-only Wave 4 proof script and proof report; no app UI, Supabase function, migration, RLS, payment, Premium, LiveKit, scan, or media behavior changed.
+- Remaining blockers: safe mutation credentials/operator path for live API spam tests; provider proof for password-reset/auth email throttling; backend rate-limit/idempotency work for call invite creation, chat messages, seat requests, room creation, upload attempts, comments/replies, reports/DMCA, and global blocked-user enforcement.
+- Safety confirmation: No secrets, credentials, service-role keys, push tokens, LiveKit tokens, signed URLs, payment changes, Premium entitlement changes, RLS weakening, LiveKit authority loosening, participant cap increases, fake production users, fake proof UI, or broad route ownership changes.
 
 ### Wave 5 — Account Lifecycle + Admin/Support + Refund/Revoke
 
