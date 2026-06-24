@@ -995,7 +995,12 @@ export default function PublicChannelScreen() {
           {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
           <Text style={styles.publicChip}>{platformVideoVisibilityLabel(video)}</Text>
         </View>
-        <TouchableOpacity style={styles.playButton} activeOpacity={0.86} onPress={() => openPlayer(video)}>
+        <TouchableOpacity
+          style={styles.playButton}
+          activeOpacity={0.86}
+          onPress={() => openPlayer(video)}
+          testID="platform-content-open-button"
+        >
           <Text style={styles.playButtonText}>Play</Text>
         </TouchableOpacity>
       </View>
@@ -1034,7 +1039,12 @@ export default function PublicChannelScreen() {
           {formatDate(video.createdAt) ? <Text style={styles.metaText}>{formatDate(video.createdAt)}</Text> : null}
           <Text style={styles.publicChip}>{platformVideoVisibilityLabel(video)}</Text>
         </View>
-        <TouchableOpacity style={styles.shelfPlayButton} activeOpacity={0.86} onPress={() => openPlayer(video)}>
+        <TouchableOpacity
+          style={styles.shelfPlayButton}
+          activeOpacity={0.86}
+          onPress={() => openPlayer(video)}
+          testID="platform-content-open-button"
+        >
           <Text style={styles.playButtonText}>Play</Text>
         </TouchableOpacity>
       </View>

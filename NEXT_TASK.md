@@ -89,14 +89,14 @@ Required outcome:
 - No access token, refresh token, reset token, token hash, push token, LiveKit token, signed URL, or credential appears in logs or artifacts.
 
 Wave 1 status:
-- Verdict:
-- Commit:
-- Proof artifacts:
-- Device/build:
-- Seeded users used:
-- Code changes:
-- Remaining blockers:
-- Safety confirmation:
+- Verdict: Partial
+- Commit: pending
+- Proof artifacts: `/tmp/chillywood-wave1-installed-auth-deeplink-proof-20260623-205523`
+- Device/build: Physical Android `R5CR120QCBF` / `SM_N986U1`, package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `55`, installer `null` / direct APK install, last update `2026-06-23 21:12:56`.
+- Seeded users used: Existing owner/proof login from ignored local proof-account env keys; no credentials committed.
+- Code changes: Added Public Platform `platform-content-open-button` proof selector required by `guard:route-contracts`; no behavior change.
+- Remaining blockers: Play/internal installer proof unavailable on the attached device; disposable proof inbox/reset email link proof unavailable; expired reset-link fallback buttons did not activate in installed Android proof; signed-out public legal deep links redirected safely to Sign In instead of opening public legal screens directly.
+- Safety confirmation: No secrets, credentials, service-role keys, auth tokens, push tokens, LiveKit tokens, payment changes, Premium behavior changes, RLS changes, LiveKit authority changes, live money/payout activation, or unrelated route ownership changes.
 
 ### Wave 2 — Creator Media Pipeline
 
