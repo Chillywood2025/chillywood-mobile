@@ -12,13 +12,13 @@ Seven-flow production switchboard: Partial. The explicit switch catalog, default
 
 Seven-flow production prep: Partial. The production-prep checklist now records flow-by-flow provider mapping, owner activation steps, support/refund/dispute policy, monitoring/readback expectations, and rollback paths in `docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md`. It keeps activation blocked pending owner approval and provider production verification per flow.
 
-Creator-money production-labeled products: Partial. Owner chose option B: sandbox-labeled creator-money product IDs remain sandbox/test-only, and clean production-labeled IDs must be created before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the `monthly` base plan remains missing. The five one-time products are absent from the Google Play catalog; browser execution reached the one-time pricing step with approved first-step metadata, then stopped before save because exact purchase-option IDs and US-only availability/pricing completion still require owner/operator action. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist. See `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`.
+Creator-money production-labeled products: Blocked. Owner chose option B: sandbox-labeled creator-money product IDs remain sandbox/test-only, and clean production-labeled IDs must be created before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, purchase-option IDs, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the `monthly` base plan remains missing because the approved US-only auto-renewing Monthly USD 4.99 draft failed with `Your changes couldn't be saved`. The five one-time products are absent from the Google Play catalog because Google Play rejects the owner-approved purchase-option IDs with underscores; the field accepts lowercase letters, numbers, and hyphens only. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist. See `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`.
 
-Creator-money production-labeled product IDs: Partial.
+Creator-money production-labeled product IDs: Blocked.
 
 Creator-money tax/legal/compliance plan: Partial.
 
-Creator-money product creation: Partial.
+Creator-money product creation: Blocked.
 
 Codex must not guess tax/legal/compliance fields.
 

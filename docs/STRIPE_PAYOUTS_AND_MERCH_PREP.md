@@ -26,7 +26,7 @@ Creator-money activation still requires owner approval and controlled proof.
 
 Creator-money tax/legal/compliance plan: Partial.
 
-Creator-money product creation: Partial.
+Creator-money product creation: Blocked.
 
 Codex must not guess tax/legal/compliance fields.
 

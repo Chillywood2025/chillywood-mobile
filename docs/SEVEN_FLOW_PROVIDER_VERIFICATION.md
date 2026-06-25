@@ -14,13 +14,13 @@ Seven-flow production prep: Partial.
 
 Seven-flow provider verification: Partial. Provider verification used browser dashboard evidence from Google Play Console and RevenueCat for the Android package `com.chillywood.mobile`. The configured product IDs are present in the dashboards and match the repo/app configuration. Production activation remains blocked by owner activation approval and, for creator-money flows, by owner decision on whether to keep the sandbox-labeled configured IDs or replace them with owner-approved production product IDs.
 
-Creator-money production-labeled products: Partial. Owner chose option B: create clean production-labeled creator-money product IDs before any creator-money launch. The owner approved the recommended production IDs, recommended starting prices, and United States only first. Browser dashboard setup created Google Play subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans; the required `monthly` base plan remains missing. The one-time products `cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_vip_pass_499`, and `cw_event_pass_099` are absent from the Google Play catalog. Browser execution reached the one-time pricing step with approved first-step metadata, then stopped before save because exact purchase-option IDs and US-only availability/pricing completion still require owner/operator action. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist. Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
+Creator-money production-labeled products: Blocked. Owner chose option B: create clean production-labeled creator-money product IDs before any creator-money launch. The owner approved the recommended production IDs, recommended starting prices, purchase-option IDs, and United States only first. Browser dashboard setup created Google Play subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans; the required `monthly` base plan remains missing because the approved US-only auto-renewing Monthly USD 4.99 draft failed with `Your changes couldn't be saved`. The one-time products `cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_vip_pass_499`, and `cw_event_pass_099` are absent from the Google Play catalog because Google Play rejects the owner-approved purchase-option IDs with underscores; the field accepts lowercase letters, numbers, and hyphens only. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist. Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
 
-Creator-money production-labeled product IDs: Partial.
+Creator-money production-labeled product IDs: Blocked.
 
 Creator-money tax/legal/compliance plan: Partial.
 
-Creator-money product creation: Partial.
+Creator-money product creation: Blocked.
 
 Codex must not guess tax/legal/compliance fields.
 

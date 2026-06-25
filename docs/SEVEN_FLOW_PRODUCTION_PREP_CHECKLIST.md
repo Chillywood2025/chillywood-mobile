@@ -14,13 +14,13 @@ Seven-flow production prep: Partial. The flows are prepared behind explicit swit
 
 Seven-flow provider verification: Partial. Provider verification used browser dashboard evidence. The configured product IDs are present in Google Play Console and RevenueCat and match the repo/app configuration; production activation remains blocked by owner approval and, for creator-money flows, owner decision on whether to keep sandbox-labeled configured IDs or replace them with production-labeled IDs.
 
-Creator-money production-labeled products: Partial. Owner chose option B: clean production-labeled IDs are required before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the required `monthly` base plan remains missing. The five one-time products are absent from the Google Play catalog; browser execution reached the one-time pricing step with approved first-step metadata, then stopped before save because exact purchase-option IDs and US-only availability/pricing completion still require owner/operator action. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist.
+Creator-money production-labeled products: Blocked. Owner chose option B: clean production-labeled IDs are required before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, purchase-option IDs, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the required `monthly` base plan remains missing: the approved US-only auto-renewing Monthly USD 4.99 draft failed with `Your changes couldn't be saved`. The five one-time products are absent from the Google Play catalog because Google Play rejects the owner-approved purchase-option IDs with underscores; the field accepts lowercase letters, numbers, and hyphens only. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist.
 
-Creator-money production-labeled product IDs: Partial.
+Creator-money production-labeled product IDs: Blocked.
 
 Creator-money tax/legal/compliance plan: Partial.
 
-Creator-money product creation: Partial.
+Creator-money product creation: Blocked.
 
 Codex must not guess tax/legal/compliance fields.
 

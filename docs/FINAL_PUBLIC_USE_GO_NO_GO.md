@@ -95,10 +95,10 @@ Seven-flow money classification:
 - Provider refunds remain manual/external.
 - Production provider products are verified only where dashboard/API evidence exists.
 - Configured Google Play and RevenueCat product IDs match the app; creator-money products remain sandbox-labeled and require owner decision before any activation.
-- Creator-money production-labeled product IDs: Partial.
-- Creator-money production-labeled products: Partial.
+- Creator-money production-labeled product IDs: Blocked.
+- Creator-money production-labeled products: Blocked.
 - Creator-money tax/legal/compliance plan: Partial.
-- Creator-money product creation: Partial.
+- Creator-money product creation: Blocked.
 - Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
 - Approved starting prices are launch defaults, not the only future prices.
 - Future custom pricing requires provider-backed price tiers/products/base plans/offers.
@@ -108,7 +108,7 @@ Seven-flow money classification:
 - Stripe payouts remain OFF.
 - Stripe merch checkout remains OFF.
 - Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
-- The owner approved the recommended production creator-money product IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans. The `monthly` base plan remains missing. The five one-time product IDs are absent from the Google Play catalog; browser execution reached the one-time pricing step with approved first-step metadata, then stopped before final save because exact purchase-option IDs and US-only availability/pricing completion still require owner/operator action.
+- The owner approved the recommended production creator-money product IDs, recommended starting prices, purchase-option IDs, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans. The `monthly` base plan remains missing because the approved US-only auto-renewing Monthly USD 4.99 draft failed with `Your changes couldn't be saved`. The five one-time product IDs are absent from the Google Play catalog because Google Play rejects the owner-approved purchase-option IDs with underscores; the field accepts lowercase letters, numbers, and hyphens only.
 - `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` is complete enough for owner/legal/tax review and records the provider fields Codex may fill, the owner-stop tax/legal/compliance fields, and the rule that Codex must not guess tax/legal/compliance fields.
 - RevenueCat import/mapping remains blocked until the matching Google Play production-labeled products/base plans exist.
 - Stripe is reserved for future creator payouts and physical merch; it is not used for Android digital creator-money purchases in this lane.

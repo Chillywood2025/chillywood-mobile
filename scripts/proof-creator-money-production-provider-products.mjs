@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
-const artifactDir = path.join("/tmp", `app-creator-money-provider-compliance-execution-proof-${timestamp}`);
+const artifactDir = path.join("/tmp", `app-creator-money-provider-product-option-proof-${timestamp}`);
 
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
@@ -20,6 +20,7 @@ const products = [
     flow: "Tips",
     sandboxProductId: "cw_creator_tip_sandbox_099",
     productionProductId: "cw_creator_tip_099",
+    purchaseOptionId: "tip_099",
     productType: "one_time_consumable",
     displayName: "Creator Tip",
     shortDescription: "Send optional support to a creator. Tips do not unlock content.",
@@ -28,16 +29,17 @@ const products = [
     futureCustomPricing: "Additional tip price products or approved provider-backed price tiers only.",
     switchName: "tipsEnabled",
     moneySwitch: "tips_enabled",
-    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
+    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "None / contribution receipt only.",
     accessNotCreated: "Premium, content, room, VIP, subscription, event, payout.",
-    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
+    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
   },
   {
     flow: "Paid Video",
     sandboxProductId: "cw_paid_content_access_sandbox_099",
     productionProductId: "cw_paid_content_access_099",
+    purchaseOptionId: "paid_video_099",
     productType: "one_time_consumable",
     displayName: "Paid Video Access",
     shortDescription: "Unlock access to one paid creator video.",
@@ -46,16 +48,17 @@ const products = [
     futureCustomPricing: "Approved paid-video price tiers mapped to verified provider products only.",
     switchName: "paidVideoEnabled",
     moneySwitch: "paid_content_enabled",
-    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
+    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact paid video target only.",
     accessNotCreated: "Premium, other videos, rooms, VIP, subscription, event, payout.",
-    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
+    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
   },
   {
     flow: "Watch-Party Ticket",
     sandboxProductId: "cw_watch_party_live_ticket_sandbox_099",
     productionProductId: "cw_watch_party_ticket_099",
+    purchaseOptionId: "ticket_099",
     productType: "one_time_consumable",
     displayName: "Watch-Party Ticket",
     shortDescription: "Unlock access to one ticketed Watch-Party room.",
@@ -64,11 +67,11 @@ const products = [
     futureCustomPricing: "Approved ticket price tiers mapped to verified provider products only.",
     switchName: "watchPartyTicketEnabled",
     moneySwitch: "watch_party_tickets_enabled",
-    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
+    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact room/ticket target only.",
     accessNotCreated: "Premium, other rooms, LiveKit publish/host/mod, VIP, subscription, payout.",
-    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
+    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
   },
   {
     flow: "Channel Subscription",
@@ -84,16 +87,17 @@ const products = [
     futureCustomPricing: "Approved subscription products, base plans, or offers only.",
     switchName: "channelSubscriptionEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Created product record; base plan missing and blocked by US-only pricing/availability save",
+    googlePlayStatus: "Product record exists; base plan save failed after US-only monthly $4.99 draft setup",
     revenueCatStatus: "Blocked until Google Play base plan exists",
     accessCreated: "Exact creator Platform subscription only.",
     accessNotCreated: "Premium, VIP, paid videos, rooms, events, other creators, payout.",
-    ownerAction: "Create Google Play monthly base plan only after US-only pricing/availability is conclusively scoped; import in RevenueCat and attach only to creator_channel_subscription.",
+    ownerAction: "Resolve Google Play save error for monthly base plan; draft showed US-only, auto-renewing monthly, default grace/account hold, and USD 4.99 before save failed.",
   },
   {
     flow: "VIP",
     sandboxProductId: "cw_vip_pass_sandbox_499",
     productionProductId: "cw_vip_pass_499",
+    purchaseOptionId: "vip_499",
     productType: "one_time_non_consumable",
     displayName: "Creator VIP Pass",
     shortDescription: "Unlock creator-specific VIP access.",
@@ -102,16 +106,17 @@ const products = [
     futureCustomPricing: "Approved VIP price tiers mapped to verified provider products only.",
     switchName: "vipEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
+    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact creator VIP only.",
     accessNotCreated: "Premium, subscription, other creators, paid videos, rooms, events, payout.",
-    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
+    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
   },
   {
     flow: "Event Pass",
     sandboxProductId: "cw_event_pass_sandbox_099",
     productionProductId: "cw_event_pass_099",
+    purchaseOptionId: "event_099",
     productType: "one_time_consumable",
     displayName: "Creator Event Pass",
     shortDescription: "Unlock access to one paid creator event.",
@@ -120,11 +125,11 @@ const products = [
     futureCustomPricing: "Approved event pass price tiers mapped to verified provider products only.",
     switchName: "eventPassEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
+    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact event target only.",
     accessNotCreated: "Premium, VIP, subscription, paid videos, rooms, other events, payout.",
-    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
+    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
   },
 ];
 
@@ -138,7 +143,11 @@ const git = (args) => {
 
 const priorCommitPresent = (() => {
   try {
-    return execFileSync("git", ["cat-file", "-t", "cee895e5234b3e7b2a46651365f9361d9ddde868"], { cwd: root, encoding: "utf8" }).trim() === "commit";
+    return [
+      "9d848c47541f9ce397ecc0789de127eb3f11c441",
+      "45b4e706d6a89b3df9aa24315ffac3585a2cf1be",
+      "cee895e5234b3e7b2a46651365f9361d9ddde868",
+    ].some((commit) => execFileSync("git", ["cat-file", "-t", commit], { cwd: root, encoding: "utf8" }).trim() === "commit");
   } catch {
     return false;
   }
@@ -163,6 +172,7 @@ const oldToNewProductIdMatrix = products.map((product) => ({
   flow: product.flow,
   oldSandboxId: product.sandboxProductId,
   newProductionId: product.productionProductId,
+  purchaseOptionId: product.purchaseOptionId ?? "Not applicable",
   productType: product.productType,
   launchDefault: product.productionBasePlanId ? `${product.launchPriceUsd}, base plan ${product.productionBasePlanId}` : product.launchPriceUsd,
   region: product.launchRegion,
@@ -171,9 +181,36 @@ const oldToNewProductIdMatrix = products.map((product) => ({
   activationStatus: "OFF",
 }));
 
+const purchaseOptionIdMatrix = products
+  .filter((product) => product.purchaseOptionId)
+  .map((product) => ({
+    flow: product.flow,
+    productionProductId: product.productionProductId,
+    approvedPurchaseOptionId: product.purchaseOptionId,
+    googlePlayValidation: product.purchaseOptionId.includes("_")
+      ? "Blocked: Google Play field accepts lowercase letters, numbers, and hyphens; underscores are invalid."
+      : "Format valid",
+    status: "Blocked",
+  }));
+
+const basePlanMatrix = products
+  .filter((product) => product.productionBasePlanId)
+  .map((product) => ({
+    flow: product.flow,
+    productionProductId: product.productionProductId,
+    basePlanId: product.productionBasePlanId,
+    type: "auto-renewing monthly",
+    region: product.launchRegion,
+    price: product.launchPriceUsd,
+    graceAccountHold: "Google Play default visible state: 7 day grace period; calculate account hold automatically.",
+    saveResult: "Blocked: Google Play displayed \"Your changes couldn't be saved\" after US-only USD 4.99 draft setup.",
+    status: "Blocked",
+  }));
+
 const googlePlayProductMatrix = products.map((product) => ({
   flow: product.flow,
   productionProductId: product.productionProductId,
+  purchaseOptionId: product.purchaseOptionId ?? "Not applicable",
   productType: product.productType,
   displayName: product.displayName,
   shortDescription: product.shortDescription,
@@ -207,6 +244,7 @@ const repoConfigMatrix = products.map((product) => ({
   flow: product.flow,
   sandboxIdKnown: switchboardText.includes(product.sandboxProductId),
   productionIdKnown: switchboardText.includes(product.productionProductId) && docsText.includes(product.productionProductId),
+  purchaseOptionIdDocumented: product.purchaseOptionId ? docsText.includes(product.purchaseOptionId) : true,
   displayNameDocumented: docsText.includes(product.displayName),
   shortDescriptionDocumented: docsText.includes(product.shortDescription),
   launchPriceKnown: switchboardText.includes(product.launchPriceUsd) && docsText.includes(product.launchPriceUsd),
@@ -340,8 +378,10 @@ const checks = [
   {
     id: "tax_legal_compliance_plan_present",
     ok: exists("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md")
-      && has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Creator-money tax/legal/compliance plan: Partial")
-      && has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Creator-money product creation: Partial")
+      && (has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Creator-money tax/legal/compliance plan: Partial")
+        || has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Creator-money tax/legal/compliance plan: Blocked"))
+      && (has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Creator-money product creation: Partial")
+        || has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Creator-money product creation: Blocked"))
       && has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Codex must not guess tax/legal/compliance fields")
       && products.every((product) => has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", product.productionProductId)),
     detail: "Tax/legal/compliance provider-product plan exists and covers all six creator-money production IDs.",
@@ -389,6 +429,20 @@ const checks = [
       && switchboardText.includes("United States only first")
       && docsText.includes("Approved starting prices are launch defaults, not the only future prices"),
     detail: "Owner-approved display names, descriptions, starting prices, and US-only-first launch region are documented as defaults.",
+  },
+  {
+    id: "purchase_option_ids_documented",
+    ok: purchaseOptionIdMatrix.every((row) => docsText.includes(row.approvedPurchaseOptionId))
+      && (docsText.includes("Google Play rejects approved purchase-option ID because underscores are invalid")
+        || docsText.includes("Google Play rejects the owner-approved purchase-option IDs with underscores")
+        || docsText.includes("the owner-approved purchase-option IDs are invalid in Google Play")),
+    detail: "Owner-approved purchase-option IDs are documented with current Google Play validation blocker.",
+  },
+  {
+    id: "base_plan_settings_documented",
+    ok: basePlanMatrix.every((row) => docsText.includes(row.basePlanId) && docsText.includes(row.price))
+      && docsText.includes("Your changes couldn't be saved"),
+    detail: "Channel Subscription base-plan settings and Google Play save blocker are documented.",
   },
   {
     id: "custom_pricing_provider_backed_fail_closed",
@@ -455,6 +509,8 @@ const artifactPayloads = {
   "must-stop-field-matrix.json": mustStopFieldMatrix,
   "proceed-field-matrix.json": proceedFieldMatrix,
   "old-to-new-product-id-matrix.json": oldToNewProductIdMatrix,
+  "purchase-option-id-matrix.json": purchaseOptionIdMatrix,
+  "base-plan-matrix.json": basePlanMatrix,
   "google-play-product-matrix.json": googlePlayProductMatrix,
   "revenuecat-product-matrix.json": revenueCatProductMatrix,
   "custom-pricing-policy-matrix.json": customPricingPolicyMatrix,
@@ -500,9 +556,9 @@ Generated: ${new Date().toISOString()}
 
 This proof is read-only and dry-run. It made no purchases, no provider refund calls, no payout calls, no transfer calls, no withdrawal calls, no provider dashboard screenshot capture, and printed no provider secrets or private user data.
 
-Verdict: Partial.
+Verdict: Blocked.
 
-Reason: the tax/legal/compliance provider-product plan is documented for owner review. Google Play still has only the creator channel subscription product record cw_channel_subscription_monthly_499; its monthly base plan remains missing, and the production one-time products remain missing because exact purchase-option IDs and US-only pricing/availability saves still require owner/operator action. RevenueCat import/mapping remains incomplete.
+Reason: the purchase-option/base-plan provider setup attempt is documented. Google Play rejects the owner-approved one-time purchase-option IDs because underscores are invalid in that field. The Channel Subscription monthly base-plan draft reached US-only, auto-renewing monthly, default grace/account hold, and USD 4.99, but Google Play returned "Your changes couldn't be saved." RevenueCat import/mapping remains incomplete.
 
 Files:
 
@@ -511,6 +567,8 @@ Files:
 - must-stop-field-matrix.json
 - proceed-field-matrix.json
 - old-to-new-product-id-matrix.json
+- purchase-option-id-matrix.json
+- base-plan-matrix.json
 - google-play-product-matrix.json
 - revenuecat-product-matrix.json
 - custom-pricing-policy-matrix.json
@@ -523,7 +581,7 @@ Files:
 `);
 
 const summary = {
-  verdict: "Partial",
+  verdict: "Blocked",
   artifactDir,
   branch: git(["branch", "--show-current"]),
   head: git(["rev-parse", "HEAD"]),
@@ -533,6 +591,8 @@ const summary = {
   existingProductRecords: ["Channel Subscription product record"],
   readyProducts: [],
   missingOrBlockedProducts: products.filter((product) => product.flow !== "Channel Subscription").map((product) => product.flow).concat(["Channel Subscription monthly base plan"]),
+  purchaseOptionIdValidation: "Blocked: owner-approved one-time purchase-option IDs contain underscores, but Google Play accepts only lowercase letters, numbers, and hyphens.",
+  channelSubscriptionBasePlanSave: "Blocked: Google Play returned \"Your changes couldn't be saved\" after US-only USD 4.99 draft setup.",
   premiumUnchanged: checks.find((check) => check.id === "premium_unchanged")?.ok === true,
   creatorMoneySwitchesOff: checks.find((check) => check.id === "creator_money_switches_off")?.ok === true,
   payoutsOff: switchOffStateProof.payouts === "OFF",
