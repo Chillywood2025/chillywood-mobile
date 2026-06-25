@@ -47,6 +47,7 @@ import {
     resolveBrandingConfig,
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
+import { getAppMonetizationRuntimeFeatures } from "../../_lib/featureFlags";
 import {
     resolveRoomAccess,
     type RoomAccessResolution,
@@ -473,6 +474,10 @@ export default function WatchPartyRoomScreen() {
   const liveBubbleOrderRef = useRef<string>("");
   const branding = resolveBrandingConfig(appConfig);
   const monetizationConfig = resolveMonetizationConfig(appConfig);
+  const paidWatchPartyCheckoutAvailable = useMemo(() => {
+    const runtime = getAppMonetizationRuntimeFeatures();
+    return runtime.liveMoneyEnabled && runtime.paidContentCheckoutEnabled;
+  }, []);
   const roomEntryConfirmed = !!room
     && !loading
     && !notFound
@@ -1959,6 +1964,10 @@ export default function WatchPartyRoomScreen() {
   const onBuyPaidTicketFromRoomGate = useCallback(async () => {
     const normalizedPartyId = String(room?.partyId ?? partyId ?? "").trim();
     if (!normalizedPartyId || paidTicketBusy) return;
+    if (!paidWatchPartyCheckoutAvailable) {
+      setPaidTicketNotice("Paid Watch-Party Seat Pass checkout is not available yet.");
+      return;
+    }
     setPaidTicketBusy(true);
     setPaidTicketNotice(null);
     try {
@@ -1978,7 +1987,7 @@ export default function WatchPartyRoomScreen() {
     } finally {
       setPaidTicketBusy(false);
     }
-  }, [paidTicketBusy, partyId, room?.partyId]);
+  }, [paidTicketBusy, paidWatchPartyCheckoutAvailable, partyId, room?.partyId]);
 
   // ── Watch together ───────────────────────────────────────────────────────────
   const onWatchTogether = useCallback(async () => {
@@ -2788,9 +2797,9 @@ export default function WatchPartyRoomScreen() {
           </View>
           <Text style={styles.ticketPrice}>{priceLabel}</Text>
           <Text style={styles.errorBody}>
-            {paidTicketGate.requiresPurchase
+            {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable
               ? `This Seat Pass unlocks access to this Watch-Party room only for ${priceLabel}. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.`
-              : "This paid Watch-Party Seat Pass is not available right now."}
+              : "Paid Watch-Party Seat Pass checkout is not available yet."}
           </Text>
           <MoneyScopeStrip
             includes="Access to this Watch-Party room target only."
@@ -2800,16 +2809,17 @@ export default function WatchPartyRoomScreen() {
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           {paidTicketGate.requiresPurchase ? (
             <TouchableOpacity
-              style={[styles.secondaryBtn, styles.accessPrimaryButton, paidTicketBusy && styles.secondaryBtnDisabled]}
+              style={[styles.secondaryBtn, styles.accessPrimaryButton, (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.secondaryBtnDisabled]}
               onPress={onBuyPaidTicketFromRoomGate}
               activeOpacity={0.85}
-              disabled={paidTicketBusy}
+              disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
               testID="watch-party-ticket-purchase-button"
               accessibilityRole="button"
               accessibilityLabel="Get Watch-Party Seat Pass"
+              accessibilityState={{ disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable, busy: paidTicketBusy }}
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                {paidTicketBusy ? "Opening Google Play" : "Get Seat"}
+                {paidTicketBusy ? "Opening Store" : paidWatchPartyCheckoutAvailable ? "Get Seat" : "Not Available Yet"}
               </Text>
             </TouchableOpacity>
           ) : null}

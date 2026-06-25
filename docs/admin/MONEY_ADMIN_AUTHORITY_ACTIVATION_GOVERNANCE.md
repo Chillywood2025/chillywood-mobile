@@ -4,6 +4,8 @@ Status: Money admin authority and activation governance: Closed / Partial / Bloc
 
 Verdict: Closed for repo-side authority governance. Partial for future public money activation because Premium monthly, creator-money, live money, payouts, Stripe Connect live use, merch checkout, and provider refund automation still require separate owner-approved lanes or provider readiness. This lane does not activate money.
 
+Public non-money feature enablement is tracked in `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md`. That lane enables safe public app systems only and keeps Premium monthly public purchase, Premium annual, Creator Channel Subscription, creator-money, `live_money_enabled`, payouts, Stripe Connect, merch checkout, and provider refund automation off, blocked, or pending separate owner-approved proof. No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
+
 This document defines who can approve, view, record, pause, freeze, override, or kill-switch money-related systems in the app. It does not create provider products, mutate Google Play, mutate RevenueCat, enable payouts, enable Stripe Connect, enable merch checkout, execute purchases, execute provider refunds, or turn on public money behavior.
 
 Required launch truth:

@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+Public non-money feature enablement update: `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md` closes the app-controlled public non-money switchboard. This lane enables safe public app systems only; `live_money_enabled`, creator-money, payouts, Stripe Connect, merch checkout, payout movement, provider refund automation, Premium annual, Creator Channel Subscription, and public Premium monthly purchase remain off, blocked, or pending separate owner-approved proof. No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
+
 Money admin authority update: First Owner / Owner controls activation authority. Premium monthly activation requires a separate owner-approved purchase proof lane; Premium annual remains provider-blocked; creator-money remains OFF; `live_money_enabled` remains OFF; payouts and payout movement remain OFF; provider refunds remain manual/external.
 
 Verdict: Partial.

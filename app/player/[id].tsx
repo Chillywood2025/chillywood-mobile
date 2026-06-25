@@ -56,6 +56,7 @@ import {
 import { trackEvent } from "../../_lib/analytics";
 import { getMonetizationAccessSheetPresentation } from "../../_lib/monetization";
 import { formatMonetizationCurrency } from "../../_lib/creatorMonetization";
+import { getAppMonetizationRuntimeFeatures } from "../../_lib/featureFlags";
 import { purchasePaidVideoAccess } from "../../_lib/creatorPaidVideos";
 import {
     getRuntimeControlBlockedCopy,
@@ -6124,6 +6125,10 @@ export default function PlayerScreen() {
       creatorVideo.paidContentAccess.currency ?? "usd",
     )
     : "";
+  const paidVideoCheckoutAvailable = useMemo(() => {
+    const runtime = getAppMonetizationRuntimeFeatures();
+    return runtime.liveMoneyEnabled && runtime.paidContentCheckoutEnabled;
+  }, []);
   const handlePaidVideoUnlock = useCallback(async () => {
     debugLog("paid-video", "paid_video_unlock_pressed", {
       hasCreatorVideo: !!creatorVideo,
@@ -6131,6 +6136,10 @@ export default function PlayerScreen() {
       signedIn: isSignedIn,
     });
     if (!creatorVideo || paidVideoUnlockBusy) return;
+    if (!paidVideoCheckoutAvailable) {
+      setPaidVideoUnlockMessage("Paid creator video checkout is not available yet.");
+      return;
+    }
     if (!isSignedIn) {
       setPaidVideoUnlockMessage("Sign in before unlocking this creator video.");
       router.push("/login" as Parameters<typeof router.push>[0]);
@@ -6176,7 +6185,7 @@ export default function PlayerScreen() {
     } finally {
       setPaidVideoUnlockBusy(false);
     }
-  }, [creatorVideo, isSignedIn, paidVideoUnlockBusy]);
+  }, [creatorVideo, isSignedIn, paidVideoCheckoutAvailable, paidVideoUnlockBusy]);
   const source = useMemo(() => {
     if (displayItem?.video_url && displayItem.video_url.trim()) return { uri: displayItem.video_url.trim() };
     if (isCreatorVideoPlayback) return null;
@@ -8730,10 +8739,10 @@ export default function PlayerScreen() {
                   style={[
                     styles.playerAccessPrimaryBtn,
                     styles.paidVideoUnlockPrimaryButton,
-                    paidVideoUnlockBusy && styles.secondaryBtnDisabled,
+                    (paidVideoUnlockBusy || !paidVideoCheckoutAvailable) && styles.secondaryBtnDisabled,
                   ]}
                   activeOpacity={0.86}
-                  disabled={paidVideoUnlockBusy}
+                  disabled={paidVideoUnlockBusy || !paidVideoCheckoutAvailable}
                   onPress={() => {
                     void handlePaidVideoUnlock();
                   }}
@@ -8744,7 +8753,9 @@ export default function PlayerScreen() {
                   {paidVideoUnlockBusy ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.playerAccessPrimaryText}>Unlock Video</Text>
+                    <Text style={styles.playerAccessPrimaryText}>
+                      {paidVideoCheckoutAvailable ? "Unlock Video" : "Not Available Yet"}
+                    </Text>
                   )}
                 </TouchableOpacity>
                 {paidVideoUnlockMessage ? (

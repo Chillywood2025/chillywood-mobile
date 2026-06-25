@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+Public non-money feature enablement update: `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md` closes safe public app-system enablement while keeping public purchase, creator-money, `live_money_enabled`, payouts, Stripe/merch, provider refunds, Premium annual, and Creator Channel Subscription unavailable unless a separate owner-approved lane changes that.
+
 Money admin authority update: this prep checklist does not activate money. Dual approval is required for future payout activation and future `live_money_enabled`; emergency money kill switch is First Owner/Owner-controlled and audited; no Google Play, RevenueCat, Stripe, payout, purchase, refund, or product mutation happened.
 
 Verdict: Partial.

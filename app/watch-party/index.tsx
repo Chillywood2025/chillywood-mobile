@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     DEFAULT_APP_CONFIG,
     readAppConfig,
@@ -7,6 +7,7 @@ import {
     resolveFeatureConfig,
     resolveMonetizationConfig,
 } from "../../_lib/appConfig";
+import { getAppMonetizationRuntimeFeatures } from "../../_lib/featureFlags";
 import {
   resolveRoomAccess,
   type RoomAccessResolution,
@@ -332,6 +333,11 @@ export default function WatchPartyIndexScreen() {
       accessKey: safeAccessKey || (isLiveRoom ? "live-first" : "watch-party-live"),
     });
     return false;
+  }, []);
+
+  const paidWatchPartyCheckoutAvailable = useMemo(() => {
+    const runtime = getAppMonetizationRuntimeFeatures();
+    return runtime.liveMoneyEnabled && runtime.paidContentCheckoutEnabled;
   }, []);
 
   useEffect(() => {
@@ -852,6 +858,10 @@ export default function WatchPartyIndexScreen() {
   };
 
   const onSavePaidTicketOffer = useCallback(async () => {
+    if (!paidWatchPartyCheckoutAvailable) {
+      setPaidTicketNotice("Paid Watch-Party Seat Passes are not available yet.");
+      return;
+    }
     const targetRoom = preparedRoom?.room ?? preview?.room ?? null;
     const partyId = String(targetRoom?.partyId ?? "").trim();
     if (!targetRoom || !partyId || targetRoom.roomType === "live") {
@@ -885,9 +895,13 @@ export default function WatchPartyIndexScreen() {
     } finally {
       setPaidTicketBusy(false);
     }
-  }, [entryTitleName, paidTicketSeatLimit, preparedRoom, preview]);
+  }, [entryTitleName, paidTicketSeatLimit, paidWatchPartyCheckoutAvailable, preparedRoom, preview]);
 
   const onBuyPaidTicketAndJoin = useCallback(async () => {
+    if (!paidWatchPartyCheckoutAvailable) {
+      setPaidTicketNotice("Paid Watch-Party Seat Pass checkout is not available yet.");
+      return;
+    }
     const targetPreview = preview ?? preparedRoom;
     const partyId = String(targetPreview?.room.partyId ?? "").trim();
     if (!targetPreview || !partyId) {
@@ -915,7 +929,7 @@ export default function WatchPartyIndexScreen() {
     } finally {
       setPaidTicketBusy(false);
     }
-  }, [isSignedIn, navigateToPreviewRoom, preparedRoom, preview, router]);
+  }, [isSignedIn, navigateToPreviewRoom, paidWatchPartyCheckoutAvailable, preparedRoom, preview, router]);
 
   const onResolveJoinAccess = useCallback(async (action: "purchase" | "restore") => {
     if (!pendingAccessPreview || !pendingAccessDecision || !accessSheetReason) {
@@ -1472,10 +1486,10 @@ export default function WatchPartyIndexScreen() {
           <View style={styles.permissionsCard}>
             <AppText scale="caption" style={styles.permissionsLabel}>ROOM PASSES</AppText>
             <AppText scale="footnote" style={styles.permissionsBody}>
-              Seat Passes are sandbox/test only and not payable while live money is off. This Seat Pass unlocks access to this Watch-Party room only. It does not include Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, other rooms, or Live Stage.
+              Paid Watch-Party Seat Passes are not available yet. This keeps live money off while room entry, Premium gates, and host controls remain available.
             </AppText>
             <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Seat Pass unlock?" />
-            {hostLabel === "You are hosting" ? (
+            {hostLabel === "You are hosting" && paidWatchPartyCheckoutAvailable ? (
               <>
                 <TextInput
                   value={paidTicketSeatLimit}
@@ -1495,11 +1509,11 @@ export default function WatchPartyIndexScreen() {
                   accessibilityLabel="Set up paid Watch-Party Seat Pass"
                 >
                   <AppText scale="footnote" style={styles.generateCodeButtonText}>
-                    {paidTicketBusy ? "Saving Seat Pass" : "Set Up $0.99 Sandbox Seat Pass"}
+                    {paidTicketBusy ? "Saving Seat Pass" : "Set Up Seat Pass"}
                   </AppText>
                 </TouchableOpacity>
               </>
-            ) : paidTicketGate?.requiresPurchase ? (
+            ) : paidTicketGate?.requiresPurchase && paidWatchPartyCheckoutAvailable ? (
               <TouchableOpacity
                 style={[styles.generateCodeButton, paidTicketBusy && styles.generateCodeButtonDisabled]}
                 onPress={onBuyPaidTicketAndJoin}
@@ -1507,10 +1521,10 @@ export default function WatchPartyIndexScreen() {
                 disabled={paidTicketBusy}
                 testID="tester-watch-party-ticket-button"
                 accessibilityRole="button"
-                accessibilityLabel="Sandbox Test Get Watch-Party Seat"
+                accessibilityLabel="Get Watch-Party Seat"
               >
                 <AppText scale="footnote" style={styles.generateCodeButtonText}>
-                  {paidTicketBusy ? "Opening Google Play" : "Sandbox Test Seat Pass"}
+                  {paidTicketBusy ? "Opening Store" : "Get Seat Pass"}
                 </AppText>
               </TouchableOpacity>
             ) : null}
@@ -1750,26 +1764,30 @@ export default function WatchPartyIndexScreen() {
                   <View style={styles.inlineTicketGate}>
                     <AppText scale="subhead" style={styles.inlineTicketGateTitle}>Seat Pass required</AppText>
                     <AppText scale="footnote" style={styles.inlineTicketGateBody}>
-                      This sandbox Seat Pass unlocks this Watch-Party room only. It does not include Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, other rooms, or Live Stage.
+                      Paid Seat Pass checkout is not available yet. This room can still use signed-in and Premium-gated entry where allowed.
                     </AppText>
                     <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this unlock?" compact />
                     {paidTicketNotice ? <AppText scale="footnote" style={styles.errorText}>{paidTicketNotice}</AppText> : null}
                     <Pressable
                       style={({ pressed }) => [
                         styles.joinNowBtn,
-                        paidTicketBusy && styles.primaryButtonDisabled,
+                        (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.primaryButtonDisabled,
                         pressed && styles.previewActionPressed,
                       ]}
                       onPress={onBuyPaidTicketAndJoin}
-                      disabled={paidTicketBusy}
+                      disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
                       accessibilityRole="button"
-                      accessibilityLabel="Sandbox Test Get Watch-Party Seat"
-                      accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
+                      accessibilityLabel="Get Watch-Party Seat"
+                      accessibilityState={{ disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable, busy: paidTicketBusy }}
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                       testID="tester-watch-party-ticket-button"
                     >
                       <AppText scale="body" style={styles.joinNowBtnText}>
-                        {paidTicketBusy ? "Opening Google Play" : `Sandbox Test Seat Pass ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`}
+                        {paidTicketBusy
+                          ? "Opening Store"
+                          : paidWatchPartyCheckoutAvailable
+                            ? `Get Seat Pass ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`
+                            : "Not Available Yet"}
                       </AppText>
                     </Pressable>
                   </View>

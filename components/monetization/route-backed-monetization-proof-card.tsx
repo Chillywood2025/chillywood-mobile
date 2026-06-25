@@ -11,24 +11,24 @@ type Props = {
 
 const SURFACE_COPY: Record<Props["surface"], { title: string; body: string }> = {
   paid_content: {
-    title: "Paid content sandbox gate",
-    body: "Paid access unlocks this content only if it remains public and safe.",
+    title: "Paid content not available yet",
+    body: "This paid-access option is disabled until the app is ready for public purchases.",
   },
   watch_party_ticket: {
-    title: "Watch-Party Seat Pass sandbox gate",
-    body: "Seat Pass access allows viewer entry only. Speaker controls still require host approval.",
+    title: "Watch-Party Seat Pass not available yet",
+    body: "Seat Pass checkout is disabled. Speaker controls still require host approval.",
   },
   live_access: {
-    title: "Live access sandbox gate",
-    body: "Access pass allows entry and viewing only. It does not grant speaker, host, moderator, admin, or publish authority.",
+    title: "Live access pass not available yet",
+    body: "Access pass checkout is disabled. It does not grant speaker, host, moderator, admin, or publish authority.",
   },
   live_seat: {
-    title: "Live seat sandbox gate",
-    body: "Seat pass creates eligibility only. Host approval is still required for mic, camera, and publish.",
+    title: "Live seat pass not available yet",
+    body: "Seat pass checkout is disabled. Host approval is still required for mic, camera, and publish.",
   },
   event_pass: {
-    title: "Event pass sandbox gate",
-    body: "Event pass allows viewing or entry only while the event remains active and allowed.",
+    title: "Event pass not available yet",
+    body: "Event pass checkout is disabled until the app is ready for public purchases.",
   },
 };
 
@@ -44,9 +44,8 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
   if (!config) return null;
   const copy = SURFACE_COPY[surface];
   const safeFlags = [
-    "Sandbox only",
-    "Not payable",
-    "Production money off",
+    "Not available yet",
+    "Purchases off",
     "Payouts off",
     "No cash-out",
     "No publish authority",
@@ -55,7 +54,7 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.kicker}>ROUTE-BACKED MONETIZATION PROOF</Text>
+      <Text style={styles.kicker}>MONEY FEATURE UNAVAILABLE</Text>
       <Text style={styles.title}>{copy.title}</Text>
       <Text style={styles.body}>{copy.body}</Text>
       <MoneyScopeInfoButton scope={SCOPE_BY_SURFACE[surface]} label="What does this unlock?" />
@@ -65,16 +64,12 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
           <Text style={styles.value}>{config.displayName || config.productType}</Text>
         </View>
         <View style={styles.row}>
-          <Text style={styles.label}>Provider product</Text>
-          <Text style={styles.value}>{config.providerProductId}</Text>
-        </View>
-        <View style={styles.row}>
           <Text style={styles.label}>Tier</Text>
           <Text style={styles.value}>{config.priceLabel}</Text>
         </View>
         <View style={styles.row}>
-          <Text style={styles.label}>Rail</Text>
-          <Text style={styles.value}>{config.provider === "stripe_physical_goods" ? "Stripe sandbox" : "Google Play / RevenueCat sandbox"}</Text>
+          <Text style={styles.label}>Status</Text>
+          <Text style={styles.value}>Checkout disabled</Text>
         </View>
       </View>
       <View style={styles.pills}>
@@ -85,10 +80,8 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
         ))}
       </View>
       <Text style={styles.finePrint}>
-        Config status {config.status}; production_enabled={String(config.productionEnabled)};
-        payout_enabled={String(config.payoutEnabled)}; canPublish={String(config.grantsLiveKitPublish)};
-        hostPower={String(config.grantsHostAuthority)}
-        {config.requiresHostApproval ? "; host approval required" : ""}.
+        Public purchase, payout, cash-out, publish, host, and admin authority are not enabled by this surface.
+        {config.requiresHostApproval ? " Host approval is still required where applicable." : ""}
       </Text>
     </View>
   );

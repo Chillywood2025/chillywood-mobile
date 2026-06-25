@@ -1,5 +1,30 @@
 # NEXT TASK
 
+## Public Non-Money Feature Enablement / Launch Switchboard Lane
+
+- [x] Admin Search commit `ca7ede034157d9f15d3c7fb4f25287d5bcf028a0` was already aligned with `origin/main` before new edits.
+- [x] Public non-money feature enablement repo-side proof closed.
+
+Status:
+- Verdict: Closed for app-controlled public non-money switchboard, route/copy cleanup, and guard coverage. Full public release remains conditional on normal store/release work and external provider/owner actions.
+- Docs: `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md`
+- Proof script: `scripts/proof-public-non-money-feature-enablements.mjs`
+- Guard: `scripts/guard-public-non-money-feature-policy.mjs`
+- Required truth:
+  - This lane enables safe public app systems only.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF.
+  - Provider refunds remain manual/external.
+  - Premium annual remains provider-blocked.
+  - Creator Channel Subscription remains provider-blocked.
+  - Premium monthly public purchase remains separate owner-approved proof unless explicitly activated in a separate lane.
+  - No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
+  - Admin/staff routes remain scoped.
+  - Reporting, blocking, account restriction, legal/support/account deletion, and monitoring remain aligned.
+  - Public paid creator video and Watch-Party Seat Pass checkout controls are disabled with safe unavailable copy unless live checkout runtime switches are explicitly enabled by a separate approved lane.
+- Next lane recommendation: Continue production readiness with provider dashboard ownership and access governance.
+
 ## Admin Search / Support Readback Privacy / Export Governance Lane
 
 - [x] Admin search privacy and export governance repo-side proof closed.
