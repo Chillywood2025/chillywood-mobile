@@ -8,6 +8,7 @@
 - [x] Seven-flow production prep readiness
 - [x] Seven-flow provider verification readiness
 - [x] Creator-money production provider product cleanup/prep
+- [x] Creator-money production provider product setup recheck plus Stripe payout/merch boundary doc
 
 Status:
 - Verdict: Partial
@@ -23,6 +24,7 @@ Status:
   - Seven-flow production switchboard: Partial
   - Seven-flow production prep: Partial
   - Seven-flow provider verification: Partial
+  - Creator-money production-labeled products: Blocked
   - Creator-money production-labeled product IDs: Blocked
   - Provider verification used browser dashboard evidence
   - All activation switches remain OFF
@@ -36,8 +38,11 @@ Status:
   - Provider refunds remain manual/external
   - Production provider products are verified only where dashboard/API evidence exists
   - Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise
+  - Stripe payout and merch prep documented separately
+  - Stripe payouts remain OFF
+  - Stripe merch checkout remains OFF
   - Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved
-- Result: Explicit switches are cataloged for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass; existing backend money kill switches remain the enforcement foundation; production-prep provider mapping, owner activation checklist, Premium-first plan, creator-money future activation plan, support/refund/dispute policy, monitoring/readback expectations, rollback matrices, and provider verification blockers are documented; local product/config matches are proved; Google Play Console and RevenueCat browser dashboard evidence verifies the configured sandbox-labeled product IDs; owner chose clean production-labeled IDs before creator-money launch; browser dashboard readback found those clean production-labeled IDs missing in Google Play Console and RevenueCat; `live_money_enabled` and `payouts_enabled` remain off; Premium purchase remains closed by default; provider production activation remains blocked pending owner/provider approval.
+- Result: Explicit switches are cataloged for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass; existing backend money kill switches remain the enforcement foundation; production-prep provider mapping, owner activation checklist, Premium-first plan, creator-money future activation plan, support/refund/dispute policy, monitoring/readback expectations, rollback matrices, and provider verification blockers are documented; local product/config matches are proved; Google Play Console and RevenueCat browser dashboard evidence verifies the configured sandbox-labeled product IDs; owner chose clean production-labeled IDs before creator-money launch; browser dashboard readback found those clean production-labeled IDs missing in Google Play Console and RevenueCat; Google Play creation forms require owner/provider choices for immutable product records, user-visible metadata, tax/compliance, age rating, region/pricing, purchase options, and subscription base plans; RevenueCat import/mapping remains blocked until Google Play records exist; Stripe dashboard access stopped at sign-in and is documented as future payout/physical-merch prep only; `live_money_enabled` and `payouts_enabled` remain off; Premium purchase remains closed by default; provider production activation remains blocked pending owner/provider approval.
 - Safety confirmation: No live money, creator payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, Premium product changes, Premium gate weakening, RLS weakening, LiveKit authority changes, participant-cap changes, auth/reset changes, scan-gate weakening, abuse-throttle removal, or block-enforcement removal.
 
 Purpose:

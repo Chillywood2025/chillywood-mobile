@@ -14,7 +14,9 @@ Seven-flow production prep: Partial.
 
 Seven-flow provider verification: Partial. Provider verification used browser dashboard evidence from Google Play Console and RevenueCat for the Android package `com.chillywood.mobile`. The configured product IDs are present in the dashboards and match the repo/app configuration. Production activation remains blocked by owner activation approval and, for creator-money flows, by owner decision on whether to keep the sandbox-labeled configured IDs or replace them with owner-approved production product IDs.
 
-Creator-money production-labeled product IDs: Blocked. Owner chose option B: create clean production-labeled creator-money product IDs before any creator-money launch. Browser dashboard readback found `cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_channel_subscription_monthly_499`, `cw_vip_pass_499`, and `cw_event_pass_099` missing in Google Play Console and RevenueCat. Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
+Creator-money production-labeled products: Blocked. Owner chose option B: create clean production-labeled creator-money product IDs before any creator-money launch. Browser dashboard readback found `cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_channel_subscription_monthly_499`, `cw_vip_pass_499`, and `cw_event_pass_099` missing in Google Play Console and RevenueCat. Google Play creation requires owner/provider choices for immutable product records, user-visible metadata, tax/compliance, age rating, region/pricing, purchase options, and subscription base plans; no product form was submitted. RevenueCat import/mapping remains blocked until the matching Google Play products exist. Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
+
+Creator-money production-labeled product IDs: Blocked.
 
 All activation switches remain OFF.
 
@@ -25,6 +27,12 @@ Creator-money flows remain OFF by default.
 Creator payouts remain OFF.
 
 Provider refunds remain manual/external.
+
+Stripe payout and merch prep documented separately in `docs/STRIPE_PAYOUTS_AND_MERCH_PREP.md`.
+
+Stripe payouts remain OFF.
+
+Stripe merch checkout remains OFF.
 
 Production provider products are verified only where dashboard/API evidence exists.
 

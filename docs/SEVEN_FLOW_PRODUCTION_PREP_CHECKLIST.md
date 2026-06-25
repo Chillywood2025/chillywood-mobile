@@ -14,13 +14,21 @@ Seven-flow production prep: Partial. The flows are prepared behind explicit swit
 
 Seven-flow provider verification: Partial. Provider verification used browser dashboard evidence. The configured product IDs are present in Google Play Console and RevenueCat and match the repo/app configuration; production activation remains blocked by owner approval and, for creator-money flows, owner decision on whether to keep sandbox-labeled configured IDs or replace them with production-labeled IDs.
 
-Creator-money production-labeled product IDs: Blocked. Owner chose option B: clean production-labeled IDs are required before creator-money launch. The production-labeled IDs are documented in `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`, but browser dashboard readback found them missing in Google Play Console and RevenueCat.
+Creator-money production-labeled products: Blocked. Owner chose option B: clean production-labeled IDs are required before creator-money launch. The production-labeled IDs are documented in `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`, but browser dashboard readback found them missing in Google Play Console and RevenueCat. Google Play creation requires owner/provider choices for immutable product records, user-visible metadata, tax/compliance, age rating, region/pricing, purchase options, and subscription base plans; RevenueCat import/mapping remains blocked until the matching Google Play products exist.
+
+Creator-money production-labeled product IDs: Blocked.
 
 Real-money activation: Off by default unless owner explicitly enables each flow.
 
 Creator payouts: Off unless separate payout lane enables them.
 
 Provider refunds: Manual/external unless separate provider-refund lane enables automation.
+
+Stripe payout and merch prep documented separately.
+
+Stripe payouts remain OFF.
+
+Stripe merch checkout remains OFF.
 
 Premium-first launch candidate: Pending owner activation/provider final check.
 

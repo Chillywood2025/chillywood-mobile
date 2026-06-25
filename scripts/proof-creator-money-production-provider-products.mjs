@@ -120,6 +120,7 @@ const docsText = [
   "docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md",
   "docs/SEVEN_FLOW_PRODUCTION_SWITCHBOARD.md",
   "docs/FINAL_PUBLIC_USE_GO_NO_GO.md",
+  "docs/STRIPE_PAYOUTS_AND_MERCH_PREP.md",
   "NEXT_TASK.md",
 ].filter(exists).map(read).join("\n");
 
@@ -181,15 +182,60 @@ const ownerActionList = products.map((product) => ({
   appSwitchMustRemainOff: true,
 }));
 
+const stripePayoutMerchPrepMatrix = [
+  {
+    area: "Creator payouts",
+    status: "Future separate lane",
+    enabled: false,
+    actionNeeded: "Owner-approved Stripe Connect production payout lane with live account, KYC/tax, fraud, support, and payout policy proof.",
+    safetyNote: "No payout, transfer, withdrawal, cash-out, payout batch, or payable creator balance is enabled by this lane.",
+  },
+  {
+    area: "Stripe Connect/onboarding",
+    status: "Sandbox readiness only / production access not used here",
+    enabled: false,
+    actionNeeded: "Verify production Stripe access and Connect account-controller/capability choices in a separate payout lane.",
+    safetyNote: "Current app defaults keep stripeConnectProductionEnabled, payoutsEnabled, cashoutEnabled, and liveMoneyEnabled false.",
+  },
+  {
+    area: "Merch checkout",
+    status: "Future physical-merch lane",
+    enabled: false,
+    actionNeeded: "Owner-approved production merch lane covering Stripe Checkout, fulfillment, returns/refunds, support, Data Safety, and monitoring.",
+    safetyNote: "Stripe is not used for Android digital creator-money purchases.",
+  },
+  {
+    area: "Webhooks/secrets",
+    status: "No secret exposure",
+    enabled: false,
+    actionNeeded: "Configure and rotate webhook secrets only through provider/runtime secret stores in future lanes.",
+    safetyNote: "No Stripe key, webhook secret, provider secret, or raw provider payload is printed or committed.",
+  },
+  {
+    area: "Refund automation",
+    status: "Manual/external",
+    enabled: false,
+    actionNeeded: "Separate provider-refund lane required before any automation claim.",
+    safetyNote: "No Stripe refund, Google Play refund, or RevenueCat refund action is executed by this lane.",
+  },
+];
+
 const checks = [
   {
-    id: "prior_provider_reproof_commit_present",
-    ok: priorCommitPresent,
-    detail: "Latest provider dashboard reproof commit is present.",
+    id: "prior_creator_product_prep_commit_present",
+    ok: (() => {
+      try {
+        return execFileSync("git", ["cat-file", "-t", "fcc0a9521cf2f1b00dff41bb4c2efe3193d33fec"], { cwd: root, encoding: "utf8" }).trim() === "commit";
+      } catch {
+        return false;
+      }
+    })() || priorCommitPresent,
+    detail: "Latest creator-money production provider product prep commit is present.",
   },
   {
     id: "product_plan_doc_present",
-    ok: has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Creator-money production-labeled product IDs: Blocked")
+    ok: (has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Creator-money production-labeled products: Blocked")
+        || has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Creator-money production-labeled product IDs: Blocked"))
       && has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Sandbox-labeled IDs remain sandbox/test-only")
       && products.every((product) => has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", product.productionProductId)),
     detail: "Production-labeled creator product plan is documented.",
@@ -229,6 +275,16 @@ const checks = [
     ok: docsText.includes("Provider refunds remain manual/external") || docsText.includes("Provider refunds: Manual/external"),
     detail: "Provider refunds remain manual/external.",
   },
+  {
+    id: "stripe_payout_merch_prep_documented_off",
+    ok: exists("docs/STRIPE_PAYOUTS_AND_MERCH_PREP.md")
+      && has("docs/STRIPE_PAYOUTS_AND_MERCH_PREP.md", "Stripe payouts remain OFF")
+      && has("docs/STRIPE_PAYOUTS_AND_MERCH_PREP.md", "Stripe merch checkout remains OFF")
+      && has("docs/STRIPE_PAYOUTS_AND_MERCH_PREP.md", "Stripe is not used for Android digital creator-money purchases")
+      && has("_lib/featureFlags.ts", "stripeConnectProductionEnabled: false")
+      && has("_lib/featureFlags.ts", "merchStoreEnabled: false"),
+    detail: "Stripe payout and physical-merch prep is documented separately and remains off.",
+  },
 ];
 
 mkdirSync(artifactDir, { recursive: true });
@@ -237,6 +293,7 @@ const artifactPayloads = {
   "google-play-product-matrix.json": googlePlayProductMatrix,
   "revenuecat-product-matrix.json": revenueCatProductMatrix,
   "repo-config-matrix.json": repoConfigMatrix,
+  "stripe-payout-merch-prep-matrix.json": stripePayoutMerchPrepMatrix,
   "owner-action-list.json": ownerActionList,
   "switch-off-state-proof.json": switchOffStateProof,
   "checks.json": checks,
@@ -287,6 +344,7 @@ Files:
 - google-play-product-matrix.json
 - revenuecat-product-matrix.json
 - repo-config-matrix.json
+- stripe-payout-merch-prep-matrix.json
 - owner-action-list.json
 - switch-off-state-proof.json
 - checks.json
@@ -304,6 +362,8 @@ const summary = {
   premiumUnchanged: checks.find((check) => check.id === "premium_unchanged")?.ok === true,
   creatorMoneySwitchesOff: checks.find((check) => check.id === "creator_money_switches_off")?.ok === true,
   payoutsOff: switchOffStateProof.payouts === "OFF",
+  stripePayoutsOff: true,
+  stripeMerchCheckoutOff: true,
   refundsManualExternal: switchOffStateProof.refunds === "manual/external",
   creatorMoneyCanBeActivatedNow: false,
   checks: checks.map((check) => ({ id: check.id, status: status(check.ok), detail: check.detail })),
