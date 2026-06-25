@@ -20,6 +20,7 @@ type AuthenticatedUser = {
   activeBreakGlassSessionId: string | null;
   email: string | null;
   id: string;
+  isFirstOwner: boolean;
   permissions: Set<string>;
   role: StaffRole;
   securityContext?: SecurityRequestContextResult | null;
@@ -185,6 +186,33 @@ const hasAnyPermission = (user: AuthenticatedUser, keys: string[]) =>
 const shouldWriteAppAudit = (user: AuthenticatedUser) =>
   user.role !== "owner" || !!user.activeBreakGlassSessionId;
 
+const hashHex = async (value: string) => {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+const randomHex = (bytes = 16) => {
+  const buffer = new Uint8Array(bytes);
+  crypto.getRandomValues(buffer);
+  return Array.from(buffer).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+const generatePasscode = () => {
+  const value = new Uint32Array(1);
+  crypto.getRandomValues(value);
+  return String(100000 + (value[0] % 900000));
+};
+
+const hashFirstOwnerPasscode = async (
+  passcode: string,
+  salt: string,
+  actorUserId: string,
+  targetOwnerMembershipId: string,
+  successorOwnerMembershipId: string,
+) =>
+  hashHex(`${salt}:${actorUserId}:first_owner_self_step_down:${targetOwnerMembershipId}:${successorOwnerMembershipId}:${passcode}`);
+
 const resolveAdminReason = (user: AuthenticatedUser, value: unknown, fallback: string) => {
   if (user.role === "owner" && !user.activeBreakGlassSessionId) {
     return redactText(value, 1000) || fallback;
@@ -302,7 +330,15 @@ const authenticate = async (
 
   const permissions = await readActivePermissions(adminClient, userId, email);
   const activeBreakGlassSessionId = await readActiveBreakGlassSessionId(adminClient, userId, email);
-  return { user: { activeBreakGlassSessionId, email, id: userId, permissions, role: role as StaffRole } };
+  let isFirstOwner = false;
+  if (role === "owner") {
+    const firstOwner = await adminClient.rpc("is_first_owner", {
+      p_actor_email: email,
+      p_actor_user_id: userId,
+    });
+    if (!firstOwner.error) isFirstOwner = firstOwner.data === true;
+  }
+  return { user: { activeBreakGlassSessionId, email, id: userId, isFirstOwner, permissions, role: role as StaffRole } };
 };
 
 const expireStaleGrants = async (adminClient: SupabaseClientLike) => {
@@ -394,6 +430,179 @@ const writeBreakGlassAudit = async (
     target_type: input.targetType || null,
   });
   if (error) throw new Error(`Break Glass audit write failed: ${error.message}`);
+};
+
+const requireFirstOwner = async (
+  adminClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  action: string,
+  reason = "First Owner authority required.",
+) => {
+  if (user.isFirstOwner) return null;
+  await adminClient.rpc("platform_first_owner_write_audit", {
+    p_action: "blocked",
+    p_actor_email: user.email,
+    p_actor_role: user.role,
+    p_actor_user_id: user.id,
+    p_metadata: { action, blocked_reason: "first_owner_required" },
+    p_reason: reason,
+    p_result: "denied",
+    p_target_email: null,
+    p_target_membership_id: null,
+    p_target_user_id: null,
+  });
+  return json(403, { error: "first_owner_required" });
+};
+
+const readOwnerRows = async (adminClient: SupabaseClientLike) => {
+  const { data, error } = await adminClient
+    .from("platform_role_memberships")
+    .select("id,user_id,email,status,granted_at,revoked_at,notes")
+    .eq("role", "owner")
+    .order("status", { ascending: true })
+    .order("granted_at", { ascending: false })
+    .limit(100);
+  if (error) throw new Error(`Owner list failed: ${error.message}`);
+  return ((data ?? []) as JsonObject[]).map((row) => ({
+    emailMasked: normalizeEmail(row.email) ? normalizeEmail(row.email).replace(/^(.{2}).*(@.*)$/, "$1***$2") : null,
+    grantedAt: toText(row.granted_at) || null,
+    id: toText(row.id),
+    isActive: toText(row.status) === "active",
+    revokedAt: toText(row.revoked_at) || null,
+    status: toText(row.status) || "unknown",
+    userIdShort: shortSecurityIdentifier(row.user_id),
+  }));
+};
+
+const firstOwnerStatus = async (adminClient: SupabaseClientLike, actorClient: SupabaseClientLike, user: AuthenticatedUser) => {
+  if (user.role !== "owner") return json(403, { error: "owner_required" });
+  const status = await actorClient.rpc("first_owner_authority_status");
+  if (status.error) throw new Error(`First Owner status failed: ${status.error.message}`);
+  return json(200, {
+    owners: await readOwnerRows(adminClient),
+    status: sanitizeObject(status.data),
+  });
+};
+
+const firstOwnerGrantOwner = async (adminClient: SupabaseClientLike, actorClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
+  const firstOwnerError = await requireFirstOwner(adminClient, user, "grant_owner", "Only First Owner can grant Owner.");
+  if (firstOwnerError) return firstOwnerError;
+  const targetEmail = normalizeEmail(payload.targetEmail ?? payload.target_email);
+  if (!targetEmail) return json(400, { error: "target_email_required" });
+  const reason = requireReason(payload.reason, "owner_grant_reason");
+  const result = await actorClient.rpc("first_owner_grant_owner_by_email", {
+    p_reason: reason,
+    p_target_email: targetEmail,
+  });
+  if (result.error) throw new Error(`First Owner grant failed: ${result.error.message}`);
+  return json(200, { result: sanitizeObject(result.data) });
+};
+
+const firstOwnerRevokeOwner = async (adminClient: SupabaseClientLike, actorClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
+  const firstOwnerError = await requireFirstOwner(adminClient, user, "revoke_owner", "Only First Owner can revoke Owner.");
+  if (firstOwnerError) return firstOwnerError;
+  const targetEmail = normalizeEmail(payload.targetEmail ?? payload.target_email);
+  if (!targetEmail) return json(400, { error: "target_email_required" });
+  if (targetEmail === normalizeEmail(user.email)) return json(403, { error: "self_revoke_requires_succession" });
+  const reason = requireReason(payload.reason, "owner_revoke_reason");
+  const result = await actorClient.rpc("first_owner_revoke_owner_by_email", {
+    p_reason: reason,
+    p_target_email: targetEmail,
+  });
+  if (result.error) throw new Error(`First Owner revoke failed: ${result.error.message}`);
+  return json(200, { result: sanitizeObject(result.data) });
+};
+
+const firstOwnerStartStepDown = async (
+  adminClient: SupabaseClientLike,
+  actorClient: SupabaseClientLike,
+  anonClient: SupabaseClientLike,
+  user: AuthenticatedUser,
+  payload: JsonObject,
+) => {
+  const firstOwnerError = await requireFirstOwner(adminClient, user, "first_owner_self_step_down", "Only First Owner can start succession.");
+  if (firstOwnerError) return firstOwnerError;
+  const successorEmail = normalizeEmail(payload.successorEmail ?? payload.successor_email);
+  if (!successorEmail) return json(400, { error: "successor_required" });
+  const reason = requireReason(payload.reason, "succession_reason");
+  const password = toText(payload.password);
+  if (!password || !user.email) return json(400, { error: "password_reauth_required" });
+  const reauth = await anonClient.auth.signInWithPassword({ email: user.email, password });
+  if (reauth.error || reauth.data.user?.id !== user.id) {
+    await adminClient.rpc("platform_first_owner_write_audit", {
+      p_action: "challenge_failed",
+      p_actor_email: user.email,
+      p_actor_role: user.role,
+      p_actor_user_id: user.id,
+      p_metadata: { failed_reason: "password_reauth_failed" },
+      p_reason: reason,
+      p_result: "failed",
+      p_target_email: successorEmail,
+      p_target_membership_id: null,
+      p_target_user_id: null,
+    });
+    return json(403, { error: "password_reauth_failed" });
+  }
+
+  const ownerRows = await adminClient
+    .from("platform_role_memberships")
+    .select("id,user_id,email")
+    .eq("role", "owner")
+    .eq("status", "active")
+    .limit(100);
+  if (ownerRows.error) throw new Error(`Owner succession lookup failed: ${ownerRows.error.message}`);
+  const activeOwners = (ownerRows.data ?? []) as JsonObject[];
+  const actorOwner = activeOwners.find((row) => toText(row.user_id) === user.id || normalizeEmail(row.email) === normalizeEmail(user.email));
+  const successor = activeOwners.find((row) => normalizeEmail(row.email) === successorEmail);
+  const targetMembershipId = toText(actorOwner?.id);
+  const successorMembershipId = toText(successor?.id);
+  if (!targetMembershipId || !successorMembershipId) return json(409, { error: "successor_owner_required" });
+  const passcode = generatePasscode();
+  const salt = randomHex(16);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const passcodeHash = await hashFirstOwnerPasscode(passcode, salt, user.id, targetMembershipId, successorMembershipId);
+  const result = await actorClient.rpc("first_owner_create_self_step_down_challenge", {
+    p_expires_at: expiresAt,
+    p_passcode_hash: passcodeHash,
+    p_passcode_salt: salt,
+    p_reason: reason,
+    p_successor_owner_email: successorEmail,
+  });
+  if (result.error) throw new Error(`First Owner challenge failed: ${result.error.message}`);
+  return json(200, {
+    challenge: {
+      ...sanitizeObject(result.data),
+      passcodeSalt: salt,
+      successorOwnerMembershipId: successorMembershipId,
+      targetOwnerMembershipId: targetMembershipId,
+    },
+    passcode,
+    passcodePlaintextStored: false,
+  });
+};
+
+const firstOwnerCompleteStepDown = async (adminClient: SupabaseClientLike, actorClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
+  const firstOwnerError = await requireFirstOwner(adminClient, user, "first_owner_complete_step_down", "Only First Owner can complete succession.");
+  if (firstOwnerError) return firstOwnerError;
+  const challengeId = toText(payload.challengeId ?? payload.challenge_id);
+  const passcode = toText(payload.passcode);
+  const salt = toText(payload.passcodeSalt ?? payload.passcode_salt);
+  const targetMembershipId = toText(payload.targetOwnerMembershipId ?? payload.target_owner_membership_id);
+  const successorMembershipId = toText(payload.successorOwnerMembershipId ?? payload.successor_owner_membership_id);
+  const typedConfirmation = toText(payload.typedConfirmation ?? payload.typed_confirmation);
+  const reason = requireReason(payload.reason, "succession_reason");
+  if (!challengeId || !passcode || !salt || !targetMembershipId || !successorMembershipId) {
+    return json(400, { error: "challenge_passcode_context_required" });
+  }
+  const passcodeHash = await hashFirstOwnerPasscode(passcode, salt, user.id, targetMembershipId, successorMembershipId);
+  const result = await actorClient.rpc("first_owner_complete_self_step_down", {
+    p_challenge_id: challengeId,
+    p_passcode_hash: passcodeHash,
+    p_reason: reason,
+    p_typed_confirmation: typedConfirmation,
+  });
+  if (result.error) throw new Error(`First Owner succession failed: ${result.error.message}`);
+  return json(200, { result: sanitizeObject(result.data) });
 };
 
 const targetHasAdminRole = async (adminClient: SupabaseClientLike, email: string) => {
@@ -585,7 +794,8 @@ const templateRevoke = async (adminClient: SupabaseClientLike, user: Authenticat
 };
 
 const breakGlassStatus = async (adminClient: SupabaseClientLike, user: AuthenticatedUser) => {
-  if (!hasPermission(user, "emergency_break_glass")) return json(403, { error: "break_glass_permission_required" });
+  const firstOwnerError = await requireFirstOwner(adminClient, user, "break_glass_status", "Break Glass requires First Owner.");
+  if (firstOwnerError) return firstOwnerError;
   let query = adminClient
     .from("platform_break_glass_sessions")
     .select("*");
@@ -602,15 +812,13 @@ const breakGlassStatus = async (adminClient: SupabaseClientLike, user: Authentic
 };
 
 const breakGlassActivate = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (!hasPermission(user, "emergency_break_glass")) return json(403, { error: "break_glass_permission_required" });
+  const firstOwnerError = await requireFirstOwner(adminClient, user, "break_glass_activate", "Break Glass activation requires First Owner.");
+  if (firstOwnerError) return firstOwnerError;
   if (user.activeBreakGlassSessionId) return json(409, { error: "break_glass_already_active", sessionId: user.activeBreakGlassSessionId });
   const reason = requireReason(payload.reason, "break_glass_reason");
   const duration = toText(payload.duration).toLowerCase();
   const requestedExpiry = duration || payload.expiresAt || payload.expires_at;
-  const expiresAt = user.role === "owner"
-    ? resolveExpiresAt(requestedExpiry)
-    : resolveExpiresAt(duration || "1h");
-  if (user.role !== "owner" && !expiresAt) return json(400, { error: "admin_break_glass_duration_required" });
+  const expiresAt = resolveExpiresAt(requestedExpiry || "1h");
   const { data, error } = await adminClient.from("platform_break_glass_sessions").insert({
     actor_email: user.email,
     actor_role: user.role,
@@ -630,11 +838,24 @@ const breakGlassActivate = async (adminClient: SupabaseClientLike, user: Authent
     reason,
     sessionId,
   });
+  await adminClient.rpc("platform_first_owner_write_audit", {
+    p_action: "break_glass_activate",
+    p_actor_email: user.email,
+    p_actor_role: user.role,
+    p_actor_user_id: user.id,
+    p_metadata: { expires_at: expiresAt, session_id: sessionId },
+    p_reason: reason,
+    p_result: "success",
+    p_target_email: null,
+    p_target_membership_id: null,
+    p_target_user_id: null,
+  });
   return json(200, { ok: true, session: sanitizeObject(data) });
 };
 
 const breakGlassEnd = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (!hasPermission(user, "emergency_break_glass")) return json(403, { error: "break_glass_permission_required" });
+  const firstOwnerError = await requireFirstOwner(adminClient, user, "break_glass_end", "Break Glass end requires First Owner.");
+  if (firstOwnerError) return firstOwnerError;
   const sessionId = toText(payload.sessionId ?? payload.session_id) || user.activeBreakGlassSessionId;
   if (!sessionId) return json(404, { error: "break_glass_not_active" });
   const reason = redactText(payload.reason, 1000) || "Break Glass session ended.";
@@ -653,6 +874,18 @@ const breakGlassEnd = async (adminClient: SupabaseClientLike, user: Authenticate
   if (error) throw new Error(`Break Glass end failed: ${error.message}`);
   if (!data) return json(404, { error: "break_glass_not_found" });
   await writeBreakGlassAudit(adminClient, user, { action: "end", reason, sessionId });
+  await adminClient.rpc("platform_first_owner_write_audit", {
+    p_action: "break_glass_end",
+    p_actor_email: user.email,
+    p_actor_role: user.role,
+    p_actor_user_id: user.id,
+    p_metadata: { session_id: sessionId },
+    p_reason: reason,
+    p_result: "success",
+    p_target_email: null,
+    p_target_membership_id: null,
+    p_target_user_id: null,
+  });
   return json(200, { ok: true, session: sanitizeObject(data) });
 };
 
@@ -3992,6 +4225,10 @@ Deno.serve(async (req) => {
 
     const auth = await authenticate(req, adminClient, supabaseUrl, anonKey);
     if ("error" in auth) return auth.error;
+    const actorClient = createClient(supabaseUrl, anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: toText(req.headers.get("authorization")) } },
+    });
 
     await expireStaleGrants(adminClient);
 
@@ -4007,6 +4244,11 @@ Deno.serve(async (req) => {
     if (action === "template_list") return await templateList();
     if (action === "template_apply") return await templateApply(adminClient, auth.user, payload);
     if (action === "template_revoke") return await templateRevoke(adminClient, auth.user, payload);
+    if (action === "first_owner_status") return await firstOwnerStatus(adminClient, actorClient, auth.user);
+    if (action === "first_owner_grant_owner") return await firstOwnerGrantOwner(adminClient, actorClient, auth.user, payload);
+    if (action === "first_owner_revoke_owner") return await firstOwnerRevokeOwner(adminClient, actorClient, auth.user, payload);
+    if (action === "first_owner_start_step_down") return await firstOwnerStartStepDown(adminClient, actorClient, anonClient, auth.user, payload);
+    if (action === "first_owner_complete_step_down") return await firstOwnerCompleteStepDown(adminClient, actorClient, auth.user, payload);
     if (action === "break_glass_status") return await breakGlassStatus(adminClient, auth.user);
     if (action === "break_glass_activate") return await breakGlassActivate(adminClient, auth.user, payload);
     if (action === "break_glass_end") return await breakGlassEnd(adminClient, auth.user, payload);

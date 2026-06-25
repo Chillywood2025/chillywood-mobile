@@ -86,6 +86,8 @@ Staff access remains one clear flow:
 
 Permission Templates are presets only. They do not create Admin, Moderator, or Owner roles.
 
+Owner grant/revoke is no longer part of generic Staff Access. Only First Owner can grant or revoke Owner through the First Owner authority controls. First Owner cannot remove himself as the last active Owner, and First Owner self-step-down requires successor, password re-auth, generated single-use passcode, typed confirmation, reason, and audit.
+
 Grant/Revoke controls are active and guarded:
 
 - `admin-staff-grant-button`
@@ -173,7 +175,7 @@ Post-revoke `/admin` denial was captured with `admin-post-revoke-denial-screen`.
 This lane did not change:
 
 - Backend authority rules.
-- Owner protection.
+- Owner protection, except that Owner grant/revoke is now enabled for authenticated First Owner after validation.
 - Self-grant blocking.
 - Final Owner protection.
 - Permission Template authority.
@@ -190,6 +192,9 @@ This lane did not change:
 - Player playback behavior.
 - Premium gates.
 - Content safety.
+- Normal Owner dashboard viewing is not Break Glass.
+- Break Glass is documented and audited when used.
+- No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
 
 ## Remaining Gaps
 

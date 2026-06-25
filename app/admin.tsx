@@ -35,11 +35,16 @@ import {
   applyPermissionTemplate,
   createLegalRequest,
   endBreakGlass,
+  firstOwnerCompleteStepDown,
+  firstOwnerGrantOwner,
+  firstOwnerRevokeOwner,
+  firstOwnerStartStepDown,
   listLegalRequests,
   listOwnerControlAudit,
   listOwnerControlCanaries,
   listPermissionTemplates,
   readBreakGlassStatus,
+  readFirstOwnerAuthorityStatus,
   readLegalRequestDetail,
   readOwnerSecurityStatus,
   revokeAllTemporaryOwnerGrants,
@@ -50,6 +55,9 @@ import {
   runOwnerSecurityChecklist,
   trustCurrentOwnerDevice,
   updateLegalRequest,
+  type FirstOwnerAuthorityStatus,
+  type FirstOwnerRow,
+  type FirstOwnerStepDownChallenge,
   type OwnerControlAuditRow,
   type OwnerControlBreakGlassSession,
   type OwnerControlCanaryResult,
@@ -114,7 +122,6 @@ import {
   readAdminAuditLog,
   applyAdminReportTargetAction,
   canAccessAuditExplorerTools,
-  canAccessBreakGlassTools,
   canAccessDmcaTools,
   canAccessLegalEvidenceTools,
   canAccessLegalRequestIntakeTools,
@@ -378,6 +385,7 @@ type OperatorTabKey =
   | "reports"
   | "dmca"
   | "content"
+  | "owners"
   | "roles"
   | "audit"
   | "audit-explorer"
@@ -3456,6 +3464,17 @@ export default function AdminStudioScreen() {
   const [breakGlassReportId, setBreakGlassReportId] = useState("");
   const [breakGlassDuration, setBreakGlassDuration] = useState("1h");
   const [breakGlassBusy, setBreakGlassBusy] = useState<"activate" | "end" | null>(null);
+  const [firstOwnerStatus, setFirstOwnerStatus] = useState<FirstOwnerAuthorityStatus | null>(null);
+  const [firstOwnerRows, setFirstOwnerRows] = useState<FirstOwnerRow[]>([]);
+  const [firstOwnerTargetEmail, setFirstOwnerTargetEmail] = useState("");
+  const [firstOwnerReason, setFirstOwnerReason] = useState("");
+  const [firstOwnerBusy, setFirstOwnerBusy] = useState<"load" | "grant" | "revoke" | "start-step-down" | "complete-step-down" | null>(null);
+  const [firstOwnerSuccessorEmail, setFirstOwnerSuccessorEmail] = useState("");
+  const [firstOwnerPassword, setFirstOwnerPassword] = useState("");
+  const [firstOwnerChallenge, setFirstOwnerChallenge] = useState<FirstOwnerStepDownChallenge | null>(null);
+  const [firstOwnerPasscode, setFirstOwnerPasscode] = useState("");
+  const [firstOwnerTypedConfirmation, setFirstOwnerTypedConfirmation] = useState("");
+  const [firstOwnerDisplayedPasscode, setFirstOwnerDisplayedPasscode] = useState("");
   const [legalRequests, setLegalRequests] = useState<OwnerControlLegalRequest[]>([]);
   const [selectedLegalRequestId, setSelectedLegalRequestId] = useState<string | null>(null);
   const [selectedLegalRequestDetail, setSelectedLegalRequestDetail] = useState<OwnerControlLegalRequestDetail | null>(null);
@@ -3611,7 +3630,9 @@ export default function AdminStudioScreen() {
   const canAccessLegalEvidence = isSignedIn && isActive && platformRolesChecked && canAccessLegalEvidenceTools(platformRoles);
   const canAccessAuditExplorer = isSignedIn && isActive && platformRolesChecked && canAccessAuditExplorerTools(platformRoles);
   const canManagePermissionTemplates = isSignedIn && isActive && platformRolesChecked && canManageStaffPermissionTemplates(platformRoles);
-  const canAccessBreakGlass = isSignedIn && isActive && platformRolesChecked && canAccessBreakGlassTools(platformRoles);
+  const canAccessBreakGlass = isOwnerStaff;
+  const canAccessFirstOwnerTools = isOwnerStaff;
+  const firstOwnerControlsEnabled = firstOwnerStatus?.controlsEnabled === true && firstOwnerStatus?.actorIsFirstOwner === true;
   const canAccessLegalIntake = isSignedIn && isActive && platformRolesChecked && canAccessLegalRequestIntakeTools(platformRoles);
   const canApplyReportTargetActions = canManagePrivilegedWrites
     || (
@@ -3632,6 +3653,7 @@ export default function AdminStudioScreen() {
       if (canAccessContentProgramming) scopedTabs.push("content");
       if (canAccessDmca) scopedTabs.push("dmca");
       if (canViewStaffRoles) scopedTabs.push("roles");
+      if (canAccessFirstOwnerTools) scopedTabs.push("owners");
       if (canAccessLiveOps) scopedTabs.push("live-cost-guard", "live-ops-fix-center");
       if (canAccessLegalEvidence || canAccessLegalIntake) scopedTabs.push("legal");
       if (canAccessAuditExplorer) scopedTabs.push("audit-explorer");
@@ -3644,6 +3666,7 @@ export default function AdminStudioScreen() {
     [
       canAccessAuditExplorer,
       canAccessBreakGlass,
+      canAccessFirstOwnerTools,
       canAccessContentProgramming,
       canAccessLegalEvidence,
       canAccessLegalIntake,
@@ -7427,6 +7450,132 @@ export default function AdminStudioScreen() {
     }
   }, [breakGlassActiveSessionId, breakGlassBusy, canAccessBreakGlass, loadBreakGlass, loadPlatformRoles]);
 
+  const loadFirstOwnerAuthority = useCallback(async () => {
+    if (!canAccessFirstOwnerTools) return;
+    try {
+      setFirstOwnerBusy("load");
+      setOwnerControlNotice(null);
+      const result = await readFirstOwnerAuthorityStatus();
+      setFirstOwnerStatus(result.status);
+      setFirstOwnerRows(result.owners);
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to load First Owner authority."));
+    } finally {
+      setFirstOwnerBusy(null);
+    }
+  }, [canAccessFirstOwnerTools]);
+
+  const runFirstOwnerGrantOwner = useCallback(async () => {
+    if (!firstOwnerControlsEnabled || firstOwnerBusy) return;
+    if (!looksLikeEmail(firstOwnerTargetEmail.trim().toLowerCase())) {
+      setOwnerControlNotice("Enter the target account email before granting Owner.");
+      return;
+    }
+    if (firstOwnerReason.trim().length < 6) {
+      setOwnerControlNotice("Owner grant requires a reason.");
+      return;
+    }
+    try {
+      setFirstOwnerBusy("grant");
+      setOwnerControlNotice(null);
+      await firstOwnerGrantOwner({ reason: firstOwnerReason.trim(), targetEmail: firstOwnerTargetEmail.trim().toLowerCase() });
+      setOwnerControlNotice("Owner role granted by First Owner authority.");
+      setFirstOwnerTargetEmail("");
+      setFirstOwnerReason("");
+      await Promise.all([loadFirstOwnerAuthority(), loadPlatformRoles()]);
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to grant Owner."));
+    } finally {
+      setFirstOwnerBusy(null);
+    }
+  }, [firstOwnerBusy, firstOwnerControlsEnabled, firstOwnerReason, firstOwnerTargetEmail, loadFirstOwnerAuthority, loadPlatformRoles]);
+
+  const runFirstOwnerRevokeOwner = useCallback(async () => {
+    if (!firstOwnerControlsEnabled || firstOwnerBusy) return;
+    if (!looksLikeEmail(firstOwnerTargetEmail.trim().toLowerCase())) {
+      setOwnerControlNotice("Enter the target Owner email before revoking Owner.");
+      return;
+    }
+    if (firstOwnerReason.trim().length < 6) {
+      setOwnerControlNotice("Owner revoke requires a reason.");
+      return;
+    }
+    try {
+      setFirstOwnerBusy("revoke");
+      setOwnerControlNotice(null);
+      await firstOwnerRevokeOwner({ reason: firstOwnerReason.trim(), targetEmail: firstOwnerTargetEmail.trim().toLowerCase() });
+      setOwnerControlNotice("Owner role revoked by First Owner authority.");
+      setFirstOwnerTargetEmail("");
+      setFirstOwnerReason("");
+      await Promise.all([loadFirstOwnerAuthority(), loadPlatformRoles()]);
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to revoke Owner."));
+    } finally {
+      setFirstOwnerBusy(null);
+    }
+  }, [firstOwnerBusy, firstOwnerControlsEnabled, firstOwnerReason, firstOwnerTargetEmail, loadFirstOwnerAuthority, loadPlatformRoles]);
+
+  const runFirstOwnerStartStepDown = useCallback(async () => {
+    if (!firstOwnerControlsEnabled || firstOwnerBusy) return;
+    if (!looksLikeEmail(firstOwnerSuccessorEmail.trim().toLowerCase())) {
+      setOwnerControlNotice("Select an active successor Owner email before starting step-down.");
+      return;
+    }
+    if (firstOwnerReason.trim().length < 6 || !firstOwnerPassword) {
+      setOwnerControlNotice("Step-down requires successor, current password re-auth, and reason.");
+      return;
+    }
+    try {
+      setFirstOwnerBusy("start-step-down");
+      setOwnerControlNotice(null);
+      const result = await firstOwnerStartStepDown({
+        password: firstOwnerPassword,
+        reason: firstOwnerReason.trim(),
+        successorEmail: firstOwnerSuccessorEmail.trim().toLowerCase(),
+      });
+      setFirstOwnerChallenge(result.challenge);
+      setFirstOwnerDisplayedPasscode(result.passcode);
+      setFirstOwnerPassword("");
+      setOwnerControlNotice("Single-use succession passcode generated. It expires shortly and is not stored in plaintext.");
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to start First Owner step-down."));
+    } finally {
+      setFirstOwnerBusy(null);
+    }
+  }, [firstOwnerBusy, firstOwnerControlsEnabled, firstOwnerPassword, firstOwnerReason, firstOwnerSuccessorEmail]);
+
+  const runFirstOwnerCompleteStepDown = useCallback(async () => {
+    if (!firstOwnerControlsEnabled || firstOwnerBusy || !firstOwnerChallenge) return;
+    if (firstOwnerReason.trim().length < 6 || firstOwnerTypedConfirmation.trim() !== "STEP DOWN FIRST OWNER" || !firstOwnerPasscode.trim()) {
+      setOwnerControlNotice("Completion requires passcode, exact typed confirmation, and reason.");
+      return;
+    }
+    try {
+      setFirstOwnerBusy("complete-step-down");
+      setOwnerControlNotice(null);
+      await firstOwnerCompleteStepDown({
+        challengeId: String(firstOwnerChallenge.challengeId ?? firstOwnerChallenge.challenge_id ?? ""),
+        passcode: firstOwnerPasscode.trim(),
+        passcodeSalt: String(firstOwnerChallenge.passcodeSalt ?? ""),
+        reason: firstOwnerReason.trim(),
+        successorOwnerMembershipId: String(firstOwnerChallenge.successorOwnerMembershipId ?? ""),
+        targetOwnerMembershipId: String(firstOwnerChallenge.targetOwnerMembershipId ?? ""),
+        typedConfirmation: firstOwnerTypedConfirmation.trim(),
+      });
+      setOwnerControlNotice("First Owner succession completed.");
+      setFirstOwnerChallenge(null);
+      setFirstOwnerDisplayedPasscode("");
+      setFirstOwnerPasscode("");
+      setFirstOwnerTypedConfirmation("");
+      setFirstOwnerReason("");
+      await Promise.all([loadFirstOwnerAuthority(), loadPlatformRoles()]);
+    } catch (err: any) {
+      setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to complete First Owner step-down."));
+    } finally {
+      setFirstOwnerBusy(null);
+    }
+  }, [firstOwnerBusy, firstOwnerChallenge, firstOwnerControlsEnabled, firstOwnerPasscode, firstOwnerReason, firstOwnerTypedConfirmation, loadFirstOwnerAuthority, loadPlatformRoles]);
+
   const loadLegalIntake = useCallback(async () => {
     if (!canAccessLegalIntake && !canAccessLegalEvidence) return;
     try {
@@ -8541,6 +8690,7 @@ export default function AdminStudioScreen() {
     if (!canAccessAdmin) return;
     if (operatorTab === "audit-explorer" && canAccessAuditExplorer) void loadAuditExplorer();
     if (operatorTab === "permission-templates" && canManagePermissionTemplates) void loadPermissionTemplates();
+    if (operatorTab === "owners" && canAccessFirstOwnerTools) void loadFirstOwnerAuthority();
     if (operatorTab === "break-glass" && canAccessBreakGlass) void loadBreakGlass();
     if (operatorTab === "legal" && (canAccessLegalIntake || canAccessLegalEvidence)) void loadLegalIntake();
     if ((operatorTab === "owner-security" || operatorTab === "safety-dashboard") && canAccessOwnerSecurity) void loadOwnerSecurity();
@@ -8550,6 +8700,7 @@ export default function AdminStudioScreen() {
     canAccessAdmin,
     canAccessAuditExplorer,
     canAccessBreakGlass,
+    canAccessFirstOwnerTools,
     canAccessCanaryChecks,
     canAccessContentProgramming,
     canAccessLegalEvidence,
@@ -8558,6 +8709,7 @@ export default function AdminStudioScreen() {
     canManagePermissionTemplates,
     loadAuditExplorer,
     loadBreakGlass,
+    loadFirstOwnerAuthority,
     loadCanaries,
     loadLegalIntake,
     loadOwnerSecurity,
@@ -16439,13 +16591,186 @@ export default function AdminStudioScreen() {
         </View>
         ) : null}
 
+        {operatorTab === "owners" ? (
+        <View style={styles.configCard}>
+          <OwnerControlPanelHeader
+            actions={(
+              <TouchableOpacity
+                style={[styles.ownerSecondaryButton, firstOwnerBusy === "load" && styles.configSaveBtnDisabled]}
+                onPress={() => void loadFirstOwnerAuthority()}
+                disabled={firstOwnerBusy === "load"}
+              >
+                <Text style={styles.ownerSecondaryButtonText}>{firstOwnerBusy === "load" ? "Refreshing" : "Refresh"}</Text>
+              </TouchableOpacity>
+            )}
+            badgeLabel={firstOwnerStatus?.status === "enabled" ? "Enabled" : "Blocked"}
+            badgeTone={firstOwnerStatus?.status === "enabled" ? "success" : "locked"}
+            kicker="FIRST OWNER"
+            subtitle="Only First Owner can grant or revoke Owner. Normal Owner dashboard viewing is not Break Glass."
+            title="Owner Authority"
+          />
+
+          {ownerControlNotice ? (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Text style={styles.noticeText}>{ownerControlNotice}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.ownerMetricGrid}>
+            <OwnerMetricTile label="Authority" tone={firstOwnerStatus?.status === "enabled" ? "success" : "locked"} value={firstOwnerStatus?.status === "enabled" ? "Enabled" : "Blocked"} />
+            <OwnerMetricTile label="Actor" tone={firstOwnerControlsEnabled ? "success" : "locked"} value={firstOwnerStatus?.actorIsFirstOwner ? "First Owner" : firstOwnerStatus?.actorIsOwner ? "Owner" : "Denied"} />
+            <OwnerMetricTile label="Active Owners" tone="info" value={firstOwnerStatus?.activeOwnerCount ?? firstOwnerRows.filter((row) => row.isActive).length} />
+            <OwnerMetricTile label="Break Glass" tone={firstOwnerStatus?.breakGlassFirstOwnerOnly ? "success" : "manual"} value={firstOwnerStatus?.breakGlassFirstOwnerOnly ? "First Owner" : "Review"} />
+          </View>
+
+          {!firstOwnerControlsEnabled ? (
+            <OwnerDisabledReason reason={firstOwnerStatus?.firstOwnerMarkerExists === false
+              ? "First Owner controls are implemented but blocked pending the active First Owner marker seed."
+              : "Owner management controls are enabled only for the authenticated First Owner. Normal Owners can view this status but cannot grant or revoke Owner."}
+            />
+          ) : null}
+
+          <OwnerAdminSection
+            defaultExpanded
+            statusLabel={`${firstOwnerRows.filter((row) => row.isActive).length} active`}
+            statusTone="info"
+            subtitle="Owner rows are masked and inspectable here. First Owner status is enforced by backend checks."
+            title="Owner List"
+          >
+            {firstOwnerRows.length ? (
+              <View style={styles.ownerControlList}>
+                {firstOwnerRows.map((row) => (
+                  <OwnerControlRow
+                    key={`first-owner-row-${row.id ?? row.emailMasked}`}
+                    message={`Granted ${row.grantedAt ? formatModerationTimestamp(row.grantedAt) : "time unavailable"}${row.revokedAt ? ` · Revoked ${formatModerationTimestamp(row.revokedAt)}` : ""}`}
+                    statusLabel={row.isActive ? "Active Owner" : formatModerationToken(row.status || "inactive")}
+                    title={row.emailMasked || row.userIdShort || "Owner"}
+                    tone={row.isActive ? "success" : "locked"}
+                  />
+                ))}
+              </View>
+            ) : (
+              <OwnerEmptyState title="No Owner Rows Loaded" body="Refresh First Owner authority to load the backed Owner roster." />
+            )}
+          </OwnerAdminSection>
+
+          <OwnerAdminSection
+            statusLabel={firstOwnerControlsEnabled ? "Enabled" : "Locked"}
+            statusTone={firstOwnerControlsEnabled ? "success" : "locked"}
+            subtitle="Grant or revoke Owner through the enabled First Owner backend path. Self-removal is not available here."
+            title="Grant / Revoke Owner"
+          >
+            <View style={styles.ownerInputGroup}>
+              <TextInput
+                value={firstOwnerTargetEmail}
+                onChangeText={setFirstOwnerTargetEmail}
+                placeholder="target@example.com"
+                placeholderTextColor="#788196"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={styles.input}
+              />
+              <TextInput
+                value={firstOwnerReason}
+                onChangeText={setFirstOwnerReason}
+                placeholder="Reason required"
+                placeholderTextColor="#788196"
+                style={[styles.input, styles.multilineInput]}
+                multiline
+              />
+              <OwnerStickyActionBar helper="Only First Owner can grant or revoke Owner. First Owner cannot remove himself through this normal revoke path.">
+                <OwnerAdminActionButton
+                  label={firstOwnerBusy === "grant" ? "Granting" : "Grant Owner"}
+                  loading={firstOwnerBusy === "grant"}
+                  onPress={() => void runFirstOwnerGrantOwner()}
+                  variant="primary"
+                  disabled={!firstOwnerControlsEnabled || firstOwnerBusy !== null}
+                />
+                <OwnerAdminActionButton
+                  label={firstOwnerBusy === "revoke" ? "Revoking" : "Revoke Owner"}
+                  loading={firstOwnerBusy === "revoke"}
+                  onPress={() => void runFirstOwnerRevokeOwner()}
+                  variant="danger"
+                  disabled={!firstOwnerControlsEnabled || firstOwnerBusy !== null}
+                />
+              </OwnerStickyActionBar>
+            </View>
+          </OwnerAdminSection>
+
+          <OwnerAdminSection
+            statusLabel={firstOwnerControlsEnabled ? "Dangerous" : "Locked"}
+            statusTone={firstOwnerControlsEnabled ? "manual" : "locked"}
+            subtitle="First Owner self-step-down requires successor, password re-auth, generated single-use passcode, typed confirmation, reason, and audit."
+            title="First Owner Step Down"
+          >
+            <View style={styles.ownerInputGroup}>
+              <TextInput
+                value={firstOwnerSuccessorEmail}
+                onChangeText={setFirstOwnerSuccessorEmail}
+                placeholder="successor-owner@example.com"
+                placeholderTextColor="#788196"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={styles.input}
+              />
+              <TextInput
+                value={firstOwnerPassword}
+                onChangeText={setFirstOwnerPassword}
+                placeholder="Current password re-auth"
+                placeholderTextColor="#788196"
+                secureTextEntry
+                style={styles.input}
+              />
+              <OwnerAdminActionButton
+                label={firstOwnerBusy === "start-step-down" ? "Generating" : "Generate Challenge"}
+                loading={firstOwnerBusy === "start-step-down"}
+                onPress={() => void runFirstOwnerStartStepDown()}
+                variant="warning"
+                disabled={!firstOwnerControlsEnabled || firstOwnerBusy !== null}
+              />
+              {firstOwnerDisplayedPasscode ? (
+                <View style={styles.ownerNestedProofPanel}>
+                  <Text style={styles.ownerSectionTitle}>Single-use passcode</Text>
+                  <Text style={styles.ownerSecurityMiniValue}>{firstOwnerDisplayedPasscode}</Text>
+                  <Text style={styles.ownerSecurityMiniMeta}>This passcode is shown once, expires shortly, and is stored only as a salted hash.</Text>
+                </View>
+              ) : null}
+              <TextInput
+                value={firstOwnerPasscode}
+                onChangeText={setFirstOwnerPasscode}
+                placeholder="Passcode"
+                placeholderTextColor="#788196"
+                keyboardType="number-pad"
+                style={styles.input}
+              />
+              <TextInput
+                value={firstOwnerTypedConfirmation}
+                onChangeText={setFirstOwnerTypedConfirmation}
+                placeholder="STEP DOWN FIRST OWNER"
+                placeholderTextColor="#788196"
+                autoCapitalize="characters"
+                style={styles.input}
+              />
+              <OwnerAdminActionButton
+                label={firstOwnerBusy === "complete-step-down" ? "Completing" : "Complete Step Down"}
+                loading={firstOwnerBusy === "complete-step-down"}
+                onPress={() => void runFirstOwnerCompleteStepDown()}
+                variant="danger"
+                disabled={!firstOwnerControlsEnabled || !firstOwnerChallenge || firstOwnerBusy !== null}
+              />
+              <OwnerDisabledReason reason="This proof lane must not remove, demote, delete, or deactivate the current First Owner. Use this only for an owner-approved live succession operation." />
+            </View>
+          </OwnerAdminSection>
+        </View>
+        ) : null}
+
         {operatorTab === "break-glass" ? (
         <View style={styles.configCard}>
           <OwnerControlPanelHeader
             badgeLabel={breakGlassActiveSessionId ? "Active" : "Off"}
             badgeTone={breakGlassActiveSessionId ? "manual" : "locked"}
             kicker="BREAK GLASS"
-            subtitle="Emergency audit mode. Owner normal use stays unaudited unless this is manually activated."
+            subtitle="Emergency audit mode for First Owner only. Normal Owner dashboard viewing is not Break Glass."
             title="Emergency Owner Mode"
           />
 
@@ -16460,7 +16785,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.ownerSectionTitle}>Activation</Text>
               <OwnerStatusPill label={breakGlassActiveSessionId ? "Active" : "Confirmation Required"} tone={breakGlassActiveSessionId ? "manual" : "locked"} />
             </View>
-            <Text style={styles.ownerPanelMeta}>Use only for emergency owner-sensitive review. Normal owner legal/admin work elsewhere stays outside Break Glass.</Text>
+            <Text style={styles.ownerPanelMeta}>Use only for emergency/private/sensitive override actions. Normal Owner dashboard viewing stays outside Break Glass.</Text>
             <View style={styles.ownerInputGroup}>
               <TextInput
                 value={breakGlassReason}
@@ -16522,7 +16847,7 @@ export default function AdminStudioScreen() {
                 </TouchableOpacity>
               </View>
               {!canAccessBreakGlass ? (
-                <OwnerDisabledReason reason="Break Glass actions require Owner or emergency_break_glass permission. Normal owner work elsewhere does not require Break Glass." />
+                <OwnerDisabledReason reason="Break Glass actions require authenticated First Owner. Normal owner work elsewhere does not require Break Glass." />
               ) : breakGlassActiveSessionId ? (
                 <OwnerDisabledReason reason="A Break Glass session is already active. End the active session before starting another one." />
               ) : (

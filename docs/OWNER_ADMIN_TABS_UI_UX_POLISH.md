@@ -44,8 +44,12 @@ The June 5 hardening pass also adds exact selected-target summaries before staff
 Protected rules are unchanged:
 
 - Owner records stay protected.
+- Owner grant/revoke now uses the separate First Owner authority controls.
+- Only First Owner can grant or revoke Owner.
+- First Owner cannot remove himself as the last active Owner.
+- First Owner self-step-down requires successor, password re-auth, generated single-use passcode, typed confirmation, reason, and audit.
 - At least one active Owner must remain.
-- Owner grants remain bootstrap/protected flow only.
+- Owner grants are enabled only through the First Owner authority flow.
 - Admin grants require Owner or `admin_grants`.
 - Moderator grants require Owner or `manage_moderators`.
 - Self-grant remains blocked.
@@ -61,6 +65,10 @@ This UI lane does not change:
 
 - backend permissions logic
 - Owner/Admin protection
+- First Owner controls are enabled for authenticated First Owner after validation
+- Normal Owner dashboard viewing is not Break Glass
+- Break Glass is documented and audited when used
+- No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed
 - protected owner rules
 - role authority
 - money state

@@ -11,6 +11,7 @@
 - Permission Templates grant permission-only bundles and never create staff roles.
 - Temporary grants use `platform_staff_permission_grants.expires_at` as the server-side source of truth.
 - Break Glass is off by default, reason-required, and writes append-only Break Glass audit rows.
+- First Owner authority is enabled through `platform_first_owner_authority`: Only First Owner can grant or revoke Owner, First Owner cannot remove himself as the last active Owner, and First Owner self-step-down requires successor, password re-auth, generated single-use passcode, typed confirmation, reason, and audit.
 - The single top-level Legal tab contains Intake, Evidence, Holds, Requests, Exports, and Timeline/History sections where backed. Legal Request Intake stores non-deletable intake records connected to Legal Evidence work.
 - DMCA Case Management handles copyright notice intake, case detail, content actions, strikes, counter-notices, and functional case history.
 - Owner Security Center is Owner-only and backed by `owner_trusted_devices`, `security_audit_events`, temporary grant read/revoke paths, security audit timeline readouts, Live Ops flag readouts, and checklist proof. It must show unavailable/manual when a source cannot be proved, not fake zeroes.
@@ -39,7 +40,7 @@
 - Owner can see all tools.
 - Audit Explorer and Canary require Owner or `audit_review` / `security_review`.
 - Permission Templates require Owner or `staff_permission_templates` / `admin_grants`; Admins cannot template-grant themselves.
-- Break Glass requires Owner or `emergency_break_glass`.
+- Break Glass requires authenticated First Owner. Normal Owner dashboard viewing is not Break Glass.
 - Legal Intake requires Owner or `legal_request_intake` / `legal_review` / `legal_ops`.
 - Legal Evidence preview/search requires Owner or `legal_review` / `evidence_preview` / `legal_ops`; export requires Owner or `evidence_export` / `legal_ops`; hold requires Owner or `legal_hold` / `legal_ops`.
 - DMCA Case Management requires Owner or Admin/operator with `dmca_review`, `copyright_review`, or `legal_review`.
@@ -59,6 +60,8 @@
 ## Safety Notes
 - The Edge Function keeps service-role access server-side.
 - No secrets are returned to the app.
+- First Owner controls are enabled for authenticated First Owner after validation.
+- No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
 - Legal Intake has no delete action.
 - Legal request records, evidence records, exports, holds, and legal request timelines are functional case records. Normal Owner Legal work does not require Break Glass or owner-sensitive app-level audit rows.
 - DMCA case history, notices, content actions, counter-notices, and strike records are functional case records. Normal Owner DMCA work does not require Break Glass or owner-sensitive app-level audit rows.

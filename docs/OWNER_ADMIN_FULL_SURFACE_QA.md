@@ -80,6 +80,10 @@ Backend authority remains unchanged:
 
 - Owner records remain protected.
 - Generic staff panel does not grant Owner.
+- Owner grant/revoke now belongs to the First Owner authority panel and backend RPCs.
+- Only First Owner can grant or revoke Owner.
+- First Owner cannot remove himself as the last active Owner.
+- First Owner self-step-down requires successor, password re-auth, generated single-use passcode, typed confirmation, reason, and audit.
 - Admin grants still require Owner or `admin_grants`.
 - Moderator grants still require Owner or `manage_moderators`.
 - Scoped permission editing remains Owner-only in the current backend.
@@ -178,3 +182,7 @@ This pass did not change:
 - Owner/Admin backend authority
 - self-grant protection
 - final Owner protection
+- First Owner controls are enabled for authenticated First Owner after validation
+- Normal Owner dashboard viewing is not Break Glass
+- Break Glass is documented and audited when used
+- No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed

@@ -63,6 +63,35 @@ export type OwnerControlBreakGlassSession = Record<string, unknown> & {
   expires_at?: string | null;
 };
 
+export type FirstOwnerAuthorityStatus = Record<string, unknown> & {
+  activeOwnerCount?: number;
+  actorIsFirstOwner?: boolean;
+  actorIsOwner?: boolean;
+  breakGlassFirstOwnerOnly?: boolean;
+  controlsEnabled?: boolean;
+  firstOwnerMarkerExists?: boolean;
+  status?: "enabled" | "blocked_pending_first_owner_seed" | string;
+};
+
+export type FirstOwnerRow = {
+  emailMasked?: string | null;
+  grantedAt?: string | null;
+  id?: string | null;
+  isActive?: boolean;
+  revokedAt?: string | null;
+  status?: string | null;
+  userIdShort?: string | null;
+};
+
+export type FirstOwnerStepDownChallenge = Record<string, unknown> & {
+  challengeId?: string;
+  expiresAt?: string;
+  passcodeSalt?: string;
+  successorOwnerMembershipId?: string;
+  targetOwnerMembershipId?: string;
+  typedConfirmationRequired?: string;
+};
+
 export type OwnerControlLegalRequest = Record<string, unknown> & {
   id?: string;
   request_type?: string | null;
@@ -315,6 +344,47 @@ export async function revokePermissionTemplate(input: {
   templateKey: string;
 }) {
   return requestOwnerControls("template_revoke", input);
+}
+
+export async function readFirstOwnerAuthorityStatus() {
+  const payload = await requestOwnerControls("first_owner_status");
+  return {
+    owners: toArray(payload.owners) as FirstOwnerRow[],
+    status: toObject(payload.status) as FirstOwnerAuthorityStatus,
+  };
+}
+
+export async function firstOwnerGrantOwner(input: { reason: string; targetEmail: string }) {
+  return requestOwnerControls("first_owner_grant_owner", input);
+}
+
+export async function firstOwnerRevokeOwner(input: { reason: string; targetEmail: string }) {
+  return requestOwnerControls("first_owner_revoke_owner", input);
+}
+
+export async function firstOwnerStartStepDown(input: {
+  password: string;
+  reason: string;
+  successorEmail: string;
+}) {
+  const payload = await requestOwnerControls("first_owner_start_step_down", input);
+  return {
+    challenge: toObject(payload.challenge) as FirstOwnerStepDownChallenge,
+    passcode: typeof payload.passcode === "string" ? payload.passcode : "",
+    passcodePlaintextStored: payload.passcodePlaintextStored === true,
+  };
+}
+
+export async function firstOwnerCompleteStepDown(input: {
+  challengeId: string;
+  passcode: string;
+  passcodeSalt: string;
+  reason: string;
+  successorOwnerMembershipId: string;
+  targetOwnerMembershipId: string;
+  typedConfirmation: string;
+}) {
+  return requestOwnerControls("first_owner_complete_step_down", input);
 }
 
 export async function readBreakGlassStatus() {
