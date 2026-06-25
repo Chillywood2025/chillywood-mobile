@@ -4,6 +4,12 @@ Last updated: May 29, 2026
 
 > Repo launch note: Attorney review required before public launch. This checklist is the status map for repo policy drafting and external legal/setup blockers.
 
+## June 25, 2026 Legal/Privacy/Data Safety Final Alignment
+
+Alignment doc: `docs/legal/LEGAL_PRIVACY_DATA_SAFETY_FINAL_ALIGNMENT.md`.
+
+Legal/privacy/Data Safety final alignment: Closed for repo-side documentation alignment; attorney/legal review and Play Console acceptance remain external. This is product/legal-readiness documentation alignment, not attorney legal advice. Account deletion uses scheduled deletion, restore window where supported, and controlled purge/de-identification. Legal/security/payment/support/moderation evidence retention exceptions are preserved. Data Safety evidence map matches actual app behavior at repo level, and Privacy Policy matches account, chat, media, analytics, crash, purchase, moderation, notification, and live room behavior subject to owner confirmation of final SDK/provider collection settings. Reports do not auto-delete, auto-ban, or expose reporter identity. Appeals use support/escalation workflow in V1. Premium annual remains provider-blocked until Google Play base plan exists. Creator-money remains OFF. Provider refunds remain manual/external. No payouts, Stripe Connect, merch checkout, payable balances, or money movement are live. Public legal pages avoid proof/debug/internal wording and do not expose secrets, raw storage paths, signed URLs, raw IPs, tokens, push tokens, provider secrets, tax IDs, bank details, proof passwords, private provider IDs, or private dashboard data.
+
 ## May 29, 2026 Public V1 Burn-Down Proof
 
 Public V1 eight-blocker burn-down proof lives at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`. The release APK installed and opened on Android device `R5CR120QCBF`, in-app Settings/Support/Account Deletion/Privacy/Terms/Copyright Report/Moderation Policy routes were captured, and public legal/support URLs returned HTTP 200 after redirects where applicable. This closes the current repo/runtime proof that the legal surfaces are reachable, but it does not complete attorney approval, Google Play Data Safety/content-rating/listing entry, account deletion URL acceptance, support/account-deletion SLA ownership, or external legal operations acceptance.

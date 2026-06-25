@@ -7,6 +7,8 @@ Proof folder: `/tmp/chillywood-store-legal-account-deletion-ops-closeout-2026052
 
 This closeout records what is repo-backed, what was runtime or URL checked, and what remains external for Google Play, legal approval, support operations, account deletion operations, and outbound email. It does not claim Play Console acceptance, Data Safety approval, attorney approval, DKIM verification, support staffing, or account deletion fulfillment. Production scanner deployment proof was closed later on May 30, 2026.
 
+June 25, 2026 legal/privacy/Data Safety final alignment: `docs/legal/LEGAL_PRIVACY_DATA_SAFETY_FINAL_ALIGNMENT.md` supersedes older wording where needed. Account deletion uses scheduled deletion, restore window where supported, and controlled purge/de-identification. Legal/security/payment/support/moderation evidence retention exceptions are preserved. Public legal pages avoid proof/debug/internal wording. Provider refunds remain manual/external, Premium annual remains provider-blocked, creator-money remains OFF, and no payouts, Stripe Connect, merch checkout, payable balances, or money movement are live.
+
 ## Official References To Recheck
 
 Google Play requirements can change. Recheck these official references during the final external submission:

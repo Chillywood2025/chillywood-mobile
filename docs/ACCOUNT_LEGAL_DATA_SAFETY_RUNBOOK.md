@@ -8,6 +8,12 @@ Purpose: prepare Chi'llywood's account deletion, legal/support URL, content poli
 
 This runbook is not legal advice and does not complete Google Play Console submission. It is a repo-backed source of truth for what the app currently supports and what a release owner must enter or verify manually.
 
+## June 25, 2026 Legal/Privacy/Data Safety Final Alignment
+
+Current final alignment doc: `docs/legal/LEGAL_PRIVACY_DATA_SAFETY_FINAL_ALIGNMENT.md`.
+
+Legal/privacy/Data Safety final alignment: Closed for repo-side documentation alignment. This is product/legal-readiness documentation alignment, not attorney legal advice. Account deletion uses scheduled deletion, restore window where supported, and controlled purge/de-identification. Legal/security/payment/support/moderation evidence retention exceptions are preserved. Data Safety evidence map matches actual app behavior at repo level, while owner/legal must still confirm final SDK/provider collection settings for the submitted build. Privacy Policy matches account, chat, media, analytics, crash, purchase, moderation, notification, and live room behavior. Appeals use support/escalation workflow in V1. Premium annual remains provider-blocked until Google Play base plan exists, creator-money remains OFF, provider refunds remain manual/external, and no payouts, Stripe Connect, merch checkout, payable balances, or money movement are live.
+
 ## May 29, 2026 Public V1 Burn-Down Update
 
 Current Android release proof is captured at `/tmp/chillywood-public-v1-eight-blocker-burndown-20260529/`. The release APK installed and opened on `R5CR120QCBF`, Settings and legal/support/account-deletion routes were captured, and the public legal/support URL audit returned HTTP 200 for Privacy, Terms, Account Deletion, Copyright, Copyright Report, Support, Community Guidelines, Creator Rules, Moderation Policy, and Premium Terms after redirects where applicable.

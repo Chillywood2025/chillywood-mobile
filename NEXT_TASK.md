@@ -1,5 +1,36 @@
 # NEXT TASK
 
+## Legal / Privacy / Data Safety Final Alignment Lane
+
+- [x] Legal/privacy/account deletion/Data Safety repo-side alignment closed.
+
+Status:
+- Verdict: Closed for repo-side documentation alignment; attorney/legal review and Play Console acceptance remain external.
+- Docs: `docs/legal/LEGAL_PRIVACY_DATA_SAFETY_FINAL_ALIGNMENT.md`
+- Proof script: `scripts/proof-legal-privacy-data-safety-final-alignment.mjs`
+- Guard: `scripts/guard-legal-privacy-data-safety-policy.mjs`
+- Required wording:
+  - Legal/privacy/Data Safety final alignment: Closed / Partial / Blocked.
+  - This is product/legal-readiness documentation alignment, not attorney legal advice.
+  - Account deletion uses scheduled deletion, restore window where supported, and controlled purge/de-identification.
+  - Legal/security/payment/support/moderation evidence retention exceptions are preserved.
+  - Data Safety evidence map matches actual app behavior.
+  - Privacy Policy matches account, chat, media, analytics, crash, purchase, moderation, notification, and live room behavior.
+  - Reports do not auto-delete, auto-ban, or expose reporter identity.
+  - Appeals use support/escalation workflow in V1.
+  - Premium annual remains provider-blocked until Google Play base plan exists.
+  - Creator-money remains OFF.
+  - Provider refunds remain manual/external.
+  - No payouts, Stripe Connect, merch checkout, payable balances, or money movement are live.
+  - Public legal pages avoid proof/debug/internal wording.
+  - No secrets, raw storage paths, signed URLs, raw IPs, tokens, push tokens, provider secrets, tax IDs, bank details, proof passwords, private provider IDs, or private dashboard data are exposed.
+- Current behavior:
+  - Public legal pages exist for Terms, Privacy, Support, Account Deletion, Copyright, Copyright Report, Refunds, Premium Terms, Live Rules, Community Guidelines, Moderation Policy, and Creator Monetization.
+  - The public copyright policy no longer uses placeholder agent wording.
+  - Account deletion language matches scheduled deletion, restore window, controlled purge/de-identification, and retention exceptions.
+  - Data Safety and Play reviewer docs remain repo-prepared while final SDK/provider disclosure, attorney approval, and Play Console acceptance remain owner/legal external actions.
+- Next lane recommendation: Continue production readiness with monitoring, analytics, crash, and runtime diagnostics final alignment.
+
 ## Sequential Production Proof Waves — Android First
 
 ### Seven-Flow Production Switchboard Lane

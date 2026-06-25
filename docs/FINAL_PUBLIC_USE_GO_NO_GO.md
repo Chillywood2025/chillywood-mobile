@@ -1,5 +1,9 @@
 # Final Public Use Go / No-Go
 
+## June 25, 2026 Legal / Privacy / Data Safety Alignment
+
+Repo-side legal/privacy/Data Safety final alignment is closed in `docs/legal/LEGAL_PRIVACY_DATA_SAFETY_FINAL_ALIGNMENT.md`. This is product/legal-readiness documentation alignment, not attorney legal advice. Public legal pages, in-app legal/support/account deletion links, account deletion scheduled/restore/purge wording, Data Safety evidence, Play reviewer packet, Premium annual provider-blocked status, creator-money OFF status, manual/external refund posture, and evidence retention exceptions are aligned to current app behavior. Play Console acceptance, attorney/legal approval, SDK/provider final disclosures, support/account deletion SLA, and public legal-site redeploy remain external owner actions.
+
 Date: 2026-06-24
 
 Verdict: Conditional Go.

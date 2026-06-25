@@ -8,6 +8,8 @@ Current proved behavior covers scheduled deletion, restore/cancel, public Profil
 
 This document is not a legal compliance claim. It records the implementation and proof boundary for the app. Any broader legal retention, permanent deletion, or de-identification promise still requires owner/legal approval.
 
+June 25, 2026 legal/privacy/Data Safety alignment: `docs/legal/LEGAL_PRIVACY_DATA_SAFETY_FINAL_ALIGNMENT.md` confirms that public legal/account deletion copy must describe scheduled deletion, restore window where supported, and controlled purge/de-identification. It must not claim instant hard deletion, automatic provider refunds, payout movement, creator-money activation, or removal of legal/security/payment/support/moderation evidence retention exceptions.
+
 Latest proof artifact:
 
 - `/tmp/app-account-purge-deidentification-proof-20260624233257/`
