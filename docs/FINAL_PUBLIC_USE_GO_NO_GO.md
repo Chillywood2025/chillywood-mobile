@@ -54,6 +54,19 @@ Latest password reset/auth email provider proof artifact:
 
 - `/tmp/app-password-reset-provider-proof-20260624-200632/`
 
+Latest seven-flow production switchboard proof artifact:
+
+- `/tmp/app-seven-flow-production-switchboard-proof-20260625-023513/`
+
+Seven-flow money classification:
+
+- Seven-flow app-side proof: Closed.
+- Seven-flow production switchboard: Partial.
+- Real-money activation: Off by default unless owner explicitly enables each flow.
+- Creator payouts: Off unless separate payout lane enables them.
+- Provider refunds: Manual/external unless separate provider-refund lane enables automation.
+- Production activation is not claimed for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, or Event Pass until owner decision and provider production product approval/mapping are proved.
+
 ## Wave Summary
 
 | Wave | Status | Closed proof | Remaining blocker | Launch impact |

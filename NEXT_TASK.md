@@ -2,6 +2,23 @@
 
 ## Sequential Production Proof Waves — Android First
 
+### Seven-Flow Production Switchboard Lane
+
+- [x] Seven-flow production switchboard readiness
+
+Status:
+- Verdict: Partial
+- Docs: `docs/SEVEN_FLOW_PRODUCTION_SWITCHBOARD.md`
+- Proof script: `scripts/proof-seven-flow-production-switchboard.mjs`
+- Required classification:
+  - Seven-flow app-side proof: Closed
+  - Seven-flow production switchboard: Partial
+  - Real-money activation: Off by default unless owner explicitly enables each flow
+  - Creator payouts: Off unless separate payout lane enables them
+  - Provider refunds: Manual/external unless separate provider-refund lane enables automation
+- Result: Explicit switches are cataloged for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass; existing backend money kill switches remain the enforcement foundation; `live_money_enabled` and `payouts_enabled` remain off; Premium purchase remains closed by default; provider production activation remains blocked pending owner/provider approval.
+- Safety confirmation: No live money, creator payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, Premium product changes, Premium gate weakening, RLS weakening, LiveKit authority changes, participant-cap changes, auth/reset changes, scan-gate weakening, abuse-throttle removal, or block-enforcement removal.
+
 Purpose:
 
 This section tracks the remaining production-readiness proof lanes in grouped waves. The original 0–17 items are preserved inside these waves. Codex must work one wave at a time, report honestly, and check items off only when proof is complete.

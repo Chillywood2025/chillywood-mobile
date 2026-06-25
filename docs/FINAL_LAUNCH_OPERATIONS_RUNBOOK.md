@@ -4,6 +4,22 @@ Status: Final launch operations lane.
 
 This runbook covers provider refund execution, batch account purge/de-identification, and manual-review categories. It does not activate live money, payouts, provider refunds, production checkout, Premium product changes, LiveKit authority changes, RLS weakening, scan-gate weakening, auth/reset weakening, abuse-control weakening, or broad automatic real-user purge.
 
+## Seven-Flow Money Switchboard
+
+The seven-flow production switchboard lives in `docs/SEVEN_FLOW_PRODUCTION_SWITCHBOARD.md`.
+
+Current classification:
+
+- Seven-flow app-side proof: Closed.
+- Seven-flow production switchboard: Partial.
+- Real-money activation: Off by default unless owner explicitly enables each flow.
+- Creator payouts: Off unless separate payout lane enables them.
+- Provider refunds: Manual/external unless separate provider-refund lane enables automation.
+
+The seven controlled flows are Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass. Each flow requires an explicit owner decision before production activation. The global emergency stop is `live_money_enabled=off`, and creator payouts remain governed separately by `payouts_enabled=off` plus payout-lane requirements.
+
+Do not use this runbook to turn on live money. Do not use it to create payable balances, withdrawals, cash-out, transfers, payout movement, provider refunds, fake provider success, Premium product changes, Premium gate weakening, RLS weakening, LiveKit authority changes, scan-gate weakening, abuse-throttle removal, or block-enforcement removal.
+
 ## Provider Refund Execution
 
 Provider refund execution is manual/external. The app must not claim instant or automatic provider refunds. Entitlement revoke/access removal behavior is proved locally; real provider refund API execution is not implemented or proved.
