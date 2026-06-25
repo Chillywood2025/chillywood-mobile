@@ -2,13 +2,13 @@
 
 Date: 2026-06-25
 
-Verdict: Blocked.
+Verdict: Partial.
 
 This lane prepares clean production-labeled provider products for the six creator-money flows. It does not activate creator-money, live money, payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, Premium, or public purchases.
 
 Owner decision: use option B. Clean production-labeled creator-money product IDs must exist before any creator-money launch. The owner approved the recommended production IDs, the recommended starting prices, and United States only first. Sandbox-labeled IDs remain sandbox/test-only unless the owner explicitly approves otherwise in a later lane.
 
-Creator-money production-labeled products: Blocked. Browser dashboard readback found the six clean production-labeled IDs missing in Google Play Console and RevenueCat. Creating them remains blocked because Google Play submission requires required public metadata and provider/compliance choices that were not approved in this lane: user-visible product names/descriptions/icons, tax category, age rating, purchase options, subscription base plans, and any publishing/provider review steps. No product form was submitted.
+Creator-money production-labeled products: Partial. Browser dashboard setup created the Google Play subscription product record `cw_channel_subscription_monthly_499` with display name `Creator Channel Subscription`. The subscription has `0` active base plans, so the required `monthly` base plan remains missing and no purchase is available. The five one-time products remain blocked by the Google Play provider form because the visible create form requires product icon upload and age rating, and exposes tax/compliance category, purchase option, region, and pricing setup before completion. RevenueCat import/mapping remains blocked because the one-time Google Play products do not exist and the channel subscription base plan does not exist.
 
 Approved starting prices are launch defaults, not the only future prices.
 
@@ -32,14 +32,18 @@ Stripe merch checkout remains OFF.
 
 United States only first.
 
+Creator-money activation still requires owner approval and controlled proof.
+
+No creator-money product maps to Premium.
+
 Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
 
 ## Dashboard Readback
 
 | Provider | App/package | Result |
 | --- | --- | --- |
-| Google Play Console | `com.chillywood.mobile` | Browser readback reached the app product pages. The five one-time production-labeled IDs and one subscription production-labeled ID below were not present. One-time product creation requires immutable product ID plus user-visible name, description, icon, tax category, age rating, regional restrictions, purchase option, and pricing before availability/pricing completion. Subscription creation requires immutable product ID and user-visible name before base-plan creation. No product form was submitted. |
-| RevenueCat | Android Play Store integration for the app | Browser readback reached Product Catalog, Entitlements, and Offerings. The six production-labeled IDs below were not present. Premium entitlement/offering remains separate, and `creator_channel_subscription` exists for the sandbox channel subscription only. RevenueCat import/mapping cannot complete until the matching Google Play products exist. |
+| Google Play Console | `com.chillywood.mobile` | Browser readback reached the app product pages. The subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` now exists with `0` active base plans. The `monthly` base plan was not saved because the base-plan form initially selected all 174 countries/regions and the safe US-only pricing/availability path could not be completed without risking broad availability. The five one-time production-labeled IDs were not created because the visible form requires product icon upload and age rating, and exposes tax/compliance, purchase-option, region, and pricing setup. |
+| RevenueCat | Android Play Store integration for the app | Browser readback reached Product Catalog. The six production-labeled IDs were not present. Premium entitlement/offering remains separate. RevenueCat import/mapping cannot complete until the matching Google Play one-time products and channel subscription base plan exist. |
 | Stripe | Future payout and physical-merch rail | Browser readback stopped at Stripe sign-in. Stripe production payout/merch readiness is pending provider access and is not required for Android digital creator-product creation. Stripe is not used for Android digital creator-money purchases in this lane. |
 
 No private dashboard screenshots, provider secrets, customer data, account identifiers, local env files, keys, tokens, signed URLs, or proof passwords were saved.
@@ -48,20 +52,22 @@ No private dashboard screenshots, provider secrets, customer data, account ident
 
 | Flow | Old sandbox-labeled ID | New production ID | Product type | Provider status | RevenueCat status | Activation status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Tips | `cw_creator_tip_sandbox_099` | `cw_creator_tip_099` | One-time product / consumable-style support if supported by provider setup; `$0.99`, United States only first | Missing | Missing | OFF |
-| Paid Video | `cw_paid_content_access_sandbox_099` | `cw_paid_content_access_099` | One-time product / consumable or exact-access product depending provider policy; `$0.99`, United States only first | Missing | Missing | OFF |
-| Watch-Party Ticket | `cw_watch_party_live_ticket_sandbox_099` | `cw_watch_party_ticket_099` | One-time product; `$0.99`, United States only first | Missing | Missing | OFF |
-| Channel Subscription | `channel_subscription_sandbox_monthly_499:monthly` | `cw_channel_subscription_monthly_499` + base plan `monthly` | Subscription; `$4.99/month`, United States only first | Missing | Missing | OFF |
-| VIP | `cw_vip_pass_sandbox_499` | `cw_vip_pass_499` | One-time product / non-consumable-style creator-specific pass if supported by provider setup; `$4.99`, United States only first | Missing | Missing | OFF |
-| Event Pass | `cw_event_pass_sandbox_099` | `cw_event_pass_099` | One-time product; `$0.99`, United States only first | Missing | Missing | OFF |
+| Tips | `cw_creator_tip_sandbox_099` | `cw_creator_tip_099` | One-time product / consumable-style support if supported by provider setup; `$0.99`, United States only first | Blocked by provider form | Blocked until Google Play product exists | OFF |
+| Paid Video | `cw_paid_content_access_sandbox_099` | `cw_paid_content_access_099` | One-time product / consumable or exact-access product depending provider policy; `$0.99`, United States only first | Blocked by provider form | Blocked until Google Play product exists | OFF |
+| Watch-Party Ticket | `cw_watch_party_live_ticket_sandbox_099` | `cw_watch_party_ticket_099` | One-time product; `$0.99`, United States only first | Blocked by provider form | Blocked until Google Play product exists | OFF |
+| Channel Subscription | `channel_subscription_sandbox_monthly_499:monthly` | `cw_channel_subscription_monthly_499` + base plan `monthly` | Subscription; `$4.99/month`, United States only first | Created product record; base plan missing | Blocked until Google Play base plan exists | OFF |
+| VIP | `cw_vip_pass_sandbox_499` | `cw_vip_pass_499` | One-time product / non-consumable-style creator-specific pass if supported by provider setup; `$4.99`, United States only first | Blocked by provider form | Blocked until Google Play product exists | OFF |
+| Event Pass | `cw_event_pass_sandbox_099` | `cw_event_pass_099` | One-time product; `$0.99`, United States only first | Blocked by provider form | Blocked until Google Play product exists | OFF |
 
 ## Provider Creation Safety Decision
 
-No provider product was submitted in this lane.
+One provider product record was submitted in this lane: Google Play subscription `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`. It has zero active base plans and cannot be purchased.
 
-Google Play one-time product creation was blocked by owner/provider action because the visible form requires an immutable product ID, user-visible name and description, product icon, tax category, age rating, regional restrictions, purchase option, and pricing path before the product can be completed. Google Play subscription creation was blocked by owner/provider action because the visible form requires an immutable product ID and user-visible subscription name before base-plan creation, and the requested base plan `monthly` would still require follow-on pricing/region/provider setup.
+Google Play one-time product creation was blocked by provider form requirements because the visible form requires an immutable product ID, user-visible name and description, product icon, tax category, age rating, regional restrictions, purchase option, and pricing path before the product can be completed. The approved prompt supplied product ID, name, description, price, and US-only region, but not product icon or age rating. Tax/compliance category was visible and must not be guessed.
 
-RevenueCat product import/mapping was blocked because the clean Google Play products do not exist yet. RevenueCat must import exact store IDs, attach only the channel subscription to `creator_channel_subscription`, and leave all creator-money products detached from `premium`.
+Google Play subscription creation was safe for the approved immutable product ID and user-visible name, so the subscription product record was created. The requested base plan `monthly` was not saved because the base-plan form initially selected all 174 countries/regions and the US-only availability/pricing path was not safely completed. The base plan remains missing.
+
+RevenueCat product import/mapping was blocked because the clean Google Play one-time products do not exist and the channel subscription base plan does not exist yet. RevenueCat must import exact store IDs, attach only the channel subscription to `creator_channel_subscription`, and leave all creator-money products detached from `premium`.
 
 Stripe was not used for Android digital products. Stripe payout and merch prep remains documented separately; Stripe payouts remain OFF and Stripe merch checkout remains OFF.
 
@@ -72,6 +78,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_creator_tip_sandbox_099`.
 - New production product ID: `cw_creator_tip_099`.
 - Intended type: one-time product / consumable-style support if supported by provider setup.
+- Display name: `Creator Tip`.
+- Short description: `Send optional support to a creator. Tips do not unlock content.`
 - Starting price: `$0.99`.
 - Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; no durable access entitlement.
@@ -86,6 +94,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_paid_content_access_sandbox_099`.
 - New production product ID: `cw_paid_content_access_099`.
 - Intended type: one-time product / consumable or exact-access product depending provider policy.
+- Display name: `Paid Video Access`.
+- Short description: `Unlock access to one paid creator video.`
 - Starting price: `$0.99`.
 - Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-target grant remains access source.
@@ -100,6 +110,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_watch_party_live_ticket_sandbox_099`.
 - New production product ID: `cw_watch_party_ticket_099`.
 - Intended type: one-time product.
+- Display name: `Watch-Party Ticket`.
+- Short description: `Unlock access to one ticketed Watch-Party room.`
 - Starting price: `$0.99`.
 - Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-room ticket/grant remains access source.
@@ -115,6 +127,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - New production product ID: `cw_channel_subscription_monthly_499`.
 - Intended type: subscription.
 - Base plan: `monthly`.
+- Display name: `Creator Channel Subscription`.
+- Short description: `Monthly access to one creator's subscriber area.`
 - Starting price: `$4.99/month`.
 - Region: United States only first.
 - RevenueCat entitlement: `creator_channel_subscription` or current safe creator-specific subscription mapping.
@@ -129,6 +143,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_vip_pass_sandbox_499`.
 - New production product ID: `cw_vip_pass_499`.
 - Intended type: one-time product / non-consumable-style creator-specific pass if supported by provider setup.
+- Display name: `Creator VIP Pass`.
+- Short description: `Unlock creator-specific VIP access.`
 - Starting price: `$4.99`.
 - Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-creator VIP pass remains access source.
@@ -143,6 +159,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_event_pass_sandbox_099`.
 - New production product ID: `cw_event_pass_099`.
 - Intended type: one-time product.
+- Display name: `Creator Event Pass`.
+- Short description: `Unlock access to one paid creator event.`
 - Starting price: `$0.99`.
 - Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-event pass remains access source.
@@ -154,25 +172,25 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 
 ## Google Play Product Matrix
 
-| Flow | Production product ID | Product type | Base plan | Price target | Region | Dashboard status | Owner action |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Tips | `cw_creator_tip_099` | One-time product | Not applicable | `$0.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
-| Paid Video | `cw_paid_content_access_099` | One-time product | Not applicable | `$0.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
-| Watch-Party Ticket | `cw_watch_party_ticket_099` | One-time product | Not applicable | `$0.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
-| Channel Subscription | `cw_channel_subscription_monthly_499` | Subscription | `monthly` | `$4.99/month` | United States only first | Missing / blocked by owner-provider setup | Create subscription, base plan, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
-| VIP | `cw_vip_pass_499` | One-time product | Not applicable | `$4.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
-| Event Pass | `cw_event_pass_099` | One-time product | Not applicable | `$0.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
+| Flow | Production product ID | Product type | Display name | Base plan | Price target | Region | Dashboard status | Owner action |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Tips | `cw_creator_tip_099` | One-time product | `Creator Tip` | Not applicable | `$0.99` | United States only first | Blocked by provider form | Provide product icon and age rating; confirm tax/compliance and purchase-option setup; then create product and keep app switch OFF. |
+| Paid Video | `cw_paid_content_access_099` | One-time product | `Paid Video Access` | Not applicable | `$0.99` | United States only first | Blocked by provider form | Provide product icon and age rating; confirm tax/compliance and purchase-option setup; then create product and keep app switch OFF. |
+| Watch-Party Ticket | `cw_watch_party_ticket_099` | One-time product | `Watch-Party Ticket` | Not applicable | `$0.99` | United States only first | Blocked by provider form | Provide product icon and age rating; confirm tax/compliance and purchase-option setup; then create product and keep app switch OFF. |
+| Channel Subscription | `cw_channel_subscription_monthly_499` | Subscription | `Creator Channel Subscription` | `monthly` missing | `$4.99/month` | United States only first | Created product record; base plan missing | Create `monthly` base plan with US-only availability/pricing; do not activate public purchase flow until owner proof. |
+| VIP | `cw_vip_pass_499` | One-time product | `Creator VIP Pass` | Not applicable | `$4.99` | United States only first | Blocked by provider form | Provide product icon and age rating; confirm tax/compliance and purchase-option setup; then create product and keep app switch OFF. |
+| Event Pass | `cw_event_pass_099` | One-time product | `Creator Event Pass` | Not applicable | `$0.99` | United States only first | Blocked by provider form | Provide product icon and age rating; confirm tax/compliance and purchase-option setup; then create product and keep app switch OFF. |
 
 ## RevenueCat Product Matrix
 
 | Flow | Production RevenueCat product | Entitlement | Offering/package | Dashboard status | Owner action |
 | --- | --- | --- | --- | --- | --- |
-| Tips | `cw_creator_tip_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Missing | Import after Google Play product exists; verify no Premium entitlement. |
-| Paid Video | `cw_paid_content_access_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Missing | Import after Google Play product exists; verify no Premium entitlement. |
-| Watch-Party Ticket | `cw_watch_party_ticket_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Missing | Import after Google Play product exists; verify no Premium entitlement. |
-| Channel Subscription | `cw_channel_subscription_monthly_499:monthly` | `creator_channel_subscription` | Not applicable for current direct product fallback unless owner requires package | Missing | Import after Google Play subscription/base plan exists; attach only to creator-channel entitlement. |
-| VIP | `cw_vip_pass_499` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Missing | Import after Google Play product exists; verify no Premium entitlement. |
-| Event Pass | `cw_event_pass_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Missing | Import after Google Play product exists; verify no Premium entitlement. |
+| Tips | `cw_creator_tip_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Blocked until Google Play product exists | Import after Google Play product exists; verify no Premium entitlement. |
+| Paid Video | `cw_paid_content_access_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Blocked until Google Play product exists | Import after Google Play product exists; verify no Premium entitlement. |
+| Watch-Party Ticket | `cw_watch_party_ticket_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Blocked until Google Play product exists | Import after Google Play product exists; verify no Premium entitlement. |
+| Channel Subscription | `cw_channel_subscription_monthly_499:monthly` | `creator_channel_subscription` | Not applicable for current direct product fallback unless owner requires package | Blocked until Google Play base plan exists | Import after Google Play subscription/base plan exists; attach only to creator-channel entitlement; do not attach to Premium. |
+| VIP | `cw_vip_pass_499` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Blocked until Google Play product exists | Import after Google Play product exists; verify no Premium entitlement. |
+| Event Pass | `cw_event_pass_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Blocked until Google Play product exists | Import after Google Play product exists; verify no Premium entitlement. |
 
 ## Repo Config Matrix
 
@@ -226,12 +244,12 @@ Unsupported custom amounts fail closed: no purchase intent, no provider sheet, n
 
 ## Owner Action List
 
-1. Approve the required user-visible product names/descriptions/icons, tax category, age rating, and any other provider/compliance fields needed by Google Play.
-2. Create the five Google Play one-time products with the production-labeled IDs above.
-3. Create the Google Play channel subscription `cw_channel_subscription_monthly_499` with base plan `monthly`.
-4. Set the approved starting prices and United States only first availability.
-5. Confirm purchase options, tax/compliance, age rating, publishing/provider review, and provider availability.
-6. Import each product into RevenueCat only after Google Play records exist.
+1. Provide approved one-time product icons for Tips, Paid Video, Watch-Party Ticket, VIP, and Event Pass.
+2. Provide approved age rating choices for the five one-time products.
+3. Confirm the visible Google Play tax/compliance category and purchase-option setup for each one-time product.
+4. Create the five Google Play one-time products with the production-labeled IDs above.
+5. Create the `monthly` base plan for `cw_channel_subscription_monthly_499` with United States only first availability and `$4.99/month` pricing.
+6. Import each product into RevenueCat only after matching Google Play records/base plans exist.
 7. Attach only the channel subscription to `creator_channel_subscription`; do not attach any creator product to `premium`.
 8. Re-run dashboard verification and Play-installed smoke in a separate lane.
 9. Keep all creator-money switches OFF until owner-approved activation.

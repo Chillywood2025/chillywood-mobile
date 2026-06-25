@@ -12,9 +12,9 @@ Seven-flow production switchboard: Partial. The explicit switch catalog, default
 
 Seven-flow production prep: Partial. The production-prep checklist now records flow-by-flow provider mapping, owner activation steps, support/refund/dispute policy, monitoring/readback expectations, and rollback paths in `docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md`. It keeps activation blocked pending owner approval and provider production verification per flow.
 
-Creator-money production-labeled products: Blocked. Owner chose option B: sandbox-labeled creator-money product IDs remain sandbox/test-only, and clean production-labeled IDs must be created before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, and United States only first. Browser dashboard readback found the clean IDs missing in Google Play Console and RevenueCat; safe provider creation still requires owner/provider-approved public product metadata, icons, tax/compliance, age rating, purchase options, subscription base plans, and publishing/provider review. See `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`.
+Creator-money production-labeled products: Partial. Owner chose option B: sandbox-labeled creator-money product IDs remain sandbox/test-only, and clean production-labeled IDs must be created before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the `monthly` base plan remains missing. The five one-time products remain blocked by product icon and age rating requirements plus tax/compliance and purchase-option setup. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist. See `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`.
 
-Creator-money production-labeled product IDs: Blocked.
+Creator-money production-labeled product IDs: Partial.
 
 Real-money activation: Off by default unless owner explicitly enables each flow.
 

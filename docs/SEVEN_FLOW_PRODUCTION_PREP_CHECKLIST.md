@@ -14,9 +14,9 @@ Seven-flow production prep: Partial. The flows are prepared behind explicit swit
 
 Seven-flow provider verification: Partial. Provider verification used browser dashboard evidence. The configured product IDs are present in Google Play Console and RevenueCat and match the repo/app configuration; production activation remains blocked by owner approval and, for creator-money flows, owner decision on whether to keep sandbox-labeled configured IDs or replace them with production-labeled IDs.
 
-Creator-money production-labeled products: Blocked. Owner chose option B: clean production-labeled IDs are required before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, and United States only first. The production-labeled IDs are documented in `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`, but browser dashboard readback found them missing in Google Play Console and RevenueCat. Google Play creation still requires owner/provider-approved public product metadata, icons, tax/compliance, age rating, purchase options, subscription base plans, and publishing/provider review before safe submission; RevenueCat import/mapping remains blocked until the matching Google Play products exist.
+Creator-money production-labeled products: Partial. Owner chose option B: clean production-labeled IDs are required before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the required `monthly` base plan remains missing. The five one-time products remain blocked by product icon and age rating requirements plus tax/compliance and purchase-option setup. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist.
 
-Creator-money production-labeled product IDs: Blocked.
+Creator-money production-labeled product IDs: Partial.
 
 Real-money activation: Off by default unless owner explicitly enables each flow.
 

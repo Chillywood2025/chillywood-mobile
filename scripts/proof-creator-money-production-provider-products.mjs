@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
-const artifactDir = path.join("/tmp", `app-creator-money-production-provider-products-proof-${timestamp}`);
+const artifactDir = path.join("/tmp", `app-creator-money-provider-product-creation-proof-${timestamp}`);
 
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
@@ -21,13 +21,15 @@ const products = [
     sandboxProductId: "cw_creator_tip_sandbox_099",
     productionProductId: "cw_creator_tip_099",
     productType: "one_time_consumable",
+    displayName: "Creator Tip",
+    shortDescription: "Send optional support to a creator. Tips do not unlock content.",
     launchPriceUsd: "$0.99",
     launchRegion: "United States only first",
     futureCustomPricing: "Additional tip price products or approved provider-backed price tiers only.",
     switchName: "tipsEnabled",
     moneySwitch: "tips_enabled",
-    googlePlayStatus: "Missing",
-    revenueCatStatus: "Missing",
+    googlePlayStatus: "Blocked by provider form",
+    revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "None / contribution receipt only.",
     accessNotCreated: "Premium, content, room, VIP, subscription, event, payout.",
     ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
@@ -37,13 +39,15 @@ const products = [
     sandboxProductId: "cw_paid_content_access_sandbox_099",
     productionProductId: "cw_paid_content_access_099",
     productType: "one_time_consumable",
+    displayName: "Paid Video Access",
+    shortDescription: "Unlock access to one paid creator video.",
     launchPriceUsd: "$0.99",
     launchRegion: "United States only first",
     futureCustomPricing: "Approved paid-video price tiers mapped to verified provider products only.",
     switchName: "paidVideoEnabled",
     moneySwitch: "paid_content_enabled",
-    googlePlayStatus: "Missing",
-    revenueCatStatus: "Missing",
+    googlePlayStatus: "Blocked by provider form",
+    revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact paid video target only.",
     accessNotCreated: "Premium, other videos, rooms, VIP, subscription, event, payout.",
     ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
@@ -53,13 +57,15 @@ const products = [
     sandboxProductId: "cw_watch_party_live_ticket_sandbox_099",
     productionProductId: "cw_watch_party_ticket_099",
     productType: "one_time_consumable",
+    displayName: "Watch-Party Ticket",
+    shortDescription: "Unlock access to one ticketed Watch-Party room.",
     launchPriceUsd: "$0.99",
     launchRegion: "United States only first",
     futureCustomPricing: "Approved ticket price tiers mapped to verified provider products only.",
     switchName: "watchPartyTicketEnabled",
     moneySwitch: "watch_party_tickets_enabled",
-    googlePlayStatus: "Missing",
-    revenueCatStatus: "Missing",
+    googlePlayStatus: "Blocked by provider form",
+    revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact room/ticket target only.",
     accessNotCreated: "Premium, other rooms, LiveKit publish/host/mod, VIP, subscription, payout.",
     ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
@@ -71,13 +77,15 @@ const products = [
     productionBasePlanId: "monthly",
     revenueCatProductId: "cw_channel_subscription_monthly_499:monthly",
     productType: "subscription",
+    displayName: "Creator Channel Subscription",
+    shortDescription: "Monthly access to one creator's subscriber area.",
     launchPriceUsd: "$4.99/month",
     launchRegion: "United States only first",
     futureCustomPricing: "Approved subscription products, base plans, or offers only.",
     switchName: "channelSubscriptionEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Missing",
-    revenueCatStatus: "Missing",
+    googlePlayStatus: "Created product record; base plan missing",
+    revenueCatStatus: "Blocked until Google Play base plan exists",
     accessCreated: "Exact creator Platform subscription only.",
     accessNotCreated: "Premium, VIP, paid videos, rooms, events, other creators, payout.",
     ownerAction: "Create Google Play subscription/base plan, configure pricing/regions, import in RevenueCat, attach only to creator_channel_subscription.",
@@ -87,13 +95,15 @@ const products = [
     sandboxProductId: "cw_vip_pass_sandbox_499",
     productionProductId: "cw_vip_pass_499",
     productType: "one_time_non_consumable",
+    displayName: "Creator VIP Pass",
+    shortDescription: "Unlock creator-specific VIP access.",
     launchPriceUsd: "$4.99",
     launchRegion: "United States only first",
     futureCustomPricing: "Approved VIP price tiers mapped to verified provider products only.",
     switchName: "vipEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Missing",
-    revenueCatStatus: "Missing",
+    googlePlayStatus: "Blocked by provider form",
+    revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact creator VIP only.",
     accessNotCreated: "Premium, subscription, other creators, paid videos, rooms, events, payout.",
     ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
@@ -103,13 +113,15 @@ const products = [
     sandboxProductId: "cw_event_pass_sandbox_099",
     productionProductId: "cw_event_pass_099",
     productType: "one_time_consumable",
+    displayName: "Creator Event Pass",
+    shortDescription: "Unlock access to one paid creator event.",
     launchPriceUsd: "$0.99",
     launchRegion: "United States only first",
     futureCustomPricing: "Approved event pass price tiers mapped to verified provider products only.",
     switchName: "eventPassEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Missing",
-    revenueCatStatus: "Missing",
+    googlePlayStatus: "Blocked by provider form",
+    revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact event target only.",
     accessNotCreated: "Premium, VIP, subscription, paid videos, rooms, other events, payout.",
     ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
@@ -162,6 +174,8 @@ const googlePlayProductMatrix = products.map((product) => ({
   flow: product.flow,
   productionProductId: product.productionProductId,
   productType: product.productType,
+  displayName: product.displayName,
+  shortDescription: product.shortDescription,
   basePlan: product.productionBasePlanId ?? "Not applicable",
   price: product.launchPriceUsd,
   region: product.launchRegion,
@@ -192,6 +206,8 @@ const repoConfigMatrix = products.map((product) => ({
   flow: product.flow,
   sandboxIdKnown: switchboardText.includes(product.sandboxProductId),
   productionIdKnown: switchboardText.includes(product.productionProductId) && docsText.includes(product.productionProductId),
+  displayNameDocumented: docsText.includes(product.displayName),
+  shortDescriptionDocumented: docsText.includes(product.shortDescription),
   launchPriceKnown: switchboardText.includes(product.launchPriceUsd) && docsText.includes(product.launchPriceUsd),
   launchRegionKnown: switchboardText.includes(product.launchRegion) && docsText.includes(product.launchRegion),
   customPricingPolicyKnown: switchboardText.includes("provider_backed_fail_closed") && docsText.includes("Unsupported custom amounts fail closed"),
@@ -269,8 +285,8 @@ const checks = [
   },
   {
     id: "product_plan_doc_present",
-    ok: (has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Creator-money production-labeled products: Blocked")
-        || has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Creator-money production-labeled product IDs: Blocked"))
+    ok: (has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Creator-money production-labeled products: Partial")
+        || has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Creator-money production-labeled products: Blocked"))
       && has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Sandbox-labeled IDs remain sandbox/test-only")
       && products.every((product) => has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", product.productionProductId)),
     detail: "Production-labeled creator product plan is documented.",
@@ -278,10 +294,11 @@ const checks = [
   {
     id: "approved_launch_defaults_documented",
     ok: products.every((product) => docsText.includes(product.launchPriceUsd) && switchboardText.includes(product.launchPriceUsd))
+      && products.every((product) => docsText.includes(product.displayName) && docsText.includes(product.shortDescription))
       && docsText.includes("United States only first")
       && switchboardText.includes("United States only first")
       && docsText.includes("Approved starting prices are launch defaults, not the only future prices"),
-    detail: "Owner-approved starting prices and US-only-first launch region are documented as defaults.",
+    detail: "Owner-approved display names, descriptions, starting prices, and US-only-first launch region are documented as defaults.",
   },
   {
     id: "custom_pricing_provider_backed_fail_closed",
@@ -308,8 +325,9 @@ const checks = [
     id: "production_ids_not_marked_verified",
     ok: products.every((product) => docsText.includes(product.productionProductId))
       && docsText.includes("Google Play Console and RevenueCat")
-      && docsText.includes("were not present"),
-    detail: "Production IDs are documented but not falsely marked verified.",
+      && docsText.includes("Creator Channel Subscription")
+      && docsText.includes("base plan remains missing"),
+    detail: "Production IDs are documented with the created subscription record but not falsely marked fully verified.",
   },
   {
     id: "creator_money_switches_off",
@@ -388,9 +406,9 @@ Generated: ${new Date().toISOString()}
 
 This proof is read-only and dry-run. It made no purchases, no provider refund calls, no payout calls, no transfer calls, no withdrawal calls, no provider dashboard screenshot capture, and printed no provider secrets or private user data.
 
-Verdict: Blocked.
+Verdict: Partial.
 
-Reason: the clean production-labeled creator-money product IDs are documented in repo config, but browser dashboard readback found them missing in Google Play Console and RevenueCat. Provider product creation requires owner/provider action.
+Reason: Google Play now has the creator channel subscription product record cw_channel_subscription_monthly_499, but its monthly base plan remains missing and the one-time products remain blocked by provider form requirements. RevenueCat import/mapping remains incomplete.
 
 Files:
 
@@ -407,13 +425,14 @@ Files:
 `);
 
 const summary = {
-  verdict: "Blocked",
+  verdict: "Partial",
   artifactDir,
   branch: git(["branch", "--show-current"]),
   head: git(["rev-parse", "HEAD"]),
   productionLabeledProductsCreatedOrVerified: false,
+  createdProductRecords: ["Channel Subscription"],
   readyProducts: [],
-  missingOrBlockedProducts: products.map((product) => product.flow),
+  missingOrBlockedProducts: products.filter((product) => product.flow !== "Channel Subscription").map((product) => product.flow).concat(["Channel Subscription monthly base plan"]),
   premiumUnchanged: checks.find((check) => check.id === "premium_unchanged")?.ok === true,
   creatorMoneySwitchesOff: checks.find((check) => check.id === "creator_money_switches_off")?.ok === true,
   payoutsOff: switchOffStateProof.payouts === "OFF",

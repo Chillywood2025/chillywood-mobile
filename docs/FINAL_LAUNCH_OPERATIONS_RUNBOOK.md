@@ -12,7 +12,7 @@ Current classification:
 
 - Seven-flow app-side proof: Closed.
 - Seven-flow production switchboard: Partial.
-- Creator-money production-labeled products: Blocked.
+- Creator-money production-labeled products: Partial.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
 - Provider refunds: Manual/external unless separate provider-refund lane enables automation.

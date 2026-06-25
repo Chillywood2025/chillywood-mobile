@@ -70,9 +70,9 @@ Latest seven-flow provider dashboard reproof artifact:
 
 - `/tmp/app-seven-flow-provider-dashboard-reproof-20260625-033613/`
 
-Latest creator-money production provider products proof artifact:
+Latest creator-money provider product creation proof artifact:
 
-- `/tmp/app-creator-money-production-provider-products-proof-20260625-042819/`
+- `/tmp/app-creator-money-provider-product-creation-proof-20260625-091126/`
 
 Seven-flow money classification:
 
@@ -91,8 +91,8 @@ Seven-flow money classification:
 - Provider refunds remain manual/external.
 - Production provider products are verified only where dashboard/API evidence exists.
 - Configured Google Play and RevenueCat product IDs match the app; creator-money products remain sandbox-labeled and require owner decision before any activation.
-- Creator-money production-labeled product IDs: Blocked.
-- Creator-money production-labeled products: Blocked.
+- Creator-money production-labeled product IDs: Partial.
+- Creator-money production-labeled products: Partial.
 - Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
 - Approved starting prices are launch defaults, not the only future prices.
 - Future custom pricing requires provider-backed price tiers/products/base plans/offers.
@@ -102,8 +102,8 @@ Seven-flow money classification:
 - Stripe payouts remain OFF.
 - Stripe merch checkout remains OFF.
 - Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
-- The owner approved the recommended production creator-money product IDs, recommended starting prices, and United States only first, but Google Play creation still requires owner/provider-approved public product metadata, icons, tax/compliance, age rating, purchase options, subscription base plans, and publishing/provider review; no provider product form was submitted in the latest prep lane.
-- RevenueCat import/mapping remains blocked until the matching Google Play production-labeled products exist.
+- The owner approved the recommended production creator-money product IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans. The `monthly` base plan remains missing. The five one-time products remain blocked by product icon and age rating requirements plus tax/compliance and purchase-option setup.
+- RevenueCat import/mapping remains blocked until the matching Google Play production-labeled products/base plans exist.
 - Stripe is reserved for future creator payouts and physical merch; it is not used for Android digital creator-money purchases in this lane.
 - Production activation is not claimed for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, or Event Pass until owner decision and provider production product approval/mapping are proved.
 

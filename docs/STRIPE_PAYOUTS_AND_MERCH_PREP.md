@@ -18,6 +18,8 @@ United States only first applies to the owner-approved Google Play / RevenueCat 
 
 Future custom pricing for Android digital creator-money flows must remain provider-backed through Google Play / RevenueCat products, price tiers, base plans, offers, or owner-approved catalog entries. Unsupported custom amounts fail closed and must not route through Stripe.
 
+No creator-money product maps to Premium.
+
 Provider refunds remain manual/external.
 
 Creator-money activation still requires owner approval and controlled proof.
