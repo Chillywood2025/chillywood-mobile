@@ -1,5 +1,7 @@
 # Owner/Admin Control Tools
 
+Owner/Admin Command Center UI: Closed after validation. The canonical staff operations route is `/admin`; Admin is the product-facing name, `operator` is internal/backend only, and Support is a workflow/case area. The Command Center must fail closed, sanitize backend errors, hide or honestly disable unavailable tools, require confirmation/reason/audit for dangerous actions where supported, and keep money/provider/payout controls disabled/read-only/manual/external.
+
 ## Scope
 - Adds protected Admin control tools on top of the owner superuser and scoped staff foundation.
 - Admin UI must follow `docs/APP_UI_UX_RULES.md`: compact command-center layout, real summary cards/counts, grouped actions, production states, exact disabled reasons, no raw debug primary UI, no dead buttons, and no fake proof/demo rows in production mode.

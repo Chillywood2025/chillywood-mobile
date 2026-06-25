@@ -1791,7 +1791,9 @@ Required production truth:
 
 Staff role hierarchy proof: Closed after validation. The final product-facing hierarchy is First Owner, Owner, Admin, Moderator, Creator, and User. `operator` is only the internal/backend alias for Admin. Support is a work area and permission group, not a backend role. Moderator includes support duties only through exact scopes. No backend role values were renamed.
 
-Next lane: Return to final production readiness checklist and app-controlled launch blockers, excluding known Google Play base-plan provider blocker.
+Owner/Admin Command Center UI: Closed after validation. Single Command Center entry point remains `/admin`. Admin UI is production-labeled, not proof/debug-labeled. Unavailable tools are hidden or honestly disabled. Dangerous actions require confirmation. Destructive/sensitive actions require reason and audit where supported. Admin search results are privacy-safe and limited/paginated. Admin UI fails closed if backend functions are unavailable and does not show raw backend errors. Admin UI does not expose service-role-only concepts, raw storage paths, signed URLs, private provider IDs, token values, raw IPs, secrets, tax IDs, or bank details. Money/provider/payout actions remain disabled/read-only/manual/external.
+
+Next lane: Continue the final production readiness checklist with the next unresolved app-controlled launch area.
 # Next Task
 
 ## BrowserStack Monetization E2E

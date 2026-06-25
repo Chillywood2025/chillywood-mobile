@@ -1,5 +1,7 @@
 # Owner/Admin Tabs UI/UX Polish
 
+Owner/Admin Command Center UI: Closed after validation. Tabs must stay production-labeled, not proof/debug-labeled. Unavailable tools are hidden or honestly disabled. Dangerous actions are visually separated and require confirmation; destructive/sensitive actions require reason and audit where supported. Search/filter surfaces must remain privacy-safe, limited, and sanitized.
+
 Updated: June 4, 2026
 
 This lane modernizes repeated Owner/Admin tab interactions without changing backend authority, role safety, money state, LiveKit behavior, route ownership, Player behavior, or terminology.

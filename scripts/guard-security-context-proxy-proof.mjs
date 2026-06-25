@@ -176,14 +176,14 @@ if (verifyProofFixture(signProof({
 
 [
   "auditExplorerNetworkFilterOptions",
-  "Has Proof",
-  "Missing Proof",
-  "Network Proof",
-  "Verified network proof",
-  "Network proof not verified",
+  "Verified",
+  "Missing Evidence",
+  "Network Verification",
+  "Network verification present",
+  "Network verification not verified",
   "formatOwnerSecurityNetworkProof",
 ].forEach((needle) => {
-  if (!adminUi.includes(needle)) fail(`missing Audit Explorer masked proof UI marker: ${needle}`);
+  if (!adminUi.includes(needle)) fail(`missing Audit Explorer masked verification UI marker: ${needle}`);
 });
 
 if (/Raw IP|Full IP|ipHashShort/.test(adminUi)) {

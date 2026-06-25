@@ -696,8 +696,8 @@ const auditExplorerNetworkFilterOptions: readonly {
   label: string;
 }[] = [
   { key: "all", label: "All Network" },
-  { key: "with", label: "Has Proof" },
-  { key: "missing", label: "Missing Proof" },
+  { key: "with", label: "Verified" },
+  { key: "missing", label: "Missing Evidence" },
 ];
 
 const statusOptions: StatusType[] = ["draft", "published", "scheduled", "archived"];
@@ -1286,7 +1286,7 @@ const MONEY_SWITCH_GROUPS: readonly {
   {
     id: "sponsors_ads",
     title: "Sponsors / Ads",
-    summary: "Sponsor and ad revenue controls remain foundation-only until provider proof exists.",
+    summary: "Sponsor and ad revenue controls remain foundation-only until provider readiness exists.",
     keys: ["sponsorships_enabled", "ads_revenue_enabled"],
   },
   {
@@ -1956,7 +1956,7 @@ const canarySectionOrder = [
   "Live Ops",
   "Public Web / Support",
   "Auth / Redirects",
-  "Cleanup / Proof Hygiene",
+  "Cleanup / Evidence Hygiene",
 ] as const;
 
 const normalizeCanaryStatus = (status: unknown): CanaryStatus => {
@@ -2062,10 +2062,10 @@ const ownerSecurityStatusLabel = (status: unknown) => {
   if (text.toLowerCase() === "revoked") return "Untrusted";
   if (text.toLowerCase() === "partial") return "Partial";
   if (text.toLowerCase() === "malformed") return "Malformed";
-  if (text.toLowerCase() === "missing_trusted_proxy_proof") return "Missing trusted proxy proof";
-  if (text.toLowerCase() === "invalid_trusted_proxy_proof_signature") return "Invalid trusted proxy proof";
-  if (text.toLowerCase() === "expired_trusted_proxy_proof") return "Expired trusted proxy proof";
-  if (text.toLowerCase() === "malformed_trusted_proxy_proof_payload") return "Malformed trusted proxy proof";
+  if (text.toLowerCase() === "missing_trusted_proxy_proof") return "Missing trusted proxy verification";
+  if (text.toLowerCase() === "invalid_trusted_proxy_proof_signature") return "Invalid trusted proxy verification";
+  if (text.toLowerCase() === "expired_trusted_proxy_proof") return "Expired trusted proxy verification";
+  if (text.toLowerCase() === "malformed_trusted_proxy_proof_payload") return "Malformed trusted proxy verification";
   return formatModerationToken(text);
 };
 
@@ -2145,7 +2145,7 @@ const formatOwnerSecurityNetworkProof = (proof: OwnerSecurityNetworkProof | null
   if (!proof) return "No security context linked";
   if (proof.networkProofVerified === false || proof.networkProofError) {
     const reason = ownerSecurityStatusLabel(proof.networkProofError || proof.captureStatus || "missing");
-    return reason.includes("Proof") ? reason : `${reason} trusted proxy proof`;
+    return reason.includes("verification") ? reason : `${reason} trusted proxy verification`;
   }
   const masked = formatAuditDisplayText(proof.maskedIp) || ownerSecurityStatusLabel(proof.captureStatus);
   const location = [proof.cityApprox, proof.region, proof.country].map(formatAuditDisplayText).filter(Boolean).join(", ");
@@ -2154,13 +2154,13 @@ const formatOwnerSecurityNetworkProof = (proof: OwnerSecurityNetworkProof | null
 };
 
 const formatOwnerSecurityNetworkMeta = (proof: OwnerSecurityNetworkProof | null | undefined) => {
-  if (!proof) return "Network proof has not been linked to this device row.";
+  if (!proof) return "Network verification has not been linked to this device row.";
   const source = formatAuditDisplayText(proof.networkProofSource || proof.trustedHeaderSource || proof.source) || "source not connected";
   const checked = proof.networkProofTimestamp
     ? formatModerationTimestamp(proof.networkProofTimestamp)
     : proof.createdAt ? formatModerationTimestamp(proof.createdAt) : "time not connected";
   const context = proof.contextIdShort ? `Context ${proof.contextIdShort}` : "context id hidden";
-  const verified = proof.networkProofVerified ? "Verified network proof" : "Network proof not verified";
+  const verified = proof.networkProofVerified ? "Network verification present" : "Network verification not verified";
   return `${verified} · ${ownerSecurityStatusLabel(proof.networkProofError || proof.captureStatus)} · ${source} · ${checked} · ${context}`;
 };
 
@@ -2237,7 +2237,7 @@ const resolveCanarySection = (input: unknown) => {
   if (text.includes("live_ops") || text.includes("live ops") || text.includes("liveops") || text.includes("remediation")) return "Live Ops";
   if (text.includes("redirect") || text.includes("auth")) return "Auth / Redirects";
   if (text.includes("support") || text.includes("public") || text.includes("channel")) return "Public Web / Support";
-  if (text.includes("proof") || text.includes("cleanup")) return "Cleanup / Proof Hygiene";
+  if (text.includes("proof") || text.includes("cleanup")) return "Cleanup / Evidence Hygiene";
   return "Public Web / Support";
 };
 
@@ -2418,13 +2418,13 @@ const CanaryProofDetails = ({ result, status }: { result: OwnerControlCanaryResu
       {structuredRows.length ? (
         <View style={styles.ownerNestedProofPanel}>
           <View style={styles.ownerSectionHeaderRow}>
-            <Text style={styles.ownerSectionTitle}>Proof Metadata</Text>
+            <Text style={styles.ownerSectionTitle}>Verification Metadata</Text>
             <OwnerStatusPill label={`${structuredRows.length} fields`} tone="info" />
           </View>
           <OwnerDetailGrid rows={structuredRows} />
         </View>
       ) : (
-        <Text style={styles.ownerDetailText}>No extra proof metadata returned for this check.</Text>
+        <Text style={styles.ownerDetailText}>No extra evidence metadata returned for this check.</Text>
       )}
     </>
   );
@@ -3076,7 +3076,7 @@ const getReportTargetActionConfirmCopy = (
     return `This hides the ${targetLabel} from public access while keeping the record available for review.`;
   }
   if (status === "removed") {
-    return `This marks the ${targetLabel} removed from public access. Use only for reviewed policy action or safe proof content.`;
+    return `This marks the ${targetLabel} removed from public access. Use only for reviewed policy action or safe review content.`;
   }
   return `This clears the active moderation block and lets the ${targetLabel} follow its normal visibility rules again.`;
 };
@@ -4763,7 +4763,7 @@ export default function AdminStudioScreen() {
   const contentCommandStatus = useMemo(() => {
     if (contentLoading) {
       return {
-        body: "Refreshing title inventory, saved config, and content audit proof.",
+        body: "Refreshing title inventory, saved config, and content audit readback.",
         label: "Partial Visibility",
         tone: "info" as OwnerControlTone,
       };
@@ -5377,7 +5377,7 @@ export default function AdminStudioScreen() {
             : "Not Connected",
       body: safetyReportQueueConnected
         ? "Reports are backed by role-gated safety_reports queries."
-        : "Safety review remains fail-closed when role or queue proof is missing.",
+        : "Safety review remains fail-closed when role or queue evidence is missing.",
       qualifier: safetyReportQueueConnected ? "Queue Ready" : canReviewSafetyReports ? "Manual Review Required" : "Read Only",
       tone: !canReviewSafetyReports ? "locked" : safetyReportsLoading ? "info" : safetyReportQueueConnected ? "success" : "manual",
       destination: canReviewSafetyReports ? "reports" : undefined,
@@ -5505,7 +5505,7 @@ export default function AdminStudioScreen() {
         ? "Live recovery posture is queue-first and approval-gated. Home links to review; it does not execute remediation."
         : "Live recovery controls are hidden unless Owner or live_ops permission is backed.",
       label: "Recovery Posture",
-      proofLabel: canAccessLiveOps ? "Queue Ready" : "Operator Only",
+      proofLabel: canAccessLiveOps ? "Queue Ready" : "Admin Only",
       tone: canAccessLiveOps ? "manual" : "locked",
     },
     {
@@ -5735,7 +5735,7 @@ export default function AdminStudioScreen() {
       {
         label: "Readiness Docs",
         value: "Ready",
-        body: "PUBLIC_V1_READINESS_CHECKLIST and EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST exist for manual proof lanes.",
+        body: "PUBLIC_V1_READINESS_CHECKLIST and EXTERNAL_SETUP_PUBLIC_V1_CHECKLIST exist for manual evidence lanes.",
       },
     ];
   }, [
@@ -5838,7 +5838,7 @@ export default function AdminStudioScreen() {
         ],
         sections: usageSections(
           adminV1ReadModel.providerUsageSchemaConnected ? "Connected" : "Needs setup",
-          "exact provider billing totals and dashboard acceptance proof",
+          "exact provider billing totals and dashboard acceptance evidence",
         ),
       });
       return;
@@ -5945,7 +5945,7 @@ export default function AdminStudioScreen() {
         ],
         sections: usageSections(
           adminV1ReadModel.participantMinutesEstimate === null ? "Needs model" : "Readable",
-          "joined/left event history and second-device proof",
+          "joined/left event history and second-device readback",
         ),
       },
       bandwidth: {
@@ -6008,7 +6008,7 @@ export default function AdminStudioScreen() {
         { label: "Admin action", value: "Inspect only" },
         { label: "Secrets", value: "not rendered" },
         { label: "History rows", value: formatAdminReadModelNumber(adminSystemHistoryReadModel.summary.filteredRows, adminSystemHistoryReadModel.loading) },
-        { label: "Missing read model", value: card.tone === "unavailable" ? "external health/build/deploy proof if not already audited" : "none for this presence check" },
+        { label: "Missing read model", value: card.tone === "unavailable" ? "external health/build/deploy evidence if not already audited" : "none for this presence check" },
       ],
       sections: [
         {
@@ -6028,11 +6028,11 @@ export default function AdminStudioScreen() {
           statusLabel: card.tone === "unavailable" ? "Needed" : "Covered",
           tone: card.tone === "unavailable" ? "locked" : "info",
           body: card.tone === "unavailable"
-            ? "A future server read model should provide health, history, or external setup proof for this card before Admin shows deeper detail."
-            : "This card has enough read-only presence proof for the current Admin surface.",
+            ? "A future server read model should provide health, history, or external setup evidence for this card before Admin shows deeper detail."
+            : "This card has enough read-only presence evidence for the current Admin surface.",
           rows: [
             { label: "Historical rows", value: adminSystemHistoryReadModel.connected ? "Audit/event history connected" : "Not connected" },
-            { label: "External provider proof", value: "Documented outside this card" },
+            { label: "External provider evidence", value: "Documented outside this card" },
           ],
         },
       ],
@@ -7937,7 +7937,7 @@ export default function AdminStudioScreen() {
       setOwnerControlNotice(null);
       const run = await runOwnerControlCanary();
       setCanaryRuns((prev) => [run, ...prev].slice(0, 10));
-      setOwnerControlNotice("Canary checks completed. Unknown means manual proof is required, not pass.");
+      setOwnerControlNotice("Canary checks completed. Unknown means manual verification is required, not pass.");
     } catch (err: any) {
       setOwnerControlNotice(formatAdminOperationFailure(err, "Failed to run canary checks."));
     } finally {
@@ -8772,7 +8772,7 @@ export default function AdminStudioScreen() {
       await createManualLiveCostGuardEvent({
         actionStatus: "logged_manual_test",
         estimatedUsdPerHour: null,
-        metricSnapshot: { proof: "manual_admin_test", fakeMetrics: false },
+        metricSnapshot: { proof: "manual_admin_test", simulatedMetrics: false },
         recommendedAction: "shorten_token_ttl",
         roomName: liveCostGuardRoomName.trim() || null,
         severity: "warning",
@@ -9983,7 +9983,7 @@ export default function AdminStudioScreen() {
         </View>
         <Text style={styles.ownerPanelMeta}>{contentCommandStatus.body}</Text>
         <View style={styles.contentHeroPills}>
-          <OwnerStatusPill label={`Operator ${formatModerationToken(resolvedActorRole)}`} tone={canAccessContentProgramming ? "info" : "locked"} />
+          <OwnerStatusPill label={`Admin ${formatModerationToken(resolvedActorRole)}`} tone={canAccessContentProgramming ? "info" : "locked"} />
           <OwnerStatusPill label={appConfigConnected ? "Config Backed" : "Config Not Connected"} tone={appConfigConnected ? "success" : "locked"} />
           <OwnerStatusPill label={contentConfigDirty ? "Unsaved Draft" : "Saved State"} tone={contentConfigDirty ? "manual" : "success"} />
           <OwnerStatusPill label={contentAuditConnected ? "Audit Feed Connected" : "Audit Feed Not Connected"} tone={contentAuditConnected ? "success" : "locked"} />
@@ -10103,7 +10103,7 @@ export default function AdminStudioScreen() {
           <Text style={styles.ownerSectionTitle}>Homepage Programming Console</Text>
           <OwnerStatusPill label={titlesConnected ? "Backed Titles" : "Not Connected"} tone={titlesConnected ? "success" : "locked"} />
         </View>
-        <Text style={styles.configHint}>Hero and Top Picks resolve against real title rows. Unbacked sources are shown as fallbacks, not fake confidence.</Text>
+        <Text style={styles.configHint}>Hero and Top Picks resolve against real title rows. Unbacked sources are shown as fallbacks, not simulated confidence.</Text>
         <Text style={styles.sectionLabel}>Hero Strategy</Text>
         <View style={styles.contentSegmentRow}>
           {(["latest", "hero_flag", "manual_title"] as const).map((heroMode) => (
@@ -10928,7 +10928,7 @@ export default function AdminStudioScreen() {
       {
         id: "overview",
         title: "Overview",
-        summary: "One admin control surface for money readiness, rails, kill switches, and proof status.",
+        summary: "One admin control surface for money readiness, rails, kill switches, and readiness status.",
         meta: `Live money is ${formatMoneySwitchState(liveMoneySwitch.state)}.`,
         statusLabel: liveMoneyOff ? "Fail closed" : "High risk",
         tone: liveMoneyOff ? "success" : "danger",
@@ -10940,7 +10940,7 @@ export default function AdminStudioScreen() {
               <OwnerMetricTile label="Provider Rows" value={providerReadinessLoading ? "Loading" : providerReadinessRows.length} tone={providerReadinessRows.length ? "info" : "locked"} />
               <OwnerMetricTile label="High Risk On" value={highRiskOnCount} tone={highRiskOnCount ? "danger" : "success"} />
             </View>
-            <OwnerDisabledReason reason="Launch review state: sandbox digital access proof is complete, live money and payouts are off, sandbox/setup rows are not payable, and no cash-out or withdrawal action exists." />
+            <OwnerDisabledReason reason="Launch review state: sandbox digital access evidence is complete, live money and payouts are off, sandbox/setup rows are not payable, and no cash-out or withdrawal action exists." />
             <OwnerDetailGrid
               rows={[
                 { label: "Digital rail", value: "Google Play / RevenueCat for Android digital purchases" },
@@ -10973,7 +10973,7 @@ export default function AdminStudioScreen() {
             </View>
             <OwnerDetailGrid
               rows={[
-                { label: "Approved tester access", value: "Owner, Operator, runtime allowlist, active beta/internal tester, or approved proof account" },
+                { label: "Approved tester access", value: "Owner, Admin, runtime allowlist, active beta/internal tester, or approved internal account" },
                 { label: "Premium", value: "Google Play / RevenueCat sandbox only; public shell remains closed" },
                 { label: "Digital access", value: "Tips, room passes, access passes, seats, paid content, and event passes use sandbox intents" },
                 { label: "Physical merch", value: "Stripe sandbox physical goods only; no digital access" },
@@ -11035,7 +11035,7 @@ export default function AdminStudioScreen() {
             {renderProviderReadinessLine("revenuecat", "revenuecat_offering", "RevenueCat offering")}
             {renderProviderReadinessLine("revenuecat", "revenuecat_entitlement", "RevenueCat entitlement")}
             {renderProviderReadinessLine("google_play", "google_play_subscription_product", "Google Play product")}
-            <OwnerDisabledReason reason="No fake Premium access or purchase activation is exposed here. Existing Premium gates remain the runtime authority." />
+            <OwnerDisabledReason reason="No simulated Premium access or purchase activation is exposed here. Existing Premium gates remain the runtime authority." />
           </View>
         ),
       },
@@ -11070,7 +11070,7 @@ export default function AdminStudioScreen() {
       {
         id: "fraud_risk",
         title: "Fraud & Risk",
-        summary: "Fraud, risk holds, payment safety, and review foundations without fake clearance.",
+        summary: "Fraud, risk holds, payment safety, and review foundations without simulated clearance.",
         meta: "Runtime enforcement hooks are not connected.",
         statusLabel: fraudQueueCount && fraudQueueCount > 0 ? "Review rows" : "Foundation only",
         tone: fraudQueueCount && fraudQueueCount > 0 ? "manual" : "locked",
@@ -11092,7 +11092,7 @@ export default function AdminStudioScreen() {
         title: "Digital Sales",
         summary: "Paid creator content, digital access passes, and creator events stay on Google Play / RevenueCat for Android.",
         meta: `Digital sales are ${formatMoneySwitchState(digitalSalesSwitch.state)}.`,
-        statusLabel: digitalSalesSwitch.state === "on" && revenueCatGoogleSwitch.state === "on" ? "Provider proof required" : "Not active",
+        statusLabel: digitalSalesSwitch.state === "on" && revenueCatGoogleSwitch.state === "on" ? "Provider verification required" : "Not active",
         tone: digitalSalesSwitch.state === "on" ? "manual" : "locked",
         children: (
           <View style={{ gap: 10 }}>
@@ -11120,7 +11120,7 @@ export default function AdminStudioScreen() {
       {
         id: "tips_seats_paid_content",
         title: "Tips / Watch-Party Seats / Paid Content",
-        summary: "Digital creator support and access products stay planned/setup until provider proof exists.",
+        summary: "Digital creator support and access products stay planned/setup until provider readiness exists.",
         meta: "Each capability has its own kill switch.",
         statusLabel: "Not active",
         tone: "locked",
@@ -11138,7 +11138,7 @@ export default function AdminStudioScreen() {
               ]}
             />
             {renderProviderReadinessLine("revenuecat", "tips", "Tips provider readiness")}
-            <OwnerDisabledReason reason="No fake tip totals, fake seat sales, fake paywalls, or fake unlocks are shown. Seat purchases cannot grant host controls or bypass approvals." />
+            <OwnerDisabledReason reason="No simulated tip totals, simulated seat sales, simulated paywalls, or simulated unlocks are shown. Seat purchases cannot grant host controls or bypass approvals." />
           </View>
         ),
       },
@@ -11164,14 +11164,14 @@ export default function AdminStudioScreen() {
               ]}
             />
             {renderAdminMoneyAuditEventRows(digitalAuditEvents.filter((event) => event.category === "merch"), "No merch rows returned", "Physical merch setup rows appear here only if safe records are readable.", 4)}
-            <OwnerDisabledReason reason="No fake merch store, fake order, or bundled digital unlock is active." />
+            <OwnerDisabledReason reason="No simulated merch store, simulated order, or bundled digital unlock is active." />
           </View>
         ),
       },
       {
         id: "ledger",
         title: "Creator Balance / Ledger",
-        summary: "Ledger-first earnings and revenue math with no fake dollar amounts.",
+        summary: "Ledger-first earnings and revenue math with no simulated dollar amounts.",
         meta: `Balance visibility is ${formatMoneySwitchState(getPlatformMoneyKillSwitch(moneySwitches, "creator_balance_visible").state)}.`,
         statusLabel: "Read only",
         tone: "info",
@@ -11186,7 +11186,7 @@ export default function AdminStudioScreen() {
                 { label: "Share ledger", value: formatAdminFinanceCount(adminFinanceReadModel.creatorRevenueShareLedgerEntryCount, adminFinanceReadModel.loading, "setup row", "setup rows") },
               ]}
             />
-            <OwnerDisabledReason reason="Creator balance is not payable. No cash-out, withdrawal, transfer, fake balance, or payable obligation is created here." />
+            <OwnerDisabledReason reason="Creator balance is not payable. No cash-out, withdrawal, transfer, simulated balance, or payable obligation is created here." />
             {renderAdminMoneyAuditEventRows(ledgerAuditEvents, "No ledger or revenue rows returned", "Ledger, share, and revenue-import rows appear here when safe records are readable.", 5)}
           </View>
         ),
@@ -11249,18 +11249,18 @@ export default function AdminStudioScreen() {
               rows={[
                 { label: "Tax/KYC", value: "Setup needed before payouts" },
                 { label: "Refunds/reversals", value: "Must reduce pending or available ledger states later" },
-                { label: "Platform fee/cut", value: "Policy/runbook only until real ledger proof exists" },
+                { label: "Platform fee/cut", value: "Policy/runbook only until real ledger evidence exists" },
                 { label: "Creator policy", value: "Creator monetization policy must pass before activation" },
               ]}
             />
-            <OwnerDisabledReason reason="No tax/KYC, fraud clearance, payout terms acceptance, or payable balance is faked here." />
+            <OwnerDisabledReason reason="No tax/KYC, fraud clearance, payout terms acceptance, or payable balance is simulated here." />
           </View>
         ),
       },
       {
         id: "money_audit",
         title: "Money Audit Explorer",
-        summary: "Inspect source rows, sandbox proof, provider readiness, kill switch audits, and blocked money actions.",
+        summary: "Inspect source rows, sandbox evidence, provider readiness, kill switch audits, and blocked money actions.",
         meta: `${adminMoneyAuditEvents.length} safe events loaded.`,
         statusLabel: adminMoneyAuditEvents.length ? "Inspectable" : "No rows",
         tone: adminMoneyAuditEvents.length ? "info" : "locked",
@@ -11278,7 +11278,7 @@ export default function AdminStudioScreen() {
       {
         id: "technical",
         title: "Technical Checks",
-        summary: "Owner/dev-only safe labels for config, provider proof, and missing setup names.",
+        summary: "Owner/dev-only safe labels for config, provider readiness, and missing setup names.",
         meta: "No secret values are rendered.",
         statusLabel: providerReadinessRows.length ? "Safe labels" : "Fallback",
         tone: providerReadinessRows.length ? "info" : "locked",
@@ -11303,7 +11303,7 @@ export default function AdminStudioScreen() {
         <OwnerControlPanelHeader
           kicker="MONEY CENTER"
           title="Owner/Admin Money Center"
-          subtitle="One fail-closed control surface for Premium, sponsors, ads, fraud, digital sales, creator ledger, payouts, provider readiness, kill switches, and audit proof."
+          subtitle="One fail-closed control surface for Premium, sponsors, ads, fraud, digital sales, creator ledger, payouts, provider readiness, kill switches, and audit record."
           badgeLabel={moneySwitchLoading || providerReadinessLoading ? "Loading" : liveMoneyOff ? "Live money off" : "High risk"}
           badgeTone={moneySwitchLoading || providerReadinessLoading ? "manual" : liveMoneyOff ? "success" : "danger"}
           actions={(
@@ -11911,7 +11911,7 @@ export default function AdminStudioScreen() {
                 title={adminImmutableAuditReadModel.connected ? "No recent audit rows returned" : "Recent activity feed not connected yet"}
                 body={adminImmutableAuditReadModel.connected
                   ? "The immutable audit query succeeded but returned no rows in the current slice."
-                  : "Home does not fake activity. The feed appears only when immutable audit rows are readable."}
+                  : "Home does not simulated activity. The feed appears only when immutable audit rows are readable."}
               />
             )}
           </View>
@@ -12252,7 +12252,7 @@ export default function AdminStudioScreen() {
 
               <View style={styles.ownerToolbarPanel}>
                 <Text style={styles.ownerSectionTitle}>Find Cases</Text>
-                <Text style={styles.configListBody}>Search and filters are backed by the loaded case list; no proof/demo cases are shown in production mode.</Text>
+                <Text style={styles.configListBody}>Search and filters are backed by the loaded case list; no demo cases are shown in production mode.</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="Search case id, content id, reporter email, uploader id, URL, or status"
@@ -12935,7 +12935,7 @@ export default function AdminStudioScreen() {
                     </View>
                   ) : (
                     <OwnerEmptyState
-                      body="Role history exists only when the backed staff audit feed returns rows for this filter. No synthetic proof rows are shown."
+                      body="Role history exists only when the backed staff audit feed returns rows for this filter. No synthetic evidence rows are shown."
                       title="No Role Audit Rows"
                     />
                   )}
@@ -12990,7 +12990,7 @@ export default function AdminStudioScreen() {
                   <OwnerDisabledReason reason={`Partial visibility: ${adminOpsNotice}`} />
                 ) : null}
                 {!auditOverviewConnected && !adminImmutableAuditReadModel.loading ? (
-                  <OwnerDisabledReason reason="The immutable audit source did not return rows for this account. This is shown as unavailable instead of a fake zero." />
+                  <OwnerDisabledReason reason="The immutable audit source did not return rows for this account. This is shown as unavailable instead of a simulated zero." />
                 ) : null}
               </View>
 
@@ -13084,7 +13084,7 @@ export default function AdminStudioScreen() {
                   />
                 ) : (
                   <OwnerEmptyState
-                    body="High-risk classification needs a readable immutable audit slice. No fake healthy state is shown."
+                    body="High-risk classification needs a readable immutable audit slice. No simulated healthy state is shown."
                     title="High-risk classification unavailable"
                   />
                 )}
@@ -13253,7 +13253,7 @@ export default function AdminStudioScreen() {
                 <OwnerStatusPill label={rachiPostsLoading ? "Loading" : `${rachiPosts.length} visible`} tone={rachiPosts.length ? "info" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Owner/Admin posts publish as Rachi through the official-post RPC and write immutable admin audit. No fake engagement is created.
+                Owner/Admin posts publish as Rachi through the official-post RPC and write immutable admin audit. No simulated engagement is created.
               </Text>
               <TextInput
                 style={[styles.input, styles.multiline]}
@@ -13302,7 +13302,7 @@ export default function AdminStudioScreen() {
               ) : (
                 <OwnerEmptyState
                   title={rachiPostsLoading ? "Loading Rachi Posts" : "No Rachi Posts Yet"}
-                  body="This list stays empty until backed official Rachi posts exist. No placeholder posts or fake engagement are shown."
+                  body="This list stays empty until backed official Rachi posts exist. No simulated posts or simulated engagement are shown."
                 />
               )}
             </View>
@@ -13331,7 +13331,7 @@ export default function AdminStudioScreen() {
               ) : (
                 <OwnerEmptyState
                   title="No Public Originals"
-                  body="Official video upload as Rachi is not faked here. When a public-safe Rachi-owned video exists, Home can show it under Chi'llywood Originals."
+                  body="Official video upload as Rachi is not simulated here. When a public-safe Rachi-owned video exists, Home can show it under Chi'llywood Originals."
                 />
               )}
             </View>
@@ -13390,7 +13390,7 @@ export default function AdminStudioScreen() {
                 rows={[
                   { label: "Normal Users", value: "Cannot post as Rachi or edit Rachi Platform" },
                   { label: "Reports", value: "Report/Copyright and DMCA flows remain separate" },
-                  { label: "No Fake Stats", value: "No fake followers, likes, comments, posts, or Originals" },
+                  { label: "No Simulated Stats", value: "No simulated followers, likes, comments, posts, or Originals" },
                   { label: "Private Chat", value: "Rachi does not read private Chi'lly Chat messages" },
                 ]}
               />
@@ -14139,7 +14139,7 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>ADS</Text>
               <Text style={styles.configTitle}>Ads</Text>
-              <Text style={styles.configBody}>Provider: placeholder / not connected. No real ads are live.</Text>
+              <Text style={styles.configBody}>Provider: inactive foundation / not connected. No real ads are live.</Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
@@ -14186,14 +14186,14 @@ export default function AdminStudioScreen() {
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Native/feed placement</Text>
-                <Text style={styles.configListBody}>Native/feed placement: Home placeholder foundation</Text>
+                <Text style={styles.configListBody}>Native/feed placement: Home inactive foundation</Text>
                 <Text style={styles.configListBody}>This is read-only foundation copy; real ads are not serving.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Interstitial placement</Text>
-                <Text style={styles.configListBody}>Interstitial placement: placeholder controller foundation</Text>
+                <Text style={styles.configListBody}>Interstitial placement: inactive controller foundation</Text>
                 <Text style={styles.configListBody}>No real interstitial ads are live.</Text>
               </View>
             </View>
@@ -14424,7 +14424,7 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  These are foundation/control-plane records only. No checkout success, payout release, fake purchase, fake order, fake tip, or live money action can be created from Admin.
+                  These are foundation/control-plane records only. No checkout success, payout release, simulated purchase, simulated order, simulated tip, or live money action can be created from Admin.
                 </Text>
               </View>
             </View>
@@ -14472,7 +14472,7 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>
-                  No withdrawal button, payout approval, payout provider integration, KYC flow, creator-facing balance, fake payable balance, or fake earnings are active.
+                  No withdrawal button, payout approval, payout provider integration, KYC flow, creator-facing balance, simulated payable balance, or simulated earnings are active.
                 </Text>
               </View>
             </View>
@@ -14828,7 +14828,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>NETWORKS</Text>
               <Text style={styles.configTitle}>Network Billing Foundation</Text>
               <Text style={styles.configBody}>
-                Network billing is not active yet. Foundation rows are proof-only; draft invoices are internal and overage warnings are read-only.
+                Network billing is not active yet. Foundation rows are foundation-only; draft invoices are internal and overage warnings are read-only.
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
@@ -14939,7 +14939,7 @@ export default function AdminStudioScreen() {
                     "internal draft lines",
                   )}
                 </Text>
-                <Text style={styles.configListBody}>Line items are proof-only and do not create a payable balance or customer obligation.</Text>
+                <Text style={styles.configListBody}>Line items are foundation-only and do not create a payable balance or customer obligation.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -15023,7 +15023,7 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configListTitle}>Future model</Text>
                 <Text style={styles.configListBody}>Monthly platform fee + included quotas + reviewed overages.</Text>
                 <Text style={styles.configListBody}>Stripe Billing or Checkout is later and is not connected in this build.</Text>
-                <Text style={styles.configListBody}>No fake revenue, unpaid balance, or real customer obligation is shown.</Text>
+                <Text style={styles.configListBody}>No simulated revenue, unpaid balance, or real customer obligation is shown.</Text>
               </View>
             </View>
           </View>
@@ -15286,7 +15286,7 @@ export default function AdminStudioScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>FRAUD</Text>
               <Text style={styles.configTitle}>Fraud Enforcement Foundation</Text>
-              <Text style={styles.configBody}>Fraud enforcement is not active yet. Foundation rows are proof-only and runtime hooks are not connected.</Text>
+              <Text style={styles.configBody}>Fraud enforcement is not active yet. Foundation rows are foundation-only and runtime hooks are not connected.</Text>
             </View>
             <View style={[styles.badge, styles.badgeOff]}>
               <Text style={styles.badgeText}>Foundation only</Text>
@@ -15383,8 +15383,8 @@ export default function AdminStudioScreen() {
                   Non-executable proof actions: {formatAdminFinanceCount(
                     adminFinanceReadModel.fraudActionNotExecutableCount,
                     adminFinanceReadModel.loading,
-                    "proof action",
-                    "proof actions",
+                    "verification action",
+                    "verification actions",
                   )}
                 </Text>
                 <Text style={styles.configListBody}>Fraud enforcement policies/actions are foundation-only.</Text>
@@ -15460,7 +15460,7 @@ export default function AdminStudioScreen() {
                   )}
                 </Text>
                 <Text style={styles.configListBody}>Fraud review queue is read-only/foundation and cannot enforce restrictions.</Text>
-                <Text style={styles.configListBody}>No payout pause, monetization disable, upload restriction, live restriction, strike, ban, or fake risk score is active.</Text>
+                <Text style={styles.configListBody}>No payout pause, monetization disable, upload restriction, live restriction, strike, ban, or simulated risk score is active.</Text>
               </View>
             </View>
             <View style={styles.configListRow}>
@@ -15522,7 +15522,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Planned reasons list</Text>
                 <Text style={styles.configListBody}>
-                  invalid traffic · fake engagement · fake followers · fake views · fake ad activity · scams · undisclosed sponsorship · stolen content · chargebacks · refund abuse · policy violation · illegal conduct · suspicious payout behavior · network overage abuse
+                  invalid traffic · simulated engagement · simulated followers · simulated views · simulated ad activity · scams · undisclosed sponsorship · stolen content · chargebacks · refund abuse · policy violation · illegal conduct · suspicious payout behavior · network overage abuse
                 </Text>
               </View>
             </View>
@@ -15571,7 +15571,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.dashboardMetricLabel}>LiveKit Metrics</Text>
               <Text style={styles.dashboardMetricValue}>Not connected</Text>
               <Text style={styles.dashboardMetricBody}>
-                Metrics not connected yet. This page does not show fake TURN Mbps, fake participants, or fake burn rate.
+                Metrics not connected yet. This page does not show simulated TURN Mbps, simulated participants, or simulated burn rate.
               </Text>
             </View>
             <View style={[styles.dashboardMetricCard, styles.dashboardMetricCardUnavailable]}>
@@ -15919,7 +15919,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Incident Cards</Text>
                 <Text style={styles.configListBody}>
-                  Cards are created only from sanitized ops alerts mirrored to Supabase. No sample rooms, fake participants, fake TURN bytes, or fake health are rendered.
+                  Cards are created only from sanitized ops alerts mirrored to Supabase. No sample rooms, simulated participants, fake TURN bytes, or simulated health are rendered.
                 </Text>
               </View>
               <View style={styles.configListActions}>
@@ -16483,7 +16483,7 @@ export default function AdminStudioScreen() {
                       { label: "Actor", value: row.actorEmail ? maskOperatorIdentity(row.actorEmail) : formatCompactIdentifier(row.actorUserId) },
                       { label: "Target", value: `${formatModerationToken(row.targetType)} ${formatCompactIdentifier(row.targetId)}` },
                       { label: "Permission", value: row.permissionKey ? formatModerationToken(row.permissionKey) : "not supplied" },
-                      { label: "Network Proof", value: formatOwnerSecurityNetworkProof(row.securityContext) },
+                      { label: "Network Verification", value: formatOwnerSecurityNetworkProof(row.securityContext) },
                       { label: "Network Status", value: row.securityContext ? formatOwnerSecurityNetworkMeta(row.securityContext) : ownerSecurityStatusLabel(row.securityContextStatus || "missing") },
                       { label: "Context ID", value: row.securityContextIdShort || "not linked" },
                       { label: "User Agent", value: row.securityContext?.userAgentHashShort || "not linked" },
@@ -16779,7 +16779,7 @@ export default function AdminStudioScreen() {
                 variant="danger"
                 disabled={!firstOwnerControlsEnabled || !firstOwnerChallenge || firstOwnerBusy !== null}
               />
-              <OwnerDisabledReason reason="This proof lane must not remove, demote, delete, or deactivate the current First Owner. Use this only for an owner-approved live succession operation." />
+              <OwnerDisabledReason reason="This verification lane must not remove, demote, delete, or deactivate the current First Owner. Use this only for an owner-approved live succession operation." />
             </View>
           </OwnerAdminSection>
         </View>
@@ -16908,7 +16908,7 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecurityHeroSubtitle}>
                   {ownerSecurityOverview?.ownerAccessStatus === "verified" && ownerSecurityBackendStatus !== "connected"
                     ? "Owner identity verified. Security telemetry is not fully connected."
-                    : "Owner-only security command center for device trust, proof grants, security events, and emergency guardrails."}
+                    : "Owner-only security command center for device trust, temporary grants, security events, and emergency guardrails."}
                 </Text>
               </View>
               <OwnerStatusPill
@@ -17021,7 +17021,7 @@ export default function AdminStudioScreen() {
               <View style={styles.ownerSecurityIdentityCell}>
                 <Text style={styles.ownerSecurityMiniLabel}>Recorded</Text>
                 <Text style={styles.ownerSecurityMiniValue}>{ownerSecurityCurrentDevice?.createdAt ? formatModerationTimestamp(ownerSecurityCurrentDevice.createdAt) : "Not connected"}</Text>
-                <Text style={styles.ownerSecurityMiniMeta}>{ownerSecurityCurrentDevice?.proofSource || ownerSecuritySourceStates.currentDevice?.proofSource || "Proof source not connected"}</Text>
+                <Text style={styles.ownerSecurityMiniMeta}>{ownerSecurityCurrentDevice?.proofSource || ownerSecuritySourceStates.currentDevice?.proofSource || "Evidence source not connected"}</Text>
               </View>
               <View style={styles.ownerSecurityIdentityCell}>
                 <Text style={styles.ownerSecurityMiniLabel}>Device hash</Text>
@@ -17029,7 +17029,7 @@ export default function AdminStudioScreen() {
                 <Text style={styles.ownerSecurityMiniMeta}>Short backend fingerprint only</Text>
               </View>
               <View style={styles.ownerSecurityIdentityCell}>
-                <Text style={styles.ownerSecurityMiniLabel}>Network proof</Text>
+                <Text style={styles.ownerSecurityMiniLabel}>Network verification</Text>
                 <Text style={styles.ownerSecurityMiniValue}>{formatOwnerSecurityNetworkProof(ownerSecurityCurrentDevice?.networkProof)}</Text>
                 <Text style={styles.ownerSecurityMiniMeta}>{formatOwnerSecurityNetworkMeta(ownerSecurityCurrentDevice?.networkProof)}</Text>
               </View>
@@ -17102,7 +17102,7 @@ export default function AdminStudioScreen() {
                           {`Revoked ${formatModerationTimestamp(device.revokedAt)}${device.revokedBy ? ` by ${formatCompactIdentifier(device.revokedBy)}` : ""}${device.revokedReason ? ` · ${formatAuditDisplayText(device.revokedReason)}` : ""}`}
                         </Text>
                       ) : null}
-                      <Text style={styles.ownerSecurityMiniMeta}>{device.proofSource || "Proof source not connected"}</Text>
+                      <Text style={styles.ownerSecurityMiniMeta}>{device.proofSource || "Evidence source not connected"}</Text>
                     </View>
                     <View style={styles.ownerSecurityRowActions}>
                       <OwnerStatusPill label={ownerSecurityStatusLabel(device.trustStatus)} tone={ownerSecurityToneForStatus(device.trustStatus)} />
@@ -17131,8 +17131,8 @@ export default function AdminStudioScreen() {
             <View style={styles.ownerSecurityPanelHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.ownerSecuritySectionKicker}>TEMPORARY GRANTS</Text>
-                <Text style={styles.ownerSecuritySectionTitle}>Proof Access Control</Text>
-                <Text style={styles.ownerSecuritySectionBody}>Temporary proof grants must expire and can be revoked here. Permanent hidden grants are not allowed.</Text>
+                <Text style={styles.ownerSecuritySectionTitle}>Temporary Access Control</Text>
+                <Text style={styles.ownerSecuritySectionBody}>Temporary grants must expire and can be revoked here. Permanent hidden grants are not allowed.</Text>
               </View>
               <OwnerStatusPill
                 label={ownerSecurityLoaded && ownerSecuritySourceStatus("temporaryGrants") !== "not_connected" ? `${ownerSecurityTemporaryGrants.filter((grant) => grant.state === "active").length} Active` : "Not Connected"}
@@ -17167,7 +17167,7 @@ export default function AdminStudioScreen() {
                             {`Revoked ${formatModerationTimestamp(grant.revokedAt)}${grant.revokedBy ? ` by ${formatCompactIdentifier(grant.revokedBy)}` : ""}`}
                           </Text>
                         ) : null}
-                        <Text style={styles.ownerSecurityMiniMeta}>{grant.proofSource || "Proof source not connected"}</Text>
+                        <Text style={styles.ownerSecurityMiniMeta}>{grant.proofSource || "Evidence source not connected"}</Text>
                       </View>
                       <View style={styles.ownerSecurityRowActions}>
                         <OwnerStatusPill label={formatModerationToken(grant.state || "unknown")} tone={activeGrant ? "manual" : "locked"} />
@@ -17198,7 +17198,7 @@ export default function AdminStudioScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.ownerSecuritySectionKicker}>SECURITY AUDIT</Text>
                 <Text style={styles.ownerSecuritySectionTitle}>Recent Security Timeline</Text>
-                <Text style={styles.ownerSecuritySectionBody}>Device trust, proof grants, role changes, Live Ops actions, and blocked access events when logged.</Text>
+                <Text style={styles.ownerSecuritySectionBody}>Device trust, temporary grants, role changes, Live Ops actions, and blocked access events when logged.</Text>
               </View>
               <OwnerStatusPill
                 label={ownerSecurityLoaded && ownerSecuritySourceStatus("securityAudit") !== "not_connected" ? `${filteredOwnerSecurityAuditEvents.length}` : "Not Connected"}
@@ -17289,8 +17289,8 @@ export default function AdminStudioScreen() {
             <View style={styles.ownerSecurityPanelHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.ownerSecuritySectionKicker}>SECURITY CHECKLIST</Text>
-                <Text style={styles.ownerSecuritySectionTitle}>Backed Guardrail Proof</Text>
-                <Text style={styles.ownerSecuritySectionBody}>Rows show the proof source and never report green when the backend cannot prove it.</Text>
+                <Text style={styles.ownerSecuritySectionTitle}>Backed Guardrail Verification</Text>
+                <Text style={styles.ownerSecuritySectionBody}>Rows show the evidence source and never report green when the backend cannot prove it.</Text>
               </View>
               <TouchableOpacity
                 style={[styles.ownerSecondaryButton, ownerSecurityActionBusy === "checklist-refresh" && styles.configSaveBtnDisabled]}
@@ -17310,7 +17310,7 @@ export default function AdminStudioScreen() {
                 {ownerSecurityChecklist.map((item) => (
                   <OwnerControlRow
                     key={String(item.key ?? item.title)}
-                    message={`${formatAuditDisplayText(item.whatItMeans) || "No detail supplied."} Proof: ${formatAuditDisplayText(item.proofSource) || "not supplied"}.`}
+                    message={`${formatAuditDisplayText(item.whatItMeans) || "No detail supplied."} Evidence: ${formatAuditDisplayText(item.proofSource) || "not supplied"}.`}
                     meta={item.lastCheckedAt ? `Last checked ${formatModerationTimestamp(item.lastCheckedAt)}` : "Last checked not connected"}
                     statusLabel={ownerSecurityStatusLabel(item.status)}
                     title={String(item.title ?? "Security checklist item")}
@@ -17320,7 +17320,7 @@ export default function AdminStudioScreen() {
               </View>
             ) : (
               <OwnerEmptyState
-                body={ownerSecurityLoaded ? "Checklist returned no rows." : "Run or refresh Owner Security to load checklist proof."}
+                body={ownerSecurityLoaded ? "Checklist returned no rows." : "Run or refresh Owner Security to load checklist evidence."}
                 title={ownerSecurityLoaded ? "Checklist Empty" : "Checklist Not Connected"}
               />
             )}
@@ -17433,9 +17433,9 @@ export default function AdminStudioScreen() {
                 ? latestCanarySummary.fail > 0
                   ? "Failed checks need review before launch. The UI keeps them visible and actionable."
                   : latestCanarySummary.manualRequired > 0
-                    ? "Manual Required checks are surfaced as warnings, never green proof."
+                    ? "Manual Required checks are surfaced as warnings, never green evidence."
                     : "All available checks from the latest run passed."
-                : "No production canary run is loaded yet. Run or refresh to load backed proof rows."}
+                : "No production canary run is loaded yet. Run or refresh to load backed evidence rows."}
             </Text>
           </View>
 
@@ -17450,15 +17450,15 @@ export default function AdminStudioScreen() {
               <Text style={styles.ownerSectionTitle}>Check Filters</Text>
               <OwnerStatusPill label={`${filteredCanaryResults.length} visible`} tone="info" />
             </View>
-            <Text style={styles.ownerPanelMeta}>Filter by proof status without hiding failed or manual-required checks behind a pass count.</Text>
+            <Text style={styles.ownerPanelMeta}>Filter by readiness status without hiding failed or manual-required checks behind a pass count.</Text>
             <OwnerFilterChips options={canaryFilterOptions} value={canaryStatusFilter} onChange={setCanaryStatusFilter} />
           </View>
 
           {canaryBusy ? (
-            <OwnerEmptyState body="The check run is using real backend proof paths and will refresh the grouped proof panels when it finishes." title="Running checks" />
+            <OwnerEmptyState body="The check run is using real backend verification paths and will refresh the grouped evidence panels when it finishes." title="Running checks" />
           ) : !latestCanaryRun ? (
             <OwnerEmptyState
-              body={ownerControlLoading ? "Canary history is loading from the backend." : "Run the first production canary when ready; no placeholder proof is shown."}
+              body={ownerControlLoading ? "Canary history is loading from the backend." : "Run the first production canary when ready; no simulated evidence is shown."}
               title={ownerControlLoading ? "Loading Canary" : "No canary run yet"}
             />
           ) : filteredCanaryResults.length === 0 ? (
@@ -17518,7 +17518,7 @@ export default function AdminStudioScreen() {
             badgeLabel={canAccessOwnerSecurity ? "Owner" : "Locked"}
             badgeTone={canAccessOwnerSecurity ? "success" : "locked"}
             kicker="OWNER SAFETY"
-            subtitle="Real counts only. Missing aggregations show Manual Required instead of fake zeroes."
+            subtitle="Real counts only. Missing aggregations show Manual Required instead of simulated zeroes."
             title="Safety Dashboard"
           />
           <View style={styles.dashboardGrid}>
@@ -19485,7 +19485,7 @@ export default function AdminStudioScreen() {
               {contentConfirm?.body ?? "Confirm this backed content programming change before continuing."}
             </Text>
             <View style={styles.confirmMetaBox}>
-              <Text style={styles.confirmMetaText}>Reason is required for audit proof.</Text>
+              <Text style={styles.confirmMetaText}>Reason is required for audit record.</Text>
               <Text style={styles.confirmMetaText}>No media files, room behavior, LiveKit lifecycle, or token issuance are changed by this action.</Text>
             </View>
             <TextInput
@@ -19555,10 +19555,10 @@ export default function AdminStudioScreen() {
             <Text style={styles.confirmTitle}>{ownerSecurityDangerAction?.title ?? "Confirm security action"}</Text>
             <Text style={styles.confirmBody}>
               {ownerSecurityDangerAction?.kind === "bulk-revoke-grants"
-                ? "This revokes every active temporary/proof grant returned by the backed staff-permission table and writes security audit events."
+                ? "This revokes every active temporary grant returned by the backed staff-permission table and writes security audit events."
                 : ownerSecurityDangerAction?.kind === "revoke-grant"
-                  ? "This revokes one backed temporary proof grant and writes security audit events."
-                  : "This marks the selected owner device as untrusted and writes a security audit event. It does not fake a Supabase Auth logout."}
+                  ? "This revokes one backed temporary grant and writes security audit events."
+                  : "This marks the selected owner device as untrusted and writes a security audit event. It does not simulate a Supabase Auth logout."}
             </Text>
             <View style={styles.confirmMetaBox}>
               <Text style={styles.confirmMetaText}>

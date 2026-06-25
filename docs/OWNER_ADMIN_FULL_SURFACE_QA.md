@@ -1,5 +1,7 @@
 # Owner/Admin Full Surface QA
 
+Owner/Admin Command Center UI: Closed after validation. `/admin` is the single Command Center entry point; Admin is the product-facing label; backend `operator` remains internal only; Support is a workflow/case area, not a staff role. Production UI must hide or honestly disable unavailable tools, require confirmation plus reason/audit for dangerous/destructive actions where supported, keep search privacy-safe and limited, fail closed on backend unavailability, and keep money/provider/payout actions disabled/read-only/manual/external.
+
 Date: 2026-06-05
 
 Lane: Owner/Admin full-surface proof and staff-access stabilization
