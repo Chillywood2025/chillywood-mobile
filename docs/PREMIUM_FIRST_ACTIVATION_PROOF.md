@@ -4,7 +4,7 @@ Date: 2026-06-25
 
 Verdict: Partial.
 
-Premium-first activation proof: Partial. Premium monthly: Verified at `$9.99/month`. Premium annual: Blocked at `$99.99/year` after a browser dashboard setup attempt because Google Play kept base plan ID `annual` marked invalid and returned `Your changes couldn't be saved` even after Yearly, United States-only availability, and `USD 99.99` were selected. Premium public activation remains OFF, no Premium purchase was completed, and no public purchase path was enabled. Creator-money flows remain OFF. Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator payouts remain OFF. Stripe payouts remain OFF. Stripe merch checkout remains OFF. Provider refunds remain manual/external. Premium launch still requires licensed/internal purchase proof and owner approval. Creator-money activation remains a separate future lane.
+Premium-first activation proof: Partial. Premium monthly: Verified at `$9.99/month`. Premium annual: Blocked at `$99.99/year` after a browser dashboard setup attempt because Google Play kept base plan ID `annual` marked invalid and returned `Your changes couldn't be saved` even after Yearly, United States-only availability, and `USD 99.99` were selected. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Premium public activation remains OFF, no Premium purchase was completed, and no public purchase path was enabled. Creator-money flows remain OFF. Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Creator payouts remain OFF. Stripe payouts remain OFF. Stripe merch checkout remains OFF. Provider refunds remain manual/external. Premium launch still requires licensed/internal purchase proof and owner approval. Creator-money activation remains a separate future lane. Support escalation packet prepared in `docs/GOOGLE_PLAY_SUBSCRIPTION_BASE_PLAN_ESCALATION.md`.
 
 This is a Premium-only proof lane. It does not activate creator-money, live money, payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, or provider refund automation.
 
@@ -35,6 +35,8 @@ Official provider behavior checked:
 | RevenueCat offering/package | Offering `premium` exists with one package, `Monthly` / `$rc_monthly`, mapped to `premium_subscription:monthly`; no `$rc_annual` package is visible. | Monthly verified / annual blocked |
 | Creator-product separation | RevenueCat product catalog shows the five production-labeled creator products as Draft with no entitlement attachment; Premium entitlement detail shows no creator product. | Verified |
 | Restore/manage/cancel support | App code exposes RevenueCat restore/customer info and Google Play subscription management URL support; no live action was performed. | Prepared / not live-proved in this lane |
+
+Shared blocker note: `docs/GOOGLE_PLAY_SUBSCRIPTION_BASE_PLAN_ESCALATION.md` documents that valid-format base-plan ID probes (`annual`, `yearly`, `annual-9999`, `monthly`, `monthly-499`, `creator-monthly`, `m-499`) remained invalid across Premium annual and Creator Channel Subscription. No public purchase activation occurred.
 
 ## Installed Proof Matrix
 
@@ -85,7 +87,7 @@ Official provider behavior checked:
 
 ## Owner Action List
 
-1. Resolve the Google Play annual base-plan blocker for `premium_subscription` / `annual`, or approve a different annual base-plan ID if Google Play support confirms `annual` cannot be saved.
+1. Submit the Google Play support escalation packet in `docs/GOOGLE_PLAY_SUBSCRIPTION_BASE_PLAN_ESCALATION.md` and resolve the annual base-plan blocker for `premium_subscription` / `annual`, or approve a different annual base-plan ID only if Google Play support confirms `annual` cannot be saved.
 2. After the Google Play annual base plan exists, import/verify `premium_subscription:annual` in RevenueCat, attach it only to entitlement `premium`, and add it to offering `premium` as `$rc_annual` or RevenueCat's annual package equivalent without changing monthly.
 3. Approve a bounded Premium-only internal/licensed-tester purchase window.
 4. Open the Premium purchase shell only for the approved environment and tester path.

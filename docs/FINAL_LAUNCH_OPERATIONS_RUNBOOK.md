@@ -15,12 +15,13 @@ Current classification:
 - Premium-first activation proof: Partial.
 - Premium monthly: Verified at $9.99/month.
 - Premium annual: Blocked at $99.99/year.
+- Premium annual: Provider-blocked pending Google Play support/base-plan resolution.
 - Premium public activation remains OFF.
 - Creator-money production-labeled products: Partial.
 - Creator-money tax/legal/compliance plan: Partial.
 - Creator-money product creation: Partial.
 - Channel Subscription base plan: Blocked by Google Play Base plan ID validation before Save.
-- Channel Subscription remains provider-blocked until Google Play base plan issue is resolved.
+- Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Support escalation packet prepared in `docs/GOOGLE_PLAY_SUBSCRIPTION_BASE_PLAN_ESCALATION.md`.
 - Purchase-option IDs use Google Play-valid hyphenated values.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.

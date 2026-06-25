@@ -40,13 +40,13 @@ Stripe merch checkout remains OFF.
 
 Premium-first launch candidate: Pending owner activation/provider final check.
 
-Premium-first activation proof: Partial. Premium monthly: Verified at `$9.99/month`. Premium annual: Blocked at `$99.99/year`. Google Play `premium_subscription` has active monthly base plan `monthly`, United States, `USD 9.99`; RevenueCat offering `premium` has package `$rc_monthly` mapped to `premium_subscription:monthly` and entitlement `premium`. The annual Google Play base-plan attempt reached approved values (`annual`, Yearly, United States only, `USD 99.99`) but Google Play kept `Base plan ID` invalid and returned `Your changes couldn't be saved`; no saved annual base plan and no RevenueCat `premium_subscription:annual` / `$rc_annual` mapping exists. No Premium purchase sheet was opened, no purchase was completed, and Premium public activation remains OFF. Premium launch still requires licensed/internal purchase proof and owner approval.
+Premium-first activation proof: Partial. Premium monthly: Verified at `$9.99/month`. Premium annual: Blocked at `$99.99/year`. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Google Play `premium_subscription` has active monthly base plan `monthly`, United States, `USD 9.99`; RevenueCat offering `premium` has package `$rc_monthly` mapped to `premium_subscription:monthly` and entitlement `premium`. The annual Google Play base-plan attempt reached approved values (`annual`, Yearly, United States only, `USD 99.99`) but Google Play kept `Base plan ID` invalid and returned `Your changes couldn't be saved`; no saved annual base plan and no RevenueCat `premium_subscription:annual` / `$rc_annual` mapping exists. No Premium purchase sheet was opened, no purchase was completed, and Premium public activation remains OFF. Premium launch still requires licensed/internal purchase proof and owner approval.
 
 Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval.
 
 Creator-money activation remains a separate future lane.
 
-Channel Subscription remains provider-blocked until Google Play base plan issue is resolved.
+Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Support escalation packet prepared in `docs/GOOGLE_PLAY_SUBSCRIPTION_BASE_PLAN_ESCALATION.md`.
 
 Provider verification used browser dashboard evidence. All activation switches remain OFF; production provider products are verified only where dashboard/API evidence exists.
 
