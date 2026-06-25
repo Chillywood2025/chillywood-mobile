@@ -174,13 +174,23 @@ const resetEnvPresence = envPresence([
 ]);
 const hasDisposableInbox =
   resetEnvPresence.PROOF_INBOX_API_KEY || resetEnvPresence.MAILOSAUR_API_KEY || resetEnvPresence.MAILSLURP_API_KEY;
+const passwordResetProviderClosed =
+  finalDoc.includes("Password reset/auth email provider proof is `Closed`") ||
+  finalDoc.includes("Latest password reset/auth email provider proof result:");
 
 const matrix = {
   playInstallerReadback: packageReadback?.installer === PLAY_INSTALLER && Number(packageReadback?.versionCode) >= 55
     ? status("Pass", `Play-installed runtime read back versionCode ${packageReadback.versionCode}, installer ${packageReadback.installer}.`)
     : status("Partial", "Play-installed runtime readback did not meet v55+ / Google Play installer condition.", "Use Google Play internal/closed testing install path."),
   accountDeletionScheduledStateVisual: accountDeletionResult,
-  passwordResetAuthEmailProvider: hasDisposableInbox
+  passwordResetAuthEmailProvider: passwordResetProviderClosed
+    ? status(
+        "Pass",
+        "Password reset/auth email provider proof is closed on the Play-installed runtime with dedicated proof inbox delivery, app-link recovery, password update, backend auth, installed Home/Settings sign-in, and expired-link fallback.",
+        "",
+        "Rotate the proof inbox password after proof and keep bounded retry monitoring in release smoke.",
+      )
+    : hasDisposableInbox
     ? status(
         "Pending external/provider",
         "A disposable/proof inbox key appears available, but this read-only pass did not send reset email or rotate proof credentials.",
@@ -249,7 +259,7 @@ const result = {
   noRefundExecution: true,
   noProviderEmailSent: true,
   noResetLinksPrinted: true,
-  finalGoNoGo: "Partial / Not Ready",
+  finalGoNoGo: passwordResetProviderClosed ? "Conditional Go" : "Partial / Not Ready",
   packageReadback,
   resetEnvPresence,
   accountDeletionEvidence,

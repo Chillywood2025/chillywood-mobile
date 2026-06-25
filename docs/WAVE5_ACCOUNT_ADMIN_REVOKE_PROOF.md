@@ -1,6 +1,6 @@
 # Wave 5 Account / Admin / Revoke Proof
 
-Status: Partial as of June 24, 2026. Wave 5.1 app-controlled disabled/admin blockers are closed; password reset/auth email provider proof remains external.
+Status: Conditional Go as of June 24, 2026. Wave 5.1 app-controlled disabled/admin blockers are closed, and password reset/auth email provider proof is closed on the Play-installed versionCode `55` runtime.
 
 This Wave 5 lane covers account lifecycle, Admin/support access, and refund/revoke/entitlement behavior. It does not activate live money, payouts, cash-out, withdrawals, payable balances, production purchase buttons, provider refunds, or creator monetization.
 
@@ -101,7 +101,7 @@ The Wave 5.1 pass did not run provider refunds, activate live money, change Prem
 
 ## Carry-Forward External / Policy Blockers
 
-- Password reset/auth email provider proof: Pending external/provider.
+- Password reset/auth email provider proof: Closed. Dedicated non-owner/non-admin proof inbox delivery, app-link recovery, password update, backend auth with the rotated proof credential, installed Home/Settings sign-in, and expired-link fallback passed on the Play-installed versionCode `55` runtime. Provider throttling was not conclusively observed in bounded attempts; bounded retry behavior was safe.
 - Real provider refund execution path: Accepted manual/external. Provider refund execution is not automated/proved, refund handling remains manual/external, and the app must not claim instant or automatic provider refunds.
 - Installed Android account deletion/restore visual proof: Closed on Play-installed versionCode 55 runtime. UI/copy, immediate scheduled-state copy, restore/cancel visual, and active/not-scheduled cleanup readback passed.
 - Installed Android blocked-viewer visual proof: Closed on Play-installed versionCode 55 runtime. Blocked-viewer Profile/Platform denial, blocked-action non-exposure, unrelated-viewer regression, and cleanup passed.

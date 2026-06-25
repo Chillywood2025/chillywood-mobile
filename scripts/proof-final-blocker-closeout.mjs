@@ -30,11 +30,11 @@ const blockerRows = [
   {
     blocker: "password reset/auth email provider proof",
     type: "external/provider",
-    currentStatus: "App reset route safety and historical forgot-password proof exist; final provider/inbox closeout is not rerun here.",
-    proofResult: "No safe disposable inbox/provider run was available in this pass; no owner inbox was used.",
-    launchImpact: "Account recovery provider proof remains a launch governance risk.",
-    requiredNextAction: "Run a disposable non-admin inbox proof on the Play/internal runtime or document owner acceptance.",
-    finalClassification: "Pending external/provider",
+    currentStatus: "Dedicated proof inbox and Play-installed versionCode 55 runtime were used.",
+    proofResult: "Reset request safe copy, provider email delivery, app-link recovery route, password update, backend auth with the rotated proof credential, installed Home/Settings sign-in, and expired-link fallback passed.",
+    launchImpact: "Main account recovery provider blocker is closed.",
+    requiredNextAction: "Rotate the proof inbox password after proof and keep bounded retry monitoring in release smoke.",
+    finalClassification: "Closed",
   },
   {
     blocker: "real provider refund execution",
@@ -87,9 +87,9 @@ const checks = [];
 const addCheck = (name, ok, evidence) => checks.push({ name, status: ok ? "Pass" : "Gap", evidence });
 
 addCheck("Wave 5.1 commit status carried forward", finalDoc.includes("Wave 5.1 | Closed"), "final doc Wave 5.1 row");
-addCheck("Final verdict remains honest", finalDoc.includes("Verdict: Partial / Not Ready"), "final doc verdict");
-addCheck("No broad launch-ready claim", !/Verdict:\s*Go\b/.test(finalDoc), "final doc does not claim Go");
-addCheck("Password reset blocker classified", finalDoc.includes("Pending external/provider"), "classification bucket present");
+addCheck("Final verdict remains honest", finalDoc.includes("Verdict: Conditional Go"), "final doc verdict");
+addCheck("No unqualified Go claim", !/Verdict:\s*Go\b/.test(finalDoc), "final doc does not claim full Go");
+addCheck("Password reset blocker closed", finalDoc.includes("Password reset/auth email provider proof is `Closed`"), "classification bucket present");
 addCheck("Installed visual proof status updated", finalDoc.includes("Installed Android account deletion/restore visual proof | installed-device proof") && finalDoc.includes("Installed visual blocker is closed.") && finalDoc.includes("Installed Android blocked-viewer visual proof | installed-device proof"), "installed visual closeout status");
 addCheck("Controlled purge production path classified", finalDoc.includes("Closed for controlled production path"), "controlled production purge classification present");
 addCheck("Wave 5.1 closed in tracker", nextTask.includes("Wave 5.1 — Disabled/Deactivated Access + Admin Suspend Proof: Closed"), "NEXT_TASK Wave 5.1 status");
@@ -129,7 +129,7 @@ for (const [file, source] of scannedSources) {
 
 const result = {
   generatedAt: now.toISOString(),
-  finalGoNoGo: "Partial / Not Ready",
+  finalGoNoGo: "Conditional Go",
   mutationPerformed: false,
   noProviderRefundsRun: true,
   noInboxEmailsSent: true,
@@ -154,7 +154,7 @@ writeFileSync(path.join(artifactDir, "README.md"), [
   "",
   "This is a read-only proof/classification pass. It does not send auth emails, execute provider refunds, mutate Supabase, or change app behavior. Installed-device proof status is read from the recorded installed visual closeout artifact.",
   "",
-  "Final Go/No-Go: Partial / Not Ready",
+  "Final Go/No-Go: Conditional Go",
   "",
   "Classification buckets:",
   ...blockerRows.map((row) => `- ${row.blocker}: ${row.finalClassification}`),

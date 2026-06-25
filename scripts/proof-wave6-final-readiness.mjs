@@ -138,7 +138,7 @@ const statusCounts = rows.reduce((acc, row) => {
 
 const finalGoNoGo = rows.some((row) => row.status === "Gap")
   ? "Partial / Not Ready"
-  : "Partial / Not Ready";
+  : "Conditional Go";
 
 mkdirSync(artifactDir, { recursive: true });
 const result = {
@@ -162,8 +162,8 @@ const result = {
     {
       blocker: "password reset/auth email provider proof",
       type: "external/provider",
-      launchImpact: "Provider proof pending.",
-      status: "Pending",
+      launchImpact: "Closed on Play-installed runtime with dedicated proof inbox.",
+      status: "Closed",
     },
     {
       blocker: "real provider refund execution",
