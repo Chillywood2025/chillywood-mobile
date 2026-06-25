@@ -9,7 +9,7 @@ Last updated: May 29, 2026
 - in-app report sheet;
 - support route and support email;
 - copyright email/contact once confirmed;
-- admin/operator review;
+- Admin review;
 - automated detection later.
 
 ## May 29, 2026 Ops Closeout Update

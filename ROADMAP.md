@@ -2,7 +2,7 @@
 
 ## Current Role Terminology Lock
 
-Product-facing role hierarchy is locked as First Owner, Owner, Admin, Moderator, Creator, and User. Backend `operator` remains the internal alias for product-facing Admin; there is no separate product Operator role. Support is a work area and permission group, not a staff role, and must not be added to `platform_role_memberships`. Moderator is separate from Admin/operator and can receive support duties only through exact scoped permissions. Moderator role scope: Closed. Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.
+Product-facing role hierarchy is locked as First Owner, Owner, Admin, Moderator, Creator, and User. Backend `operator` remains the internal alias for product-facing Admin; there is no separate product Operator role. Support is a work area and permission group, not a staff role, and must not be added to `platform_role_memberships`. Moderator is separate from Admin/operator and can receive support duties only through exact scoped permissions. Moderator role scope: Closed. Staff role hierarchy proof: Closed. Next lane: Return to final production readiness checklist and app-controlled launch blockers, excluding known Google Play base-plan provider blocker.
 
 ## Current Auth Email Branding Readiness
 

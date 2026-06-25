@@ -63,6 +63,7 @@ assertIncludes(lock, "Moderator is separate from Admin/operator", "Moderator sep
 if (
   !(nextTask + roadmap + lock).includes("Next lane: Moderator role scope including support duties.")
   && !(nextTask + roadmap + lock).includes("Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.")
+  && !(nextTask + roadmap + lock).includes("Next lane: Return to final production readiness checklist and app-controlled launch blockers, excluding known Google Play base-plan provider blocker.")
 ) {
   fail("missing next lane recommendation");
 }

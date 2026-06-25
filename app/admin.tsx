@@ -10500,10 +10500,10 @@ export default function AdminStudioScreen() {
         </View>
         <TextInput style={styles.input} placeholder="Home hero kicker" placeholderTextColor="#8d8d8d" value={experienceConfig.branding.homeHeroKicker} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, branding: { ...prev.branding, homeHeroKicker: text } }))} />
         <View style={styles.inlineInputs}>
-          <TextInput style={[styles.input, styles.inputHalf]} placeholder="Operator center label" placeholderTextColor="#8d8d8d" value={experienceConfig.branding.adminTitle} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, branding: { ...prev.branding, adminTitle: text } }))} />
+          <TextInput style={[styles.input, styles.inputHalf]} placeholder="Admin center label" placeholderTextColor="#8d8d8d" value={experienceConfig.branding.adminTitle} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, branding: { ...prev.branding, adminTitle: text } }))} />
           <TextInput style={[styles.input, styles.inputHalf, styles.inputDisabled]} placeholder="Watch Party label" placeholderTextColor="#8d8d8d" value={experienceConfig.branding.watchPartyLabel} editable={false} selectTextOnFocus={false} />
         </View>
-        <TextInput style={[styles.input, styles.multiline]} placeholder="Operator center helper copy" placeholderTextColor="#8d8d8d" multiline value={experienceConfig.branding.adminSubtitle} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, branding: { ...prev.branding, adminSubtitle: text } }))} />
+        <TextInput style={[styles.input, styles.multiline]} placeholder="Admin center helper copy" placeholderTextColor="#8d8d8d" multiline value={experienceConfig.branding.adminSubtitle} onChangeText={(text) => updateExperienceConfig((prev) => ({ ...prev, branding: { ...prev.branding, adminSubtitle: text } }))} />
       </View>
 
       <View style={styles.contentPanel}>
@@ -18498,7 +18498,7 @@ export default function AdminStudioScreen() {
                 />
                 <TextInput
                   style={[styles.input, styles.inputHalf]}
-                  placeholder="Operator center label"
+                  placeholder="Admin center label"
                   placeholderTextColor="#8d8d8d"
                   value={experienceConfig.branding.adminTitle}
                   onChangeText={(text) =>
@@ -18550,7 +18550,7 @@ export default function AdminStudioScreen() {
               </View>
               <TextInput
                 style={[styles.input, styles.multiline]}
-                placeholder="Operator center helper copy"
+                placeholder="Admin center helper copy"
                 placeholderTextColor="#8d8d8d"
                 multiline
                 value={experienceConfig.branding.adminSubtitle}

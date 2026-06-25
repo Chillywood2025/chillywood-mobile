@@ -1789,7 +1789,9 @@ Required production truth:
 - Broken Admin buttons are wired or honestly disabled.
 - No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
 
-Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.
+Staff role hierarchy proof: Closed after validation. The final product-facing hierarchy is First Owner, Owner, Admin, Moderator, Creator, and User. `operator` is only the internal/backend alias for Admin. Support is a work area and permission group, not a backend role. Moderator includes support duties only through exact scopes. No backend role values were renamed.
+
+Next lane: Return to final production readiness checklist and app-controlled launch blockers, excluding known Google Play base-plan provider blocker.
 # Next Task
 
 ## BrowserStack Monetization E2E

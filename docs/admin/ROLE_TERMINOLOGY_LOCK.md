@@ -70,4 +70,4 @@ Moderator cannot perform Owner/First Owner/Admin-only actions unless explicitly 
 
 ## Next Lane
 
-Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.
+Next lane: Return to final production readiness checklist and app-controlled launch blockers, excluding known Google Play base-plan provider blocker.

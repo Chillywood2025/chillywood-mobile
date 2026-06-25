@@ -69,7 +69,7 @@ Purchases/live money:
 - Creator subscriptions, VIP, tips, tickets, event passes, and paid videos are separate from Premium and must not be treated as creator cash-out or payout systems.
 
 Private/admin surfaces:
-- Admin Command Center and owner/operator tools are private and not required for standard consumer review unless Chi'llywood provides a separate admin review packet.
+- Admin Command Center and owner/Admin tools are private and not required for standard consumer review unless Chi'llywood provides a separate admin review packet. Backend `operator` remains only the internal Admin alias.
 ```
 
 ## Data Safety Ready Answers

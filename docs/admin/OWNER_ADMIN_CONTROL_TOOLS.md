@@ -43,7 +43,7 @@
 - Break Glass requires authenticated First Owner. Normal Owner dashboard viewing is not Break Glass.
 - Legal Intake requires Owner or `legal_request_intake` / `legal_review` / `legal_ops`.
 - Legal Evidence preview/search requires Owner or `legal_review` / `evidence_preview` / `legal_ops`; export requires Owner or `evidence_export` / `legal_ops`; hold requires Owner or `legal_hold` / `legal_ops`.
-- DMCA Case Management requires Owner or Admin/operator with `dmca_review`, `copyright_review`, or `legal_review`.
+- DMCA Case Management requires Owner, scoped Admin/internal `operator`, or scoped Moderator with `dmca_review`, `copyright_review`, `legal_review`, `admin.dmca.view`, or `admin.dmca.manage`.
 - Owner Security is Owner-only.
 
 Terminology lock: Admin is the product-facing role and backend `operator` is only the internal alias. There is no separate product Operator role. Support is a work area, not a separate role; support scopes can be granted to Moderator or Admin according to Owner/First Owner policy.
