@@ -10,6 +10,8 @@ Premium monthly: Verified. Premium annual: Provider-blocked pending Google Play 
 
 Research update: `docs/GOOGLE_PLAY_BASE_PLAN_ROOT_CAUSE_RESEARCH.md` ranks the most likely cause as a Google Play Console provider-side UI/backend state validation blocker, with hidden draft/base-plan state and hidden permission/merchant/tax constraints as secondary possibilities that require owner/admin or Google Support confirmation. The research update was read-only and did not retry saving any form.
 
+API research update: `docs/GOOGLE_PLAY_BASE_PLAN_API_READONLY_RESEARCH.md` documents that Google Play Developer API readback could not run with local credentials. The default local `gcloud` token produced a sanitized `403 PERMISSION_DENIED` / `Request had insufficient authentication scopes` response for the read-only subscriptions list request. No API mutation call was run. Hidden/ghost base-plan state remains unconfirmed until the owner provides Android Publisher API credentials with the required scope or Google Support checks backend state.
+
 ## Official Provider Rules Checked
 
 - Google Play subscriptions are composed of subscription products, base plans, and offers. Source: https://support.google.com/googleplay/android-developer/answer/12154973
@@ -181,6 +183,8 @@ Questions for Google Support:
 8. Can Google inspect backend subscription/base-plan state for `premium_subscription` and `cw_channel_subscription_monthly_499` and confirm whether any hidden draft/base-plan objects exist?
 9. Can Google confirm whether a hidden merchant, tax/compliance, or permission issue can make valid base-plan IDs appear invalid before Save?
 10. Would Android Publisher API readback show the hidden state causing this issue, and is read-only API inspection recommended before any product recreation?
+11. Does a `403 PERMISSION_DENIED` / insufficient authentication scopes result on `monetization.subscriptions.list` indicate that the current API user/service account lacks Android Publisher scope only, or can it also indicate missing Play Console monetization/catalog permissions?
+12. Which exact Play Console role/API permissions should be granted for read-only subscription/base-plan catalog inspection without mutation rights?
 
 Most likely root cause ranking from research:
 
@@ -205,9 +209,17 @@ Steps intentionally not tried without owner approval:
 
 - No new Save/Create/Apply/Activate/Submit action.
 - No provider product recreation, archive, delete, or replacement ID creation.
-- No Android Publisher API read/write call.
+- No Android Publisher API mutation call.
 - No support ticket submission by Codex.
 - No RevenueCat mapping change.
+
+API read-only result:
+
+- Allowed read-only target: `GET /androidpublisher/v3/applications/com.chillywood.mobile/subscriptions`.
+- Local default API auth result: `403 PERMISSION_DENIED` with sanitized message `Request had insufficient authentication scopes`.
+- Scoped Android Publisher token attempt: blocked by local gcloud scope restrictions before a token was produced.
+- No hidden/ghost base-plan state was confirmed or ruled out by API because authenticated Android Publisher readback was unavailable.
+- Required next step: owner/admin provides Android Publisher API access with the required `https://www.googleapis.com/auth/androidpublisher` authorization or asks Google Support to inspect backend state directly.
 
 ## Owner Action List
 
