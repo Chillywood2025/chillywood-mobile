@@ -2,6 +2,8 @@
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
+Money admin authority update: payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect live use, and payout movement remain OFF. Dual approval is required for future payout activation. Emergency money kill switch is First Owner/Owner-controlled and audited. No Stripe, payout, provider refund, purchase, or product mutation happened.
+
 This checklist defines the evidence required before Chi'llywood can activate production payout execution.
 
 

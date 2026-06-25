@@ -2,6 +2,8 @@
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
+Money admin authority update: payout approval, payout pause, creator balance freeze, payout risk flag clear, and fraud/risk override are future First Owner/Owner-controlled or dual-approved paths. Payouts remain OFF and no payout movement happened.
+
 This plan defines production payout operations that must exist before payout execution is enabled.
 
 

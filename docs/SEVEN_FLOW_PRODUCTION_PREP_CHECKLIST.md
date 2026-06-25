@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+Money admin authority update: this prep checklist does not activate money. Dual approval is required for future payout activation and future `live_money_enabled`; emergency money kill switch is First Owner/Owner-controlled and audited; no Google Play, RevenueCat, Stripe, payout, purchase, refund, or product mutation happened.
+
 Verdict: Partial.
 
 This checklist prepares the seven money/access flows for controlled production activation later. It does not activate live money, creator-money flows, payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, or Premium product/pricing changes.

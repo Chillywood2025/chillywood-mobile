@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+Money admin authority update: Premium annual remains provider-blocked until Google Play base plan exists and RevenueCat mapping is complete. Creator Channel Subscription remains provider-blocked by the same base-plan issue. This update does not mutate Google Play or RevenueCat.
+
 Verdict: Blocked.
 
 This lane investigates the shared Google Play subscription base-plan blocker affecting Premium annual and Creator Channel Subscription. It does not activate Premium, creator-money, live money, payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, or provider refund automation.

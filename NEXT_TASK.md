@@ -1,5 +1,33 @@
 # NEXT TASK
 
+## Money Admin Authority / Activation Governance Lane
+
+- [x] Money admin authority and activation governance repo-side proof closed.
+
+Status:
+- Verdict: Closed for repo-side governance; future Premium public activation, creator-money activation, `live_money_enabled`, payout activation, Stripe Connect live use, merch checkout, and provider refund automation remain OFF or blocked until separate owner-approved lanes.
+- Docs: `docs/admin/MONEY_ADMIN_AUTHORITY_ACTIVATION_GOVERNANCE.md`
+- Proof script: `scripts/proof-money-admin-authority-activation-governance.mjs`
+- Guard: `scripts/guard-money-admin-authority-policy.mjs`
+- Required truth:
+  - This lane does not activate money.
+  - First Owner / Owner controls activation authority.
+  - Premium monthly activation requires separate owner-approved purchase proof lane.
+  - Premium annual remains provider-blocked.
+  - Creator-money remains OFF.
+  - `live_money_enabled` remains OFF.
+  - Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF.
+  - Provider refunds remain manual/external.
+  - Manual refund support status can be recorded only with exact scope and audit.
+  - Admin can view/manage only exact money-support scopes.
+  - Moderator cannot activate money.
+  - Provider transaction/customer/order data is masked/scoped.
+  - Access grant revoke/removal requires exact scope, reason, target, and audit.
+  - Dual approval is required for future payout activation and future `live_money_enabled`.
+  - Emergency money kill switch is First Owner/Owner-controlled and audited.
+  - No Google Play, RevenueCat, Stripe, payout, purchase, refund, or product mutation happened.
+- Next lane recommendation: Continue production readiness with final store/release readiness and Play submission packet alignment, excluding known Google Play annual/channel base-plan provider blocker.
+
 ## Monitoring / Analytics / Crash / Runtime Diagnostics Final Alignment Lane
 
 - [x] Monitoring, analytics, crash, performance, runtime diagnostics, and production health repo-side alignment closed.

@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+Money admin authority update: First Owner / Owner controls activation authority. Premium monthly activation requires a separate owner-approved purchase proof lane; Premium annual remains provider-blocked; creator-money remains OFF; `live_money_enabled` remains OFF; payouts and payout movement remain OFF; provider refunds remain manual/external.
+
 Verdict: Partial.
 
 This is a production-readiness switchboard for the app. It does not activate live money, creator payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, Premium product changes, Premium gate weakening, RLS weakening, LiveKit authority changes, participant-cap changes, auth/reset changes, scan-gate weakening, abuse-throttle removal, or block-enforcement removal.

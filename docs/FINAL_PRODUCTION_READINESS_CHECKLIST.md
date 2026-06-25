@@ -1,5 +1,7 @@
 # Final Production Readiness Checklist
 
+Money admin authority and activation governance: Closed for repo-side governance. This lane does not activate money. First Owner / Owner controls activation authority; Premium monthly activation requires a separate owner-approved purchase proof lane; Premium annual remains provider-blocked; creator-money remains OFF; `live_money_enabled` remains OFF; payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF; provider refunds remain manual/external; manual refund support status can be recorded only with exact scope and audit; Admin can view/manage only exact money-support scopes; Moderator cannot activate money; provider transaction/customer/order data is masked/scoped; access grant revoke/removal requires exact scope, reason, target, and audit; dual approval is required for future payout activation and future `live_money_enabled`; emergency money kill switch is First Owner/Owner-controlled and audited; no Google Play, RevenueCat, Stripe, payout, purchase, refund, or product mutation happened.
+
 Date: 2026-06-25
 
 Verdict: Partial / conditional go for the current launch mode.

@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+Money admin authority update: Premium monthly activation requires separate owner-approved purchase proof lane. Premium annual remains provider-blocked. This lane does not activate money, does not change Google Play products/base plans, does not change RevenueCat mappings, and does not change Premium product/pricing/entitlement/offering.
+
 Verdict: Partial.
 
 Premium-first activation proof: Partial. Premium monthly: Verified at `$9.99/month`. Premium annual: Blocked at `$99.99/year` after a browser dashboard setup attempt because Google Play kept base plan ID `annual` marked invalid and returned `Your changes couldn't be saved` even after Yearly, United States-only availability, and `USD 99.99` were selected. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Premium public activation remains OFF, no Premium purchase was completed, and no public purchase path was enabled. Creator-money flows remain OFF. Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Creator payouts remain OFF. Stripe payouts remain OFF. Stripe merch checkout remains OFF. Provider refunds remain manual/external. Premium launch still requires licensed/internal purchase proof and owner approval. Creator-money activation remains a separate future lane. Google Play support packet: Submitted through Google Play Console Help on 2026-06-25 at 12:25 CDT; case ID pending. No provider products/base plans were changed.

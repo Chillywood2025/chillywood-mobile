@@ -2,6 +2,8 @@
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
+Money admin authority update: provider refunds remain manual/external. Manual refund support status can be recorded only with exact scope and audit. Paid access removal preserves evidence and payment/access history, does not execute provider refunds, and does not move money.
+
 This policy defines refund handling for Android digital goods and access products.
 
 

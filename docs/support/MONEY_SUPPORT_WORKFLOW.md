@@ -2,6 +2,8 @@
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
+Money admin authority and activation governance is closed in `docs/admin/MONEY_ADMIN_AUTHORITY_ACTIVATION_GOVERNANCE.md`: provider refunds remain manual/external; manual refund support status can be recorded only with exact scope and audit; Admin can view/manage only exact money-support scopes; Moderator cannot activate money; provider transaction/customer/order data is masked/scoped; access grant revoke/removal requires exact scope, reason, target, and audit; no Google Play, RevenueCat, Stripe, payout, purchase, refund, or product mutation happened.
+
 This document defines support categories, evidence, escalation, and response limits for Chi'llywood money features.
 
 

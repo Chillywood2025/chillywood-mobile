@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+Money admin authority update: creator-money remains OFF; five one-time creator-money products remain Draft/readback verified only; `live_money_enabled` remains OFF; payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF; no Google Play, RevenueCat, Stripe, payout, purchase, refund, or product mutation happened.
+
 Verdict: Closed for the five one-time product readback.
 
 Five one-time creator-money products: Verified. Products remain Draft unless explicitly activated later. Creator-money switches remain OFF. `live_money_enabled` remains OFF. Premium remains separate. No creator-money product maps to Premium. Payouts remain OFF. Provider refunds remain manual/external. Activation requires a separate owner-approved proof lane.

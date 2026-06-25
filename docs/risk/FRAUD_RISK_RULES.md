@@ -2,6 +2,8 @@
 
 Status: policy and operations readiness material. Production live money, production payouts, cash-out, withdrawal, transfer, payable balances, and production merch checkout are not active. This document should be reviewed by qualified counsel and relevant operations owners before public posting or production use.
 
+Money admin authority and activation governance is closed in `docs/admin/MONEY_ADMIN_AUTHORITY_ACTIVATION_GOVERNANCE.md`: fraud/risk overrides that could affect money movement are First Owner/Owner-controlled or future dual-approved paths; Admin can view/manage only exact money-support scopes; Moderator cannot activate money or clear payout risk flags; provider transaction/customer/order data is masked/scoped; dual approval is required for future payout activation and future `live_money_enabled`; emergency money kill switch is First Owner/Owner-controlled and audited.
+
 This document defines Chi'llywood money-risk rules for production readiness while live money remains off.
 
 
