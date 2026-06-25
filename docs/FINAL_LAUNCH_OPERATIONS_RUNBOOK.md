@@ -21,7 +21,7 @@ Current classification:
 - Creator-money tax/legal/compliance plan: Partial.
 - Creator-money product creation: Partial.
 - Channel Subscription base plan: Blocked by Google Play Base plan ID validation before Save.
-- Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Support escalation packet prepared in `docs/GOOGLE_PLAY_SUBSCRIPTION_BASE_PLAN_ESCALATION.md`.
+- Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Google Play support packet: Submitted through Google Play Console Help on 2026-06-25 at 12:25 CDT; case ID pending. No provider products/base plans were changed.
 - Purchase-option IDs use Google Play-valid hyphenated values.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
