@@ -6,7 +6,9 @@ Verdict: Blocked.
 
 This lane investigates the shared Google Play subscription base-plan blocker affecting Premium annual and Creator Channel Subscription. It does not activate Premium, creator-money, live money, payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, or provider refund automation.
 
-Premium monthly: Verified. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Premium public activation remains OFF. Creator-money switches remain OFF. Creator payouts remain OFF. Stripe payout/merch remains OFF. Provider refunds remain manual/external. No creator-money product maps to Premium. Support escalation packet prepared.
+Premium monthly: Verified. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Premium public activation remains OFF. Creator-money switches remain OFF. Creator payouts remain OFF. Stripe payout/merch remains OFF. Provider refunds remain manual/external. No creator-money product maps to Premium. Google Play support packet: Submitted.
+
+Support submission update: The prepared sanitized support packet was submitted through Google Play Console Help > Create support ticket on 2026-06-25 at 12:25 CDT. Support topic: Monetization. Issue type: Managing monetization. Common issue: I have questions about subscriptions. App selected: `com.chillywood.mobile`. Google Play Console confirmed `Ticket submitted` and said replies are sent by email within 2 business days. Case ID status: pending in the Console at submission time.
 
 Research update: `docs/GOOGLE_PLAY_BASE_PLAN_ROOT_CAUSE_RESEARCH.md` ranks the most likely cause as a Google Play Console provider-side UI/backend state validation blocker, with hidden draft/base-plan state and hidden permission/merchant/tax constraints as secondary possibilities that require owner/admin or Google Support confirmation. The research update was read-only and did not retry saving any form.
 
@@ -107,7 +109,7 @@ No private dashboard screenshots, provider account private identifiers, provider
 - Recreating `premium_subscription` was not attempted because the active monthly production Premium product is tied to that subscription.
 - Recreating `cw_channel_subscription_monthly_499` was not attempted because replacement product IDs require owner approval and would need a separate provider setup lane.
 - Archive/delete paths were not attempted.
-- Google Play support contact was not submitted by Codex.
+- Google Play support contact was submitted through the official Play Console support ticket flow on 2026-06-25 at 12:25 CDT. Case ID was still pending in the Console immediately after submission.
 - RevenueCat import was not attempted for absent Google Play base plans.
 
 Possible future replacement IDs to consider only after owner approval and Google Play guidance:
@@ -125,6 +127,8 @@ Possible future replacement IDs to consider only after owner approval and Google
 | Creator one-time products | `cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_vip_pass_499`, `cw_event_pass_099` | Present as Draft consumables with no entitlement attachment. | Preserve read-only/off-state until future owner activation lane. | Verified / OFF |
 
 ## Google Play Support Escalation Packet
+
+Submission status: Submitted through Google Play Console Help > Create support ticket on 2026-06-25 at 12:25 CDT. Case ID: pending. No private screenshots or attachments were submitted.
 
 Subject: Base plan ID validation/save failure for valid subscription base-plan IDs in `com.chillywood.mobile`
 
@@ -223,7 +227,7 @@ API read-only result:
 
 ## Owner Action List
 
-1. Submit the support escalation packet to Google Play Console support.
+1. Monitor the submitted Google Play Console support ticket and record the case ID once Google assigns one.
 2. Ask Google whether the account has all required monetization/base-plan permissions and whether the merchant/payment profile has any hidden limitation.
 3. Ask Google to confirm whether the failed draft forms can be cleared or whether product recreation is required.
 4. Do not activate Premium annual until Google Play saves the annual base plan and RevenueCat imports/maps `premium_subscription:annual`.

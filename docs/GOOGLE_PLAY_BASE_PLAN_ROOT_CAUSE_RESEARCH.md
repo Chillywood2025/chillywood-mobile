@@ -6,7 +6,7 @@ Verdict: Blocked.
 
 This research-only lane investigates the shared Google Play subscription base-plan blocker affecting Premium annual and Creator Channel Subscription. No provider dashboard mutation was performed. No product, base plan, offer, RevenueCat mapping, switch, payout, Stripe, merch, refund, or purchase behavior was changed.
 
-Premium monthly: Verified. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Premium public activation remains OFF. Creator-money switches remain OFF. `live_money_enabled` remains OFF. Creator payouts remain OFF. Stripe payout/merch remains OFF. Provider refunds remain manual/external. No creator-money product maps to Premium.
+Premium monthly: Verified. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Google Play support packet: Submitted through Google Play Console Help on 2026-06-25 at 12:25 CDT; case ID pending. Premium public activation remains OFF. Creator-money switches remain OFF. `live_money_enabled` remains OFF. Creator payouts remain OFF. Stripe payout/merch remains OFF. Provider refunds remain manual/external. No creator-money product maps to Premium.
 
 ## Executive Finding
 
@@ -100,7 +100,7 @@ Do not execute this checklist without an owner-approved retry lane.
 
 ### Google Play Support Path
 
-1. Send the updated support packet in `docs/GOOGLE_PLAY_SUBSCRIPTION_BASE_PLAN_ESCALATION.md`.
+1. Monitor the submitted Google Play Console support ticket and record the case ID once assigned.
 2. Ask Google to inspect backend state for `premium_subscription` and `cw_channel_subscription_monthly_499`.
 3. Ask Google to confirm whether hidden merchant/tax/permission constraints can surface as invalid base-plan IDs.
 4. Ask Google whether failed Add base plan drafts can create hidden conflicts.
