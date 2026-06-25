@@ -1,5 +1,31 @@
 # NEXT TASK
 
+## Admin Search / Support Readback Privacy / Export Governance Lane
+
+- [x] Admin search privacy and export governance repo-side proof closed.
+
+Status:
+- Verdict: Closed for repo-side Admin Search governance, support readback minimization, and export-default denial; future suspicious-search alert automation and any bulk export remain separate Owner-approved lanes.
+- Docs: `docs/admin/ADMIN_SEARCH_PRIVACY_EXPORT_GOVERNANCE.md`
+- Proof script: `scripts/proof-admin-search-privacy-export-governance.mjs`
+- Guard: `scripts/guard-admin-search-privacy-export-policy.mjs`
+- Required truth:
+  - Admin search requires exact scope.
+  - Non-admin and unscoped attempts are denied.
+  - Searches are audited with masked query preview.
+  - Failed/denied searches are audited where supported.
+  - Search results are minimized and bounded/paginated or safely limited.
+  - Support-workflow readbacks are masked/minimized by default.
+  - Moderator does not see full email by default.
+  - Admin can see full email only with exact scope.
+  - Phone/device search is disabled by default unless future case-scoped privacy review approves it.
+  - Private chat/content evidence search requires exact scope and case/report/legal context.
+  - Payment/provider search is masked/scoped summary only.
+  - Deleted/de-identified users are not available in ordinary search.
+  - Exports are disabled by default and require future Owner-approved audited lane.
+  - No secrets, raw storage paths, signed URLs, raw IPs, tokens, push tokens, provider secrets, tax IDs, bank details, private provider IDs, raw payment credentials, or private evidence are exposed.
+- Next lane recommendation: Continue production readiness with provider dashboard ownership and access governance.
+
 ## Money Admin Authority / Activation Governance Lane
 
 - [x] Money admin authority and activation governance repo-side proof closed.

@@ -1,5 +1,7 @@
 # Owner/Admin Search Permission Audit Hardening
 
+Current follow-up: Admin search privacy and export governance is documented in `docs/admin/ADMIN_SEARCH_PRIVACY_EXPORT_GOVERNANCE.md`. Admin search requires exact scope; non-admin and unscoped attempts are denied; searches are audited with masked query preview; failed/denied searches are audited where supported; support-workflow readbacks are masked/minimized by default; Moderator does not see full email by default; Admin can see full email only with exact scope; phone/device search is disabled by default unless future case-scoped privacy review approves it; private chat/content evidence search requires exact scope and case/report/legal context; payment/provider search is masked/scoped summary only; deleted/de-identified users are not available in ordinary search; exports are disabled by default and require future Owner-approved audited lane.
+
 Date: 2026-06-05
 
 Lane: Owner Admin Search And Permission Audit Hardening

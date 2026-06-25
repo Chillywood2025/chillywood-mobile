@@ -2,6 +2,8 @@
 
 Status: Legal/privacy/Data Safety final alignment: Closed for repo-side documentation alignment; owner/legal review and Play Console acceptance remain external.
 
+Admin search privacy and export governance is documented in `docs/admin/ADMIN_SEARCH_PRIVACY_EXPORT_GOVERNANCE.md`: Admin search requires exact scope; support-workflow readbacks are masked/minimized by default; private chat/content evidence search requires exact scope and case/report/legal context; payment/provider search is masked/scoped summary only; exports are disabled by default; and search audit uses masked query preview rather than plaintext email/private evidence.
+
 This is product/legal-readiness documentation alignment, not attorney legal advice. It records current app behavior, public legal surfaces, store-readiness evidence, and remaining owner/legal actions. It does not change Google Play products, RevenueCat mappings, Premium activation, creator-money switches, payouts, Stripe, merch, account deletion enforcement, moderation enforcement, staff roles, RLS, auth, LiveKit, scan gates, abuse throttles, or provider dashboards.
 
 Required alignment assertions:

@@ -2,6 +2,8 @@
 
 Owner/Admin Command Center UI: Closed after validation.
 
+Admin search privacy and export governance: Closed / Partial / Blocked. Current repo-side status is Closed for scoped Admin Search governance, support readback minimization, and export-default denial. Admin search requires exact scope; non-admin and unscoped attempts are denied; searches are audited with masked query preview; failed/denied searches are audited where supported; search results are minimized and bounded/paginated or safely limited; support-workflow readbacks are masked/minimized by default; Moderator does not see full email by default; Admin can see full email only with exact scope; private chat/content evidence search requires exact scope and case/report/legal context; payment/provider search is masked/scoped summary only; exports are disabled by default.
+
 The app has a single Command Center entry point: `/admin` in `app/admin.tsx`. The Command Center is production-labeled, role-scoped, backend-authorized, and fail-closed. It is not a new role hierarchy, provider-product, money activation, payout, Stripe, merch, or broad redesign lane.
 
 Required production wording:

@@ -40,6 +40,13 @@ import {
 } from "./creatorMonetization";
 import { supabase } from "./supabase";
 
+const formatCompactIdentifier = (value: string | null | undefined) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "not returned";
+  if (text.length <= 12) return text;
+  return `${text.slice(0, 8)}...${text.slice(-4)}`;
+};
+
 export type MoneyAuditEnvironment = "production" | "sandbox" | "setup";
 
 export type MoneyAuditCategory =
@@ -443,7 +450,7 @@ const eventFromSourceRow = (
       { label: "Payable", value: "No" },
       { label: "Provider", value: source.provider || "No provider" },
       { label: "Capability", value: source.capability || "not returned" },
-      { label: "Provider event id", value: options.creatorSafe ? (source.providerEventId ? "Recorded" : "not returned") : (source.providerEventId || "not returned") },
+      { label: "Provider event id", value: options.creatorSafe ? (source.providerEventId ? "Recorded" : "not returned") : (source.providerEventId ? formatCompactIdentifier(source.providerEventId) : "not returned") },
       { label: "Idempotency", value: source.idempotencyKeyPresent ? "Duplicate-safe source recorded" : "No duplicate key returned" },
       { label: "Reason", value: reason },
       ...source.safeMetadata.filter((entry) => !options.creatorSafe || !entry.label.includes("user_id")),
