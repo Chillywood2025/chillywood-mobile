@@ -16,6 +16,10 @@ Latest production enablement proof artifact:
 
 - `/tmp/app-account-purge-production-enable-proof-20260625000935/`
 
+Latest final launch operations proof artifact:
+
+- `/tmp/app-final-launch-operations-proof-20260625003349/`
+
 ## Scheduled Deletion
 
 Scheduled deletion is the reversible phase.
@@ -89,11 +93,12 @@ Production-capable purge is controlled by:
 - emergency stop runtime config;
 - single-user enable flag;
 - batch enable flag that is default-off;
+- proof-batch enable flag for disposable proof-account automation;
 - explicit call-time batch enable requirement;
 - sanitized audit readback;
 - idempotent already-deidentified result.
 
-Batch auto-purge remains disabled/default-off. It is not enabled in this lane.
+Proof-only batch auto-purge is enabled/proved for disposable proof accounts. Production batch auto-purge remains config-gated/default-off unless owner/operator explicitly enables it after dry-run review.
 
 ## Manual / Legal Process
 
@@ -102,10 +107,10 @@ Some categories remain manual or policy-controlled:
 - Provider-side identity, billing, refund, chargeback, and store records.
 - Auth-provider deletion beyond local restriction/de-identification.
 - Storage-object deletion where content may be needed for legal, safety, DMCA, fraud, or another user's record.
-- Batch purge for production users.
+- Batch purge for production users unless owner/operator explicitly enables the config-gated production path after dry-run review.
 - Any data category subject to legal hold, fraud review, abuse investigation, payment dispute, or DMCA retention.
 
-The support/legal path should review these manually until owner/legal approves an automated production job. The controlled single-user production path is available for eligible expired scheduled-deletion accounts; the proof-only RPC remains proof-account scoped and must not be treated as a general production purge worker.
+The support/legal path should review these manually unless owner/legal approves the config-gated production batch path for eligible expired scheduled-deletion accounts. The controlled single-user production path is available for eligible expired scheduled-deletion accounts; proof-only batch mutation remains proof-account scoped.
 
 ## Safety Requirements
 
@@ -129,7 +134,9 @@ The proof harness creates or uses a dedicated disposable purge proof account, ad
 
 The production enablement harness creates a dedicated disposable proof account, schedules deletion, expires the restore window only for that proof account, proves dry-run eligibility, proves controlled single-user purge, proves idempotency, proves active/restore-window/protected/non-admin denial, proves batch mutation is disabled/default-off, and proves sanitized audit readback.
 
-A broad production purge job remains disabled unless a future owner/legal-approved lane explicitly enables it.
+The final launch operations harness proves refund manual/external classification, emergency stop, batch dry-run, disabled mutation, proof-only batch processing for disposable proof accounts, bounded batch size, idempotency, sanitized batch audit readback, manual-review queue creation, manual-review status transition, non-admin denial, and no provider refund or live-money side effect.
+
+Broad production batch processing remains config-gated/default-off unless owner/operator explicitly enables it after dry-run review.
 
 Latest proof result:
 
@@ -158,5 +165,23 @@ Latest production enablement result:
 - Sanitized purge audit readback: Pass.
 - Public Profile/Platform fail-closed after purge: Pass.
 - Private-feature denial after purge: Pass.
+- Provider refund execution: not performed.
+- Live-money action: not performed.
+
+Latest final launch operations result:
+
+- Provider refund execution manual/external: Pass.
+- Batch dry-run: Pass.
+- Emergency stop: Pass.
+- Proof-only batch mutation for disposable proof accounts: Pass.
+- Production mode gate/default-off: Pass.
+- Batch size bound: Pass.
+- Active-account skip/denial: Pass.
+- Restore-window skip/denial: Pass.
+- Owner/admin/operator protected account skip/denial: Pass.
+- Non-admin batch/manual-review denial: Pass.
+- Batch audit readback: Pass.
+- Idempotency: Pass.
+- Manual-review queue creation: Pass for creator media, storage references, provider records, legal/support/DMCA, and payment/access grants.
 - Provider refund execution: not performed.
 - Live-money action: not performed.

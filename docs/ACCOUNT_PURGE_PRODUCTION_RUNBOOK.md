@@ -8,14 +8,16 @@ Current production enablement:
 
 - Single-user owner/operator purge: enabled and proved for eligible expired scheduled-deletion accounts.
 - Dry-run: default and non-mutating.
-- Batch auto-purge: disabled/default-off.
-- Broad auto-purge: not enabled.
+- Batch auto-purge: proof-only automation is enabled/proved for disposable proof accounts; production batch remains config-gated/default-off unless owner/operator explicitly enables it.
+- Broad auto-purge: not enabled silently.
+- Manual-review queue: enabled/proved for creator media, storage references, provider records, legal/support/DMCA, payment/access grants, and audit-related retained categories.
 - Provider refunds: not executed.
 - Live-money actions: not executed.
 
 Latest proof artifact:
 
 - `/tmp/app-account-purge-production-enable-proof-20260625000430/`
+- `/tmp/app-final-launch-operations-proof-20260625003349/`
 
 ## What Is Automated Now
 
@@ -100,22 +102,27 @@ Mutation result:
 
 ## Batch Mode
 
-Batch mode is disabled/default-off.
+Batch mode is controlled and default-off for production accounts.
 
 The batch RPC currently supports:
 
 - dry-run eligible-count readback;
 - bounded limit;
-- disabled mutation proof.
+- disabled mutation proof;
+- emergency stop proof;
+- proof-only mutation for disposable proof accounts;
+- sanitized audit rows;
+- idempotent repeat-run behavior;
+- manual-review queue creation for retained/review categories.
 
-It does not process broad production accounts in this lane. To enable batch in the future, a separate owner/legal-approved lane must:
+It does not silently process broad production accounts. Production batch mutation requires:
 
 - turn on runtime config intentionally;
 - require an explicit call-time enable flag;
 - keep bounded batch size;
-- prove idempotency and audit;
-- prove emergency stop;
-- prove no real-user accidental purge.
+- verify dry-run counts before mutation;
+- preserve emergency stop;
+- preserve sanitized audit and manual-review readbacks.
 
 ## Stop / Disable
 
@@ -124,9 +131,10 @@ The runtime config includes:
 - `emergency_stop`;
 - `single_user_enabled`;
 - `batch_enabled`;
+- `proof_batch_enabled`;
 - `max_batch_size`.
 
-Emergency stop or disabling single-user purge causes the production RPC to fail closed. Batch mutation also requires `batch_enabled=true` and an explicit call-time enable flag; both are false/not provided by default.
+Emergency stop or disabling single-user purge causes the production RPC to fail closed. Production batch mutation also requires `batch_enabled=true` and an explicit call-time enable flag; both are false/not provided by default. Proof-only batch mutation requires `proof_batch_enabled=true`, proof-account eligibility, and explicit call-time enablement.
 
 ## Retained Records
 
@@ -179,6 +187,32 @@ Escalate to owner/legal before:
 - turning on batch mutation;
 - processing legal hold, DMCA, fraud, chargeback, or payment-dispute accounts;
 - claiming legal compliance beyond the proved behavior.
+
+## Manual-Review Queue
+
+The final launch operations lane adds an owner/operator manual-review queue for records that should not be automatically deleted during purge.
+
+Categories:
+
+- creator media;
+- storage references;
+- provider records;
+- legal/support/DMCA;
+- payment/access grants;
+- abuse/security records;
+- admin audit logs.
+
+Allowed statuses:
+
+- pending_review;
+- retained;
+- deidentified;
+- deleted;
+- legal_hold;
+- provider_required;
+- unsupported/manual.
+
+Non-admin users cannot read the queue. Owner/operator users can read sanitized queue items and update review status through the backend RPC. Creator media, storage references, provider records, legal/support/DMCA records, payment/access grants, fraud/security records, and admin audit logs must not be automatically deleted without review.
 
 ## Rollback / Incident Notes
 

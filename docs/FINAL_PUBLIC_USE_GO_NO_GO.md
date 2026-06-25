@@ -46,6 +46,10 @@ Latest account purge production enablement proof artifact:
 
 - `/tmp/app-account-purge-production-enable-proof-20260625000935/`
 
+Latest final launch operations proof artifact:
+
+- `/tmp/app-final-launch-operations-proof-20260625003349/`
+
 ## Wave Summary
 
 | Wave | Status | Closed proof | Remaining blocker | Launch impact |
@@ -69,7 +73,7 @@ Latest account purge production enablement proof artifact:
 ### External / Provider Blockers
 
 - Password reset/auth email provider proof is `Pending external/provider`: app-side reset route safety and historical forgot-password proof exist, but no safe disposable inbox/provider run was available in this closeout pass.
-- Real provider refund execution is `Accepted manual/external`: current support/refund truth is manual/external or not implemented, automated refunds cannot be claimed, and the app must not claim instant or automatic provider refunds.
+- Real provider refund execution is `Accepted manual/external`: current support/refund truth is manual/external, automated refunds cannot be claimed, and the app must not claim instant or automatic provider refunds. The final launch operations proof confirms no refund API call and no live-money side effect.
 - Firebase dashboard receipt is `Pass`: browser readback confirmed Firebase Console access for project `chillywood-app`, Android app package `com.chillywood.mobile`, Analytics dashboard activity, Crashlytics release `1.0.0 (55)` receipt with 100% crash-free users/sessions and no open crash issues for the selected crash filter, and Performance Monitoring receipt for release `1.0.0 (55)`.
 
 ### Installed-Device Proof Blockers
@@ -80,7 +84,8 @@ Latest account purge production enablement proof artifact:
 
 ### Product / Legal Policy Blockers
 
-- Permanent account purge/de-identification is `Closed for controlled production path`: single-user owner/operator purge is production-capable for eligible expired scheduled-deletion accounts, dry-run is default, batch auto-purge is disabled/default-off, and no broad production auto-purge job is claimed.
+- Permanent account purge/de-identification is `Closed for controlled production path`: single-user owner/operator purge is production-capable for eligible expired scheduled-deletion accounts, dry-run is default, proof-only batch automation is proved for disposable proof accounts, production batch remains config-gated/default-off unless owner/operator explicitly enables it, and no silent broad auto-purge is claimed.
+- Manual-review workflow is `Closed`: creator media, storage references, provider records, legal/support/DMCA, payment/access grants, and audit-related retained categories have an owner/operator-only queue with sanitized readback and non-admin denial.
 - Final attorney/legal review and Play Console acceptance remain outside repo proof.
 
 ## Public-Use Risk Summary
@@ -92,7 +97,7 @@ Latest account purge production enablement proof artifact:
 | LiveKit/rooms/capacity | Metrics and synthetic passive proof exist; active camera/mic cap remains 4. | Do not claim real-device 25-viewer or higher active capacity. |
 | Calls/notifications | Chi'lly Chat call push ringing is closed for current proof; notification/ring dedupe passed. | Keep device/release smoke in final release proof. |
 | Abuse/spam/blocking | Backend abuse controls, blocked-user backend enforcement, and installed blocked-viewer Profile/Platform visual proof are materially closed. | Password reset/auth email provider proof remains pending. |
-| Account lifecycle | Scheduled-deletion Profile/Platform visibility fails closed; Wave 5.1 proves disabled/deactivated private-feature denial and admin suspend/restore; installed deletion UI/copy, scheduled-state copy, restore/cancel, and controlled purge/de-identification were proved. | No broad auto-purge job or legal compliance claim is made. |
+| Account lifecycle | Scheduled-deletion Profile/Platform visibility fails closed; Wave 5.1 proves disabled/deactivated private-feature denial and admin suspend/restore; installed deletion UI/copy, scheduled-state copy, restore/cancel, controlled purge/de-identification, proof-only batch automation, and manual-review queue were proved. | Production batch purge remains config-gated/default-off and no legal compliance claim is made. |
 | Admin/support/DMCA | Admin/support privacy, DMCA privacy, and Wave 5.1 suspend/deactivate action proof passed. | Provider/policy items below remain pending. |
 | Premium/refund/revoke | Valid/revoked entitlement readback and client spoof prevention passed; no live money changed. | Real provider refund execution remains external/manual. |
 | Analytics/crash/monitoring | Firebase packages/config/runbooks exist; telemetry email identity was removed. Firebase Console receipt is now browser-proved for Analytics, Crashlytics, and Performance on Android release `1.0.0 (55)`. | Keep release telemetry privacy checks in final smoke. |
@@ -121,8 +126,8 @@ Latest account purge production enablement proof artifact:
 | Media-storage rollback | Scan/storage runbooks and scan-safe resolver proof exist. | Scanner-down failure-mode proof pending. | Partial |
 | Scan failure response | Pending/failed/malware gates fail closed in current proof. | Operator scanner-down proof pending. | Partial |
 | Abuse/spam incident response | Wave 4 controls and proof docs exist. | Password reset/auth email provider proof pending. | Partial |
-| Account deletion/support incident response | Account/legal runbook, production purge runbook, and Wave 5/5.1 proof exist; Play-installed deletion UI/copy, scheduled-state copy, restore/cancel visual proof, and controlled purge/de-identification passed. | Batch auto-purge remains disabled/default-off. | Partial |
-| Premium/provider incident response | Money/support/refund playbooks exist; live money stays off. | Real provider refund execution pending/manual. | Partial |
+| Account deletion/support incident response | Account/legal runbook, production purge runbook, final launch operations runbook, and Wave 5/5.1 proof exist; Play-installed deletion UI/copy, scheduled-state copy, restore/cancel visual proof, controlled purge/de-identification, proof-only batch automation, and manual-review queue passed. | Production batch purge remains config-gated/default-off. | Pass |
+| Premium/provider incident response | Money/support/refund playbooks exist; live money stays off; final launch operations proof confirms manual/external refund handling and no refund API call. | Automated provider refund execution is not implemented/proved and must not be claimed. | Pass |
 | App release rollback | Android/EAS runbook documents OTA/native build limits. | Play/internal versionCode `55` runtime proof is closed; keep normal release rollback smoke in future candidate proofs. | Partial |
 | Function/migration rollback | Recent migrations are tracked in docs/proof reports. | No universal automated rollback guarantee is claimed. | Partial |
 | Safe degradation | Runtime config, media, Premium, LiveKit, notifications, and money paths fail safely where proved. | Release monitoring proof pending. | Partial |
@@ -152,7 +157,7 @@ Latest account purge production enablement proof artifact:
 | Installed Android account deletion/restore visual proof | installed-device proof | Backend/runtime account deletion/restore proof is passed. | Play-installed UI/copy reachability passed, immediate scheduled-state copy was captured, restore/cancel visual proof passed, and cleanup readback confirmed the proof account is active/not scheduled. | Installed visual blocker is closed. | Keep normal release smoke for this path in future launch candidates. | Closed |
 | Installed Android blocked-viewer visual proof | installed-device proof | Backend/runtime blocked-user enforcement is passed. | Play-installed blocked-viewer Profile/Platform routes showed blocked/unavailable state, blocked actions were not exposed, unrelated viewer regression passed, and fixture cleanup passed. | Installed visual blocker is closed. | Keep normal release smoke for this path in future launch candidates. | Closed |
 | Play/internal proof where prior lanes used direct APK/backend proof | installed Play/internal proof | Play internal testing exposes versionCode `55`, and the attached device readback shows package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `com.android.vending`, last update `2026-06-24 15:45:06`. Signed-out privacy/support route smoke, signed-out private-chat denial, Premium gate smoke, route fatal-log scans, and signed-in Home/Settings visual smoke passed on the Play-installed runtime. | The hard Play/internal runtime pass condition is met, and signed-in smoke is now closed. | Store/runtime proof now matches the distributed internal testing path for versionCode `55`. | Keep normal signed-in release smoke in future installed visual proof lanes. | Closed |
-| Permanent purge/de-identification policy | account lifecycle proof | Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, admin suspend/restore, proof-account de-identification, and controlled single-user production purge/de-identification. | Policy doc, runbook, owner/operator-only production RPC, dry-run, disposable proof-account mutation, denial safeguards, sanitized audit readback, idempotency, batch disabled proof, public fail-closed, and private-feature denial are proved. No broad auto-purge job or legal compliance claim is made. | Controlled production path is closed. Batch auto-purge remains disabled/default-off. | Keep owner/legal review for any broader batch automation or legal compliance promise. | Closed for controlled production path |
+| Permanent purge/de-identification policy | account lifecycle proof | Current proved behavior covers scheduled deletion/restore, public hiding, disabled access denial, admin suspend/restore, proof-account de-identification, controlled single-user production purge/de-identification, proof-only batch automation, and manual-review queue workflow. | Policy doc, runbook, owner/operator-only production RPC, dry-run, disposable proof-account mutation, denial safeguards, sanitized audit readback, idempotency, emergency stop, proof-only batch mutation, manual-review queue readback/status transition, public fail-closed, and private-feature denial are proved. No silent broad auto-purge or legal compliance claim is made. | Controlled production path is closed. Production batch remains config-gated/default-off unless owner/operator explicitly enables it. | Keep owner/legal review for legal compliance promises and production batch operating cadence. | Closed for controlled production path |
 
 ## Launch Condition Decision
 
@@ -169,7 +174,7 @@ Required before broad public launch:
 - Installed blocked-viewer visual proof is closed on Play runtime.
 - Firebase dashboard receipt is closed by browser readback; keep release telemetry privacy checks in final smoke.
 - Provider refund manual/external wording confirmed.
-- Controlled single-user account purge/de-identification is production-capable; broad batch auto-purge remains disabled/default-off.
+- Controlled single-user account purge/de-identification is production-capable; proof-only batch automation and manual-review queue are proved; production batch remains config-gated/default-off.
 
 Accepted carry-forward candidates:
 
@@ -180,7 +185,7 @@ Accepted carry-forward candidates:
 
 Final Go/No-Go: Partial / Not Ready.
 
-App-controlled Wave 5.1 blockers are closed, Play/internal versionCode `55` runtime proof is closed, signed-in Home/Settings smoke is closed, installed account deletion/restore visual proof is closed, installed blocked-viewer Profile/Platform visual proof is closed, and controlled account purge/de-identification is closed. Do not launch broadly until password reset/auth email provider proof is closed or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, deletion, and provider claims qualified exactly to the proof that exists.
+App-controlled Wave 5.1 blockers are closed, Play/internal versionCode `55` runtime proof is closed, signed-in Home/Settings smoke is closed, installed account deletion/restore visual proof is closed, installed blocked-viewer Profile/Platform visual proof is closed, controlled account purge/de-identification is closed, proof-only batch purge automation is proved, provider refund execution is accepted manual/external, and manual-review operations are proved. Do not launch broadly until password reset/auth email provider proof is closed or explicitly accepted by the owner with documented risk. Continue to keep capacity, money, refunds, deletion, and provider claims qualified exactly to the proof that exists.
 
 Earlier launch-candidate installed proof result: direct APK launch smoke passed on physical Android (`R5CR120QCBF / SM-N986U1`) for package `com.chillywood.mobile`, versionCode `55`, versionName `1.0.0`, installer `null`, with no fatal launch crash in the captured logcat window; Home was visible and Settings opened from Home. This evidence is superseded for Play/internal runtime proof by the Play v55 upload/install result below.
 
@@ -199,3 +204,5 @@ Latest final-four launch-condition result: `/tmp/app-final-four-launch-condition
 Latest account purge/de-identification result: `/tmp/app-account-purge-deidentification-proof-20260624233257/` closes permanent purge/de-identification for proof-account policy implementation. The remote-applied proof path defines retained/de-identified categories, denies active account purge, denies restore-window purge without proof override, denies owner/admin/operator and non-admin purge, de-identifies a disposable proof account, keeps public Profile/Platform fail-closed, keeps private-feature access denied, preserves support/audit privacy, performs no provider refund, and performs no live-money action. This is not a real-user broad auto-purge job or a legal compliance claim.
 
 Latest account purge production enablement result: `/tmp/app-account-purge-production-enable-proof-20260625000935/` closes controlled production purge/de-identification. The remote-applied path enables owner/operator single-user purge for eligible expired scheduled-deletion accounts, keeps dry-run as default, keeps batch auto-purge disabled/default-off, proves active/restore-window/protected/non-admin denial, proves sanitized purge audit readback, proves idempotency, keeps public Profile/Platform fail-closed, keeps private-feature access denied, performs no provider refund, and performs no live-money action. The app must not promise instant permanent deletion, and some records may be retained for security, fraud prevention, legal, transaction, support, audit, DMCA, or dispute reasons.
+
+Latest final launch operations result: `/tmp/app-final-launch-operations-proof-20260625003349/` closes provider refund manual/external operations, proof-only batch purge automation, and manual-review workflow. The remote-applied path proves refund copy/doc scan, no refund API call, no live-money side effect, emergency stop, batch dry-run, disabled mutation without explicit enable, bounded proof-only batch processing for disposable proof accounts, active/restore-window/protected/non-admin denial, sanitized batch audit readback, idempotency, manual-review queue creation for creator media, storage references, provider records, legal/support/DMCA, and payment/access grants, manual-review status transition, and non-admin manual-review denial. Production batch remains config-gated/default-off unless owner/operator explicitly enables it after dry-run review.

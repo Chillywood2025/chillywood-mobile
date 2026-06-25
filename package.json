@@ -21,6 +21,7 @@
     "proof:final-four-launch-conditions": "node ./scripts/proof-final-four-launch-conditions.mjs",
     "proof:account-purge-deidentification": "node ./scripts/proof-account-purge-deidentification.mjs",
     "proof:account-purge-production-enable": "node ./scripts/proof-account-purge-production-enable.mjs",
+    "proof:final-launch-operations": "node ./scripts/proof-final-launch-operations.mjs",
     "proof:launch-candidate-installed": "node ./scripts/proof-launch-candidate-installed.mjs",
     "proof:watch-party-seat-request": "node ./scripts/proof-watch-party-seat-request.mjs",
     "proof:live-stage-seat-approval": "node ./scripts/proof-live-stage-seat-approval.mjs",
