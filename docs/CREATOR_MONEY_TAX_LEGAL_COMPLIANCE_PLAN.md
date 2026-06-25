@@ -6,9 +6,9 @@ Verdict: Partial.
 
 This is a provider compliance planning document for the six creator-money Google Play / RevenueCat products. It is not legal or tax advice. It does not activate creator-money, live money, payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, provider refunds, Premium, public purchase availability, or arbitrary custom checkout amounts.
 
-Creator-money tax/legal/compliance plan: Partial. The plan is complete enough for owner/legal/tax review and lists each provider field, recommended value, owner-confirmation requirement, and Codex proceed/stop rule. Product creation remains Partial because Google Play still exposes owner-stop fields that Codex must not guess.
+Creator-money tax/legal/compliance plan: Partial. The plan is complete enough for owner/legal/tax review and lists each provider field, recommended value, owner-confirmation requirement, and Codex proceed/stop rule. Product creation remains Partial because Google Play still exposes provider setup fields that Codex must not guess or save with all-region availability.
 
-Creator-money product creation: Partial. Google Play already has subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but it has `0` active base plans and cannot be purchased. The five one-time products are not created. The one-time product form visibly requires or exposes Product ID, Name, Description, Icon, Product tax category, Age rating, Payment location restriction, purchase option, region, and pricing. Age rating remains an owner/legal/tax stop field. The Channel Subscription base-plan form visibly exposes immutable Base plan ID, base-plan Type, country/region availability, and price setup; US-only base-plan save was not completed.
+Creator-money product creation: Partial. Google Play already has subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but it has `0` active base plans and cannot be purchased. The five one-time products are not created. Browser execution on 2026-06-25 confirmed the one-time product form accepts the approved Product ID, Name, Description, existing icon preview, and default `Digital app sales` tax category strongly enough to reach the Availability and pricing step without selecting Age rating. Creation still stopped before final save because the next step requires a provider `Purchase option ID` that has not been owner-approved and starts from all-region availability; US-only price/availability was not conclusively scoped. The Channel Subscription base-plan form visibly exposes immutable Base plan ID, base-plan Type, country/region availability, and price setup; US-only base-plan save was not completed.
 
 United States only first.
 
@@ -56,11 +56,11 @@ Codex may proceed only when the field value is already owner-approved, visible a
 | Short description | Owner-approved descriptions below | Yes | Yes | No, already approved | Editable but public | Yes | Medium | Proceed only with approved copy. |
 | Icon / graphic | Existing shared app/product icon if Google Play accepts it | Yes, owner approved shared existing icon | Yes if already available and accepted by dashboard | Owner must provide/approve any new asset | Public asset can affect review | Yes | Medium | Proceed only with existing approved icon; stop if upload requires new creative/legal claim. |
 | Product tax category | `Digital app sales` if inherited/visible as the current Play default for these digital items | Partially: visible default, not independently legal-reviewed here | No if dashboard requires active selection/change | Yes for any edit/change | Affects future transaction tax treatment | No direct marketing copy, but provider setting | High | Do not edit without owner/legal/tax confirmation. |
-| Age/content rating | Must match owner-approved product-specific rating | No | No | Yes | Public/regulatory effect | Potentially visible in applicable US states | High | Stop. Options observed: `All ages`, `13+`, `16+`, `18+`, `Unspecified`. |
+| Age/content rating | Must match owner-approved product-specific rating if owner chooses to assign one | No | No active selection | Yes before selecting a value | Public/regulatory effect | Potentially visible in applicable US states | High | Stop before choosing a value. Browser execution confirmed the field is visible but did not block moving to pricing when left unselected. Options observed: `All ages`, `13+`, `16+`, `18+`, `Unspecified`. |
 | Payment location restriction | No restriction unless owner/legal requires a restriction | No separate approval | No if dashboard asks for an active decision | Yes | Compliance effect | Not marketing copy | High | Stop if a restriction decision is required. |
 | Country/region availability | United States only first | Yes | Yes only if the dashboard control can be conclusively scoped to US-only before save | No for US-only target; yes for any other country | Public availability | Yes by effect | High | Stop if UI risks all-region activation or is ambiguous. |
 | Price/currency | `$0.99` one-time products; `$4.99/month` subscription, USD | Yes | Yes only after US-only availability is conclusively scoped | No for defaults | Public and billing effect | Yes | High | Proceed only for exact USD price in US-only setup. |
-| Purchase option | Standard `Buy` / repeat-purchasable style for Tips; exact-access one-time product for others | Partially approved at concept level | No if Google Play presents unapproved variants or activation controls | Yes for final choice if labels differ | Billing/access behavior | Indirect | High | Stop if purchase-option form requires unapproved choice. |
+| Purchase option | Standard `Buy` / repeat-purchasable style for Tips; exact-access one-time product for others | Partially approved at concept level | No final save without a specific owner-approved provider `Purchase option ID` | Yes for the exact purchase-option ID and any final choice if labels differ | Billing/access behavior | Indirect | High | Stop if purchase-option form requires unapproved ID, label, or choice. |
 | Consumable / non-consumable behavior | Tips consumable-style; Paid Video/Watch-Party/Event exact-access consumable-style if app consumes after grant; VIP exact creator access / non-consumable-style if supported | Partially approved; architecture-specific details require final owner confirmation | No if provider asks explicit irreversible selection | Yes | Access and restore behavior | Indirect | Medium/high | Stop if provider requires explicit consumable/non-consumable decision not matching app proof. |
 | Subscription base plan ID | `monthly` | Yes | Yes for ID only | No, already approved | Yes, cannot change/reuse | Indirect | Medium | Proceed only for exact `monthly`. |
 | Billing period | Monthly auto-renewing | Yes conceptually | Yes only if no additional unapproved settings are required | Owner must confirm any nonstandard period/mode | Billing/legal disclosure | Yes | High | Proceed only for standard monthly auto-renewing; stop on prepaid/installment/nonstandard mode. |
@@ -76,8 +76,8 @@ Codex may proceed only when the field value is already owner-approved, visible a
 | --- | --- | --- | --- |
 | Unknown tax category or any edit to tax category | Affects transaction tax treatment and compliance. | One-time form and subscription details show `Digital app sales`; subscription details also show `Service`. | Owner/legal/tax must confirm any active change or certification. |
 | Age/content rating | Product rating is distinct from app rating and may be shown in applicable US states. | One-time form options observed: `All ages`, `13+`, `16+`, `18+`, `Unspecified`. | Owner/legal/product must select a rating for each one-time product or approve a shared rating. |
-| Country/region beyond United States | Launch scope is US-only first. | Base-plan form showed broad regional price grid; prior flow initially selected all regions. | Owner/operator must complete or approve exact US-only scoping. |
-| Publishing/review/activation control | Could make products publicly available or submit provider review. | Channel subscription base plan not created; one-time product Next disabled until required fields. | Owner must authorize any publish/activate/review submission separately. |
+| Country/region beyond United States | Launch scope is US-only first. | One-time product pricing step and base-plan form showed broad regional price grids starting from all/all available regions. | Owner/operator must complete or approve exact US-only scoping before any save. |
+| Publishing/review/activation control | Could make products publicly available or submit provider review. | Channel subscription base plan not created; one-time product flow reached the pricing step but no product was saved. | Owner must authorize any publish/activate/review submission separately. |
 | Bank/tax identity fields | Private provider account data and legal/tax identity are prohibited. | Not needed for this lane. | Owner handles directly. |
 | Charity/donation/fundraising classification | Tips are not a charitable donation and no tax deduction is claimed. | No charity field used. | Stop if surfaced. |
 | Gambling/contest/sweepstakes classification | The six products are not gambling/contest/sweepstakes products. | No such field used. | Stop if surfaced. |
@@ -132,10 +132,10 @@ Codex may proceed only when the field value is already owner-approved, visible a
 | Product name | `Creator Tip` | Yes | No | Public/user-visible. |
 | Short description | `Send optional support to a creator. Tips do not unlock content.` | Yes | No | Public/user-visible. |
 | Icon/graphic | Existing shared app/product icon | Yes if accepted | No for existing icon; yes for new asset | Public. |
-| Purchase option | Consumable-style support / repeat-purchasable if supported | Stop if provider labels require explicit unresolved choice | Yes for final provider-specific purchase option | Must not unlock access. |
+| Purchase option | Consumable-style support / repeat-purchasable if supported | Stop before final save until owner approves exact provider `Purchase option ID` and any provider-specific choice | Yes for final provider-specific purchase option | Must not unlock access. |
 | Consumable vs non-consumable | Consumable-style if explicit consumption required after receipt | Stop if uncertain | Yes if dashboard asks directly | Repeat support implies consumable-style, but exact provider selection must match architecture. |
 | Price/currency | `$0.99` USD | Yes only with US-only scope | No | Public billing value. |
-| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop on all-region ambiguity. |
+| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop because dashboard starts broad unless US-only availability/pricing is conclusively scoped before save. |
 | Product tax category | `Digital app sales` if inherited/default | No active edit | Yes for changes/certifications | No charity/nonprofit/donation tax deduction claim. |
 | Age/content rating | Owner-selected value | No | Yes | Must-stop. |
 | Legal/product disclosure | Contribution-only; no content unlock; no payout promise | Docs only | Yes for provider legal text | No charity, investment, gambling, donation deduction, or payout claim. |
@@ -175,10 +175,10 @@ Provider refunds remain manual/external. No instant refund promise and no in-app
 | Product name | `Paid Video Access` | Yes | No | Public. |
 | Short description | `Unlock access to one paid creator video.` | Yes | No | Public. |
 | Icon/graphic | Existing shared app/product icon | Yes if accepted | No for existing icon; yes for new asset | Public. |
-| Purchase option | Exact-access one-time product | Stop if provider asks unapproved variant | Yes for final provider-specific option | Must support exact-target backend grant. |
+| Purchase option | Exact-access one-time product | Stop before final save until owner approves exact provider `Purchase option ID` and any provider-specific choice | Yes for final provider-specific option | Must support exact-target backend grant. |
 | Consumable vs non-consumable | Use existing app architecture: if purchase is consumed after exact-target access grant, consumable-style; otherwise stop | No if uncertain | Yes if explicit | Do not guess. |
 | Price/currency | `$0.99` USD | Yes only with US-only scope | No | Public billing value. |
-| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop on all-region ambiguity. |
+| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop because dashboard starts broad unless US-only availability/pricing is conclusively scoped before save. |
 | Product tax category | `Digital app sales` if inherited/default | No active edit | Yes for changes/certifications | Digital content access. |
 | Age/content rating | Owner-selected value | No | Yes | Must-stop. |
 | Legal/product disclosure | Unlocks one paid creator video only | Docs only | Yes for provider legal text | No Premium, subscription, payout, or physical good claim. |
@@ -218,10 +218,10 @@ Provider refunds remain manual/external. No instant refund promise. Support path
 | Product name | `Watch-Party Ticket` | Yes | No | Public. |
 | Short description | `Unlock access to one ticketed Watch-Party room.` | Yes | No | Public. |
 | Icon/graphic | Existing shared app/product icon | Yes if accepted | No for existing icon; yes for new asset | Public. |
-| Purchase option | Exact-access one-time product | Stop if unresolved | Yes for final provider-specific option | Must not grant LiveKit authority. |
+| Purchase option | Exact-access one-time product | Stop before final save until owner approves exact provider `Purchase option ID` and any provider-specific choice | Yes for final provider-specific option | Must not grant LiveKit authority. |
 | Consumable vs non-consumable | Use existing app architecture; stop if explicit provider choice is uncertain | No if uncertain | Yes if explicit | Exact room grant remains backend source. |
 | Price/currency | `$0.99` USD | Yes only with US-only scope | No | Public. |
-| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop on all-region ambiguity. |
+| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop because dashboard starts broad unless US-only availability/pricing is conclusively scoped before save. |
 | Product tax category | `Digital app sales` if inherited/default | No active edit | Yes for changes/certifications | Digital in-app access. |
 | Age/content rating | Owner-selected value | No | Yes | Must-stop. |
 | Legal/product disclosure | Digital room access only; no external event admission | Docs only | Yes for provider legal text | No transportation/physical admission. |
@@ -266,7 +266,7 @@ Provider refunds remain manual/external. Support path covers room ended/failed/n
 | Grace period | Google Play default only if inherited | No if prompted | Yes | Must-stop if required. |
 | Renewal/cancellation disclosure | `$4.99/month`; renews monthly unless canceled; manage/cancel through Google Play/account subscriptions; one creator only | Docs only | Yes for public/legal text | Required before activation. |
 | Price/currency | `$4.99/month` USD | Yes only with US-only scope | No | Public billing value. |
-| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop on all-region ambiguity. |
+| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop because dashboard starts broad unless US-only availability/pricing is conclusively scoped before save. |
 | Tax/policy settings | Current product details show `Digital app sales` and `Service` | No active edit | Yes for changes/certifications | Tax/legal effect. |
 | Offers/free trial/intro price | None in this lane | No | Yes | Offers are optional and not approved. |
 | Review/publish/activation | Do not publish/activate | No | Yes | Base plan activation/public availability is separate. |
@@ -305,10 +305,10 @@ Provider refunds remain manual/external. No instant refund promise and no in-app
 | Product name | `Creator VIP Pass` | Yes | No | Public. |
 | Short description | `Unlock creator-specific VIP access.` | Yes | No | Public. |
 | Icon/graphic | Existing shared app/product icon | Yes if accepted | No for existing icon; yes for new asset | Public. |
-| Purchase option | Exact creator-specific VIP access product | Stop if unresolved | Yes for final provider-specific option | Must not imply Premium. |
+| Purchase option | Exact creator-specific VIP access product | Stop before final save until owner approves exact provider `Purchase option ID` and any provider-specific choice | Yes for final provider-specific option | Must not imply Premium. |
 | Consumable vs non-consumable | Non-consumable-style creator-specific pass if supported; stop if provider choice conflicts with app architecture | No if uncertain | Yes if explicit | VIP restore/ownership semantics must match exact creator access. |
 | Price/currency | `$4.99` USD | Yes only with US-only scope | No | Public. |
-| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop on all-region ambiguity. |
+| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop because dashboard starts broad unless US-only availability/pricing is conclusively scoped before save. |
 | Product tax category | `Digital app sales` if inherited/default | No active edit | Yes for changes/certifications | Digital access. |
 | Age/content rating | Owner-selected value | No | Yes | Must-stop. |
 | Legal/product disclosure | Creator-specific VIP access only | Docs only | Yes for provider legal text | No Premium, subscription, physical good, or payout claim. |
@@ -348,10 +348,10 @@ Provider refunds remain manual/external. Support path covers unavailable perks, 
 | Product name | `Creator Event Pass` | Yes | No | Public. |
 | Short description | `Unlock access to one paid creator event.` | Yes | No | Public. |
 | Icon/graphic | Existing shared app/product icon | Yes if accepted | No for existing icon; yes for new asset | Public. |
-| Purchase option | Exact-access one-time product | Stop if unresolved | Yes for final provider-specific option | Must not imply physical event admission. |
+| Purchase option | Exact-access one-time product | Stop before final save until owner approves exact provider `Purchase option ID` and any provider-specific choice | Yes for final provider-specific option | Must not imply physical event admission. |
 | Consumable vs non-consumable | Use existing app architecture; stop if explicit provider choice is uncertain | No if uncertain | Yes if explicit | Exact event grant remains backend source. |
 | Price/currency | `$0.99` USD | Yes only with US-only scope | No | Public. |
-| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop on all-region ambiguity. |
+| Country/region availability | United States only first | Yes only if unambiguous | No for US-only | Stop because dashboard starts broad unless US-only availability/pricing is conclusively scoped before save. |
 | Product tax category | `Digital app sales` if inherited/default | No active edit | Yes for changes/certifications | Digital in-app access. |
 | Age/content rating | Owner-selected value | No | Yes | Must-stop. |
 | Legal/product disclosure | Digital in-app event access only | Docs only | Yes for provider legal text | No physical event admission, external ticketing, Premium, or payout claim. |
@@ -399,16 +399,16 @@ Stripe is reserved for future creator payouts and physical merch. No Android dig
 
 | Provider | Result |
 | --- | --- |
-| Google Play one-time products | Product creation remains blocked. The form exposes a product-specific Age rating selector with options `All ages`, `13+`, `16+`, `18+`, and `Unspecified`; this is distinct from the app rating and is a must-stop owner/legal field. Product tax category is visible as `Digital app sales`; Codex did not edit it. Icon preview was visible, but age rating remains unresolved. No one-time product was submitted. |
-| Google Play Channel Subscription | Product record `cw_channel_subscription_monthly_499` exists. Base-plan form exposes immutable Base plan ID, Type choices (`Auto-renewing`, `Prepaid`, `Installments`), country/region availability, and price setup. Codex did not save the base plan because US-only availability/pricing was not conclusively safe in the visible form. |
-| RevenueCat | Import/mapping remains blocked until matching Google Play one-time products and the Channel Subscription base plan exist. |
+| Google Play one-time products | Product creation remains blocked. Browser execution confirmed the five production one-time IDs are absent from the catalog. The create form accepted approved first-step metadata for `cw_creator_tip_099` and allowed progression without selecting Age rating, but the pricing step requires a provider `Purchase option ID` and starts from broad all-region availability. Codex did not guess the purchase-option ID, did not save all-region availability, did not submit a product, and did not edit the `Digital app sales` tax category. |
+| Google Play Channel Subscription | Product record `cw_channel_subscription_monthly_499` exists. Base-plan form exposes immutable Base plan ID, Type choices (`Auto-renewing`, `Prepaid`, `Installments`), country/region availability, and price setup. Codex did not save the base plan because the US-only availability/pricing path was not conclusively safe in the visible form and the regional grid starts broad. |
+| RevenueCat | Product catalog access was verified. Premium products remain present, sandbox products remain present, and the six production-labeled creator-money product IDs are absent. Import/mapping remains blocked until matching Google Play one-time products and the Channel Subscription base plan exist. |
 | Stripe | Not used for Android digital products. Stripe payout/merch remains OFF and future-only. |
 
 ## Owner Action List
 
-1. Choose the product age/content rating for each one-time product, or approve one shared rating for Tips, Paid Video, Watch-Party Ticket, VIP, and Event Pass.
+1. If the owner wants product-specific Age rating assigned, choose the product age/content rating for each one-time product, or approve one shared rating for Tips, Paid Video, Watch-Party Ticket, VIP, and Event Pass. Browser execution showed this field did not block moving to pricing when left unselected.
 2. Confirm that `Digital app sales` is the correct Google Play product tax category for all six digital creator-money products, and confirm whether the existing `Service` policy setting on the subscription is correct.
-3. Confirm purchase-option details for each one-time product: repeat-purchasable/consumable-style for Tips and exact-access one-time behavior for Paid Video, Watch-Party Ticket, VIP, and Event Pass.
+3. Approve exact Google Play `Purchase option ID` values for each one-time product, plus any purchase-option details: repeat-purchasable/consumable-style for Tips and exact-access one-time behavior for Paid Video, Watch-Party Ticket, VIP, and Event Pass.
 4. Confirm whether Paid Video, Watch-Party Ticket, Event Pass, and VIP should be consumed after backend exact-target grant or treated as non-consumable/owned access in Google Play/RevenueCat where provider setup asks explicitly.
 5. Complete or approve exact US-only country/region scoping before any product/base plan save.
 6. Create the five Google Play one-time products only after the stop fields above are approved.

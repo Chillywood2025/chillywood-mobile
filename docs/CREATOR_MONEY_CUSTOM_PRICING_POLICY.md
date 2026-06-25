@@ -28,7 +28,7 @@ Provider refunds remain manual/external.
 
 No creator-money product maps to Premium.
 
-Current provider setup status: Partial. Google Play has the channel subscription product record `cw_channel_subscription_monthly_499`, but the `monthly` base plan is missing. The one-time products remain blocked by provider form requirements. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist.
+Current provider setup status: Partial. Google Play has the channel subscription product record `cw_channel_subscription_monthly_499`, but the `monthly` base plan is missing. The one-time production product IDs are absent from the Google Play catalog; browser execution reached the pricing step with approved first-step metadata, then stopped before final save because exact purchase-option IDs and US-only availability/pricing completion still require owner/operator action. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist.
 
 Creator-money tax/legal/compliance plan: Partial. `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` documents provider-backed/fail-closed custom pricing boundaries, must-stop tax/legal/compliance fields, allowed proceed fields, and the rule that Codex must not guess tax/legal/compliance fields.
 

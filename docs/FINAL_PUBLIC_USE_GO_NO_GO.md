@@ -76,7 +76,7 @@ Latest creator-money provider product creation proof artifact:
 
 Latest creator-money tax/legal/compliance proof artifact:
 
-- `/tmp/app-creator-money-tax-legal-compliance-proof-20260625-093040/`
+- `/tmp/app-creator-money-provider-compliance-execution-proof-20260625-095225/`
 
 Seven-flow money classification:
 
@@ -108,7 +108,7 @@ Seven-flow money classification:
 - Stripe payouts remain OFF.
 - Stripe merch checkout remains OFF.
 - Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
-- The owner approved the recommended production creator-money product IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans. The `monthly` base plan remains missing. The five one-time products remain blocked by product icon and age rating requirements plus tax/compliance and purchase-option setup.
+- The owner approved the recommended production creator-money product IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans. The `monthly` base plan remains missing. The five one-time product IDs are absent from the Google Play catalog; browser execution reached the one-time pricing step with approved first-step metadata, then stopped before final save because exact purchase-option IDs and US-only availability/pricing completion still require owner/operator action.
 - `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` is complete enough for owner/legal/tax review and records the provider fields Codex may fill, the owner-stop tax/legal/compliance fields, and the rule that Codex must not guess tax/legal/compliance fields.
 - RevenueCat import/mapping remains blocked until the matching Google Play production-labeled products/base plans exist.
 - Stripe is reserved for future creator payouts and physical merch; it is not used for Android digital creator-money purchases in this lane.

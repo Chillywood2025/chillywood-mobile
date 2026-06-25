@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
-const artifactDir = path.join("/tmp", `app-creator-money-tax-legal-compliance-proof-${timestamp}`);
+const artifactDir = path.join("/tmp", `app-creator-money-provider-compliance-execution-proof-${timestamp}`);
 
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
@@ -28,11 +28,11 @@ const products = [
     futureCustomPricing: "Additional tip price products or approved provider-backed price tiers only.",
     switchName: "tipsEnabled",
     moneySwitch: "tips_enabled",
-    googlePlayStatus: "Blocked by provider form",
+    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "None / contribution receipt only.",
     accessNotCreated: "Premium, content, room, VIP, subscription, event, payout.",
-    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
   },
   {
     flow: "Paid Video",
@@ -46,11 +46,11 @@ const products = [
     futureCustomPricing: "Approved paid-video price tiers mapped to verified provider products only.",
     switchName: "paidVideoEnabled",
     moneySwitch: "paid_content_enabled",
-    googlePlayStatus: "Blocked by provider form",
+    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact paid video target only.",
     accessNotCreated: "Premium, other videos, rooms, VIP, subscription, event, payout.",
-    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
   },
   {
     flow: "Watch-Party Ticket",
@@ -64,11 +64,11 @@ const products = [
     futureCustomPricing: "Approved ticket price tiers mapped to verified provider products only.",
     switchName: "watchPartyTicketEnabled",
     moneySwitch: "watch_party_tickets_enabled",
-    googlePlayStatus: "Blocked by provider form",
+    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact room/ticket target only.",
     accessNotCreated: "Premium, other rooms, LiveKit publish/host/mod, VIP, subscription, payout.",
-    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
   },
   {
     flow: "Channel Subscription",
@@ -84,11 +84,11 @@ const products = [
     futureCustomPricing: "Approved subscription products, base plans, or offers only.",
     switchName: "channelSubscriptionEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Created product record; base plan missing",
+    googlePlayStatus: "Created product record; base plan missing and blocked by US-only pricing/availability save",
     revenueCatStatus: "Blocked until Google Play base plan exists",
     accessCreated: "Exact creator Platform subscription only.",
     accessNotCreated: "Premium, VIP, paid videos, rooms, events, other creators, payout.",
-    ownerAction: "Create Google Play subscription/base plan, configure pricing/regions, import in RevenueCat, attach only to creator_channel_subscription.",
+    ownerAction: "Create Google Play monthly base plan only after US-only pricing/availability is conclusively scoped; import in RevenueCat and attach only to creator_channel_subscription.",
   },
   {
     flow: "VIP",
@@ -102,11 +102,11 @@ const products = [
     futureCustomPricing: "Approved VIP price tiers mapped to verified provider products only.",
     switchName: "vipEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Blocked by provider form",
+    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact creator VIP only.",
     accessNotCreated: "Premium, subscription, other creators, paid videos, rooms, events, payout.",
-    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
   },
   {
     flow: "Event Pass",
@@ -120,11 +120,11 @@ const products = [
     futureCustomPricing: "Approved event pass price tiers mapped to verified provider products only.",
     switchName: "eventPassEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Blocked by provider form",
+    googlePlayStatus: "Missing; blocked by unresolved purchase-option ID and US-only pricing/availability save",
     revenueCatStatus: "Blocked until Google Play product exists",
     accessCreated: "Exact event target only.",
     accessNotCreated: "Premium, VIP, subscription, paid videos, rooms, other events, payout.",
-    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+    ownerAction: "Approve exact Google Play purchase-option ID and complete US-only pricing/availability save; then create product, import in RevenueCat, and verify no Premium entitlement.",
   },
 ];
 
@@ -451,6 +451,7 @@ const checks = [
 mkdirSync(artifactDir, { recursive: true });
 const artifactPayloads = {
   "tax-legal-compliance-plan-summary.json": taxLegalCompliancePlanSummary,
+  "tax-legal-compliance-decision-matrix.json": taxLegalCompliancePlanSummary,
   "must-stop-field-matrix.json": mustStopFieldMatrix,
   "proceed-field-matrix.json": proceedFieldMatrix,
   "old-to-new-product-id-matrix.json": oldToNewProductIdMatrix,
@@ -501,11 +502,12 @@ This proof is read-only and dry-run. It made no purchases, no provider refund ca
 
 Verdict: Partial.
 
-Reason: the tax/legal/compliance provider-product plan is documented for owner review. Google Play still has only the creator channel subscription product record cw_channel_subscription_monthly_499; its monthly base plan remains missing, and the one-time products remain blocked by owner-stop provider fields such as age rating and tax/compliance confirmation. RevenueCat import/mapping remains incomplete.
+Reason: the tax/legal/compliance provider-product plan is documented for owner review. Google Play still has only the creator channel subscription product record cw_channel_subscription_monthly_499; its monthly base plan remains missing, and the production one-time products remain missing because exact purchase-option IDs and US-only pricing/availability saves still require owner/operator action. RevenueCat import/mapping remains incomplete.
 
 Files:
 
 - tax-legal-compliance-plan-summary.json
+- tax-legal-compliance-decision-matrix.json
 - must-stop-field-matrix.json
 - proceed-field-matrix.json
 - old-to-new-product-id-matrix.json
@@ -528,7 +530,7 @@ const summary = {
   productionLabeledProductsCreatedOrVerified: false,
   taxLegalCompliancePlanReadyForOwnerReview: checks.find((check) => check.id === "tax_legal_compliance_plan_present")?.ok === true,
   codexMustNotGuessTaxLegalComplianceFields: checks.find((check) => check.id === "must_stop_fields_documented")?.ok === true,
-  createdProductRecords: ["Channel Subscription"],
+  existingProductRecords: ["Channel Subscription product record"],
   readyProducts: [],
   missingOrBlockedProducts: products.filter((product) => product.flow !== "Channel Subscription").map((product) => product.flow).concat(["Channel Subscription monthly base plan"]),
   premiumUnchanged: checks.find((check) => check.id === "premium_unchanged")?.ok === true,
