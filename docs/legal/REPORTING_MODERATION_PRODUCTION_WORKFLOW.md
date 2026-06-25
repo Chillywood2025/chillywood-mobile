@@ -9,6 +9,8 @@ Chat/call moderation and notification abuse controls: Closed after validation.
 Dedicated chat_thread report target: Closed after validation.
 Chat-message hide/remove/restore: Closed after validation.
 
+Account restriction and appeals operations: Closed for current production policy and existing backed enforcement. Reports do not auto-suspend or auto-ban. Account restriction and restore are staff decisions requiring exact scope, reason, target, and audit. Appeals use support/escalation workflow in V1 and do not expose reporter identity or private evidence.
+
 This document defines the production reporting and moderation workflow for the app. It does not create a new staff role, activate money, execute refunds, or weaken existing role hierarchy protections.
 
 ## Reportable Surface Matrix

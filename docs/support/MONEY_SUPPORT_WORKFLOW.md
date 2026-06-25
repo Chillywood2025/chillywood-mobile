@@ -31,6 +31,8 @@ Content takedown decisions: Closed for production decision policy and current ba
 
 Support can explain current status, collect evidence, verify account identity through approved support process, check safe readouts, escalate to Owner/Admin, explain refund or access process, confirm that sandbox rows are not payable, and route provider-specific issues to the correct provider path. Support can correct misleading copy or missing docs by opening an internal issue.
 
+Account restriction and appeals operations: Closed for current production policy and existing backed enforcement. Support can route suspension/deactivation/restore appeals through support/escalation workflow in V1, but support is not a separate role and cannot independently suspend, deactivate, restore, purge, de-identify, refund, move money, or enable payouts. Appeals do not expose reporter identity or private evidence.
+
 Support is a work area, not a separate role. Moderator role scope: Closed. Moderator includes support duties when granted exact support scopes such as `support_inbox`, `creator_support`, `billing_support_read`, `admin.support.view`, `admin.support.manage`, `admin.payment_status.view`, or `admin.refund_status.record`. Admin may also receive support scopes when granted by Owner/First Owner. Do not create a separate Support role and do not add `support` to `platform_role_memberships`.
 
 Moderator can record manual/external refund support status only with permission. Moderator cannot issue refunds, trigger Google Play refunds, trigger RevenueCat refunds, approve payouts, move money, enable Stripe Connect, enable creator-money, enable `live_money_enabled`, or enable Premium public activation.

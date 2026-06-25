@@ -127,6 +127,8 @@ Live-room moderation and incident response: Closed for production policy, curren
 
 Chat/call moderation and notification abuse controls: Closed after validation. Dedicated chat_thread report target: Closed after validation. Chat-message hide/remove/restore: Closed after validation. Command Center chat/call evidence and call metadata are report/case scoped. There is no arbitrary private-chat browser, no staff call audio/video visibility, no call recording, and no raw push token/LiveKit token exposure. Report-linked chat-message hide/remove/restore is backed only with exact scope, reason, case/report context, audit, and evidence preservation.
 
+Account restriction and appeals operations: Closed for current production policy and existing backed enforcement. The Users read model remains inspect-only for broad account rows and does not expose generic destructive account controls. Backed account suspend/restore actions are scoped Owner/Admin support operations that require exact permission, reason, target, and audit. Unsupported broader account actions stay hidden, disabled, or escalated honestly.
+
 ## Fail-Closed Behavior
 
 Admin UI fails closed if backend functions are unavailable. Admin UI fails closed when:

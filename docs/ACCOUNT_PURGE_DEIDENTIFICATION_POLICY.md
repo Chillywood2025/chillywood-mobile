@@ -32,6 +32,8 @@ Scheduled deletion is the reversible phase.
 - The app must not describe scheduled deletion as instant permanent deletion.
 - The app must not imply provider refunds, payout changes, or live-money actions happen because deletion was scheduled.
 
+Account restriction and appeals operations: Closed for current production policy and existing backed enforcement. Suspension, deactivation, disabled status, scheduled deletion, deleted status, and purge/de-identification are separate states. Reports do not auto-suspend or auto-ban. Suspension/deactivation/restore require exact scope, reason, target, and audit. Purge/de-identification remains separate owner-controlled policy and must not be merged into normal account suspension.
+
 ## Permanent Purge / De-identification
 
 Permanent purge/de-identification is the post-restore-window phase.

@@ -109,6 +109,8 @@ The backend remains authoritative. Non-admin, disabled, deactivated, deleted, sc
 
 Admin role scope: Closed.
 
+Account restriction and appeals operations: Closed for current production policy and existing backed enforcement. Admin can suspend or restore accounts only with exact backed scope (`admin.user.suspend` / `admin.user.restore`), reason, target, and audit. Admin cannot suspend, deactivate, delete, restore, or restrict First Owner. Provider refunds remain manual/external, and payouts and money movement remain disabled.
+
 Proof validates that:
 
 - Admin is a real production role.

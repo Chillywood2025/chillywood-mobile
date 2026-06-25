@@ -74,6 +74,8 @@ Live-room moderation and incident response: Closed for production policy, curren
 
 Chat/call moderation and notification abuse controls: Closed after validation. Dedicated chat_thread report target: Closed after validation. Chat-message hide/remove/restore: Closed after validation. Moderator can review exact chat-message reports, whole-conversation `chat_thread` reports, report-linked chat-message hide/remove/restore actions, and safe call metadata only with exact scope and case/report context. Moderator cannot browse arbitrary private chats, cannot see call audio/video content, and no call recording is introduced.
 
+Account restriction and appeals operations: Closed for current production policy and existing backed enforcement. Moderator cannot perform account-wide suspension/restoration by default. Moderator may escalate account restriction or appeal cases through scoped support/moderation workflows, but cannot suspend, deactivate, delete, restore, or restrict First Owner and cannot grant account-wide restore authority to themselves.
+
 ## Private Evidence
 
 Moderator private-data access is minimum necessary and case-scoped. Moderator cannot browse arbitrary private chats, rooms, or profiles. Moderator can view private profile/room/chat evidence only with permission and case/report context. Moderator cannot view raw storage paths, signed URLs, raw IP/security context, tokens, secrets, tax IDs, bank details, provider secrets, or plaintext passcodes.
