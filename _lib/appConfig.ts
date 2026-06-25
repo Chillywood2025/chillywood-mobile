@@ -152,7 +152,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     partyWaitingRoomTitle: "Party Waiting Room",
     liveRoomTitle: "Live Room",
     partyRoomTitle: "Party Room",
-    adminTitle: "Chi'llywood Operator Center",
+    adminTitle: "Chi'llywood Admin Command Center",
     adminSubtitle: "Private platform surface for reports, moderation, roles, and launch operations.",
   },
   features: APP_RUNTIME_FEATURE_DEFAULTS,

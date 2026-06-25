@@ -13,7 +13,7 @@ First Owner authority: Closed / Partial / Blocked: Closed repo-side after migrat
 - Only First Owner can grant or revoke Owner.
 - A normal Owner cannot remove another Owner.
 - A normal Owner cannot remove the First Owner.
-- Admin, Operator, Support, Moderator, and normal users cannot grant or revoke Owner.
+- Admin, Moderator, support-scoped staff, and normal users cannot grant or revoke Owner. `operator` remains an internal backend alias for product-facing Admin; Support is a work area, not a separate role.
 - First Owner cannot remove himself as the last active Owner.
 - First Owner controls are enabled for authenticated First Owner after validation.
 

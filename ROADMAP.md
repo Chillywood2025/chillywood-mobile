@@ -1,5 +1,9 @@
 # ROADMAP
 
+## Current Role Terminology Lock
+
+Product-facing role hierarchy is locked as First Owner, Owner, Admin, Moderator, Creator, and User. Backend `operator` remains the internal alias for product-facing Admin; there is no separate product Operator role. Support is a work area and permission group, not a staff role, and must not be added to `platform_role_memberships`. Moderator is separate from Admin/operator and can receive support duties only through exact scoped permissions. Next lane: Moderator role scope including support duties.
+
 ## Current Auth Email Branding Readiness
 
 Chi'llywood now has repo-backed Supabase Auth email branding templates and app redirect handling. Production-quality Auth email sender delivery still needs external SMTP/DNS/dashboard proof before it can be called live-branded. Sender name should be `Chi'llywood`, preferred from address is `no-reply@chillywoodstream.com` or `auth@chillywoodstream.com`, support remains `support@chillywoodstream.com`, signup confirmation redirects to `chillywoodmobile://auth/callback` (legacy `chillywoodmobile://auth/confirm` is tolerated), and reset password redirects to `chillywoodmobile://reset-password`. This item is account/auth email only; it does not activate production money, payouts, Stripe Android digital checkout, LiveKit changes, or route ownership changes.

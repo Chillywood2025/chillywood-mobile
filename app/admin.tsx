@@ -2700,7 +2700,7 @@ const formatAdminOperationFailure = (error: any, fallback: string) => {
     || searchable.includes("policy")
     || code === "42501"
   ) {
-    return "This operator action is not allowed for the current backend role.";
+    return "This Admin action is not allowed for the current backend role.";
   }
 
   if (
@@ -2714,7 +2714,7 @@ const formatAdminOperationFailure = (error: any, fallback: string) => {
   }
 
   if (searchable.includes("network") || searchable.includes("fetch")) {
-    return "Network trouble interrupted the operator action. Check the connection and try again.";
+    return "Network trouble interrupted the Admin action. Check the connection and try again.";
   }
 
   return fallback;
@@ -2741,7 +2741,7 @@ const formatDmcaOperationFailure = (error: any, fallback: string) => {
     return "Missing backend piece: disable/restore is not implemented for this content type.";
   }
   if (searchable.includes("dmca_owner_or_scoped_operator_required") || searchable.includes("dmca_owner_operator_required")) {
-    return "Permission denied: Admin DMCA requires Owner or an approved Admin/Operator with dmca_review, copyright_review, or legal_review.";
+    return "Permission denied: DMCA requires Owner, Admin, or scoped Moderator access with dmca_review, copyright_review, or legal_review.";
   }
 
   return formatAdminOperationFailure(error, fallback);
@@ -4175,7 +4175,7 @@ export default function AdminStudioScreen() {
   }, [legalRequestSearch, legalRequestStatusFilter, legalRequests]);
   const selectedLegalRequest = selectedLegalRequestDetail?.request ?? legalRequests.find((request) => request.id === selectedLegalRequestId) ?? null;
   const selectedLegalTarget = legalRequestPrimaryTarget(selectedLegalRequest);
-  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Operator Center");
+  const blockedBetaCopy = getBetaAccessBlockCopy(accessState.status, "Admin Command Center");
 
   useEffect(() => {
     if (visibleOperatorTabs.length > 0 && !visibleOperatorTabs.some((tab) => tab.key === operatorTab)) {
@@ -5013,7 +5013,7 @@ export default function AdminStudioScreen() {
     }
     if (manualReviewRequired) {
       return {
-        body: "One or more backed signals requires owner/operator review before this can be called calm.",
+        body: "One or more backed signals requires Owner/Admin review before this can be called calm.",
         label: "Manual Review Required",
         tone: "danger" as AdminHomeTone,
       };
@@ -5218,7 +5218,7 @@ export default function AdminStudioScreen() {
 
     if (liveCostGuardNeedsReview && canAccessLiveOps) {
       rows.push({
-        body: "Cost pressure is observe-only unless a backed operator action is reviewed in the guard tab.",
+        body: "Cost pressure is observe-only unless a backed Admin action is reviewed in the guard tab.",
         destination: "live-cost-guard",
         label: "Live Cost Guard signal",
         priorityLabel: "Observe",
@@ -5488,9 +5488,9 @@ export default function AdminStudioScreen() {
   const homeBoundaryItems = useMemo<readonly AdminHomeBoundaryItem[]>(() => [
     {
       body: canManagePrivilegedWrites
-          ? "Platform owners manage Platform-level systems; platform operators review platform-wide safety, legal, audit, and ops queues here."
-        : "Platform ownership alone never opens this private operator surface.",
-      label: "Owner / Operator Split",
+          ? "Platform owners manage Platform-level systems; Admins review platform-wide safety, legal, audit, and ops queues here."
+        : "Platform ownership alone never opens this private Admin surface.",
+      label: "Owner / Admin Split",
       proofLabel: canManagePrivilegedWrites ? "Backed Role" : "Scope Limited",
       tone: canManagePrivilegedWrites ? "success" : "locked",
     },
@@ -6116,7 +6116,7 @@ export default function AdminStudioScreen() {
           ? auditSummary
             ? `${auditSummary.roleRecordCount} role record${auditSummary.roleRecordCount === 1 ? "" : "s"} · ${auditSummary.safetyReportCount} safety item${auditSummary.safetyReportCount === 1 ? "" : "s"} in the current bounded audit slice.`
             : "Current audit visibility is limited to role records and safety-report context already backed in repo truth."
-          : "Audit visibility stays unavailable until this signed-in identity has active owner/operator or review-capable admin truth.",
+          : "Audit visibility stays unavailable until this signed-in identity has active Owner/Admin or review-capable scoped-staff truth.",
         tone: canViewAudit ? "default" : "unavailable",
       },
     ];
@@ -6415,7 +6415,7 @@ export default function AdminStudioScreen() {
 
   const openDmcaIntake = useCallback(() => {
     if (!canAccessDmca) {
-      setDmcaNotice("Formal notice intake requires Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("Formal notice intake requires Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     setDmcaIntakeVisible(true);
@@ -6476,7 +6476,7 @@ export default function AdminStudioScreen() {
 
   const loadDmcaCaseDetail = useCallback(async (caseId: string) => {
     if (!canAccessDmca) {
-      setDmcaNotice("DMCA case details require Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("DMCA case details require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
 
@@ -6563,7 +6563,7 @@ export default function AdminStudioScreen() {
     const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
-      setDmcaNotice("DMCA admin actions require Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("DMCA admin actions require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
 
@@ -6600,7 +6600,7 @@ export default function AdminStudioScreen() {
     const reason = dmcaActionReason.trim();
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
-      setDmcaNotice("DMCA admin actions require Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("DMCA admin actions require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     if (!contentId) {
@@ -6655,7 +6655,7 @@ export default function AdminStudioScreen() {
     const reason = dmcaActionReason.trim();
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
-      setDmcaNotice("DMCA strike actions require Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("DMCA strike actions require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     if (!userId || !contentId || !reason) {
@@ -6716,7 +6716,7 @@ export default function AdminStudioScreen() {
     const reason = dmcaActionReason.trim();
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
-      setDmcaNotice("DMCA strike actions require Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("DMCA strike actions require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     if (!reason) {
@@ -6748,7 +6748,7 @@ export default function AdminStudioScreen() {
     const selectedCaseId = dmcaCaseDetail?.case.id ?? dmcaSelectedCaseId;
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
-      setDmcaNotice("Counter-notice recording requires Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("Counter-notice recording requires Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     if (!counterSubmitterName.trim() || !counterSubmitterEmail.trim() || !counterRemovedDescription.trim() || !counterRemovedLocation.trim() || !counterSignature.trim()) {
@@ -6814,7 +6814,7 @@ export default function AdminStudioScreen() {
     const reason = dmcaActionReason.trim() || "Counter-notice forwarding to claimant recorded.";
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
-      setDmcaNotice("Counter-notice actions require Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("Counter-notice actions require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     try {
@@ -6842,7 +6842,7 @@ export default function AdminStudioScreen() {
     const reason = dmcaActionReason.trim() || "Court action notice received from claimant.";
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
-      setDmcaNotice("Counter-notice actions require Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("Counter-notice actions require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     try {
@@ -6870,7 +6870,7 @@ export default function AdminStudioScreen() {
     const reason = dmcaActionReason.trim() || "No court action notice recorded within the review window.";
     if (!selectedCaseId || dmcaActionBusy) return;
     if (!canAccessDmca) {
-      setDmcaNotice("Counter-notice actions require Owner or scoped Admin/Operator copyright access.");
+      setDmcaNotice("Counter-notice actions require Owner, Admin, or scoped Moderator copyright access.");
       return;
     }
     try {
@@ -9517,7 +9517,7 @@ export default function AdminStudioScreen() {
 
   const loadCreatorGrantTarget = useCallback(async () => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to load creator grants." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to load creator grants." });
       return;
     }
 
@@ -9542,7 +9542,7 @@ export default function AdminStudioScreen() {
 
   const saveCreatorGrantTarget = useCallback(async () => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to save creator grants." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to save creator grants." });
       return;
     }
 
@@ -9604,7 +9604,7 @@ export default function AdminStudioScreen() {
 
   const saveExperienceConfigChanges = useCallback(async () => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to save global config." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to save global config." });
       return;
     }
 
@@ -9625,7 +9625,7 @@ export default function AdminStudioScreen() {
 
   const runExperienceConfigSave = useCallback(async (reason: string) => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to save global config." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to save global config." });
       return;
     }
 
@@ -9655,7 +9655,7 @@ export default function AdminStudioScreen() {
 
   const openCreate = useCallback(() => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to create platform titles." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to create platform titles." });
       return;
     }
     const nextSort = titles.reduce((acc, item) => Math.max(acc, item.sort_order ?? 0), 0) + 1;
@@ -9727,7 +9727,7 @@ export default function AdminStudioScreen() {
     successText: string,
   ) => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to update platform titles." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to update platform titles." });
       return;
     }
 
@@ -9759,7 +9759,7 @@ export default function AdminStudioScreen() {
     reason: string,
   ) => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to update platform titles." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to update platform titles." });
       return;
     }
 
@@ -9809,7 +9809,7 @@ export default function AdminStudioScreen() {
 
   const saveEditor = useCallback(() => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to save platform titles." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to save platform titles." });
       return;
     }
 
@@ -9837,7 +9837,7 @@ export default function AdminStudioScreen() {
 
   const runEditorSave = useCallback(async (reason: string) => {
     if (!canAccessContentProgramming) {
-      setNotice({ type: "error", text: "Active owner or operator role required to save platform titles." });
+      setNotice({ type: "error", text: "Active Owner or Admin role required to save platform titles." });
       return;
     }
 
@@ -11560,7 +11560,7 @@ export default function AdminStudioScreen() {
   if (authLoading || betaLoading) {
     return (
       <BetaAccessScreen
-        title="Loading operator access"
+        title="Loading Admin access"
         body="Checking whether your signed-in account has backend platform-role membership."
         operatorOnly
         loadingOverride
@@ -11571,8 +11571,8 @@ export default function AdminStudioScreen() {
   if (!isSignedIn) {
     return (
       <BetaAccessScreen
-        title="Sign in to access the Operator Center"
-        body="This private surface is limited to signed-in backend owner, operator, or moderator platform roles."
+        title="Sign in to access the Admin Command Center"
+        body="This private surface is limited to signed-in backend Owner, Admin, or Moderator platform roles."
       />
     );
   }
@@ -11603,8 +11603,8 @@ export default function AdminStudioScreen() {
           title="This account does not have an active admin role"
           body={
             moderationAccess.isLocalTestHelper
-              ? "This account is recognized by the local test helper, but Admin access requires an active owner, operator, or moderator platform role."
-              : "Admin access requires an active owner, operator, or moderator platform role."
+              ? "This account is recognized by the local test helper, but Admin access requires an active Owner, Admin, or Moderator platform role."
+              : "Admin access requires an active Owner, Admin, or Moderator platform role."
           }
           operatorOnly
         />
@@ -11704,7 +11704,7 @@ export default function AdminStudioScreen() {
                 <Text style={styles.adminHomeSummaryBody}>{homeCommandStatus.body}</Text>
               </View>
               <View style={styles.adminHomeHeroPills}>
-                <OwnerStatusPill label={`Operator ${formatModerationToken(resolvedActorRole)}`} tone={canAccessAdmin ? "info" : "locked"} />
+                <OwnerStatusPill label={`Role ${formatModerationToken(resolvedActorRole)}`} tone={canAccessAdmin ? "info" : "locked"} />
                 <OwnerStatusPill label={appConfigConnected ? "App Config Connected" : "App Config Not Connected"} tone={appConfigConnected ? "success" : "locked"} />
                 <OwnerStatusPill label={adminImmutableAuditReadModel.connected ? "Audit Connected" : "Audit Not Connected"} tone={adminImmutableAuditReadModel.connected ? "success" : "locked"} />
                 <OwnerStatusPill
@@ -11949,7 +11949,7 @@ export default function AdminStudioScreen() {
                 <Text style={styles.configKicker}>REPORTS</Text>
                 <Text style={styles.ownerPanelTitle}>Reports Triage</Text>
                 <Text style={styles.ownerPanelSubtitle}>
-                  Review platform reports and apply backed safety actions without exposing private operator data.
+                  Review platform reports and apply backed safety actions without exposing private staff data.
                 </Text>
               </View>
               <TouchableOpacity
@@ -12189,7 +12189,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>DMCA / COPYRIGHT</Text>
               <Text style={styles.configTitle}>Copyright case management</Text>
               <Text style={styles.configBody}>
-                Owner and scoped Admin/Operator workflow for notices, content actions, strikes, counter-notices, preservation, and case history. Manual email intake enabled. Automated email ingestion not configured.
+                Owner, Admin, and scoped Moderator workflow for notices, content actions, strikes, counter-notices, preservation, and case history. Manual email intake enabled. Automated email ingestion not configured.
               </Text>
             </View>
             <TouchableOpacity
@@ -12224,7 +12224,7 @@ export default function AdminStudioScreen() {
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>DMCA tooling is locked</Text>
                 <Text style={styles.configListBody}>
-                  Admin DMCA requires Owner, or an approved Admin/Operator with dmca_review, copyright_review, or legal_review. Moderators and regular users are denied by backend RLS/RPC checks.
+                  DMCA tooling requires Owner, Admin, or a scoped Moderator with dmca_review, copyright_review, or legal_review. Regular users are denied by backend RLS/RPC checks.
                 </Text>
               </View>
             </View>
@@ -13183,7 +13183,7 @@ export default function AdminStudioScreen() {
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
                 <Text style={styles.ownerSectionTitle}>Overview</Text>
-                <OwnerStatusPill label={canAccessContentProgramming ? "Operator Ready" : "Locked"} tone={canAccessContentProgramming ? "success" : "locked"} />
+                <OwnerStatusPill label={canAccessContentProgramming ? "Admin Ready" : "Locked"} tone={canAccessContentProgramming ? "success" : "locked"} />
               </View>
               <OwnerDetailGrid
                 rows={[
@@ -15610,13 +15610,13 @@ export default function AdminStudioScreen() {
             <OwnerAdminSection
               statusLabel={canAccessLiveOps ? "Configurable" : "Locked"}
               statusTone={canAccessLiveOps ? "info" : "locked"}
-              subtitle="Settings persist through owner/operator RLS and do not change normal live behavior unless explicitly enabled."
+              subtitle="Settings persist through Owner/Admin RLS and do not change normal live behavior unless explicitly enabled."
               title="Settings"
             >
               <View style={styles.configListCopy}>
                 <Text style={styles.configListTitle}>Settings</Text>
                 <Text style={styles.configListBody}>
-                  Settings persist through owner/operator RLS. Save does not enable automatic action unless the mode and enabled toggle explicitly allow it.
+                  Settings persist through Owner/Admin RLS. Save does not enable automatic action unless the mode and enabled toggle explicitly allow it.
                 </Text>
               </View>
               <View style={styles.toggleRowWrap}>
@@ -17559,7 +17559,7 @@ export default function AdminStudioScreen() {
               </Text>
             </View>
             <View style={[styles.badge, styles.badgeScheduled]}>
-              <Text style={styles.badgeText}>Operator-only</Text>
+              <Text style={styles.badgeText}>Admin-only</Text>
             </View>
           </View>
 
@@ -17582,14 +17582,14 @@ export default function AdminStudioScreen() {
               <Text style={styles.dashboardMetricLabel}>Approve / Deny</Text>
               <Text style={styles.dashboardMetricValue}>Fix Center</Text>
               <Text style={styles.dashboardMetricBody}>
-                Owner/operator approval for Live reliability incidents goes through `admin-live-ops-fix-center`; tokens still never ship in client code.
+                Owner/Admin approval for Live reliability incidents goes through the backed Live Ops Fix Center; tokens still never ship in client code.
               </Text>
             </View>
             <View style={styles.dashboardMetricCard}>
               <Text style={styles.dashboardMetricLabel}>Read API</Text>
               <Text style={styles.dashboardMetricValue}>Backend-owned</Text>
               <Text style={styles.dashboardMetricBody}>
-                The ops service exposes sanitized job list/detail endpoints for a trusted admin backend or internal operator network.
+                The ops service exposes sanitized job list/detail endpoints for a trusted Admin backend or internal operations network.
               </Text>
             </View>
           </View>
@@ -17960,7 +17960,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>EXPERIENCE CONFIG</Text>
               <Text style={styles.configTitle}>Global presentation and feature controls</Text>
               <Text style={styles.configBody}>
-                Tune homepage, feature visibility, and safe presentation defaults here. Locked product naming stays code-owned, and saving requires an active owner or operator role.
+                Tune homepage, feature visibility, and safe presentation defaults here. Locked product naming stays code-owned, and saving requires an active Owner or Admin role.
               </Text>
             </View>
             <TouchableOpacity
@@ -18716,7 +18716,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>CREATOR GRANTS</Text>
               <Text style={styles.configTitle}>Backend creator monetization permissions</Text>
               <Text style={styles.configBody}>
-                Load a creator user id, then decide whether that creator can use premium rooms, Party Pass rooms, premium titles, and sponsor/ad hooks. Active owner or operator role required.
+                Load a creator user id, then decide whether that creator can use premium rooms, Party Pass rooms, premium titles, and sponsor/ad hooks. Active Owner or Admin role required.
               </Text>
             </View>
             <TouchableOpacity
@@ -19760,7 +19760,7 @@ export default function AdminStudioScreen() {
 
                   <View style={styles.configListRow}>
                     <View style={styles.configListCopy}>
-                      <Text style={styles.configListTitle}>Owner / Operator Notes</Text>
+                      <Text style={styles.configListTitle}>Owner / Admin Notes</Text>
                       <TextInput
                         style={[styles.input, styles.multiline]}
                         placeholder="Internal case notes"
@@ -20416,7 +20416,7 @@ export default function AdminStudioScreen() {
             <Text style={styles.confirmBody}>
               {pendingCreatorVideoModeration
                 ? getReportTargetActionConfirmCopy(pendingCreatorVideoModeration.status, pendingCreatorVideoModeration.targetType)
-                : "Confirm this operator action before continuing."}
+                : "Confirm this Admin action before continuing."}
             </Text>
             {pendingCreatorVideoModeration ? (
               <View style={styles.confirmMetaBox}>

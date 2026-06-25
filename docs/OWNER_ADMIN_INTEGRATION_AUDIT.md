@@ -41,7 +41,9 @@ Recommendation: proceed toward BrowserStack prep after local validation. The onl
 
 No owner/creator surface was found to expose admin-only controls. No surface reviewed implied live money, payout, cash-out, withdrawal, transfer, or payable balances.
 
-## Admin/Operator Surface Audit
+## Admin Surface Audit
+
+Terminology lock: Admin is the product-facing role; backend `operator` remains the internal role value. Support is a work area, not a separate role, and Moderator is separate from Admin/operator while support-duty-capable through scoped permissions.
 
 | Area | Current capability | Gap/deferred state |
 | --- | --- | --- |

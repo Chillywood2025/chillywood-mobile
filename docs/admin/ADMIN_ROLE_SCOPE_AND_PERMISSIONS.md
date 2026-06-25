@@ -4,6 +4,8 @@ Status: Admin role scope: Closed.
 
 This document defines the production Admin role for the app. Admin is a real production role, not a UI label. The backend represents public Admins as active `operator` rows in `platform_role_memberships`, and operational authority is granted through explicit rows in `platform_staff_permission_grants`.
 
+Role terminology is locked in `docs/admin/ROLE_TERMINOLOGY_LOCK.md`: `operator` is only the internal/backend alias for product-facing Admin, there is no separate product Operator role, Support is a work area and permission group rather than a staff role, and Moderator is separate from Admin while support-duty-capable through exact scopes.
+
 Admin permissions are scoped and granted by Owner/First Owner. Missing permission fails closed. Backend denies non-admin and unscoped-admin attempts even if UI is bypassed.
 
 ## Owner Vs Admin
@@ -82,6 +84,8 @@ Admin can view support tickets with permission. Admin can view DMCA reports with
 Admin can record manual/external refund status only with permission. Admin cannot trigger Google Play refunds, RevenueCat refunds, Stripe refunds, payouts, withdrawals, cash-out, transfers, payable balances, creator-money switches, or `live_money_enabled`.
 
 Provider refunds remain manual/external. Premium public activation and creator-money activation remain outside Admin authority.
+
+Support is not a separate role. Support permissions are work-area scopes that can be granted to Admin or Moderator according to Owner/First Owner policy.
 
 ## Private Data Boundary
 

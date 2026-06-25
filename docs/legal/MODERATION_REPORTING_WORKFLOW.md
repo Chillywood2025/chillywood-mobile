@@ -20,6 +20,7 @@ Current operations truth:
 
 - general safety report intake, Admin Reports review, report status changes, target hide/remove/restore, immutable audit rows, Profile Photo/Profile Background reports, Profile media status actions, and non-active Profile media masking are repo-backed;
 - support/moderation/account deletion ownership is mapped by role, but launch staffing and SLA acceptance remain external;
+- Support is a work area, not a separate staff role. Moderator can handle support duties when granted exact support scopes such as `support_inbox`, `creator_support`, or `billing_support_read`.
 - outbound legal/support email remains manual until an outbound provider, DKIM, delivery proof, bounce handling, and templates are configured;
 - repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable;
 - optional disposable report lifecycle visual proof was not run because no safe disposable fixture was provided and production reports must not be faked.
@@ -67,7 +68,7 @@ Implementation gap: the current report UI maps fraud, scams, unsafe products, il
 
 ## Review Actions
 
-Moderators/operators may take one or more actions where backed:
+Moderators and Admins may take one or more actions where backed and scoped:
 
 - no action;
 - ask for more information;
@@ -113,8 +114,8 @@ Current admin tooling:
 - creator videos, profile posts, profile post comments, creator-video comments, social attachments, and Profile media can be actioned where their public read paths honor moderation/status fields;
 - Profile Photo and Profile Background can be reported from the Profile Actions sheet when the media exists; admin target actions set Profile media to `flagged`, `admin_removed`, or `active`, and public Profile reads mask non-active media;
 - DMCA cases are backed by dedicated tables for formal notices, counter-notices, content actions, strikes, and audit history;
-- Owner can always access Admin DMCA; approved Admin/operator access requires `dmca_review`, `copyright_review`, or `legal_review`; moderators and regular users are denied server-side;
-- Owner or scoped Admin/operator can list/detail DMCA cases, mark case statuses, record hide/disable/restore/rejected-no-action/preserved-evidence actions, add/remove/dispute/resolve strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view functional case history;
+- Owner can always access Admin DMCA; approved Admin access requires `dmca_review`, `copyright_review`, or `legal_review`; Moderator access requires exact DMCA/legal scopes and remains separate from Admin; regular users are denied server-side;
+- Owner, scoped Admin, or scoped Moderator can list/detail DMCA cases, mark case statuses, record hide/disable/restore/rejected-no-action/preserved-evidence actions, add/remove/dispute/resolve strikes, record counter-notices, record forwarding/court-action notices, mark restore eligibility, and view functional case history only where backed and permissioned;
 - normal users cannot access Admin DMCA case details or private reporter/uploader contact fields through the DMCA tables;
 - live backed/Admin DMCA proof passed with disposable reporter/uploader/admin/viewer accounts and safe profile-post/comment/creator-video content, including invalid notice rejection, notice creation, Admin list/detail/status, content hide/restore, public hidden/restored visibility, strike/repeat-infringer review, rejected no-strike behavior, counter-notice deadlines, court-action restore blocking, RLS/private-data denial, generic report compatibility, and proof-content cleanup;
 - production Admin DMCA/public-legal closeout proof on physical Android `R5CR120QCBF` returned `60 pass`, `0 manual_required`, and `0 failed`, including hosted public DMCA URL reachability, public form submission, private evidence attachment upload/access denial, uploader self-service counter-notice/other-user denial, Admin readback/cleanup, email-intake mode, and content mutation coverage;

@@ -1771,6 +1771,8 @@ Admin role scope: Closed after validation.
 
 Admin is a real production role backed by the existing `operator` platform staff role and scoped permission grants. Admin permissions are scoped and granted by Owner/First Owner through the existing Staff & Roles flow. Backend denies non-admin and unscoped-admin attempts even if UI is bypassed.
 
+Role terminology lock: `operator` is only the internal/backend alias for product-facing Admin. There is no separate product Operator role. Support is a work area and permission group, not a separate staff role. Moderator is separate from Admin/operator and can receive support duties through exact scoped permissions. Do not add `support` to `platform_role_memberships`.
+
 Required production truth:
 
 - Admin cannot grant or revoke Owner.
@@ -1782,6 +1784,8 @@ Required production truth:
 - Admin destructive actions require permission, reason, confirmation, and audit.
 - Broken Admin buttons are wired or honestly disabled.
 - No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
+
+Next lane: Moderator role scope including support duties.
 # Next Task
 
 ## BrowserStack Monetization E2E

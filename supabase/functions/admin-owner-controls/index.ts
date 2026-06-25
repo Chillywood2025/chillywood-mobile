@@ -41,12 +41,12 @@ const PERMISSION_TEMPLATES: Record<string, { label: string; permissions: string[
   creator_support: { label: "Creator Support", permissions: ["creator_support", "support_inbox", "user_lookup", "admin.support.view", "admin.user.view"] },
   evidence_exporter: { label: "Evidence Exporter", permissions: ["evidence_preview", "evidence_export", "legal_request_intake"] },
   dmca_reviewer: { label: "DMCA Reviewer", permissions: ["dmca_review", "copyright_review", "legal_review", "admin.dmca.view", "admin.dmca.manage"] },
-  legal_operator: { label: "Legal Operator", permissions: ["legal_ops", "legal_request_intake", "evidence_preview", "evidence_export", "legal_hold", "legal_review", "admin.chat_evidence.view"] },
+  legal_operator: { label: "Legal Admin Workflow", permissions: ["legal_ops", "legal_request_intake", "evidence_preview", "evidence_export", "legal_hold", "legal_review", "admin.chat_evidence.view"] },
   legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "evidence_preview", "dmca_review", "copyright_review", "legal_request_intake", "admin.dmca.view"] },
-  live_ops_operator: { label: "Live Ops Operator", permissions: ["live_ops", "admin.room.moderate", "admin.live.force_end"] },
+  live_ops_operator: { label: "Live Ops Admin Workflow", permissions: ["live_ops", "admin.room.moderate", "admin.live.force_end"] },
   moderator: { label: "Moderator", permissions: ["reports_review", "content_moderation", "admin.content.hide", "admin.content.restore"] },
   senior_moderator: { label: "Senior Moderator", permissions: ["reports_review", "content_moderation", "user_lookup", "admin.user.search", "admin.content.hide", "admin.content.restore"] },
-  support_agent: { label: "Support Agent", permissions: ["support_inbox", "user_lookup", "admin.support.view", "admin.user.search", "admin.user.view"] },
+  support_agent: { label: "Support Workflow", permissions: ["support_inbox", "user_lookup", "admin.support.view", "admin.user.search", "admin.user.view"] },
 };
 
 const TEMPLATE_KEYS = Object.keys(PERMISSION_TEMPLATES);
@@ -3117,7 +3117,7 @@ const dmcaAdminCanaryResults = async (
     actual: dmcaScopedGrant.error ? "dmca_review scoped grant failed." : "dmca_review scoped permission key accepted.",
     cleanupStatus: "pending proof cleanup",
     details: { error: dmcaScopedGrant.error ? redactText((dmcaScopedGrant.error as { message?: string }).message, 240) : null },
-    expected: "dmca_review can be granted as a scoped Admin/Operator permission.",
+    expected: "dmca_review can be granted as a scoped Admin or Moderator permission.",
     key: "dmca_scoped_permission_key",
     label: "DMCA scoped permission key accepted",
     section: "DMCA / Copyright",

@@ -55,7 +55,7 @@ Operational status:
 - Admin owner/scoped operator review can mark a case received, needs-more-info, under-review, content-disabled, counter-notice-received, waiting-rightsholder-response, eligible-for-restore, repeat-infringer-review, closed, rejected-no-action, or preserved-evidence;
 - supported content actions can hide, disable, restore, preserve evidence, or record no action for creator videos, profile posts, profile-post comments, creator-video comments, and social attachments;
 - live backed/Admin proof has passed for safe profile-post and creator-video hide/restore, public visibility blocking/restoration, counter-notice deadlines, court-action restore blocking, strikes, repeat-infringer review, case history, RLS/private-data denial, and production Admin case-management workflows;
-- owner can always access Admin DMCA, while approved Admin/operator access requires `dmca_review`, `copyright_review`, or `legal_review`; moderators and regular users are denied server-side;
+- owner can always access Admin DMCA, while approved Admin access backed by internal `operator` requires `dmca_review`, `copyright_review`, or `legal_review`; moderators need exact scoped permission and regular users are denied server-side;
 - proof/demo/canary cases are marked test-only and hidden from production clients;
 - live rooms and channel-level takedowns still require a separate safe moderation action unless handled by support/legal outside this tool;
 - outbound email automation is not claimed; support/admin notices may be manual and recorded in the case history.

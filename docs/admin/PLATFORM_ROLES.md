@@ -4,6 +4,8 @@ Last updated: 2026-05-22
 
 Chi'llywood platform staff roles are backed by Supabase, not by client-only email checks.
 
+Role terminology is locked in `docs/admin/ROLE_TERMINOLOGY_LOCK.md`: Admin is the product-facing role, backend `operator` is only the internal Admin alias, Moderator is separate from Admin/operator, and Support is a work area/permission group rather than a separate staff role.
+
 ## Required Bootstrap Roles
 
 - Owner: `rob2008gn@gmail.com`
@@ -18,8 +20,8 @@ The bootstrap path does not create fake auth users or passwords. The existing `h
 - Owner has full backed platform/Admin access and can add or remove Admins and Moderators.
 - Admin can access backed Admin tools allowed to Admins and can add or remove Moderators.
 - Admin cannot add Owners, remove Owners, add Admins, or remove Admins.
-- Admin DMCA/Copyright access is scoped: Owner always has access, but Admin/operator users need `dmca_review`, `copyright_review`, or `legal_review`.
-- Moderator can access backed moderation review tools only and cannot manage staff.
+- Admin DMCA/Copyright access is scoped: Owner always has access, but Admin users backed by internal `operator` need `dmca_review`, `copyright_review`, or `legal_review`.
+- Moderator can access backed moderation review tools and support-duty workflows only when exact scopes are granted, and cannot manage staff.
 - Regular users cannot access the Admin route or staff-management RPCs.
 
 At least one active Owner must always remain. Owner grants are intentionally bootstrap/manual only in this lane so a normal Admin UI action cannot accidentally create another Owner.
@@ -48,3 +50,5 @@ Live role truth is closed for the current Supabase project.
 The `202605140009` follow-up fixed a NULL actor-role permission fallthrough found during proof and revoked the accidental proof row created while verifying the boundary.
 
 This role system does not activate billing, payouts, live money, provider imports, LiveKit backend secrets, SMTP secrets, or any unsafe production action.
+
+Do not add `support` as a backend role. Support inbox, creator support, billing support read/status, DMCA support handoff, and refund/support status recording remain permission-scoped work areas that can be granted to Moderator or Admin according to Owner/First Owner policy.

@@ -46,6 +46,8 @@
 - DMCA Case Management requires Owner or Admin/operator with `dmca_review`, `copyright_review`, or `legal_review`.
 - Owner Security is Owner-only.
 
+Terminology lock: Admin is the product-facing role and backend `operator` is only the internal alias. There is no separate product Operator role. Support is a work area, not a separate role; support scopes can be granted to Moderator or Admin according to Owner/First Owner policy.
+
 ## Admin Role Scope
 
 Admin role scope: Closed.
@@ -64,13 +66,13 @@ Admin role scope: Closed.
 - No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
 
 ## Templates
-- Support Agent: `support_inbox`, `user_lookup`, `admin.support.view`, `admin.user.search`, `admin.user.view`
+- Support workflow template: `support_inbox`, `user_lookup`, `admin.support.view`, `admin.user.search`, `admin.user.view`
 - Moderator: `reports_review`, `content_moderation`, `admin.content.hide`, `admin.content.restore`
 - Senior Moderator: `reports_review`, `content_moderation`, `user_lookup`, `admin.user.search`, `admin.content.hide`, `admin.content.restore`
-- Live Ops Operator: `live_ops`, `admin.room.moderate`, `admin.live.force_end`
+- Live Ops Admin Workflow: `live_ops`, `admin.room.moderate`, `admin.live.force_end`
 - DMCA Reviewer: `dmca_review`, `copyright_review`, `legal_review`, `admin.dmca.view`, `admin.dmca.manage`
 - Legal Reviewer: `legal_review`, `evidence_preview`, `legal_request_intake`, `dmca_review`, `copyright_review`
-- Legal Operator: `legal_ops`, `legal_request_intake`, `evidence_preview`, `evidence_export`, `legal_hold`, `legal_review`, `admin.chat_evidence.view`
+- Legal Admin Workflow: `legal_ops`, `legal_request_intake`, `evidence_preview`, `evidence_export`, `legal_hold`, `legal_review`, `admin.chat_evidence.view`
 - Evidence Exporter: `evidence_preview`, `evidence_export`, `legal_request_intake`
 - Creator Support: `creator_support`, `support_inbox`, `user_lookup`, `admin.support.view`, `admin.user.view`
 

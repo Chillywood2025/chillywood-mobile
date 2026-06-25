@@ -27,6 +27,8 @@ Support categories include Premium purchase issue, paid content access issue, Wa
 
 Support can explain current status, collect evidence, verify account identity through approved support process, check safe readouts, escalate to Owner/Admin, explain refund or access process, confirm that sandbox rows are not payable, and route provider-specific issues to the correct provider path. Support can correct misleading copy or missing docs by opening an internal issue.
 
+Support is a work area, not a separate role. Moderator includes support duties when granted exact support scopes such as `support_inbox`, `creator_support`, `billing_support_read`, `admin.payment_status.view`, or `admin.refund_status.record`. Admin may also receive support scopes when granted by Owner/First Owner. Do not create a separate Support role and do not add `support` to `platform_role_memberships`.
+
 ## What Support Cannot Do
 
 Support cannot promise guaranteed payout, guaranteed refund, guaranteed access if the content or room is unsafe, guaranteed merch delivery without fulfillment proof, tax advice, legal advice, provider approval, KYC approval, cash-out, withdrawal, transfer, balance availability, or production activation. Support cannot bypass content safety, Premium gates, LiveKit authority, host approval, admin authority, or provider policy.

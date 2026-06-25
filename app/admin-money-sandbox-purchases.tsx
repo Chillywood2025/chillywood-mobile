@@ -262,7 +262,7 @@ export default function AdminMoneySandboxPurchasesScreen() {
       <View style={styles.centered}>
         <Text style={styles.title}>Sandbox tester access required</Text>
         <Text style={styles.body}>
-          This sandbox purchase proof surface is limited to active owner/operator accounts or approved internal tester sandbox accounts.
+          This sandbox purchase proof surface is limited to active Owner/Admin accounts or approved internal tester sandbox accounts.
         </Text>
         <Text style={styles.body}>{accessSummary}</Text>
       </View>

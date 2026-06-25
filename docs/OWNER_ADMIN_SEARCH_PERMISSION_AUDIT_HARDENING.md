@@ -207,6 +207,9 @@ This lane did not change:
 Admin role scope: Closed.
 
 - Admin is a real production role backed by the existing `operator` platform staff role.
+- `operator` is only the internal/backend alias for product-facing Admin; there is no separate product Operator role.
+- Support is a work area and permission group, not a separate staff role.
+- Moderator is separate from Admin/operator and can receive support duties through exact scoped permissions.
 - Admin permissions are scoped and granted by Owner/First Owner.
 - Production `admin.*` permission scopes are now available in the same scoped permission matrix.
 - Admin cannot grant or revoke Owner.
