@@ -111,7 +111,7 @@ The app now creates Android channels:
 
 `chilly_chat_calls_v2` uses `chilly_ring.wav` as its bundled native sound where Android and the installed native build support it. Messages and missed-call channels stay calmer and do not use the call ringtone.
 
-Notification tap routing already accepts `/chat/...` deep links, including an `openCall` query if the server dispatch path sends it later. This pass does not add service-role secrets to mobile code and does not log push tokens. The existing `notification-dispatch` Edge Function is still a discovery/activity dispatcher and does not yet dispatch Chi'lly Chat call pushes; a future call-push dispatcher should use `chilly_chat_calls_v2`.
+Notification tap routing accepts `/chat/...` deep links, including `openCall` context from the dedicated `chilly-chat-call-dispatch` path. This pass does not add service-role secrets to mobile code and does not log push tokens. The existing `notification-dispatch` Edge Function remains a discovery/activity dispatcher; Chi'lly Chat call pushes use the dedicated server-side call dispatch path and the `chilly_chat_calls_v2` / `chilly_chat_missed_calls` channels.
 
 ## Native Android Proof
 
@@ -177,13 +177,13 @@ Required before production claim:
 
 - Play/internal installed runtime proof for versionCode `34`
 - two-user Android proof with both users in Chi'lly Chat
-- background notification proof after backend dispatch wiring is available
+- background notification proof through the dedicated server dispatch path on a Play/internal runtime
 - BrowserStack proof if required for cross-device release evidence
 
 ## Remaining Gaps
 
 - Bundled notification sounds are configured and native Android channel creation is proved on the EAS internal APK runtime. Google Play internal AAB build and submit are complete, but Play-installed tester pickup still needs device proof from installer `com.android.vending`.
-- Background call push dispatch is channel-ready but still needs the approved server dispatch path for call invites.
+- Background call push dispatch now has the approved dedicated server dispatch path for call invites; remaining work is Play/internal two-user runtime proof, background/locked-device proof, and channel migration readback.
 - Two-user device proof is required to prove recipient incoming sheet, accept/decline, and missed-card behavior.
 - BrowserStack proof remains pending.
 - Dynamic downloaded sounds are intentionally not promised for Android background push notifications in V1.

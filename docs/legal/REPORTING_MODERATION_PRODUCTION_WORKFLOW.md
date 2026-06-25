@@ -5,6 +5,7 @@ Dedicated event report affordance: Closed after validation.
 Exact chat-message report affordance: Closed after validation.
 Content takedown decisions: Closed for production decision policy and current backed enforcement after validation.
 Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation.
+Chat/call moderation and notification abuse controls: Partial for direct message hide/remove/restore mutation; Closed for current production reporting, evidence-access policy, blocked/restricted account denial, call/ring dedupe, chat-send rate limiting, attachment scan gating, notification privacy, and proof after validation.
 
 This document defines the production reporting and moderation workflow for the app. It does not create a new staff role, activate money, execute refunds, or weaken existing role hierarchy protections.
 
@@ -35,12 +36,14 @@ This document defines the production reporting and moderation workflow for the a
 Users can report profiles, Profile media, Platform content, videos, paid videos, live rooms, chat messages, comments, replies, events, and VIP/subscriber content where the surface exists.
 Event reports target the specific event.
 Chat-message reports target the exact message with thread context.
+Specific chat messages can be reported. Thread-level reports are supported where safely wired, or documented as follow-up. Current whole-thread coverage is a participant/thread-context report; a dedicated `chat_thread` target remains a future exact lane if needed.
 Reporter identity remains private by default.
 Reported users are not notified merely because a report was filed.
 Reported events/messages are not auto-deleted.
 Urgent categories route to escalation/review.
 Duplicate/false reports remain deduped and rate-limited.
 Private evidence access remains staff-scoped and case/report-context-only.
+Staff private chat evidence access requires exact scope and case/report context. Moderators/Admins cannot browse arbitrary private chats. Blocked users cannot message, call, or ring each other. Disabled/deleted/scheduled-deletion users fail closed for chat and calls. Call/ring notifications are deduped or rate-limited. Chat sends are rate-limited or documented as follow-up. Support/moderation staff can see safe call metadata only with scope/context. Support/moderation staff cannot see call audio/video content. No call recording is introduced. Attachments remain scan-gated. Reported attachments remain evidence-preserved and case-scoped.
 Takedowns require exact scope, reason, case/report context where applicable, and audit. Hide/quarantine/restrict is preferred over hard delete. Evidence is preserved for moderation, DMCA/legal, security, payment/access disputes, and appeals.
 
 ## Category And Severity Model

@@ -6,6 +6,8 @@ This document covers Live Watch-Party, Watch-Party Live, Live Stage, Party Room,
 
 LiveKit token issuer remains source of truth for publish authority. Moderator actions cannot grant publish authority accidentally. Host/authorized seat approval remains separate from staff moderation. Blocked, disabled, deleted, scheduled-deletion, and suspended users fail closed. Force-end/remove/mute/revoke actions require exact scope, reason, and audit where backed. Live safety reports route to live-safety queue. Urgent live safety categories escalate differently. Passive viewers remain separate from active publishers. Participant caps remain enforced after moderation actions. Reconnect/refresh does not bypass moderation state. Stale room handling remains protected. Reporter identity remains private. No LiveKit tokens, raw room URLs, signed URLs, raw IPs, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
 
+Chat/call moderation and notification abuse controls do not weaken LiveKit authority. Chi'lly Chat call invites and call/ring notifications are support-safe metadata only; they do not grant publish authority, do not expose LiveKit tokens, do not introduce call recording, and do not give staff access to call audio/video content.
+
 ## Live Moderation Authority Matrix
 
 | Surface / actor | Can join? | Can publish? | Can request seat? | Can approve seat? | Can deny seat? | Can mute? | Can remove? | Can force-end? | Who can act? | Required permission scope | Reason required? | Report/case context required? | Audit required? | Evidence preserved? | Public copy shown | Fail-closed rule |

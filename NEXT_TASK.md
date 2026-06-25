@@ -89,6 +89,42 @@ Status:
 - Owner action items: apply the migration before production use; if production has multiple active Owners and no marker, select one existing active Owner as First Owner through the approved backend path; perform live Owner grant/revoke/succession proof only with owner-approved safe target accounts.
 - Safety confirmation: No real owner/admin/staff roles changed during repo proof; no provider dashboard mutation; no Google Play product/base-plan mutation; no RevenueCat mapping change; no Premium public activation; no creator-money switches enabled; no `live_money_enabled`; no payouts/payable balances/withdrawals/cash-out/transfers; no Stripe payout/merch; no provider refunds; no RLS/auth/LiveKit/scan/abuse/block weakening; no plaintext passcodes stored; no raw IP/token/signed URL exposure added.
 
+### Chat / Call Moderation And Notification Abuse Lane
+
+- [x] Production chat/call moderation and notification abuse controls documented and proved repo-side.
+
+Status:
+- Verdict: Partial for direct message hide/remove/restore mutation; Closed for current production reporting, evidence-access policy, blocked/restricted account denial, call/ring dedupe, chat-send rate limiting, attachment scan gating, notification privacy, and proof after validation.
+- Docs: `docs/chat/CHAT_CALL_MODERATION_NOTIFICATION_ABUSE.md`
+- Proof script: `scripts/proof-chat-call-moderation-notification-abuse.mjs`
+- Guard: `scripts/guard-chat-call-moderation-notification-policy.mjs`
+- Required wording:
+  - Chat/call moderation and notification abuse controls: Closed / Partial / Blocked.
+  - Specific chat messages can be reported.
+  - Thread-level reports are supported where safely wired, or documented as follow-up.
+  - Staff private chat evidence access requires exact scope and case/report context.
+  - Moderators/Admins cannot browse arbitrary private chats.
+  - Blocked users cannot message, call, or ring each other.
+  - Disabled/deleted/scheduled-deletion users fail closed for chat and calls.
+  - Call/ring notifications are deduped or rate-limited.
+  - Chat sends are rate-limited or documented as follow-up.
+  - Support/moderation staff can see safe call metadata only with scope/context.
+  - Support/moderation staff cannot see call audio/video content.
+  - No call recording is introduced.
+  - Attachments remain scan-gated.
+  - Reported attachments remain evidence-preserved and case-scoped.
+  - No private message bodies, reporter identity, raw storage paths, signed URLs, raw IPs, tokens, push tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
+- Current behavior:
+  - Exact chat-message reports are wired through the shared report workflow as `chat_message` with thread/message context.
+  - Thread-level reporting is covered by participant/thread-context reporting; a dedicated `chat_thread` target remains a future exact lane if product needs whole-thread targeting.
+  - Staff private chat evidence is scope/case/report constrained through `admin.chat_evidence.view` policy; no arbitrary staff private-chat browser is added.
+  - Admin/Moderator direct chat-message hide/remove/restore is not backed by the current report target-action allowlist and remains a future exact backend lane; reports can still be reviewed, dismissed, escalated, and preserved.
+  - Blocked/restricted users fail closed for chat sends and call/ring dispatch through backend guards, triggers, RLS, and Edge Function checks.
+  - Call/ring notifications use server-side dedupe, safe payloads, delivery attempt audit, receipt reconciliation, sanitized errors, and token fingerprint/status readback only.
+  - Attachments remain scan-gated and thread-scoped; reported attachments remain evidence-preserved and case-scoped.
+- Next lane recommendation: Continue production readiness with account suspension/deactivation and appeals operations.
+- Safety confirmation: No arbitrary staff private-chat browsing, unsafe message-body exposure, call recording, staff call audio/video visibility, blocked-user denial weakening, disabled/deleted/scheduled-deletion denial weakening, attachment scan weakening, LiveKit authority weakening, moderator publish-authority escalation, reporter identity exposure, token/raw URL/raw IP/push-token exposure, staff-role change, money/provider/payout activation, provider dashboard mutation, Google Play/RevenueCat mutation, RLS/auth/scan/abuse/block weakening, or First Owner touch.
+
 Purpose:
 
 This section tracks the remaining production-readiness proof lanes in grouped waves. The original 0–17 items are preserved inside these waves. Codex must work one wave at a time, report honestly, and check items off only when proof is complete.

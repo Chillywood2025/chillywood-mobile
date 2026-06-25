@@ -125,6 +125,8 @@ Content takedown decisions: Closed for production decision policy and current ba
 
 Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation. Command Center live tools are incident/readback/escalation surfaces unless a backed live action exists. Force-end/remove/mute/revoke controls must require exact live scope, reason, report/case context where applicable, and audit. Staff UI must not grant LiveKit publish authority, bypass host/seat approval, weaken participant caps, revive stale rooms, or expose LiveKit tokens/raw room URLs.
 
+Chat/call moderation and notification abuse controls: Partial for direct message hide/remove/restore mutation; Closed for current production reporting, evidence-access policy, blocked/restricted account denial, call/ring dedupe, chat-send rate limiting, attachment scan gating, notification privacy, and proof after validation. Command Center chat/call evidence and call metadata are report/case scoped. There is no arbitrary private-chat browser, no staff call audio/video visibility, no call recording, and no raw push token/LiveKit token exposure. Unsupported direct chat-message mutation remains honestly unavailable/escalated until an exact backend lane exists.
+
 ## Fail-Closed Behavior
 
 Admin UI fails closed if backend functions are unavailable. Admin UI fails closed when:

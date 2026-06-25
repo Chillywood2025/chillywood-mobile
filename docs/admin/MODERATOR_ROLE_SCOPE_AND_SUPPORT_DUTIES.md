@@ -72,6 +72,8 @@ Content takedown decisions: Closed for production decision policy and current ba
 
 Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation. Moderator can triage live safety reports, escalate urgent incidents, and use backed live moderation actions only with exact live scopes and case/report context. Moderator actions cannot grant publish authority accidentally; LiveKit token issuer remains source of truth, host/authorized seat approval remains separate from staff moderation, participant caps remain enforced, and blocked, disabled, deleted, scheduled-deletion, and suspended users fail closed.
 
+Chat/call moderation and notification abuse controls: Partial for direct message hide/remove/restore mutation; Closed for current production reporting, evidence-access policy, blocked/restricted account denial, call/ring dedupe, chat-send rate limiting, attachment scan gating, notification privacy, and proof after validation. Moderator can review exact chat-message reports and safe call metadata only with exact scope and case/report context. Moderator cannot browse arbitrary private chats, cannot see call audio/video content, and no call recording is introduced.
+
 ## Private Evidence
 
 Moderator private-data access is minimum necessary and case-scoped. Moderator cannot browse arbitrary private chats, rooms, or profiles. Moderator can view private profile/room/chat evidence only with permission and case/report context. Moderator cannot view raw storage paths, signed URLs, raw IP/security context, tokens, secrets, tax IDs, bank details, provider secrets, or plaintext passcodes.
