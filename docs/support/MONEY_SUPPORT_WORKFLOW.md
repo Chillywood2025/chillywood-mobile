@@ -25,6 +25,8 @@ Support categories include Premium purchase issue, paid content access issue, Wa
 
 Fraud/payment concerns submitted through the report sheet route to money/refund/access support as a separated work area. Reporting and moderation workflow: Closed after validation. Reporter identity stays private by default, reported users are not notified merely because a report was filed, and payment/access reports do not execute provider refunds or money movement.
 
+Content takedown decisions: Closed for production decision policy and current backed enforcement after validation. Paid-access history is preserved when content is hidden, removed, restricted, canceled, unavailable, malware-blocked, DMCA-disabled, or otherwise inaccessible. Takedown does not execute provider refunds, enable payouts, move money, or create payable balances. Support can review access/refund status and record manual/external refund support status only with exact permission.
+
 ## What Support Can Do
 
 Support can explain current status, collect evidence, verify account identity through approved support process, check safe readouts, escalate to Owner/Admin, explain refund or access process, confirm that sandbox rows are not payable, and route provider-specific issues to the correct provider path. Support can correct misleading copy or missing docs by opening an internal issue.

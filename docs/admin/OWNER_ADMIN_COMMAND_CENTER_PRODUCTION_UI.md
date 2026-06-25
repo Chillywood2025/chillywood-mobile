@@ -121,6 +121,8 @@ Reporting and moderation workflow: Closed after validation. The Command Center R
 
 Reports can be marked reviewed, dismissed, escalated, or actioned against supported targets only with reason and audit. Reported items are reviewed before action unless high-risk policy requires urgent temporary hiding/escalation. No reporter identity, raw storage paths, signed URLs, raw IPs, tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
 
+Content takedown decisions: Closed for production decision policy and current backed enforcement after validation. Target actions remain report-linked, scoped, reason-required, and audited. Unsupported target actions are honestly disabled or escalated; standalone manual mutation remains locked because immutable audit requires a selected `safety_reports` row. Paid-content takedown preserves access history and routes refund/access questions through manual/external support without provider refund execution, payout movement, or money activation.
+
 ## Fail-Closed Behavior
 
 Admin UI fails closed if backend functions are unavailable. Admin UI fails closed when:

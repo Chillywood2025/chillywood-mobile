@@ -3,6 +3,7 @@
 Reporting and moderation workflow: Closed after validation.
 Dedicated event report affordance: Closed after validation.
 Exact chat-message report affordance: Closed after validation.
+Content takedown decisions: Closed for production decision policy and current backed enforcement after validation.
 
 This document defines the production reporting and moderation workflow for the app. It does not create a new staff role, activate money, execute refunds, or weaken existing role hierarchy protections.
 
@@ -39,6 +40,7 @@ Reported events/messages are not auto-deleted.
 Urgent categories route to escalation/review.
 Duplicate/false reports remain deduped and rate-limited.
 Private evidence access remains staff-scoped and case/report-context-only.
+Takedowns require exact scope, reason, case/report context where applicable, and audit. Hide/quarantine/restrict is preferred over hard delete. Evidence is preserved for moderation, DMCA/legal, security, payment/access disputes, and appeals.
 
 ## Category And Severity Model
 
@@ -93,7 +95,7 @@ Duplicate/false reports are deduped and rate-limited. The app preflights exact r
 
 ## Auto-Hide Vs Review Policy
 
-Reported items are reviewed before action unless high-risk policy requires urgent temporary hiding/escalation. A report submission never self-executes content deletion, user banning, or public report-detail exposure. Target hide/remove/restore actions require exact staff scope, reason text, selected report, audit, and supported target type. Unsupported target actions fail closed.
+Reported items are reviewed before action unless high-risk policy requires urgent temporary hiding/escalation. A report submission never self-executes content deletion, user banning, or public report-detail exposure. Target hide/remove/restore actions require exact staff scope, reason text, selected report, audit, and supported target type. Unsupported target actions fail closed. Content takedown decisions are governed by `docs/legal/CONTENT_TAKEDOWN_DECISIONS.md`.
 
 ## Appeals
 

@@ -68,6 +68,8 @@ Reporter identity stays private by default. Reported users are not notified mere
 
 Normal reports, DMCA/legal, support, money/refund/access support, security incidents, and appeals remain separated. Duplicate/false reports are deduped and rate-limited. No reporter identity, raw storage paths, signed URLs, raw IPs, tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
 
+Content takedown decisions: Closed for production decision policy and current backed enforcement after validation. Reports do not auto-delete content. Takedowns require exact scope, reason, case/report context where applicable, and audit. Hide/quarantine/restrict is preferred over hard delete. Evidence is preserved for moderation, DMCA/legal, security, payment/access disputes, and appeals. Moderator can hide/remove/restore only with exact content scopes and only where the backend target action is supported; unsupported targets are escalated to Admin/Owner, legal, live ops, support, or a future exact backend lane.
+
 ## Private Evidence
 
 Moderator private-data access is minimum necessary and case-scoped. Moderator cannot browse arbitrary private chats, rooms, or profiles. Moderator can view private profile/room/chat evidence only with permission and case/report context. Moderator cannot view raw storage paths, signed URLs, raw IP/security context, tokens, secrets, tax IDs, bank details, provider secrets, or plaintext passcodes.
