@@ -6,23 +6,32 @@
 
 - [x] Seven-flow production switchboard readiness
 - [x] Seven-flow production prep readiness
+- [x] Seven-flow provider verification readiness
 
 Status:
 - Verdict: Partial
 - Docs: `docs/SEVEN_FLOW_PRODUCTION_SWITCHBOARD.md`
 - Production prep docs: `docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md`
+- Provider verification docs: `docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md`
 - Proof script: `scripts/proof-seven-flow-production-switchboard.mjs`
 - Production prep proof script: `scripts/proof-seven-flow-production-prep.mjs`
+- Provider verification proof script: `scripts/proof-seven-flow-provider-verification.mjs`
 - Required classification:
   - Seven-flow app-side proof: Closed
   - Seven-flow production switchboard: Partial
   - Seven-flow production prep: Partial
+  - Seven-flow provider verification: Blocked
+  - All activation switches remain OFF
   - Premium-first launch candidate: Pending owner activation/provider final check
   - Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval
+  - Creator-money flows remain OFF by default
   - Real-money activation: Off by default unless owner explicitly enables each flow
   - Creator payouts: Off unless separate payout lane enables them
+  - Creator payouts remain OFF
   - Provider refunds: Manual/external unless separate provider-refund lane enables automation
-- Result: Explicit switches are cataloged for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass; existing backend money kill switches remain the enforcement foundation; production-prep provider mapping, owner activation checklist, Premium-first plan, creator-money future activation plan, support/refund/dispute policy, monitoring/readback expectations, and rollback matrices are documented; `live_money_enabled` and `payouts_enabled` remain off; Premium purchase remains closed by default; provider production activation remains blocked pending owner/provider approval.
+  - Provider refunds remain manual/external
+  - Production provider products are verified only where dashboard/API evidence exists
+- Result: Explicit switches are cataloged for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass; existing backend money kill switches remain the enforcement foundation; production-prep provider mapping, owner activation checklist, Premium-first plan, creator-money future activation plan, support/refund/dispute policy, monitoring/readback expectations, rollback matrices, and provider verification blockers are documented; local product/config matches are proved; current production Google Play Console and RevenueCat dashboard/API evidence was not available, so provider verification remains blocked by provider access; `live_money_enabled` and `payouts_enabled` remain off; Premium purchase remains closed by default; provider production activation remains blocked pending owner/provider approval.
 - Safety confirmation: No live money, creator payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, Premium product changes, Premium gate weakening, RLS weakening, LiveKit authority changes, participant-cap changes, auth/reset changes, scan-gate weakening, abuse-throttle removal, or block-enforcement removal.
 
 Purpose:

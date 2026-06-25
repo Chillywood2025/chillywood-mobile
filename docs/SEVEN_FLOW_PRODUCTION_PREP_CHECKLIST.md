@@ -12,6 +12,8 @@ Seven-flow production switchboard: Partial.
 
 Seven-flow production prep: Partial. The flows are prepared behind explicit switches with documented provider mappings, owner activation steps, support/refund/dispute policy, monitoring/readback expectations, and rollback paths. Production activation remains blocked until owner approval and production provider verification are complete per flow.
 
+Seven-flow provider verification: Blocked. Current production Google Play Console and RevenueCat dashboard/API evidence was not available in the provider-verification lane. Local app/config product IDs and switch defaults are proved; production provider products are verified only where dashboard/API evidence exists.
+
 Real-money activation: Off by default unless owner explicitly enables each flow.
 
 Creator payouts: Off unless separate payout lane enables them.

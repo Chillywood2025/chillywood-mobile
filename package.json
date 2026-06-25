@@ -25,6 +25,7 @@
     "proof:password-reset-provider": "node ./scripts/proof-password-reset-provider.mjs",
     "proof:seven-flow-production-switchboard": "node ./scripts/proof-seven-flow-production-switchboard.mjs",
     "proof:seven-flow-production-prep": "node ./scripts/proof-seven-flow-production-prep.mjs",
+    "proof:seven-flow-provider-verification": "node ./scripts/proof-seven-flow-provider-verification.mjs",
     "proof:launch-candidate-installed": "node ./scripts/proof-launch-candidate-installed.mjs",
     "proof:watch-party-seat-request": "node ./scripts/proof-watch-party-seat-request.mjs",
     "proof:live-stage-seat-approval": "node ./scripts/proof-live-stage-seat-approval.mjs",

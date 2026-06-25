@@ -62,15 +62,25 @@ Latest seven-flow production prep proof artifact:
 
 - `/tmp/app-seven-flow-production-prep-proof-20260625-025426/`
 
+Latest seven-flow provider verification proof artifact:
+
+- `/tmp/app-seven-flow-provider-verification-proof-20260625-031618/`
+
 Seven-flow money classification:
 
 - Seven-flow app-side proof: Closed.
 - Seven-flow production switchboard: Partial.
+- Seven-flow provider verification: Blocked.
+- All activation switches remain OFF.
 - Premium-first launch candidate: Pending owner activation/provider final check.
 - Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval.
+- Creator-money flows remain OFF by default.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
+- Creator payouts remain OFF.
 - Provider refunds: Manual/external unless separate provider-refund lane enables automation.
+- Provider refunds remain manual/external.
+- Production provider products are verified only where dashboard/API evidence exists.
 - Production activation is not claimed for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, or Event Pass until owner decision and provider production product approval/mapping are proved.
 
 ## Wave Summary
