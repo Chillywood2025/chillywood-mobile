@@ -8,6 +8,8 @@ This lane investigates the shared Google Play subscription base-plan blocker aff
 
 Premium monthly: Verified. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Premium public activation remains OFF. Creator-money switches remain OFF. Creator payouts remain OFF. Stripe payout/merch remains OFF. Provider refunds remain manual/external. No creator-money product maps to Premium. Support escalation packet prepared.
 
+Research update: `docs/GOOGLE_PLAY_BASE_PLAN_ROOT_CAUSE_RESEARCH.md` ranks the most likely cause as a Google Play Console provider-side UI/backend state validation blocker, with hidden draft/base-plan state and hidden permission/merchant/tax constraints as secondary possibilities that require owner/admin or Google Support confirmation. The research update was read-only and did not retry saving any form.
+
 ## Official Provider Rules Checked
 
 - Google Play subscriptions are composed of subscription products, base plans, and offers. Source: https://support.google.com/googleplay/android-developer/answer/12154973
@@ -176,6 +178,36 @@ Questions for Google Support:
 5. Is this a Play Console UI validation bug?
 6. Should either product be recreated, and what are the risks for the active `premium_subscription:monthly` product if Premium remains under the same subscription?
 7. Can Google clear stale failed draft state for the affected Add base plan forms?
+8. Can Google inspect backend subscription/base-plan state for `premium_subscription` and `cw_channel_subscription_monthly_499` and confirm whether any hidden draft/base-plan objects exist?
+9. Can Google confirm whether a hidden merchant, tax/compliance, or permission issue can make valid base-plan IDs appear invalid before Save?
+10. Would Android Publisher API readback show the hidden state causing this issue, and is read-only API inspection recommended before any product recreation?
+
+Most likely root cause ranking from research:
+
+1. Google Play provider-side UI/backend state validation blocker.
+2. Hidden draft/ghost base-plan state or backend product-state conflict.
+3. Exact account role/permission limitation not visible in the form.
+4. Hidden merchant/payments profile or tax/compliance limitation.
+5. Parent product detail incompleteness.
+6. Region/pricing order issue.
+7. Browser/session UI cache issue.
+8. RevenueCat dependency: ruled out as root cause because RevenueCat cannot create Google Play base plans.
+
+Steps already tried:
+
+- Read-only inspection of Play Console monetization setup and users/permissions pages.
+- Read-only parent product inspection for `premium_subscription` and `cw_channel_subscription_monthly_499`.
+- Prior non-saving Base plan ID validation probes using valid-format IDs across both affected products.
+- Prior safe form attempts reached approved period/region/price values but failed with `Your changes couldn't be saved`.
+- RevenueCat readback confirmed annual/channel subscription products remain absent because Google Play base plans do not exist.
+
+Steps intentionally not tried without owner approval:
+
+- No new Save/Create/Apply/Activate/Submit action.
+- No provider product recreation, archive, delete, or replacement ID creation.
+- No Android Publisher API read/write call.
+- No support ticket submission by Codex.
+- No RevenueCat mapping change.
 
 ## Owner Action List
 
