@@ -405,6 +405,11 @@ const isProfilePostEngageable = (post: ProfilePost) => (
   && post.moderationStatus === "clean"
 );
 
+const shouldShowOwnerDraftMarker = (
+  isSelfProfile: boolean,
+  post: { visibility?: string },
+) => isSelfProfile && post.visibility === "draft";
+
 const formatEngagementCount = (count: number, singular: string, plural: string) => {
   const normalizedCount = Math.max(0, Math.floor(Number(count) || 0));
   if (normalizedCount <= 0) return "";
@@ -3497,6 +3502,11 @@ export default function ProfileScreen() {
             <AppText scale="subhead" style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</AppText>
             <AppText scale="caption" style={styles.feedPostMeta}>{formatProfilePostDate(post.createdAt)}</AppText>
           </View>
+          {shouldShowOwnerDraftMarker(isSelfProfile, post as ProfilePost & { visibility: "public" | "draft" }) ? (
+            <View style={styles.feedDraftBadge}>
+              <AppText scale="caption" style={styles.feedDraftBadgeText}>DRAFT</AppText>
+            </View>
+          ) : null}
           {isSelfProfile && post.moderationStatus === "reported" ? (
             <View style={styles.feedDraftBadge}>
               <AppText scale="caption" style={styles.feedDraftBadgeText}>REPORTED</AppText>
