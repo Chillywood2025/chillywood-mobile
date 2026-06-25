@@ -200,17 +200,21 @@ const matrix = {
     "Keep support/refund copy manual/external, or open a future provider-refund integration proof lane.",
   ),
   permanentPurgeDeidentification: status(
-    finalDoc.includes("Closed for proof-account policy implementation") && purgePolicyDoc.includes("Verdict: Closed for proof-account policy implementation")
+    finalDoc.includes("Closed for controlled production path") &&
+      purgePolicyDoc.includes("Verdict: Closed for controlled production path")
       ? "Pass"
       : "Pending policy decision",
-    finalDoc.includes("Closed for proof-account policy implementation") && purgePolicyDoc.includes("Verdict: Closed for proof-account policy implementation")
-      ? "Proof-account purge/de-identification policy implementation is closed. No real-user broad auto-purge job or legal compliance claim is made."
+    finalDoc.includes("Closed for controlled production path") &&
+      purgePolicyDoc.includes("Verdict: Closed for controlled production path")
+      ? "Controlled single-user production purge/de-identification is closed for eligible expired scheduled-deletion accounts. Batch auto-purge remains disabled/default-off, and no legal compliance claim is made."
       : "Permanent purge/de-identification is not implemented/proved. Current proved account lifecycle covers scheduled deletion, restore/cancel, public hiding, disabled access denial, and admin/operator suspend/restore.",
-    finalDoc.includes("Closed for proof-account policy implementation") && purgePolicyDoc.includes("Verdict: Closed for proof-account policy implementation")
+    finalDoc.includes("Closed for controlled production path") &&
+      purgePolicyDoc.includes("Verdict: Closed for controlled production path")
       ? ""
       : "Owner/legal must decide whether permanent purge is required before broad public launch or accepted as a post-launch/manual legal-request policy.",
-    finalDoc.includes("Closed for proof-account policy implementation") && purgePolicyDoc.includes("Verdict: Closed for proof-account policy implementation")
-      ? "Keep owner/legal review for any broader production automation or legal compliance promise."
+    finalDoc.includes("Closed for controlled production path") &&
+      purgePolicyDoc.includes("Verdict: Closed for controlled production path")
+      ? "Keep owner/legal review for any broader batch automation or legal compliance promise."
       : "Record owner/legal decision.",
   ),
 };

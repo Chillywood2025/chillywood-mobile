@@ -83,7 +83,7 @@ for (const route of publicLegalRoutes) {
   "Wave 5.1 — Disabled/Deactivated Access + Admin Suspend Proof",
   "password reset/auth email provider proof",
   "real provider refund execution",
-  "proof-account purge/de-identification",
+  "controlled account purge/de-identification",
 ].forEach((needle) => expectText("known_blockers", needle, nextTask, needle, "Final Go/No-Go blocker visibility"));
 
 expectText("legal_copy", "refund support no guarantee posture", refundSupport, "without promising outcomes", "Refund copy consistency");
@@ -180,8 +180,8 @@ const result = {
     {
       blocker: "permanent purge/de-identification policy",
       type: "account lifecycle proof",
-      launchImpact: "Closed for proof-account implementation; no real-user broad auto-purge job or legal compliance claim is made.",
-      status: "Closed for proof-account policy implementation",
+      launchImpact: "Closed for controlled production path; batch auto-purge remains disabled/default-off and no legal compliance claim is made.",
+      status: "Closed for controlled production path",
     },
   ],
 };

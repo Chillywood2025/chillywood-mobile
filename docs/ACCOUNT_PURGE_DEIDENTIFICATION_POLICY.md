@@ -2,15 +2,19 @@
 
 ## Status
 
-Verdict: Closed for proof-account policy implementation as of June 24, 2026.
+Verdict: Closed for controlled production path as of June 25, 2026.
 
-Current proved behavior covers scheduled deletion, restore/cancel, public Profile/Platform hiding, disabled/deactivated private-feature denial, and admin/operator suspend/restore. This policy defines the narrower post-restore-window behavior that starts after the restore window ends.
+Current proved behavior covers scheduled deletion, restore/cancel, public Profile/Platform hiding, disabled/deactivated private-feature denial, admin/operator suspend/restore, proof-account de-identification, and controlled single-user production purge/de-identification for expired scheduled-deletion accounts.
 
 This document is not a legal compliance claim. It records the implementation and proof boundary for the app. Any broader legal retention, permanent deletion, or de-identification promise still requires owner/legal approval.
 
 Latest proof artifact:
 
 - `/tmp/app-account-purge-deidentification-proof-20260624233257/`
+
+Latest production enablement proof artifact:
+
+- `/tmp/app-account-purge-production-enable-proof-20260625000935/`
 
 ## Scheduled Deletion
 
@@ -37,11 +41,11 @@ Permanent purge/de-identification is the post-restore-window phase.
 - It keeps public Profile and public Platform hidden/fail-closed.
 - It keeps private-feature access denied.
 
-No automatic broad production purge job is enabled by this lane.
+Permanent purge/de-identification is production-capable only through a controlled admin/operator path and/or an explicitly enabled job. No broad auto-purge runs by default.
 
 ## Retained Data Categories
 
-These categories are retained unless a later owner/legal policy explicitly approves a narrower deletion path:
+Some records may be retained for security, fraud prevention, legal, transaction, support, audit, DMCA, or dispute reasons. These categories are retained unless a later owner/legal policy explicitly approves a narrower deletion path:
 
 - Payment/provider transaction records.
 - Refund, chargeback, access-grant, and entitlement audit.
@@ -73,6 +77,24 @@ The current proof-account implementation de-identifies or removes:
 
 The implementation does not physically delete auth provider records, support/report/DMCA records, admin audit logs, payment/provider records, creator media objects, or storage objects.
 
+## Production Controls
+
+Production-capable purge is controlled by:
+
+- dry-run default;
+- owner/operator-only single-user RPC;
+- restore-window expiry requirement;
+- protected owner/operator/moderator denial;
+- active sandbox tester/protected tester denial;
+- emergency stop runtime config;
+- single-user enable flag;
+- batch enable flag that is default-off;
+- explicit call-time batch enable requirement;
+- sanitized audit readback;
+- idempotent already-deidentified result.
+
+Batch auto-purge remains disabled/default-off. It is not enabled in this lane.
+
 ## Manual / Legal Process
 
 Some categories remain manual or policy-controlled:
@@ -80,18 +102,19 @@ Some categories remain manual or policy-controlled:
 - Provider-side identity, billing, refund, chargeback, and store records.
 - Auth-provider deletion beyond local restriction/de-identification.
 - Storage-object deletion where content may be needed for legal, safety, DMCA, fraud, or another user's record.
-- Permanent purge for non-proof production users.
+- Batch purge for production users.
 - Any data category subject to legal hold, fraud review, abuse investigation, payment dispute, or DMCA retention.
 
-The support/legal path should review these manually until owner/legal approves an automated production job. The proof RPC is intentionally proof-account scoped and must not be treated as a general production purge worker.
+The support/legal path should review these manually until owner/legal approves an automated production job. The controlled single-user production path is available for eligible expired scheduled-deletion accounts; the proof-only RPC remains proof-account scoped and must not be treated as a general production purge worker.
 
 ## Safety Requirements
 
 The purge/de-identification path must:
 
 - Deny active-account purge.
-- Deny restore-window purge unless the target is a dedicated disposable proof account and proof override is explicitly requested.
+- Deny restore-window purge for production accounts.
 - Deny owner/admin/operator/moderator account purge.
+- Deny active sandbox tester/protected tester purge.
 - Deny non-admin callers.
 - Retain audit/support/DMCA/payment records.
 - Preserve public Profile/Platform fail-closed behavior.
@@ -103,6 +126,8 @@ The purge/de-identification path must:
 ## Proof Boundary
 
 The proof harness creates or uses a dedicated disposable purge proof account, adds safe sample records, schedules deletion, proves deny states, runs a dry-run, and only then runs proof-account de-identification with explicit `--run --proof-only`.
+
+The production enablement harness creates a dedicated disposable proof account, schedules deletion, expires the restore window only for that proof account, proves dry-run eligibility, proves controlled single-user purge, proves idempotency, proves active/restore-window/protected/non-admin denial, proves batch mutation is disabled/default-off, and proves sanitized audit readback.
 
 A broad production purge job remains disabled unless a future owner/legal-approved lane explicitly enables it.
 
@@ -117,5 +142,21 @@ Latest proof result:
 - Public Profile/Platform fail-closed after de-identification: Pass.
 - Private-feature denial after de-identification: Pass.
 - Support/audit privacy preservation: Pass.
+- Provider refund execution: not performed.
+- Live-money action: not performed.
+
+Latest production enablement result:
+
+- Controlled single-user owner/operator purge: Pass.
+- Batch auto-purge: disabled/default-off.
+- Batch disabled proof: Pass.
+- Idempotency: Pass.
+- Active-account purge denial: Pass.
+- Restore-window purge denial: Pass.
+- Owner/admin/operator purge denial: Pass.
+- Non-admin purge denial: Pass.
+- Sanitized purge audit readback: Pass.
+- Public Profile/Platform fail-closed after purge: Pass.
+- Private-feature denial after purge: Pass.
 - Provider refund execution: not performed.
 - Live-money action: not performed.
