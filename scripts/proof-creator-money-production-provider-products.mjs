@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
-const artifactDir = path.join("/tmp", `app-creator-money-provider-hyphen-option-proof-${timestamp}`);
+const artifactDir = path.join("/tmp", `app-channel-subscription-base-plan-blocker-proof-${timestamp}`);
 
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
@@ -87,11 +87,11 @@ const products = [
     futureCustomPricing: "Approved subscription products, base plans, or offers only.",
     switchName: "channelSubscriptionEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Product record exists; base plan save failed after US-only monthly $4.99 draft setup",
+    googlePlayStatus: "Product record exists; monthly base plan blocked because Google Play marks the Base plan ID field invalid before Save",
     revenueCatStatus: "Blocked until Google Play base plan exists",
     accessCreated: "Exact creator Platform subscription only.",
     accessNotCreated: "Premium, VIP, paid videos, rooms, events, other creators, payout.",
-    ownerAction: "Resolve Google Play save error for monthly base plan; retry showed US-only, auto-renewing monthly, default 7-day grace/account hold, and USD 4.99 before save failed.",
+    ownerAction: "Resolve Google Play Base plan ID validation blocker for monthly; clean form still marks valid-format IDs invalid before Save, so owner/provider support should clear stale draft/state or advise an approved replacement base-plan ID before retry.",
   },
   {
     flow: "VIP",
@@ -203,9 +203,78 @@ const basePlanMatrix = products
     region: product.launchRegion,
     price: product.launchPriceUsd,
     graceAccountHold: "Google Play default visible state: 7 day grace period; calculate account hold automatically.",
-    saveResult: "Blocked: Google Play displayed \"Your changes couldn't be saved\" after the single approved retry with US-only USD 4.99 draft setup.",
+    saveResult: "Blocked: Google Play marks the Base plan ID field invalid before Save. Stale tab and fresh parent-product Add base plan flow both rejected valid-format values including monthly, monthly-499, m1, and 1monthly.",
     status: "Blocked",
   }));
+
+const channelSubscriptionInvestigationMatrix = [
+  {
+    row: "parent product state",
+    finding: "Google Play subscription product record cw_channel_subscription_monthly_499 / Creator Channel Subscription exists; setup shows 0 of 4 tasks complete and Base plans/offers says add and publish at least 1 base plan. Product details show product ID plus tax/policy settings Digital app sales and Service.",
+    actionTaken: "Read-only inspected parent subscription page.",
+    status: "Pass / product exists",
+  },
+  {
+    row: "base plan ID",
+    finding: "monthly is plain ASCII and valid per Google docs, but the Play Console Base plan ID field stays aria-invalid=true with the format message. Valid-format probes monthly-499, m1, and 1monthly also stayed invalid. No hidden characters were present.",
+    actionTaken: "Inspected DOM value/character codes; retyped monthly; opened a fresh Add base plan form from the parent product; typed monthly using keyboard events; no Save submitted.",
+    status: "Blocked by provider UI validation",
+  },
+  {
+    row: "base plan type",
+    finding: "Auto-renewing can be selected and exposes the approved monthly lifecycle fields.",
+    actionTaken: "Selected only owner-approved Auto-renewing mode on the fresh form.",
+    status: "Pass",
+  },
+  {
+    row: "billing period",
+    finding: "Monthly is visible as the selected billing period after Auto-renewing is selected.",
+    actionTaken: "Read-only form inspection after selecting Auto-renewing.",
+    status: "Pass",
+  },
+  {
+    row: "grace/account hold",
+    finding: "Default visible state is 7-day grace period and calculate account hold automatically / 53-day account hold.",
+    actionTaken: "Read-only form inspection; no custom lifecycle setting changed.",
+    status: "Pass",
+  },
+  {
+    row: "region/availability",
+    finding: "The stale failed draft showed United States only and USD 4.99 from the prior attempt; the fresh form starts broad/all-region with no prices. Because Base plan ID remains invalid before Save, region/pricing was not reconfigured in this lane.",
+    actionTaken: "Stopped before pricing/availability mutation on the fresh form.",
+    status: "Not attempted after ID blocker",
+  },
+  {
+    row: "pricing",
+    finding: "Approved target remains USD 4.99/month, United States only. Prior attempt reached this state but failed save. This lane did not re-enter pricing because the ID field was already invalid.",
+    actionTaken: "No price change submitted.",
+    status: "Blocked behind ID validation",
+  },
+  {
+    row: "tax/compliance/rating",
+    finding: "No new tax, legal, rating, disclosure, or compliance field appeared during base-plan investigation. Parent product shows tax/policy settings Digital app sales and Service.",
+    actionTaken: "Read-only inspection only.",
+    status: "Pass / no new owner-stop field surfaced",
+  },
+  {
+    row: "browser/session",
+    finding: "The stale Add base plan tab and a clean Add base plan form opened from the parent subscription both produced the same Base plan ID invalid state.",
+    actionTaken: "Used one clean fresh form/session path; did not retry repeatedly.",
+    status: "Provider UI/state blocker persists",
+  },
+  {
+    row: "hidden required fields",
+    finding: "The only visible field-level blocker is Base plan ID. Benefits are marked recommended in the parent setup, not the active field-level blocker. Offers are locked until a base plan exists.",
+    actionTaken: "Inspected DOM snapshot and field-level alerts.",
+    status: "Blocked at Base plan ID",
+  },
+  {
+    row: "save result",
+    finding: "No Save was submitted in this lane because the fresh form was invalid before Save. Previous lane's submitted save result remains Your changes couldn't be saved.",
+    actionTaken: "Stopped before a provider write that would repeat a known invalid form failure.",
+    status: "Blocked",
+  },
+];
 
 const googlePlayProductMatrix = products.map((product) => ({
   flow: product.flow,
@@ -513,6 +582,7 @@ const artifactPayloads = {
   "old-to-new-product-id-matrix.json": oldToNewProductIdMatrix,
   "purchase-option-id-matrix.json": purchaseOptionIdMatrix,
   "base-plan-matrix.json": basePlanMatrix,
+  "channel-subscription-base-plan-investigation-matrix.json": channelSubscriptionInvestigationMatrix,
   "google-play-product-matrix.json": googlePlayProductMatrix,
   "revenuecat-product-matrix.json": revenueCatProductMatrix,
   "custom-pricing-policy-matrix.json": customPricingPolicyMatrix,
@@ -552,7 +622,7 @@ writeArtifact("secret-scan-result.json", asJson({
   status: secretFindings.length === 0 ? "Pass" : "Blocked",
 }));
 
-writeArtifact("README.md", `# Creator-Money Hyphen Purchase Option Proof
+writeArtifact("README.md", `# Channel Subscription Base-Plan Blocker Proof
 
 Generated: ${new Date().toISOString()}
 
@@ -560,7 +630,7 @@ This proof is read-only and dry-run. It made no purchases, no provider refund ca
 
 Verdict: Partial.
 
-Reason: the hyphen purchase-option/base-plan provider setup attempt is documented. Five one-time production-labeled products were created as Google Play Draft records with United States-only pricing and imported into RevenueCat as Draft consumables with no entitlement attachment. The Channel Subscription monthly base-plan retry reached US-only, auto-renewing monthly, default grace/account hold, and USD 4.99, but Google Play returned "Your changes couldn't be saved." Channel Subscription RevenueCat import/mapping remains blocked until the Google Play base plan exists.
+Reason: the focused Channel Subscription base-plan blocker investigation is documented. Five one-time production-labeled products remain read-only provider records and RevenueCat Draft consumables with no Premium mapping. The Channel Subscription product record exists, but the Google Play Add base plan form marks the Base plan ID field invalid before Save for the owner-approved monthly value and other valid-format probes. No Save was submitted in this lane because the provider form was already invalid; the prior submitted save error remains "Your changes couldn't be saved." Channel Subscription RevenueCat import/mapping remains blocked until the Google Play base plan exists.
 
 Files:
 
@@ -571,6 +641,7 @@ Files:
 - old-to-new-product-id-matrix.json
 - purchase-option-id-matrix.json
 - base-plan-matrix.json
+- channel-subscription-base-plan-investigation-matrix.json
 - google-play-product-matrix.json
 - revenuecat-product-matrix.json
 - custom-pricing-policy-matrix.json
@@ -594,7 +665,8 @@ const summary = {
   readyProducts: ["Tips draft provider records", "Paid Video draft provider records", "Watch-Party Ticket draft provider records", "VIP draft provider records", "Event Pass draft provider records"],
   missingOrBlockedProducts: ["Channel Subscription monthly base plan"],
   purchaseOptionIdValidation: "Pass: owner-approved hyphenated one-time purchase-option IDs were accepted by Google Play draft setup.",
-  channelSubscriptionBasePlanSave: "Blocked: Google Play returned \"Your changes couldn't be saved\" after the single approved retry with US-only USD 4.99 draft setup.",
+  channelSubscriptionBasePlanSave: "Blocked: Google Play marks the Base plan ID field invalid before Save on both stale and fresh forms; prior submitted save error remains \"Your changes couldn't be saved\".",
+  channelSubscriptionBasePlanInvestigation: channelSubscriptionInvestigationMatrix,
   premiumUnchanged: checks.find((check) => check.id === "premium_unchanged")?.ok === true,
   creatorMoneySwitchesOff: checks.find((check) => check.id === "creator_money_switches_off")?.ok === true,
   payoutsOff: switchOffStateProof.payouts === "OFF",

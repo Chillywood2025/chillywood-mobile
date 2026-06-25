@@ -8,7 +8,7 @@ This lane prepares clean production-labeled provider products for the six creato
 
 Owner decision: use option B. Clean production-labeled creator-money product IDs must exist before any creator-money launch. The owner approved the recommended production IDs, the recommended starting prices, and United States only first. Sandbox-labeled IDs remain sandbox/test-only unless the owner explicitly approves otherwise in a later lane.
 
-Creator-money production-labeled products: Partial. Browser dashboard execution on 2026-06-25 created the five one-time production-labeled Google Play product records as Draft, each with a Google Play-valid hyphenated purchase-option ID, United States-only availability, approved launch price, and approved public name/description. RevenueCat import then found those five draft products and imported them as Draft consumables with no entitlement attachment and no Premium mapping. The existing Google Play subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` still has `0` active base plans, so the required `monthly` base plan remains missing and no Channel Subscription purchase is available. The single approved Channel Subscription base-plan retry reached `monthly`, auto-renewing Monthly, United States only, USD 4.99, default 7-day grace period, and automatic account hold, but Google Play again returned `Your changes couldn't be saved`. Channel Subscription RevenueCat import/mapping remains blocked until the Google Play base plan exists.
+Creator-money production-labeled products: Partial. Browser dashboard execution on 2026-06-25 created the five one-time production-labeled Google Play product records as Draft, each with a Google Play-valid hyphenated purchase-option ID, United States-only availability, approved launch price, and approved public name/description. RevenueCat import then found those five draft products and imported them as Draft consumables with no entitlement attachment and no Premium mapping. The existing Google Play subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` still has `0` active base plans, so the required `monthly` base plan remains missing and no Channel Subscription purchase is available. Focused blocker investigation found that both the stale Add base plan tab and a clean Add base plan form opened from the parent subscription mark the `Base plan ID` field invalid before Save, even though `monthly` is plain ASCII and matches Google's documented format. Valid-format non-saving probes (`monthly-499`, `m1`, `1monthly`) also stayed invalid, so the blocker is a Google Play provider UI/state validation issue rather than hidden characters in `monthly`. Channel Subscription base plan: Blocked. Channel Subscription RevenueCat import/mapping remains blocked until the Google Play base plan exists.
 
 Creator-money tax/legal/compliance plan: Partial. `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` is complete enough for owner/legal/tax review and records every visible provider field, recommended value, owner-confirmation requirement, and Codex proceed/stop rule. Codex must not guess tax/legal/compliance fields. Product creation is partial: the five one-time Draft records were created/imported with approved values, while the Channel Subscription base-plan save is still blocked by Google Play; any active age rating, tax category, or legal/compliance change also remains owner-controlled.
 
@@ -48,7 +48,7 @@ Do not activate creator-money until production-labeled IDs are verified, mapped,
 
 | Provider | App/package | Result |
 | --- | --- | --- |
-| Google Play Console | `com.chillywood.mobile` | Browser readback reached the app product pages. Five one-time production-labeled products were created as Draft records: `cw_creator_tip_099` / `tip-099` / United States / USD 0.99, `cw_paid_content_access_099` / `paid-video-099` / United States / USD 0.99, `cw_watch_party_ticket_099` / `ticket-099` / United States / USD 0.99, `cw_vip_pass_499` / `vip-499` / United States / USD 4.99, and `cw_event_pass_099` / `event-099` / United States / USD 0.99. The subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` exists with `0` active base plans. The `monthly` base-plan retry was scoped to United States only and priced at USD 4.99, but save failed again with `Your changes couldn't be saved`. No product or base plan was activated. |
+| Google Play Console | `com.chillywood.mobile` | Browser readback reached the app product pages. Five one-time production-labeled products exist with `0` active purchase options/offers: `cw_creator_tip_099` / `tip-099` / United States / USD 0.99, `cw_paid_content_access_099` / `paid-video-099` / United States / USD 0.99, `cw_watch_party_ticket_099` / `ticket-099` / United States / USD 0.99, `cw_vip_pass_499` / `vip-499` / United States / USD 4.99, and `cw_event_pass_099` / `event-099` / United States / USD 0.99. The subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` exists with `0` active base plans. Focused blocker investigation showed the `Base plan ID` field remains invalid before Save on stale and clean forms. No product, purchase option, or base plan was activated. |
 | RevenueCat | Android Play Store integration for the app | Browser readback reached Product Catalog and import. RevenueCat found the five new one-time Google Play Draft products and imported them as Draft consumables with no entitlement attachment. Premium entitlement/offering remains separate. `cw_channel_subscription_monthly_499:monthly` remains absent/blocked until the Google Play base plan exists. |
 | Stripe | Future payout and physical-merch rail | Browser readback stopped at Stripe sign-in. Stripe production payout/merch readiness is pending provider access and is not required for Android digital creator-product creation. Stripe is not used for Android digital creator-money purchases in this lane. |
 
@@ -61,7 +61,7 @@ No private dashboard screenshots, provider secrets, customer data, account ident
 | Tips | `cw_creator_tip_sandbox_099` | `cw_creator_tip_099` | One-time product / consumable-style support; `$0.99`, United States only first | Created as Draft with `tip-099` | Imported as Draft consumable; no entitlement | OFF |
 | Paid Video | `cw_paid_content_access_sandbox_099` | `cw_paid_content_access_099` | One-time product / consumable-style exact-access grant; `$0.99`, United States only first | Created as Draft with `paid-video-099` | Imported as Draft consumable; no entitlement | OFF |
 | Watch-Party Ticket | `cw_watch_party_live_ticket_sandbox_099` | `cw_watch_party_ticket_099` | One-time product; `$0.99`, United States only first | Created as Draft with `ticket-099` | Imported as Draft consumable; no entitlement | OFF |
-| Channel Subscription | `channel_subscription_sandbox_monthly_499:monthly` | `cw_channel_subscription_monthly_499` + base plan `monthly` | Subscription; `$4.99/month`, United States only first | Product record exists; base plan save failed after US-only USD 4.99 draft setup | Blocked until Google Play base plan exists | OFF |
+| Channel Subscription | `channel_subscription_sandbox_monthly_499:monthly` | `cw_channel_subscription_monthly_499` + base plan `monthly` | Subscription; `$4.99/month`, United States only first | Product record exists; Base plan ID field invalid before Save on stale and clean forms | Blocked until Google Play base plan exists | OFF |
 | VIP | `cw_vip_pass_sandbox_499` | `cw_vip_pass_499` | One-time product / consumable-style exact creator grant; `$4.99`, United States only first | Created as Draft with `vip-499` | Imported as Draft consumable; no entitlement | OFF |
 | Event Pass | `cw_event_pass_sandbox_099` | `cw_event_pass_099` | One-time product; `$0.99`, United States only first | Created as Draft with `event-099` | Imported as Draft consumable; no entitlement | OFF |
 
@@ -71,7 +71,7 @@ Six Google Play product records now exist in provider setup scope: five one-time
 
 Google Play one-time product creation succeeded as Draft for the five owner-approved one-time products using hyphenated purchase-option IDs. Each Draft uses the approved immutable product ID, approved user-visible name and description, default `Digital app sales` tax category, United States-only availability, and the approved launch price. Codex did not click Activate.
 
-Google Play subscription product record `cw_channel_subscription_monthly_499` already exists. The requested base plan `monthly` was retried once with United States only, USD 4.99, auto-renewing Monthly, default 7-day grace period, and automatic account hold. Google Play returned `Your changes couldn't be saved`, so the base plan remains missing.
+Google Play subscription product record `cw_channel_subscription_monthly_499` already exists. The requested base plan `monthly` remains blocked because the Play Console `Base plan ID` field is invalid before Save. DOM inspection confirmed `monthly` is plain ASCII with no hidden characters. A clean Add base plan form opened from the parent subscription and keyboard entry produced the same invalid field state, and valid-format non-saving probes also stayed invalid. The previous submitted save error remains `Your changes couldn't be saved`, but this focused lane stopped before Save because the form was already invalid.
 
 RevenueCat product import succeeded for the five one-time Draft products as Draft consumables with no entitlement attachment. RevenueCat import/mapping remains blocked for `cw_channel_subscription_monthly_499:monthly` because the clean Google Play base plan does not exist yet. RevenueCat must attach only the channel subscription to `creator_channel_subscription` after the base plan exists, and leave all creator-money products detached from `premium`.
 
@@ -93,7 +93,23 @@ Owner action: keep these Draft purchase options inactive until owner activation 
 
 | Product ID | Base plan ID | Type | Billing period | Price | Region | Grace/account hold | Save result | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `cw_channel_subscription_monthly_499` | `monthly` | Auto-renewing | Monthly | `USD 4.99` | United States only | Google Play default visible state: 7-day grace period and calculate account hold automatically | Single approved retry returned `Your changes couldn't be saved` | Blocked |
+| `cw_channel_subscription_monthly_499` | `monthly` | Auto-renewing | Monthly | `USD 4.99` target | United States only target | Google Play default visible state: 7-day grace period and calculate account hold automatically | Blocked before Save: Base plan ID field remains invalid for `monthly` on stale and clean forms | Blocked |
+
+## Channel Subscription Base-Plan Investigation Matrix
+
+| Investigation row | Finding | Action taken | Status |
+| --- | --- | --- | --- |
+| Parent product state | Subscription product `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` exists; setup shows no base plan yet; tax/policy settings show `Digital app sales` and `Service`. | Read-only parent product inspection. | Product exists |
+| Base plan ID | `monthly` is plain ASCII and matches Google's documented base-plan ID format, but Play Console marks the field invalid. Valid-format probes `monthly-499`, `m1`, and `1monthly` also stayed invalid. | Inspected DOM value/character codes; retyped `monthly`; opened clean form from parent subscription; typed with keyboard events; restored approved value; no Save submitted. | Blocked by provider UI/state validation |
+| Base plan type | Auto-renewing is selectable and exposes the expected lifecycle fields. | Selected only owner-approved Auto-renewing in the clean form. | Pass |
+| Billing period | Monthly is visible as the selected billing period after Auto-renewing is selected. | Read-only form inspection. | Pass |
+| Grace/account hold | Default visible state is 7-day grace period and calculated 53-day account hold. | Read-only form inspection; no custom lifecycle settings changed. | Pass |
+| Region/availability | Prior failed draft reached United States only; clean form starts broad/all-region with no prices. | Stopped before reconfiguring region because Base plan ID was already invalid. | Blocked behind ID validation |
+| Pricing | Target remains USD 4.99/month, United States only. | No price change submitted in this focused lane. | Blocked behind ID validation |
+| Tax/compliance/rating | No new active tax, legal, rating, disclosure, or compliance field appeared during investigation. | Read-only inspection only. | No new owner-stop field surfaced |
+| Browser/session | Stale tab and clean parent-product flow both reproduce the invalid Base plan ID field. | Used one clean form/session path; no repeated save attempts. | Provider UI/state blocker persists |
+| Hidden required fields | Only visible field-level blocker is Base plan ID. Benefits are recommended; offers are locked until a base plan exists. | DOM snapshot and field-level alert inspection. | Blocked at Base plan ID |
+| Save result | No Save submitted in this lane because the fresh form was invalid before Save. | Stopped before provider write. | Blocked |
 
 ## Flow Product Plan
 
@@ -160,7 +176,7 @@ Owner action: keep these Draft purchase options inactive until owner activation 
 - Access created: exact creator Platform subscription only.
 - Access not created: Premium, VIP, paid videos, rooms, events, other creators, payout.
 - Activation status: OFF.
-- Owner action needed: resolve the Google Play `Your changes couldn't be saved` base-plan blocker, create/save the approved `monthly` base plan, import `cw_channel_subscription_monthly_499:monthly` in RevenueCat, attach only to `creator_channel_subscription`, and approve later lifecycle smoke before any switch changes.
+- Owner action needed: resolve the Google Play Base plan ID validation blocker, create/save the approved `monthly` base plan only after the provider form accepts it, import `cw_channel_subscription_monthly_499:monthly` in RevenueCat, attach only to `creator_channel_subscription`, and approve later lifecycle smoke before any switch changes.
 
 ### VIP
 
@@ -201,7 +217,7 @@ Owner action: keep these Draft purchase options inactive until owner activation 
 | Tips | `cw_creator_tip_099` | One-time product | `Creator Tip` | Not applicable | `$0.99` | United States only first | Created as Draft with `tip-099`; not activated | Later owner activation/proof; keep app switch OFF. |
 | Paid Video | `cw_paid_content_access_099` | One-time product | `Paid Video Access` | Not applicable | `$0.99` | United States only first | Created as Draft with `paid-video-099`; not activated | Later owner activation/proof; keep app switch OFF. |
 | Watch-Party Ticket | `cw_watch_party_ticket_099` | One-time product | `Watch-Party Ticket` | Not applicable | `$0.99` | United States only first | Created as Draft with `ticket-099`; not activated | Later owner activation/proof; keep app switch OFF. |
-| Channel Subscription | `cw_channel_subscription_monthly_499` | Subscription | `Creator Channel Subscription` | `monthly` missing | `$4.99/month` | United States only first | Created product record; base plan save failed with `Your changes couldn't be saved` | Resolve Google Play save error and retry the approved US-only monthly base plan; do not activate public purchase flow until owner proof. |
+| Channel Subscription | `cw_channel_subscription_monthly_499` | Subscription | `Creator Channel Subscription` | `monthly` missing | `$4.99/month` | United States only first | Product record exists; Base plan ID field invalid before Save on stale and clean forms | Resolve Google Play provider UI/state validation blocker; do not activate public purchase flow until owner proof. |
 | VIP | `cw_vip_pass_499` | One-time product | `Creator VIP Pass` | Not applicable | `$4.99` | United States only first | Created as Draft with `vip-499`; not activated | Later owner activation/proof; keep app switch OFF. |
 | Event Pass | `cw_event_pass_099` | One-time product | `Creator Event Pass` | Not applicable | `$0.99` | United States only first | Created as Draft with `event-099`; not activated | Later owner activation/proof; keep app switch OFF. |
 
@@ -273,7 +289,7 @@ Unsupported custom amounts fail closed: no purchase intent, no provider sheet, n
 3. Confirm the visible Google Play tax/compliance category if the dashboard asks for an active change.
 4. Confirm whether exact-access products are consumed after backend grant or treated as non-consumable/owned access where Google Play asks explicitly.
 5. Confirm the five RevenueCat Draft consumable imports remain detached from `premium`.
-6. Retry the `monthly` base plan for `cw_channel_subscription_monthly_499`; the approved United States-only `$4.99/month` draft failed with `Your changes couldn't be saved`.
+6. Resolve the Google Play Base plan ID validation blocker for `cw_channel_subscription_monthly_499`; owner/provider support may need to clear stale draft/provider state or approve a replacement base-plan ID before another save attempt.
 7. Import the Channel Subscription base plan into RevenueCat only after the matching Google Play base plan exists.
 8. Attach only the channel subscription to `creator_channel_subscription`; do not attach any creator product to `premium`.
 9. Re-run dashboard verification and Play-installed smoke in a separate lane.

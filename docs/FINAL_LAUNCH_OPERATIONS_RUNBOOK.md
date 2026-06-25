@@ -15,6 +15,7 @@ Current classification:
 - Creator-money production-labeled products: Partial.
 - Creator-money tax/legal/compliance plan: Partial.
 - Creator-money product creation: Partial.
+- Channel Subscription base plan: Blocked by Google Play Base plan ID validation before Save.
 - Purchase-option IDs use Google Play-valid hyphenated values.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
