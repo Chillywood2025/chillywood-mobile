@@ -58,10 +58,16 @@ Latest seven-flow production switchboard proof artifact:
 
 - `/tmp/app-seven-flow-production-switchboard-proof-20260625-023513/`
 
+Latest seven-flow production prep proof artifact:
+
+- `/tmp/app-seven-flow-production-prep-proof-20260625-025426/`
+
 Seven-flow money classification:
 
 - Seven-flow app-side proof: Closed.
 - Seven-flow production switchboard: Partial.
+- Premium-first launch candidate: Pending owner activation/provider final check.
+- Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
 - Provider refunds: Manual/external unless separate provider-refund lane enables automation.

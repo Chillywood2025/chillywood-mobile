@@ -10,6 +10,8 @@ Seven-flow app-side proof: Closed.
 
 Seven-flow production switchboard: Partial. The explicit switch catalog, default-safe governance, support policy, rollback policy, and dry-run proof artifacts are in place. Production activation remains blocked by owner decision, provider production product approval/mapping, and a separate live-money activation lane.
 
+Seven-flow production prep: Partial. The production-prep checklist now records flow-by-flow provider mapping, owner activation steps, support/refund/dispute policy, monitoring/readback expectations, and rollback paths in `docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md`. It keeps activation blocked pending owner approval and provider production verification per flow.
+
 Real-money activation: Off by default unless owner explicitly enables each flow.
 
 Creator payouts: Off unless separate payout lane enables them.
@@ -275,12 +277,14 @@ Run:
 
 ```sh
 npm run proof:seven-flow-production-switchboard
+npm run proof:seven-flow-production-prep
 ```
 
 The script is dry-run by default. It performs no real purchases, no provider refund calls, no provider secret printing, no payout calls, no transfer calls, no withdrawal/cash-out calls, and writes sanitized artifacts to:
 
 ```text
 /tmp/app-seven-flow-production-switchboard-proof-YYYYMMDD-HHMMSS/
+/tmp/app-seven-flow-production-prep-proof-YYYYMMDD-HHMMSS/
 ```
 
 Expected artifacts:
