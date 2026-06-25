@@ -6,7 +6,13 @@ import path from "node:path";
 
 const root = process.cwd();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
-const artifactDir = path.join("/tmp", `app-seven-flow-provider-verification-proof-${timestamp}`);
+const dashboardReproof = process.argv.includes("--dashboard-reproof");
+const artifactDir = path.join(
+  "/tmp",
+  dashboardReproof
+    ? `app-seven-flow-provider-dashboard-reproof-${timestamp}`
+    : `app-seven-flow-provider-verification-proof-${timestamp}`,
+);
 
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
@@ -22,6 +28,8 @@ const allowedStatuses = new Set([
   "Mismatch",
   "Blocked by provider access",
   "Blocked by owner action",
+  "Blocked by provider approval",
+  "Pending owner activation",
   "Not applicable",
 ]);
 
@@ -141,6 +149,11 @@ const sanitizeProviderInput = (input) => {
       normalized[field] = allowedStatuses.has(row[field]) ? row[field] : "Blocked by provider access";
     }
     normalized.evidenceLabel = typeof row.evidenceLabel === "string" ? row.evidenceLabel.slice(0, 140) : "No provider dashboard/API evidence supplied.";
+    normalized.dashboardProductId = typeof row.dashboardProductId === "string" ? row.dashboardProductId.slice(0, 120) : "";
+    normalized.productType = typeof row.productType === "string" ? row.productType.slice(0, 120) : "";
+    normalized.entitlement = typeof row.entitlement === "string" ? row.entitlement.slice(0, 120) : "";
+    normalized.offeringPackage = typeof row.offeringPackage === "string" ? row.offeringPackage.slice(0, 120) : "";
+    normalized.blockerAction = typeof row.blockerAction === "string" ? row.blockerAction.slice(0, 220) : "";
     return [flow.key, normalized];
   }));
 };
@@ -202,7 +215,8 @@ const repoChecks = [
   },
   {
     id: "provider_verification_doc_consistent",
-    ok: has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "Seven-flow provider verification: Blocked")
+    ok: has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "Seven-flow provider verification:")
+      && has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "Provider verification used browser dashboard evidence")
       && has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "All activation switches remain OFF")
       && has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "Production provider products are verified only where dashboard/API evidence exists"),
     detail: "Provider verification doc keeps readiness honest and activation off.",
@@ -239,6 +253,36 @@ const providerVerificationMatrix = flows.map((flow) => {
     activationSwitchState: flow.activationSwitchState,
     evidenceLabel: status.evidenceLabel,
     status: providerReady && appConfigMatch(flow) ? "Verified" : status.googlePlayStatus === "Mismatch" || status.revenueCatProductStatus === "Mismatch" ? "Mismatch" : "Blocked by provider access",
+  };
+});
+
+const googlePlayVerificationMatrix = flows.map((flow) => {
+  const status = providerStatuses[flow.key];
+  return {
+    flow: flow.flow,
+    expectedProductId: flow.expectedProductId,
+    dashboardProductId: status.dashboardProductId || flow.expectedProductId,
+    productType: status.productType || flow.productType,
+    status: status.googlePlayStatus,
+    basePlanStatus: flow.basePlanId ? status.basePlanStatus : "Not applicable",
+    match: status.googlePlayStatus === "Verified" && appConfigMatch(flow) ? "Yes" : "No",
+    blockerAction: status.blockerAction || (status.googlePlayStatus === "Verified" ? "Pending owner activation; app switch remains OFF." : "Provider dashboard evidence required."),
+  };
+});
+
+const revenueCatVerificationMatrix = flows.map((flow) => {
+  const status = providerStatuses[flow.key];
+  return {
+    flow: flow.flow,
+    expectedProductId: flow.expectedProductId,
+    revenueCatProduct: status.revenueCatProductStatus,
+    dashboardProductId: status.dashboardProductId || flow.expectedProductId,
+    entitlement: flow.revenueCatEntitlement ? (status.entitlement || flow.revenueCatEntitlement) : "Not applicable",
+    entitlementStatus: flow.revenueCatEntitlement ? status.revenueCatEntitlementStatus : "Not applicable",
+    offeringPackage: status.offeringPackage || flow.offeringPackage,
+    offeringPackageStatus: status.revenueCatOfferingPackageStatus,
+    match: status.revenueCatProductStatus === "Verified" && appConfigMatch(flow) ? "Yes" : "No",
+    blockerAction: status.blockerAction || (status.revenueCatProductStatus === "Verified" ? "Pending owner activation; app switch remains OFF." : "Provider dashboard evidence required."),
   };
 });
 
@@ -283,10 +327,13 @@ const blockerMatrix = providerVerificationMatrix.map((row) => ({
 }));
 
 const artifactPayloads = {
+  "google-play-verification-matrix.json": googlePlayVerificationMatrix,
+  "revenuecat-verification-matrix.json": revenueCatVerificationMatrix,
   "provider-verification-matrix.json": providerVerificationMatrix,
   "app-config-match-matrix.json": appConfigMatchMatrix,
   "switch-off-state-readback.json": switchOffStateReadback,
-  "blockers-owner-actions.json": blockerMatrix,
+  "owner-action-list.json": ownerActions,
+  "blocker-list.json": blockerMatrix,
   "repo-checks.json": repoChecks,
 };
 
@@ -320,22 +367,37 @@ writeArtifact("secret-scan-result.json", asJson({
   status: secretFindings.length === 0 ? "Pass" : "Blocked",
 }));
 
+const computedVerdict = providerInput && ["Closed", "Partial", "Blocked"].includes(providerInput.verdict)
+  ? providerInput.verdict
+  : providerVerificationMatrix.every((row) => row.status === "Verified")
+    ? "Closed"
+    : providerVerificationMatrix.some((row) => row.status === "Verified")
+      ? "Partial"
+      : "Blocked";
+
+const reason = dashboardReproof
+  ? "Provider verification used browser dashboard evidence. Activation remains off and owner approval is still required before any purchase switch changes."
+  : "Local app/config product ID and switch evidence is verified, but current Google Play Console and RevenueCat dashboard/API evidence was not supplied in this run. Production provider products are verified only where dashboard/API evidence exists.";
+
 writeArtifact("README.md", `# Seven-Flow Provider Verification Proof
 
 Generated: ${new Date().toISOString()}
 
 This proof is read-only and dry-run. It made no purchases, no provider refund calls, no payout calls, no transfer calls, no withdrawal calls, no provider dashboard screenshot capture, and printed no provider secrets or private user data.
 
-Verdict: Blocked.
+Verdict: ${computedVerdict}.
 
-Reason: local app/config product ID and switch evidence is verified, but current Google Play Console and RevenueCat dashboard/API evidence was not supplied in this run. Production provider products are verified only where dashboard/API evidence exists.
+Reason: ${reason}
 
 Files:
 
+- google-play-verification-matrix.json
+- revenuecat-verification-matrix.json
 - provider-verification-matrix.json
 - app-config-match-matrix.json
 - switch-off-state-readback.json
-- blockers-owner-actions.json
+- owner-action-list.json
+- blocker-list.json
 - repo-checks.json
 - secret-scan-result.json
 `);
@@ -349,7 +411,7 @@ const git = (args) => {
 };
 
 const summary = {
-  verdict: "Blocked",
+  verdict: computedVerdict,
   artifactDir,
   branch: git(["branch", "--show-current"]),
   head: git(["rev-parse", "HEAD"]),
@@ -357,6 +419,7 @@ const summary = {
   androidVersionCode: 55,
   androidVersionName: "1.0.0",
   providerInputSupplied: Boolean(providerInputPath),
+  dashboardReproof,
   providerProductsVerifiedWithoutSwitchesOn: providerVerificationMatrix.some((row) => row.status === "Verified"),
   providerReadyFlows: providerVerificationMatrix.filter((row) => row.status === "Verified").map((row) => row.flow),
   providerBlockedFlows: providerVerificationMatrix.filter((row) => row.status !== "Verified").map((row) => row.flow),

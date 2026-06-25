@@ -204,7 +204,9 @@ const repoChecks = [
   },
   {
     id: "production_activation_not_claimed",
-    ok: has("docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md", "Pending provider verification")
+    ok: has("docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md", "Provider verification used browser dashboard evidence")
+      && has("docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md", "All activation switches remain OFF")
+      && has("docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md", "owner decision")
       && has("docs/FINAL_PUBLIC_USE_GO_NO_GO.md", "Premium-first launch candidate: Pending owner activation/provider final check")
       && has("docs/FINAL_PUBLIC_USE_GO_NO_GO.md", "Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval"),
     detail: "Docs keep production activation blocked pending owner/provider approval.",
@@ -351,7 +353,7 @@ const proofOutput = {
   payableBalancesCreated: false,
   creatorMoneyDefaultsOff: pass(repoChecks.find((check) => check.id === "creator_defaults_off")?.ok),
   emergencyStopProvedByDefaults: pass(repoChecks.find((check) => check.id === "live_money_and_payouts_off")?.ok),
-  providerProductionReadiness: "Pending provider verification",
+  providerProductionReadiness: "Configured dashboard products verified; activation remains pending owner decision.",
   ownerActivationRequired: true,
   repoChecks,
 };
@@ -443,7 +445,7 @@ const summary = {
   allFlowsPreparedBehindSwitches: pass(repoChecks.find((check) => check.id === "switchboard_catalog_present")?.ok),
   creatorMoneyFlowsStillOff: pass(repoChecks.find((check) => check.id === "creator_defaults_off")?.ok),
   emergencyStopCanBlockPurchases: pass(repoChecks.find((check) => check.id === "live_money_and_payouts_off")?.ok),
-  productionProviderMappings: "Pending provider verification",
+  productionProviderMappings: "Configured dashboard products verified; activation remains pending owner decision.",
   ownerActivationDecisionsRequired: true,
   payoutsStillOff: pass(repoChecks.find((check) => check.id === "live_money_and_payouts_off")?.ok),
   refundsStillManualExternal: pass(repoChecks.find((check) => check.id === "provider_refunds_manual_external")?.ok),
