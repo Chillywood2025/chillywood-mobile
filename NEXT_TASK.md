@@ -1764,6 +1764,24 @@ Remaining proof-only follow-ups:
 ## Signup Follow-Up
 
 Signup is no longer blocked on the Play-installed Android build. Commit `ea4b545` imports `react-native-get-random-values` before Supabase auth initialization, and EAS production update group `4679bd00-d966-4950-b7eb-570e120b3e4d` proved a fresh Android signup on `R5CR120QCBF` with success copy. Keep using fresh emails for signup smoke because proof emails created during debugging now exist in Supabase auth. The remaining signup follow-up is operational: confirm real user confirmation-email delivery with the configured SMTP/provider and keep reset-email rate limits managed through Supabase Auth email settings, not app UI changes.
+
+## Admin Role Scope Follow-Up
+
+Admin role scope: Closed after validation.
+
+Admin is a real production role backed by the existing `operator` platform staff role and scoped permission grants. Admin permissions are scoped and granted by Owner/First Owner through the existing Staff & Roles flow. Backend denies non-admin and unscoped-admin attempts even if UI is bypassed.
+
+Required production truth:
+
+- Admin cannot grant or revoke Owner.
+- Admin cannot alter First Owner succession.
+- Admin cannot remove, demote, delete, or deactivate First Owner.
+- Admin cannot enable money/provider/payout systems.
+- Admin cannot execute provider refunds.
+- Admin can record manual/external refund status only with permission.
+- Admin destructive actions require permission, reason, confirmation, and audit.
+- Broken Admin buttons are wired or honestly disabled.
+- No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
 # Next Task
 
 ## BrowserStack Monetization E2E

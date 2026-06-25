@@ -38,15 +38,15 @@ const JSON_HEADERS = {
 } as const;
 
 const PERMISSION_TEMPLATES: Record<string, { label: string; permissions: string[] }> = {
-  creator_support: { label: "Creator Support", permissions: ["creator_support", "support_inbox", "user_lookup"] },
+  creator_support: { label: "Creator Support", permissions: ["creator_support", "support_inbox", "user_lookup", "admin.support.view", "admin.user.view"] },
   evidence_exporter: { label: "Evidence Exporter", permissions: ["evidence_preview", "evidence_export", "legal_request_intake"] },
-  dmca_reviewer: { label: "DMCA Reviewer", permissions: ["dmca_review", "copyright_review", "legal_review"] },
-  legal_operator: { label: "Legal Operator", permissions: ["legal_ops", "legal_request_intake", "evidence_preview", "evidence_export", "legal_hold", "legal_review"] },
-  legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "evidence_preview", "dmca_review", "copyright_review", "legal_request_intake"] },
-  live_ops_operator: { label: "Live Ops Operator", permissions: ["live_ops"] },
-  moderator: { label: "Moderator", permissions: ["reports_review", "content_moderation"] },
-  senior_moderator: { label: "Senior Moderator", permissions: ["reports_review", "content_moderation", "user_lookup"] },
-  support_agent: { label: "Support Agent", permissions: ["support_inbox", "user_lookup"] },
+  dmca_reviewer: { label: "DMCA Reviewer", permissions: ["dmca_review", "copyright_review", "legal_review", "admin.dmca.view", "admin.dmca.manage"] },
+  legal_operator: { label: "Legal Operator", permissions: ["legal_ops", "legal_request_intake", "evidence_preview", "evidence_export", "legal_hold", "legal_review", "admin.chat_evidence.view"] },
+  legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "evidence_preview", "dmca_review", "copyright_review", "legal_request_intake", "admin.dmca.view"] },
+  live_ops_operator: { label: "Live Ops Operator", permissions: ["live_ops", "admin.room.moderate", "admin.live.force_end"] },
+  moderator: { label: "Moderator", permissions: ["reports_review", "content_moderation", "admin.content.hide", "admin.content.restore"] },
+  senior_moderator: { label: "Senior Moderator", permissions: ["reports_review", "content_moderation", "user_lookup", "admin.user.search", "admin.content.hide", "admin.content.restore"] },
+  support_agent: { label: "Support Agent", permissions: ["support_inbox", "user_lookup", "admin.support.view", "admin.user.search", "admin.user.view"] },
 };
 
 const TEMPLATE_KEYS = Object.keys(PERMISSION_TEMPLATES);
@@ -72,6 +72,27 @@ const CONTROL_PERMISSION_KEYS = [
   "staff_permission_templates",
   "support_inbox",
   "user_lookup",
+  "admin.user.search",
+  "admin.user.view",
+  "admin.user.suspend",
+  "admin.user.restore",
+  "admin.support.view",
+  "admin.support.manage",
+  "admin.dmca.view",
+  "admin.dmca.manage",
+  "admin.payment_status.view",
+  "admin.refund_status.record",
+  "admin.profile_private.view",
+  "admin.room_private.view",
+  "admin.chat_evidence.view",
+  "admin.content.hide",
+  "admin.content.restore",
+  "admin.content.remove",
+  "admin.comment.moderate",
+  "admin.room.moderate",
+  "admin.live.force_end",
+  "admin.audit.view",
+  "admin.lower_role.manage",
 ] as const;
 
 const toText = (value: unknown) => String(value ?? "").trim();

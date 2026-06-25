@@ -236,3 +236,17 @@ Do not activate creator-money. Tips, Paid Video, Watch-Party Ticket, VIP, and Ev
 - First Owner controls are enabled for authenticated First Owner after validation.
 - No plaintext passcodes stored.
 - No raw IP/token/signed URL exposure added.
+
+## Admin Role Scope Closeout
+
+| Check | Status | Severity | Evidence / next action |
+| --- | --- | --- | --- |
+| Admin role scope | Closed | Already closed | Admin is a real production role backed by `platform_role_memberships.role = 'operator'` and scoped grants. |
+| Admin permissions | Closed | Already closed | Admin permissions are scoped and granted by Owner/First Owner through `platform_staff_permission_grants`. |
+| Backend denial | Closed | Already closed | Backend denies non-admin and unscoped-admin attempts even if UI is bypassed. |
+| Owner/First Owner boundary | Closed | Already closed | Admin cannot grant or revoke Owner, cannot alter First Owner succession, and cannot remove, demote, delete, or deactivate First Owner. |
+| Money/provider boundary | Closed | Already closed | Admin cannot enable money/provider/payout systems and cannot execute provider refunds. |
+| Refund status boundary | Closed | Already closed | Admin can record manual/external refund status only with permission; provider refunds remain manual/external. |
+| Destructive actions | Closed | Already closed | Admin destructive actions require permission, reason, confirmation, and audit. |
+| Admin UI buttons | Closed | Already closed | Broken Admin buttons are wired or honestly disabled. |
+| Private data safety | Closed | Already closed | No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed. |

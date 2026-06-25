@@ -186,3 +186,20 @@ This pass did not change:
 - Normal Owner dashboard viewing is not Break Glass
 - Break Glass is documented and audited when used
 - No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed
+
+## Admin Role Scope Closeout
+
+Admin role scope: Closed.
+
+- Admin is a real production role backed by the existing `operator` platform staff role.
+- Admin permissions are scoped and granted by Owner/First Owner.
+- Admin cannot grant or revoke Owner.
+- Admin cannot alter First Owner succession.
+- Admin cannot remove, demote, delete, or deactivate First Owner.
+- Admin cannot enable money/provider/payout systems.
+- Admin cannot execute provider refunds.
+- Admin can record manual/external refund status only with permission.
+- Admin destructive actions require permission, reason, confirmation, and audit.
+- Backend denies non-admin and unscoped-admin attempts even if UI is bypassed.
+- Broken Admin buttons are wired or honestly disabled.
+- No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.

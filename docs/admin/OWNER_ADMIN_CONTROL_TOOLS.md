@@ -46,16 +46,33 @@
 - DMCA Case Management requires Owner or Admin/operator with `dmca_review`, `copyright_review`, or `legal_review`.
 - Owner Security is Owner-only.
 
+## Admin Role Scope
+
+Admin role scope: Closed.
+
+- Admin is a real production role backed by the existing `operator` platform staff role and scoped permission grants.
+- Admin permissions are scoped and granted by Owner/First Owner.
+- Admin cannot grant or revoke Owner.
+- Admin cannot alter First Owner succession.
+- Admin cannot remove, demote, delete, or deactivate First Owner.
+- Admin cannot enable money/provider/payout systems.
+- Admin cannot execute provider refunds.
+- Admin can record manual/external refund status only with permission.
+- Admin destructive actions require permission, reason, confirmation, and audit.
+- Backend denies non-admin and unscoped-admin attempts even if UI is bypassed.
+- Broken Admin buttons are wired or honestly disabled.
+- No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
+
 ## Templates
-- Support Agent: `support_inbox`, `user_lookup`
-- Moderator: `reports_review`, `content_moderation`
-- Senior Moderator: `reports_review`, `content_moderation`, `user_lookup`
-- Live Ops Operator: `live_ops`
-- DMCA Reviewer: `dmca_review`, `copyright_review`, `legal_review`
+- Support Agent: `support_inbox`, `user_lookup`, `admin.support.view`, `admin.user.search`, `admin.user.view`
+- Moderator: `reports_review`, `content_moderation`, `admin.content.hide`, `admin.content.restore`
+- Senior Moderator: `reports_review`, `content_moderation`, `user_lookup`, `admin.user.search`, `admin.content.hide`, `admin.content.restore`
+- Live Ops Operator: `live_ops`, `admin.room.moderate`, `admin.live.force_end`
+- DMCA Reviewer: `dmca_review`, `copyright_review`, `legal_review`, `admin.dmca.view`, `admin.dmca.manage`
 - Legal Reviewer: `legal_review`, `evidence_preview`, `legal_request_intake`, `dmca_review`, `copyright_review`
-- Legal Operator: `legal_ops`, `legal_request_intake`, `evidence_preview`, `evidence_export`, `legal_hold`, `legal_review`
+- Legal Operator: `legal_ops`, `legal_request_intake`, `evidence_preview`, `evidence_export`, `legal_hold`, `legal_review`, `admin.chat_evidence.view`
 - Evidence Exporter: `evidence_preview`, `evidence_export`, `legal_request_intake`
-- Creator Support: `creator_support`, `support_inbox`, `user_lookup`
+- Creator Support: `creator_support`, `support_inbox`, `user_lookup`, `admin.support.view`, `admin.user.view`
 
 ## Safety Notes
 - The Edge Function keeps service-role access server-side.
