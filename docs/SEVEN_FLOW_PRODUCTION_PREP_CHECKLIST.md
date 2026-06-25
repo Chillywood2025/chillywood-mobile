@@ -14,7 +14,7 @@ Seven-flow production prep: Partial. The flows are prepared behind explicit swit
 
 Seven-flow provider verification: Partial. Provider verification used browser dashboard evidence. The configured product IDs are present in Google Play Console and RevenueCat and match the repo/app configuration; production activation remains blocked by owner approval and, for creator-money flows, owner decision on whether to keep sandbox-labeled configured IDs or replace them with production-labeled IDs.
 
-Creator-money production-labeled products: Blocked. Owner chose option B: clean production-labeled IDs are required before creator-money launch. The production-labeled IDs are documented in `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`, but browser dashboard readback found them missing in Google Play Console and RevenueCat. Google Play creation requires owner/provider choices for immutable product records, user-visible metadata, tax/compliance, age rating, region/pricing, purchase options, and subscription base plans; RevenueCat import/mapping remains blocked until the matching Google Play products exist.
+Creator-money production-labeled products: Blocked. Owner chose option B: clean production-labeled IDs are required before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, and United States only first. The production-labeled IDs are documented in `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`, but browser dashboard readback found them missing in Google Play Console and RevenueCat. Google Play creation still requires owner/provider-approved public product metadata, icons, tax/compliance, age rating, purchase options, subscription base plans, and publishing/provider review before safe submission; RevenueCat import/mapping remains blocked until the matching Google Play products exist.
 
 Creator-money production-labeled product IDs: Blocked.
 
@@ -37,6 +37,14 @@ Creator-money flows: Prepared behind switches / OFF by default / activation requ
 Provider verification used browser dashboard evidence. All activation switches remain OFF; production provider products are verified only where dashboard/API evidence exists.
 
 Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
+
+Approved starting prices are launch defaults, not the only future prices.
+
+Future custom pricing requires provider-backed price tiers/products/base plans/offers.
+
+Unsupported custom amounts fail closed.
+
+United States only first.
 
 Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
 

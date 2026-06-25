@@ -56,6 +56,9 @@ export type CreatorMoneyProductionProviderProductRow = {
   productionProductId: string;
   productionBasePlanId: string | null;
   productType: SevenFlowSwitchboardRow["productType"];
+  launchPriceUsd: string;
+  launchRegion: "United States only first";
+  customPricingPolicy: "provider_backed_fail_closed";
   switchName: SevenFlowSwitchName;
   activationStatus: "off";
   googlePlayStatus: CreatorMoneyProductionProviderStatus;
@@ -195,6 +198,9 @@ export const CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS: readonly CreatorMoneyPr
     productionProductId: flow.productionProductId ?? "",
     productionBasePlanId: flow.productionBasePlanId ?? null,
     productType: flow.productType,
+    launchPriceUsd: flow.flowKey === "channel_subscription" ? "$4.99/month" : flow.flowKey === "vip" ? "$4.99" : "$0.99",
+    launchRegion: "United States only first" as const,
+    customPricingPolicy: "provider_backed_fail_closed" as const,
     switchName: flow.switchName,
     activationStatus: "off" as const,
     googlePlayStatus: "missing" as CreatorMoneyProductionProviderStatus,

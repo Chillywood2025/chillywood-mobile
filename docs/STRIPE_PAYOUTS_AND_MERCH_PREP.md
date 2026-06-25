@@ -14,6 +14,10 @@ Stripe merch checkout remains OFF.
 
 Stripe is not used for Android digital creator-money purchases in this lane. Android digital purchases for Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass remain Google Play / RevenueCat products only.
 
+United States only first applies to the owner-approved Google Play / RevenueCat launch defaults for Android digital creator-money products. It does not activate Stripe payouts, Stripe Connect, or merch checkout.
+
+Future custom pricing for Android digital creator-money flows must remain provider-backed through Google Play / RevenueCat products, price tiers, base plans, offers, or owner-approved catalog entries. Unsupported custom amounts fail closed and must not route through Stripe.
+
 Provider refunds remain manual/external.
 
 Creator-money activation still requires owner approval and controlled proof.

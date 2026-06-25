@@ -16,6 +16,10 @@ Current classification:
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
 - Provider refunds: Manual/external unless separate provider-refund lane enables automation.
+- Approved starting prices are launch defaults, not the only future prices.
+- Future custom pricing requires provider-backed price tiers/products/base plans/offers.
+- Unsupported custom amounts fail closed.
+- United States only first.
 - Stripe payout and merch prep documented separately.
 - Stripe payouts remain OFF.
 - Stripe merch checkout remains OFF.

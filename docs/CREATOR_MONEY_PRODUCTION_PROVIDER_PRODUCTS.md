@@ -6,9 +6,15 @@ Verdict: Blocked.
 
 This lane prepares clean production-labeled provider products for the six creator-money flows. It does not activate creator-money, live money, payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, Premium, or public purchases.
 
-Owner decision: use option B. Clean production-labeled creator-money product IDs must exist before any creator-money launch. Sandbox-labeled IDs remain sandbox/test-only unless the owner explicitly approves otherwise in a later lane.
+Owner decision: use option B. Clean production-labeled creator-money product IDs must exist before any creator-money launch. The owner approved the recommended production IDs, the recommended starting prices, and United States only first. Sandbox-labeled IDs remain sandbox/test-only unless the owner explicitly approves otherwise in a later lane.
 
-Creator-money production-labeled products: Blocked. Browser dashboard readback found the six clean production-labeled IDs missing in Google Play Console and RevenueCat. Creating them requires owner/provider action because product creation can involve immutable product records, user-visible product names/descriptions/icons, pricing, purchase options, subscription base plans, publishing review, tax/compliance, age rating, regional availability, and irreversible product identifiers.
+Creator-money production-labeled products: Blocked. Browser dashboard readback found the six clean production-labeled IDs missing in Google Play Console and RevenueCat. Creating them remains blocked because Google Play submission requires required public metadata and provider/compliance choices that were not approved in this lane: user-visible product names/descriptions/icons, tax category, age rating, purchase options, subscription base plans, and any publishing/provider review steps. No product form was submitted.
+
+Approved starting prices are launch defaults, not the only future prices.
+
+Future custom pricing requires provider-backed price tiers/products/base plans/offers.
+
+Unsupported custom amounts fail closed.
 
 Creator-money activation remains OFF.
 
@@ -23,6 +29,8 @@ Stripe payout and merch prep documented separately in `docs/STRIPE_PAYOUTS_AND_M
 Stripe payouts remain OFF.
 
 Stripe merch checkout remains OFF.
+
+United States only first.
 
 Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
 
@@ -40,12 +48,12 @@ No private dashboard screenshots, provider secrets, customer data, account ident
 
 | Flow | Old sandbox-labeled ID | New production ID | Product type | Provider status | RevenueCat status | Activation status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Tips | `cw_creator_tip_sandbox_099` | `cw_creator_tip_099` | One-time product / consumable-style support if supported by provider setup | Missing | Missing | OFF |
-| Paid Video | `cw_paid_content_access_sandbox_099` | `cw_paid_content_access_099` | One-time product / consumable or exact-access product depending provider policy | Missing | Missing | OFF |
-| Watch-Party Ticket | `cw_watch_party_live_ticket_sandbox_099` | `cw_watch_party_ticket_099` | One-time product | Missing | Missing | OFF |
-| Channel Subscription | `channel_subscription_sandbox_monthly_499:monthly` | `cw_channel_subscription_monthly_499` + base plan `monthly` | Subscription | Missing | Missing | OFF |
-| VIP | `cw_vip_pass_sandbox_499` | `cw_vip_pass_499` | One-time product / non-consumable-style creator-specific pass if supported by provider setup | Missing | Missing | OFF |
-| Event Pass | `cw_event_pass_sandbox_099` | `cw_event_pass_099` | One-time product | Missing | Missing | OFF |
+| Tips | `cw_creator_tip_sandbox_099` | `cw_creator_tip_099` | One-time product / consumable-style support if supported by provider setup; `$0.99`, United States only first | Missing | Missing | OFF |
+| Paid Video | `cw_paid_content_access_sandbox_099` | `cw_paid_content_access_099` | One-time product / consumable or exact-access product depending provider policy; `$0.99`, United States only first | Missing | Missing | OFF |
+| Watch-Party Ticket | `cw_watch_party_live_ticket_sandbox_099` | `cw_watch_party_ticket_099` | One-time product; `$0.99`, United States only first | Missing | Missing | OFF |
+| Channel Subscription | `channel_subscription_sandbox_monthly_499:monthly` | `cw_channel_subscription_monthly_499` + base plan `monthly` | Subscription; `$4.99/month`, United States only first | Missing | Missing | OFF |
+| VIP | `cw_vip_pass_sandbox_499` | `cw_vip_pass_499` | One-time product / non-consumable-style creator-specific pass if supported by provider setup; `$4.99`, United States only first | Missing | Missing | OFF |
+| Event Pass | `cw_event_pass_sandbox_099` | `cw_event_pass_099` | One-time product; `$0.99`, United States only first | Missing | Missing | OFF |
 
 ## Provider Creation Safety Decision
 
@@ -64,7 +72,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_creator_tip_sandbox_099`.
 - New production product ID: `cw_creator_tip_099`.
 - Intended type: one-time product / consumable-style support if supported by provider setup.
-- Price: 0.99 or provider-confirmed value.
+- Starting price: `$0.99`.
+- Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; no durable access entitlement.
 - App switch: `tipsEnabled`; backend `tips_enabled`.
 - Access created: none / contribution receipt only.
@@ -77,7 +86,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_paid_content_access_sandbox_099`.
 - New production product ID: `cw_paid_content_access_099`.
 - Intended type: one-time product / consumable or exact-access product depending provider policy.
-- Price: 0.99 or provider-confirmed value.
+- Starting price: `$0.99`.
+- Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-target grant remains access source.
 - App switch: `paidVideoEnabled`; backend `paid_content_enabled`.
 - Access created: exact paid video target only.
@@ -90,7 +100,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_watch_party_live_ticket_sandbox_099`.
 - New production product ID: `cw_watch_party_ticket_099`.
 - Intended type: one-time product.
-- Price: 0.99 or provider-confirmed value.
+- Starting price: `$0.99`.
+- Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-room ticket/grant remains access source.
 - App switch: `watchPartyTicketEnabled`; backend `watch_party_tickets_enabled`.
 - Access created: exact room/ticket target only.
@@ -104,7 +115,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - New production product ID: `cw_channel_subscription_monthly_499`.
 - Intended type: subscription.
 - Base plan: `monthly`.
-- Price: 4.99 or provider-confirmed value.
+- Starting price: `$4.99/month`.
+- Region: United States only first.
 - RevenueCat entitlement: `creator_channel_subscription` or current safe creator-specific subscription mapping.
 - App switch: `channelSubscriptionEnabled`; backend `digital_sales_enabled`.
 - Access created: exact creator Platform subscription only.
@@ -117,7 +129,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_vip_pass_sandbox_499`.
 - New production product ID: `cw_vip_pass_499`.
 - Intended type: one-time product / non-consumable-style creator-specific pass if supported by provider setup.
-- Price: 4.99 or provider-confirmed value.
+- Starting price: `$4.99`.
+- Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-creator VIP pass remains access source.
 - App switch: `vipEnabled`; backend `digital_sales_enabled`.
 - Access created: exact creator VIP only.
@@ -130,7 +143,8 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 - Old sandbox-labeled product ID: `cw_event_pass_sandbox_099`.
 - New production product ID: `cw_event_pass_099`.
 - Intended type: one-time product.
-- Price: 0.99 or provider-confirmed value.
+- Starting price: `$0.99`.
+- Region: United States only first.
 - RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-event pass remains access source.
 - App switch: `eventPassEnabled`; backend `digital_sales_enabled`.
 - Access created: exact event target only.
@@ -140,14 +154,14 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 
 ## Google Play Product Matrix
 
-| Flow | Production product ID | Product type | Base plan | Price target | Dashboard status | Owner action |
-| --- | --- | --- | --- | --- | --- | --- |
-| Tips | `cw_creator_tip_099` | One-time product | Not applicable | 0.99 or provider-confirmed | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, and keep app switch OFF. |
-| Paid Video | `cw_paid_content_access_099` | One-time product | Not applicable | 0.99 or provider-confirmed | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, and keep app switch OFF. |
-| Watch-Party Ticket | `cw_watch_party_ticket_099` | One-time product | Not applicable | 0.99 or provider-confirmed | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, and keep app switch OFF. |
-| Channel Subscription | `cw_channel_subscription_monthly_499` | Subscription | `monthly` | 4.99 or provider-confirmed | Missing / blocked by owner-provider setup | Create subscription, base plan, pricing, regions, and keep app switch OFF. |
-| VIP | `cw_vip_pass_499` | One-time product | Not applicable | 4.99 or provider-confirmed | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, and keep app switch OFF. |
-| Event Pass | `cw_event_pass_099` | One-time product | Not applicable | 0.99 or provider-confirmed | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, and keep app switch OFF. |
+| Flow | Production product ID | Product type | Base plan | Price target | Region | Dashboard status | Owner action |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Tips | `cw_creator_tip_099` | One-time product | Not applicable | `$0.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
+| Paid Video | `cw_paid_content_access_099` | One-time product | Not applicable | `$0.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
+| Watch-Party Ticket | `cw_watch_party_ticket_099` | One-time product | Not applicable | `$0.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
+| Channel Subscription | `cw_channel_subscription_monthly_499` | Subscription | `monthly` | `$4.99/month` | United States only first | Missing / blocked by owner-provider setup | Create subscription, base plan, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
+| VIP | `cw_vip_pass_499` | One-time product | Not applicable | `$4.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
+| Event Pass | `cw_event_pass_099` | One-time product | Not applicable | `$0.99` | United States only first | Missing / blocked by owner-provider setup | Create product, purchase option, pricing, regions, required public metadata, tax/compliance, age rating, and keep app switch OFF. |
 
 ## RevenueCat Product Matrix
 
@@ -170,6 +184,19 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 | Channel Subscription | Yes | Yes | Sandbox ID/base plan remains current proof config | OFF |
 | VIP | Yes | Yes | Sandbox ID remains current proof config | OFF |
 | Event Pass | Yes | Yes | Sandbox ID remains current proof config | OFF |
+
+## Custom Pricing Policy Matrix
+
+| Flow | Launch default | Future custom method | Provider-backed? | Fail-closed? | Status |
+| --- | --- | --- | --- | --- | --- |
+| Tips | `cw_creator_tip_099`, `$0.99`, United States only first | Additional tip price products or approved provider-backed price tiers | Yes | Yes | Documented / provider products missing |
+| Paid Video | `cw_paid_content_access_099`, `$0.99`, United States only first | Creator selects from approved paid-video price tiers mapped to provider products | Yes | Yes | Documented / provider products missing |
+| Watch-Party Ticket | `cw_watch_party_ticket_099`, `$0.99`, United States only first | Creator selects from approved ticket price tiers mapped to provider products | Yes | Yes | Documented / provider products missing |
+| Channel Subscription | `cw_channel_subscription_monthly_499`, base plan `monthly`, `$4.99/month`, United States only first | Approved subscription products, base plans, or offers only | Yes | Yes | Documented / provider products missing |
+| VIP | `cw_vip_pass_499`, `$4.99`, United States only first | Approved VIP price tiers mapped to provider products | Yes | Yes | Documented / provider products missing |
+| Event Pass | `cw_event_pass_099`, `$0.99`, United States only first | Approved event pass price tiers mapped to provider products | Yes | Yes | Documented / provider products missing |
+
+Unsupported custom amounts fail closed: no purchase intent, no provider sheet, no access grant, no ledger row, no payout, no payable balance, and safe unavailable copy only. Future price expansion requires verified Google Play / RevenueCat products, price tiers, base plans, offers, or owner-approved product catalog entries.
 
 ## Switch / Off-State Proof
 
@@ -199,13 +226,15 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 
 ## Owner Action List
 
-1. Create the five Google Play one-time products with the production-labeled IDs above.
-2. Create the Google Play channel subscription `cw_channel_subscription_monthly_499` with base plan `monthly`.
-3. Confirm prices, currency, regions, purchase options, tax/compliance, and provider availability.
-4. Import each product into RevenueCat only after Google Play records exist.
-5. Attach only the channel subscription to `creator_channel_subscription`; do not attach any creator product to `premium`.
-6. Re-run dashboard verification and Play-installed smoke in a separate lane.
-7. Keep all creator-money switches OFF until owner-approved activation.
+1. Approve the required user-visible product names/descriptions/icons, tax category, age rating, and any other provider/compliance fields needed by Google Play.
+2. Create the five Google Play one-time products with the production-labeled IDs above.
+3. Create the Google Play channel subscription `cw_channel_subscription_monthly_499` with base plan `monthly`.
+4. Set the approved starting prices and United States only first availability.
+5. Confirm purchase options, tax/compliance, age rating, publishing/provider review, and provider availability.
+6. Import each product into RevenueCat only after Google Play records exist.
+7. Attach only the channel subscription to `creator_channel_subscription`; do not attach any creator product to `premium`.
+8. Re-run dashboard verification and Play-installed smoke in a separate lane.
+9. Keep all creator-money switches OFF until owner-approved activation.
 
 ## Current Provider Docs Basis
 

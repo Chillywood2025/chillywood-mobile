@@ -21,6 +21,9 @@ const products = [
     sandboxProductId: "cw_creator_tip_sandbox_099",
     productionProductId: "cw_creator_tip_099",
     productType: "one_time_consumable",
+    launchPriceUsd: "$0.99",
+    launchRegion: "United States only first",
+    futureCustomPricing: "Additional tip price products or approved provider-backed price tiers only.",
     switchName: "tipsEnabled",
     moneySwitch: "tips_enabled",
     googlePlayStatus: "Missing",
@@ -34,6 +37,9 @@ const products = [
     sandboxProductId: "cw_paid_content_access_sandbox_099",
     productionProductId: "cw_paid_content_access_099",
     productType: "one_time_consumable",
+    launchPriceUsd: "$0.99",
+    launchRegion: "United States only first",
+    futureCustomPricing: "Approved paid-video price tiers mapped to verified provider products only.",
     switchName: "paidVideoEnabled",
     moneySwitch: "paid_content_enabled",
     googlePlayStatus: "Missing",
@@ -47,6 +53,9 @@ const products = [
     sandboxProductId: "cw_watch_party_live_ticket_sandbox_099",
     productionProductId: "cw_watch_party_ticket_099",
     productType: "one_time_consumable",
+    launchPriceUsd: "$0.99",
+    launchRegion: "United States only first",
+    futureCustomPricing: "Approved ticket price tiers mapped to verified provider products only.",
     switchName: "watchPartyTicketEnabled",
     moneySwitch: "watch_party_tickets_enabled",
     googlePlayStatus: "Missing",
@@ -62,6 +71,9 @@ const products = [
     productionBasePlanId: "monthly",
     revenueCatProductId: "cw_channel_subscription_monthly_499:monthly",
     productType: "subscription",
+    launchPriceUsd: "$4.99/month",
+    launchRegion: "United States only first",
+    futureCustomPricing: "Approved subscription products, base plans, or offers only.",
     switchName: "channelSubscriptionEnabled",
     moneySwitch: "digital_sales_enabled",
     googlePlayStatus: "Missing",
@@ -75,6 +87,9 @@ const products = [
     sandboxProductId: "cw_vip_pass_sandbox_499",
     productionProductId: "cw_vip_pass_499",
     productType: "one_time_non_consumable",
+    launchPriceUsd: "$4.99",
+    launchRegion: "United States only first",
+    futureCustomPricing: "Approved VIP price tiers mapped to verified provider products only.",
     switchName: "vipEnabled",
     moneySwitch: "digital_sales_enabled",
     googlePlayStatus: "Missing",
@@ -88,6 +103,9 @@ const products = [
     sandboxProductId: "cw_event_pass_sandbox_099",
     productionProductId: "cw_event_pass_099",
     productType: "one_time_consumable",
+    launchPriceUsd: "$0.99",
+    launchRegion: "United States only first",
+    futureCustomPricing: "Approved event pass price tiers mapped to verified provider products only.",
     switchName: "eventPassEnabled",
     moneySwitch: "digital_sales_enabled",
     googlePlayStatus: "Missing",
@@ -133,6 +151,8 @@ const oldToNewProductIdMatrix = products.map((product) => ({
   oldSandboxId: product.sandboxProductId,
   newProductionId: product.productionProductId,
   productType: product.productType,
+  launchDefault: product.productionBasePlanId ? `${product.launchPriceUsd}, base plan ${product.productionBasePlanId}` : product.launchPriceUsd,
+  region: product.launchRegion,
   providerStatus: product.googlePlayStatus,
   revenueCatStatus: product.revenueCatStatus,
   activationStatus: "OFF",
@@ -143,6 +163,8 @@ const googlePlayProductMatrix = products.map((product) => ({
   productionProductId: product.productionProductId,
   productType: product.productType,
   basePlan: product.productionBasePlanId ?? "Not applicable",
+  price: product.launchPriceUsd,
+  region: product.launchRegion,
   dashboardStatus: product.googlePlayStatus,
   ownerAction: product.ownerAction,
 }));
@@ -156,10 +178,23 @@ const revenueCatProductMatrix = products.map((product) => ({
   ownerAction: product.ownerAction,
 }));
 
+const customPricingPolicyMatrix = products.map((product) => ({
+  flow: product.flow,
+  launchDefault: product.productionBasePlanId ? `${product.launchPriceUsd}, base plan ${product.productionBasePlanId}` : product.launchPriceUsd,
+  futureCustomMethod: product.futureCustomPricing,
+  providerBacked: true,
+  failClosed: true,
+  unsupportedCustomAmounts: "Blocked. The app must not accept arbitrary checkout amounts that do not map to verified Google Play / RevenueCat products, price tiers, base plans, offers, or owner-approved catalog entries.",
+  status: "Documented",
+}));
+
 const repoConfigMatrix = products.map((product) => ({
   flow: product.flow,
   sandboxIdKnown: switchboardText.includes(product.sandboxProductId),
   productionIdKnown: switchboardText.includes(product.productionProductId) && docsText.includes(product.productionProductId),
+  launchPriceKnown: switchboardText.includes(product.launchPriceUsd) && docsText.includes(product.launchPriceUsd),
+  launchRegionKnown: switchboardText.includes(product.launchRegion) && docsText.includes(product.launchRegion),
+  customPricingPolicyKnown: switchboardText.includes("provider_backed_fail_closed") && docsText.includes("Unsupported custom amounts fail closed"),
   activeAppId: "Sandbox ID remains current proof config",
   activationState: "OFF",
 }));
@@ -241,6 +276,24 @@ const checks = [
     detail: "Production-labeled creator product plan is documented.",
   },
   {
+    id: "approved_launch_defaults_documented",
+    ok: products.every((product) => docsText.includes(product.launchPriceUsd) && switchboardText.includes(product.launchPriceUsd))
+      && docsText.includes("United States only first")
+      && switchboardText.includes("United States only first")
+      && docsText.includes("Approved starting prices are launch defaults, not the only future prices"),
+    detail: "Owner-approved starting prices and US-only-first launch region are documented as defaults.",
+  },
+  {
+    id: "custom_pricing_provider_backed_fail_closed",
+    ok: exists("docs/CREATOR_MONEY_CUSTOM_PRICING_POLICY.md")
+      && has("docs/CREATOR_MONEY_CUSTOM_PRICING_POLICY.md", "Custom pricing is allowed only through verified provider-supported price paths")
+      && has("docs/CREATOR_MONEY_CUSTOM_PRICING_POLICY.md", "Unsupported custom amounts fail closed")
+      && has("docs/CREATOR_MONEY_CUSTOM_PRICING_POLICY.md", "arbitrary custom amounts")
+      && docsText.includes("Future custom pricing requires provider-backed price tiers/products/base plans/offers")
+      && switchboardText.includes("provider_backed_fail_closed"),
+    detail: "Custom pricing is documented as provider-backed only and fail-closed for unsupported amounts.",
+  },
+  {
     id: "sandbox_and_production_ids_known",
     ok: products.every((product) => switchboardText.includes(product.sandboxProductId) && switchboardText.includes(product.productionProductId)),
     detail: "Switchboard knows both sandbox and production product IDs.",
@@ -292,6 +345,7 @@ const artifactPayloads = {
   "old-to-new-product-id-matrix.json": oldToNewProductIdMatrix,
   "google-play-product-matrix.json": googlePlayProductMatrix,
   "revenuecat-product-matrix.json": revenueCatProductMatrix,
+  "custom-pricing-policy-matrix.json": customPricingPolicyMatrix,
   "repo-config-matrix.json": repoConfigMatrix,
   "stripe-payout-merch-prep-matrix.json": stripePayoutMerchPrepMatrix,
   "owner-action-list.json": ownerActionList,
@@ -343,6 +397,7 @@ Files:
 - old-to-new-product-id-matrix.json
 - google-play-product-matrix.json
 - revenuecat-product-matrix.json
+- custom-pricing-policy-matrix.json
 - repo-config-matrix.json
 - stripe-payout-merch-prep-matrix.json
 - owner-action-list.json
@@ -365,6 +420,7 @@ const summary = {
   stripePayoutsOff: true,
   stripeMerchCheckoutOff: true,
   refundsManualExternal: switchOffStateProof.refunds === "manual/external",
+  customPricingProviderBackedFailClosed: checks.find((check) => check.id === "custom_pricing_provider_backed_fail_closed")?.ok === true,
   creatorMoneyCanBeActivatedNow: false,
   checks: checks.map((check) => ({ id: check.id, status: status(check.ok), detail: check.detail })),
   secretScan: secretFindings.length === 0 ? "Pass" : "Blocked",

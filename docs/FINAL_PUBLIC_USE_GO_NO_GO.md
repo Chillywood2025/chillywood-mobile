@@ -94,11 +94,15 @@ Seven-flow money classification:
 - Creator-money production-labeled product IDs: Blocked.
 - Creator-money production-labeled products: Blocked.
 - Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
+- Approved starting prices are launch defaults, not the only future prices.
+- Future custom pricing requires provider-backed price tiers/products/base plans/offers.
+- Unsupported custom amounts fail closed.
+- United States only first.
 - Stripe payout and merch prep documented separately.
 - Stripe payouts remain OFF.
 - Stripe merch checkout remains OFF.
 - Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
-- Google Play creation requires owner/provider choices for immutable product records, user-visible metadata, tax/compliance, age rating, region/pricing, purchase options, and subscription base plans; no provider product form was submitted in the latest prep lane.
+- The owner approved the recommended production creator-money product IDs, recommended starting prices, and United States only first, but Google Play creation still requires owner/provider-approved public product metadata, icons, tax/compliance, age rating, purchase options, subscription base plans, and publishing/provider review; no provider product form was submitted in the latest prep lane.
 - RevenueCat import/mapping remains blocked until the matching Google Play production-labeled products exist.
 - Stripe is reserved for future creator payouts and physical merch; it is not used for Android digital creator-money purchases in this lane.
 - Production activation is not claimed for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, or Event Pass until owner decision and provider production product approval/mapping are proved.
