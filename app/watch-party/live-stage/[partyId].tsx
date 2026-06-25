@@ -2885,14 +2885,16 @@ export default function WatchPartyLiveStageScreen({
       return;
     }
 
-    console.log("[live-stage-proof] enter live stage", {
-      partyId,
-      isHost,
-      liveKitFoundationEnabled,
-      participantRole: entryParticipantRole,
-      stageMode: entryStageMode,
-      trackedUserReady: !!trackedUserId && trackedUserId !== "anon",
-    });
+    if (__DEV__) {
+      console.log("[live-stage-proof] enter live stage", {
+        partyId,
+        isHost,
+        liveKitFoundationEnabled,
+        participantRole: entryParticipantRole,
+        stageMode: entryStageMode,
+        trackedUserReady: !!trackedUserId && trackedUserId !== "anon",
+      });
+    }
 
     if (liveKitFoundationEnabled && partyId) {
       setLiveKitJoinUnavailable(null);
@@ -2915,12 +2917,6 @@ export default function WatchPartyLiveStageScreen({
       if (joinResult.status === "ready") {
         setLiveKitJoinContract(joinResult);
         setLiveKitJoinUnavailable(null);
-        console.log("[live-stage-proof] prepared live-stage join contract", {
-          roomName: joinResult.roomName,
-          participantRole: joinResult.participantRole,
-          canPublish: joinResult.requestedGrants.canPublish,
-          canSubscribe: joinResult.requestedGrants.canSubscribe,
-        });
         debugLog("livekit", "prepared live-stage join contract", {
           roomName: joinResult.roomName,
           endpoint: joinResult.endpoint,
@@ -2930,14 +2926,16 @@ export default function WatchPartyLiveStageScreen({
       } else {
         setLiveKitJoinContract(null);
         setLiveKitJoinUnavailable(joinResult);
-        console.log("[live-stage-proof] live-stage join contract unavailable", {
-          reason: joinResult.reason,
-          responseStatus: joinResult.responseStatus ?? null,
-          responseError: joinResult.responseError ?? null,
-          message: joinResult.message,
-          roomName: joinResult.roomName,
-          participantRole: joinResult.participantRole,
-        });
+        if (__DEV__) {
+          console.log("[live-stage-proof] live-stage join contract unavailable", {
+            reason: joinResult.reason,
+            responseStatus: joinResult.responseStatus ?? null,
+            responseError: joinResult.responseError ?? null,
+            message: joinResult.message,
+            roomName: joinResult.roomName,
+            participantRole: joinResult.participantRole,
+          });
+        }
         debugLog("livekit", "live-stage join contract unavailable", {
           reason: joinResult.reason,
           roomName: joinResult.roomName,
@@ -2951,7 +2949,7 @@ export default function WatchPartyLiveStageScreen({
         }
       }
     } else {
-      console.log("[live-stage-proof] live-stage join skipped", {
+      debugLog("livekit", "live-stage join skipped", {
         partyId,
         liveKitFoundationEnabled,
       });

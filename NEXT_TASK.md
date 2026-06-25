@@ -1,5 +1,25 @@
 # NEXT TASK
 
+## Monitoring / Analytics / Crash / Runtime Diagnostics Final Alignment Lane
+
+- [x] Monitoring, analytics, crash, performance, runtime diagnostics, and production health repo-side alignment closed.
+
+Status:
+- Verdict: Closed for repo-side alignment; final Firebase SDK/provider collection settings, release dashboard monitoring, and release log audit remain owner/provider confirmation items.
+- Docs: `docs/monitoring/MONITORING_ANALYTICS_CRASH_RUNTIME_DIAGNOSTICS.md`
+- Proof script: `scripts/proof-monitoring-analytics-crash-runtime-diagnostics.mjs`
+- Guard: `scripts/guard-monitoring-analytics-crash-policy.mjs`
+- Runtime hardening:
+  - Runtime error analytics no longer include exception message text.
+  - Root-boundary support feedback no longer attaches raw error text.
+  - User-facing runtime errors use safe copy.
+  - Support/admin diagnostics are scoped and privacy-safe.
+- Provider truth:
+  - Firebase Analytics, Crashlytics, Performance, and Remote Config are the documented Firebase-first diagnostics stack subject to owner confirmation for the submitted build.
+  - Sentry/PostHog remain disabled/not intended by current package evidence.
+  - No new analytics vendor and no expanded data collection were added.
+- Next lane recommendation: Continue production readiness with final store/release readiness and Play submission packet alignment, excluding known Google Play annual/channel base-plan provider blocker.
+
 ## Legal / Privacy / Data Safety Final Alignment Lane
 
 - [x] Legal/privacy/account deletion/Data Safety repo-side alignment closed.

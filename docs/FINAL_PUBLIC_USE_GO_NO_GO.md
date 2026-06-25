@@ -4,6 +4,10 @@
 
 Repo-side legal/privacy/Data Safety final alignment is closed in `docs/legal/LEGAL_PRIVACY_DATA_SAFETY_FINAL_ALIGNMENT.md`. This is product/legal-readiness documentation alignment, not attorney legal advice. Public legal pages, in-app legal/support/account deletion links, account deletion scheduled/restore/purge wording, Data Safety evidence, Play reviewer packet, Premium annual provider-blocked status, creator-money OFF status, manual/external refund posture, and evidence retention exceptions are aligned to current app behavior. Play Console acceptance, attorney/legal approval, SDK/provider final disclosures, support/account deletion SLA, and public legal-site redeploy remain external owner actions.
 
+## June 25, 2026 Monitoring / Analytics / Crash / Runtime Diagnostics Alignment
+
+Monitoring, analytics, crash, and runtime diagnostics repo-side alignment is closed in `docs/monitoring/MONITORING_ANALYTICS_CRASH_RUNTIME_DIAGNOSTICS.md`. Firebase Analytics/Crashlytics/Performance status is documented; Sentry/PostHog remain disabled/not intended; runtime error analytics avoid exception message text; root-boundary support feedback avoids raw error text; runtime unavailable/root error handling uses safe copy; support/admin diagnostics remain scoped and privacy-safe. Owner must confirm final SDK/provider collection settings and run release health checks before Play submission or public rollout.
+
 Date: 2026-06-24
 
 Verdict: Conditional Go.

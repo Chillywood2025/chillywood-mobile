@@ -87,8 +87,7 @@ export function reportRuntimeError(scope: string, error: unknown, meta?: Seriali
 
   trackEvent("runtime_error", {
     scope,
-    message: normalized.message,
-    ...(safeMeta ?? {}),
+    errorName: normalized.name,
   });
 
   return normalized;

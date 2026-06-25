@@ -84,7 +84,6 @@ function RootBoundaryFallback({
         sourceSurface: "root-boundary",
         context: {
           errorName: error.name,
-          errorMessage: error.message,
           betaAccessStatus: accessState.status,
         },
       });
