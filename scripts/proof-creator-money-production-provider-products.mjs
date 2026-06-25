@@ -1,0 +1,318 @@
+#!/usr/bin/env node
+
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
+const artifactDir = path.join("/tmp", `app-creator-money-production-provider-products-proof-${timestamp}`);
+
+const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
+const exists = (relativePath) => existsSync(path.join(root, relativePath));
+const has = (relativePath, needle) => exists(relativePath) && read(relativePath).includes(needle);
+const asJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
+const writeArtifact = (name, content) => writeFileSync(path.join(artifactDir, name), content);
+const status = (ok) => (ok ? "Pass" : "Blocked");
+
+const products = [
+  {
+    flow: "Tips",
+    sandboxProductId: "cw_creator_tip_sandbox_099",
+    productionProductId: "cw_creator_tip_099",
+    productType: "one_time_consumable",
+    switchName: "tipsEnabled",
+    moneySwitch: "tips_enabled",
+    googlePlayStatus: "Missing",
+    revenueCatStatus: "Missing",
+    accessCreated: "None / contribution receipt only.",
+    accessNotCreated: "Premium, content, room, VIP, subscription, event, payout.",
+    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+  },
+  {
+    flow: "Paid Video",
+    sandboxProductId: "cw_paid_content_access_sandbox_099",
+    productionProductId: "cw_paid_content_access_099",
+    productType: "one_time_consumable",
+    switchName: "paidVideoEnabled",
+    moneySwitch: "paid_content_enabled",
+    googlePlayStatus: "Missing",
+    revenueCatStatus: "Missing",
+    accessCreated: "Exact paid video target only.",
+    accessNotCreated: "Premium, other videos, rooms, VIP, subscription, event, payout.",
+    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+  },
+  {
+    flow: "Watch-Party Ticket",
+    sandboxProductId: "cw_watch_party_live_ticket_sandbox_099",
+    productionProductId: "cw_watch_party_ticket_099",
+    productType: "one_time_consumable",
+    switchName: "watchPartyTicketEnabled",
+    moneySwitch: "watch_party_tickets_enabled",
+    googlePlayStatus: "Missing",
+    revenueCatStatus: "Missing",
+    accessCreated: "Exact room/ticket target only.",
+    accessNotCreated: "Premium, other rooms, LiveKit publish/host/mod, VIP, subscription, payout.",
+    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+  },
+  {
+    flow: "Channel Subscription",
+    sandboxProductId: "channel_subscription_sandbox_monthly_499:monthly",
+    productionProductId: "cw_channel_subscription_monthly_499",
+    productionBasePlanId: "monthly",
+    revenueCatProductId: "cw_channel_subscription_monthly_499:monthly",
+    productType: "subscription",
+    switchName: "channelSubscriptionEnabled",
+    moneySwitch: "digital_sales_enabled",
+    googlePlayStatus: "Missing",
+    revenueCatStatus: "Missing",
+    accessCreated: "Exact creator Platform subscription only.",
+    accessNotCreated: "Premium, VIP, paid videos, rooms, events, other creators, payout.",
+    ownerAction: "Create Google Play subscription/base plan, configure pricing/regions, import in RevenueCat, attach only to creator_channel_subscription.",
+  },
+  {
+    flow: "VIP",
+    sandboxProductId: "cw_vip_pass_sandbox_499",
+    productionProductId: "cw_vip_pass_499",
+    productType: "one_time_non_consumable",
+    switchName: "vipEnabled",
+    moneySwitch: "digital_sales_enabled",
+    googlePlayStatus: "Missing",
+    revenueCatStatus: "Missing",
+    accessCreated: "Exact creator VIP only.",
+    accessNotCreated: "Premium, subscription, other creators, paid videos, rooms, events, payout.",
+    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+  },
+  {
+    flow: "Event Pass",
+    sandboxProductId: "cw_event_pass_sandbox_099",
+    productionProductId: "cw_event_pass_099",
+    productType: "one_time_consumable",
+    switchName: "eventPassEnabled",
+    moneySwitch: "digital_sales_enabled",
+    googlePlayStatus: "Missing",
+    revenueCatStatus: "Missing",
+    accessCreated: "Exact event target only.",
+    accessNotCreated: "Premium, VIP, subscription, paid videos, rooms, other events, payout.",
+    ownerAction: "Create Google Play one-time product, configure purchase option/pricing/regions, import in RevenueCat, verify no Premium entitlement.",
+  },
+];
+
+const git = (args) => {
+  try {
+    return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+};
+
+const priorCommitPresent = (() => {
+  try {
+    return execFileSync("git", ["cat-file", "-t", "cee895e5234b3e7b2a46651365f9361d9ddde868"], { cwd: root, encoding: "utf8" }).trim() === "commit";
+  } catch {
+    return false;
+  }
+})();
+
+const docsText = [
+  "docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md",
+  "docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md",
+  "docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md",
+  "docs/SEVEN_FLOW_PRODUCTION_SWITCHBOARD.md",
+  "docs/FINAL_PUBLIC_USE_GO_NO_GO.md",
+  "NEXT_TASK.md",
+].filter(exists).map(read).join("\n");
+
+const switchboardText = read("_lib/sevenFlowSwitchboard.ts");
+const moneyFlagsText = read("_lib/moneyFeatureFlags.ts");
+const runtimeFlagsText = read("_lib/featureFlags.ts");
+
+const oldToNewProductIdMatrix = products.map((product) => ({
+  flow: product.flow,
+  oldSandboxId: product.sandboxProductId,
+  newProductionId: product.productionProductId,
+  productType: product.productType,
+  providerStatus: product.googlePlayStatus,
+  revenueCatStatus: product.revenueCatStatus,
+  activationStatus: "OFF",
+}));
+
+const googlePlayProductMatrix = products.map((product) => ({
+  flow: product.flow,
+  productionProductId: product.productionProductId,
+  productType: product.productType,
+  basePlan: product.productionBasePlanId ?? "Not applicable",
+  dashboardStatus: product.googlePlayStatus,
+  ownerAction: product.ownerAction,
+}));
+
+const revenueCatProductMatrix = products.map((product) => ({
+  flow: product.flow,
+  revenueCatProductId: product.revenueCatProductId ?? product.productionProductId,
+  entitlement: product.flow === "Channel Subscription" ? "creator_channel_subscription" : "Not applicable",
+  offeringPackage: "Not applicable for current direct product flow unless owner requires one",
+  dashboardStatus: product.revenueCatStatus,
+  ownerAction: product.ownerAction,
+}));
+
+const repoConfigMatrix = products.map((product) => ({
+  flow: product.flow,
+  sandboxIdKnown: switchboardText.includes(product.sandboxProductId),
+  productionIdKnown: switchboardText.includes(product.productionProductId) && docsText.includes(product.productionProductId),
+  activeAppId: "Sandbox ID remains current proof config",
+  activationState: "OFF",
+}));
+
+const switchOffStateProof = {
+  liveMoney: moneyFlagsText.includes('live_money_enabled: "off"') && runtimeFlagsText.includes("liveMoneyEnabled: false") ? "OFF" : "Blocked",
+  tips: moneyFlagsText.includes('tips_enabled: "off"') && runtimeFlagsText.includes("tipsEnabled: false") ? "OFF" : "Blocked",
+  paidContent: moneyFlagsText.includes('paid_content_enabled: "off"') && runtimeFlagsText.includes("paidContentCheckoutEnabled: false") ? "OFF" : "Blocked",
+  watchPartyTickets: moneyFlagsText.includes('watch_party_tickets_enabled: "off"') ? "OFF" : "Blocked",
+  digitalSales: moneyFlagsText.includes('digital_sales_enabled: "off"') ? "OFF" : "Blocked",
+  premiumPurchase: runtimeFlagsText.includes("premiumPurchaseEnabled: false") ? "OFF" : "Blocked",
+  payouts: moneyFlagsText.includes('payouts_enabled: "off"') && runtimeFlagsText.includes("payoutsEnabled: false") ? "OFF" : "Blocked",
+  cashout: runtimeFlagsText.includes("cashoutEnabled: false") ? "OFF" : "Blocked",
+  refunds: docsText.includes("Provider refunds remain manual/external") || docsText.includes("Provider refunds: Manual/external") ? "manual/external" : "Blocked",
+};
+
+const ownerActionList = products.map((product) => ({
+  flow: product.flow,
+  action: product.ownerAction,
+  appSwitchMustRemainOff: true,
+}));
+
+const checks = [
+  {
+    id: "prior_provider_reproof_commit_present",
+    ok: priorCommitPresent,
+    detail: "Latest provider dashboard reproof commit is present.",
+  },
+  {
+    id: "product_plan_doc_present",
+    ok: has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Creator-money production-labeled product IDs: Blocked")
+      && has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Sandbox-labeled IDs remain sandbox/test-only")
+      && products.every((product) => has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", product.productionProductId)),
+    detail: "Production-labeled creator product plan is documented.",
+  },
+  {
+    id: "sandbox_and_production_ids_known",
+    ok: products.every((product) => switchboardText.includes(product.sandboxProductId) && switchboardText.includes(product.productionProductId)),
+    detail: "Switchboard knows both sandbox and production product IDs.",
+  },
+  {
+    id: "sandbox_ids_not_claimed_real_money",
+    ok: docsText.includes("Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise")
+      && !docsText.includes("sandbox-labeled IDs are production-ready"),
+    detail: "Sandbox IDs are not claimed as future real-money IDs.",
+  },
+  {
+    id: "production_ids_not_marked_verified",
+    ok: products.every((product) => docsText.includes(product.productionProductId))
+      && docsText.includes("Google Play Console and RevenueCat")
+      && docsText.includes("were not present"),
+    detail: "Production IDs are documented but not falsely marked verified.",
+  },
+  {
+    id: "creator_money_switches_off",
+    ok: Object.entries(switchOffStateProof).every(([key, value]) => key === "refunds" ? value === "manual/external" : value === "OFF"),
+    detail: "Creator-money, live money, Premium purchase, payouts, and cash-out switches remain off.",
+  },
+  {
+    id: "premium_unchanged",
+    ok: switchboardText.includes('productId: "premium_subscription"')
+      && has("_lib/monetization.ts", "PREMIUM_PURCHASE_SHELL_ON_HOLD = true")
+      && runtimeFlagsText.includes("premiumPurchaseEnabled: false"),
+    detail: "Premium product and purchase hold remain unchanged.",
+  },
+  {
+    id: "provider_refunds_manual_external",
+    ok: docsText.includes("Provider refunds remain manual/external") || docsText.includes("Provider refunds: Manual/external"),
+    detail: "Provider refunds remain manual/external.",
+  },
+];
+
+mkdirSync(artifactDir, { recursive: true });
+const artifactPayloads = {
+  "old-to-new-product-id-matrix.json": oldToNewProductIdMatrix,
+  "google-play-product-matrix.json": googlePlayProductMatrix,
+  "revenuecat-product-matrix.json": revenueCatProductMatrix,
+  "repo-config-matrix.json": repoConfigMatrix,
+  "owner-action-list.json": ownerActionList,
+  "switch-off-state-proof.json": switchOffStateProof,
+  "checks.json": checks,
+};
+
+for (const [name, payload] of Object.entries(artifactPayloads)) {
+  writeArtifact(name, asJson(payload));
+}
+
+const artifactText = Object.entries(artifactPayloads)
+  .map(([name, payload]) => `${name}\n${asJson(payload)}`)
+  .join("\n");
+const secretPatterns = [
+  /sk_live/i,
+  /sk_test/i,
+  /whsec_/i,
+  /Bearer\s+[A-Za-z0-9._-]+/i,
+  /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/,
+  /signedUrl/i,
+  /LIVEKIT_API_SECRET/i,
+  /REVENUECAT.*SECRET/i,
+  /SUPABASE_SERVICE_ROLE/i,
+];
+const secretFindings = secretPatterns
+  .map((pattern) => ({ pattern: String(pattern), matched: pattern.test(artifactText) }))
+  .filter((entry) => entry.matched);
+
+writeArtifact("secret-scan-result.json", asJson({
+  scannedArtifactNames: Object.keys(artifactPayloads),
+  findingCount: secretFindings.length,
+  findings: secretFindings.map((entry) => ({ pattern: entry.pattern, value: "[redacted]" })),
+  status: secretFindings.length === 0 ? "Pass" : "Blocked",
+}));
+
+writeArtifact("README.md", `# Creator-Money Production Provider Products Proof
+
+Generated: ${new Date().toISOString()}
+
+This proof is read-only and dry-run. It made no purchases, no provider refund calls, no payout calls, no transfer calls, no withdrawal calls, no provider dashboard screenshot capture, and printed no provider secrets or private user data.
+
+Verdict: Blocked.
+
+Reason: the clean production-labeled creator-money product IDs are documented in repo config, but browser dashboard readback found them missing in Google Play Console and RevenueCat. Provider product creation requires owner/provider action.
+
+Files:
+
+- old-to-new-product-id-matrix.json
+- google-play-product-matrix.json
+- revenuecat-product-matrix.json
+- repo-config-matrix.json
+- owner-action-list.json
+- switch-off-state-proof.json
+- checks.json
+- secret-scan-result.json
+`);
+
+const summary = {
+  verdict: "Blocked",
+  artifactDir,
+  branch: git(["branch", "--show-current"]),
+  head: git(["rev-parse", "HEAD"]),
+  productionLabeledProductsCreatedOrVerified: false,
+  readyProducts: [],
+  missingOrBlockedProducts: products.map((product) => product.flow),
+  premiumUnchanged: checks.find((check) => check.id === "premium_unchanged")?.ok === true,
+  creatorMoneySwitchesOff: checks.find((check) => check.id === "creator_money_switches_off")?.ok === true,
+  payoutsOff: switchOffStateProof.payouts === "OFF",
+  refundsManualExternal: switchOffStateProof.refunds === "manual/external",
+  creatorMoneyCanBeActivatedNow: false,
+  checks: checks.map((check) => ({ id: check.id, status: status(check.ok), detail: check.detail })),
+  secretScan: secretFindings.length === 0 ? "Pass" : "Blocked",
+};
+
+writeArtifact("summary.json", asJson(summary));
+console.log(asJson(summary));
+
+if (checks.some((check) => !check.ok) || secretFindings.length > 0) {
+  process.exit(1);
+}

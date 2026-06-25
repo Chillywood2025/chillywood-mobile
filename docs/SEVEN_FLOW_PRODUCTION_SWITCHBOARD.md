@@ -12,11 +12,15 @@ Seven-flow production switchboard: Partial. The explicit switch catalog, default
 
 Seven-flow production prep: Partial. The production-prep checklist now records flow-by-flow provider mapping, owner activation steps, support/refund/dispute policy, monitoring/readback expectations, and rollback paths in `docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md`. It keeps activation blocked pending owner approval and provider production verification per flow.
 
+Creator-money production-labeled product IDs: Blocked. Owner chose option B: sandbox-labeled creator-money product IDs remain sandbox/test-only, and clean production-labeled IDs must be created before creator-money launch. See `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`.
+
 Real-money activation: Off by default unless owner explicitly enables each flow.
 
 Creator payouts: Off unless separate payout lane enables them.
 
 Provider refunds: Manual/external unless separate provider-refund lane enables automation.
+
+Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
 
 ## Current Repo Truth
 

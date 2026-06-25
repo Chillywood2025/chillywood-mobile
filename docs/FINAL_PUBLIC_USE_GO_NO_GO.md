@@ -70,6 +70,10 @@ Latest seven-flow provider dashboard reproof artifact:
 
 - `/tmp/app-seven-flow-provider-dashboard-reproof-20260625-033613/`
 
+Latest creator-money production provider products proof artifact:
+
+- `/tmp/app-creator-money-production-provider-products-proof-20260625-040606/`
+
 Seven-flow money classification:
 
 - Seven-flow app-side proof: Closed.
@@ -87,6 +91,9 @@ Seven-flow money classification:
 - Provider refunds remain manual/external.
 - Production provider products are verified only where dashboard/API evidence exists.
 - Configured Google Play and RevenueCat product IDs match the app; creator-money products remain sandbox-labeled and require owner decision before any activation.
+- Creator-money production-labeled product IDs: Blocked.
+- Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
+- Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
 - Production activation is not claimed for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, or Event Pass until owner decision and provider production product approval/mapping are proved.
 
 ## Wave Summary

@@ -14,6 +14,8 @@ Seven-flow production prep: Partial.
 
 Seven-flow provider verification: Partial. Provider verification used browser dashboard evidence from Google Play Console and RevenueCat for the Android package `com.chillywood.mobile`. The configured product IDs are present in the dashboards and match the repo/app configuration. Production activation remains blocked by owner activation approval and, for creator-money flows, by owner decision on whether to keep the sandbox-labeled configured IDs or replace them with owner-approved production product IDs.
 
+Creator-money production-labeled product IDs: Blocked. Owner chose option B: create clean production-labeled creator-money product IDs before any creator-money launch. Browser dashboard readback found `cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_channel_subscription_monthly_499`, `cw_vip_pass_499`, and `cw_event_pass_099` missing in Google Play Console and RevenueCat. Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
+
 All activation switches remain OFF.
 
 Premium-first launch remains pending owner activation and provider final check.
@@ -27,6 +29,8 @@ Provider refunds remain manual/external.
 Production provider products are verified only where dashboard/API evidence exists.
 
 Do not claim a flow provider-ready unless Google Play and RevenueCat evidence support it.
+
+Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
 
 ## Repo And Dashboard Confirmation
 

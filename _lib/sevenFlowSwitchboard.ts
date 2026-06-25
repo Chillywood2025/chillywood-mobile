@@ -23,6 +23,13 @@ export type SevenFlowProviderReadiness =
   | "production_ready_unverified"
   | "production_blocked_provider_config";
 
+export type CreatorMoneyProductionProviderStatus =
+  | "missing"
+  | "created"
+  | "verified"
+  | "blocked_owner_action"
+  | "blocked_provider_constraints";
+
 export type SevenFlowSwitchboardRow = {
   flowKey: SevenMoneyFlowKey;
   label: string;
@@ -33,11 +40,26 @@ export type SevenFlowSwitchboardRow = {
   emergencyStopSwitch: MoneyFeatureFlagKey;
   provider: "Google Play / RevenueCat";
   productId: string;
+  productionProductId?: string;
+  productionBasePlanId?: string;
   productType: "subscription" | "one_time_consumable" | "one_time_non_consumable";
   accessCreated: string;
   accessNotCreated: string;
   appSurface: string;
   providerReadiness: SevenFlowProviderReadiness;
+};
+
+export type CreatorMoneyProductionProviderProductRow = {
+  flowKey: SevenMoneyFlowKey;
+  label: string;
+  sandboxProductId: string;
+  productionProductId: string;
+  productionBasePlanId: string | null;
+  productType: SevenFlowSwitchboardRow["productType"];
+  switchName: SevenFlowSwitchName;
+  activationStatus: "off";
+  googlePlayStatus: CreatorMoneyProductionProviderStatus;
+  revenueCatStatus: CreatorMoneyProductionProviderStatus;
 };
 
 export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
@@ -67,6 +89,7 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: "Google Play / RevenueCat",
     productId: "cw_creator_tip_sandbox_099",
+    productionProductId: "cw_creator_tip_099",
     productType: "one_time_consumable",
     accessCreated: "No durable access. Sandbox ledger/readback row only.",
     accessNotCreated: "No Premium, paid video, ticket, subscription, VIP, event, badge, ranking, LiveKit, host, moderator, payable balance, or payout access.",
@@ -83,6 +106,7 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: "Google Play / RevenueCat",
     productId: "cw_paid_content_access_sandbox_099",
+    productionProductId: "cw_paid_content_access_099",
     productType: "one_time_consumable",
     accessCreated: "paid_content_access grant bound to one creator video/source id.",
     accessNotCreated: "No Premium, channel subscription, VIP, room ticket, event pass, other video unlock, LiveKit authority, payout, or payable balance.",
@@ -99,6 +123,7 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: "Google Play / RevenueCat",
     productId: "cw_watch_party_live_ticket_sandbox_099",
+    productionProductId: "cw_watch_party_ticket_099",
     productType: "one_time_consumable",
     accessCreated: "watch_party_live_ticket grant bound to one Party Room / Watch-Party target.",
     accessNotCreated: "No Premium, other room, Live Stage route, LiveKit publish, host, speaker, moderator, paid video, VIP, subscription, event pass, payout, or payable balance.",
@@ -115,6 +140,8 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: "Google Play / RevenueCat",
     productId: "channel_subscription_sandbox_monthly_499:monthly",
+    productionProductId: "cw_channel_subscription_monthly_499",
+    productionBasePlanId: "monthly",
     productType: "subscription",
     accessCreated: "channel_subscription grant/subscription state for one creator channel.",
     accessNotCreated: "No Premium, VIP, paid video, room ticket, event pass, other creator subscription, LiveKit authority, payout, or payable balance.",
@@ -131,6 +158,7 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: "Google Play / RevenueCat",
     productId: "cw_vip_pass_sandbox_499",
+    productionProductId: "cw_vip_pass_499",
     productType: "one_time_non_consumable",
     accessCreated: "vip_pass grant/pass state for one creator.",
     accessNotCreated: "No Premium, channel subscription, paid video, ticket, event pass, other creator VIP, LiveKit authority, payout, or payable balance.",
@@ -147,6 +175,7 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
     emergencyStopSwitch: "live_money_enabled",
     provider: "Google Play / RevenueCat",
     productId: "cw_event_pass_sandbox_099",
+    productionProductId: "cw_event_pass_099",
     productType: "one_time_consumable",
     accessCreated: "event_pass grant/pass bound to one creator event.",
     accessNotCreated: "No Premium, VIP, subscription, paid video, room ticket, other event, LiveKit authority, payout, or payable balance.",
@@ -156,3 +185,18 @@ export const SEVEN_FLOW_SWITCHBOARD: readonly SevenFlowSwitchboardRow[] = [
 ] as const;
 
 export const SEVEN_FLOW_REQUIRED_SWITCHES: readonly SevenFlowSwitchName[] = SEVEN_FLOW_SWITCHBOARD.map((flow) => flow.switchName);
+
+export const CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS: readonly CreatorMoneyProductionProviderProductRow[] = SEVEN_FLOW_SWITCHBOARD
+  .filter((flow) => flow.flowKey !== "premium")
+  .map((flow) => ({
+    flowKey: flow.flowKey,
+    label: flow.label,
+    sandboxProductId: flow.productId,
+    productionProductId: flow.productionProductId ?? "",
+    productionBasePlanId: flow.productionBasePlanId ?? null,
+    productType: flow.productType,
+    switchName: flow.switchName,
+    activationStatus: "off" as const,
+    googlePlayStatus: "missing" as CreatorMoneyProductionProviderStatus,
+    revenueCatStatus: "missing" as CreatorMoneyProductionProviderStatus,
+  }));
