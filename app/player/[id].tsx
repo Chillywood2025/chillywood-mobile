@@ -8163,7 +8163,7 @@ export default function PlayerScreen() {
             <Text style={styles.playerAccessKicker}>WATCH-PARTY LIVE</Text>
             <Text style={styles.playerAccessTitle}>Checking watch-party access</Text>
             <Text style={styles.playerAccessBody}>
-              Chi&apos;llywood is confirming room membership and access truth before Watch-Party Live opens.
+              Chi'llywood is confirming room membership and access truth before Watch-Party Live opens.
             </Text>
             <View style={styles.playerAccessActions}>
               <TouchableOpacity
@@ -8306,7 +8306,7 @@ export default function PlayerScreen() {
             <Text style={styles.playerAccessKicker}>PLAYER</Text>
             <Text style={styles.playerAccessTitle}>Title unavailable</Text>
             <Text style={styles.playerAccessBody}>
-              Chi&apos;llywood could not find a playable platform title for this route.
+              Chi'llywood could not find a playable platform title for this route.
             </Text>
             <View style={styles.playerAccessActions}>
               <TouchableOpacity style={styles.playerAccessSecondaryBtn} onPress={() => router.back()} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Go back">
@@ -8689,7 +8689,7 @@ export default function PlayerScreen() {
                   ) : null}
                   {creatorVideoPaidContentLocked ? (
                     <Text style={styles.videoLoadingSubtext}>
-                      Unlocking this video does not include Chi&apos;llywood Premium, subscriptions, VIP, rooms, events, or other creator videos.
+                      Unlocking this video does not include Chi'llywood Premium, subscriptions, VIP, rooms, events, or other creator videos.
                     </Text>
                   ) : null}
                   {isSpectatorPlaybackUnavailable ? (

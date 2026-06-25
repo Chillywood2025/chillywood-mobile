@@ -1544,13 +1544,13 @@ export default function SettingsScreen() {
 
         <InlineAccordion
           id="account-username"
-          title="Handle"
+          title="Username"
           summary={`Current handle: ${formatUsernameHandle(myProfile?.username) || "Not set"}`}
           expandedSections={expandedSections}
           onToggle={toggleSection}
         >
           <Text style={styles.statusNote}>
-            Your @handle is how people find you and tag you. It can be different from your display name.
+            This is how people find you. Your @handle can be different from your display name.
           </Text>
           <View style={styles.usernameEditorCard}>
             <View style={styles.usernameInputWrap}>

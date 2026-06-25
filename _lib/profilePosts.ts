@@ -14,7 +14,7 @@ export const PROFILE_POST_LIKES_TABLE = "profile_post_likes";
 export const PROFILE_POST_BODY_LIMIT = 500;
 export const PROFILE_POST_COMMENT_BODY_LIMIT = 500;
 
-export type ProfilePostVisibility = "public";
+export type ProfilePostVisibility = "public" | "draft";
 export type ProfilePostModerationStatus = "clean" | "reported" | "hidden" | "removed";
 
 export type ProfilePost = {
@@ -81,6 +81,10 @@ const normalizeModerationStatus = (value: unknown): ProfilePostModerationStatus 
   return "clean";
 };
 
+const normalizeProfilePostVisibility = (value: unknown): ProfilePostVisibility => (
+  normalizeText(value).toLowerCase() === "draft" ? "draft" : "public"
+);
+
 const parseProfilePost = (
   row: ProfilePostRow,
   attachments: SocialAttachment[] = [],
@@ -88,7 +92,7 @@ const parseProfilePost = (
   id: normalizeText(row.id),
   userId: normalizeText(row.user_id),
   body: normalizeText(row.body),
-  visibility: "public",
+  visibility: normalizeProfilePostVisibility(row.visibility),
   moderationStatus: normalizeModerationStatus(row.moderation_status),
   moderationReason: normalizeText(row.moderation_reason) || null,
   moderatedAt: normalizeText(row.moderated_at) || null,

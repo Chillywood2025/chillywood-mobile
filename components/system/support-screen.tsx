@@ -296,7 +296,7 @@ export function SupportScreen() {
             <Text style={styles.cardBody}>{blockedCopy.body}</Text>
             <Text style={styles.metaText}>Signed-in account: {user?.email ?? "Unknown email"}</Text>
             <Text style={styles.metaText}>
-              If this account should be invited, ask the Chi&apos;llywood operator to add or reactivate it in the beta membership table.
+              If this account should be invited, ask the Chi'llywood operator to add or reactivate it in the beta membership table.
             </Text>
           </View>
         ) : (
@@ -408,7 +408,7 @@ export function SupportScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Safety and response expectations</Text>
           <Text style={styles.cardBody}>
-            Chi&apos;llywood Support is not an emergency service. If there is immediate danger, contact local emergency services or the appropriate authority first. Response timing depends on issue type, safety priority, copyright review, and account verification needs.
+            Chi'llywood Support is not an emergency service. If there is immediate danger, contact local emergency services or the appropriate authority first. Response timing depends on issue type, safety priority, copyright review, and account verification needs.
           </Text>
         </View>
 

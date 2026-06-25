@@ -277,8 +277,11 @@ export default function PublicChannelScreen() {
       const brandPromise = showDraftBranding
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
+      const videosPromise = showOwnerControls
+        ? readCreatorVideos(routeUserId, { includeDrafts: true, limit: 50 }).catch(() => [])
+        : readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []);
       const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextWatchPartyTicketOffer, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
-        readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50 }).catch(() => []),
+        videosPromise,
         readPublicEventSummaries(routeUserId).catch(() => []),
         readCreatorMiniPlatformCommerceSurface(routeUserId).catch(() => null),
         readCreatorTipPublicStatus(routeUserId).catch(() => null),
@@ -420,7 +423,9 @@ export default function PublicChannelScreen() {
 
   const refreshPublicVideos = async () => {
     if (!routeUserId) return;
-    const nextVideos = await readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50 }).catch(() => []);
+    const nextVideos = showOwnerControls
+      ? await readCreatorVideos(routeUserId, { includeDrafts: true, limit: 50 }).catch(() => [])
+      : await readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []);
     setVideos(nextVideos);
   };
 
@@ -809,9 +814,9 @@ export default function PublicChannelScreen() {
               )}
             </View>
             <Text style={styles.channelName} numberOfLines={2}>{platformDisplayName}</Text>
-            {platformHandle ? (
+            {channel.handle ? (
               <Text style={styles.channelHandle} numberOfLines={1} testID="platform-public-handle">
-                {platformHandle}
+                {channel.handle}
               </Text>
             ) : null}
 	            {isOfficialChannel ? <Text style={[styles.rolePill, styles.officialRolePill]}>{"Official Chi'llywood"}</Text> : null}
@@ -1285,7 +1290,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "Subscription offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage this creator Platform subscription. This is separate from Chi&apos;llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, and payouts.
+              Manage this creator Platform subscription. This is separate from Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, paid events, and payouts.
             </Text>
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>
@@ -1352,7 +1357,7 @@ export default function PublicChannelScreen() {
             <Text style={styles.cardKicker}>Owner tools</Text>
             <Text style={styles.cardTitle}>{offer?.title ?? "VIP offer"}</Text>
             <Text style={styles.cardBody}>
-              Manage creator-specific VIP for this Platform. VIP does not unlock Chi&apos;llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, or payouts.
+              Manage creator-specific VIP for this Platform. VIP does not unlock Chi'llywood Premium, subscriptions, paid videos, Watch-Party Seat Passes, paid events, room authority, or payouts.
             </Text>
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             <View style={styles.ownerCommerceActions}>

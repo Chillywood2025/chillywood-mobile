@@ -3399,7 +3399,7 @@ export default function WatchPartyRoomScreen() {
           <TouchableOpacity onPress={returnToWatchPartyEntry} hitSlop={12} activeOpacity={0.75}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.kicker}>CHI&apos;LLYWOOD · WATCH PARTY</Text>
+          <Text style={styles.kicker}>Chi'llywood · Watch Party</Text>
           {/* Connection badge */}
           <View style={[styles.connBadge, { borderColor: connColor[connState] + "44" }]}>
             <View style={[styles.connDot, { backgroundColor: connColor[connState] }]} />

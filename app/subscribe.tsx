@@ -352,7 +352,7 @@ export default function SubscribeScreen() {
       </View>
 
       <View style={styles.heroCard} testID="premium-not-creator-offer-copy" collapsable={false}>
-        <Text style={styles.heroKicker}>CHI&apos;LLYWOOD PREMIUM</Text>
+        <Text style={styles.heroKicker}>Chi'llywood Premium</Text>
         <Text style={styles.heroTitle}>{hasPremium ? "Premium is active." : "Premium is not active."}</Text>
         <Text style={styles.heroBody}>{statusSummary}</Text>
       </View>
@@ -373,7 +373,7 @@ export default function SubscribeScreen() {
           <Text style={styles.cardKicker}>SIGN IN REQUIRED</Text>
           <Text style={styles.cardTitle}>Sign in before Premium can be checked.</Text>
           <Text style={styles.body}>
-            Premium is account-owned. Sign in so Chi&apos;llywood can check your subscription or restore purchases safely.
+            Premium is account-owned. Sign in so Chi'llywood can check your subscription or restore purchases safely.
           </Text>
           <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88} onPress={onSignIn}>
             <Text style={styles.primaryButtonText}>Sign In</Text>

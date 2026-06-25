@@ -221,7 +221,6 @@ const SAFE_METADATA_FIELDS = [
   "stripe_event_id",
   "revenuecat_event_id",
   "google_play_event_id",
-  "security_context_id",
   "created_at",
   "updated_at",
 ];
@@ -806,7 +805,6 @@ export function buildAdminMoneyAuditEvents({
         { label: "Old state", value: row.oldState ?? "unset" },
         { label: "New state", value: row.newState },
         { label: "Actor user id", value: row.actorUserId || "not returned" },
-        { label: "Security context id", value: row.securityContextId || "not returned" },
         { label: "Reason", value: row.reason },
       ],
     });

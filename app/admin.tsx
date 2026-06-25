@@ -12974,9 +12974,9 @@ export default function AdminStudioScreen() {
           <View style={styles.configHeaderRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.configKicker}>RACHI / OFFICIAL ACCOUNT</Text>
-              <Text style={styles.configTitle}>Official Chi&apos;llywood presence</Text>
+              <Text style={styles.configTitle}>Official Chi'llywood presence</Text>
               <Text style={styles.configBody}>
-                Manage Rachi as an official Platform voice for updates, tips, and Chi&apos;llywood Originals. Rachi does not read private chats.
+                Manage Rachi as an official Platform voice for updates, tips, and Chi'llywood Originals. Rachi does not read private chats.
               </Text>
             </View>
           </View>
@@ -13029,7 +13029,7 @@ export default function AdminStudioScreen() {
                 <OwnerStatusPill label={rachiProfileImageSavedUrl ? "Custom" : "Default"} tone={rachiProfileImageSavedUrl ? "success" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Choose a picture from this device&apos;s photo gallery to update Rachi&apos;s official Profile and Platform picture. Saves and clears write admin audit.
+                Choose a picture from this device's photo gallery to update Rachi's official Profile and Platform picture. Saves and clears write admin audit.
               </Text>
               <View style={styles.rachiProfileImageRow}>
                 <View style={styles.rachiProfileImagePreview}>
@@ -13136,11 +13136,11 @@ export default function AdminStudioScreen() {
 
             <View style={styles.contentPanel}>
               <View style={styles.ownerSectionHeaderRow}>
-                <Text style={styles.ownerSectionTitle}>Chi&apos;llywood Originals</Text>
+                <Text style={styles.ownerSectionTitle}>Chi'llywood Originals</Text>
                 <OwnerStatusPill label={rachiOriginalsLoading ? "Loading" : `${rachiOriginals.length} public`} tone={rachiOriginals.length ? "info" : "locked"} />
               </View>
               <Text style={styles.contentSignalBody}>
-                Home reads public-safe videos owned by Rachi for the Chi&apos;llywood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
+                Home reads public-safe videos owned by Rachi for the Chi'llywood Originals rail. Drafts, private uploads, hidden content, and raw storage paths stay out of Home.
               </Text>
               {rachiOriginals.length ? (
                 <View style={styles.ownerControlList}>
@@ -13199,7 +13199,7 @@ export default function AdminStudioScreen() {
                   <Text style={styles.actionText}>Open Platform</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/chilly-circle")}>
-                  <Text style={styles.actionText}>Open Chi&apos;lly Circle</Text>
+                  <Text style={styles.actionText}>Open Chi'lly Circle</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionBtn, styles.configSaveBtnDisabled]} disabled>
                   <Text style={styles.actionText}>Upload Original</Text>
@@ -15696,7 +15696,7 @@ export default function AdminStudioScreen() {
               <Text style={styles.configKicker}>LIVE OPS FIX CENTER</Text>
               <Text style={styles.configTitle}>Owner/Admin Live remediation approvals</Text>
               <Text style={styles.configBody}>
-                Real incident cards for Live Stage, Watch-Party Live, and Chi&apos;lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
+                Real incident cards for Live Stage, Watch-Party Live, and Chi'lly Chat call reliability only. Approvals go through the server-side proxy; this screen never holds ops approval tokens.
               </Text>
             </View>
             <View style={[styles.badge, getLiveOpsRiskStyle(liveOpsHighestRisk)]}>

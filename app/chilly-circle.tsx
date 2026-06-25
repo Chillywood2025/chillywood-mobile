@@ -536,7 +536,9 @@ export default function ChillyCircleScreen() {
               <Text style={styles.statusPillText}>Official</Text>
             </View>
           </View>
-          <Text style={styles.officialMeta} numberOfLines={1}>Official Chi&apos;llywood updates and Originals.</Text>
+          <Text style={styles.officialMeta} numberOfLines={1}>Official connection</Text>
+          <Text style={styles.officialMeta} numberOfLines={1}>Your first Chi'lly Circle connection</Text>
+          <Text style={styles.officialMeta} numberOfLines={1}>Rachi does not read your private chats.</Text>
         </View>
       </TouchableOpacity>
     </View>
@@ -567,13 +569,13 @@ export default function ChillyCircleScreen() {
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.82}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.kicker}>CHI&apos;LLY CIRCLE</Text>
+        <Text style={styles.kicker}>CHI'LLY CIRCLE</Text>
         <TouchableOpacity activeOpacity={0.82} onPress={() => { void loadCircle(); }}>
           <Text style={styles.refreshText}>Refresh</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.pageTitle}>Chi&apos;lly Circle</Text>
+      <Text style={styles.pageTitle}>Chi'lly Circle</Text>
       <Text style={styles.pageSubtle}>Find people and manage official and mutual connections.</Text>
 
       <View style={styles.searchShell}>

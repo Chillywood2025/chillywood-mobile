@@ -54,7 +54,6 @@ export type PlatformMoneyKillSwitchAuditRow = {
   oldState: MoneyFeatureFlagState | null;
   newState: MoneyFeatureFlagState;
   reason: string;
-  securityContextId: string | null;
   createdAt: string | null;
 };
 
@@ -88,7 +87,6 @@ type PlatformMoneyKillSwitchAuditDbRow = {
   old_state?: unknown;
   new_state?: unknown;
   reason?: unknown;
-  security_context_id?: unknown;
   created_at?: unknown;
 };
 
@@ -269,7 +267,6 @@ const toAuditRow = (row: PlatformMoneyKillSwitchAuditDbRow): PlatformMoneyKillSw
     oldState: row.old_state === null || row.old_state === undefined ? null : normalizeState(row.old_state),
     newState: normalizeState(row.new_state),
     reason: normalizeText(row.reason) || "No reason returned.",
-    securityContextId: normalizeText(row.security_context_id) || null,
     createdAt: normalizeText(row.created_at) || null,
   };
 };

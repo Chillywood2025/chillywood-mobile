@@ -511,16 +511,22 @@ export async function readCreatorVideos(
 ): Promise<CreatorVideo[]> {
   const normalizedOwnerId = toText(ownerId);
   if (!normalizedOwnerId) return [];
+  const limit = options?.limit ?? 24;
+
+  if (!options?.includeDrafts) {
+    return readPublicCreatorVideoCards({
+      action: "list_by_owner",
+      ownerId: normalizedOwnerId,
+      limit,
+    }).catch(() => []);
+  }
 
   let query = supabase
     .from("videos")
     .select(CREATOR_VIDEO_SELECT)
     .eq("owner_id", normalizedOwnerId)
     .order("created_at", { ascending: false })
-    .limit(options?.limit ?? 24);
-  if (!options?.includeDrafts) {
-    query = query.neq("visibility", "draft");
-  }
+    .limit(limit);
 
   const { data, error } = await query.returns<CreatorVideoRow[]>();
   if (error || !data) return [];
