@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
-const artifactDir = path.join("/tmp", `app-creator-money-provider-product-option-proof-${timestamp}`);
+const artifactDir = path.join("/tmp", `app-creator-money-provider-hyphen-option-proof-${timestamp}`);
 
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
@@ -20,7 +20,7 @@ const products = [
     flow: "Tips",
     sandboxProductId: "cw_creator_tip_sandbox_099",
     productionProductId: "cw_creator_tip_099",
-    purchaseOptionId: "tip_099",
+    purchaseOptionId: "tip-099",
     productType: "one_time_consumable",
     displayName: "Creator Tip",
     shortDescription: "Send optional support to a creator. Tips do not unlock content.",
@@ -29,17 +29,17 @@ const products = [
     futureCustomPricing: "Additional tip price products or approved provider-backed price tiers only.",
     switchName: "tipsEnabled",
     moneySwitch: "tips_enabled",
-    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
-    revenueCatStatus: "Blocked until Google Play product exists",
+    googlePlayStatus: "Created as Google Play Draft with purchase option tip-099, United States only, USD 0.99",
+    revenueCatStatus: "Imported as RevenueCat Draft consumable; no entitlement attached",
     accessCreated: "None / contribution receipt only.",
     accessNotCreated: "Premium, content, room, VIP, subscription, event, payout.",
-    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
+    ownerAction: "Keep draft off; later owner approval must activate/provider-smoke this product before app switch activation.",
   },
   {
     flow: "Paid Video",
     sandboxProductId: "cw_paid_content_access_sandbox_099",
     productionProductId: "cw_paid_content_access_099",
-    purchaseOptionId: "paid_video_099",
+    purchaseOptionId: "paid-video-099",
     productType: "one_time_consumable",
     displayName: "Paid Video Access",
     shortDescription: "Unlock access to one paid creator video.",
@@ -48,17 +48,17 @@ const products = [
     futureCustomPricing: "Approved paid-video price tiers mapped to verified provider products only.",
     switchName: "paidVideoEnabled",
     moneySwitch: "paid_content_enabled",
-    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
-    revenueCatStatus: "Blocked until Google Play product exists",
+    googlePlayStatus: "Created as Google Play Draft with purchase option paid-video-099, United States only, USD 0.99",
+    revenueCatStatus: "Imported as RevenueCat Draft consumable; no entitlement attached",
     accessCreated: "Exact paid video target only.",
     accessNotCreated: "Premium, other videos, rooms, VIP, subscription, event, payout.",
-    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
+    ownerAction: "Keep draft off; later owner approval must activate/provider-smoke this product before app switch activation.",
   },
   {
     flow: "Watch-Party Ticket",
     sandboxProductId: "cw_watch_party_live_ticket_sandbox_099",
     productionProductId: "cw_watch_party_ticket_099",
-    purchaseOptionId: "ticket_099",
+    purchaseOptionId: "ticket-099",
     productType: "one_time_consumable",
     displayName: "Watch-Party Ticket",
     shortDescription: "Unlock access to one ticketed Watch-Party room.",
@@ -67,11 +67,11 @@ const products = [
     futureCustomPricing: "Approved ticket price tiers mapped to verified provider products only.",
     switchName: "watchPartyTicketEnabled",
     moneySwitch: "watch_party_tickets_enabled",
-    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
-    revenueCatStatus: "Blocked until Google Play product exists",
+    googlePlayStatus: "Created as Google Play Draft with purchase option ticket-099, United States only, USD 0.99",
+    revenueCatStatus: "Imported as RevenueCat Draft consumable; no entitlement attached",
     accessCreated: "Exact room/ticket target only.",
     accessNotCreated: "Premium, other rooms, LiveKit publish/host/mod, VIP, subscription, payout.",
-    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
+    ownerAction: "Keep draft off; later owner approval must activate/provider-smoke this product before app switch activation.",
   },
   {
     flow: "Channel Subscription",
@@ -91,14 +91,14 @@ const products = [
     revenueCatStatus: "Blocked until Google Play base plan exists",
     accessCreated: "Exact creator Platform subscription only.",
     accessNotCreated: "Premium, VIP, paid videos, rooms, events, other creators, payout.",
-    ownerAction: "Resolve Google Play save error for monthly base plan; draft showed US-only, auto-renewing monthly, default grace/account hold, and USD 4.99 before save failed.",
+    ownerAction: "Resolve Google Play save error for monthly base plan; retry showed US-only, auto-renewing monthly, default 7-day grace/account hold, and USD 4.99 before save failed.",
   },
   {
     flow: "VIP",
     sandboxProductId: "cw_vip_pass_sandbox_499",
     productionProductId: "cw_vip_pass_499",
-    purchaseOptionId: "vip_499",
-    productType: "one_time_non_consumable",
+    purchaseOptionId: "vip-499",
+    productType: "one_time_consumable",
     displayName: "Creator VIP Pass",
     shortDescription: "Unlock creator-specific VIP access.",
     launchPriceUsd: "$4.99",
@@ -106,17 +106,17 @@ const products = [
     futureCustomPricing: "Approved VIP price tiers mapped to verified provider products only.",
     switchName: "vipEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
-    revenueCatStatus: "Blocked until Google Play product exists",
+    googlePlayStatus: "Created as Google Play Draft with purchase option vip-499, United States only, USD 4.99",
+    revenueCatStatus: "Imported as RevenueCat Draft consumable; no entitlement attached",
     accessCreated: "Exact creator VIP only.",
     accessNotCreated: "Premium, subscription, other creators, paid videos, rooms, events, payout.",
-    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
+    ownerAction: "Keep draft off; later owner approval must activate/provider-smoke this product before app switch activation.",
   },
   {
     flow: "Event Pass",
     sandboxProductId: "cw_event_pass_sandbox_099",
     productionProductId: "cw_event_pass_099",
-    purchaseOptionId: "event_099",
+    purchaseOptionId: "event-099",
     productType: "one_time_consumable",
     displayName: "Creator Event Pass",
     shortDescription: "Unlock access to one paid creator event.",
@@ -125,11 +125,11 @@ const products = [
     futureCustomPricing: "Approved event pass price tiers mapped to verified provider products only.",
     switchName: "eventPassEnabled",
     moneySwitch: "digital_sales_enabled",
-    googlePlayStatus: "Missing; Google Play rejects approved purchase-option ID because underscores are invalid",
-    revenueCatStatus: "Blocked until Google Play product exists",
+    googlePlayStatus: "Created as Google Play Draft with purchase option event-099, United States only, USD 0.99",
+    revenueCatStatus: "Imported as RevenueCat Draft consumable; no entitlement attached",
     accessCreated: "Exact event target only.",
     accessNotCreated: "Premium, VIP, subscription, paid videos, rooms, other events, payout.",
-    ownerAction: "Approve a Google Play-valid hyphenated purchase-option ID, then create product with US-only pricing and import in RevenueCat.",
+    ownerAction: "Keep draft off; later owner approval must activate/provider-smoke this product before app switch activation.",
   },
 ];
 
@@ -189,8 +189,8 @@ const purchaseOptionIdMatrix = products
     approvedPurchaseOptionId: product.purchaseOptionId,
     googlePlayValidation: product.purchaseOptionId.includes("_")
       ? "Blocked: Google Play field accepts lowercase letters, numbers, and hyphens; underscores are invalid."
-      : "Format valid",
-    status: "Blocked",
+      : "Format valid and accepted in Google Play draft setup.",
+    status: "Created as draft",
   }));
 
 const basePlanMatrix = products
@@ -203,7 +203,7 @@ const basePlanMatrix = products
     region: product.launchRegion,
     price: product.launchPriceUsd,
     graceAccountHold: "Google Play default visible state: 7 day grace period; calculate account hold automatically.",
-    saveResult: "Blocked: Google Play displayed \"Your changes couldn't be saved\" after US-only USD 4.99 draft setup.",
+    saveResult: "Blocked: Google Play displayed \"Your changes couldn't be saved\" after the single approved retry with US-only USD 4.99 draft setup.",
     status: "Blocked",
   }));
 
@@ -433,10 +433,8 @@ const checks = [
   {
     id: "purchase_option_ids_documented",
     ok: purchaseOptionIdMatrix.every((row) => docsText.includes(row.approvedPurchaseOptionId))
-      && (docsText.includes("Google Play rejects approved purchase-option ID because underscores are invalid")
-        || docsText.includes("Google Play rejects the owner-approved purchase-option IDs with underscores")
-        || docsText.includes("the owner-approved purchase-option IDs are invalid in Google Play")),
-    detail: "Owner-approved purchase-option IDs are documented with current Google Play validation blocker.",
+      && docsText.includes("Purchase-option IDs use Google Play-valid hyphenated values"),
+    detail: "Owner-approved hyphenated purchase-option IDs are documented and accepted by Google Play draft setup.",
   },
   {
     id: "base_plan_settings_documented",
@@ -469,9 +467,13 @@ const checks = [
     id: "production_ids_not_marked_verified",
     ok: products.every((product) => docsText.includes(product.productionProductId))
       && docsText.includes("Google Play Console and RevenueCat")
+      && (docsText.includes("five one-time production-labeled products were created as Google Play Draft records")
+        || docsText.includes("five one-time production-labeled Google Play product records were created as Draft")
+        || docsText.includes("created the five one-time production-labeled Google Play product records as Draft"))
+      && docsText.includes("Imported as RevenueCat Draft consumable")
       && docsText.includes("Creator Channel Subscription")
       && docsText.includes("base plan remains missing"),
-    detail: "Production IDs are documented with the created subscription record but not falsely marked fully verified.",
+    detail: "Production IDs are documented with five draft one-time provider records and the channel base-plan blocker, without falsely marking activation-ready.",
   },
   {
     id: "creator_money_switches_off",
@@ -550,15 +552,15 @@ writeArtifact("secret-scan-result.json", asJson({
   status: secretFindings.length === 0 ? "Pass" : "Blocked",
 }));
 
-writeArtifact("README.md", `# Creator-Money Tax Legal Compliance Proof
+writeArtifact("README.md", `# Creator-Money Hyphen Purchase Option Proof
 
 Generated: ${new Date().toISOString()}
 
 This proof is read-only and dry-run. It made no purchases, no provider refund calls, no payout calls, no transfer calls, no withdrawal calls, no provider dashboard screenshot capture, and printed no provider secrets or private user data.
 
-Verdict: Blocked.
+Verdict: Partial.
 
-Reason: the purchase-option/base-plan provider setup attempt is documented. Google Play rejects the owner-approved one-time purchase-option IDs because underscores are invalid in that field. The Channel Subscription monthly base-plan draft reached US-only, auto-renewing monthly, default grace/account hold, and USD 4.99, but Google Play returned "Your changes couldn't be saved." RevenueCat import/mapping remains incomplete.
+Reason: the hyphen purchase-option/base-plan provider setup attempt is documented. Five one-time production-labeled products were created as Google Play Draft records with United States-only pricing and imported into RevenueCat as Draft consumables with no entitlement attachment. The Channel Subscription monthly base-plan retry reached US-only, auto-renewing monthly, default grace/account hold, and USD 4.99, but Google Play returned "Your changes couldn't be saved." Channel Subscription RevenueCat import/mapping remains blocked until the Google Play base plan exists.
 
 Files:
 
@@ -581,18 +583,18 @@ Files:
 `);
 
 const summary = {
-  verdict: "Blocked",
+  verdict: "Partial",
   artifactDir,
   branch: git(["branch", "--show-current"]),
   head: git(["rev-parse", "HEAD"]),
-  productionLabeledProductsCreatedOrVerified: false,
+  productionLabeledProductsCreatedOrVerified: true,
   taxLegalCompliancePlanReadyForOwnerReview: checks.find((check) => check.id === "tax_legal_compliance_plan_present")?.ok === true,
   codexMustNotGuessTaxLegalComplianceFields: checks.find((check) => check.id === "must_stop_fields_documented")?.ok === true,
-  existingProductRecords: ["Channel Subscription product record"],
-  readyProducts: [],
-  missingOrBlockedProducts: products.filter((product) => product.flow !== "Channel Subscription").map((product) => product.flow).concat(["Channel Subscription monthly base plan"]),
-  purchaseOptionIdValidation: "Blocked: owner-approved one-time purchase-option IDs contain underscores, but Google Play accepts only lowercase letters, numbers, and hyphens.",
-  channelSubscriptionBasePlanSave: "Blocked: Google Play returned \"Your changes couldn't be saved\" after US-only USD 4.99 draft setup.",
+  existingProductRecords: ["Tips draft", "Paid Video draft", "Watch-Party Ticket draft", "VIP draft", "Event Pass draft", "Channel Subscription product record"],
+  readyProducts: ["Tips draft provider records", "Paid Video draft provider records", "Watch-Party Ticket draft provider records", "VIP draft provider records", "Event Pass draft provider records"],
+  missingOrBlockedProducts: ["Channel Subscription monthly base plan"],
+  purchaseOptionIdValidation: "Pass: owner-approved hyphenated one-time purchase-option IDs were accepted by Google Play draft setup.",
+  channelSubscriptionBasePlanSave: "Blocked: Google Play returned \"Your changes couldn't be saved\" after the single approved retry with US-only USD 4.99 draft setup.",
   premiumUnchanged: checks.find((check) => check.id === "premium_unchanged")?.ok === true,
   creatorMoneySwitchesOff: checks.find((check) => check.id === "creator_money_switches_off")?.ok === true,
   payoutsOff: switchOffStateProof.payouts === "OFF",

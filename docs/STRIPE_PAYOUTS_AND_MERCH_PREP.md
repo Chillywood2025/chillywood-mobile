@@ -26,7 +26,9 @@ Creator-money activation still requires owner approval and controlled proof.
 
 Creator-money tax/legal/compliance plan: Partial.
 
-Creator-money product creation: Blocked.
+Creator-money product creation: Partial.
+
+Purchase-option IDs use Google Play-valid hyphenated values.
 
 Codex must not guess tax/legal/compliance fields.
 

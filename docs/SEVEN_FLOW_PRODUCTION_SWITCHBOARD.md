@@ -12,13 +12,15 @@ Seven-flow production switchboard: Partial. The explicit switch catalog, default
 
 Seven-flow production prep: Partial. The production-prep checklist now records flow-by-flow provider mapping, owner activation steps, support/refund/dispute policy, monitoring/readback expectations, and rollback paths in `docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md`. It keeps activation blocked pending owner approval and provider production verification per flow.
 
-Creator-money production-labeled products: Blocked. Owner chose option B: sandbox-labeled creator-money product IDs remain sandbox/test-only, and clean production-labeled IDs must be created before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, purchase-option IDs, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the `monthly` base plan remains missing because the approved US-only auto-renewing Monthly USD 4.99 draft failed with `Your changes couldn't be saved`. The five one-time products are absent from the Google Play catalog because Google Play rejects the owner-approved purchase-option IDs with underscores; the field accepts lowercase letters, numbers, and hyphens only. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist. See `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`.
+Creator-money production-labeled products: Partial. Owner chose option B: sandbox-labeled creator-money product IDs remain sandbox/test-only, and clean production-labeled IDs must be created before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, Google Play-valid hyphenated purchase-option IDs, and United States only first. Google Play now has five one-time production-labeled Draft records (`cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_vip_pass_499`, `cw_event_pass_099`) and RevenueCat imported those five as Draft consumables with no entitlement attachment and no Premium mapping. Google Play also has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the `monthly` base plan remains missing because the single approved US-only auto-renewing Monthly USD 4.99 retry failed with `Your changes couldn't be saved`. Channel Subscription RevenueCat import/mapping remains blocked until the matching Google Play base plan exists. See `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`.
 
 Creator-money production-labeled product IDs: Blocked.
 
 Creator-money tax/legal/compliance plan: Partial.
 
-Creator-money product creation: Blocked.
+Creator-money product creation: Partial.
+
+Purchase-option IDs use Google Play-valid hyphenated values.
 
 Codex must not guess tax/legal/compliance fields.
 
