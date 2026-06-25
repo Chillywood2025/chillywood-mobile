@@ -12,10 +12,14 @@ Current classification:
 
 - Seven-flow app-side proof: Closed.
 - Seven-flow production switchboard: Partial.
+- Premium-first activation proof: Partial.
+- Premium monthly: Verified.
+- Premium annual: Pending / provider-blocked.
 - Creator-money production-labeled products: Partial.
 - Creator-money tax/legal/compliance plan: Partial.
 - Creator-money product creation: Partial.
 - Channel Subscription base plan: Blocked by Google Play Base plan ID validation before Save.
+- Channel Subscription remains provider-blocked until Google Play base plan issue is resolved.
 - Purchase-option IDs use Google Play-valid hyphenated values.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
@@ -29,7 +33,18 @@ Current classification:
 - Stripe merch checkout remains OFF.
 - Codex must not guess tax/legal/compliance fields.
 
+Premium-first launch remains monthly-only prepared until the owner decides whether annual is required. Google Play dashboard evidence verifies `premium_subscription` base plan `monthly` as Active, United States, `USD 9.99`; RevenueCat dashboard evidence verifies entitlement `premium`, offering `premium`, package `$rc_monthly`, and product `premium_subscription:monthly`. Premium annual is not ready unless Google Play and RevenueCat show an annual/yearly base plan/package at `$99.99/year`. Premium launch requires owner approval after proof. Creator-money activation remains a separate future lane.
+
 The seven controlled flows are Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass. Each flow requires an explicit owner decision before production activation. The global emergency stop is `live_money_enabled=off`, and creator payouts remain governed separately by `payouts_enabled=off` plus payout-lane requirements.
+
+Premium support and rollback:
+
+1. If a user paid but Premium did not unlock, ask the user to run Restore Purchases, then support verifies Google Play/RevenueCat receipt and backend entitlement readback.
+2. Cancellation/manage support must route through Google Play/RevenueCat management where available.
+3. Provider refunds remain manual/external. Do not promise instant refunds and do not execute in-app provider refunds.
+4. To stop new Premium purchases, keep or set `premiumPurchaseEnabled=false` and leave Premium gates backed by trusted entitlement readback.
+5. Preserve already-valid Premium entitlements unless provider/revoke policy says otherwise.
+6. Monitor RevenueCat customer info, Google Play base-plan status, backend `user_entitlements`, restore/revoke readback, Crashlytics, and analytics purchase/restore/error events after any owner-approved activation.
 
 Do not use this runbook to turn on live money. Do not use it to create payable balances, withdrawals, cash-out, transfers, payout movement, provider refunds, fake provider success, Premium product changes, Premium gate weakening, RLS weakening, LiveKit authority changes, scan-gate weakening, abuse-throttle removal, or block-enforcement removal. Do not use Stripe for Android digital creator-money purchases; Stripe is reserved for future creator payouts and physical merch in separate approved lanes.
 

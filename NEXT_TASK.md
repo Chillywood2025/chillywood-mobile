@@ -10,6 +10,7 @@
 - [x] Creator-money production provider product cleanup/prep
 - [x] Creator-money production provider product setup recheck plus Stripe payout/merch boundary doc
 - [x] Owner-approved creator-money product IDs, starting prices, US-only-first posture, and custom-pricing fail-closed policy
+- [x] Premium-first provider/readiness proof without creator-money activation
 
 Status:
 - Verdict: Partial
@@ -20,6 +21,8 @@ Status:
 - Production prep proof script: `scripts/proof-seven-flow-production-prep.mjs`
 - Provider verification proof script: `scripts/proof-seven-flow-provider-verification.mjs`
 - Creator-money production provider product proof script: `scripts/proof-creator-money-production-provider-products.mjs`
+- Premium-first activation proof script: `scripts/proof-premium-first-activation.mjs`
+- Latest Premium-first activation proof artifact: `/tmp/app-premium-first-activation-proof-20260625-112204/`
 - Required classification:
   - Seven-flow app-side proof: Closed
   - Seven-flow production switchboard: Partial
@@ -32,6 +35,9 @@ Status:
   - Provider verification used browser dashboard evidence
   - All activation switches remain OFF
   - Premium-first launch candidate: Pending owner activation/provider final check
+  - Premium-first activation proof: Partial
+  - Premium monthly: Verified
+  - Premium annual: Pending / provider-blocked
   - Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval
   - Creator-money flows remain OFF by default
   - Real-money activation: Off by default unless owner explicitly enables each flow
@@ -49,8 +55,9 @@ Status:
   - Stripe payouts remain OFF
   - Stripe merch checkout remains OFF
   - Channel Subscription base plan: Blocked
+  - Channel Subscription remains provider-blocked until Google Play base plan issue is resolved
   - Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved
-- Result: Explicit switches are cataloged for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass; existing backend money kill switches remain the enforcement foundation; production-prep provider mapping, owner activation checklist, Premium-first plan, creator-money future activation plan, support/refund/dispute policy, monitoring/readback expectations, rollback matrices, and provider verification blockers are documented; local product/config matches are proved; Google Play Console and RevenueCat browser dashboard evidence verifies the configured sandbox-labeled product IDs; owner chose clean production-labeled IDs before creator-money launch and approved the recommended starting prices plus United States only first; five one-time production-labeled Google Play product records were created as Draft records with Google Play-valid hyphenated purchase-option IDs (`tip-099`, `paid-video-099`, `ticket-099`, `vip-499`, `event-099`), United States-only availability, and approved starting prices; RevenueCat imported those five products as Draft consumables with no entitlement attachment and no Premium mapping; Google Play has the production-labeled channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans; focused blocker investigation found the `monthly` base plan remains missing because Google Play marks the `Base plan ID` field invalid before Save on both stale and clean Add base plan forms, even though `monthly` is plain ASCII and valid-format probes also stay invalid; `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` lists the provider fields Codex may fill, the owner-stop tax/legal/compliance fields, the RevenueCat mapping rules, refund/support/dispute stance, and Stripe separation; Channel Subscription RevenueCat import/mapping remains blocked until the matching Google Play base plan exists; custom pricing is documented as provider-backed only and unsupported custom amounts fail closed; Stripe dashboard access stopped at sign-in and is documented as future payout/physical-merch prep only; `live_money_enabled` and `payouts_enabled` remain off; Premium purchase remains closed by default; provider production activation remains blocked pending owner/provider approval.
+- Result: Explicit switches are cataloged for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass; existing backend money kill switches remain the enforcement foundation; production-prep provider mapping, owner activation checklist, Premium-first plan, creator-money future activation plan, support/refund/dispute policy, monitoring/readback expectations, rollback matrices, and provider verification blockers are documented; local product/config matches are proved; Google Play Console and RevenueCat browser dashboard evidence verifies the configured sandbox-labeled product IDs; owner chose clean production-labeled IDs before creator-money launch and approved the recommended starting prices plus United States only first; five one-time production-labeled Google Play product records were created as Draft records with Google Play-valid hyphenated purchase-option IDs (`tip-099`, `paid-video-099`, `ticket-099`, `vip-499`, `event-099`), United States-only availability, and approved starting prices; RevenueCat imported those five products as Draft consumables with no entitlement attachment and no Premium mapping; Google Play has the production-labeled channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans; focused blocker investigation found the `monthly` base plan remains missing because Google Play marks the `Base plan ID` field invalid before Save on both stale and clean Add base plan forms, even though `monthly` is plain ASCII and valid-format probes also stay invalid; `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` lists the provider fields Codex may fill, the owner-stop tax/legal/compliance fields, the RevenueCat mapping rules, refund/support/dispute stance, and Stripe separation; Premium-first activation proof verified Google Play `premium_subscription` monthly base plan `monthly` as Active, United States, `USD 9.99`, and verified RevenueCat `premium` offering package `$rc_monthly` mapped to `premium_subscription:monthly` plus entitlement `premium`; Premium annual remains pending/provider-blocked because no annual/yearly base plan or `$99.99/year` package was visible in the inspected provider dashboards; Play-installed Android versionCode `55` opened the Premium screen and showed Premium inactive plus creator-product separation; no Premium purchase sheet was opened and no purchase was completed; Channel Subscription RevenueCat import/mapping remains blocked until the matching Google Play base plan exists; custom pricing is documented as provider-backed only and unsupported custom amounts fail closed; Stripe dashboard access stopped at sign-in and is documented as future payout/physical-merch prep only; `live_money_enabled` and `payouts_enabled` remain off; Premium purchase remains closed by default; provider production activation remains blocked pending owner/provider approval.
 - Safety confirmation: No live money, creator payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, Premium product changes, Premium gate weakening, RLS weakening, LiveKit authority changes, participant-cap changes, auth/reset changes, scan-gate weakening, abuse-throttle removal, or block-enforcement removal.
 
 Purpose:

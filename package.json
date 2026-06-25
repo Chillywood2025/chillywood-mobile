@@ -27,6 +27,7 @@
     "proof:seven-flow-production-prep": "node ./scripts/proof-seven-flow-production-prep.mjs",
     "proof:seven-flow-provider-verification": "node ./scripts/proof-seven-flow-provider-verification.mjs",
     "proof:creator-money-production-provider-products": "node ./scripts/proof-creator-money-production-provider-products.mjs",
+    "proof:premium-first-activation": "node ./scripts/proof-premium-first-activation.mjs",
     "proof:launch-candidate-installed": "node ./scripts/proof-launch-candidate-installed.mjs",
     "proof:watch-party-seat-request": "node ./scripts/proof-watch-party-seat-request.mjs",
     "proof:live-stage-seat-approval": "node ./scripts/proof-live-stage-seat-approval.mjs",

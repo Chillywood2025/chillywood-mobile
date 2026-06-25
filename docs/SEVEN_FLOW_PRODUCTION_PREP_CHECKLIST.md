@@ -40,7 +40,13 @@ Stripe merch checkout remains OFF.
 
 Premium-first launch candidate: Pending owner activation/provider final check.
 
+Premium-first activation proof: Partial. Premium monthly: Verified. Premium annual: Pending / provider-blocked. Google Play `premium_subscription` has active monthly base plan `monthly`, United States, `USD 9.99`; RevenueCat offering `premium` has package `$rc_monthly` mapped to `premium_subscription:monthly` and entitlement `premium`. No annual/yearly Google Play base plan or RevenueCat annual package at `$99.99/year` was visible in the inspected provider dashboards. No Premium purchase sheet was opened and no purchase was completed in the Premium-only proof lane. Premium launch requires owner approval after proof.
+
 Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval.
+
+Creator-money activation remains a separate future lane.
+
+Channel Subscription remains provider-blocked until Google Play base plan issue is resolved.
 
 Provider verification used browser dashboard evidence. All activation switches remain OFF; production provider products are verified only where dashboard/API evidence exists.
 
@@ -115,6 +121,7 @@ Before Premium goes live:
 - Owner explicitly approves Premium activation by product ID and rollout window.
 - Google Play subscription and base plan are verified active/approved.
 - RevenueCat product, offering/package, and entitlement `premium` are verified.
+- Monthly may proceed only if the owner accepts a monthly-only launch. Annual remains pending unless Google Play and RevenueCat verify an annual/yearly base plan/package at `$99.99/year`.
 - Premium purchase shell is intentionally opened only for the approved environment.
 - Premium gates remain backed by provider/backend entitlement readback, not local UI state.
 - Restore/manage/cancel behavior is smoke-tested on a Play-installed build.

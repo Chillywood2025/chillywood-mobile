@@ -209,6 +209,15 @@ June 1, 2026 Premium sandbox regression note:
 - Watch-Party Live and Live Watch-Party / Live Stage Premium gates remain access gates only. Ticket/seat monetization for both room types is off/setup-only until a real Google Play/RevenueCat-backed product and entitlement path exists; no buy button should appear unless it is truly backed.
 - `live_money_enabled`, tips, paid content, payouts, and Stripe checkout for Android digital goods remain off.
 
+June 25, 2026 Premium-first activation proof note:
+
+- Premium-first activation proof: Partial. Premium monthly: Verified. Premium annual: Pending / provider-blocked.
+- Browser dashboard evidence verifies Google Play `premium_subscription` base plan `monthly` as Active, United States, `USD 9.99`; RevenueCat entitlement `premium`, offering `premium`, package `$rc_monthly`, and product `premium_subscription:monthly` are verified.
+- No annual/yearly Google Play base plan or RevenueCat annual package at `$99.99/year` was visible in the inspected provider dashboards. Do not claim annual readiness until both provider surfaces prove it.
+- Play-installed Android versionCode `55` opened the Premium screen and showed Premium inactive plus copy that creator subscriptions, VIP passes, tips, paid videos, Watch-Party Seat Passes, and paid events are separate creator products.
+- No Premium purchase sheet was opened, no purchase was completed, and no live production Premium activation occurred. Premium launch requires owner approval after proof.
+- Creator-money flows remain OFF. Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator payouts remain OFF. Stripe payouts remain OFF. Stripe merch checkout remains OFF. Provider refunds remain manual/external. Creator-money activation remains a separate future lane.
+
 `_lib/moneyAuditEvents.ts` is the shared normalization layer for these surfaces. It reads safe source rows where RLS allows and builds source-labeled events from existing read models otherwise. It filters secret-like fields and marks every sandbox/setup event as non-payable.
 
 ## Surface Audit And Consolidation

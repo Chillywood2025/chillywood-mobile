@@ -12,6 +12,8 @@ Seven-flow production switchboard: Partial. The explicit switch catalog, default
 
 Seven-flow production prep: Partial. The production-prep checklist now records flow-by-flow provider mapping, owner activation steps, support/refund/dispute policy, monitoring/readback expectations, and rollback paths in `docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md`. It keeps activation blocked pending owner approval and provider production verification per flow.
 
+Premium-first activation proof: Partial. Premium monthly: Verified. Premium annual: Pending / provider-blocked. Browser dashboard evidence verifies Google Play `premium_subscription` base plan `monthly` as Active, United States, `USD 9.99`, and RevenueCat entitlement `premium` plus offering `premium` package `$rc_monthly` mapped to `premium_subscription:monthly`. No annual/yearly Google Play base plan or RevenueCat annual package at `$99.99/year` was visible in the inspected Premium provider surfaces. No Premium purchase sheet was opened and no purchase was completed. Premium launch requires owner approval after proof. Creator-money activation remains a separate future lane.
+
 Creator-money production-labeled products: Partial. Owner chose option B: sandbox-labeled creator-money product IDs remain sandbox/test-only, and clean production-labeled IDs must be created before creator-money launch. The owner approved the recommended production IDs, recommended starting prices, Google Play-valid hyphenated purchase-option IDs, and United States only first. Google Play now has five one-time production-labeled Draft records (`cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_vip_pass_499`, `cw_event_pass_099`) and RevenueCat imported those five as Draft consumables with no entitlement attachment and no Premium mapping. Google Play also has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but the `monthly` base plan remains missing because Google Play marks the `Base plan ID` field invalid before Save on stale and clean Add base plan forms. Channel Subscription base plan: Blocked. Channel Subscription RevenueCat import/mapping remains blocked until the matching Google Play base plan exists. See `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md`.
 
 Creator-money production-labeled product IDs: Blocked.
@@ -45,6 +47,8 @@ Unsupported custom amounts fail closed.
 United States only first.
 
 Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
+
+Channel Subscription remains provider-blocked until Google Play base plan issue is resolved.
 
 ## Current Repo Truth
 
