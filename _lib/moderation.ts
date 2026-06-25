@@ -711,8 +711,7 @@ export function canReviewSafetyQueue(
   _moderationAccess: ModerationAccess,
   memberships: PlatformRoleMembership[],
 ) {
-  return hasPlatformRoleMembership(memberships, ["owner", "moderator"])
-    || hasPlatformStaffPermission(memberships, ["reports_review", "content_moderation"]);
+  return hasPlatformStaffPermission(memberships, ["reports_review", "content_moderation"]);
 }
 
 export function canManagePrivilegedAdminWrites(
@@ -757,19 +756,24 @@ export function canAccessLiveOpsTools(memberships: PlatformRoleMembership[]) {
 }
 
 export function canAccessLegalEvidenceTools(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner"])
-    || (
-      hasPlatformRoleMembership(memberships, ["operator"])
-      && hasPlatformStaffPermission(memberships, ["legal_review", "evidence_preview", "evidence_export", "legal_hold", "legal_ops"])
-    );
+  return hasPlatformStaffPermission(memberships, [
+    "legal_review",
+    "evidence_preview",
+    "evidence_export",
+    "legal_hold",
+    "legal_ops",
+    "admin.chat_evidence.view",
+  ]);
 }
 
 export function canAccessDmcaTools(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner"])
-    || (
-      hasPlatformRoleMembership(memberships, ["operator"])
-      && hasPlatformStaffPermission(memberships, ["dmca_review", "copyright_review", "legal_review"])
-    );
+  return hasPlatformStaffPermission(memberships, [
+    "dmca_review",
+    "copyright_review",
+    "legal_review",
+    "admin.dmca.view",
+    "admin.dmca.manage",
+  ]);
 }
 
 export function canAccessAuditExplorerTools(memberships: PlatformRoleMembership[]) {
@@ -785,11 +789,7 @@ export function canAccessBreakGlassTools(memberships: PlatformRoleMembership[]) 
 }
 
 export function canAccessLegalRequestIntakeTools(memberships: PlatformRoleMembership[]) {
-  return hasPlatformRoleMembership(memberships, ["owner"])
-    || (
-      hasPlatformRoleMembership(memberships, ["operator"])
-      && hasPlatformStaffPermission(memberships, ["legal_request_intake", "legal_review", "legal_ops"])
-    );
+  return hasPlatformStaffPermission(memberships, ["legal_request_intake", "legal_review", "legal_ops"]);
 }
 
 const platformMembershipMatchesIdentity = (

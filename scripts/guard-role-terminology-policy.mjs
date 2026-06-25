@@ -60,7 +60,12 @@ assertIncludes(lock, "Support is a work area, not a separate role.", "Support wo
 assertIncludes(currentDocs, "Support is a work area", "Support work-area docs");
 assertIncludes(lock, "Moderator includes support duties when granted exact support scopes", "Moderator support-duty doctrine");
 assertIncludes(lock, "Moderator is separate from Admin/operator", "Moderator separate doctrine");
-assertIncludes(nextTask + roadmap + lock, "Next lane: Moderator role scope including support duties.", "next lane recommendation");
+if (
+  !(nextTask + roadmap + lock).includes("Next lane: Moderator role scope including support duties.")
+  && !(nextTask + roadmap + lock).includes("Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.")
+) {
+  fail("missing next lane recommendation");
+}
 
 for (const scope of [
   "support_inbox",

@@ -52,7 +52,7 @@ Do not rename old migrations. Do not rename the backend `operator` value. Do not
 
 Moderator is separate from Admin/operator.
 
-Moderator can receive `support_inbox`, `creator_support`, `billing_support_read`, `reports_review`, `content_moderation`, `live_ops`, and similar scoped permissions when Owner/Admin policy allows. Moderator can handle support inbox, creator support, billing support read/status, report case support, DMCA support handoff, and user support workflows only when granted exact scopes.
+Moderator role scope: Closed. Moderator can receive `support_inbox`, `creator_support`, `billing_support_read`, `reports_review`, `content_moderation`, `live_ops`, and similar scoped permissions when Owner/Admin policy allows. Moderator can handle support inbox, creator support, billing support read/status, report case support, DMCA support handoff, and user support workflows only when granted exact scopes.
 
 Moderator cannot perform Owner/First Owner/Admin-only actions unless explicitly allowed by Admin role policy. Moderator cannot touch Owner/First Owner authority. Moderator cannot enable money/provider/payout systems. Moderator cannot execute provider refunds. Moderator can record support status only if granted exact scope. Moderator cannot view private chat/profile/room evidence unless tied to a case/report and granted exact permission.
 
@@ -70,4 +70,4 @@ Moderator cannot perform Owner/First Owner/Admin-only actions unless explicitly 
 
 ## Next Lane
 
-Next lane: Moderator role scope including support duties.
+Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.

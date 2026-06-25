@@ -48,6 +48,8 @@
 
 Terminology lock: Admin is the product-facing role and backend `operator` is only the internal alias. There is no separate product Operator role. Support is a work area, not a separate role; support scopes can be granted to Moderator or Admin according to Owner/First Owner policy.
 
+Moderator role scope: Closed. Moderator is a real production role backed by `moderator`; support is a work area, not a separate role. Moderator can perform support duties only with exact support scopes, cannot grant or revoke Owner/Admin, cannot alter First Owner succession, cannot enable money/provider/payout systems, and cannot execute provider refunds.
+
 ## Admin Role Scope
 
 Admin role scope: Closed.
@@ -67,8 +69,9 @@ Admin role scope: Closed.
 
 ## Templates
 - Support workflow template: `support_inbox`, `user_lookup`, `admin.support.view`, `admin.user.search`, `admin.user.view`
-- Moderator: `reports_review`, `content_moderation`, `admin.content.hide`, `admin.content.restore`
-- Senior Moderator: `reports_review`, `content_moderation`, `user_lookup`, `admin.user.search`, `admin.content.hide`, `admin.content.restore`
+- Moderator: `reports_review`, `content_moderation`, `admin.content.hide`, `admin.content.restore`, `admin.comment.moderate`
+- Moderator Support Workflow: `support_inbox`, `creator_support`, `billing_support_read`, `admin.support.view`, `admin.support.manage`, `admin.payment_status.view`, `admin.refund_status.record`, `admin.user.view`
+- Senior Moderator: `reports_review`, `content_moderation`, `user_lookup`, `admin.user.search`, `admin.content.hide`, `admin.content.restore`, `admin.content.remove`, `admin.comment.moderate`, `admin.room.moderate`
 - Live Ops Admin Workflow: `live_ops`, `admin.room.moderate`, `admin.live.force_end`
 - DMCA Reviewer: `dmca_review`, `copyright_review`, `legal_review`, `admin.dmca.view`, `admin.dmca.manage`
 - Legal Reviewer: `legal_review`, `evidence_preview`, `legal_request_intake`, `dmca_review`, `copyright_review`

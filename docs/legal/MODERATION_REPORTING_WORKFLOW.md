@@ -20,7 +20,7 @@ Current operations truth:
 
 - general safety report intake, Admin Reports review, report status changes, target hide/remove/restore, immutable audit rows, Profile Photo/Profile Background reports, Profile media status actions, and non-active Profile media masking are repo-backed;
 - support/moderation/account deletion ownership is mapped by role, but launch staffing and SLA acceptance remain external;
-- Support is a work area, not a separate staff role. Moderator can handle support duties when granted exact support scopes such as `support_inbox`, `creator_support`, or `billing_support_read`.
+- Support is a work area, not a separate staff role. Moderator role scope: Closed. Moderator can handle support duties when granted exact support scopes such as `support_inbox`, `creator_support`, `billing_support_read`, `admin.support.view`, `admin.support.manage`, `admin.dmca.view`, or `admin.dmca.manage`.
 - outbound legal/support email remains manual until an outbound provider, DKIM, delivery proof, bounce handling, and templates are configured;
 - repo-side malware scanning is implemented, production-deployed, runtime-proved, and Admin-reviewable;
 - optional disposable report lifecycle visual proof was not run because no safe disposable fixture was provided and production reports must not be faked.
@@ -68,7 +68,7 @@ Implementation gap: the current report UI maps fraud, scams, unsafe products, il
 
 ## Review Actions
 
-Moderators and Admins may take one or more actions where backed and scoped:
+Moderators and Admins may take one or more actions where backed and scoped. Moderator destructive actions require permission, reason, confirmation, case/report context where applicable, and audit. Moderator cannot grant/revoke Owner or Admin/operator, cannot alter First Owner succession, cannot remove/demote/delete/deactivate/suspend First Owner, cannot enable money/provider/payout systems, and cannot execute provider refunds.
 
 - no action;
 - ask for more information;

@@ -44,8 +44,9 @@ const PERMISSION_TEMPLATES: Record<string, { label: string; permissions: string[
   legal_operator: { label: "Legal Admin Workflow", permissions: ["legal_ops", "legal_request_intake", "evidence_preview", "evidence_export", "legal_hold", "legal_review", "admin.chat_evidence.view"] },
   legal_reviewer: { label: "Legal Reviewer", permissions: ["legal_review", "evidence_preview", "dmca_review", "copyright_review", "legal_request_intake", "admin.dmca.view"] },
   live_ops_operator: { label: "Live Ops Admin Workflow", permissions: ["live_ops", "admin.room.moderate", "admin.live.force_end"] },
-  moderator: { label: "Moderator", permissions: ["reports_review", "content_moderation", "admin.content.hide", "admin.content.restore"] },
-  senior_moderator: { label: "Senior Moderator", permissions: ["reports_review", "content_moderation", "user_lookup", "admin.user.search", "admin.content.hide", "admin.content.restore"] },
+  moderator: { label: "Moderator", permissions: ["reports_review", "content_moderation", "admin.content.hide", "admin.content.restore", "admin.comment.moderate"] },
+  moderator_support: { label: "Moderator Support Workflow", permissions: ["support_inbox", "creator_support", "billing_support_read", "admin.support.view", "admin.support.manage", "admin.payment_status.view", "admin.refund_status.record", "admin.user.view"] },
+  senior_moderator: { label: "Senior Moderator", permissions: ["reports_review", "content_moderation", "user_lookup", "admin.user.search", "admin.content.hide", "admin.content.restore", "admin.content.remove", "admin.comment.moderate", "admin.room.moderate"] },
   support_agent: { label: "Support Workflow", permissions: ["support_inbox", "user_lookup", "admin.support.view", "admin.user.search", "admin.user.view"] },
 };
 
@@ -939,7 +940,6 @@ const writeLegalRequestEvent = async (
 };
 
 const legalRequestList = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role === "moderator") return json(403, { error: "owner_or_approved_operator_required" });
   if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops", "evidence_preview", "evidence_export", "legal_hold"])) return json(403, { error: "legal_permission_required" });
   const limit = parseLimit(payload.limit, 25, 100);
   let query = adminClient.from("legal_request_intake").select("*");
@@ -953,7 +953,6 @@ const legalRequestList = async (adminClient: SupabaseClientLike, user: Authentic
 };
 
 const legalRequestDetail = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role === "moderator") return json(403, { error: "owner_or_approved_operator_required" });
   if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops", "evidence_preview", "evidence_export", "legal_hold"])) return json(403, { error: "legal_permission_required" });
   const requestId = toText(payload.id ?? payload.requestId ?? payload.request_id);
   if (!requestId) return json(400, { error: "legal_request_id_required" });
@@ -976,7 +975,6 @@ const legalRequestDetail = async (adminClient: SupabaseClientLike, user: Authent
 };
 
 const legalRequestCreate = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role === "moderator") return json(403, { error: "owner_or_approved_operator_required" });
   if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops"])) return json(403, { error: "legal_request_intake_required" });
   const reason = resolveAdminReason(user, payload.auditReason ?? payload.audit_reason ?? payload.requestReason ?? payload.request_reason, "Owner legal request intake record.");
   const requestingAgency = redactText(payload.requestingAgency ?? payload.requesting_agency, 180);
@@ -1065,7 +1063,6 @@ const legalRequestCreate = async (adminClient: SupabaseClientLike, user: Authent
 };
 
 const legalRequestUpdate = async (adminClient: SupabaseClientLike, user: AuthenticatedUser, payload: JsonObject) => {
-  if (user.role === "moderator") return json(403, { error: "owner_or_approved_operator_required" });
   if (!hasAnyPermission(user, ["legal_request_intake", "legal_review", "legal_ops"])) return json(403, { error: "legal_request_intake_required" });
   const requestId = toText(payload.id ?? payload.requestId ?? payload.request_id);
   if (!requestId) return json(400, { error: "legal_request_id_required" });

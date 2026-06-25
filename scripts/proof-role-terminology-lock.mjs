@@ -99,7 +99,7 @@ add("no_product_operator", currentDocs.includes("There is no separate product Op
 add("support_work_area", hasAll(text.lock + text.moneySupport + text.adminScope, ["Support is a work area", "not a separate role"]), "Docs state Support is a work area, not a separate role.");
 add("moderator_support_capable", hasAll(text.lock + text.moderation + text.moneySupport, ["Moderator includes support duties", "granted exact support scopes"]), "Docs state Moderator can handle support duties through exact scopes.");
 add("moderator_separate", (text.lock + text.adminScope).includes("Moderator is separate from Admin"), "Docs state Moderator is separate from Admin/operator.");
-add("next_lane", currentDocs.includes("Next lane: Moderator role scope including support duties."), "Next lane recommendation is recorded.");
+add("next_lane", currentDocs.includes("Next lane: Moderator role scope including support duties.") || currentDocs.includes("Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes."), "Next lane recommendation is recorded.");
 add("support_scopes_preserved", hasAll(currentDocs + text.adminScopeMigration + text.edge, supportScopes), "Support remains represented as permission scopes/workflows.");
 add("operator_role_preserved", hasAll(roleNormalizer, ["when 'admin' then 'operator'", "when 'operator' then 'operator'", "when 'moderator' then 'moderator'"]), "Backend role normalizer preserves admin->operator and moderator.");
 add("support_role_not_added", hasNone(roleNormalizer + roleAuditChecks, forbiddenSupportRoleNormalizers), "Backend migrations do not add support as a platform role.");

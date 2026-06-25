@@ -61,6 +61,8 @@ There is one primary staff role path:
 
 Permission templates remain available as optional presets for scoped permissions only. They do not create Admin, Moderator, Owner, payout, room, or publish authority.
 
+Moderator role scope: Closed. Moderator support and moderation surfaces are permission-scoped, audited where sensitive/destructive, and backend-enforced. Support remains a work area, not a role. Broken Moderator/support buttons are wired or honestly disabled.
+
 ## Fixed
 
 `app/admin.tsx` now makes the highest-risk Owner/Admin controls active and guarded instead of validation-disabled:

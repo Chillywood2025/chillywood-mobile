@@ -1773,6 +1773,10 @@ Admin is a real production role backed by the existing `operator` platform staff
 
 Role terminology lock: `operator` is only the internal/backend alias for product-facing Admin. There is no separate product Operator role. Support is a work area and permission group, not a separate staff role. Moderator is separate from Admin/operator and can receive support duties through exact scoped permissions. Do not add `support` to `platform_role_memberships`.
 
+Moderator role scope: Closed after validation.
+
+Moderator is a real production role backed by `moderator`. Support is a work area, not a separate role. Moderator can perform support duties only with exact support scopes. Moderator is separate from Admin/operator. Moderator cannot grant or revoke Owner. Moderator cannot grant or revoke Admin/operator. Moderator cannot alter First Owner succession. Moderator cannot remove, demote, delete, deactivate, or suspend First Owner. Moderator cannot enable money/provider/payout systems. Moderator cannot execute provider refunds. Moderator can record manual/external refund support status only with permission. Moderator destructive actions require permission, reason, confirmation, case/report context where applicable, and audit. Backend denies non-moderator and unscoped-moderator attempts even if UI is bypassed. Broken Moderator/support buttons are wired or honestly disabled. No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
+
 Required production truth:
 
 - Admin cannot grant or revoke Owner.
@@ -1785,7 +1789,7 @@ Required production truth:
 - Broken Admin buttons are wired or honestly disabled.
 - No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed.
 
-Next lane: Moderator role scope including support duties.
+Next lane: real staff grant/readback only when Owner selects the actual Moderator accounts and exact scopes.
 # Next Task
 
 ## BrowserStack Monetization E2E

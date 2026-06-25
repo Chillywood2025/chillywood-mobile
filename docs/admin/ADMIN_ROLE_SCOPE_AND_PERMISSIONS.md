@@ -4,7 +4,7 @@ Status: Admin role scope: Closed.
 
 This document defines the production Admin role for the app. Admin is a real production role, not a UI label. The backend represents public Admins as active `operator` rows in `platform_role_memberships`, and operational authority is granted through explicit rows in `platform_staff_permission_grants`.
 
-Role terminology is locked in `docs/admin/ROLE_TERMINOLOGY_LOCK.md`: `operator` is only the internal/backend alias for product-facing Admin, there is no separate product Operator role, Support is a work area and permission group rather than a staff role, and Moderator is separate from Admin while support-duty-capable through exact scopes.
+Role terminology is locked in `docs/admin/ROLE_TERMINOLOGY_LOCK.md`: `operator` is only the internal/backend alias for product-facing Admin, there is no separate product Operator role, Support is a work area and permission group rather than a staff role, and Moderator is separate from Admin while support-duty-capable through exact scopes. Moderator role scope is documented separately in `docs/admin/MODERATOR_ROLE_SCOPE_AND_SUPPORT_DUTIES.md`.
 
 Admin permissions are scoped and granted by Owner/First Owner. Missing permission fails closed. Backend denies non-admin and unscoped-admin attempts even if UI is bypassed.
 
