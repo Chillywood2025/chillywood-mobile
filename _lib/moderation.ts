@@ -267,6 +267,18 @@ export const SAFETY_REPORT_CATEGORIES: SafetyReportCategory[] = [
   "other",
 ];
 
+export const SAFETY_REPORT_TARGET_TYPES: SafetyReportTargetType[] = [
+  "participant",
+  "room",
+  "title",
+  "creator_video",
+  "profile_post",
+  "profile_post_comment",
+  "profile_media",
+  "creator_video_comment",
+  "social_attachment",
+];
+
 export const SAFETY_REPORT_CATEGORY_COPY: Record<SafetyReportCategory, SafetyReportCategoryCopy> = {
   abuse: {
     label: "Abuse",
@@ -1549,6 +1561,43 @@ export async function submitSafetyReport(input: SafetyReportInput) {
   const targetId = normalizeText(input.targetId);
   if (!targetId) {
     throw new Error("Missing report target.");
+  }
+
+  if (!SAFETY_REPORT_TARGET_TYPES.includes(input.targetType)) {
+    throw new Error("This report target is not supported.");
+  }
+
+  if (!SAFETY_REPORT_CATEGORIES.includes(input.category)) {
+    throw new Error("Choose a supported report category.");
+  }
+
+  const duplicateWindowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: duplicateRows, error: duplicateError } = await supabase
+    .from(SAFETY_REPORTS_TABLE)
+    .select("id")
+    .eq("reporter_user_id", reporterUserId)
+    .eq("target_type", input.targetType)
+    .eq("target_id", targetId)
+    .eq("category", input.category)
+    .gte("created_at", duplicateWindowStart)
+    .in("status", ["needs_review", "reviewing", "escalated"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (!duplicateError && duplicateRows?.[0]?.id) {
+    trackModerationActionUsed({
+      surface: isPlainObject(input.context) ? String(input.context.sourceSurface ?? "unknown") : "unknown",
+      action: "dedupe_safety_report",
+      targetType: input.targetType,
+      targetId,
+      actorRole: moderationAccess.actorRole,
+      roomId: normalizeText(input.roomId) || null,
+      titleId: normalizeText(input.titleId) || null,
+      sourceRoute: isPlainObject(input.context) ? String(input.context.sourceRoute ?? "") : "",
+      targetAuditOwnerKey: isPlainObject(input.context) ? String(input.context.targetAuditOwnerKey ?? "") : "",
+      platformOwnedTarget: isPlainObject(input.context) && input.context.platformOwnedTarget === true,
+    });
+    return duplicateRows[0];
   }
 
   const payloadContext: Record<string, unknown> = {

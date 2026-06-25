@@ -60,6 +60,14 @@ Moderator can view support cases with permission. Moderator can manage support c
 
 Support duties do not allow Google Play refunds, RevenueCat refunds, Stripe refunds, payout approval, money movement, Stripe Connect, creator-money activation, `live_money_enabled`, Premium public activation, or access to provider credentials.
 
+## Reporting And Moderation Workflow
+
+Reporting and moderation workflow: Closed after validation. Moderator can review normal reports, live safety reports, support-workflow reports, DMCA/legal handoffs, security escalations, and appeals only with exact scopes and case/report context. Users can report profiles, Profile media, Platform content, videos, paid videos, live rooms, chat messages, comments, replies, events, and VIP/subscriber content where the surface exists.
+
+Reporter identity stays private by default. Reported users are not notified merely because a report was filed. Moderation actions can notify affected users/creators with safe copy. Appeals use support/escalation workflow in V1 unless full in-app appeal UI exists. Reported items are reviewed before action unless high-risk policy requires urgent temporary hiding/escalation.
+
+Normal reports, DMCA/legal, support, money/refund/access support, security incidents, and appeals remain separated. Duplicate/false reports are deduped and rate-limited. No reporter identity, raw storage paths, signed URLs, raw IPs, tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
+
 ## Private Evidence
 
 Moderator private-data access is minimum necessary and case-scoped. Moderator cannot browse arbitrary private chats, rooms, or profiles. Moderator can view private profile/room/chat evidence only with permission and case/report context. Moderator cannot view raw storage paths, signed URLs, raw IP/security context, tokens, secrets, tax IDs, bank details, provider secrets, or plaintext passcodes.

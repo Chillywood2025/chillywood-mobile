@@ -23,6 +23,8 @@ The approval standard is evidence-based. A reviewer should be able to inspect th
 
 Support categories include Premium purchase issue, paid content access issue, Watch-Party ticket issue, Live access pass issue, Live seat pass issue, event pass issue, creator tip issue, merch order issue, refund request, chargeback or dispute, creator payout status, KYC/tax onboarding help, fraud hold appeal, account payment safety, and internal sandbox tester issue. Each case should be tagged with rail, user, source, provider, and safety state where available.
 
+Fraud/payment concerns submitted through the report sheet route to money/refund/access support as a separated work area. Reporting and moderation workflow: Closed after validation. Reporter identity stays private by default, reported users are not notified merely because a report was filed, and payment/access reports do not execute provider refunds or money movement.
+
 ## What Support Can Do
 
 Support can explain current status, collect evidence, verify account identity through approved support process, check safe readouts, escalate to Owner/Admin, explain refund or access process, confirm that sandbox rows are not payable, and route provider-specific issues to the correct provider path. Support can correct misleading copy or missing docs by opening an internal issue.

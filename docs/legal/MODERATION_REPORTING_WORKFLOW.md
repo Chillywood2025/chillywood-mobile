@@ -1,6 +1,12 @@
 # Moderation And Reporting Workflow
 
-Last updated: May 29, 2026
+Last updated: June 25, 2026
+
+Reporting and moderation workflow: Closed after validation. The production matrix, queue separation, reporter privacy policy, dedupe/rate-limit policy, and appeal path are now tracked in `docs/legal/REPORTING_MODERATION_PRODUCTION_WORKFLOW.md`.
+
+Users can report profiles, Profile media, Platform content, videos, paid videos, live rooms, chat messages, comments, replies, events, and VIP/subscriber content where the surface exists. Reporter identity stays private by default. Reported users are not notified merely because a report was filed. Moderation actions can notify affected users/creators with safe copy. Appeals use support/escalation workflow in V1 unless full in-app appeal UI exists. Reported items are reviewed before action unless high-risk policy requires urgent temporary hiding/escalation.
+
+Illegal/safety/security categories are escalated differently. Normal reports, DMCA/legal, support, money/refund/access support, security incidents, and appeals are separated. Duplicate/false reports are deduped and rate-limited. Staff access requires exact scopes and case/report context. No reporter identity, raw storage paths, signed URLs, raw IPs, tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
 
 > Repo launch note: Attorney review required before public launch. This workflow documents current and required operations; it does not claim a complete trust-and-safety organization exists.
 

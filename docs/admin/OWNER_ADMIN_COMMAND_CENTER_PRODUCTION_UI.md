@@ -115,6 +115,12 @@ Search must not expose:
 
 Unsupported filters are disabled, hidden, or routed to unavailable copy.
 
+## Reporting / Moderation Queue
+
+Reporting and moderation workflow: Closed after validation. The Command Center Reports tab remains the scoped queue for normal moderation reports. DMCA/legal, support, money/refund/access support, security incidents, and appeals are separate work areas and must not be collapsed into one unsafe queue. Staff access requires exact scopes and case/report context. Reporter identity stays private by default. Reported users are not notified merely because a report was filed.
+
+Reports can be marked reviewed, dismissed, escalated, or actioned against supported targets only with reason and audit. Reported items are reviewed before action unless high-risk policy requires urgent temporary hiding/escalation. No reporter identity, raw storage paths, signed URLs, raw IPs, tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
+
 ## Fail-Closed Behavior
 
 Admin UI fails closed if backend functions are unavailable. Admin UI fails closed when:

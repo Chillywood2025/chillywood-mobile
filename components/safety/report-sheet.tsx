@@ -11,8 +11,6 @@ import {
 } from "react-native";
 
 import {
-  SAFETY_REPORT_CATEGORIES,
-  SAFETY_REPORT_CATEGORY_COPY,
   type SafetyReportCategory,
 } from "../../_lib/moderation";
 
@@ -25,6 +23,129 @@ type ReportSheetProps = {
   onClose: () => void;
 };
 
+type ReportSheetCategoryOption = {
+  key: string;
+  label: string;
+  description: string;
+  backedCategory: SafetyReportCategory;
+  queue: "normal" | "urgent" | "legal" | "security" | "money_support";
+};
+
+const REPORT_SHEET_CATEGORY_OPTIONS: readonly ReportSheetCategoryOption[] = [
+  {
+    key: "harassment_bullying",
+    label: "Harassment or bullying",
+    description: "Targeted abuse, stalking, hostile contact, or repeated unwanted behavior.",
+    backedCategory: "harassment",
+    queue: "normal",
+  },
+  {
+    key: "hate_discrimination",
+    label: "Hate or discrimination",
+    description: "Attacks or exclusion based on protected traits, identity, or community.",
+    backedCategory: "abuse",
+    queue: "normal",
+  },
+  {
+    key: "threats_violence",
+    label: "Threats or violence",
+    description: "Threats, violent behavior, weapons, live danger, or immediate safety risk.",
+    backedCategory: "safety",
+    queue: "urgent",
+  },
+  {
+    key: "sexual_exploitation",
+    label: "Sexual content or exploitation",
+    description: "Non-consensual sexual content, exploitation, or sexual safety concerns.",
+    backedCategory: "safety",
+    queue: "urgent",
+  },
+  {
+    key: "self_harm_danger",
+    label: "Self-harm or dangerous behavior",
+    description: "Self-harm, suicide, dangerous behavior, or a live emergency concern.",
+    backedCategory: "safety",
+    queue: "urgent",
+  },
+  {
+    key: "minor_safety",
+    label: "Minor safety",
+    description: "Child/minor safety, exploitation, grooming, or age-related risk.",
+    backedCategory: "safety",
+    queue: "urgent",
+  },
+  {
+    key: "illegal_activity",
+    label: "Illegal activity",
+    description: "Illegal goods, criminal activity, exploitation, or severe platform abuse.",
+    backedCategory: "safety",
+    queue: "urgent",
+  },
+  {
+    key: "spam_scam",
+    label: "Spam or scam",
+    description: "Spam, phishing, malware, fake giveaways, or manipulative promotion.",
+    backedCategory: "safety",
+    queue: "security",
+  },
+  {
+    key: "impersonation",
+    label: "Impersonation",
+    description: "Fake person, creator, brand, official account, or false affiliation.",
+    backedCategory: "impersonation",
+    queue: "normal",
+  },
+  {
+    key: "privacy_doxxing",
+    label: "Privacy violation/doxxing",
+    description: "Private information, doxxing, unwanted personal data, or privacy invasion.",
+    backedCategory: "safety",
+    queue: "urgent",
+  },
+  {
+    key: "copyright_dmca",
+    label: "Copyright/DMCA",
+    description: "Copyright, stolen media, unauthorized upload, or formal rights concern.",
+    backedCategory: "copyright",
+    queue: "legal",
+  },
+  {
+    key: "deceptive_content",
+    label: "Misinformation or deceptive content",
+    description: "Deceptive claims, misleading identity, or harmful false context.",
+    backedCategory: "other",
+    queue: "normal",
+  },
+  {
+    key: "graphic_violent_content",
+    label: "Graphic/violent content",
+    description: "Graphic injury, gore, violent imagery, or shocking unsafe content.",
+    backedCategory: "safety",
+    queue: "urgent",
+  },
+  {
+    key: "fraud_payment",
+    label: "Fraud/payment concern",
+    description: "Suspicious paid access, refund/access issue, or payment-related abuse.",
+    backedCategory: "safety",
+    queue: "money_support",
+  },
+  {
+    key: "live_safety",
+    label: "Live safety issue",
+    description: "Unsafe live behavior, room abuse, dangerous participant, or live disruption.",
+    backedCategory: "safety",
+    queue: "urgent",
+  },
+  {
+    key: "other",
+    label: "Other",
+    description: "Something else that needs moderation review.",
+    backedCategory: "other",
+    queue: "normal",
+  },
+];
+
 export function ReportSheet({
   visible,
   title,
@@ -34,14 +155,15 @@ export function ReportSheet({
   onClose,
 }: ReportSheetProps) {
   const router = useRouter();
-  const [category, setCategory] = useState<SafetyReportCategory>("safety");
+  const [categoryKey, setCategoryKey] = useState<string>("harassment_bullying");
   const [note, setNote] = useState("");
 
   const helperText = useMemo(
-    () => "Reports use backed safety categories. Dedicated fraud, sponsorship, and unsafe-product categories need a later schema pass; use Safety or Other with a note for now.",
+    () => "Your report goes to a scoped moderation queue. Reporter identity stays private by default, and reports do not remove content automatically unless urgent safety policy requires temporary escalation.",
     [],
   );
-  const categoryCopy = SAFETY_REPORT_CATEGORY_COPY[category];
+  const falseReportText = "Please report in good faith. Repeated false or abusive reports may be rate-limited or reviewed.";
+  const categoryOption = REPORT_SHEET_CATEGORY_OPTIONS.find((entry) => entry.key === categoryKey) ?? REPORT_SHEET_CATEGORY_OPTIONS[0];
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -54,23 +176,26 @@ export function ReportSheet({
           <Text style={styles.description}>{description}</Text>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-            {SAFETY_REPORT_CATEGORIES.map((entry) => (
+            {REPORT_SHEET_CATEGORY_OPTIONS.map((entry) => (
               <TouchableOpacity
-                key={entry}
-                style={[styles.categoryChip, category === entry && styles.categoryChipActive]}
+                key={entry.key}
+                style={[styles.categoryChip, categoryKey === entry.key && styles.categoryChipActive]}
                 activeOpacity={0.84}
-                onPress={() => setCategory(entry)}
+                onPress={() => setCategoryKey(entry.key)}
               >
-                <Text style={[styles.categoryChipText, category === entry && styles.categoryChipTextActive]}>
-                  {SAFETY_REPORT_CATEGORY_COPY[entry].label}
+                <Text style={[styles.categoryChipText, categoryKey === entry.key && styles.categoryChipTextActive]}>
+                  {entry.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
           <View style={styles.categoryHelp}>
-            <Text style={styles.categoryHelpTitle}>{categoryCopy.label}</Text>
-            <Text style={styles.categoryHelpText}>{categoryCopy.description}</Text>
+            <Text style={styles.categoryHelpTitle}>{categoryOption.label}</Text>
+            <Text style={styles.categoryHelpText}>{categoryOption.description}</Text>
+            <Text style={styles.categoryHelpMeta}>
+              Review path: {categoryOption.queue.replace("_", " ")}
+            </Text>
           </View>
 
           <TextInput
@@ -83,8 +208,9 @@ export function ReportSheet({
           />
 
           <Text style={styles.helperText}>{helperText}</Text>
+          <Text style={styles.helperText}>{falseReportText}</Text>
 
-          {category === "copyright" ? (
+          {categoryOption.backedCategory === "copyright" ? (
             <View style={styles.formalNoticeBox}>
               <Text style={styles.formalNoticeTitle}>Formal copyright notice</Text>
               <Text style={styles.formalNoticeText}>
@@ -108,7 +234,12 @@ export function ReportSheet({
             activeOpacity={0.86}
             disabled={busy}
             onPress={() => {
-              void onSubmit({ category, note });
+              const selectedCategoryNote = `Selected report category: ${categoryOption.label}. Queue: ${categoryOption.queue.replace("_", " ")}.`;
+              const normalizedNote = note.trim();
+              void onSubmit({
+                category: categoryOption.backedCategory,
+                note: normalizedNote ? `${selectedCategoryNote}\n${normalizedNote}` : selectedCategoryNote,
+              });
             }}
           >
             <Text style={styles.primaryButtonText}>{busy ? "Sending…" : "Send Report"}</Text>
@@ -207,6 +338,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     fontWeight: "600",
+  },
+  categoryHelpMeta: {
+    color: "#7D879E",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    textTransform: "uppercase",
   },
   input: {
     minHeight: 98,
