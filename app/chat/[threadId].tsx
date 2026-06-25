@@ -222,6 +222,8 @@ export default function ChillyChatThreadScreen() {
   const [appConfig, setAppConfig] = useState(DEFAULT_APP_CONFIG);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+  const [messageReportTarget, setMessageReportTarget] = useState<ChatMessage | null>(null);
+  const [messageReportBusy, setMessageReportBusy] = useState(false);
   const [callPanelOpen, setCallPanelOpen] = useState(false);
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
@@ -1048,6 +1050,52 @@ export default function ChillyChatThreadScreen() {
     officialAccount,
   ]);
 
+  const handleOpenMessageReport = useCallback((message: ChatMessage) => {
+    trackModerationActionUsed({
+      surface: "chat-thread-message",
+      action: "open_safety_report",
+      targetType: "chat_message",
+      targetId: message.id,
+      threadId,
+      sourceRoute: `/chat/${threadId}`,
+      targetAuditOwnerKey: null,
+      platformOwnedTarget: false,
+    });
+    setMessageReportTarget(message);
+  }, [threadId]);
+
+  const handleSubmitMessageReport = useCallback(async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
+    if (!messageReportTarget?.id || messageReportBusy) return;
+    setMessageReportBusy(true);
+    try {
+      const senderLabel = buildAuthor(thread?.members ?? [], messageReportTarget.senderUserId);
+      await submitSafetyReport({
+        targetType: "chat_message",
+        targetId: messageReportTarget.id,
+        category: input.category,
+        note: input.note,
+        context: buildSafetyReportContext({
+          sourceSurface: "chat-thread-message",
+          sourceRoute: `/chat/${threadId}`,
+          targetLabel: "Chat message",
+          targetRoleLabel: senderLabel,
+          context: {
+            threadId,
+            messageSenderUserId: messageReportTarget.senderUserId,
+            messageCreatedAt: messageReportTarget.createdAt,
+            hasAttachments: messageReportTarget.attachments.length > 0,
+          },
+        }),
+      });
+      setMessageReportTarget(null);
+      Alert.alert("Report sent", "Thanks. The moderation team will review this message report.");
+    } catch {
+      Alert.alert("Report unavailable", "This message report could not be sent right now.");
+    } finally {
+      setMessageReportBusy(false);
+    }
+  }, [messageReportBusy, messageReportTarget, thread?.members, threadId]);
+
   const handleFriendAction = useCallback(async (action: "request" | "accept" | "decline" | "cancel" | "remove") => {
     const targetUserId = String(otherMember?.userId ?? "").trim();
     if (!targetUserId || officialAccount || friendBusy) return;
@@ -1468,6 +1516,18 @@ export default function ChillyChatThreadScreen() {
             <Text style={[styles.messageTime, message.isMe && styles.messageTimeMe]}>
               {formatStamp(message.createdAt)}
             </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Report message"
+              testID="chat-message-report-button"
+              activeOpacity={0.82}
+              onPress={() => handleOpenMessageReport(message)}
+              style={[styles.messageReportButton, message.isMe && styles.messageReportButtonMe]}
+            >
+              <Text style={[styles.messageReportButtonText, message.isMe && styles.messageReportButtonTextMe]}>
+                Report message
+              </Text>
+            </TouchableOpacity>
           </View>
         ))}
       {renderedMessages.length === 0 ? (
@@ -1661,6 +1721,14 @@ export default function ChillyChatThreadScreen() {
         busy={reportBusy}
         onSubmit={handleSubmitReport}
         onClose={() => setReportVisible(false)}
+      />
+      <ReportSheet
+        visible={!!messageReportTarget}
+        title="Report message"
+        description="Send a safety report for this specific chat message. The sender is not notified merely because a report was filed."
+        busy={messageReportBusy}
+        onSubmit={handleSubmitMessageReport}
+        onClose={() => setMessageReportTarget(null)}
       />
       <SocialAttachmentActionSheet
         visible={attachmentSheetVisible}
@@ -2317,6 +2385,29 @@ const styles = StyleSheet.create({
   },
   messageTimeMe: {
     color: "#FFE2EA",
+  },
+  messageReportButton: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    marginTop: 2,
+  },
+  messageReportButtonMe: {
+    alignSelf: "flex-end",
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  messageReportButtonText: {
+    color: "#C8D0E2",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  messageReportButtonTextMe: {
+    color: "#FFF3F7",
   },
   emptyCard: {
     borderRadius: 18,

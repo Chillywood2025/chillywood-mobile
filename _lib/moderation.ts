@@ -17,7 +17,9 @@ export type SafetyReportTargetType =
   | "profile_post_comment"
   | "profile_media"
   | "creator_video_comment"
-  | "social_attachment";
+  | "social_attachment"
+  | "event"
+  | "chat_message";
 export type SafetyReportCategory = "abuse" | "harassment" | "impersonation" | "copyright" | "safety" | "other";
 export type SafetyReportSeverity = "low" | "medium" | "high" | "critical" | "unknown";
 export type SafetyReportStatus = "needs_review" | "reviewing" | "actioned" | "dismissed" | "escalated";
@@ -277,6 +279,8 @@ export const SAFETY_REPORT_TARGET_TYPES: SafetyReportTargetType[] = [
   "profile_media",
   "creator_video_comment",
   "social_attachment",
+  "event",
+  "chat_message",
 ];
 
 export const SAFETY_REPORT_CATEGORY_COPY: Record<SafetyReportCategory, SafetyReportCategoryCopy> = {

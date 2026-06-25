@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -9,9 +9,11 @@ import {
   resolvePaidCreatorEventPassAccess,
   type PaidCreatorEventAccess,
 } from "../../_lib/paidCreatorEvents";
+import { buildSafetyReportContext, submitSafetyReport } from "../../_lib/moderation";
 import { supabase } from "../../_lib/supabase";
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { MoneyOfferCard, MoneyScopeStrip, MoneyStatusChip, MoneySuccessReceipt } from "../../components/monetization/money-ui";
+import { ReportSheet } from "../../components/safety/report-sheet";
 
 type EventRow = {
   id: string;
@@ -56,6 +58,8 @@ export default function PaidCreatorEventRoute() {
   const [access, setAccess] = useState<PaidCreatorEventAccess | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -116,6 +120,37 @@ export default function PaidCreatorEventRoute() {
   const soldOut = access?.reason === "sold_out";
   const unavailable = !!access && !access.allowed && !access.requiresPurchase;
   const title = event?.event_title || offer?.title || "Creator event";
+
+  const onSubmitEventReport = async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
+    if (!eventId || reportBusy) return;
+    setReportBusy(true);
+    try {
+      await submitSafetyReport({
+        targetType: "event",
+        targetId: eventId,
+        category: input.category,
+        note: input.note,
+        context: buildSafetyReportContext({
+          sourceSurface: "event-detail",
+          sourceRoute: `/event/${eventId}`,
+          targetLabel: title,
+          targetRoleLabel: "Creator event",
+          context: {
+            eventType: event?.event_type ?? offer?.eventType ?? null,
+            status: event?.status ?? offer?.status ?? null,
+            hostUserId: event?.host_user_id ?? null,
+            paidAccessReason: access?.reason ?? null,
+          },
+        }),
+      });
+      setReportVisible(false);
+      Alert.alert("Report sent", "Thanks. The moderation team will review this event report.");
+    } catch {
+      Alert.alert("Report unavailable", "This event report could not be sent right now.");
+    } finally {
+      setReportBusy(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} testID="screen-event">
@@ -209,12 +244,30 @@ export default function PaidCreatorEventRoute() {
             {notice ? <Text style={styles.notice}>{notice}</Text> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Report event"
+              testID="event-report-button"
+              onPress={() => setReportVisible(true)}
+              style={styles.reportButton}
+            >
+              <Text style={styles.reportButtonText}>Report Event</Text>
+            </Pressable>
+
             <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.secondaryButton}>
               <Text style={styles.secondaryButtonText}>Back</Text>
             </Pressable>
           </View>
         )}
       </ScrollView>
+      <ReportSheet
+        visible={reportVisible}
+        title="Report event"
+        description="Send a safety report for this event if it seems abusive, unsafe, fraudulent, infringing, or otherwise violates policy."
+        busy={reportBusy}
+        onSubmit={onSubmitEventReport}
+        onClose={() => setReportVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -311,6 +364,21 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
+    fontWeight: "900",
+  },
+  reportButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,180,200,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(220,20,60,0.08)",
+    paddingHorizontal: 16,
+  },
+  reportButtonText: {
+    color: "#FFD6E0",
+    fontSize: 13,
     fontWeight: "900",
   },
   secondaryButton: {

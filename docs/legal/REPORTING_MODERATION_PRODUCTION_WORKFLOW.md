@@ -1,6 +1,8 @@
 # Reporting Moderation Production Workflow
 
 Reporting and moderation workflow: Closed after validation.
+Dedicated event report affordance: Closed after validation.
+Exact chat-message report affordance: Closed after validation.
 
 This document defines the production reporting and moderation workflow for the app. It does not create a new staff role, activate money, execute refunds, or weaken existing role hierarchy protections.
 
@@ -18,17 +20,25 @@ This document defines the production reporting and moderation workflow for the a
 | post | Yes | Profile post action | `profile_post` | all report sheet categories | normal/elevated by category | review first; staff can hide/remove/restore | normal moderation / urgent if safety | `reports_review`, target action requires `content_moderation` | private by default | only after action where policy allows | yes |
 | comment | Yes | creator-video/Profile comment action | `creator_video_comment` or `profile_post_comment` | all report sheet categories | normal/elevated by category | review first; staff can hide/remove/restore | normal moderation / urgent if safety | `reports_review`, target action requires `content_moderation` | private by default | only after action where policy allows | yes |
 | reply | Yes where replies use the same comment/report surface | `profile_post_comment` / comment row | `profile_post_comment` | all report sheet categories | normal/elevated by category | review first | normal moderation | `reports_review`, target action requires `content_moderation` | private by default | only after action where policy allows | yes |
-| chat message | Partial | Chi'lly Chat thread report currently reports participant/thread context | `participant` with thread context | all report sheet categories | normal/elevated by category | no automatic hide | normal moderation / security if exploit | `reports_review`; private evidence requires `admin.chat_evidence.view` and case context | private by default | not notified merely because filed | yes |
+| chat message | Yes | per-message Chi'lly Chat action | `chat_message` with thread context | all report sheet categories | normal/elevated by category | no automatic hide or delete | normal moderation / security if exploit | `reports_review`; private evidence requires `admin.chat_evidence.view` and case context | private by default | not notified merely because filed | yes |
 | room message | Partial | room/participant report context | `room` or `participant` | all report sheet categories | normal/elevated by category | no automatic hide | live safety / normal moderation | `reports_review`, `admin.room_private.view` for evidence | private by default | not notified merely because filed | yes |
 | Watch-Party room | Yes | Watch-Party room report action | `room` | all report sheet categories | normal/elevated by category | no automatic hide | live safety / normal moderation | `reports_review`, live action requires `live_ops`/`admin.room.moderate` | private by default | only after action where policy allows | yes |
 | Live room | Yes through live participant/room context where surface exists | Live Stage participant/report action | `participant` or `room` | all report sheet categories | urgent for live safety | no automatic hard delete; urgent escalation may temporarily hide/end only with scope | live safety | `reports_review`, force-end requires `admin.live.force_end` | private by default | may be delayed for safety investigation | yes |
 | live participant | Yes | participant detail sheet | `participant` | all report sheet categories | normal/elevated by category | no automatic hide | live safety / normal moderation | `reports_review`, live actions require exact live scope | private by default | not notified merely because filed | yes |
-| event | Partial | report through Player/Profile/support until event-specific UI is added | `title`, `creator_video`, or `participant` depending on surface | all report sheet categories plus fraud/payment concern | normal/elevated by category | review first | normal moderation / money support if paid access | exact report/content/support scope | private by default | only after action where policy allows | yes |
-| event content/chat if present | Partial | current event-linked surfaces use existing comment/chat/room report paths | `profile_post_comment`, `creator_video_comment`, `room`, or `participant` | all report sheet categories | normal/elevated by category | review first | normal/live moderation | exact report/content/live scope | private by default | only after action where policy allows | yes |
+| event | Yes | dedicated event detail action | `event` | all report sheet categories plus fraud/payment concern | normal/elevated by category | review first; no automatic delete | normal moderation / money support if paid access | exact report/content/support scope | private by default | only after action where policy allows | yes |
+| event content/chat if present | Yes where the surface exists | event detail plus event-linked comment/chat/room report paths | `event`, `chat_message`, `profile_post_comment`, `creator_video_comment`, `room`, or `participant` | all report sheet categories | normal/elevated by category | review first | normal/live moderation | exact report/content/live scope | private by default | only after action where policy allows | yes |
 | suspicious purchase/access/refund issue | Yes as support workflow | report sheet fraud/payment concern or support route | report context plus support case | fraud/payment concern | money support | no moderation auto-hide | money/refund/access support | `billing_support_read`, `admin.payment_status.view`, `admin.refund_status.record` | private by default | support copy only; no provider refund execution | yes |
 | impersonation/username/handle issue | Yes | Profile/Platform report action | `participant` | impersonation | elevated | no automatic hide | normal moderation / support if account issue | `reports_review`, `admin.user.view` if needed | private by default | only after action where policy allows | yes |
 
 Users can report profiles, Profile media, Platform content, videos, paid videos, live rooms, chat messages, comments, replies, events, and VIP/subscriber content where the surface exists.
+Event reports target the specific event.
+Chat-message reports target the exact message with thread context.
+Reporter identity remains private by default.
+Reported users are not notified merely because a report was filed.
+Reported events/messages are not auto-deleted.
+Urgent categories route to escalation/review.
+Duplicate/false reports remain deduped and rate-limited.
+Private evidence access remains staff-scoped and case/report-context-only.
 
 ## Category And Severity Model
 
@@ -107,7 +117,7 @@ The report form requires a target and backed category, bounds details, warns aga
 
 ## Proof Status
 
-The workflow is closed after validation for current app-controlled surfaces. Partial items remain for full in-app appeal center, message-level chat report targeting beyond thread/participant context, event-specific report UI where a separate event surface exists, reviewer assignment automation, and final legal/operations staffing acceptance.
+The workflow is closed after validation for current app-controlled surfaces. Event reports target the specific event and chat-message reports target the exact message with thread context. Partial items remain for full in-app appeal center, future event card surfaces beyond the current event detail route, reviewer assignment automation, and final legal/operations staffing acceptance.
 
 ## Launch Status
 
