@@ -4,6 +4,7 @@ Reporting and moderation workflow: Closed after validation.
 Dedicated event report affordance: Closed after validation.
 Exact chat-message report affordance: Closed after validation.
 Content takedown decisions: Closed for production decision policy and current backed enforcement after validation.
+Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation.
 
 This document defines the production reporting and moderation workflow for the app. It does not create a new staff role, activate money, execute refunds, or weaken existing role hierarchy protections.
 
@@ -104,6 +105,8 @@ Appeals use support/escalation workflow in V1 unless full in-app appeal UI exist
 ## Staff Scope / Case Context
 
 Staff access requires exact scopes and case/report context. Admin and Moderator can review reports only through role/permission-scoped queues. Private evidence access requires the exact private-data permission and a report/support/DMCA/security case context. No reporter identity, raw storage paths, signed URLs, raw IPs, tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
+
+Live safety reports route to the live-safety queue. Urgent live safety categories escalate differently. Moderator live actions cannot grant publish authority accidentally, and LiveKit token issuer remains source of truth for publish authority. Host/authorized seat approval remains separate from staff moderation.
 
 ## Money / Refund Boundary
 

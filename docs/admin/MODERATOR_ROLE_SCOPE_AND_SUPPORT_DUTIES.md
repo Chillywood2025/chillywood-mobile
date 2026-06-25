@@ -70,6 +70,8 @@ Normal reports, DMCA/legal, support, money/refund/access support, security incid
 
 Content takedown decisions: Closed for production decision policy and current backed enforcement after validation. Reports do not auto-delete content. Takedowns require exact scope, reason, case/report context where applicable, and audit. Hide/quarantine/restrict is preferred over hard delete. Evidence is preserved for moderation, DMCA/legal, security, payment/access disputes, and appeals. Moderator can hide/remove/restore only with exact content scopes and only where the backend target action is supported; unsupported targets are escalated to Admin/Owner, legal, live ops, support, or a future exact backend lane.
 
+Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation. Moderator can triage live safety reports, escalate urgent incidents, and use backed live moderation actions only with exact live scopes and case/report context. Moderator actions cannot grant publish authority accidentally; LiveKit token issuer remains source of truth, host/authorized seat approval remains separate from staff moderation, participant caps remain enforced, and blocked, disabled, deleted, scheduled-deletion, and suspended users fail closed.
+
 ## Private Evidence
 
 Moderator private-data access is minimum necessary and case-scoped. Moderator cannot browse arbitrary private chats, rooms, or profiles. Moderator can view private profile/room/chat evidence only with permission and case/report context. Moderator cannot view raw storage paths, signed URLs, raw IP/security context, tokens, secrets, tax IDs, bank details, provider secrets, or plaintext passcodes.

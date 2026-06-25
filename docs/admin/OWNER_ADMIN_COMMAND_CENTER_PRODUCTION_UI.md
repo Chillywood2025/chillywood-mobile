@@ -123,6 +123,8 @@ Reports can be marked reviewed, dismissed, escalated, or actioned against suppor
 
 Content takedown decisions: Closed for production decision policy and current backed enforcement after validation. Target actions remain report-linked, scoped, reason-required, and audited. Unsupported target actions are honestly disabled or escalated; standalone manual mutation remains locked because immutable audit requires a selected `safety_reports` row. Paid-content takedown preserves access history and routes refund/access questions through manual/external support without provider refund execution, payout movement, or money activation.
 
+Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation. Command Center live tools are incident/readback/escalation surfaces unless a backed live action exists. Force-end/remove/mute/revoke controls must require exact live scope, reason, report/case context where applicable, and audit. Staff UI must not grant LiveKit publish authority, bypass host/seat approval, weaken participant caps, revive stale rooms, or expose LiveKit tokens/raw room URLs.
+
 ## Fail-Closed Behavior
 
 Admin UI fails closed if backend functions are unavailable. Admin UI fails closed when:
