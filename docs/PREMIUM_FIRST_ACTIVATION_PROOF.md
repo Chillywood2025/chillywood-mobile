@@ -4,7 +4,7 @@ Date: 2026-06-25
 
 Verdict: Partial.
 
-Premium-first activation proof: Partial. Premium monthly is provider-verified and installed-screen visible, but Premium annual is not verified in Google Play or RevenueCat, and no Premium purchase was completed in this lane. Creator-money flows remain OFF. Creator payouts remain OFF. Stripe payouts remain OFF. Stripe merch checkout remains OFF. Provider refunds remain manual/external. Premium launch requires owner approval after proof. Creator-money activation remains a separate future lane.
+Premium-first activation proof: Partial. Premium monthly: Verified at `$9.99/month`. Premium annual: Blocked at `$99.99/year` after a browser dashboard setup attempt because Google Play kept base plan ID `annual` marked invalid and returned `Your changes couldn't be saved` even after Yearly, United States-only availability, and `USD 99.99` were selected. Premium public activation remains OFF, no Premium purchase was completed, and no public purchase path was enabled. Creator-money flows remain OFF. Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator payouts remain OFF. Stripe payouts remain OFF. Stripe merch checkout remains OFF. Provider refunds remain manual/external. Premium launch still requires licensed/internal purchase proof and owner approval. Creator-money activation remains a separate future lane.
 
 This is a Premium-only proof lane. It does not activate creator-money, live money, payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, or provider refund automation.
 
@@ -28,11 +28,11 @@ Official provider behavior checked:
 | Product type | Subscription. | Verified |
 | Monthly base plan/package | Base plan `monthly`; Monthly, auto-renewing; United States; Active. | Verified |
 | Monthly price | Google Play base-plan detail shows `USD 9.99`. | Verified |
-| Annual base plan/package | No annual/yearly base plan was visible in the inspected Google Play `premium_subscription` base-plan list. | Pending / provider-blocked |
-| Annual price | `$99.99/year` was not visible in Google Play or RevenueCat Premium offering evidence. | Pending / provider-blocked |
+| Annual base plan/package | Add-base-plan form accepted the approved draft values `annual`, Yearly, United States only, and `USD 99.99`, but Google Play kept `Base plan ID` invalid and returned `Your changes couldn't be saved`; no saved annual base-plan record was created. | Blocked |
+| Annual price | `$99.99/year` was entered for United States only in the unsaved Google Play draft; no saved Google Play annual base plan or RevenueCat annual package exists. | Blocked |
 | RevenueCat product | `premium_subscription:monthly` exists as `Chi'llywood Premium Monthly`, Published. | Verified |
 | RevenueCat entitlement | Entitlement `premium` exists and has exactly one associated product: `premium_subscription:monthly`. | Verified |
-| RevenueCat offering/package | Offering `premium` exists with one package, `Monthly` / `$rc_monthly`, mapped to `premium_subscription:monthly`. | Verified |
+| RevenueCat offering/package | Offering `premium` exists with one package, `Monthly` / `$rc_monthly`, mapped to `premium_subscription:monthly`; no `$rc_annual` package is visible. | Monthly verified / annual blocked |
 | Creator-product separation | RevenueCat product catalog shows the five production-labeled creator products as Draft with no entitlement attachment; Premium entitlement detail shows no creator product. | Verified |
 | Restore/manage/cancel support | App code exposes RevenueCat restore/customer info and Google Play subscription management URL support; no live action was performed. | Prepared / not live-proved in this lane |
 
@@ -44,7 +44,7 @@ Official provider behavior checked:
 | Premium screen opens | Deep link opened `screen-premium` on the Play-installed app. | Verified |
 | Premium product loads | Provider setup is verified, but the purchase shell stayed in safe/off state; no purchase sheet was opened. | Partial |
 | Correct monthly price appears | Provider dashboard verifies `USD 9.99`; installed screen readback did not scroll to a visible price row in this lane. | Provider-verified / installed-price pending |
-| Correct annual price appears | Annual provider setup is not verified. | Blocked |
+| Correct annual price appears | Annual provider setup is blocked before saved provider setup; no annual package can be displayed from RevenueCat yet. | Blocked |
 | Purchase sheet opens | Not attempted because this lane did not enable the Premium purchase shell publicly or make a real customer purchase. | Pending controlled tester proof |
 | Licensed/internal test purchase completes | Not attempted; no real purchase was performed. | Pending controlled tester proof |
 | RevenueCat entitlement `premium` becomes active | Not newly proved in this lane; prior sandbox proof remains historical. | Pending controlled tester proof |
@@ -85,8 +85,8 @@ Official provider behavior checked:
 
 ## Owner Action List
 
-1. Decide whether Premium can launch monthly-only or whether annual must be created first.
-2. If annual is required, create/verify a Google Play annual base plan/package at `$99.99/year` and map it in RevenueCat offering `premium` without changing creator-money products.
+1. Resolve the Google Play annual base-plan blocker for `premium_subscription` / `annual`, or approve a different annual base-plan ID if Google Play support confirms `annual` cannot be saved.
+2. After the Google Play annual base plan exists, import/verify `premium_subscription:annual` in RevenueCat, attach it only to entitlement `premium`, and add it to offering `premium` as `$rc_annual` or RevenueCat's annual package equivalent without changing monthly.
 3. Approve a bounded Premium-only internal/licensed-tester purchase window.
 4. Open the Premium purchase shell only for the approved environment and tester path.
 5. Complete no-charge licensed/internal test purchase proof, entitlement readback, restore, manage/cancel, and revoked/expired denial proof.
@@ -95,4 +95,4 @@ Official provider behavior checked:
 
 ## Safety Confirmation
 
-No creator-money switch was enabled. `live_money_enabled` remains OFF. Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and provider refund automation remain OFF. Premium product/pricing was not changed. Creator-money product IDs, prices, regions, purchase options, and RevenueCat mappings were not changed. No creator-money product maps to Premium. No real customer account or real paid customer purchase was used.
+No creator-money switch was enabled. `live_money_enabled` remains OFF. Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and provider refund automation remain OFF. Premium public activation remains OFF. Premium monthly remains unchanged. The attempted Premium annual draft did not save and no purchase was completed. Creator-money product IDs, prices, regions, purchase options, and RevenueCat mappings were not changed. No creator-money product maps to Premium. No real customer account or real paid customer purchase was used.

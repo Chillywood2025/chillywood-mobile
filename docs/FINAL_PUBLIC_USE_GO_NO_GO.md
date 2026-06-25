@@ -80,7 +80,7 @@ Latest creator-money tax/legal/compliance proof artifact:
 
 Latest Premium-first activation proof artifact:
 
-- `/tmp/app-premium-first-activation-proof-20260625-112204/`
+- `/tmp/app-premium-annual-provider-proof-20260625-120313/`
 
 Seven-flow money classification:
 
@@ -91,8 +91,9 @@ Seven-flow money classification:
 - All activation switches remain OFF.
 - Premium-first launch candidate: Pending owner activation/provider final check.
 - Premium-first activation proof: Partial.
-- Premium monthly: Verified.
-- Premium annual: Pending / provider-blocked.
+- Premium monthly: Verified at $9.99/month.
+- Premium annual: Blocked at $99.99/year.
+- Premium public activation remains OFF.
 - Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval.
 - Creator-money flows remain OFF by default.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
@@ -116,7 +117,7 @@ Seven-flow money classification:
 - Stripe merch checkout remains OFF.
 - Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
 - The owner approved the recommended production creator-money product IDs, recommended starting prices, Google Play-valid hyphenated purchase-option IDs, and United States only first. Google Play now has five one-time production-labeled Draft records: `cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_vip_pass_499`, and `cw_event_pass_099`. RevenueCat imported those five products as Draft consumables with no entitlement attachment and no Premium mapping. Google Play also has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans. Channel Subscription base plan: Blocked. The `monthly` base plan remains missing because Google Play marks the `Base plan ID` field invalid before Save on stale and clean Add base plan forms.
-- Premium-first activation proof used browser dashboard evidence and Play-installed Android readback without enabling creator-money. Google Play `premium_subscription` has active base plan `monthly`, Monthly auto-renewing, United States, `USD 9.99`; RevenueCat has Published product `premium_subscription:monthly`, entitlement `premium`, and offering `premium` package `$rc_monthly`. Premium annual remains pending/provider-blocked because no annual/yearly base plan or `$99.99/year` package was visible in the inspected Google Play or RevenueCat Premium surfaces. The Play-installed versionCode `55` Premium screen opened, showed Premium inactive, and showed creator products are separate from Premium. No purchase sheet was opened, no purchase was completed, and Premium launch still requires owner approval after proof.
+- Premium-first activation proof used browser dashboard evidence and Play-installed Android readback without enabling creator-money. Google Play `premium_subscription` has active base plan `monthly`, Monthly auto-renewing, United States, `USD 9.99`; RevenueCat has Published product `premium_subscription:monthly`, entitlement `premium`, and offering `premium` package `$rc_monthly`. Premium annual remains blocked because the Google Play `premium_subscription` annual base-plan attempt reached approved values (`annual`, Yearly, United States only, `USD 99.99`) but Google Play kept `Base plan ID` invalid and returned `Your changes couldn't be saved`; no saved annual base plan and no RevenueCat `premium_subscription:annual` / `$rc_annual` mapping exists. The Play-installed versionCode `55` Premium screen opened, showed Premium inactive, and showed creator products are separate from Premium. No purchase sheet was opened, no purchase was completed, Premium public activation remains OFF, and Premium launch still requires licensed/internal purchase proof plus owner approval.
 - Channel Subscription remains provider-blocked until Google Play base plan issue is resolved.
 - Creator-money activation remains a separate future lane.
 - `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` is complete enough for owner/legal/tax review and records the provider fields Codex may fill, the owner-stop tax/legal/compliance fields, and the rule that Codex must not guess tax/legal/compliance fields.

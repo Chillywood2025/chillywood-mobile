@@ -278,7 +278,7 @@ export default function PublicChannelScreen() {
         ? readPlatformBrandStudio(routeUserId).catch(() => null)
         : readPublicPlatformBranding(routeUserId).catch(() => null);
       const videosPromise = showOwnerControls
-        ? readCreatorVideos(routeUserId, { includeDrafts: true, limit: 50 }).catch(() => [])
+        ? readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50 }).catch(() => [])
         : readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []);
       const [publicVideos, publicEvents, nextCommerceSurface, nextTipStatus, nextSubscriptionAccess, nextVipAccess, nextWatchPartyTicketOffer, nextSandboxTesterActive, nextPlatformBranding] = await Promise.all([
         videosPromise,
@@ -424,7 +424,7 @@ export default function PublicChannelScreen() {
   const refreshPublicVideos = async () => {
     if (!routeUserId) return;
     const nextVideos = showOwnerControls
-      ? await readCreatorVideos(routeUserId, { includeDrafts: true, limit: 50 }).catch(() => [])
+      ? await readCreatorVideos(routeUserId, { includeDrafts: showOwnerControls, limit: 50 }).catch(() => [])
       : await readCreatorVideos(routeUserId, { includeDrafts: false, limit: 50 }).catch(() => []);
     setVideos(nextVideos);
   };

@@ -14,7 +14,7 @@ export const PROFILE_POST_LIKES_TABLE = "profile_post_likes";
 export const PROFILE_POST_BODY_LIMIT = 500;
 export const PROFILE_POST_COMMENT_BODY_LIMIT = 500;
 
-export type ProfilePostVisibility = "public" | "draft";
+export type ProfilePostVisibility = "public";
 export type ProfilePostModerationStatus = "clean" | "reported" | "hidden" | "removed";
 
 export type ProfilePost = {
@@ -81,9 +81,7 @@ const normalizeModerationStatus = (value: unknown): ProfilePostModerationStatus 
   return "clean";
 };
 
-const normalizeProfilePostVisibility = (value: unknown): ProfilePostVisibility => (
-  normalizeText(value).toLowerCase() === "draft" ? "draft" : "public"
-);
+const normalizeProfilePostVisibility = (_value: unknown): ProfilePostVisibility => "public";
 
 const parseProfilePost = (
   row: ProfilePostRow,

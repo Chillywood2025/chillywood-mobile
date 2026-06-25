@@ -3497,11 +3497,6 @@ export default function ProfileScreen() {
             <AppText scale="subhead" style={styles.feedPostName} numberOfLines={1}>{profile.displayName}</AppText>
             <AppText scale="caption" style={styles.feedPostMeta}>{formatProfilePostDate(post.createdAt)}</AppText>
           </View>
-          {isSelfProfile && post.visibility === "draft" ? (
-            <View style={styles.feedDraftBadge}>
-              <AppText scale="caption" style={styles.feedDraftBadgeText}>DRAFT</AppText>
-            </View>
-          ) : null}
           {isSelfProfile && post.moderationStatus === "reported" ? (
             <View style={styles.feedDraftBadge}>
               <AppText scale="caption" style={styles.feedDraftBadgeText}>REPORTED</AppText>

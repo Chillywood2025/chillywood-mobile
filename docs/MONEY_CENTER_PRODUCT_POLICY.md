@@ -211,11 +211,11 @@ June 1, 2026 Premium sandbox regression note:
 
 June 25, 2026 Premium-first activation proof note:
 
-- Premium-first activation proof: Partial. Premium monthly: Verified. Premium annual: Pending / provider-blocked.
+- Premium-first activation proof: Partial. Premium monthly: Verified at `$9.99/month`. Premium annual: Blocked at `$99.99/year`.
 - Browser dashboard evidence verifies Google Play `premium_subscription` base plan `monthly` as Active, United States, `USD 9.99`; RevenueCat entitlement `premium`, offering `premium`, package `$rc_monthly`, and product `premium_subscription:monthly` are verified.
-- No annual/yearly Google Play base plan or RevenueCat annual package at `$99.99/year` was visible in the inspected provider dashboards. Do not claim annual readiness until both provider surfaces prove it.
+- Premium annual provider setup was attempted with approved values (`annual`, Yearly, United States only, `USD 99.99`), but Google Play kept `Base plan ID` invalid and returned `Your changes couldn't be saved`. Do not claim annual readiness until Google Play has a saved annual base plan and RevenueCat has `premium_subscription:annual` mapped into the `premium` offering without changing monthly.
 - Play-installed Android versionCode `55` opened the Premium screen and showed Premium inactive plus copy that creator subscriptions, VIP passes, tips, paid videos, Watch-Party Seat Passes, and paid events are separate creator products.
-- No Premium purchase sheet was opened, no purchase was completed, and no live production Premium activation occurred. Premium launch requires owner approval after proof.
+- No Premium purchase sheet was opened, no purchase was completed, Premium public activation remains OFF, and no live production Premium activation occurred. Premium launch still requires licensed/internal purchase proof and owner approval after annual provider setup is resolved.
 - Creator-money flows remain OFF. Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator payouts remain OFF. Stripe payouts remain OFF. Stripe merch checkout remains OFF. Provider refunds remain manual/external. Creator-money activation remains a separate future lane.
 
 `_lib/moneyAuditEvents.ts` is the shared normalization layer for these surfaces. It reads safe source rows where RLS allows and builds source-labeled events from existing read models otherwise. It filters secret-like fields and marks every sandbox/setup event as non-payable.

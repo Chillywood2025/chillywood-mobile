@@ -13,8 +13,9 @@ Current classification:
 - Seven-flow app-side proof: Closed.
 - Seven-flow production switchboard: Partial.
 - Premium-first activation proof: Partial.
-- Premium monthly: Verified.
-- Premium annual: Pending / provider-blocked.
+- Premium monthly: Verified at $9.99/month.
+- Premium annual: Blocked at $99.99/year.
+- Premium public activation remains OFF.
 - Creator-money production-labeled products: Partial.
 - Creator-money tax/legal/compliance plan: Partial.
 - Creator-money product creation: Partial.
@@ -33,7 +34,7 @@ Current classification:
 - Stripe merch checkout remains OFF.
 - Codex must not guess tax/legal/compliance fields.
 
-Premium-first launch remains monthly-only prepared until the owner decides whether annual is required. Google Play dashboard evidence verifies `premium_subscription` base plan `monthly` as Active, United States, `USD 9.99`; RevenueCat dashboard evidence verifies entitlement `premium`, offering `premium`, package `$rc_monthly`, and product `premium_subscription:monthly`. Premium annual is not ready unless Google Play and RevenueCat show an annual/yearly base plan/package at `$99.99/year`. Premium launch requires owner approval after proof. Creator-money activation remains a separate future lane.
+Premium-first launch remains blocked on annual setup because the owner requires both monthly and annual before launch. Google Play dashboard evidence verifies `premium_subscription` base plan `monthly` as Active, United States, `USD 9.99`; RevenueCat dashboard evidence verifies entitlement `premium`, offering `premium`, package `$rc_monthly`, and product `premium_subscription:monthly`. Premium annual is blocked at `$99.99/year`: the Google Play annual base-plan attempt reached approved values (`annual`, Yearly, United States only, `USD 99.99`) but Google Play kept `Base plan ID` invalid and returned `Your changes couldn't be saved`; no saved annual base plan and no RevenueCat `premium_subscription:annual` / `$rc_annual` mapping exists. Premium launch still requires licensed/internal purchase proof and owner approval. Creator-money activation remains a separate future lane.
 
 The seven controlled flows are Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass. Each flow requires an explicit owner decision before production activation. The global emergency stop is `live_money_enabled=off`, and creator payouts remain governed separately by `payouts_enabled=off` plus payout-lane requirements.
 

@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
-const artifactDir = path.join("/tmp", `app-premium-first-activation-proof-${timestamp}`);
+const artifactDir = path.join("/tmp", `app-premium-annual-provider-proof-${timestamp}`);
 
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
@@ -39,8 +39,8 @@ const dashboardEvidence = {
     monthlyPeriod: "Monthly, auto-renewing",
     monthlyRegion: "United States",
     monthlyPrice: "USD 9.99",
-    annualBasePlan: "Not visible in inspected Google Play premium_subscription base-plan list",
-    annualPrice: "Not verified",
+    annualBasePlan: "Blocked: approved annual draft values were entered, but Google Play kept Base plan ID invalid and returned Your changes couldn't be saved",
+    annualPrice: "Blocked: USD 99.99/year was entered for United States only, but no saved annual base plan exists",
   },
   revenueCat: {
     project: "Chi'llywood",
@@ -50,7 +50,7 @@ const dashboardEvidence = {
     entitlementProducts: ["premium_subscription:monthly"],
     offering: "premium",
     package: "$rc_monthly",
-    annualPackage: "Not visible in inspected premium offering",
+    annualPackage: "Blocked: no premium_subscription:annual / $rc_annual package is visible because Google Play annual base plan did not save",
   },
 };
 
@@ -133,11 +133,14 @@ const checks = [
     detail: "Docs record browser dashboard evidence for Premium monthly at USD 9.99.",
   },
   {
-    id: "premium_annual_not_claimed",
-    ok: docsText.includes("Premium annual: Pending / provider-blocked")
-      && docsText.includes("No annual/yearly base plan was visible")
-      && docsText.includes("$99.99/year` was not visible"),
-    detail: "Annual Premium is not claimed ready without provider evidence.",
+    id: "premium_annual_blocked_not_claimed_ready",
+    ok: docsText.includes("Premium annual: Blocked at")
+      && docsText.includes("USD 99.99")
+      && docsText.includes("Base plan ID")
+      && docsText.includes("Your changes couldn't be saved")
+      && docsText.includes("premium_subscription:annual")
+      && docsText.includes("$rc_annual"),
+    detail: "Annual Premium is documented as blocked by Google Play save/validation behavior and is not claimed ready without provider evidence.",
   },
   {
     id: "revenuecat_restore_manage_paths",
@@ -182,8 +185,8 @@ const premiumProviderMatrix = [
   },
   {
     row: "annual base plan/package",
-    finding: "No annual/yearly base plan visible in inspected Google Play premium_subscription base-plan list or RevenueCat premium offering.",
-    status: "Pending / provider-blocked",
+    finding: "Blocked: approved draft values annual / Yearly / United States / USD 99.99 were entered, but Google Play kept Base plan ID invalid and returned Your changes couldn't be saved; no saved annual base plan exists.",
+    status: "Blocked",
   },
   {
     row: "RevenueCat product",
@@ -197,8 +200,8 @@ const premiumProviderMatrix = [
   },
   {
     row: "offering/package",
-    finding: "RevenueCat offering premium has package Monthly / $rc_monthly mapped to premium_subscription:monthly.",
-    status: "Verified",
+    finding: "RevenueCat offering premium has package Monthly / $rc_monthly mapped to premium_subscription:monthly; no premium_subscription:annual / $rc_annual package is visible.",
+    status: "Monthly verified / annual blocked",
   },
   {
     row: "restore/manage/cancel",
@@ -302,9 +305,29 @@ const safetyMatrix = [
   { control: "payouts/cash-out/withdrawals/transfers", state: "OFF", status: "Pass" },
   { control: "Stripe payouts/merch", state: "OFF", status: "Pass" },
   { control: "Provider refunds", state: "Manual/external", status: "Pass" },
-  { control: "Premium product/pricing changes", state: "None performed", status: "Pass" },
+  { control: "Premium public activation", state: "OFF", status: "Pass" },
+  { control: "Premium monthly product/pricing changes", state: "None performed", status: "Pass" },
+  { control: "Premium annual setup", state: "Blocked before saved provider record; no purchase performed", status: "Blocked" },
   { control: "Creator product mapping to Premium", state: "None found in dashboard/doc evidence", status: "Pass" },
   { control: "Real customer purchase", state: "None performed", status: "Pass" },
+];
+
+const appUiReadinessMatrix = [
+  {
+    area: "RevenueCat package readback",
+    finding: "The app snapshot records availablePackageIds, recommendedPackageId, and packageCount for the Premium offering.",
+    status: "Prepared",
+  },
+  {
+    area: "Annual package recognition",
+    finding: "_lib/monetization.ts recognizes ANNUAL packages and P1Y subscription periods.",
+    status: "Prepared",
+  },
+  {
+    area: "Visible annual selection",
+    finding: "The current subscribe/access-sheet path prefers the recommended package, with monthly before annual. If annual launch requires an explicit annual chooser, add that in a follow-up UI lane after provider setup is unblocked.",
+    status: "Follow-up if annual chooser is required",
+  },
 ];
 
 mkdirSync(artifactDir, { recursive: true });
@@ -320,6 +343,7 @@ writeArtifact("revenuecat-premium-matrix.json", asJson({
   annualPackage: dashboardEvidence.revenueCat.annualPackage,
 }));
 writeArtifact("installed-proof-summary.json", asJson(installedProofMatrix));
+writeArtifact("app-ui-readiness-matrix.json", asJson(appUiReadinessMatrix));
 writeArtifact("creator-money-off-state-matrix.json", asJson(creatorMoneyOffStateMatrix));
 writeArtifact("support-refund-rollback-matrix.json", asJson(supportRefundRollbackMatrix));
 writeArtifact("safety-matrix.json", asJson(safetyMatrix));
@@ -334,18 +358,19 @@ writeArtifact("secret-scan-result.txt", [
   "",
 ].join("\n"));
 writeArtifact("README.md", [
-  "# Premium-First Activation Proof",
+  "# Premium Annual Provider Proof",
   "",
   `Generated: ${new Date().toISOString()}`,
   "",
-  "Verdict: Partial.",
+  "Verdict: Blocked.",
   "",
-  "Premium monthly is provider-verified at Google Play / RevenueCat, but annual is provider-blocked and no purchase was completed in this dry-run lane.",
+  "Premium monthly is provider-verified at Google Play / RevenueCat. Premium annual remains blocked because Google Play rejected the annual base-plan save after approved values were entered. No purchase was completed and Premium public activation remains OFF.",
   "",
   "Files:",
   "- premium-provider-matrix.json",
   "- revenuecat-premium-matrix.json",
   "- installed-proof-summary.json",
+  "- app-ui-readiness-matrix.json",
   "- creator-money-off-state-matrix.json",
   "- support-refund-rollback-matrix.json",
   "- safety-matrix.json",
@@ -355,7 +380,7 @@ writeArtifact("README.md", [
 ].join("\n"));
 
 const summary = {
-  verdict: "Partial",
+  verdict: "Blocked",
   artifactDir,
   branch: git(["branch", "--show-current"]),
   head: git(["rev-parse", "HEAD"]),
@@ -374,6 +399,7 @@ const summary = {
   safety: {
     dryRun: true,
     noRealCustomerPurchase: true,
+    premiumPublicActivationOff: true,
     creatorMoneySwitchesOff: true,
     liveMoneyOff: true,
     payoutsOff: true,
