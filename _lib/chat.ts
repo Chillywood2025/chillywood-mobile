@@ -72,6 +72,11 @@ export type ChatMessage = {
   messageType: "text";
   createdAt: string;
   attachments: SocialAttachment[];
+  moderationStatus: "clean" | "hidden" | "removed";
+  moderationReason?: string;
+  moderationReportId?: number;
+  moderationActionedAt?: string;
+  isModerationHidden: boolean;
 };
 
 type ChatThreadMemberRow = Pick<
@@ -94,10 +99,18 @@ type ChatThreadRow = Pick<
   members: ChatThreadMemberRow[] | null;
 };
 
-type ChatMessageRow = Pick<
-  Tables<"chat_messages">,
-  "id" | "thread_id" | "sender_user_id" | "body" | "message_type" | "created_at"
->;
+type ChatMessageRow = {
+  id: string | null;
+  thread_id: string | null;
+  sender_user_id: string | null;
+  body: string | null;
+  message_type: string | null;
+  created_at: string | null;
+  moderation_status?: string | null;
+  moderation_reason?: string | null;
+  moderation_report_id?: number | null;
+  moderation_actioned_at?: string | null;
+};
 
 type ChatUserProfileRow = Pick<
   Tables<"user_profiles">,
@@ -115,7 +128,7 @@ const CHAT_THREAD_MEMBER_SELECT =
 const CHAT_THREAD_SELECT =
   `id,participant_pair_key,created_by,created_at,updated_at,last_message_at,last_message_preview,active_communication_room_id,active_call_type,members:${CHAT_THREAD_MEMBERS_TABLE}(${CHAT_THREAD_MEMBER_SELECT})`;
 const CHAT_MESSAGE_SELECT =
-  "id,thread_id,sender_user_id,body,message_type,created_at";
+  "id,thread_id,sender_user_id,body,message_type,created_at,moderation_status,moderation_reason,moderation_report_id,moderation_actioned_at";
 const CHAT_USER_SEARCH_SELECT =
   "user_id,username,display_name,avatar_url,tagline";
 
@@ -253,16 +266,30 @@ function parseChatMessage(
   const threadId = toText(row.thread_id);
   const senderUserId = toText(row.sender_user_id);
   const body = toText(row.body);
-  if (!id || !threadId || !senderUserId || !body) return null;
+  const rawModerationStatus = toText(row.moderation_status).toLowerCase();
+  const moderationStatus = rawModerationStatus === "hidden" || rawModerationStatus === "removed"
+    ? rawModerationStatus
+    : "clean";
+  const isModerationHidden = moderationStatus === "hidden" || moderationStatus === "removed";
+  if (!id || !threadId || !senderUserId || (!body && !isModerationHidden)) return null;
 
   return {
     id,
     threadId,
     senderUserId,
-    body,
+    body: isModerationHidden
+      ? moderationStatus === "removed"
+        ? "This message was removed after review."
+        : "This message is hidden while it is reviewed."
+      : body,
     messageType: "text",
     createdAt: toText(row.created_at) || new Date().toISOString(),
-    attachments,
+    attachments: isModerationHidden ? [] : attachments,
+    moderationStatus,
+    moderationReason: toText(row.moderation_reason) || undefined,
+    moderationReportId: Number.isFinite(Number(row.moderation_report_id)) ? Number(row.moderation_report_id) : undefined,
+    moderationActionedAt: toText(row.moderation_actioned_at) || undefined,
+    isModerationHidden,
   };
 }
 
@@ -389,7 +416,7 @@ export async function listChatMessages(threadId: string): Promise<ChatMessage[]>
   if (error || !data) return [];
   const attachmentsByMessageId = await readSocialAttachmentsForSurfaces(
     "chat_message",
-    data.map((row) => row.id),
+    data.map((row) => toText(row.id)).filter(Boolean),
   );
   return data
     .map((row) => parseChatMessage(row, attachmentsByMessageId.get(toText(row.id)) ?? []))

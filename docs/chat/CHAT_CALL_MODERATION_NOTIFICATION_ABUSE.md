@@ -1,18 +1,20 @@
 # Chat Call Moderation Notification Abuse
 
-Chat/call moderation and notification abuse controls: Partial for direct message hide/remove/restore mutation; Closed for current production reporting, evidence-access policy, blocked/restricted account denial, call/ring dedupe, chat-send rate limiting, attachment scan gating, notification privacy, and proof after validation.
+Chat/call moderation and notification abuse controls: Closed after validation.
+Dedicated chat_thread report target: Closed after validation.
+Chat-message hide/remove/restore: Closed after validation.
 
-This document covers Chi'lly Chat direct threads, exact chat-message reports, participant/thread-context reports, call invites, call/ring notifications, push-token handling, attachments, staff evidence access, and support-safe call metadata. It does not rebuild Chi'lly Chat, add call recording, expose private call content, weaken LiveKit authority, create staff roles, activate money, execute refunds, change provider products, or weaken reporting privacy.
+This document covers Chi'lly Chat direct threads, exact chat-message reports, dedicated whole-conversation reports, call invites, call/ring notifications, push-token handling, attachments, staff evidence access, report-linked chat-message moderation actions, and support-safe call metadata. It does not rebuild Chi'lly Chat, add call recording, expose private call content, weaken LiveKit authority, create staff roles, activate money, execute refunds, change provider products, or weaken reporting privacy.
 
-Specific chat messages can be reported. Thread-level reports are supported where safely wired, or documented as follow-up. Current thread-level coverage is a participant/thread-context report, and a separate `chat_thread` target remains documented as follow-up. Staff private chat evidence access requires exact scope and case/report context. Moderators/Admins cannot browse arbitrary private chats. Blocked users cannot message, call, or ring each other. Disabled/deleted/scheduled-deletion users fail closed for chat and calls. Call/ring notifications are deduped or rate-limited. Chat sends are rate-limited or documented as follow-up. Support/moderation staff can see safe call metadata only with scope/context. Support/moderation staff cannot see call audio/video content. No call recording is introduced. Attachments remain scan-gated. Reported attachments remain evidence-preserved and case-scoped. No private message bodies, reporter identity, raw storage paths, signed URLs, raw IPs, tokens, push tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
+Specific chat messages can be reported. Users can report a whole chat conversation. `chat_thread` reports target the exact thread internally. `chat_message` reports target the exact message with thread context internally. Staff private chat evidence access requires exact scope and case/report context. Moderators/Admins cannot browse arbitrary private chats. Chat-message hide/remove/restore preserves evidence. Chat-message hide/remove/restore does not hard-delete moderation/legal evidence. Chat-message moderation actions require exact scope, reason, case/report context where applicable, and audit. Reporter identity remains private. Reported users are not notified merely because a report was filed. Duplicate/rate-limit protections apply. Blocked users cannot message, call, or ring each other. Disabled/deleted/scheduled-deletion users fail closed for chat and calls. Call/ring notifications are deduped or rate-limited. Chat sends are rate-limited or documented as follow-up. Support/moderation staff can see safe call metadata only with scope/context. Support/moderation staff cannot see call audio/video content. No call recording is introduced. Attachments remain scan-gated. Reported attachments remain evidence-preserved and case-scoped. No private message bodies, reporter identity, raw storage paths, signed URLs, raw IPs, tokens, push tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
 
 ## Chat Reporting Matrix
 
 | Surface | Reportable now? | UI entry point | Target / context | Reporter privacy | Reported-user notification | Staff evidence access | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| direct thread participant | Yes | thread header safety action | `participant` plus `threadId` and active call context | private by default | not notified merely because report filed | report/case scoped | Closed |
+| direct thread participant | Yes through participant/profile surfaces where needed | participant/profile safety action | `participant` plus safe context where applicable | private by default | not notified merely because report filed | report/case scoped | Closed |
 | specific chat message | Yes | per-message `Report message` button | `chat_message` exact message id plus thread context | private by default | not notified merely because report filed | `admin.chat_evidence.view` plus case/report context | Closed |
-| whole chat thread | Partial | participant/thread-context report | no separate `chat_thread` target today | private by default | not notified merely because report filed | case/report scoped | Follow-up if a dedicated thread target is needed |
+| whole chat thread | Yes | thread header `Report conversation` action | `chat_thread` exact thread id plus safe participant/call context | private by default | not notified merely because report filed | case/report scoped | Closed |
 | chat attachment | Yes through message report context | report exact message containing attachment | `chat_message` plus `hasAttachments` context | private by default | not notified merely because report filed | scan-gated attachment evidence only | Closed |
 | call/ring behavior | Yes through participant/thread support or report context | participant/thread-context report or support case | participant/thread/call invite metadata | private by default | not notified merely because report filed | metadata only, no call content | Closed |
 
@@ -28,11 +30,11 @@ Private message bodies must not appear in generic Admin search, public notificat
 | --- | --- | --- | --- | --- | --- |
 | review report | exact `reports_review` or `content_moderation` scope | exact `reports_review` or `content_moderation` scope | backed through report queue | report row and audit where actioned | none to reported user merely because filed |
 | view message evidence | exact `admin.chat_evidence.view` plus case/report context | exact `admin.chat_evidence.view` plus case/report context | case-scoped policy; no arbitrary browser | audit where supported | n/a |
-| hide/remove message | Owner/Admin/Moderator only if a future exact backend target action exists | same boundary | Partial: no generic `chat_message` public-visibility mutation in current target-action allowlist | preserve report and evidence; future exact action must audit | safe message unavailable copy only |
-| restore message | Owner/Admin/Moderator only if a future exact backend target action exists | same boundary | Partial / future exact lane | preserve evidence and before/after state | safe restored/unavailable copy |
+| hide/remove message | Owner/Admin/Moderator only with exact content scope and selected report/case context | same boundary | backed through report-linked `chat_message` target action | preserves message row, attachments, report row, before/after state, and audit | safe message unavailable copy only |
+| restore message | Owner/Admin/Moderator only with exact restore scope and selected report/case context | same boundary | backed through report-linked `chat_message` target action | preserves evidence and before/after state | safe restored/unavailable copy |
 | hard delete message | not allowed for moderation evidence | not allowed | not expanded by this lane | evidence must remain preserved | n/a |
 
-Hidden/deleted messages are retained for audit/evidence where a backed future action exists. The current safe path for `chat_message` reports is review, evidence preservation, escalation, support/legal/security routing, and future exact mutation where needed. No hard delete may erase moderation/legal evidence.
+Hidden/removed messages are retained for audit/evidence. The current safe path for `chat_message` reports is report-linked hide/remove/restore, review, evidence preservation, escalation, support/legal/security routing, and audit. No hard delete may erase moderation/legal evidence.
 
 ## Blocked / Disabled / Deleted Denial Policy
 
@@ -83,7 +85,7 @@ Backend denial remains authoritative if UI is bypassed. Chat-message report targ
 
 Chat/call moderation and notification abuse controls are production-ready for current launch mode after validation with these boundaries:
 
-- Closed: exact chat-message reporting, participant/thread-context reporting, reporter privacy, case-scoped staff evidence doctrine, blocked/restricted denial, chat-send rate limiting, call/ring dedupe, notification privacy, attachment scan gating, and no call recording.
-- Partial: dedicated whole-thread `chat_thread` target and direct chat-message hide/remove/restore mutation remain future exact backend lanes.
+- Closed: exact chat-message reporting, dedicated whole-thread `chat_thread` reporting, reporter privacy, case-scoped staff evidence doctrine, report-linked chat-message hide/remove/restore mutation, blocked/restricted denial, chat-send rate limiting, call/ring dedupe, notification privacy, attachment scan gating, and no call recording.
+- Partial: none for the focused `chat_thread` reporting and chat-message hide/remove/restore follow-ups in this lane.
 
 This lane does not activate money/provider/payout systems and does not change staff hierarchy.

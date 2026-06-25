@@ -94,7 +94,7 @@ Status:
 - [x] Production chat/call moderation and notification abuse controls documented and proved repo-side.
 
 Status:
-- Verdict: Partial for direct message hide/remove/restore mutation; Closed for current production reporting, evidence-access policy, blocked/restricted account denial, call/ring dedupe, chat-send rate limiting, attachment scan gating, notification privacy, and proof after validation.
+- Verdict: Closed after validation.
 - Docs: `docs/chat/CHAT_CALL_MODERATION_NOTIFICATION_ABUSE.md`
 - Proof script: `scripts/proof-chat-call-moderation-notification-abuse.mjs`
 - Guard: `scripts/guard-chat-call-moderation-notification-policy.mjs`
@@ -102,6 +102,12 @@ Status:
   - Chat/call moderation and notification abuse controls: Closed / Partial / Blocked.
   - Specific chat messages can be reported.
   - Thread-level reports are supported where safely wired, or documented as follow-up.
+  - Dedicated chat_thread report target: Closed / Partial / Blocked.
+  - Chat-message hide/remove/restore: Closed / Partial / Blocked.
+  - Users can report a whole chat conversation.
+  - `chat_thread` reports target the exact thread internally.
+  - Chat-message hide/remove/restore preserves evidence and does not hard-delete moderation/legal evidence.
+  - Chat-message moderation actions require exact scope, reason, case/report context where applicable, and audit.
   - Staff private chat evidence access requires exact scope and case/report context.
   - Moderators/Admins cannot browse arbitrary private chats.
   - Blocked users cannot message, call, or ring each other.
@@ -116,9 +122,9 @@ Status:
   - No private message bodies, reporter identity, raw storage paths, signed URLs, raw IPs, tokens, push tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
 - Current behavior:
   - Exact chat-message reports are wired through the shared report workflow as `chat_message` with thread/message context.
-  - Thread-level reporting is covered by participant/thread-context reporting; a dedicated `chat_thread` target remains a future exact lane if product needs whole-thread targeting.
+  - Thread-level reporting is wired through the shared report workflow as `chat_thread` with exact thread context.
   - Staff private chat evidence is scope/case/report constrained through `admin.chat_evidence.view` policy; no arbitrary staff private-chat browser is added.
-  - Admin/Moderator direct chat-message hide/remove/restore is not backed by the current report target-action allowlist and remains a future exact backend lane; reports can still be reviewed, dismissed, escalated, and preserved.
+  - Admin/Moderator direct chat-message hide/remove/restore is backed through report-linked target actions with exact scope, reason, case/report context, before/after audit, and evidence preservation.
   - Blocked/restricted users fail closed for chat sends and call/ring dispatch through backend guards, triggers, RLS, and Edge Function checks.
   - Call/ring notifications use server-side dedupe, safe payloads, delivery attempt audit, receipt reconciliation, sanitized errors, and token fingerprint/status readback only.
   - Attachments remain scan-gated and thread-scoped; reported attachments remain evidence-preserved and case-scoped.

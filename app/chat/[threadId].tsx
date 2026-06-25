@@ -705,6 +705,8 @@ export default function ChillyChatThreadScreen() {
       messageType: "text",
       createdAt: new Date().toISOString(),
       attachments: [],
+      moderationStatus: "clean",
+      isModerationHidden: false,
     };
 
     setDraft("");
@@ -995,16 +997,16 @@ export default function ChillyChatThreadScreen() {
   }, [activeCallRoomId, handleStartCall, thread?.activeCallType, threadId]);
 
   const handleOpenReport = useCallback(() => {
-    if (!otherMember?.userId) {
-      Alert.alert("Report", "This thread is missing the participant identity needed for a safety report.");
+    if (!threadId) {
+      Alert.alert("Report", "This conversation is unavailable for reporting right now.");
       return;
     }
 
     trackModerationActionUsed({
       surface: "chat-thread",
       action: "open_safety_report",
-      targetType: "participant",
-      targetId: otherMember.userId,
+      targetType: "chat_thread",
+      targetId: threadId,
       threadId,
       sourceRoute: `/chat/${threadId}`,
       targetAuditOwnerKey: officialAccount?.auditOwnerKey ?? null,
@@ -1012,26 +1014,27 @@ export default function ChillyChatThreadScreen() {
     });
     setHeaderQuickActionsOpen(false);
     setReportVisible(true);
-  }, [officialAccount?.auditOwnerKey, otherMember?.userId, threadId, officialAccount]);
+  }, [officialAccount?.auditOwnerKey, threadId, officialAccount]);
 
   const handleSubmitReport = useCallback(async (input: { category: Parameters<typeof submitSafetyReport>[0]["category"]; note: string }) => {
-    if (!otherMember?.userId) return;
+    if (!threadId) return;
     setReportBusy(true);
     try {
       await submitSafetyReport({
-        targetType: "participant",
-        targetId: otherMember.userId,
+        targetType: "chat_thread",
+        targetId: threadId,
         category: input.category,
         note: input.note,
         context: buildSafetyReportContext({
           sourceSurface: "chat-thread",
           sourceRoute: `/chat/${threadId}`,
-          targetLabel: otherMemberDisplayName,
-          targetRoleLabel: officialAccount?.platformRoleLabel ?? "Participant",
+          targetLabel: "Chat conversation",
+          targetRoleLabel: officialAccount?.platformRoleLabel ?? "Conversation participant",
           targetAuditOwnerKey: officialAccount?.auditOwnerKey ?? null,
           platformOwnedTarget: !!officialAccount,
           context: {
             threadId,
+            participantContext: otherMember?.userId ? "direct_chat_participant" : "unknown_participant",
             activeCallType: thread?.activeCallType ?? null,
           },
         }),
@@ -1044,7 +1047,6 @@ export default function ChillyChatThreadScreen() {
     officialAccount?.auditOwnerKey,
     officialAccount?.platformRoleLabel,
     otherMember?.userId,
-    otherMemberDisplayName,
     thread?.activeCallType,
     threadId,
     officialAccount,
@@ -1716,8 +1718,8 @@ export default function ChillyChatThreadScreen() {
 
       <ReportSheet
         visible={reportVisible}
-        title="Report participant"
-        description={`Send a safety report for ${otherMemberDisplayName} if this direct thread feels abusive, unsafe, or impersonated.`}
+        title="Report conversation"
+        description="Send a safety report for this chat conversation. Participants are not notified merely because a report was filed."
         busy={reportBusy}
         onSubmit={handleSubmitReport}
         onClose={() => setReportVisible(false)}

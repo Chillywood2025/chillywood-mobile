@@ -20,6 +20,7 @@ const moderationLib = read("_lib/moderation.ts");
 const accountAccessMigration = read("supabase/migrations/20260624171153_wave5_1_account_access_restrictions.sql");
 const abuseMigration = read("supabase/migrations/20260624125951_wave4_abuse_rate_limit_controls.sql");
 const reportTargetsMigration = read("supabase/migrations/20260625204222_event_chat_message_report_targets.sql");
+const chatThreadMessageActionsMigration = read("supabase/migrations/20260625214816_chat_thread_report_message_actions.sql");
 const duplicateReportMigration = read("supabase/migrations/20260625202127_reporting_moderation_duplicate_guard.sql");
 const attachmentPolicyMigration = read("supabase/migrations/20260624115132_tighten_social_attachment_scan_safe_select.sql");
 const callMigration = read("supabase/migrations/202606100001_chilly_chat_call_invites_and_ringtones.sql");
@@ -29,7 +30,10 @@ add("doc_exists", existsSync(join(root, docPath)), "chat/call moderation notific
 [
   "Chat/call moderation and notification abuse controls:",
   "Specific chat messages can be reported",
-  "Thread-level reports are supported where safely wired, or documented as follow-up",
+  "Users can report a whole chat conversation",
+  "Dedicated chat_thread report target: Closed",
+  "Chat-message hide/remove/restore: Closed",
+  "Chat-message hide/remove/restore preserves evidence",
   "Staff private chat evidence access requires exact scope and case/report context",
   "Moderators/Admins cannot browse arbitrary private chats",
   "Blocked users cannot message, call, or ring each other",
@@ -58,8 +62,8 @@ add("doc_exists", existsSync(join(root, docPath)), "chat/call moderation notific
 
 add("chat_message_report_ui", chatThread.includes("Report message") && chatThread.includes('targetType: "chat_message"'), "specific chat-message report UI targets chat_message");
 add("chat_message_report_context", chatThread.includes("messageSenderUserId") && chatThread.includes("messageCreatedAt") && chatThread.includes("hasAttachments"), "message report stores thread/message context");
-add("thread_context_report_ui", chatThread.includes('targetType: "participant"') && chatThread.includes("activeCallType") && chatThread.includes("threadId"), "thread-level report is participant/thread-context report");
-add("moderation_target_allowlist", moderationLib.includes('"chat_message"') && reportTargetsMigration.includes("'chat_message'"), "chat_message target type is allowlisted");
+add("thread_context_report_ui", chatThread.includes('targetType: "chat_thread"') && chatThread.includes("Report conversation") && chatThread.includes("activeCallType") && chatThread.includes("threadId"), "thread-level report is dedicated chat_thread report");
+add("moderation_target_allowlist", moderationLib.includes('"chat_message"') && moderationLib.includes('"chat_thread"') && reportTargetsMigration.includes("'chat_message'") && chatThreadMessageActionsMigration.includes("'chat_thread'"), "chat_message and chat_thread target types are allowlisted in code/migrations");
 add("duplicate_report_guard", duplicateReportMigration.includes("enforce_safety_reports_duplicate_guard") && duplicateReportMigration.includes("safety_report_duplicate_window"), "duplicate report guard exists");
 
 add("chat_membership_read", chatLib.includes("getChatThread(normalizedThreadId)") && chatLib.includes("if (!thread?.currentMember)"), "chat send reads thread membership before insert");
@@ -80,7 +84,8 @@ add("dispatch_sanitized_errors", callDispatch.includes("sanitizeErrorMessage") &
 add("device_token_fingerprint_only", deviceTokens.includes("token_fingerprint") && deviceTokens.includes("tokenFingerprint") && !deviceTokens.includes("return jsonResponse(200, { status: \"ok\", token:"), "device token status returns fingerprint not raw token");
 
 add("attachment_scan_safe", attachmentPolicyMigration.includes("\"surface_type\" = 'chat_message'") && attachmentPolicyMigration.includes("media_scan_public_safe") && attachmentPolicyMigration.includes("can_access_chat_thread"), "chat-message attachments are scan-gated and thread-scoped");
-add("message_mutation_partial_truth", doc.includes("Partial: no generic `chat_message` public-visibility mutation"), "doc marks direct chat-message mutation partial/future exact lane");
+add("message_mutation_closed_truth", doc.includes("Chat-message hide/remove/restore: Closed") && doc.includes("Chat-message hide/remove/restore preserves evidence"), "doc marks direct chat-message mutation closed with evidence preservation");
+add("message_mutation_backend", chatThreadMessageActionsMigration.includes("when 'chat_message'") && chatThreadMessageActionsMigration.includes("admin_reports_write_audit"), "chat-message target actions are backed and audited");
 add("package_proof_script", packageJson.includes("\"proof:chat-call-moderation-notification-abuse\""), "package proof script is registered");
 add("package_guard_script", packageJson.includes("\"guard:chat-call-moderation-notification-policy\""), "package guard script is registered");
 

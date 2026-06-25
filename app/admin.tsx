@@ -3149,6 +3149,7 @@ const isReportVisibilityTargetSupported = (targetType: SafetyReportQueueItem["ta
   || targetType === "profile_post_comment"
   || targetType === "creator_video_comment"
   || targetType === "social_attachment"
+  || targetType === "chat_message"
 );
 
 const reportMatchesTriageFilter = (report: SafetyReportQueueItem, filter: ReportTriageFilterKey) => {
@@ -3170,12 +3171,20 @@ const reportMatchesTriageFilter = (report: SafetyReportQueueItem, filter: Report
 
 const buildReportTargetLine = (report: SafetyReportQueueItem) => {
   const label = formatAuditDisplayText(report.targetLabel) || formatCompactIdentifier(report.targetId);
+  if (report.targetType === "chat_message") {
+    return "Chat Message · Case-scoped message target";
+  }
+  if (report.targetType === "chat_thread") {
+    return "Chat Thread · Case-scoped conversation target";
+  }
   return `${formatModerationToken(report.targetType)} · ${label}`;
 };
 
 const buildReportActorLine = (report: SafetyReportQueueItem) => {
   const reporter = `Reporter ${formatModerationToken(report.reporterRole)}`;
-  const target = `Target ${formatCompactIdentifier(report.targetId)}`;
+  const target = report.targetType === "chat_message" || report.targetType === "chat_thread"
+    ? "Target case-scoped private chat"
+    : `Target ${formatCompactIdentifier(report.targetId)}`;
   const owner = report.targetAuditOwnerKey ? `Owner ${formatCompactIdentifier(report.targetAuditOwnerKey)}` : "";
   return [reporter, target, owner].filter(Boolean).join(" · ");
 };
@@ -3192,7 +3201,7 @@ const getReportTargetActionDisabledReason = (
     return `Missing backend piece: ${formatModerationToken(report.targetType)} public visibility mutation is not backed. Mark Reviewed, Dismiss, and Escalate are available.`;
   }
   if (!canApplyReportTargetActions) {
-    return "Target visibility actions require Owner or scoped content_moderation permission. Report review alone can Mark Reviewed, Dismiss, or Escalate.";
+    return "Target visibility actions require Owner or scoped content moderation permission. Report review alone can Mark Reviewed, Dismiss, or Escalate.";
   }
   return null;
 };
@@ -3660,7 +3669,12 @@ export default function AdminStudioScreen() {
       isSignedIn
       && isActive
       && platformRolesChecked
-      && hasPlatformStaffPermission(platformRoles, ["content_moderation"])
+      && hasPlatformStaffPermission(platformRoles, [
+        "content_moderation",
+        "admin.content.hide",
+        "admin.content.remove",
+        "admin.content.restore",
+      ])
     );
   const canAccessOwnerSecurity = isOwnerStaff;
   const canAccessCanaryChecks = canAccessAuditExplorer;
@@ -8866,7 +8880,7 @@ export default function AdminStudioScreen() {
     if (!targetId || creatorVideoModerationBusy) return;
 
     if (!canApplyReportTargetActions) {
-      setModerationNotice("Target visibility actions require Owner or scoped content_moderation permission.");
+      setModerationNotice("Target visibility actions require Owner or scoped content moderation permission.");
       return;
     }
 
@@ -8894,7 +8908,7 @@ export default function AdminStudioScreen() {
 
     if (!canApplyReportTargetActions) {
       setPendingCreatorVideoModeration(null);
-      setModerationNotice("Target visibility actions require Owner or scoped content_moderation permission.");
+      setModerationNotice("Target visibility actions require Owner or scoped content moderation permission.");
       return;
     }
 
@@ -12175,7 +12189,7 @@ export default function AdminStudioScreen() {
               <OwnerDisabledReason reason={
                 canApplyReportTargetActions
                   ? "Manual target action without a selected report is disabled because immutable report-linked audit requires a safety_reports row. Use Review or Use Target from the queue."
-                  : "Manual target actions require Owner or scoped content_moderation permission and are hidden from regular report reviewers."
+                  : "Manual target actions require Owner or scoped content moderation permission and are hidden from regular report reviewers."
               } />
             ) : null}
           </View>
