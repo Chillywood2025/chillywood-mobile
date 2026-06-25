@@ -16,6 +16,12 @@ Creator-money production-labeled products: Partial. Owner chose option B: sandbo
 
 Creator-money production-labeled product IDs: Partial.
 
+Creator-money tax/legal/compliance plan: Partial.
+
+Creator-money product creation: Partial.
+
+Codex must not guess tax/legal/compliance fields.
+
 Real-money activation: Off by default unless owner explicitly enables each flow.
 
 Creator payouts: Off unless separate payout lane enables them.

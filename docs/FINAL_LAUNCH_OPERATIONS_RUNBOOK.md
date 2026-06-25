@@ -13,6 +13,8 @@ Current classification:
 - Seven-flow app-side proof: Closed.
 - Seven-flow production switchboard: Partial.
 - Creator-money production-labeled products: Partial.
+- Creator-money tax/legal/compliance plan: Partial.
+- Creator-money product creation: Partial.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
 - Provider refunds: Manual/external unless separate provider-refund lane enables automation.
@@ -23,6 +25,7 @@ Current classification:
 - Stripe payout and merch prep documented separately.
 - Stripe payouts remain OFF.
 - Stripe merch checkout remains OFF.
+- Codex must not guess tax/legal/compliance fields.
 
 The seven controlled flows are Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass. Each flow requires an explicit owner decision before production activation. The global emergency stop is `live_money_enabled=off`, and creator payouts remain governed separately by `payouts_enabled=off` plus payout-lane requirements.
 

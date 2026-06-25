@@ -74,6 +74,10 @@ Latest creator-money provider product creation proof artifact:
 
 - `/tmp/app-creator-money-provider-product-creation-proof-20260625-091126/`
 
+Latest creator-money tax/legal/compliance proof artifact:
+
+- `/tmp/app-creator-money-tax-legal-compliance-proof-20260625-093040/`
+
 Seven-flow money classification:
 
 - Seven-flow app-side proof: Closed.
@@ -93,6 +97,8 @@ Seven-flow money classification:
 - Configured Google Play and RevenueCat product IDs match the app; creator-money products remain sandbox-labeled and require owner decision before any activation.
 - Creator-money production-labeled product IDs: Partial.
 - Creator-money production-labeled products: Partial.
+- Creator-money tax/legal/compliance plan: Partial.
+- Creator-money product creation: Partial.
 - Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
 - Approved starting prices are launch defaults, not the only future prices.
 - Future custom pricing requires provider-backed price tiers/products/base plans/offers.
@@ -103,6 +109,7 @@ Seven-flow money classification:
 - Stripe merch checkout remains OFF.
 - Do not activate creator-money until production-labeled IDs are verified, mapped, smoke-tested, and owner-approved.
 - The owner approved the recommended production creator-money product IDs, recommended starting prices, and United States only first. Google Play now has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` with `0` active base plans. The `monthly` base plan remains missing. The five one-time products remain blocked by product icon and age rating requirements plus tax/compliance and purchase-option setup.
+- `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` is complete enough for owner/legal/tax review and records the provider fields Codex may fill, the owner-stop tax/legal/compliance fields, and the rule that Codex must not guess tax/legal/compliance fields.
 - RevenueCat import/mapping remains blocked until the matching Google Play production-labeled products/base plans exist.
 - Stripe is reserved for future creator payouts and physical merch; it is not used for Android digital creator-money purchases in this lane.
 - Production activation is not claimed for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, or Event Pass until owner decision and provider production product approval/mapping are proved.

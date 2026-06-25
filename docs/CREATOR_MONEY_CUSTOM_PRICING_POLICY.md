@@ -30,6 +30,8 @@ No creator-money product maps to Premium.
 
 Current provider setup status: Partial. Google Play has the channel subscription product record `cw_channel_subscription_monthly_499`, but the `monthly` base plan is missing. The one-time products remain blocked by provider form requirements. RevenueCat import/mapping remains blocked until matching Google Play products/base plans exist.
 
+Creator-money tax/legal/compliance plan: Partial. `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` documents provider-backed/fail-closed custom pricing boundaries, must-stop tax/legal/compliance fields, allowed proceed fields, and the rule that Codex must not guess tax/legal/compliance fields.
+
 ## Policy Rules
 
 1. The app must not accept arbitrary custom amounts that do not map to a verified Google Play / RevenueCat product, price tier, base plan, offer, or owner-approved product catalog entry.

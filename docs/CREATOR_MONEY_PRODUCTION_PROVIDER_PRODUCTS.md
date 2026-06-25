@@ -10,6 +10,10 @@ Owner decision: use option B. Clean production-labeled creator-money product IDs
 
 Creator-money production-labeled products: Partial. Browser dashboard setup created the Google Play subscription product record `cw_channel_subscription_monthly_499` with display name `Creator Channel Subscription`. The subscription has `0` active base plans, so the required `monthly` base plan remains missing and no purchase is available. The five one-time products remain blocked by the Google Play provider form because the visible create form requires product icon upload and age rating, and exposes tax/compliance category, purchase option, region, and pricing setup before completion. RevenueCat import/mapping remains blocked because the one-time Google Play products do not exist and the channel subscription base plan does not exist.
 
+Creator-money tax/legal/compliance plan: Partial. `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md` is complete enough for owner/legal/tax review and records every visible provider field, recommended value, owner-confirmation requirement, and Codex proceed/stop rule. Codex must not guess tax/legal/compliance fields. Product creation remains Partial because age/content rating, tax/compliance confirmation, purchase-option details, and exact US-only availability/pricing completion still require owner/operator action.
+
+Creator-money product creation: Partial.
+
 Approved starting prices are launch defaults, not the only future prices.
 
 Future custom pricing requires provider-backed price tiers/products/base plans/offers.
@@ -42,7 +46,7 @@ Do not activate creator-money until production-labeled IDs are verified, mapped,
 
 | Provider | App/package | Result |
 | --- | --- | --- |
-| Google Play Console | `com.chillywood.mobile` | Browser readback reached the app product pages. The subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` now exists with `0` active base plans. The `monthly` base plan was not saved because the base-plan form initially selected all 174 countries/regions and the safe US-only pricing/availability path could not be completed without risking broad availability. The five one-time production-labeled IDs were not created because the visible form requires product icon upload and age rating, and exposes tax/compliance, purchase-option, region, and pricing setup. |
+| Google Play Console | `com.chillywood.mobile` | Browser readback reached the app product pages. The subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription` now exists with `0` active base plans. The `monthly` base plan was not saved because the safe US-only pricing/availability path could not be completed without risking broad availability. The five one-time production-labeled IDs were not created because the visible form requires an owner-selected age rating and exposes tax/compliance, purchase-option, region, and pricing setup. |
 | RevenueCat | Android Play Store integration for the app | Browser readback reached Product Catalog. The six production-labeled IDs were not present. Premium entitlement/offering remains separate. RevenueCat import/mapping cannot complete until the matching Google Play one-time products and channel subscription base plan exist. |
 | Stripe | Future payout and physical-merch rail | Browser readback stopped at Stripe sign-in. Stripe production payout/merch readiness is pending provider access and is not required for Android digital creator-product creation. Stripe is not used for Android digital creator-money purchases in this lane. |
 
@@ -63,7 +67,7 @@ No private dashboard screenshots, provider secrets, customer data, account ident
 
 One provider product record was submitted in this lane: Google Play subscription `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`. It has zero active base plans and cannot be purchased.
 
-Google Play one-time product creation was blocked by provider form requirements because the visible form requires an immutable product ID, user-visible name and description, product icon, tax category, age rating, regional restrictions, purchase option, and pricing path before the product can be completed. The approved prompt supplied product ID, name, description, price, and US-only region, but not product icon or age rating. Tax/compliance category was visible and must not be guessed.
+Google Play one-time product creation was blocked by provider form requirements because the visible form requires an immutable product ID, user-visible name and description, icon/graphic handling, tax category, age rating, regional restrictions, purchase option, and pricing path before the product can be completed. The owner approved use of one shared existing app/product icon if Google Play requires an icon, but age/content rating and any tax/compliance certification remain owner-stop fields. Tax/compliance category was visible and must not be guessed.
 
 Google Play subscription creation was safe for the approved immutable product ID and user-visible name, so the subscription product record was created. The requested base plan `monthly` was not saved because the base-plan form initially selected all 174 countries/regions and the US-only availability/pricing path was not safely completed. The base plan remains missing.
 
@@ -244,15 +248,16 @@ Unsupported custom amounts fail closed: no purchase intent, no provider sheet, n
 
 ## Owner Action List
 
-1. Provide approved one-time product icons for Tips, Paid Video, Watch-Party Ticket, VIP, and Event Pass.
-2. Provide approved age rating choices for the five one-time products.
+1. Review `docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md`.
+2. Approve the age/content rating choices for the five one-time products.
 3. Confirm the visible Google Play tax/compliance category and purchase-option setup for each one-time product.
-4. Create the five Google Play one-time products with the production-labeled IDs above.
-5. Create the `monthly` base plan for `cw_channel_subscription_monthly_499` with United States only first availability and `$4.99/month` pricing.
-6. Import each product into RevenueCat only after matching Google Play records/base plans exist.
-7. Attach only the channel subscription to `creator_channel_subscription`; do not attach any creator product to `premium`.
-8. Re-run dashboard verification and Play-installed smoke in a separate lane.
-9. Keep all creator-money switches OFF until owner-approved activation.
+4. Confirm whether exact-access products are consumed after backend grant or treated as non-consumable/owned access where Google Play asks explicitly.
+5. Create the five Google Play one-time products with the production-labeled IDs above.
+6. Create the `monthly` base plan for `cw_channel_subscription_monthly_499` with United States only first availability and `$4.99/month` pricing.
+7. Import each product into RevenueCat only after matching Google Play records/base plans exist.
+8. Attach only the channel subscription to `creator_channel_subscription`; do not attach any creator product to `premium`.
+9. Re-run dashboard verification and Play-installed smoke in a separate lane.
+10. Keep all creator-money switches OFF until owner-approved activation.
 
 ## Current Provider Docs Basis
 

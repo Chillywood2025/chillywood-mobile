@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = process.cwd();
 const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
-const artifactDir = path.join("/tmp", `app-creator-money-provider-product-creation-proof-${timestamp}`);
+const artifactDir = path.join("/tmp", `app-creator-money-tax-legal-compliance-proof-${timestamp}`);
 
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 const exists = (relativePath) => existsSync(path.join(root, relativePath));
@@ -145,6 +145,7 @@ const priorCommitPresent = (() => {
 })();
 
 const docsText = [
+  "docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md",
   "docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md",
   "docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md",
   "docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md",
@@ -233,6 +234,51 @@ const ownerActionList = products.map((product) => ({
   appSwitchMustRemainOff: true,
 }));
 
+const mustStopFieldMatrix = [
+  "Unknown tax category",
+  "Age/content rating",
+  "Country/region beyond United States",
+  "Publishing/review/activation control",
+  "Bank/tax identity fields",
+  "Charity/donation/fundraising classification",
+  "Gambling/contest/sweepstakes classification",
+  "Medical/financial/legal service classification",
+  "Physical goods/external services classification",
+  "Subscription grace period, renewal mode, offer, trial, intro price",
+  "Required legal disclosure not covered by current policy",
+  "Field implying creator payouts/live earnings",
+  "Any switch/app activation",
+].map((field) => ({ field, codexMustStop: true }));
+
+const proceedFieldMatrix = [
+  "owner-approved product IDs",
+  "owner-approved public display names",
+  "owner-approved short descriptions",
+  "owner-approved starting prices",
+  "United States only first",
+  "existing app/product icon",
+  "one-time product type",
+  "subscription product type",
+  "base plan ID monthly",
+  "RevenueCat mapping with no Premium entitlement",
+  "docs/proof updates",
+].map((field) => ({ field, codexMayProceedWhenSafe: true }));
+
+const taxLegalCompliancePlanSummary = products.map((product) => ({
+  flow: product.flow,
+  classification: product.flow === "Channel Subscription"
+    ? "Recurring digital subscription to one creator's subscriber area."
+    : product.flow === "Tips"
+      ? "Optional digital creator support; contribution-only."
+      : `Digital exact-target access for ${product.flow}.`,
+  taxComplianceStance: "Digital app sales through Google Play / RevenueCat; no physical goods, no charity/nonprofit claim, no payout claim.",
+  legalDisclosureStance: product.flow === "Channel Subscription"
+    ? "$4.99/month, monthly auto-renewing, creator-specific, manage/cancel through Google Play/account subscriptions before activation."
+    : "Exact flow scope only; no Premium, payout, physical goods, or broader access promise.",
+  ownerStopFields: mustStopFieldMatrix.map((row) => row.field),
+  status: "Partial / owner-stop fields remain",
+}));
+
 const stripePayoutMerchPrepMatrix = [
   {
     area: "Creator payouts",
@@ -290,6 +336,50 @@ const checks = [
       && has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", "Sandbox-labeled IDs remain sandbox/test-only")
       && products.every((product) => has("docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md", product.productionProductId)),
     detail: "Production-labeled creator product plan is documented.",
+  },
+  {
+    id: "tax_legal_compliance_plan_present",
+    ok: exists("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md")
+      && has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Creator-money tax/legal/compliance plan: Partial")
+      && has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Creator-money product creation: Partial")
+      && has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", "Codex must not guess tax/legal/compliance fields")
+      && products.every((product) => has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", product.productionProductId)),
+    detail: "Tax/legal/compliance provider-product plan exists and covers all six creator-money production IDs.",
+  },
+  {
+    id: "must_stop_fields_documented",
+    ok: [
+      "Unknown tax category",
+      "Age/content rating",
+      "Country/region beyond United States",
+      "Publishing/review/activation control",
+      "Bank/tax identity fields",
+      "Charity/donation/fundraising classification",
+      "Gambling/contest/sweepstakes classification",
+      "Medical/financial/legal service classification",
+      "Physical goods/external services classification",
+      "Subscription grace period, renewal mode, offer, trial, intro price",
+      "Required legal disclosure not covered by current policy",
+      "Field implying creator payouts/live earnings",
+      "Any switch/app activation",
+    ].every((needle) => has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", needle)),
+    detail: "Must-stop provider tax/legal/compliance fields are documented.",
+  },
+  {
+    id: "proceed_fields_documented",
+    ok: [
+      "Product ID",
+      "Product name",
+      "Short description",
+      "Starting prices",
+      "United States only first",
+      "Existing shared app/product icon",
+      "Product type",
+      "Base plan ID",
+      "RevenueCat mapping",
+      "Docs/proof updates",
+    ].every((needle) => has("docs/CREATOR_MONEY_TAX_LEGAL_COMPLIANCE_PLAN.md", needle)),
+    detail: "Allowed proceed fields are documented with safe conditions.",
   },
   {
     id: "approved_launch_defaults_documented",
@@ -360,6 +450,9 @@ const checks = [
 
 mkdirSync(artifactDir, { recursive: true });
 const artifactPayloads = {
+  "tax-legal-compliance-plan-summary.json": taxLegalCompliancePlanSummary,
+  "must-stop-field-matrix.json": mustStopFieldMatrix,
+  "proceed-field-matrix.json": proceedFieldMatrix,
   "old-to-new-product-id-matrix.json": oldToNewProductIdMatrix,
   "google-play-product-matrix.json": googlePlayProductMatrix,
   "revenuecat-product-matrix.json": revenueCatProductMatrix,
@@ -400,7 +493,7 @@ writeArtifact("secret-scan-result.json", asJson({
   status: secretFindings.length === 0 ? "Pass" : "Blocked",
 }));
 
-writeArtifact("README.md", `# Creator-Money Production Provider Products Proof
+writeArtifact("README.md", `# Creator-Money Tax Legal Compliance Proof
 
 Generated: ${new Date().toISOString()}
 
@@ -408,10 +501,13 @@ This proof is read-only and dry-run. It made no purchases, no provider refund ca
 
 Verdict: Partial.
 
-Reason: Google Play now has the creator channel subscription product record cw_channel_subscription_monthly_499, but its monthly base plan remains missing and the one-time products remain blocked by provider form requirements. RevenueCat import/mapping remains incomplete.
+Reason: the tax/legal/compliance provider-product plan is documented for owner review. Google Play still has only the creator channel subscription product record cw_channel_subscription_monthly_499; its monthly base plan remains missing, and the one-time products remain blocked by owner-stop provider fields such as age rating and tax/compliance confirmation. RevenueCat import/mapping remains incomplete.
 
 Files:
 
+- tax-legal-compliance-plan-summary.json
+- must-stop-field-matrix.json
+- proceed-field-matrix.json
 - old-to-new-product-id-matrix.json
 - google-play-product-matrix.json
 - revenuecat-product-matrix.json
@@ -430,6 +526,8 @@ const summary = {
   branch: git(["branch", "--show-current"]),
   head: git(["rev-parse", "HEAD"]),
   productionLabeledProductsCreatedOrVerified: false,
+  taxLegalCompliancePlanReadyForOwnerReview: checks.find((check) => check.id === "tax_legal_compliance_plan_present")?.ok === true,
+  codexMustNotGuessTaxLegalComplianceFields: checks.find((check) => check.id === "must_stop_fields_documented")?.ok === true,
   createdProductRecords: ["Channel Subscription"],
   readyProducts: [],
   missingOrBlockedProducts: products.filter((product) => product.flow !== "Channel Subscription").map((product) => product.flow).concat(["Channel Subscription monthly base plan"]),

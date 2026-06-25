@@ -18,6 +18,12 @@ Creator-money production-labeled products: Partial. Owner chose option B: create
 
 Creator-money production-labeled product IDs: Partial.
 
+Creator-money tax/legal/compliance plan: Partial.
+
+Creator-money product creation: Partial.
+
+Codex must not guess tax/legal/compliance fields.
+
 All activation switches remain OFF.
 
 Premium-first launch remains pending owner activation and provider final check.

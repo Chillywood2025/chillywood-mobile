@@ -24,6 +24,12 @@ Provider refunds remain manual/external.
 
 Creator-money activation still requires owner approval and controlled proof.
 
+Creator-money tax/legal/compliance plan: Partial.
+
+Creator-money product creation: Partial.
+
+Codex must not guess tax/legal/compliance fields.
+
 ## Dashboard Access
 
 Stripe dashboard access was attempted through the existing browser session. The visible page was the Stripe sign-in screen, so production Stripe payout/merch dashboard readiness is pending provider access.
