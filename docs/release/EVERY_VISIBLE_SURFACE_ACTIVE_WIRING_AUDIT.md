@@ -91,3 +91,9 @@ Use Google Play internal/closed testing v57 or a later approved Play internal bu
 ## Release Recommendation
 
 Release recommendation: proceed with tester QA on Play internal/closed testing after this code is built into the next tester binary/update. Do not use this lane as a production Play submission or provider mutation lane.
+
+## Tester Delivery
+
+Visible-surface active wiring tester delivery: Closed. Commit 7138dd2 was pushed to origin/main before delivery. The visible-surface active wiring changes were delivered by EAS Update group `d7aac53c-65bb-4bf7-ae69-04bfea248e0a` with Android update `019f0533-920e-7fca-8f45-74b1f538040a` on branch `production`, runtime `1.0.0`.
+
+Play internal/closed testing remains the approved tester path. Sideload is not an approved tester delivery path. No APK sideload was used. No app uninstall/reinstall/clear-data happened unless explicitly owner-approved. Testers must verify visible controls in the installed tester build. No Play production submission happened. No provider mutation happened. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. Premium annual remains provider-blocked. Creator Channel Subscription remains provider-blocked.

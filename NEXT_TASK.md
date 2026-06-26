@@ -2370,3 +2370,11 @@ Every visible surface active wiring audit: Closed. Current lane closed: Every vi
 Tester-visible monetization UX is separate from live money settlement. Premium monthly tester flow is reachable where Play internal/licensed tester/provider setup supports it. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.
 
 Next practical lane: build/publish the next approved Google Play internal/closed testing binary/update containing this active-surface wiring, then run tester feedback triage. Premium monthly public purchase proof remains separate owner-approved work.
+
+## Visible Surface Tester Delivery
+
+Visible-surface active wiring tester delivery: Closed. Commit 7138dd2 was pushed to origin/main before delivery, and `main` was aligned with `origin/main` before delivery. The changed-file delivery analysis classified the commit as EAS Update eligible because it did not change native config, package ID, runtimeVersion, permissions, native modules, Android project files, or build profile configuration.
+
+EAS Update group `d7aac53c-65bb-4bf7-ae69-04bfea248e0a` with Android update `019f0533-920e-7fca-8f45-74b1f538040a` was published to branch `production` for runtime `1.0.0`. Play internal/closed testing remains the approved tester path. Sideload is not an approved tester delivery path. No APK sideload was used. No app uninstall/reinstall/clear-data happened unless explicitly owner-approved.
+
+Next lane: Play internal tester full visible-surface QA pass. Testers must verify visible controls in the installed tester build after closing and reopening the Play internal app on a good network. No Play production submission happened. No provider mutation happened. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. Premium annual remains provider-blocked. Creator Channel Subscription remains provider-blocked.
