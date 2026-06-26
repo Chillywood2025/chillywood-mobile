@@ -1,5 +1,7 @@
 # Money Admin Authority Activation Governance
 
+Final store/release readiness and Play submission packet alignment is documented in `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`. The release packet does not activate money: live_money_enabled remains OFF, Creator-money remains OFF, Premium public purchase remains OFF, Premium monthly public purchase remains a separate owner-approved proof lane, Premium annual remains Google Play base-plan provider-blocked, Creator Channel Subscription remains Google Play base-plan provider-blocked, payouts/payable balances/withdrawals/cash-out/transfers/Stripe Connect/merch checkout/payout movement remain OFF, provider refunds remain manual/external, and no Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
+
 Status: Money admin authority and activation governance: Closed / Partial / Blocked.
 
 Verdict: Closed for repo-side authority governance. Partial for future public money activation because Premium monthly, creator-money, live money, payouts, Stripe Connect live use, merch checkout, and provider refund automation still require separate owner-approved lanes or provider readiness. This lane does not activate money.

@@ -1,5 +1,7 @@
 # Provider Dashboard Ownership Access Governance
 
+Final store/release readiness and Play submission packet alignment is documented in `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`. Provider dashboard private proof remains owner-confirmation-required for final Play submission. This release packet lane did not mutate provider dashboards, did not print provider access lists, did not rotate secrets, and did not change Google Play, RevenueCat, Stripe, payouts, purchases, refunds, or provider state.
+
 Provider dashboard ownership and access governance: Partial for actual dashboard proof and Closed for repo-side ownership/access governance, sanitized service-account inventory, secret-storage policy, webhook rotation policy, provider offboarding checklist, support-ticket tracking model, proof, and guard coverage. Dashboard access proof remains owner-confirmation-required where repo cannot verify it.
 
 Status vocabulary: Provider dashboard ownership and access governance: Closed / Partial / Blocked.

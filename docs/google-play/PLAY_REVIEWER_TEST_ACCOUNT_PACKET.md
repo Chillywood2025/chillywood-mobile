@@ -3,6 +3,8 @@
 Date: 2026-06-01
 Status: field-ready copy; credentials must be entered only in Play Console
 
+Final store/release readiness and Play submission packet alignment is consolidated in `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`. App Access/reviewer packet is sanitized and does not commit credentials. Reviewer passwords must be entered only in Play Console and must not be committed, printed, screenshotted, or included in artifacts. This lane did not submit the app to production and did not mutate Google Play, RevenueCat, Stripe, payouts, purchases, refunds, or provider dashboards.
+
 June 25, 2026 legal/privacy/Data Safety final alignment: reviewer instructions remain field-ready only when they match `docs/legal/LEGAL_PRIVACY_DATA_SAFETY_FINAL_ALIGNMENT.md`. Reviewers may be directed to public Terms, Privacy, Support, Account Deletion, Copyright/DMCA, Moderation, Community, Live Rules, and Premium Terms. Do not provide proof passwords, owner/admin credentials, provider secrets, dashboard screenshots, raw storage paths, signed URLs, raw IPs, push tokens, LiveKit tokens, tax IDs, bank details, private provider IDs, or private account evidence. Premium annual remains provider-blocked, creator-money remains OFF, and provider refunds remain manual/external.
 
 Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.

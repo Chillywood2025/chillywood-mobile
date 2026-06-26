@@ -1,5 +1,30 @@
 # NEXT TASK
 
+# Final Store / Release Readiness and Play Submission Packet Alignment Lane
+
+- [x] Previous commit `b318c6249271ac068ccaeef122477f6bc00f2663` was verified aligned with `origin/main` before release-packet edits began.
+- [x] Created `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`.
+- [x] Added proof and guard scripts for final store/release readiness packet alignment.
+- [x] Updated Play, Data Safety, App Access, release, legal, provider, money, monitoring, public switchboard, and hot-path docs with the final packet boundary.
+
+Status:
+- Verdict: Partial. Repo-side Play submission packet alignment is closed for documentation/proof/guard coverage, but final Play Console acceptance, final release build/install smoke, provider dashboard private proof, reviewer credential entry, and attorney/legal approval remain owner/store/provider/release operations outside this lane.
+- Required truth:
+  - This lane did not submit the app to production.
+  - This lane did not mutate Google Play, RevenueCat, Stripe, payouts, purchases, refunds, or provider dashboards.
+  - Safe public non-money systems remain enabled.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Premium public purchase remains OFF.
+  - Premium monthly public purchase remains a separate owner-approved proof lane.
+  - Premium annual remains Google Play base-plan provider-blocked.
+  - Creator Channel Subscription remains Google Play base-plan provider-blocked.
+  - Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF.
+  - Provider refunds remain manual/external.
+  - App Access/reviewer packet is sanitized and does not commit credentials.
+  - Provider dashboard private proof remains owner-confirmation-required.
+- Next lane recommendation: Continue with owner-approved Premium monthly public purchase proof only if you want Premium monthly live before release. Otherwise continue with final release build/install smoke and Play Console manual submission steps.
+
 ## Proof Fixture Bootstrap + Full Installed Moderator/Admin Traversal Lane
 
 - [x] Prior local commit `72642da35a99010c3b38cd9c6d24e663d7ceecce` was pushed and aligned with `origin/main` before bootstrap started.

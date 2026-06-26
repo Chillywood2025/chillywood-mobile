@@ -4,6 +4,8 @@ Date: 2026-04-27
 
 Lane: Store listing assets / content rating checklist
 
+Current release handoff: `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`. Final store/release readiness and Play submission packet alignment is Partial: the packet is repo-side aligned, but final Play Console acceptance, final release build/smoke, provider dashboard private proof, and owner/legal approval remain external release actions. This lane did not submit the app to production and did not mutate Google Play, RevenueCat, Stripe, payouts, purchases, refunds, or provider dashboards.
+
 Purpose: prepare Chi'llywood's Google Play Store listing metadata, graphic asset, screenshot, content rating, target audience, Data Safety consistency, and user-generated-content policy readiness for Public v1 without uploading assets, submitting forms, changing runtime behavior, or claiming legal/store approval.
 
 This runbook is not proof that Google Play listing setup is complete. It is a repo-backed preparation checklist for the release owner, product owner, and legal/support owner to use in Play Console.

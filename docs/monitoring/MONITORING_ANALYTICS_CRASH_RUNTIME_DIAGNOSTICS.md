@@ -1,5 +1,7 @@
 # Monitoring, Analytics, Crash, And Runtime Diagnostics
 
+Final store/release readiness and Play submission packet alignment is documented in `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`. Post-release monitoring remains a release operation: owner must confirm final Firebase/provider collection settings, run release health checks, and monitor Crashlytics/Firebase after rollout. This release packet lane did not submit the app to production and did not mutate provider dashboards, Google Play, RevenueCat, Stripe, payouts, purchases, refunds, or money systems.
+
 Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Reporting, escalation, malicious-report handling, coordinated-report signals, repeated-offender review flags, and urgent live-safety SLA monitoring must use sanitized diagnostics and must not log reporter identity, private evidence, private chat bodies, raw IPs, tokens, signed URLs, provider payloads, payment data, legal conclusions, or secrets.
 
 Date: 2026-06-25

@@ -4,6 +4,8 @@ Date: 2026-04-26
 
 Lane: Android release build / EAS signing readiness
 
+Current release packet: `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`. Final release build/smoke remains a release operation unless explicitly run in the release lane. This lane did not submit the app to production and did not mutate Google Play, RevenueCat, Stripe, payouts, purchases, refunds, or provider dashboards. Package ID remains `com.chillywood.mobile`; app version/runtime remains `1.0.0`; Android versionCode is documented in `app.json` and future Play uploads use EAS release-owner build/version handling.
+
 Purpose: prepare Chi'llywood's Android release build, EAS signing, production runtime environment, and Play upload handoff without starting a build, uploading to Google Play, rotating credentials, or exposing secrets.
 
 This runbook is not proof that the current `main` commit has a passing release build. It records what is ready from repo/config inspection, what EAS/Google dashboard work remains, and exactly how the release owner should prove the lane later.
