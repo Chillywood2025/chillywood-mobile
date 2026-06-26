@@ -12,6 +12,7 @@ const artifactDir =
   path.join("/tmp", `app-owner-admin-moderator-seeded-full-traversal-${timestamp}`);
 const requestedSerial = process.env.PROOF_ANDROID_SERIAL || process.env.ADB_SERIAL || "R5CR120QCBF";
 const captureScreenshots = process.env.PROOF_CAPTURE_SANITIZED_SCREENSHOTS === "1";
+const allowDeviceClear = process.env.PROOF_ALLOW_DEVICE_CLEAR === "1";
 
 fs.mkdirSync(artifactDir, { recursive: true });
 
@@ -230,8 +231,14 @@ const openDeepLink = (serial, url) => {
 };
 
 const clearAppData = (serial) => {
+  if (!allowDeviceClear) {
+    notes.push("Skipped adb pm clear because PROOF_ALLOW_DEVICE_CLEAR is not set.");
+    sleep(800);
+    return false;
+  }
   adb(serial, ["shell", "pm", "clear", PACKAGE_ID], { timeout: 20000 });
   sleep(1800);
+  return true;
 };
 
 const signInOnDevice = (serial, label, email, password) => {

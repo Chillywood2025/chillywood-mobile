@@ -38,7 +38,8 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 
 [
   "One attached device full app automation proof: Closed / Partial / Blocked",
-  "Verdict for this lane: Partial",
+  "Verdict for this lane: Partial after account-pack repair",
+  "Stable seeded proof account pack: Closed",
   "No sideload was used",
   "No APK install was used as tester proof",
   "No uninstall/reinstall/clear-data happened",
@@ -50,7 +51,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "Missing roles are not called passed",
   "Service-role bootstrap was not used as proof of role/permission authority",
   "Two-device proof still required",
-  "Blocked: missing seeded proof credential",
+  "Blocked: full role UI traversal not rerun end-to-end",
 ].forEach((needle) => requireText("one attached device proof doc", doc, needle));
 
 forbidPositiveSentence("one attached device proof doc", doc, /sideload (?:was|used|recommended|proves|proof)/i, "sideload tester proof");

@@ -24,9 +24,10 @@ const packageJson = read("package.json");
 
 [
   "One attached device full app automation proof: Closed / Partial / Blocked",
-  "Verdict for this lane: Partial",
+  "Verdict for this lane: Partial after account-pack repair",
   "package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `57`",
   "EAS update group under test: `d7aac53c-65bb-4bf7-ae69-04bfea248e0a`",
+  "Stable seeded proof account pack: Closed",
   "Seeded Account Readiness Table",
   "signed-out",
   "proof_normal_001",
@@ -41,11 +42,11 @@ const packageJson = read("package.json");
   "proof_nonpremium_001",
   "Flow Matrix",
   "Pass / Fail / Blocked Summary",
-  "Blocked: missing seeded proof credential",
+  "Blocked: full role UI traversal not rerun end-to-end",
   "Two-device proof still required",
   "No sideload was used",
   "No uninstall/reinstall/clear-data happened",
-  "Service-role bootstrap may only be used after explicit owner approval",
+  "Service-role bootstrap was used only for proof-only account creation/repair",
   "Service-role bootstrap was not used as proof of role/permission authority",
   "liveMoneyEnabled remains OFF",
   "Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF",
@@ -59,7 +60,7 @@ const packageJson = read("package.json");
 ].forEach((needle) => requireText("package scripts", packageJson, needle));
 
 notes.push("One attached device proof doc records installed Play metadata, EAS update group, seeded account readiness, flow matrix, blockers, two-device limitations, and safety confirmation.");
-notes.push("The lane is honestly Partial because required seeded proof credentials are missing for normal, creator, restricted, blocked-pair, Premium, and non-Premium flows.");
+notes.push("The lane is honestly Partial because the stable proof account pack is closed, but full post-repair role-by-role UI traversal has not been rerun end-to-end.");
 
 if (failures.length) {
   console.error("One attached device full app automation proof failed:");

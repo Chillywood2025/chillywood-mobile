@@ -1,5 +1,42 @@
 # NEXT TASK
 
+# Seeded Proof Account Pack Repair + One-Device Automation Rerun
+
+Docs:
+- `docs/release/STABLE_SEEDED_PROOF_ACCOUNT_PACK.md`
+- `docs/release/ONE_ATTACHED_DEVICE_FULL_APP_AUTOMATION_PROOF.md`
+
+- [x] Created `scripts/local-bootstrap-stable-seeded-proof-account-pack.mjs`.
+- [x] Added package script `bootstrap:stable-seeded-proof-account-pack`.
+- [x] Created `scripts/proof-stable-seeded-proof-account-pack.mjs`.
+- [x] Added package script `proof:stable-seeded-proof-account-pack`.
+- [x] Created `scripts/guard-stable-seeded-proof-account-pack-policy.mjs`.
+- [x] Added package script `guard:stable-seeded-proof-account-pack-policy`.
+- [x] Created/reused/repaired all ten proof-only `@chillywood.test` accounts.
+- [x] Stored credentials only in ignored `.env.browserstack-monetization.local`.
+- [x] Proved all ten accounts usable with `npm run proof:stable-seeded-proof-account-pack`.
+- [x] Reran non-destructive attached-device Play-installed package/launch readback on `R5CR120QCBF`.
+
+Status:
+- Stable seeded proof account pack: Closed.
+- One attached device full app automation proof: Partial after account-pack repair.
+- Remaining blocker: full post-repair role-by-role UI traversal has not been rerun end-to-end.
+- Two-device live/watch-party/chat-call proof remains required for real simultaneous media/state behavior.
+- Required truth:
+  - service-role bootstrap was proof-only account creation/repair
+  - service-role bootstrap is not role/permission authority proof
+  - Owner RPC staff grant path remains the authority proof
+  - no passwords printed or committed
+  - no current First Owner touched
+  - no real users modified
+  - no provider mutation
+  - no Play production submission
+  - `liveMoneyEnabled` remains OFF
+  - payouts/cashout/Stripe production/payable balances/provider refunds remain OFF/manual/external
+
+Next lane recommendation:
+- Run the full post-repair one-device role UI traversal with the completed stable account pack, then run two-device live/watch-party/chat-call proof.
+
 # Owner RPC Staff Grant Path Follow-Up
 
 Doc: `docs/admin/OWNER_ADMIN_MODERATOR_PRODUCTION_AUTHORITY_SEEDED_DEVICE_PROOF.md`.
