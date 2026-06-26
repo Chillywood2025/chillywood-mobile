@@ -1,5 +1,7 @@
 # Account Restriction And Appeals Operations
 
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Account restriction recommendations escalate from moderation/support cases; appeals remain separate from initial moderation review; notices are privacy-safe; reporter identity and private evidence are not exposed.
+
 ## Status
 
 Account restriction and appeals operations: Closed for current production policy and existing backed enforcement as of June 25, 2026.

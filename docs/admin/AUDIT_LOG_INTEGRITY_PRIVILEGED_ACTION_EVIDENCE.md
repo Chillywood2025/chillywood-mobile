@@ -1,5 +1,7 @@
 # Audit Log Integrity Privileged Action Evidence
 
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Case actions, notes, assignments, escalations, notices, and reversals require audit where backed, with sanitized metadata and no reporter identity or private evidence exposure.
+
 Status: Audit log integrity and privileged action evidence governance: Closed / Partial / Blocked.
 
 Verdict: Closed for repo-side governance, current immutable audit foundations, scoped readback, and proof/guard coverage. Partial for future unsupported or disabled privileged-attempt telemetry where no backend mutation path exists yet; those attempts must remain disabled, fail closed, or route through a future exact backend lane instead of synthetic proof.

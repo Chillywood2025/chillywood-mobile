@@ -1,5 +1,7 @@
 # Moderator Role Scope And Support Duties
 
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderators can act only with exact scopes, can escalate cases where scoped, cannot receive broad case-management authority, and cannot use moderation queues to gain Admin/Owner powers.
+
 Moderator role scope: Closed.
 
 Audit log integrity and privileged action evidence governance: Closed / Partial / Blocked. Moderator destructive or sensitive support/moderation actions require exact scope, case/report context where applicable, reason, and audit where backed. Moderator/support-workflow users cannot browse broad audit history by default, and audit logs cannot be edited or deleted through normal app/admin flows.

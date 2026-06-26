@@ -1,5 +1,7 @@
 # Reporting Moderation Production Workflow
 
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Reports route to separated queues where appropriate; live safety reports are urgent; DMCA/legal reports are separate from general moderation; payment disputes are support/money cases, not general moderation; appeals are separate from initial moderation review; internal notes are private, scoped, sanitized, and audited where backed; user-facing and creator-facing notices are templated and privacy-safe.
+
 Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Report-driven emergency escalation requires exact scope, reason, and audit where backed; reporter identity remains private, and emergency disable preserves evidence instead of hard-deleting content or audit records.
 
 Reporting and moderation workflow: Closed after validation.

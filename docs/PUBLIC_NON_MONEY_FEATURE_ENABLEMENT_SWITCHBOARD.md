@@ -1,5 +1,7 @@
 # Public Non-Money Feature Enablement Switchboard
 
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Safe public non-money systems remain enabled while reporting, separated queues, urgent live-safety escalation, privacy-safe notices, and exact-scope moderation actions remain aligned.
+
 Public non-money feature enablement: Closed for app-controlled public switchboard, route/copy cleanup, and guard coverage. Full public launch remains conditional on store release operations, owner decisions, and provider blockers that are outside this lane.
 
 Audit log integrity and privileged action evidence governance: Closed for current repo-side launch evidence governance. Safe public non-money systems remain enabled; privileged app/admin actions remain scoped and audited where backed; audit logs are append-only from app/admin paths; `live_money_enabled` remains OFF; Creator-money remains OFF; no Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.

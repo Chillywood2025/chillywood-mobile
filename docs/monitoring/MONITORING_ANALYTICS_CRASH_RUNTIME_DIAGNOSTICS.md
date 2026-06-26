@@ -1,5 +1,7 @@
 # Monitoring, Analytics, Crash, And Runtime Diagnostics
 
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Reporting, escalation, malicious-report handling, and urgent live-safety SLA monitoring must use sanitized diagnostics and must not log reporter identity, private evidence, private chat bodies, raw IPs, tokens, signed URLs, or provider payloads.
+
 Date: 2026-06-25
 
 Monitoring, analytics, crash, and runtime diagnostics: Closed for repo-side alignment. Owner must confirm final SDK/provider collection settings before Play submission.

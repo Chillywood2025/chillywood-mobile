@@ -1,5 +1,41 @@
 # NEXT TASK
 
+## Moderation Queue / Case Management / Escalation Governance Lane
+
+- [x] Staff lifecycle commit `eb66492a80a50d9aa61b99fde58031f97a185654` was already aligned with `origin/main` before new edits.
+- [x] Moderation queue, case management, and escalation governance repo-side proof closed.
+
+Status:
+- Verdict: Closed for repo-side queue separation, severity/SLA policy, privacy-safe notice templates, exact-scope action governance, proof, and guard coverage. Partial for broad general-case self-assignment, broad internal moderation case notes, universal canned-reason UI, coordinated-report automation, and universal repeated-offender automation where no backed model exists yet.
+- Docs: `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`
+- Proof script: `scripts/proof-moderation-queue-case-management-escalation-governance.mjs`
+- Guard: `scripts/guard-moderation-queue-case-policy.mjs`
+- Required truth:
+  - Reports route to separated queues where appropriate.
+  - Live safety reports are urgent.
+  - DMCA/legal reports are separate from general moderation.
+  - Payment disputes are support/money cases, not general moderation.
+  - Appeals are separate from initial moderation review.
+  - Moderators can act only with exact scopes.
+  - Internal notes are private, scoped, sanitized, and audited where backed.
+  - Actions require reasons where backed.
+  - Actions are reversible where backed.
+  - User-facing notices are templated and privacy-safe.
+  - Creator-facing notices are templated and privacy-safe.
+  - Reporter identity is not exposed.
+  - Private evidence is not exposed.
+  - Repeated offenders are flagged where supported.
+  - Coordinated reporting is detected where supported or documented as follow-up.
+  - Malicious reporting is handled.
+  - Urgent report SLA is documented.
+  - Safe public non-money systems remain enabled.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Premium public purchase remains OFF.
+  - Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF.
+  - No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
+- Next lane recommendation: Continue production readiness with provider dashboard ownership and access governance.
+
 ## Staff Access Lifecycle / Onboarding / Offboarding Governance Lane
 
 - [x] Emergency-controls commit `7e03aa7b0a356ed436f172259ffcfb2680f4575c` was already aligned with `origin/main` before new edits.

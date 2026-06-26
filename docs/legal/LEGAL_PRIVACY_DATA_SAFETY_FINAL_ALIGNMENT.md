@@ -1,5 +1,7 @@
 # Legal/privacy/Data Safety Final Alignment
 
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation notices, internal notes, DMCA/legal separation, payment/support separation, appeals separation, reporter privacy, and private-evidence protections remain aligned with legal/privacy/Data Safety documentation.
+
 Status: Legal/privacy/Data Safety final alignment: Closed for repo-side documentation alignment; owner/legal review and Play Console acceptance remain external.
 
 Public non-money feature enablement is documented in `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md`: safe public app systems are enabled or verified behind existing privacy/security gates; public purchase, creator-money, `live_money_enabled`, payouts, Stripe/merch, provider refund automation, Premium annual, Creator Channel Subscription, and public Premium monthly purchase remain off, blocked, or pending separate owner-approved proof; no Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
