@@ -8,6 +8,8 @@ This lane does not add new staff powers, does not create a Support backend role,
 
 Plain guard wording: live_money_enabled remains OFF.
 
+Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Emergency actions require exact scope, reason, and audit where backed; emergency disable preserves evidence and does not hard-delete audit records; post-incident audit review is required after serious incidents or emergency control use.
+
 Required launch truth:
 
 - Every privileged action must create an audit log where backed.

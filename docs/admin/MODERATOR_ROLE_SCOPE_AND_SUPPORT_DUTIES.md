@@ -6,6 +6,8 @@ Audit log integrity and privileged action evidence governance: Closed / Partial 
 
 Admin search privacy and export governance: Closed / Partial / Blocked. Moderator search/readback is limited to exact support/moderation scopes, case/report/legal context where private evidence is involved, and masked/minimized fields by default. Moderator does not see full email by default, cannot use phone/device search by default, cannot browse arbitrary private chats, cannot access raw payment/provider records, and cannot export Admin Search results.
 
+Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Moderator cannot operate broad emergency controls; Moderator may escalate and perform scoped moderation/live-safety actions only where explicitly allowed.
+
 Moderator is a real production role. Product-facing Moderator maps to backend role `moderator`, remains separate from Admin/operator, and sits below Admin in the app hierarchy. Support is a work area, not a separate role. Moderator can perform support duties only with exact support scopes granted by Owner/First Owner/Admin policy.
 
 ## Role Boundary

@@ -8,6 +8,8 @@ Audit log integrity and privileged action evidence governance: Closed for curren
 
 Public non-money feature enablement is tracked in `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md`. That lane enables safe public app systems only and keeps Premium monthly public purchase, Premium annual, Creator Channel Subscription, creator-money, `live_money_enabled`, payouts, Stripe Connect, merch checkout, and provider refund automation off, blocked, or pending separate owner-approved proof. No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
 
+Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Money incidents keep `live_money_enabled`, creator-money, Premium public purchase, payouts, Stripe Connect, merch checkout, purchases, refunds, transfers, and provider mutation OFF unless a separate owner-approved lane changes that.
+
 This document defines who can approve, view, record, pause, freeze, override, or kill-switch money-related systems in the app. It does not create provider products, mutate Google Play, mutate RevenueCat, enable payouts, enable Stripe Connect, enable merch checkout, execute purchases, execute provider refunds, or turn on public money behavior.
 
 Required launch truth:

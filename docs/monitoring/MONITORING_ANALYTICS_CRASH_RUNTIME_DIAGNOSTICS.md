@@ -8,6 +8,8 @@ Audit log integrity and privileged action evidence governance: Closed for curren
 
 Admin search privacy and export governance is documented in `docs/admin/ADMIN_SEARCH_PRIVACY_EXPORT_GOVERNANCE.md`. Search audit uses masked query preview, result counts, status, and scope; failed/denied searches are audited where supported; suspicious search patterns are documented for monitoring follow-up; search audit must not store plaintext email, private evidence, raw provider records, secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, push tokens, or reporter identity.
 
+Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Incident diagnostics and post-incident audit review must stay sanitized and must not expose raw logs, private evidence, tokens, signed URLs, raw IPs, provider payloads, payment data, tax/bank data, or reporter identity.
+
 This lane documents and hardens the app's production telemetry posture without adding a new analytics vendor and without expanding data collection. Data Safety and Privacy disclosures match monitoring/diagnostics behavior at repo level, subject to final owner/provider confirmation for the submitted build.
 
 ## Provider Inventory

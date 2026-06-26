@@ -1,5 +1,36 @@
 # NEXT TASK
 
+## Emergency Controls / Incident Response / Kill-Switch Governance Lane
+
+- [x] Audit-log commit `3aba0d4cc8ba044d9689498980b6d55c5f2bdcee` was already aligned with `origin/main` before new edits.
+- [x] Emergency controls, incident response, and kill-switch governance repo-side proof closed.
+
+Status:
+- Verdict: Closed for repo-side governance, incident ownership/escalation, rollback checklist, privacy-safe templates, post-incident audit-review requirement, proof, and guard coverage. Partial for controls that remain manual/provider-dashboard/runbook-only or require a future exact backend lane.
+- Docs: `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`
+- Proof script: `scripts/proof-emergency-controls-incident-response-kill-switch-governance.mjs`
+- Guard: `scripts/guard-emergency-controls-incident-response-policy.mjs`
+- Required truth:
+  - Safe public non-money systems remain enabled.
+  - Emergency actions require exact scope, reason, and audit where backed.
+  - First Owner / Owner owns emergency control authority.
+  - Admin can operate only exact-scope emergency controls where explicitly allowed.
+  - Moderator cannot operate broad emergency controls.
+  - Support is not a backend role.
+  - Emergency disable preserves evidence and does not hard-delete audit records.
+  - Emergency disable does not execute refunds, purchases, payouts, transfers, or provider mutations.
+  - Customer, creator, security, legal/DMCA, money, and live-room harassment templates are privacy-safe.
+  - Post-incident audit review is required.
+  - Rollback checklist exists.
+  - Incident owner and escalation path are documented.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Premium public purchase remains OFF.
+  - Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF.
+  - Provider refunds remain manual/external.
+  - No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
+- Next lane recommendation: Continue production readiness with provider dashboard ownership and access governance.
+
 ## Audit Log Integrity / Privileged Action Evidence Governance Lane
 
 - [x] Audit log integrity and privileged action evidence governance repo-side proof closed.

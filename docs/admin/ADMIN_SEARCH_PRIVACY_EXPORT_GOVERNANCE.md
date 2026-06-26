@@ -6,6 +6,8 @@ Verdict: Closed for repo-side Admin Search governance, support readback minimiza
 
 Audit log integrity and privileged action evidence governance: Closed for current repo-side Admin Search audit integrity. Admin search queries are audited with masked query preview, failed/denied searches are audited where supported, audit readback requires exact scope, and search audit must not store plaintext email/private evidence/secrets.
 
+Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Admin Search freeze remains Owner/First Owner-controlled and manual/future-lane unless a backed exact-scope switch exists; Admin Search audit/readback privacy remains unchanged.
+
 Required launch truth:
 
 - Admin search requires exact scope.

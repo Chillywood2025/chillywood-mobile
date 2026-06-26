@@ -6,6 +6,8 @@ Public non-money feature enablement is documented in `docs/PUBLIC_NON_MONEY_FEAT
 
 Admin search privacy and export governance is documented in `docs/admin/ADMIN_SEARCH_PRIVACY_EXPORT_GOVERNANCE.md`: Admin search requires exact scope; support-workflow readbacks are masked/minimized by default; private chat/content evidence search requires exact scope and case/report/legal context; payment/provider search is masked/scoped summary only; exports are disabled by default; and search audit uses masked query preview rather than plaintext email/private evidence.
 
+Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`: incident templates and rollback/support copy are product/legal-readiness documentation alignment, not attorney legal advice; they preserve evidence and avoid reporter identity, private evidence, raw logs, provider IDs, legal conclusions, automatic refund claims, payout claims, or provider mutation claims.
+
 This is product/legal-readiness documentation alignment, not attorney legal advice. It records current app behavior, public legal surfaces, store-readiness evidence, and remaining owner/legal actions. It does not change Google Play products, RevenueCat mappings, Premium activation, creator-money switches, payouts, Stripe, merch, account deletion enforcement, moderation enforcement, staff roles, RLS, auth, LiveKit, scan gates, abuse throttles, or provider dashboards.
 
 Required alignment assertions:

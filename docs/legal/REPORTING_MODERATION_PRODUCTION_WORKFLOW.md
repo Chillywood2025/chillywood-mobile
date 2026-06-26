@@ -1,5 +1,7 @@
 # Reporting Moderation Production Workflow
 
+Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Report-driven emergency escalation requires exact scope, reason, and audit where backed; reporter identity remains private, and emergency disable preserves evidence instead of hard-deleting content or audit records.
+
 Reporting and moderation workflow: Closed after validation.
 Dedicated event report affordance: Closed after validation.
 Exact chat-message report affordance: Closed after validation.

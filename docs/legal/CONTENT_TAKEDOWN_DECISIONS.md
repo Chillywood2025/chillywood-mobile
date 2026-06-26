@@ -1,5 +1,7 @@
 # Content Takedown Decisions
 
+Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Emergency moderation/takedown actions remain exact-scope, reasoned, audited where backed, and evidence-preserving; emergency disable is not hard delete, refund, payout movement, or provider mutation.
+
 Content takedown decisions: Closed for production decision policy and current backed enforcement after validation. Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation. Chat/call moderation and notification abuse controls: Closed after validation. Dedicated chat_thread report target: Closed after validation. Chat-message hide/remove/restore: Closed after validation. Account restriction and appeals operations: Closed for current production policy and existing backed enforcement. Direct mutation coverage remains intentionally limited to backed target types; unsupported target types use review, escalation, support, DMCA/legal, live-ops, or future exact backend lanes rather than unsafe generic mutation.
 
 Account restriction does not erase content/evidence, does not execute provider refunds, and does not move money. Restricted-user public Profile/Platform visibility follows scheduled-deletion, purge/de-identification, or separate takedown policy instead of report-triggered auto-hiding.
