@@ -1,5 +1,25 @@
 # NEXT TASK
 
+## Seeded Moderator/Admin Credential Provisioning + Full Installed Traversal Proof Lane
+
+- [x] Commit `1a5a3b75b6b3cd38e5e2720ee41b91089b5e1480` was already pushed and aligned with `origin/main` before this lane began.
+- [x] Added a repo-safe proof-account provisioner for fixed `@chillywood.test` Moderator/Admin proof accounts.
+- [x] Kept credential values outside git and never printed passwords.
+- [x] Reran installed-device proof with a redacted credential key presence checklist.
+
+Status:
+- Verdict: Partial. Installed package/launch proof passed, static/guard coverage passed, and credential key presence is now redacted in `/tmp/app-owner-admin-moderator-seeded-full-traversal-YYYYMMDD-HHMMSS/`.
+- Provisioning blocker: the Owner-authenticated staff-role grant RPC returned `platform_staff_permission_denied`, so the lane did not bypass governance with direct service-role staff-role inserts.
+- Missing proof env keys:
+  - `CHILLYWOOD_E2E_MODERATOR_EMAIL`
+  - `CHILLYWOOD_E2E_MODERATOR_USER_ID`
+  - `CHILLYWOOD_E2E_MODERATOR_PASSWORD`
+  - `CHILLYWOOD_E2E_ADMIN_OPERATOR_EMAIL`
+  - `CHILLYWOOD_E2E_ADMIN_OPERATOR_USER_ID`
+  - `CHILLYWOOD_E2E_ADMIN_OPERATOR_PASSWORD`
+- Owner action: run the provisioner with an Owner/First Owner account that can grant `moderator` and `operator`, or provide pre-seeded credentials through an approved ignored env/secret manager.
+- Next lane recommendation: Continue production readiness with final store/release readiness and Play submission packet alignment, excluding known Google Play annual/channel base-plan provider blocker.
+
 ## Owner/Admin/Moderator Production Authority Seeded 1-Device Proof Lane
 
 - [x] Provider dashboard governance commit `84356a955959861df3993e10a6e615b03f03d73c` was aligned with `origin/main` before proof began.

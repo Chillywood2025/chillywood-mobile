@@ -8,7 +8,7 @@ const PACKAGE_ID = "com.chillywood.mobile";
 const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 const artifactDir =
   process.env.OWNER_ADMIN_MODERATOR_AUTHORITY_ARTIFACT_DIR ||
-  path.join("/tmp", `app-owner-admin-moderator-production-authority-seeded-device-${timestamp}`);
+  path.join("/tmp", `app-owner-admin-moderator-seeded-full-traversal-${timestamp}`);
 const requestedSerial = process.env.PROOF_ANDROID_SERIAL || process.env.ADB_SERIAL || "R5CR120QCBF";
 const captureScreenshots = process.env.PROOF_CAPTURE_SANITIZED_SCREENSHOTS === "1";
 
@@ -121,19 +121,49 @@ const sources = {
 ].forEach((needle) => requireText("seeded authority doc", docs.ownerAdminModerator, needle));
 
 const envFiles = [
+  ".env.proof.local",
   ".env.browserstack-monetization.local",
   ".env.local",
   ".env.final-qa-proof.local",
   ".env.money-proof.local",
 ];
 const envKeys = new Set();
+const envValues = new Map();
+const envSources = new Map();
+for (const [key, value] of Object.entries(process.env)) {
+  if (typeof value === "string" && value.length > 0) {
+    envKeys.add(key);
+    envValues.set(key, value);
+    envSources.set(key, "process env");
+  }
+}
 for (const file of envFiles) {
   if (!fs.existsSync(path.join(root, file))) continue;
   for (const line of fs.readFileSync(path.join(root, file), "utf8").split(/\r?\n/)) {
     const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
-    if (match) envKeys.add(match[1]);
+    if (match) {
+      envKeys.add(match[1]);
+      if (!envValues.has(match[1])) {
+        envValues.set(match[1], line.slice(line.indexOf("=") + 1));
+        envSources.set(match[1], file);
+      }
+    }
   }
 }
+const requiredModeratorKeys = ["CHILLYWOOD_E2E_MODERATOR_EMAIL", "CHILLYWOOD_E2E_MODERATOR_USER_ID", "CHILLYWOOD_E2E_MODERATOR_PASSWORD"];
+const requiredAdminOperatorKeys = ["CHILLYWOOD_E2E_ADMIN_OPERATOR_EMAIL", "CHILLYWOOD_E2E_ADMIN_OPERATOR_USER_ID", "CHILLYWOOD_E2E_ADMIN_OPERATOR_PASSWORD"];
+const credentialChecklist = Object.fromEntries(
+  [...requiredModeratorKeys, ...requiredAdminOperatorKeys].map((key) => [
+    key,
+    {
+      present: envKeys.has(key) && String(envValues.get(key) ?? "").trim().length > 0,
+      source: envKeys.has(key) ? envSources.get(key) || "unknown local source" : "missing",
+      value: "<redacted>",
+    },
+  ]),
+);
+const allModeratorCredentialsPresent = requiredModeratorKeys.every((key) => credentialChecklist[key].present);
+const allAdminOperatorCredentialsPresent = requiredAdminOperatorKeys.every((key) => credentialChecklist[key].present);
 
 const personaMatrix = {
   signedOut: { label: "signed-out", credentialKeysPresent: true, installedDeviceStatus: "Partial unless route automation resets session safely" },
@@ -159,13 +189,17 @@ const personaMatrix = {
   },
   moderator: {
     label: "moderator-proof-account",
-    credentialKeysPresent: ["CHILLYWOOD_E2E_MODERATOR_EMAIL", "CHILLYWOOD_E2E_MODERATOR_USER_ID", "CHILLYWOOD_E2E_MODERATOR_PASSWORD"].every((key) => envKeys.has(key)),
-    installedDeviceStatus: "Partial unless safe moderator seeded login exists",
+    credentialKeysPresent: allModeratorCredentialsPresent,
+    installedDeviceStatus: allModeratorCredentialsPresent
+      ? "Credentials available outside git; installed login traversal still requires a backed device automation harness"
+      : "Partial because safe moderator seeded credentials are missing outside git",
   },
   adminOperator: {
     label: "proof_admin_operator_001",
-    credentialKeysPresent: ["CHILLYWOOD_E2E_ADMIN_OPERATOR_EMAIL", "CHILLYWOOD_E2E_ADMIN_OPERATOR_USER_ID", "CHILLYWOOD_E2E_ADMIN_OPERATOR_PASSWORD"].every((key) => envKeys.has(key)),
-    installedDeviceStatus: "Partial unless safe operator seeded login exists",
+    credentialKeysPresent: allAdminOperatorCredentialsPresent,
+    installedDeviceStatus: allAdminOperatorCredentialsPresent
+      ? "Credentials available outside git; installed login traversal still requires a backed device automation harness"
+      : "Partial because safe Admin/operator seeded credentials are missing outside git",
   },
   ownerFirstOwner: {
     label: "owner-first-owner",
@@ -180,10 +214,10 @@ const personaMatrix = {
 };
 
 if (!personaMatrix.moderator.credentialKeysPresent) {
-  partials.push("No safe seeded Moderator credential set was found in ignored local env key names; installed Moderator traversal is Partial.");
+  partials.push(`Missing safe seeded Moderator credential values outside git: ${requiredModeratorKeys.filter((key) => !credentialChecklist[key].present).join(", ")}.`);
 }
 if (!personaMatrix.adminOperator.credentialKeysPresent) {
-  partials.push("No safe seeded Admin/operator credential set was found in ignored local env key names; installed Admin/operator traversal is Partial.");
+  partials.push(`Missing safe seeded Admin/operator credential values outside git: ${requiredAdminOperatorKeys.filter((key) => !credentialChecklist[key].present).join(", ")}.`);
 }
 
 const pass = (evidence) => ({ status: "Pass", evidence });
@@ -296,7 +330,11 @@ if (!devicesResult.ok) {
       ? "Installed package and launch proof passed. Multi-persona route traversal remains Partial unless seeded role logins are available."
       : "Installed package/launch proof did not fully pass.";
     if (oneDevice.status !== "Pass") partials.push(oneDevice.blocker);
-    partials.push("One-device multi-persona Admin/Moderator route traversal was not fully run because safe seeded Moderator/Admin credentials are not available.");
+    if (allModeratorCredentialsPresent && allAdminOperatorCredentialsPresent) {
+      partials.push("One-device multi-persona Admin/Moderator route traversal was not fully run because no supported credential-based installed-device traversal harness exists yet.");
+    } else {
+      partials.push("One-device multi-persona Admin/Moderator route traversal was not fully run because safe seeded Moderator/Admin credential values are not available outside git.");
+    }
   }
 }
 
@@ -379,8 +417,8 @@ const routeChecklist = {
   normalAdminDenied: partial("Expected denial is documented; not route-probed without seeded normal login.", "Installed persona traversal unavailable."),
   normalAdminSearchDenied: partial("Expected denial is documented; not route-probed without seeded normal login.", "Installed persona traversal unavailable."),
   creatorStaffToolsDenied: partial("Expected denial is documented; not route-probed without seeded creator login.", "Installed persona traversal unavailable."),
-  moderatorExactScope: partial("Expected exact-scope behavior is documented; not route-probed without seeded moderator login.", "No safe Moderator credential set found."),
-  adminScopedCommandCenter: partial("Expected scoped Command Center behavior is documented; not route-probed without seeded admin login.", "No safe Admin/operator credential set found."),
+  moderatorExactScope: partial("Expected exact-scope behavior is documented; installed Moderator traversal was not completed.", allModeratorCredentialsPresent ? "No supported installed-device login traversal harness exists yet." : "No safe Moderator credential set found outside git."),
+  adminScopedCommandCenter: partial("Expected scoped Command Center behavior is documented; installed Admin/operator traversal was not completed.", allAdminOperatorCredentialsPresent ? "No supported installed-device login traversal harness exists yet." : "No safe Admin/operator credential set found outside git."),
   safePublicNonMoneyWorks: oneDevice.status === "Pass" ? pass("Installed app launched successfully.") : partial("Static guards pass; installed launch not fully proved.", oneDevice.blocker),
 };
 
@@ -409,6 +447,7 @@ const autoFixLog = [
   "pass 1: added seeded authority proof doc, proof script, guard script, and package scripts.",
   "pass 2: fixed safe repo issues from first run: artifact secret scan now ignores Android accessibility `password: false` booleans, and policy guard now avoids false positives on negated existing docs.",
   "pass 3: added repo-safe seeded Moderator/Admin env key contract without committing credential values.",
+  "full traversal pass: checked ignored local env/process env for seeded Moderator/Admin credential values by key only, emitted a redacted credential checklist, and kept installed traversal Partial when values were unavailable.",
 ];
 
 const proofSummary = {
@@ -419,8 +458,9 @@ const proofSummary = {
   seededOneDeviceProofRun: oneDevice.status === "Pass" || oneDevice.packageReadback !== null,
   autoFixLoopUsed: true,
   firstFailure: "First runnable pass failed on safe repo issues: Android accessibility logcat `password: false` false positive and guard false positives on negated policy wording.",
-  autoFixed: ["added doc", "added proof script", "added guard script", "added package scripts", "narrowed artifact secret scan", "narrowed policy guard false positives", "added seeded Moderator/Admin env key contract"],
+  autoFixed: ["added doc", "added proof script", "added guard script", "added package scripts", "narrowed artifact secret scan", "narrowed policy guard false positives", "added seeded Moderator/Admin env key contract", "added redacted full-traversal credential checklist"],
   remainingPartial: partials,
+  credentialChecklist,
   personaMatrix,
   oneDevice,
   routeChecklist,
@@ -435,8 +475,44 @@ const proofSummary = {
 };
 
 writeJson("backend-denial-probe-output.json", backendDenial);
+writeJson("credential-key-presence-checklist.json", credentialChecklist);
 writeJson("seeded-persona-matrix.json", personaMatrix);
 writeJson("one-device-route-checklist.json", routeChecklist);
+writeJson("moderator-traversal-summary.json", {
+  status: allModeratorCredentialsPresent ? "Partial" : "Partial",
+  credentialsFoundOutsideGit: allModeratorCredentialsPresent,
+  result: allModeratorCredentialsPresent
+    ? "Seeded Moderator credential values are present outside git, but full installed Moderator traversal requires a supported no-secret device automation harness."
+    : "Seeded Moderator credential values are missing outside git; full installed Moderator traversal did not run.",
+  expectedBoundaries: [
+    "Moderator reaches only exact-scope moderation/support surfaces.",
+    "Moderator cannot reach Owner-only tools.",
+    "Moderator cannot grant Owner/Admin.",
+    "Moderator cannot activate money.",
+    "Moderator cannot browse broad audit/private evidence.",
+    "Moderator cannot gain LiveKit host/speaker/publish authority accidentally.",
+  ],
+});
+writeJson("admin-operator-traversal-summary.json", {
+  status: allAdminOperatorCredentialsPresent ? "Partial" : "Partial",
+  credentialsFoundOutsideGit: allAdminOperatorCredentialsPresent,
+  result: allAdminOperatorCredentialsPresent
+    ? "Seeded Admin/operator credential values are present outside git, but full installed Admin/operator traversal requires a supported no-secret device automation harness."
+    : "Seeded Admin/operator credential values are missing outside git; full installed Admin/operator traversal did not run.",
+  expectedBoundaries: [
+    "Admin/operator reaches scoped Admin Command Center.",
+    "Admin/operator Admin Search remains exact-scope/minimized/audited.",
+    "Admin/operator cannot alter First Owner authority.",
+    "Admin/operator cannot activate creator-money/live_money_enabled/payouts/provider refunds.",
+    "Admin/operator cannot mutate provider dashboards.",
+  ],
+});
+writeJson("normal-user-signed-out-denial-summary.json", {
+  status: "Static/backed proof passed; installed traversal not rerun without persona login harness.",
+  signedOutAdminDenied: routeChecklist.signedOutAdminDenied,
+  normalAdminDenied: routeChecklist.normalAdminDenied,
+  normalAdminSearchDenied: routeChecklist.normalAdminSearchDenied,
+});
 writeJson("route-nav-proof.json", oneDevice);
 writeJson("audit-proof-summary.json", auditResults);
 writeJson("moderation-proof-summary.json", moderationResults);

@@ -47,6 +47,7 @@
     "proof:moderation-case-operations-completion": "node ./scripts/proof-moderation-case-operations-completion.mjs",
     "proof:provider-dashboard-ownership-access-governance": "node ./scripts/proof-provider-dashboard-ownership-access-governance.mjs",
     "proof:owner-admin-moderator-production-authority-seeded-device": "node ./scripts/proof-owner-admin-moderator-production-authority-seeded-device.mjs",
+    "proof:owner-admin-moderator-provision-proof-accounts": "node ./scripts/provision-owner-admin-moderator-proof-accounts.mjs",
     "proof:admin-role-scope": "node ./scripts/proof-admin-role-scope.mjs",
     "proof:moderator-role-scope": "node ./scripts/proof-moderator-role-scope.mjs",
     "proof:staff-role-hierarchy": "node ./scripts/proof-staff-role-hierarchy.mjs",
