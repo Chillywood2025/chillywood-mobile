@@ -1,5 +1,7 @@
 # Tester Build Current Runtime Delivery
 
+Fresh Android tester binary fallback is tracked in `docs/release/ANDROID_TESTER_BINARY_BUILD_INSTALL_SMOKE.md`.
+
 Tester build / current runtime delivery: Partial.
 
 Status vocabulary: Tester build / current runtime delivery: Closed / Partial / Blocked.

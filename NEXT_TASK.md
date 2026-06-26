@@ -1,5 +1,34 @@
 # NEXT TASK
 
+# Android Tester Binary Build / Install Smoke Lane
+
+Doc: `docs/release/ANDROID_TESTER_BINARY_BUILD_INSTALL_SMOKE.md`.
+
+- [x] Commit `de3f9eb69798cebb5fab7fe0f34ce00fc0a10d8c` was verified pushed/aligned with `origin/main` before build work began.
+- [x] Built EAS Android internal APK with profile `production-apk`.
+- [x] Captured build ID `9e31b4b1-bd02-405c-8eeb-7aae3550d598`.
+- [x] Captured APK path `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-apk-v56.apk`.
+- [x] Captured SHA-256 `5ab5390291a1556c85b1eda0fb66290181c035f17711d9f316b68070af0ace16`.
+- [x] Confirmed APK metadata package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `56`.
+- [x] Install-over-existing attached-device installs failed safely with signature mismatch; no uninstall was performed.
+- [x] Built Play-uploadable AAB for Play internal/closed testing path: build ID `d7cec74d-95f5-4cf5-be0e-eb53571efc18`, versionCode `57`, SHA-256 `a71b8a9b8e35a284e62b7843df5c7f16ba94c54487ca63bcf67aba04598c9efa`.
+- [x] Owner instructed no use attached device; no further attached-device install/smoke actions are part of this lane.
+
+Status:
+- Verdict: Partial. Fresh tester APK is built and available for clean-device install or owner-approved uninstall/reinstall. Play-uploadable AAB is built for Play internal/closed testing distribution. Installed-device smoke for v56/v57 did not run because update-over-existing failed with signature mismatch and attached-device use was stopped by owner instruction; AAB upload to Play was not performed in this lane.
+- Required truth:
+  - No production Play submission.
+  - No provider dashboard mutation.
+  - No Google Play product/base-plan mutation.
+  - No RevenueCat mapping change.
+  - No Stripe mutation.
+  - No purchases or provider refunds executed.
+  - Premium public purchase remains OFF.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Payouts/Stripe/merch remain OFF.
+- Next lane recommendation: Upload the v57 AAB to Play internal/closed testing if existing Play testers need update-over-install, then run tester feedback triage after testers complete current binary QA. Premium monthly public purchase proof remains separate owner-approved lane.
+
 # Tester Build / Current Runtime Delivery Lane
 
 - [x] Previous commit `25ecf6d55180144b7202c901c163f9e28e469609` was verified aligned with `origin/main` before delivery work began.
