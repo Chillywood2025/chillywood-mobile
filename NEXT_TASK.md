@@ -1,5 +1,30 @@
 # NEXT TASK
 
+## Proof Fixture Bootstrap + Full Installed Moderator/Admin Traversal Lane
+
+- [x] Prior local commit `72642da35a99010c3b38cd9c6d24e663d7ceecce` was pushed and aligned with `origin/main` before bootstrap started.
+- [x] Service-role proof fixture bootstrap was used for only two `.test` proof accounts.
+- [x] Credentials were written only to ignored `.env.browserstack-monetization.local`.
+- [x] Installed Moderator traversal ran and closed.
+- [x] Installed Admin/operator traversal ran and closed.
+- [x] Signed-out and normal-user admin denial ran and closed.
+- [x] Owner RPC staff grant path was not claimed proved.
+
+Status:
+- Verdict: Closed for installed Moderator/Admin traversal through proof-only service-role fixtures.
+- Remaining separate follow-up: Owner RPC staff grant path remains Partial unless separately fixed/proved.
+- Artifact: `/tmp/app-seeded-staff-proof-fixture-bootstrap-full-traversal-20260625-220019/`
+- Cleanup: not performed; proof roles/scopes are short-expiring.
+- Required truth:
+  - service-role fixture was proof-only
+  - no real staff accounts changed
+  - no First Owner touched
+  - no credentials committed
+  - no passwords printed
+  - no provider dashboards changed
+  - no money systems enabled
+- Next lane recommendation: Continue production readiness with final store/release readiness and Play submission packet alignment, excluding known Google Play annual/channel base-plan provider blocker.
+
 ## Seeded Moderator/Admin Credential Provisioning + Full Installed Traversal Proof Lane
 
 - [x] Commit `1a5a3b75b6b3cd38e5e2720ee41b91089b5e1480` was already pushed and aligned with `origin/main` before this lane began.

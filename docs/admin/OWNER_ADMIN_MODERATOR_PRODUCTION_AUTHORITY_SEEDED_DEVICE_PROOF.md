@@ -1,8 +1,10 @@
 # Owner Admin Moderator Production Authority Seeded Device Proof
 
-Owner/Admin/Moderator production authority seeded 1-device proof: Partial for installed multi-persona device traversal and Closed for static policy guards, seeded account availability checks, backend/RPC denial contract, installed-app readback/launch probe, proof artifact generation, proof script, guard coverage, and redacted seeded credential key presence checks.
+Owner/Admin/Moderator production authority seeded 1-device proof: Closed for installed Moderator/Admin traversal through proof-only service-role fixtures, static policy guards, seeded account availability checks, backend/RPC denial contract, installed-app readback/launch probe, proof artifact generation, proof script, guard coverage, and redacted seeded credential key presence checks.
 
-Seeded Moderator/Admin credential provisioning result, June 26, 2026: Partial. The repo-safe credential key names exist, and the proof script checks ignored local env/process env without printing values. A narrow proof-account provisioner was added for fixed `@chillywood.test` proof accounts. It uses service-role access only for Auth/profile proof-account provisioning and attempts staff role grants through the Owner-authenticated audited RPC path. The attempt stopped safely because the local Owner actor was denied by `platform_staff_permission_denied`; no direct service-role staff-role insert or unaudited role bypass was used. Therefore seeded Moderator/Admin credential values remain absent from proof env, and full installed Moderator/Admin traversal remains Partial.
+Seeded Moderator/Admin credential provisioning result, June 26, 2026: Closed for installed traversal through proof-only service-role fixtures. The repo-safe credential key names exist, and the proof script checks ignored local env/process env without printing values. A narrow proof-account provisioner remains for the separate Owner-authenticated RPC path, but the local Owner actor was denied by `platform_staff_permission_denied`; therefore Owner RPC staff grant remains separate / Partial unless separately fixed and proved. This lane used `scripts/local-bootstrap-seeded-staff-proof-fixtures.mjs` as an explicit service-role proof fixture bootstrap for only `proof_moderator_001@chillywood.test` and `proof_admin_operator_001@chillywood.test`.
+
+Service-role proof fixture bootstrap was used. This proves installed Moderator/Admin traversal. This does not prove the Owner RPC staff grant path. No real staff accounts were changed. No real users were changed. No provider dashboards were changed. No money systems were enabled.
 
 Status vocabulary: Owner/Admin/Moderator production authority seeded 1-device proof: Closed / Partial / Blocked.
 
@@ -57,7 +59,7 @@ Seeded Moderator/Admin credential values must live only in ignored local env or 
 
 Proof artifacts may include these key names and presence booleans only. They must not include passwords, full private emails, tokens, raw provider data, private evidence, raw audit logs, or screenshots showing credential entry.
 
-The current redacted credential checklist is Partial: all six Moderator/Admin keys are missing from the proof environment. A proof-account provisioning attempt stopped at the audited Owner RPC role-grant boundary with `platform_staff_permission_denied`, so the lane did not bypass staff governance.
+The current redacted credential checklist is Closed for fixture credentials: all six Moderator/Admin keys are present in ignored `.env.browserstack-monetization.local` and values are redacted in artifacts. The proof-account provisioning attempt for the Owner RPC path stopped at the audited Owner RPC role-grant boundary with `platform_staff_permission_denied`, so this lane does not claim the Owner RPC grant path is proved.
 
 ## Seeded Persona Matrix
 
@@ -68,8 +70,8 @@ The current redacted credential checklist is Partial: all six Moderator/Admin ke
 | creator user | `proof_creator_001` | seeded harness owner/creator mapping | Partial if installed creator login is not run | Static creator/admin boundary checked | Creator cannot access Admin/Moderator-only tools. |
 | blocked user | `proof_blocked_001` | seeded harness user id/email keys where present | Partial; no password guaranteed | Existing blocking guards/proofs referenced | Blocked users cannot bypass guarded private surfaces where backed. |
 | disabled/deactivated/suspended user | `proof_deleted_pending_001` / account restriction proofs | account restriction and purge/de-id proof chain | Partial unless disposable installed account is available | Existing account restriction proof referenced | No mutation in this lane. |
-| moderator | `proof_moderator_001` planned optional | `CHILLYWOOD_E2E_MODERATOR_*` ignored local env key contract plus role/scope docs and moderation guards | Partial; credentials remain missing after audited-RPC provisioning attempt was denied | Exact-scope Moderator proof referenced | Moderator cannot gain Admin/Owner powers. |
-| admin/operator | `proof_admin_operator_001` planned optional | `CHILLYWOOD_E2E_ADMIN_OPERATOR_*` ignored local env key contract plus role/scope docs and command center guards | Partial; credentials remain missing after audited-RPC provisioning attempt was denied | Admin/operator static/RPC contract checked | `operator` remains backend Admin alias. |
+| moderator | `proof_moderator_001` | `CHILLYWOOD_E2E_MODERATOR_*` ignored local env key contract plus service-role proof fixture role/scope rows | Closed for installed traversal | Exact-scope Moderator proof referenced | Moderator cannot gain Admin/Owner powers. |
+| admin/operator | `proof_admin_operator_001` | `CHILLYWOOD_E2E_ADMIN_OPERATOR_*` ignored local env key contract plus service-role proof fixture role/scope rows | Closed for installed traversal | Admin/operator static/RPC contract checked | `operator` remains backend Admin alias. |
 | owner/First Owner | existing Owner/First Owner governance | First Owner/Owner proofs | Partial unless owner device session is safely available | First Owner proof referenced | Current First Owner is not touched. |
 | proof/test staff account | proof-only staff fixture if approved | staff lifecycle governance | Partial unless safe expiring role fixture exists | Proof/test separation checked | Proof/test accounts are not staff accounts. |
 
@@ -83,8 +85,8 @@ The current redacted credential checklist is Partial: all six Moderator/Admin ke
 | normal user Admin Command Center | denied | Partial unless normal-user seeded login is run |
 | normal user Admin Search | denied | Partial unless normal-user seeded login is run |
 | creator Admin/Moderator tools | denied | Partial unless creator seeded login is run |
-| Moderator tools | exact-scope only, no Admin/Owner powers | Partial unless moderator seeded login exists |
-| Admin/operator Command Center | scoped Admin Command Center only | Partial unless operator seeded login exists |
+| Moderator tools | exact-scope only, no Admin/Owner powers | Closed through installed proof fixture traversal |
+| Admin/operator Command Center | scoped Admin Command Center only | Closed through installed proof fixture traversal |
 | staff UI labels | production-labeled, not proof/debug/dev to public users | static/device launch proof |
 | reporting/legal/support/account deletion | reachable from public/signed-in surfaces where app state allows | Partial unless route screenshots captured |
 | money surfaces | unavailable/off, no purchase/payout/provider mutation | static and guard-backed |
@@ -189,16 +191,17 @@ Loop rule: run proof; patch only safe repo failures; rerun; repeat up to three t
 
 Current artifact path is produced under `/tmp/app-owner-admin-moderator-seeded-full-traversal-YYYYMMDD-HHMMSS/` and includes proof contract, redacted credential key presence checklist, persona matrix, route checklist, backend denial probe output, Moderator traversal summary, Admin/operator traversal summary, normal-user/signed-out denial summary, route/nav proof, audit/moderation/money-off summaries, auto-fix log, proof output, guard output, blocker list, owner action list, and secret scan result.
 
+Combined bootstrap/traversal artifact: `/tmp/app-seeded-staff-proof-fixture-bootstrap-full-traversal-20260625-220019/`.
+
 ## Remaining Blockers
 
-- Installed multi-persona route traversal remains Partial unless safe seeded normal/creator/moderator/admin/owner credentials and a supported account-switching harness are available. Moderator credentials must use `CHILLYWOOD_E2E_MODERATOR_EMAIL`, `CHILLYWOOD_E2E_MODERATOR_USER_ID`, and `CHILLYWOOD_E2E_MODERATOR_PASSWORD` in ignored local env or a secret manager. Admin/operator credentials must use `CHILLYWOOD_E2E_ADMIN_OPERATOR_EMAIL`, `CHILLYWOOD_E2E_ADMIN_OPERATOR_USER_ID`, and `CHILLYWOOD_E2E_ADMIN_OPERATOR_PASSWORD` in ignored local env or a secret manager.
-- The proof-account provisioning attempt could not grant Moderator/Admin roles through the audited Owner RPC path because the local Owner actor received `platform_staff_permission_denied`. Owner action is required to run the provisioner with an Owner/First Owner account that can grant `moderator` and `operator`, or to provide pre-seeded credentials through an approved secret manager.
+- Owner RPC staff grant path was not proved by this lane. The proof-account provisioning attempt could not grant Moderator/Admin roles through the audited Owner RPC path because the local Owner actor received `platform_staff_permission_denied`. Owner action is required only if the Owner RPC staff grant path must be separately closed.
 - Backend/RPC denial probes are contract/static-proof based unless a safe non-mutating RPC harness with seeded sessions exists for each persona.
 - Provider dashboard access proof remains owner-confirmation-required.
 
 ## Launch Verdict
 
-Launch verdict for this lane: Partial. Static policy, seeded availability, device package/launch, and guard coverage are closed. Installed one-device multi-persona authority traversal remains Partial until safe seeded role credentials and route automation exist without printing secrets or granting unsafe roles.
+Launch verdict for this lane: Closed for installed Moderator/Admin traversal through proof-only service-role fixtures. Owner RPC staff grant path remains separate / Partial and was not claimed proved.
 
 ## Existing Proof References
 

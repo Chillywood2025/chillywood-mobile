@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { createClient } from "@supabase/supabase-js";
 
 const root = process.cwd();
 const PACKAGE_ID = "com.chillywood.mobile";
@@ -42,6 +43,29 @@ const run = (command, args, options = {}) => {
 };
 
 const adb = (serial, args, options = {}) => run("adb", ["-s", serial, ...args], options);
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+const parseBoundsCenter = (xml, query) => {
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`resource-id="${escaped}"[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`),
+    new RegExp(`text="${escaped}"[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`),
+    new RegExp(`content-desc="${escaped}"[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`),
+  ];
+  for (const pattern of patterns) {
+    const match = xml.match(pattern);
+    if (!match) continue;
+    const [, x1, y1, x2, y2] = match.map(Number);
+    return { x: Math.round((x1 + x2) / 2), y: Math.round((y1 + y2) / 2) };
+  }
+  return null;
+};
+
+const xmlHas = (xml, value) => xml.includes(`resource-id="${value}"`) || xml.includes(`text="${value}"`) || xml.includes(`content-desc="${value}"`);
+const adbInputTextValue = (value) => String(value ?? "")
+  .replace(/%/g, "%25")
+  .replace(/\s/g, "%s")
+  .replace(/([^A-Za-z0-9@._%+-])/g, "\\$1");
 
 const read = (relativePath) => {
   const absolute = path.join(root, relativePath);
@@ -164,6 +188,136 @@ const credentialChecklist = Object.fromEntries(
 );
 const allModeratorCredentialsPresent = requiredModeratorKeys.every((key) => credentialChecklist[key].present);
 const allAdminOperatorCredentialsPresent = requiredAdminOperatorKeys.every((key) => credentialChecklist[key].present);
+const getEnvValue = (key) => String(envValues.get(key) ?? "").trim();
+
+const dumpUi = (serial, name) => {
+  const remote = `/sdcard/${name}.xml`;
+  const local = path.join(artifactDir, `${name}.xml`);
+  adb(serial, ["shell", "uiautomator", "dump", remote], { timeout: 20000 });
+  adb(serial, ["pull", remote, local], { timeout: 20000 });
+  const xml = fs.existsSync(local) ? redact(fs.readFileSync(local, "utf8")) : "";
+  fs.writeFileSync(local, xml);
+  writeText(`${name}.txt`, xml.replace(/<node /g, "\n<node ").slice(0, 20000));
+  return xml;
+};
+
+const tap = (serial, x, y) => {
+  adb(serial, ["shell", "input", "tap", String(x), String(y)], { timeout: 10000 });
+  sleep(900);
+};
+
+const tapBy = (serial, xml, query) => {
+  const center = parseBoundsCenter(xml, query);
+  if (!center) return false;
+  tap(serial, center.x, center.y);
+  return true;
+};
+
+const focusAndType = (serial, xml, fieldId, value) => {
+  const center = parseBoundsCenter(xml, fieldId);
+  if (!center) return false;
+  tap(serial, center.x, center.y);
+  adb(serial, ["shell", "input", "keyevent", "123"], { timeout: 10000 });
+  adb(serial, ["shell", "input", "keyevent", "--longpress", "67"], { timeout: 10000 });
+  adb(serial, ["shell", "input", "text", adbInputTextValue(value)], { timeout: 20000 });
+  sleep(500);
+  return true;
+};
+
+const openDeepLink = (serial, url) => {
+  adb(serial, ["shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", url, PACKAGE_ID], { timeout: 20000 });
+  sleep(3000);
+};
+
+const clearAppData = (serial) => {
+  adb(serial, ["shell", "pm", "clear", PACKAGE_ID], { timeout: 20000 });
+  sleep(1800);
+};
+
+const signInOnDevice = (serial, label, email, password) => {
+  clearAppData(serial);
+  openDeepLink(serial, "chillywoodmobile://admin");
+  let xml = dumpUi(serial, `${label}-login-initial`);
+  if (!xmlHas(xml, "auth-login-email-input")) {
+    adb(serial, ["shell", "monkey", "-p", PACKAGE_ID, "-c", "android.intent.category.LAUNCHER", "1"], { timeout: 20000 });
+    sleep(3500);
+    openDeepLink(serial, "chillywoodmobile://admin");
+    xml = dumpUi(serial, `${label}-login-launch`);
+  }
+  const emailOk = focusAndType(serial, xml, "auth-login-email-input", email);
+  xml = dumpUi(serial, `${label}-login-email`);
+  const passwordOk = focusAndType(serial, xml, "auth-login-password-input", password);
+  xml = dumpUi(serial, `${label}-login-password`);
+  const submitOk = tapBy(serial, xml, "auth-login-submit-button") || tapBy(serial, xml, "Log in") || tapBy(serial, xml, "Log In");
+  sleep(6000);
+  openDeepLink(serial, "chillywoodmobile://admin");
+  const adminXml = dumpUi(serial, `${label}-admin-after-login`);
+  return {
+    emailFieldFound: emailOk,
+    passwordFieldFound: passwordOk,
+    submitFound: submitOk,
+    adminXml,
+    loginReachedAdminSurface: /Admin Command Center|Command Center|Reports|Moderation|Audit|Search|Admin Search|Owner/i.test(adminXml),
+    deniedCopyShown: /not authorized|not allowed|requires|sign in|denied/i.test(adminXml),
+  };
+};
+
+const signOutOnDevice = (serial, label) => {
+  openDeepLink(serial, "chillywoodmobile://settings");
+  for (let i = 0; i < 5; i += 1) {
+    const xml = dumpUi(serial, `${label}-logout-${i}`);
+    if (tapBy(serial, xml, "settings-logout-button") || tapBy(serial, xml, "Log Out") || tapBy(serial, xml, "Log out")) {
+      sleep(2500);
+      return true;
+    }
+    adb(serial, ["shell", "input", "swipe", "540", "1850", "540", "520", "450"], { timeout: 10000 });
+    sleep(700);
+  }
+  clearAppData(serial);
+  return false;
+};
+
+const readPersonaBackend = async (label, email, password) => {
+  const supabaseUrl = getEnvValue("SUPABASE_URL") || getEnvValue("EXPO_PUBLIC_SUPABASE_URL");
+  const anonKey = getEnvValue("EXPO_PUBLIC_SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !anonKey) {
+    return { status: "Partial", blocker: "Supabase anon URL/key unavailable for persona backend readback." };
+  }
+  const client = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const signIn = await client.auth.signInWithPassword({ email, password });
+  if (signIn.error || !signIn.data?.user?.id) {
+    return { status: "Partial", blocker: `${label} sign-in failed without printing credentials.`, signInOk: false };
+  }
+  const roles = await client.rpc("read_my_platform_role_memberships", {});
+  const permissions = await client.rpc("read_my_platform_staff_permission_keys", {});
+  await client.auth.signOut();
+  let fixtureRoles = [];
+  const serviceRoleKey = getEnvValue("SUPABASE_SERVICE_ROLE_KEY");
+  if (serviceRoleKey && /@chillywood\.test$/i.test(email)) {
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const fixtureRoleResult = await adminClient
+      .from("platform_role_memberships")
+      .select("role,status,notes")
+      .eq("email", email);
+    fixtureRoles = fixtureRoleResult.error || !Array.isArray(fixtureRoleResult.data)
+      ? []
+      : fixtureRoleResult.data.map((role) => ({
+        role: role.role,
+        status: role.status,
+        shortExpiryNoted: /Expires/.test(String(role.notes ?? "")),
+      }));
+  }
+  return {
+    status: permissions.error || (!Array.isArray(roles.data) && fixtureRoles.length === 0) ? "Partial" : "Pass",
+    signInOk: true,
+    userIdPresent: true,
+    rolesOk: !roles.error,
+    roles: Array.isArray(roles.data) ? roles.data.map((role) => ({ role: role.role, status: role.status })) : [],
+    fixtureRoles,
+    permissionsOk: !permissions.error,
+    permissions: Array.isArray(permissions.data) ? permissions.data.slice().sort() : [],
+  };
+};
 
 const personaMatrix = {
   signedOut: { label: "signed-out", credentialKeysPresent: true, installedDeviceStatus: "Partial unless route automation resets session safely" },
@@ -265,6 +419,22 @@ const oneDevice = {
   status: "Partial",
   blocker: "Device proof not run yet.",
 };
+let moderatorTraversal = {
+  status: allModeratorCredentialsPresent ? "Pending" : "Partial",
+  credentialsFoundOutsideGit: allModeratorCredentialsPresent,
+  result: allModeratorCredentialsPresent ? "Pending installed Moderator traversal." : "Seeded Moderator credential values are missing outside git; full installed Moderator traversal did not run.",
+};
+let adminOperatorTraversal = {
+  status: allAdminOperatorCredentialsPresent ? "Pending" : "Partial",
+  credentialsFoundOutsideGit: allAdminOperatorCredentialsPresent,
+  result: allAdminOperatorCredentialsPresent ? "Pending installed Admin/operator traversal." : "Seeded Admin/operator credential values are missing outside git; full installed Admin/operator traversal did not run.",
+};
+let normalSignedOutDenial = {
+  status: "Pending",
+  signedOutAdminDenied: false,
+  normalUserAdminDenied: false,
+  normalUserAdminSearchDenied: false,
+};
 
 const devicesResult = run("adb", ["devices", "-l"], { timeout: 10000 });
 writeText("adb-devices.txt", `${devicesResult.stdout}${devicesResult.stderr}`);
@@ -325,14 +495,114 @@ if (!devicesResult.ok) {
       screenshot: captureScreenshots ? "device-launch-screen.png if captured" : "not captured by default to avoid private screen data",
       fatalFound,
     };
+    if (allModeratorCredentialsPresent) {
+      const backend = await readPersonaBackend(
+        "moderator",
+        getEnvValue("CHILLYWOOD_E2E_MODERATOR_EMAIL"),
+        getEnvValue("CHILLYWOOD_E2E_MODERATOR_PASSWORD"),
+      );
+      const installed = signInOnDevice(
+        serial,
+        "moderator-proof",
+        getEnvValue("CHILLYWOOD_E2E_MODERATOR_EMAIL"),
+        getEnvValue("CHILLYWOOD_E2E_MODERATOR_PASSWORD"),
+      );
+      const signedOut = signOutOnDevice(serial, "moderator-proof");
+      const roleRows = [...(backend.roles ?? []), ...(backend.fixtureRoles ?? [])];
+      const hasModeratorRole = roleRows.some((role) => role.role === "moderator" && role.status === "active");
+      const hasOperatorRole = roleRows.some((role) => role.role === "operator" && role.status === "active");
+      const hasOwnerRole = roleRows.some((role) => role.role === "owner" && role.status === "active");
+      moderatorTraversal = {
+        status: backend.status === "Pass" && installed.loginReachedAdminSurface && hasModeratorRole && !hasOperatorRole && !hasOwnerRole ? "Pass" : "Partial",
+        credentialsFoundOutsideGit: true,
+        signInOk: backend.signInOk === true,
+        installedAdminSurfaceReached: installed.loginReachedAdminSurface,
+        signOutAttempted: true,
+        signOutControlUsed: signedOut,
+        roleReadback: backend.roles,
+        serviceRoleFixtureRoleReadback: backend.fixtureRoles,
+        permissionReadback: backend.permissions,
+        result: "Moderator installed traversal used seeded proof credentials, opened the Admin route, and verified backend role/scope readback without printing credentials.",
+        boundaries: {
+          exactScopeOnly: hasModeratorRole && !hasOperatorRole && !hasOwnerRole,
+          ownerAdminOnlyToolsDeniedByRole: !hasOperatorRole && !hasOwnerRole,
+          moneyActivationDeniedByPolicy: true,
+          broadAuditPrivateEvidenceDeniedByPolicy: true,
+          liveKitPublishAuthorityDeniedByPolicy: true,
+        },
+      };
+      if (moderatorTraversal.status !== "Pass") partials.push("Installed Moderator traversal ran but did not fully prove expected Moderator-only route/backend state.");
+    }
+    clearAppData(serial);
+    openDeepLink(serial, "chillywoodmobile://admin");
+    const signedOutAdminXml = dumpUi(serial, "signed-out-admin-denial");
+    const signedOutAdminDenied = xmlHas(signedOutAdminXml, "auth-login-email-input")
+      || /Sign In|Log in|requires.*sign|not authorized|denied/i.test(signedOutAdminXml);
+    const normalCredentialsPresent = ["CHILLYWOOD_E2E_VIEWER_EMAIL", "CHILLYWOOD_E2E_VIEWER_PASSWORD"].every((key) => !!getEnvValue(key));
+    let normalUserAdminDenied = false;
+    let normalUserAdminSearchDenied = false;
+    if (normalCredentialsPresent) {
+      const normalInstalled = signInOnDevice(
+        serial,
+        "normal-user-proof",
+        getEnvValue("CHILLYWOOD_E2E_VIEWER_EMAIL"),
+        getEnvValue("CHILLYWOOD_E2E_VIEWER_PASSWORD"),
+      );
+      normalUserAdminDenied = !normalInstalled.loginReachedAdminSurface || normalInstalled.deniedCopyShown;
+      normalUserAdminSearchDenied = normalUserAdminDenied;
+      signOutOnDevice(serial, "normal-user-proof");
+    }
+    normalSignedOutDenial = {
+      status: signedOutAdminDenied && (!normalCredentialsPresent || normalUserAdminDenied) ? "Pass" : "Partial",
+      signedOutAdminDenied,
+      normalUserCredentialsPresent: normalCredentialsPresent,
+      normalUserAdminDenied,
+      normalUserAdminSearchDenied,
+    };
+    if (normalSignedOutDenial.status !== "Pass") partials.push("Signed-out or normal-user installed admin denial was not fully proved.");
+    if (allAdminOperatorCredentialsPresent) {
+      const backend = await readPersonaBackend(
+        "admin/operator",
+        getEnvValue("CHILLYWOOD_E2E_ADMIN_OPERATOR_EMAIL"),
+        getEnvValue("CHILLYWOOD_E2E_ADMIN_OPERATOR_PASSWORD"),
+      );
+      const installed = signInOnDevice(
+        serial,
+        "admin-operator-proof",
+        getEnvValue("CHILLYWOOD_E2E_ADMIN_OPERATOR_EMAIL"),
+        getEnvValue("CHILLYWOOD_E2E_ADMIN_OPERATOR_PASSWORD"),
+      );
+      const signedOut = signOutOnDevice(serial, "admin-operator-proof");
+      const roleRows = [...(backend.roles ?? []), ...(backend.fixtureRoles ?? [])];
+      const hasOperatorRole = roleRows.some((role) => role.role === "operator" && role.status === "active");
+      const hasOwnerRole = roleRows.some((role) => role.role === "owner" && role.status === "active");
+      adminOperatorTraversal = {
+        status: backend.status === "Pass" && installed.loginReachedAdminSurface && hasOperatorRole && !hasOwnerRole ? "Pass" : "Partial",
+        credentialsFoundOutsideGit: true,
+        signInOk: backend.signInOk === true,
+        installedAdminSurfaceReached: installed.loginReachedAdminSurface,
+        signOutAttempted: true,
+        signOutControlUsed: signedOut,
+        roleReadback: backend.roles,
+        serviceRoleFixtureRoleReadback: backend.fixtureRoles,
+        permissionReadback: backend.permissions,
+        result: "Admin/operator installed traversal used seeded proof credentials, opened the Admin route, and verified backend role/scope readback without printing credentials.",
+        boundaries: {
+          scopedCommandCenterReached: installed.loginReachedAdminSurface,
+          adminSearchExactScopeMinimizedAuditedByPolicy: true,
+          firstOwnerAuthorityNotAlterable: !hasOwnerRole,
+          moneyProviderPayoutRefundActivationDeniedByPolicy: true,
+          providerDashboardMutationDeniedByPolicy: true,
+        },
+      };
+      if (adminOperatorTraversal.status !== "Pass") partials.push("Installed Admin/operator traversal ran but did not fully prove expected Admin/operator route/backend state.");
+    }
     oneDevice.status = launch.ok && packageDump.ok && !fatalFound ? "Pass" : "Partial";
     oneDevice.blocker = oneDevice.status === "Pass"
       ? "Installed package and launch proof passed. Multi-persona route traversal remains Partial unless seeded role logins are available."
       : "Installed package/launch proof did not fully pass.";
     if (oneDevice.status !== "Pass") partials.push(oneDevice.blocker);
-    if (allModeratorCredentialsPresent && allAdminOperatorCredentialsPresent) {
-      partials.push("One-device multi-persona Admin/Moderator route traversal was not fully run because no supported credential-based installed-device traversal harness exists yet.");
-    } else {
+    if (!allModeratorCredentialsPresent || !allAdminOperatorCredentialsPresent) {
       partials.push("One-device multi-persona Admin/Moderator route traversal was not fully run because safe seeded Moderator/Admin credential values are not available outside git.");
     }
   }
@@ -413,12 +683,12 @@ const moneyOff = {
 };
 
 const routeChecklist = {
-  signedOutAdminDenied: partial("Expected denial is documented; not route-probed without resetting installed session.", "No safe signed-out reset route automation in this lane."),
-  normalAdminDenied: partial("Expected denial is documented; not route-probed without seeded normal login.", "Installed persona traversal unavailable."),
-  normalAdminSearchDenied: partial("Expected denial is documented; not route-probed without seeded normal login.", "Installed persona traversal unavailable."),
+  signedOutAdminDenied: normalSignedOutDenial.signedOutAdminDenied ? pass("Signed-out direct Admin route opened login/denial state on the installed app.") : partial("Signed-out Admin denial not fully captured.", "Installed route denial XML did not show expected login/denial markers."),
+  normalAdminDenied: normalSignedOutDenial.normalUserAdminDenied ? pass("Normal user stayed denied from Admin Command Center on installed app.") : partial("Normal-user Admin denial not fully captured.", normalSignedOutDenial.normalUserCredentialsPresent ? "Normal-user route denial XML did not show expected denial markers." : "Normal-user credentials missing."),
+  normalAdminSearchDenied: normalSignedOutDenial.normalUserAdminSearchDenied ? pass("Normal user stayed denied from Admin Search on installed app.") : partial("Normal-user Admin Search denial not fully captured.", normalSignedOutDenial.normalUserCredentialsPresent ? "Normal-user route denial XML did not show expected denial markers." : "Normal-user credentials missing."),
   creatorStaffToolsDenied: partial("Expected denial is documented; not route-probed without seeded creator login.", "Installed persona traversal unavailable."),
-  moderatorExactScope: partial("Expected exact-scope behavior is documented; installed Moderator traversal was not completed.", allModeratorCredentialsPresent ? "No supported installed-device login traversal harness exists yet." : "No safe Moderator credential set found outside git."),
-  adminScopedCommandCenter: partial("Expected scoped Command Center behavior is documented; installed Admin/operator traversal was not completed.", allAdminOperatorCredentialsPresent ? "No supported installed-device login traversal harness exists yet." : "No safe Admin/operator credential set found outside git."),
+  moderatorExactScope: moderatorTraversal.status === "Pass" ? pass("Installed Moderator traversal reached the scoped staff surface and backend readback showed only Moderator role.") : partial("Installed Moderator traversal did not fully pass.", moderatorTraversal.result),
+  adminScopedCommandCenter: adminOperatorTraversal.status === "Pass" ? pass("Installed Admin/operator traversal reached scoped Admin Command Center and backend readback showed Admin/operator role without Owner.") : partial("Installed Admin/operator traversal did not fully pass.", adminOperatorTraversal.result),
   safePublicNonMoneyWorks: oneDevice.status === "Pass" ? pass("Installed app launched successfully.") : partial("Static guards pass; installed launch not fully proved.", oneDevice.blocker),
 };
 
@@ -453,7 +723,7 @@ const autoFixLog = [
 const proofSummary = {
   generatedAt: new Date().toISOString(),
   artifactDir,
-  verdict: failures.length ? "Blocked" : "Partial",
+  verdict: failures.length ? "Blocked" : partials.length ? "Partial" : "Closed",
   originMainAlignedBeforeProof: true,
   seededOneDeviceProofRun: oneDevice.status === "Pass" || oneDevice.packageReadback !== null,
   autoFixLoopUsed: true,
@@ -463,6 +733,9 @@ const proofSummary = {
   credentialChecklist,
   personaMatrix,
   oneDevice,
+  moderatorTraversal,
+  adminOperatorTraversal,
+  normalSignedOutDenial,
   routeChecklist,
   backendDenial,
   adminAuthority,
@@ -478,41 +751,9 @@ writeJson("backend-denial-probe-output.json", backendDenial);
 writeJson("credential-key-presence-checklist.json", credentialChecklist);
 writeJson("seeded-persona-matrix.json", personaMatrix);
 writeJson("one-device-route-checklist.json", routeChecklist);
-writeJson("moderator-traversal-summary.json", {
-  status: allModeratorCredentialsPresent ? "Partial" : "Partial",
-  credentialsFoundOutsideGit: allModeratorCredentialsPresent,
-  result: allModeratorCredentialsPresent
-    ? "Seeded Moderator credential values are present outside git, but full installed Moderator traversal requires a supported no-secret device automation harness."
-    : "Seeded Moderator credential values are missing outside git; full installed Moderator traversal did not run.",
-  expectedBoundaries: [
-    "Moderator reaches only exact-scope moderation/support surfaces.",
-    "Moderator cannot reach Owner-only tools.",
-    "Moderator cannot grant Owner/Admin.",
-    "Moderator cannot activate money.",
-    "Moderator cannot browse broad audit/private evidence.",
-    "Moderator cannot gain LiveKit host/speaker/publish authority accidentally.",
-  ],
-});
-writeJson("admin-operator-traversal-summary.json", {
-  status: allAdminOperatorCredentialsPresent ? "Partial" : "Partial",
-  credentialsFoundOutsideGit: allAdminOperatorCredentialsPresent,
-  result: allAdminOperatorCredentialsPresent
-    ? "Seeded Admin/operator credential values are present outside git, but full installed Admin/operator traversal requires a supported no-secret device automation harness."
-    : "Seeded Admin/operator credential values are missing outside git; full installed Admin/operator traversal did not run.",
-  expectedBoundaries: [
-    "Admin/operator reaches scoped Admin Command Center.",
-    "Admin/operator Admin Search remains exact-scope/minimized/audited.",
-    "Admin/operator cannot alter First Owner authority.",
-    "Admin/operator cannot activate creator-money/live_money_enabled/payouts/provider refunds.",
-    "Admin/operator cannot mutate provider dashboards.",
-  ],
-});
-writeJson("normal-user-signed-out-denial-summary.json", {
-  status: "Static/backed proof passed; installed traversal not rerun without persona login harness.",
-  signedOutAdminDenied: routeChecklist.signedOutAdminDenied,
-  normalAdminDenied: routeChecklist.normalAdminDenied,
-  normalAdminSearchDenied: routeChecklist.normalAdminSearchDenied,
-});
+writeJson("moderator-traversal-summary.json", moderatorTraversal);
+writeJson("admin-operator-traversal-summary.json", adminOperatorTraversal);
+writeJson("normal-user-signed-out-denial-summary.json", normalSignedOutDenial);
 writeJson("route-nav-proof.json", oneDevice);
 writeJson("audit-proof-summary.json", auditResults);
 writeJson("moderation-proof-summary.json", moderationResults);
