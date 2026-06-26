@@ -1,6 +1,6 @@
 # Android Tester Binary Build Install Smoke
 
-Play internal/closed testing AAB upload + tester smoke is tracked in `docs/release/PLAY_INTERNAL_TEST_AAB_UPLOAD_TESTER_SMOKE.md`. VersionCode `57` AAB `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-aab-v57.aab` was submitted through EAS Submit to the Google Play internal track only; Play production submission/promotion did not happen. Installed Play tester smoke remains pending until Play processing/tester availability is confirmed on an owner-permitted tester device.
+Play internal/closed testing AAB upload + tester smoke is tracked in `docs/release/PLAY_INTERNAL_TEST_AAB_UPLOAD_TESTER_SMOKE.md`. VersionCode `57` AAB `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-aab-v57.aab` was submitted through EAS Submit to the Google Play internal track only; Play production submission/promotion did not happen. The approved tester delivery path is Google Play internal/closed testing. The sideload v56 APK path was not owner-approved for tester delivery and must not be used for testers. The first Play update failed because a sideloaded v56 APK was installed on device `R5CR120QCBF`; the sideloaded package was removed so the approved Play internal v57 build could be installed. Play internal v57 installed successfully from Google Play with installer `com.android.vending`, package `com.chillywood.mobile`, version `1.0.0`, versionCode `57`, and launched as `com.chillywood.mobile/.MainActivity` with no fatal crash in the captured launch log window. This is install/launch smoke only, not full tester QA; testers still need to run current non-money flows. Future tester delivery must use Google Play internal/closed testing only unless the owner explicitly approves sideload in writing.
 
 Android tester binary build / install smoke: Partial.
 
@@ -69,18 +69,18 @@ After the install attempts, the owner instructed: no use attached device. No fur
 
 Tester-safe paths from here:
 
-1. Install the APK on a clean tester device that does not already have `com.chillywood.mobile` installed.
-2. If a tester already has the Play/internal app, uninstall/reinstall only with explicit owner/tester approval because app data will be removed.
-3. For update-over-existing Play/internal installs without uninstall, upload AAB `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-aab-v57.aab` to Play internal/closed testing in a separate owner-approved release operation. This lane did not upload it.
+1. Use Google Play internal/closed testing for tester delivery.
+2. Do not use the sideload v56 APK path for testers; it was not owner-approved for tester delivery.
+3. Future tester delivery must use Google Play internal/closed testing only unless the owner explicitly approves sideload in writing.
+4. If a sideload is explicitly approved later, document the reason and expect signature mismatch on devices that already have a Play-installed package.
 
 ## Tester Instructions
 
-1. For clean sideload testing, use APK `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-apk-v56.apk` or EAS build `9e31b4b1-bd02-405c-8eeb-7aae3550d598`.
-2. For existing Play/internal or closed-testing testers, use AAB `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-aab-v57.aab` or EAS build `d7cec74d-95f5-4cf5-be0e-eb53571efc18` and upload it to Play internal/closed testing outside this lane.
-3. Verify package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `56` for clean APK installs or versionCode `57` for Play internal/closed testing, runtimeVersion `1.0.0`.
-4. If installing the APK on a device that already has `com.chillywood.mobile`, expect update failure if the existing app was installed from Play with a different signing key. Do not uninstall unless explicitly approved.
-5. Test Home, Search/Browse, title pages, Player, Favorites, Continue Watching, profile/settings, legal/support/account deletion, reporting, blocking, Chilly Chat, calls, Watch-Party/Live guarded routes, notifications, and approved staff proof flows.
-6. Report bugs with device, app version, versionCode, persona, route, time, and sanitized screenshots only.
+1. Use Google Play internal/closed testing for tester delivery.
+2. Verify package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `57`, installer `com.android.vending`.
+3. Do not use the sideload v56 APK path for testers unless the owner explicitly approves sideload in writing.
+4. Test Home, Search/Browse, title pages, Player, Favorites, Continue Watching, profile/settings, legal/support/account deletion, reporting, blocking, Chilly Chat, calls, Watch-Party/Live guarded routes, notifications, and approved staff proof flows.
+5. Report bugs with device, app version, versionCode, persona, route, time, and sanitized screenshots only.
 
 ## Known Disabled Systems
 
@@ -107,4 +107,4 @@ The artifact contains sanitized build metadata, APK/AAB SHA-256, package badging
 
 ## Final Verdict
 
-Partial. A fresh Android internal tester APK was built successfully from current commit `de3f9eb69798cebb5fab7fe0f34ce00fc0a10d8c`, with package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `56`, runtimeVersion `1.0.0`, and SHA-256 `5ab5390291a1556c85b1eda0fb66290181c035f17711d9f316b68070af0ace16`. Installation over existing attached-device installs failed safely with signature mismatch, and no uninstall was performed. A Play-uploadable AAB was also built successfully from the same commit, with versionCode `57` and SHA-256 `a71b8a9b8e35a284e62b7843df5c7f16ba94c54487ca63bcf67aba04598c9efa`. Existing Play/closed-testing testers should use the AAB through Play internal/closed testing in a separate owner-approved release operation; this lane did not upload or submit it. Clean sideload testers can use the APK on devices without an existing `com.chillywood.mobile` install.
+Partial for the original sideload binary lane, superseded for tester delivery by the Play internal v57 install smoke lane. A fresh Android internal tester APK was built successfully from current commit `de3f9eb69798cebb5fab7fe0f34ce00fc0a10d8c`, with package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `56`, runtimeVersion `1.0.0`, and SHA-256 `5ab5390291a1556c85b1eda0fb66290181c035f17711d9f316b68070af0ace16`. Installation over existing attached-device installs failed safely with signature mismatch. A Play-uploadable AAB was also built successfully from the same commit, with versionCode `57` and SHA-256 `a71b8a9b8e35a284e62b7843df5c7f16ba94c54487ca63bcf67aba04598c9efa`. The approved tester delivery path is Google Play internal/closed testing. The sideload v56 APK path was not owner-approved for tester delivery and must not be used for testers unless the owner explicitly approves sideload in writing.

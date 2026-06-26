@@ -9,10 +9,17 @@ Doc: `docs/release/PLAY_INTERNAL_TEST_AAB_UPLOAD_TESTER_SMOKE.md`.
 - [x] Verified package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `57`, SHA-256 `a71b8a9b8e35a284e62b7843df5c7f16ba94c54487ca63bcf67aba04598c9efa`.
 - [x] Submitted the v57 AAB through EAS Submit to the Google Play internal track only.
 - [x] Prepared safe release notes and tester update instructions.
-- [ ] Run Play-installed tester smoke after Play processing/tester availability is confirmed on an owner-permitted tester device.
+- [x] Removed the sideloaded v56 package from device `R5CR120QCBF` after the first Play update failed due the sideload install.
+- [x] Installed the approved Play internal v57 build from Google Play.
+- [x] Verified installer `com.android.vending`, package `com.chillywood.mobile`, version `1.0.0`, versionCode `57`.
+- [x] Launched as `com.chillywood.mobile/.MainActivity` with no fatal crash in the captured launch log window.
 
 Status:
-- Verdict: Partial. The v57 AAB was submitted to Google Play internal testing, but installed Play tester smoke remains pending until Play processing/tester availability is confirmed.
+- Verdict: Closed for Play internal v57 install and launch smoke. This is install/launch smoke only, not full tester QA; testers still need to run current non-money flows.
+- Required tester delivery truth:
+  - The approved tester delivery path is Google Play internal/closed testing.
+  - The sideload v56 APK path was not owner-approved for tester delivery and must not be used for testers.
+  - Future tester delivery must use Google Play internal/closed testing only unless the owner explicitly approves sideload in writing.
 - Required truth:
   - No Play production submission or promotion.
   - No provider dashboard mutation.
@@ -24,7 +31,7 @@ Status:
   - `live_money_enabled` remains OFF.
   - Creator-money remains OFF.
   - Payouts/Stripe/merch remain OFF.
-- Next lane recommendation: Run Play-installed tester smoke after the v57 internal testing build is available to testers. Premium monthly public purchase proof remains separate owner-approved lane.
+- Next lane recommendation: Run tester feedback triage after testers complete current non-money QA. Premium monthly public purchase proof remains separate owner-approved lane.
 
 # Android Tester Binary Build / Install Smoke Lane
 
@@ -41,7 +48,7 @@ Doc: `docs/release/ANDROID_TESTER_BINARY_BUILD_INSTALL_SMOKE.md`.
 - [x] Owner instructed no use attached device; no further attached-device install/smoke actions are part of this lane.
 
 Status:
-- Verdict: Partial. Fresh tester APK is built and available for clean-device install or owner-approved uninstall/reinstall. Play-uploadable AAB is built for Play internal/closed testing distribution. Installed-device smoke for v56/v57 did not run because update-over-existing failed with signature mismatch and attached-device use was stopped by owner instruction; AAB upload to Play was not performed in this lane.
+- Verdict: Partial for the original sideload binary lane, superseded for tester delivery by the Play internal v57 install smoke lane. Fresh tester APK was built, but the sideload v56 APK path was not owner-approved for tester delivery and must not be used for testers unless the owner explicitly approves sideload in writing. Play-uploadable AAB v57 was built for Google Play internal/closed testing distribution.
 - Required truth:
   - No production Play submission.
   - No provider dashboard mutation.
@@ -53,7 +60,7 @@ Status:
   - `live_money_enabled` remains OFF.
   - Creator-money remains OFF.
   - Payouts/Stripe/merch remain OFF.
-- Next lane recommendation: Upload the v57 AAB to Play internal/closed testing if existing Play testers need update-over-install, then run tester feedback triage after testers complete current binary QA. Premium monthly public purchase proof remains separate owner-approved lane.
+- Next lane recommendation: Run tester feedback triage after testers complete current non-money QA. Premium monthly public purchase proof remains separate owner-approved lane.
 
 # Tester Build / Current Runtime Delivery Lane
 

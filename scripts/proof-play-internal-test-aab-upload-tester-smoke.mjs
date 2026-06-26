@@ -47,7 +47,21 @@ const packageJson = read("package.json");
   "internal",
   "Release Notes",
   "Tester Instructions",
-  "Installed Play tester smoke is Partial / pending Play processing or tester install",
+  "The approved tester delivery path is Google Play internal/closed testing",
+  "The sideload v56 APK path was not owner-approved for tester delivery and must not be used for testers",
+  "The first Play update failed because a sideloaded v56 APK was installed on the device",
+  "The sideloaded package was removed so the approved Play internal v57 build could be installed",
+  "Future tester delivery must use Google Play internal/closed testing only unless the owner explicitly approves sideload in writing",
+  "Play internal v57 installed successfully from Google Play",
+  "Installer is `com.android.vending`",
+  "Package is `com.chillywood.mobile`",
+  "Version is `1.0.0`",
+  "versionCode is `57`",
+  "Device is `R5CR120QCBF`",
+  "App launched successfully as `com.chillywood.mobile/.MainActivity`",
+  "No fatal crash appeared in the captured launch log window",
+  "This is install/launch smoke only, not full tester QA",
+  "Testers still need to run current non-money flows",
   "Known Disabled Systems",
   "Rollback Instructions",
   "This lane did not submit to Play production",
@@ -77,8 +91,8 @@ const packageJson = read("package.json");
   "guard:play-internal-test-aab-policy",
 ].forEach((needle) => requireText("package scripts", packageJson, needle));
 
-notes.push("Play internal AAB upload doc records reason, AAB metadata, internal track upload status, release notes, tester instructions, smoke pending status, rollback, and disabled money systems.");
-notes.push("Installed Play tester smoke is honestly pending unless the owner-permitted attached device can verify Play tester availability for versionCode 57.");
+notes.push("Play internal AAB upload doc records reason, AAB metadata, internal track upload status, release notes, tester instructions, closed install/launch smoke, rollback, and disabled money systems.");
+notes.push("Installed Play tester smoke is closed for v57 install/launch only; full tester QA remains separate.");
 notes.push("Related release/current-state docs reference the Play internal AAB upload tester smoke doc.");
 
 if (failures.length) {
