@@ -4,6 +4,8 @@ Content takedown decisions: Closed for production decision policy and current ba
 
 Account restriction does not erase content/evidence, does not execute provider refunds, and does not move money. Restricted-user public Profile/Platform visibility follows scheduled-deletion, purge/de-identification, or separate takedown policy instead of report-triggered auto-hiding.
 
+Audit log integrity and privileged action evidence governance: Closed for current repo-side takedown evidence governance. Takedowns and restores require exact scope, reason, case/report context where applicable, and audit; audit logs include before/after where practical and avoid private evidence, raw provider payloads, tokens, signed URLs, raw IPs, and secrets.
+
 This document defines who can hide, remove, restore, quarantine, restrict playback, force-end, mark unavailable, or preserve evidence for the app's major content types. It does not create a new staff role, activate money, execute refunds, move payouts, alter provider products, weaken reporting privacy, or weaken staff hierarchy protections.
 
 Reports do not auto-delete content. Reports create review cases. Takedowns require exact scope, reason, case/report context where applicable, and audit. Hide/quarantine/restrict is preferred over hard delete. Evidence is preserved for moderation, DMCA/legal, security, payment/access disputes, and appeals.

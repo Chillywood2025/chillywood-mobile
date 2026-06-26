@@ -4,6 +4,8 @@ Date: 2026-06-25
 
 Monitoring, analytics, crash, and runtime diagnostics: Closed for repo-side alignment. Owner must confirm final SDK/provider collection settings before Play submission.
 
+Audit log integrity and privileged action evidence governance: Closed for current repo-side monitoring alignment. Monitoring, analytics, crash, and runtime diagnostics must not copy raw audit logs, private evidence, private chat bodies, call content, tokens, signed URLs, raw IPs, provider secrets, payment credentials, tax IDs, bank details, or private reporter identity into logs, analytics, crash reports, support diagnostics, or proof artifacts.
+
 Admin search privacy and export governance is documented in `docs/admin/ADMIN_SEARCH_PRIVACY_EXPORT_GOVERNANCE.md`. Search audit uses masked query preview, result counts, status, and scope; failed/denied searches are audited where supported; suspicious search patterns are documented for monitoring follow-up; search audit must not store plaintext email, private evidence, raw provider records, secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, push tokens, or reporter identity.
 
 This lane documents and hardens the app's production telemetry posture without adding a new analytics vendor and without expanding data collection. Data Safety and Privacy disclosures match monitoring/diagnostics behavior at repo level, subject to final owner/provider confirmation for the submitted build.

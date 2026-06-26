@@ -4,6 +4,8 @@ Status: Admin search privacy and export governance: Closed / Partial / Blocked.
 
 Verdict: Closed for repo-side Admin Search governance, support readback minimization, and export-default denial. Partial only for future monitoring automation around suspicious search pattern alerting and any future Owner-approved export lane. This lane does not add a Support backend role, does not broaden private evidence access, and does not enable exports by default.
 
+Audit log integrity and privileged action evidence governance: Closed for current repo-side Admin Search audit integrity. Admin search queries are audited with masked query preview, failed/denied searches are audited where supported, audit readback requires exact scope, and search audit must not store plaintext email/private evidence/secrets.
+
 Required launch truth:
 
 - Admin search requires exact scope.

@@ -4,6 +4,8 @@
 
 Account restriction and appeals operations: Closed for current production policy and existing backed enforcement as of June 25, 2026.
 
+Audit log integrity and privileged action evidence governance: Closed for current repo-side account restriction evidence governance. Restriction/restore/appeal actions are audited where backed with actor, target, action, reason, timestamp, result, and before/after where practical; audit retention preserves legal/security/payment/support/moderation evidence after account deletion where required; audit de-identification is policy-controlled.
+
 Admin search privacy and export governance is documented in `docs/admin/ADMIN_SEARCH_PRIVACY_EXPORT_GOVERNANCE.md`. Deleted/de-identified users are not available in ordinary search; limited Owner/Admin legal, account-retention, audit, or support readback may exist only where retention policy allows, stays minimized, and is audited where supported. Exports are disabled by default and require a future Owner-approved audited lane.
 
 This lane defines account restriction states, who can apply or restore them, what restricted users can and cannot do, how appeals work in V1, and how Premium, paid-access, support, and purge/de-identification stay separated. It does not activate money, provider refunds, payouts, Premium public launch, creator-money, or a new staff role.

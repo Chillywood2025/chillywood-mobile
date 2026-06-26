@@ -2,6 +2,8 @@
 
 Moderator role scope: Closed.
 
+Audit log integrity and privileged action evidence governance: Closed / Partial / Blocked. Moderator destructive or sensitive support/moderation actions require exact scope, case/report context where applicable, reason, and audit where backed. Moderator/support-workflow users cannot browse broad audit history by default, and audit logs cannot be edited or deleted through normal app/admin flows.
+
 Admin search privacy and export governance: Closed / Partial / Blocked. Moderator search/readback is limited to exact support/moderation scopes, case/report/legal context where private evidence is involved, and masked/minimized fields by default. Moderator does not see full email by default, cannot use phone/device search by default, cannot browse arbitrary private chats, cannot access raw payment/provider records, and cannot export Admin Search results.
 
 Moderator is a real production role. Product-facing Moderator maps to backend role `moderator`, remains separate from Admin/operator, and sits below Admin in the app hierarchy. Support is a work area, not a separate role. Moderator can perform support duties only with exact support scopes granted by Owner/First Owner/Admin policy.

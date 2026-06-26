@@ -1,5 +1,16 @@
 # NEXT TASK
 
+## Audit Log Integrity / Privileged Action Evidence Governance Lane
+
+- [x] Audit log integrity and privileged action evidence governance repo-side proof closed.
+
+Status:
+- Verdict: Closed for current repo-side immutable audit governance, scoped readback, sanitized proof artifacts, and guard coverage.
+- Docs: `docs/admin/AUDIT_LOG_INTEGRITY_PRIVILEGED_ACTION_EVIDENCE.md`
+- Proof script: `scripts/proof-audit-log-integrity-privileged-action-evidence.mjs`
+- Guard: `scripts/guard-audit-log-integrity-policy.mjs`
+- Next recommended lane: Continue production readiness with provider dashboard ownership and access governance.
+
 ## Public Non-Money Feature Enablement / Launch Switchboard Lane
 
 - [x] Admin Search commit `ca7ede034157d9f15d3c7fb4f25287d5bcf028a0` was already aligned with `origin/main` before new edits.

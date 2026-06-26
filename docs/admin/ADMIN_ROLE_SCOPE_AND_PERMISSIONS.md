@@ -2,6 +2,8 @@
 
 Status: Admin role scope: Closed.
 
+Audit log integrity and privileged action evidence governance: Closed / Partial / Blocked. Admin destructive and sensitive actions require exact scope, reason, target, timestamp, result, and audit where backed. Audit readback requires exact scope, audit logs are append-only from app/admin paths, and Admin cannot edit or delete audit logs through normal app/admin flows.
+
 Admin search privacy and export governance: Closed / Partial / Blocked. Admin can use search/readback only with exact scope; Admin can see full email only with exact user/support scope; payment/provider search is masked/scoped summary only; private chat/content evidence search requires exact scope and case/report/legal context; exports are disabled by default and require a future Owner-approved audited lane.
 
 This document defines the production Admin role for the app. Admin is a real production role, not a UI label. The backend represents public Admins as active `operator` rows in `platform_role_memberships`, and operational authority is granted through explicit rows in `platform_staff_permission_grants`.
