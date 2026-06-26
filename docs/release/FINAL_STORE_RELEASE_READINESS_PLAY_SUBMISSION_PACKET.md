@@ -1,5 +1,7 @@
 # Final Store Release Readiness Play Submission Packet
 
+Play internal/closed testing AAB upload + tester smoke is tracked in `docs/release/PLAY_INTERNAL_TEST_AAB_UPLOAD_TESTER_SMOKE.md`. VersionCode `57` AAB `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-aab-v57.aab` was submitted through EAS Submit to the Google Play internal track only; Play production submission/promotion did not happen. Installed Play tester smoke remains pending until Play processing/tester availability is confirmed on an owner-permitted tester device.
+
 Tester build / current runtime delivery is tracked in `docs/release/TESTER_BUILD_CURRENT_RUNTIME_DELIVERY.md`. EAS Update was sufficient and published for runtime `1.0.0`, but installed-device uptake of the new update group was not observed during the short smoke window.
 
 Fresh Android tester binary fallback is tracked in `docs/release/ANDROID_TESTER_BINARY_BUILD_INSTALL_SMOKE.md`.

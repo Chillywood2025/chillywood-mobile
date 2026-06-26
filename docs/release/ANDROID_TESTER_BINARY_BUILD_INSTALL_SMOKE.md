@@ -1,5 +1,7 @@
 # Android Tester Binary Build Install Smoke
 
+Play internal/closed testing AAB upload + tester smoke is tracked in `docs/release/PLAY_INTERNAL_TEST_AAB_UPLOAD_TESTER_SMOKE.md`. VersionCode `57` AAB `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-aab-v57.aab` was submitted through EAS Submit to the Google Play internal track only; Play production submission/promotion did not happen. Installed Play tester smoke remains pending until Play processing/tester availability is confirmed on an owner-permitted tester device.
+
 Android tester binary build / install smoke: Partial.
 
 Status vocabulary: Android tester binary build / install smoke: Closed / Partial / Blocked.

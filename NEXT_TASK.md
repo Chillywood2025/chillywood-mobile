@@ -1,5 +1,31 @@
 # NEXT TASK
 
+# Play Internal / Closed Testing AAB Upload + Tester Smoke Lane
+
+Doc: `docs/release/PLAY_INTERNAL_TEST_AAB_UPLOAD_TESTER_SMOKE.md`.
+
+- [x] Commit `9361c45987d6dd37ec7574dca7f9fb1e37c9fb9a` was verified aligned with `origin/main` before Play upload work began.
+- [x] Verified AAB path `/tmp/app-android-tester-binary-build-install-smoke-20260625-235636/chillywood-production-aab-v57.aab`.
+- [x] Verified package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `57`, SHA-256 `a71b8a9b8e35a284e62b7843df5c7f16ba94c54487ca63bcf67aba04598c9efa`.
+- [x] Submitted the v57 AAB through EAS Submit to the Google Play internal track only.
+- [x] Prepared safe release notes and tester update instructions.
+- [ ] Run Play-installed tester smoke after Play processing/tester availability is confirmed on an owner-permitted tester device.
+
+Status:
+- Verdict: Partial. The v57 AAB was submitted to Google Play internal testing, but installed Play tester smoke remains pending until Play processing/tester availability is confirmed.
+- Required truth:
+  - No Play production submission or promotion.
+  - No provider dashboard mutation.
+  - No Google Play product/base-plan mutation.
+  - No RevenueCat mapping change.
+  - No Stripe mutation.
+  - No purchases or provider refunds executed.
+  - Premium public purchase remains OFF.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Payouts/Stripe/merch remain OFF.
+- Next lane recommendation: Run Play-installed tester smoke after the v57 internal testing build is available to testers. Premium monthly public purchase proof remains separate owner-approved lane.
+
 # Android Tester Binary Build / Install Smoke Lane
 
 Doc: `docs/release/ANDROID_TESTER_BINARY_BUILD_INSTALL_SMOKE.md`.
