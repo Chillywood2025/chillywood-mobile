@@ -74,7 +74,8 @@ The labels below are the canonical Wave 0 proof pack. "Identified" means a local
 | `proof_subscriber_001` | Creator subscriber proof | `CHILLYWOOD_E2E_SUBSCRIBER_*` plus temporary subscriber/access fixture | Partially identified | Email and user id keys are present; password key is not currently declared |
 | `proof_vip_001` | VIP pass proof | `CHILLYWOOD_E2E_VIP_*` plus temporary VIP/access fixture | Partially identified | Email and user id keys are present; password key is not currently declared |
 | `proof_deleted_pending_001` | Account deletion/restore proof | None yet | Planned | Must be created as disposable proof-only user before Wave 5 |
-| `proof_admin_operator_001` | Optional operator/admin proof | None committed; only if safe operator path exists | Planned optional | Must use existing backend-authorized operator path with expiring role; never app-code bypass |
+| `proof_moderator_001` | Moderator exact-scope proof | `CHILLYWOOD_E2E_MODERATOR_*` | Planned optional | Must use an existing backend-authorized Moderator path with exact scopes and cleanup; never app-code bypass |
+| `proof_admin_operator_001` | Optional operator/admin proof | `CHILLYWOOD_E2E_ADMIN_OPERATOR_*` | Planned optional | Must use existing backend-authorized operator path with expiring role; never app-code bypass |
 
 ## Role Matrix
 
@@ -94,6 +95,7 @@ The labels below are the canonical Wave 0 proof pack. "Identified" means a local
 | Subscriber | `proof_subscriber_001` | Existing subscriber/access resolver | Expiring proof grant if manually seeded | Lane runner |
 | VIP | `proof_vip_001` | Existing VIP resolver | Expiring proof grant if manually seeded | Lane runner |
 | Deleted pending | `proof_deleted_pending_001` | Account deletion/restore source of truth | Created only for deletion lane; no reuse after restore/delete proof | Wave 5 runner |
+| Moderator | `proof_moderator_001` | Existing platform role membership plus exact scoped permissions | Shortest practical duration, usually same session | Owner/operator lane runner |
 | Operator/admin | `proof_admin_operator_001` | Existing platform role membership/admin permission source | Expiring proof role; revoke immediately after proof | Owner/operator lane runner |
 
 ## Temporary Grants Matrix
@@ -199,6 +201,7 @@ Not created by this Wave 0 pass:
 - Several relationship/access labels are identified by email/user id key names but do not currently have password key names in the local proof env. They are usable for backend/API proof where service-role/operator access is explicitly approved, but installed Android login needs local credentials.
 - Premium, subscriber, VIP, paid-video buyer, room-pass buyer, and event-pass buyer roles require future wave-specific exact-target grants or sandbox/provider proof. Wave 0 does not create them.
 - Optional `proof_admin_operator_001` remains planned only. It must use an existing backend-authorized operator path with immediate revocation and cannot be added as an app-code bypass.
+- Optional `proof_moderator_001` remains planned only. It must use an existing backend-authorized Moderator path with exact scopes, immediate cleanup, and cannot be added as an app-code bypass.
 - No service-role/operator mutation was performed in Wave 0, so the harness is documented and partially identified, not fully seeded end to end.
 
 ## Later Wave Consumption Rules

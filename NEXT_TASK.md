@@ -1,5 +1,29 @@
 # NEXT TASK
 
+## Owner/Admin/Moderator Production Authority Seeded 1-Device Proof Lane
+
+- [x] Provider dashboard governance commit `84356a955959861df3993e10a6e615b03f03d73c` was aligned with `origin/main` before proof began.
+- [x] Seeded one-device proof ran with installed package/launch readback.
+- [x] Auto-fix loop was used for safe repo issues only.
+- [x] Repo-safe seeded Moderator/Admin env key contract was added without committing credential values.
+
+Status:
+- Verdict: Partial. Static policy guards, seeded account availability checks, backend/RPC denial contract, installed-app package/launch probe, proof artifact generation, proof script, and guard coverage are closed. Installed multi-persona Moderator/Admin route traversal remains Partial until safe `CHILLYWOOD_E2E_MODERATOR_*` and `CHILLYWOOD_E2E_ADMIN_OPERATOR_*` credentials exist in ignored local env or a secret manager.
+- Docs: `docs/admin/OWNER_ADMIN_MODERATOR_PRODUCTION_AUTHORITY_SEEDED_DEVICE_PROOF.md`
+- Proof script: `scripts/proof-owner-admin-moderator-production-authority-seeded-device.mjs`
+- Guard: `scripts/guard-owner-admin-moderator-production-authority-policy.mjs`
+- Required truth:
+  - no Support backend role
+  - no `operator` rename
+  - no Moderator/Admin merge
+  - no new broad Moderator powers
+  - no non-admin admin access
+  - no unscoped Admin Search
+  - no reporter identity/private evidence exposure
+  - safe public non-money systems remain enabled
+  - `live_money_enabled`, creator-money, Premium public purchase, payouts, Stripe Connect, merch checkout, purchases, refunds, and provider mutation remain OFF/not performed
+- Next lane recommendation: Continue production readiness with final store/release readiness and Play submission packet alignment, excluding known Google Play annual/channel base-plan provider blocker.
+
 ## Provider Dashboard Ownership / Access Governance Lane
 
 - [x] Previous local Moderation Case Operations Completion commit `d0136a67150702e45aeccc2a24d9ee72a93f25d1` was already aligned with `origin/main` before new edits.

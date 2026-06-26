@@ -19,6 +19,7 @@ const requiredLabels = [
   "proof_subscriber_001",
   "proof_vip_001",
   "proof_deleted_pending_001",
+  "proof_moderator_001",
   "proof_admin_operator_001",
 ];
 
@@ -44,6 +45,8 @@ const labelEnvKeys = {
   proof_event_pass_buyer_001: ["CHILLYWOOD_E2E_VIEWER_07_EMAIL", "CHILLYWOOD_E2E_VIEWER_07_USER_ID", "CHILLYWOOD_E2E_VIEWER_07_PASSWORD"],
   proof_subscriber_001: ["CHILLYWOOD_E2E_SUBSCRIBER_EMAIL", "CHILLYWOOD_E2E_SUBSCRIBER_USER_ID"],
   proof_vip_001: ["CHILLYWOOD_E2E_VIP_EMAIL", "CHILLYWOOD_E2E_VIP_USER_ID"],
+  proof_moderator_001: ["CHILLYWOOD_E2E_MODERATOR_EMAIL", "CHILLYWOOD_E2E_MODERATOR_USER_ID", "CHILLYWOOD_E2E_MODERATOR_PASSWORD"],
+  proof_admin_operator_001: ["CHILLYWOOD_E2E_ADMIN_OPERATOR_EMAIL", "CHILLYWOOD_E2E_ADMIN_OPERATOR_USER_ID", "CHILLYWOOD_E2E_ADMIN_OPERATOR_PASSWORD"],
 };
 
 function readText(path) {
