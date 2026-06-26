@@ -21,6 +21,7 @@ Use this with:
 ## Command-Center Guardrails
 
 - Do not run destructive commands from a dashboard-audit pass.
+- Provider dashboard ownership and access governance is documented in `docs/ops/PROVIDER_DASHBOARD_OWNERSHIP_ACCESS_GOVERNANCE.md`. This lane did not mutate provider dashboards; First Owner / Owner owns provider dashboard accountability; each provider has a primary owner and backup owner requirement; dashboard access proof remains owner-confirmation-required where repo cannot verify it.
 - Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`; provider dashboard offboarding is documented as manual checklist in that lane, and no provider dashboard access was changed by that lane.
 - Do not submit anything to Google Play from repo automation unless a separate release pass explicitly approves it.
 - Do not run production builds from this doc.

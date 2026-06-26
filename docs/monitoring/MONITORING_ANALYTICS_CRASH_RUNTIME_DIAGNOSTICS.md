@@ -12,6 +12,8 @@ Admin search privacy and export governance is documented in `docs/admin/ADMIN_SE
 
 Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Incident diagnostics and post-incident audit review must stay sanitized and must not expose raw logs, private evidence, tokens, signed URLs, raw IPs, provider payloads, payment data, tax/bank data, or reporter identity.
 
+Provider dashboard ownership and access governance is documented in `docs/ops/PROVIDER_DASHBOARD_OWNERSHIP_ACCESS_GOVERNANCE.md`. Monitoring and provider dashboard proof must remain sanitized: provider support tickets are tracked with sanitized references, provider decisions are mirrored into repo docs with sanitized facts, and dashboard access proof remains owner-confirmation-required where repo cannot verify actual dashboard users/MFA/access state.
+
 This lane documents and hardens the app's production telemetry posture without adding a new analytics vendor and without expanding data collection. Data Safety and Privacy disclosures match monitoring/diagnostics behavior at repo level, subject to final owner/provider confirmation for the submitted build.
 
 ## Provider Inventory

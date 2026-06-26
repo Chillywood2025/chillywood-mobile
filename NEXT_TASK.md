@@ -1,5 +1,35 @@
 # NEXT TASK
 
+## Provider Dashboard Ownership / Access Governance Lane
+
+- [x] Previous local Moderation Case Operations Completion commit `d0136a67150702e45aeccc2a24d9ee72a93f25d1` was already aligned with `origin/main` before new edits.
+- [ ] Provider dashboard ownership and access governance repo-side proof in progress.
+
+Status:
+- Verdict target: Partial for actual dashboard access proof and Closed for repo-side governance.
+- Docs: `docs/ops/PROVIDER_DASHBOARD_OWNERSHIP_ACCESS_GOVERNANCE.md`
+- Proof script: `scripts/proof-provider-dashboard-ownership-access-governance.mjs`
+- Guard: `scripts/guard-provider-dashboard-ownership-policy.mjs`
+- Required truth:
+  - This lane did not mutate provider dashboards.
+  - First Owner / Owner owns provider dashboard accountability.
+  - Each provider has a primary owner and backup owner requirement.
+  - Company-controlled email is required where available.
+  - Personal accounts are avoided for production ownership.
+  - Provider roles must be least-privilege.
+  - MFA/2FA is required where supported.
+  - Shared provider dashboard accounts are forbidden where individual access is supported.
+  - Service accounts are not human staff accounts.
+  - API keys and provider secrets must live in secret managers/provider dashboards/EAS/Supabase/GitHub secrets, not repo.
+  - Provider webhooks must be protected with signature/shared-secret validation where supported.
+  - Credential rotation calendar and provider offboarding checklist exist.
+  - Provider support tickets are tracked with sanitized references.
+  - Provider decisions are mirrored into repo docs with sanitized facts.
+  - Dashboard access proof remains owner-confirmation-required where repo cannot verify it.
+  - Safe public non-money systems remain enabled.
+  - `live_money_enabled`, creator-money, Premium public purchase, payouts, Stripe Connect, merch checkout, and provider mutation remain OFF/not performed.
+- Next lane recommendation: Continue production readiness with final store/release readiness and Play submission packet alignment, excluding known Google Play annual/channel base-plan provider blocker.
+
 ## Moderation Case Operations Completion Lane
 
 - [x] Moderation queue commit `9714cac8491e56f75fd2dba8dc42fd31d2f42d2a` was already aligned with `origin/main` before new edits.

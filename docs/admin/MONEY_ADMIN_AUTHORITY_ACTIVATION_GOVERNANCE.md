@@ -10,6 +10,8 @@ Public non-money feature enablement is tracked in `docs/PUBLIC_NON_MONEY_FEATURE
 
 Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Money incidents keep `live_money_enabled`, creator-money, Premium public purchase, payouts, Stripe Connect, merch checkout, purchases, refunds, transfers, and provider mutation OFF unless a separate owner-approved lane changes that.
 
+Provider dashboard ownership and access governance is documented in `docs/ops/PROVIDER_DASHBOARD_OWNERSHIP_ACCESS_GOVERNANCE.md`. Provider dashboard ownership does not activate money: dashboard roles must be least-privilege, MFA/2FA is required where supported, provider support tickets are tracked with sanitized references, provider decisions are mirrored into repo docs with sanitized facts, and dashboard access proof remains owner-confirmation-required where repo cannot verify it.
+
 This document defines who can approve, view, record, pause, freeze, override, or kill-switch money-related systems in the app. It does not create provider products, mutate Google Play, mutate RevenueCat, enable payouts, enable Stripe Connect, enable merch checkout, execute purchases, execute provider refunds, or turn on public money behavior.
 
 Required launch truth:

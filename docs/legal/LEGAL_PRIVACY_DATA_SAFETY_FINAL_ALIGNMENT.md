@@ -1,5 +1,7 @@
 # Legal/privacy/Data Safety Final Alignment
 
+Provider dashboard ownership and access governance is documented in `docs/ops/PROVIDER_DASHBOARD_OWNERSHIP_ACCESS_GOVERNANCE.md`. Provider dashboard ownership proof is repo-side Partial where actual dashboard access/MFA state requires owner confirmation; support tickets and provider decisions must be mirrored into repo docs with sanitized facts only. No provider dashboard secrets, access lists, private emails, API keys, webhook secrets, service-account JSON, raw provider records, payment credentials, tax IDs, bank details, private evidence, or reporter identity may be included in legal/Data Safety proof artifacts.
+
 Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Moderation notices, internal notes, canned reason templates, coordinated-report signals, repeated-offender review flags, malicious-report handling, DMCA/legal separation, payment/support separation, appeals separation, reporter privacy, and private-evidence protections remain aligned with legal/privacy/Data Safety documentation.
 
 Status: Legal/privacy/Data Safety final alignment: Closed for repo-side documentation alignment; owner/legal review and Play Console acceptance remain external.

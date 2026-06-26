@@ -4,6 +4,8 @@ Moderation queue, case management, and escalation governance is documented in `d
 
 Emergency controls, incident response, and kill-switch governance: Closed for repo-side governance, documented response ownership, runbooks, templates, rollback checklist, proof, and guard coverage. Partial for emergency controls that are manual/provider-dashboard/runbook-only or require a future exact backend lane.
 
+Provider dashboard ownership and access governance is documented in `docs/ops/PROVIDER_DASHBOARD_OWNERSHIP_ACCESS_GOVERNANCE.md`. Provider dashboard rollback/offboarding remains Owner-controlled/manual unless separately backed; this lane and that provider governance lane did not mutate provider dashboards, execute refunds, execute purchases, execute payouts, or change Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider state.
+
 Status vocabulary: Emergency controls, incident response, and kill-switch governance: Closed / Partial / Blocked.
 
 Safe public non-money systems remain enabled. This lane does not disable safe public non-money features, does not activate money, does not mutate providers, and does not add new staff powers. `live_money_enabled` remains OFF. Creator-money remains OFF. Premium public purchase remains OFF. Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF. Provider refunds remain manual/external. No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
