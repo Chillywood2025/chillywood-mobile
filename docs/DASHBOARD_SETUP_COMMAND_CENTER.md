@@ -21,6 +21,7 @@ Use this with:
 ## Command-Center Guardrails
 
 - Do not run destructive commands from a dashboard-audit pass.
+- Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`; provider dashboard offboarding is documented as manual checklist in that lane, and no provider dashboard access was changed by that lane.
 - Do not submit anything to Google Play from repo automation unless a separate release pass explicitly approves it.
 - Do not run production builds from this doc.
 - Do not rotate credentials without release-owner approval.

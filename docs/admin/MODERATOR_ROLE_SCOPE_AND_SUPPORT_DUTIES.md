@@ -8,6 +8,8 @@ Admin search privacy and export governance: Closed / Partial / Blocked. Moderato
 
 Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Moderator cannot operate broad emergency controls; Moderator may escalate and perform scoped moderation/live-safety actions only where explicitly allowed.
 
+Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`. Moderator cannot manage staff, cannot add/remove Admin/operator or Moderator roles, cannot create a Support backend role, and can receive support-workflow access only as exact-scope permission work.
+
 Moderator is a real production role. Product-facing Moderator maps to backend role `moderator`, remains separate from Admin/operator, and sits below Admin in the app hierarchy. Support is a work area, not a separate role. Moderator can perform support duties only with exact support scopes granted by Owner/First Owner/Admin policy.
 
 ## Role Boundary

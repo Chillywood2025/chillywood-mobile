@@ -10,6 +10,8 @@ Plain guard wording: live_money_enabled remains OFF.
 
 Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Emergency actions require exact scope, reason, and audit where backed; emergency disable preserves evidence and does not hard-delete audit records; post-incident audit review is required after serious incidents or emergency control use.
 
+Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`. Staff onboarding, staff removal, scope changes, emergency staff removal, provider-dashboard offboarding notes, proof/test account cleanup, and service-account reviews require audit or sanitized owner-tracker evidence where backed; proof artifacts must not include raw audit logs, provider access lists, private emails, credentials, MFA/recovery codes, or private evidence.
+
 Required launch truth:
 
 - Every privileged action must create an audit log where backed.

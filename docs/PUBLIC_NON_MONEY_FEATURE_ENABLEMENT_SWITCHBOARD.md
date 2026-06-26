@@ -6,6 +6,8 @@ Audit log integrity and privileged action evidence governance: Closed for curren
 
 Emergency controls, incident response, and kill-switch governance: Closed for repo-side governance in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Safe public non-money systems remain enabled; emergency actions require exact scope, reason, and audit where backed; emergency disable is not deletion, refund, payout movement, or provider mutation.
 
+Staff access lifecycle, onboarding, and offboarding governance: Closed for repo-side governance in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`. Safe public non-money systems remain enabled; staff access remains least-privilege, Owner/First Owner-approved where backed, support-workflow access remains exact-scope permission work, and provider dashboard offboarding is manual checklist only in this lane.
+
 Status vocabulary: Public non-money feature enablement: Closed / Partial / Blocked. This document marks the app-controlled non-money switchboard Closed, while separately listing Partial or Blocked systems that must remain disabled.
 
 This lane enables safe public app systems only. `live_money_enabled` remains OFF. Creator-money remains OFF. Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF. Provider refunds remain manual/external. Premium annual remains provider-blocked. Creator Channel Subscription remains provider-blocked. Premium monthly public purchase remains separate owner-approved proof unless explicitly activated in a separate lane. No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened. Admin/staff routes remain scoped. Reporting, blocking, account restriction, legal/support/account deletion, and monitoring remain aligned.
@@ -92,3 +94,5 @@ User-facing monetization proof copy was replaced with public-safe unavailable co
 ## Proof References
 
 Existing proofs and guards remain part of this switchboard boundary: Money admin authority governance, Admin Search privacy/export governance, legal/privacy/Data Safety alignment, monitoring analytics crash diagnostics, account restriction appeals, reporting/moderation workflow, event/chat report affordances, content takedown decisions, live-room moderation incident response, chat/call moderation notification abuse, staff role hierarchy, role terminology lock, Admin role scope, Moderator role scope, First Owner authority, Owner/Admin Command Center UI, Watch-Party LiveKit, old-room handling, refresh policy, profile production policy, Rachi official policy, critical UX polish, platform brand studio, clip studio, creator video Circle visibility, and creator feed fanout.
+
+Staff lifecycle governance is also part of this boundary: `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`.

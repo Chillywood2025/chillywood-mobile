@@ -8,6 +8,8 @@ Admin search privacy and export governance: Closed / Partial / Blocked. Admin ca
 
 Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Admin can operate only exact-scope emergency controls where explicitly allowed; broad emergency control authority remains First Owner / Owner-owned.
 
+Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`. Admin staff-management remains exact-scope only, staff actions must be attributable to one human account, shared staff accounts are forbidden, staff access should be temporary or reviewable by default, and provider dashboard offboarding is manual checklist only in this lane.
+
 This document defines the production Admin role for the app. Admin is a real production role, not a UI label. The backend represents public Admins as active `operator` rows in `platform_role_memberships`, and operational authority is granted through explicit rows in `platform_staff_permission_grants`.
 
 Role terminology is locked in `docs/admin/ROLE_TERMINOLOGY_LOCK.md`: `operator` is only the internal/backend alias for product-facing Admin, there is no separate product Operator role, Support is a work area and permission group rather than a staff role, and Moderator is separate from Admin while support-duty-capable through exact scopes. Moderator role scope is documented separately in `docs/admin/MODERATOR_ROLE_SCOPE_AND_SUPPORT_DUTIES.md`.

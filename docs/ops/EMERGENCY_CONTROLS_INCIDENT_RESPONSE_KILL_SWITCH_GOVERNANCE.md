@@ -13,6 +13,7 @@ Required launch truth:
 - Admin can operate only exact-scope emergency controls where explicitly allowed.
 - Moderator cannot operate broad emergency controls.
 - Support is not a backend role.
+- Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`.
 - Emergency disable preserves evidence and does not hard-delete audit records.
 - Emergency disable does not execute refunds, purchases, payouts, transfers, or provider mutations.
 - Customer, creator, security, legal/DMCA, money, and live-room harassment templates are privacy-safe.
@@ -226,6 +227,7 @@ These must remain manual/external or future exact backend lanes until separately
 ## Existing Proof References
 
 - `docs/admin/AUDIT_LOG_INTEGRITY_PRIVILEGED_ACTION_EVIDENCE.md`
+- `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`
 - `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md`
 - `docs/admin/ADMIN_SEARCH_PRIVACY_EXPORT_GOVERNANCE.md`
 - `docs/admin/MONEY_ADMIN_AUTHORITY_ACTIVATION_GOVERNANCE.md`

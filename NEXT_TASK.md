@@ -1,5 +1,41 @@
 # NEXT TASK
 
+## Staff Access Lifecycle / Onboarding / Offboarding Governance Lane
+
+- [x] Emergency-controls commit `7e03aa7b0a356ed436f172259ffcfb2680f4575c` was already aligned with `origin/main` before new edits.
+- [x] Staff access lifecycle, onboarding, and offboarding governance repo-side proof closed.
+
+Status:
+- Verdict: Closed for repo-side governance, onboarding/offboarding policy, provider-dashboard manual checklist, proof/test account separation, service-account separation, proof, and guard coverage. Partial for full Supabase Auth forced logout and provider-dashboard offboarding automation, which remain manual/future lanes.
+- Docs: `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`
+- Proof script: `scripts/proof-staff-access-lifecycle-onboarding-offboarding-governance.mjs`
+- Guard: `scripts/guard-staff-access-lifecycle-policy.mjs`
+- Required truth:
+  - Support is not a backend role.
+  - Support-workflow access is exact-scope permission work.
+  - Shared staff accounts are forbidden.
+  - Proof/test accounts are separate from staff accounts.
+  - Service accounts are not human staff accounts.
+  - Staff actions must be attributable to one human account.
+  - Staff access requires Owner/First Owner approval where backed.
+  - Staff permissions are least-privilege.
+  - Staff access should be temporary or reviewable by default.
+  - Staff MFA is required where the identity/provider supports it.
+  - Monthly staff access review is required.
+  - Staff removal revokes app roles and scopes where backed.
+  - Staff removal invalidates sessions where backed and documents manual/future full Auth logout if not backed.
+  - Offboarding is audited.
+  - Emergency staff removal is supported or documented as manual/future.
+  - Provider dashboard offboarding is documented as manual checklist in this lane.
+  - No provider dashboard access was changed.
+  - Safe public non-money systems remain enabled.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Premium public purchase remains OFF.
+  - Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF.
+  - No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
+- Next lane recommendation: Continue production readiness with provider dashboard ownership and access governance.
+
 ## Emergency Controls / Incident Response / Kill-Switch Governance Lane
 
 - [x] Audit-log commit `3aba0d4cc8ba044d9689498980b6d55c5f2bdcee` was already aligned with `origin/main` before new edits.

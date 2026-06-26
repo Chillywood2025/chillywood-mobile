@@ -8,6 +8,8 @@ Admin search privacy and export governance: Closed / Partial / Blocked. Current 
 
 Emergency controls, incident response, and kill-switch governance: Closed / Partial / Blocked. Current repo-side status is Closed for governance in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`; broad emergency controls remain First Owner/Owner-owned, Admin operates only exact-scope backed controls where explicitly allowed, and Moderator cannot operate broad emergency controls.
 
+Staff access lifecycle, onboarding, and offboarding governance: Closed / Partial / Blocked. Current repo-side status is Closed for governance in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`; staff add/remove remains Owner/First Owner-approved where backed, Support is not a backend role, support-workflow access is exact-scope permission work, shared staff accounts are forbidden, proof/test accounts stay separate from staff accounts, and provider dashboard offboarding is a manual checklist in this lane.
+
 The app has a single Command Center entry point: `/admin` in `app/admin.tsx`. The Command Center is production-labeled, role-scoped, backend-authorized, and fail-closed. It is not a new role hierarchy, provider-product, money activation, payout, Stripe, merch, or broad redesign lane.
 
 Required production wording:

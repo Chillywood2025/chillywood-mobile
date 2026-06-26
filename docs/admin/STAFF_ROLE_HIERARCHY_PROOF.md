@@ -4,6 +4,8 @@ Staff role hierarchy proof: Closed.
 
 This document reconciles the final production role hierarchy for the app across docs, migrations, RPCs, Edge functions, UI labels, proof scripts, and guards.
 
+Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`. That governance does not create a new role hierarchy; it keeps Support as permission-scoped work, forbids shared staff accounts, separates proof/test accounts and service accounts from human staff, and requires Owner/First Owner-approved least-privilege staff access where backed.
+
 ## Final Product-Facing Hierarchy
 
 1. First Owner

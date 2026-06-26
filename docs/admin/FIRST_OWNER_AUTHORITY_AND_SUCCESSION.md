@@ -4,6 +4,8 @@ Date: 2026-06-25
 
 First Owner authority: Closed / Partial / Blocked: Closed repo-side after migration, Edge function, UI, docs, and guards pass. Production database use requires the new migration to be applied. If migration apply finds more than one active Owner and no First Owner marker, the launch status becomes `Implemented but blocked pending First Owner seed`.
 
+Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`. First Owner remains the highest staff-governance authority; staff access requires Owner/First Owner approval where backed, provider dashboard offboarding is manual checklist only in this lane, and no provider dashboard access was changed.
+
 ## Doctrine
 
 - There may be multiple Owners.
