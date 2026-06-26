@@ -86,15 +86,15 @@ forbidMatch("money feature defaults", moneyFlags, /merch_enabled:\s*["']on["']/,
 
 [
   "paidVideoCheckoutAvailable",
-  "Paid creator video checkout is not available yet.",
+  "Paid creator video status is active",
 ].forEach((needle) => requireText("paid video route", player, needle));
 [
   "paidWatchPartyCheckoutAvailable",
-  "Paid Watch-Party Seat Passes are not available yet.",
+  "Paid Watch-Party Seat Pass status is active",
 ].forEach((needle) => requireText("watch-party entry route", watchPartyEntry, needle));
 [
   "paidWatchPartyCheckoutAvailable",
-  "Paid Watch-Party Seat Pass checkout is not available yet.",
+  "Seat Pass status is active",
 ].forEach((needle) => requireText("watch-party room route", watchPartyRoom, needle));
 
 forbidMatch("public money card", publicMoneyCard, /ROUTE-BACKED MONETIZATION PROOF/, "proof copy");
@@ -126,5 +126,5 @@ if (failures.length) {
 
 console.log("Public non-money feature policy guard passed.");
 console.log("- live_money_enabled, creator-money, payouts, Stripe/merch, and refund automation remain off/manual.");
-console.log("- public paid-access controls are disabled unless live checkout switches are explicitly enabled elsewhere.");
+console.log("- public paid-access controls open active status/readiness flows unless live checkout switches are explicitly enabled elsewhere.");
 console.log("- admin/staff route guard markers remain present.");

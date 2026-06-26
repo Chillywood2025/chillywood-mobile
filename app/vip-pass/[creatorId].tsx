@@ -189,7 +189,7 @@ export default function CreatorVipPassScreen() {
             <Text style={styles.body}>
               {needsPurchase
                 ? `Get VIP access for ${creatorName}'s Platform for ${formatCreatorVipPassPrice(offer.priceCents, offer.currency)}. VIP is creator-specific and does not include Chi'llywood Premium, paid videos, Watch-Party Seat Passes, paid events, subscriptions, or other creators.`
-                : "This creator has not enabled VIP yet."}
+                : "VIP is in setup/status mode for this Platform. This screen stays active so testers can refresh, open support, or creators can manage the offer from Platform Studio."}
             </Text>
             <MoneyScopeStrip
               includes="Creator-specific VIP access for this Platform when active."
@@ -198,19 +198,29 @@ export default function CreatorVipPassScreen() {
             <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
             <Text style={styles.meta}>{"VIP does not unlock Chi'llywood Premium."}</Text>
-            {needsPurchase ? (
+            <View style={styles.ownerActionStack}>
               <TouchableOpacity
                 style={[styles.primaryButton, busy && styles.buttonDisabled]}
                 activeOpacity={0.86}
                 disabled={busy}
-                onPress={handleGetVip}
+                onPress={needsPurchase ? handleGetVip : loadAccess}
                 testID="vip-area-get-vip-button"
                 accessibilityRole="button"
-                accessibilityLabel="Get Creator VIP"
+                accessibilityLabel={needsPurchase ? "Get Creator VIP" : "Refresh VIP status"}
               >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Get VIP</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Get VIP" : "Refresh VIP status"}</Text>}
               </TouchableOpacity>
-            ) : null}
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                activeOpacity={0.86}
+                onPress={() => router.push("/support" as Parameters<typeof router.push>[0])}
+                testID="vip-area-support-button"
+                accessibilityRole="button"
+                accessibilityLabel="Open VIP support"
+              >
+                <Text style={styles.secondaryButtonText}>Open support</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>

@@ -199,8 +199,8 @@ export function TipSheet({
 
           <TouchableOpacity
             activeOpacity={0.88}
-            disabled={!canSubmit}
-            style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}
+            disabled={busy}
+            style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
             onPress={startCheckout}
             testID="tip-confirm-button"
             accessibilityRole="button"

@@ -103,7 +103,13 @@ Every money admin action must be audited with actor, target, action, reason, tim
 
 ## Admin Command Center / UI Status
 
-The Owner/Admin Command Center remains the single production-labeled staff entry point. Money Center UI is read-only/readiness-focused for provider status, money switches, audit events, fraud/risk foundation, and payout readiness. Money activation controls remain disabled/read-only unless a future activation lane enables them. Premium annual and Creator Channel Subscription remain provider-blocked. One-time creator products remain Draft/OFF/readback verified. Provider refunds remain manual/external. Payout, Stripe Connect live use, and merch checkout remain future/OFF. Admin/Moderator cannot activate money from the UI.
+The Owner/Admin Command Center remains the single production-labeled staff entry point. Money Center UI is read-only/readiness-focused for provider status, money switches, audit events, fraud/risk foundation, and payout readiness. Money activation controls open active readiness/status/review flows unless a future activation lane enables the live backed action. Premium annual and Creator Channel Subscription remain provider-blocked but open active status/resolution flows. One-time creator products remain Draft/OFF/readback verified. Provider refunds remain manual/external. Payout, Stripe Connect live use, and merch checkout remain future/OFF. Admin/Moderator cannot activate money from the UI.
+
+## Every Visible Surface Active Wiring
+
+Every visible surface active wiring audit: Closed. No visible clickable dead buttons are allowed. Nothing visible should be hidden or disabled. Every visible control works, routes correctly, opens a setup/status/resolution flow, opens a support/review flow, or starts a tester-safe flow. Permission scopes must unlock backed behavior.
+
+Tester-visible monetization UX is separate from live money settlement. Premium monthly tester flow is reachable where Play internal/licensed tester/provider setup supports it. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.
 
 ## Backend / RPC Enforcement Summary
 

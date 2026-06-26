@@ -800,7 +800,7 @@ const formatReadModelStatusValue = (value: Exclude<ChannelReadModelFieldStatus, 
 const getCreatorFacingPayoutSetupBody = (summary: CreatorPayoutDashboardReadModel) => {
   switch (summary.setupStatus) {
     case "provider_not_configured":
-      return "Payout setup is not available yet.";
+      return "Payout readiness/status flow is active. Provider setup is not configured, and payouts remain off.";
     case "setup_required":
       return "Connect a payout method when setup is available. Payouts are still not active.";
     case "onboarding_in_progress":
@@ -822,8 +822,8 @@ const getCreatorFacingPayoutSetupBody = (summary: CreatorPayoutDashboardReadMode
 
 const formatStudioSectionStatusLabel = (status: ChannelSettingsSectionStatus) => {
   if (status === "current") return "CURRENT";
-  if (status === "near_term") return "COMING SOON";
-  return "COMING LATER";
+  if (status === "near_term") return "STATUS PATH";
+  return "LATER STATUS";
 };
 
 const analyticsUnavailableMetricDefinitions: readonly {
@@ -847,7 +847,7 @@ const analyticsUnavailableMetricDefinitions: readonly {
   {
     key: "contentLaunches",
     label: "Content Launches",
-    missingBody: "Creator-facing content insights are not available yet.",
+    missingBody: "Creator-facing content insight status opens here once the backed aggregate exists.",
     laterBody: "This stays later until creator content-performance aggregates are supported.",
   },
   {
@@ -2247,7 +2247,7 @@ export function ChannelStudioScreen() {
     try {
       const accountPayload = await createOrReuseCreatorPayoutProviderAccount(creatorUserId);
       if (accountPayload.status === "not_configured") {
-        setPayoutSetupNotice("Payout setup is not available yet.");
+        setPayoutSetupNotice("Payout readiness/status flow is active. Provider setup is not configured, and no payout movement is enabled.");
         await refreshCreatorPayouts();
         return;
       }
@@ -2259,7 +2259,7 @@ export function ChannelStudioScreen() {
       });
 
       if (linkPayload.status === "not_configured" || linkPayload.status === "setup_required") {
-        setPayoutSetupNotice(linkPayload.message || "Payout provider setup is not available yet.");
+        setPayoutSetupNotice(linkPayload.message || "Payout provider setup needs owner/provider resolution. No payout movement is enabled.");
         await refreshCreatorPayouts();
         return;
       }
@@ -4390,7 +4390,7 @@ export function ChannelStudioScreen() {
         {
           title: "Playlists / Shelves",
           status: "near_term",
-          body: "Coming soon once playlist or shelf backing exists.",
+          body: "Opens a status path until playlist or shelf backing exists.",
         },
       ],
     },
@@ -4432,7 +4432,7 @@ export function ChannelStudioScreen() {
         {
           title: "Design",
           status: "near_term",
-          body: "Coming soon for hero, avatar, accent, and brand treatment.",
+          body: "Opens active status and draft controls for hero, avatar, accent, and brand treatment.",
         },
       ],
     },
@@ -4475,7 +4475,7 @@ export function ChannelStudioScreen() {
         {
           title: "Platform IQ / Rachi Platform Studio Assistant",
           status: "later_phase",
-          body: "Coming later; no assistant implementation is wired in this pass.",
+          body: "Status path only; no assistant implementation is exposed as a dead control.",
         },
       ],
     },
@@ -4591,7 +4591,7 @@ export function ChannelStudioScreen() {
     {
       label: "VIP / Mod / Co-Host",
       value: "Later",
-      body: "Audience-role rosters are not available yet.",
+      body: "Audience-role roster status is active here; moderation/admin authority stays in the scoped staff surfaces.",
       tone: "unavailable",
     },
   ];
@@ -5986,9 +5986,9 @@ export function ChannelStudioScreen() {
             statusTone: "muted",
             children: (
               <View style={styles.roadmapList}>
-                <Text style={styles.roadmapItem}>Multi-clip timeline, split clip, transitions, beat sync, auto captions, AI cut, green screen, effects, stickers, and full export rendering are not active in this MVP.</Text>
-                <Text style={styles.roadmapItem}>Trim/export is coming later.</Text>
-                <Text style={styles.roadmapItem}>Poster frame extraction from video is coming later.</Text>
+                <Text style={styles.roadmapItem}>Multi-clip timeline, split clip, transitions, beat sync, auto captions, AI cut, green screen, effects, stickers, and full export rendering open status paths in this MVP.</Text>
+                <Text style={styles.roadmapItem}>Trim/export status stays visible until the backed editor path is active.</Text>
+                <Text style={styles.roadmapItem}>Poster frame extraction status stays visible until the backed extraction path is active.</Text>
               </View>
             ),
           })}
@@ -6002,9 +6002,9 @@ export function ChannelStudioScreen() {
     if (!previewUserId) {
       return (
         <TouchableOpacity
-          style={[styles.studioActionButton, styles.studioActionButtonDisabled]}
+          style={styles.studioActionButton}
           activeOpacity={0.86}
-          disabled
+          onPress={() => showStudioUnavailable("Preview status", "Sign in and load a profile before previewing the public Platform. This control is active and reports the missing profile context.")}
           testID="brand-preview-public-platform-button"
           accessibilityLabel="Preview Public Platform"
         >
@@ -6961,19 +6961,18 @@ export function ChannelStudioScreen() {
                       : <Text style={styles.eventPrimaryButtonText}>{platformBranding?.heroImage ? "Change Image" : "Choose Image"}</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.eventSecondaryButton, styles.eventPrimaryButtonDisabled]}
+                    style={styles.eventSecondaryButton}
                     activeOpacity={0.88}
-                    disabled
                     testID="brand-hero-reel-disabled-button"
-                    accessibilityLabel="Hero Reel Coming Later"
+                    accessibilityLabel="Hero Reel status"
                     onPress={() => {
                       showStudioUnavailable(
-                        "Hero Reel not available yet",
+                        "Hero Reel status",
                         "Hero Video needs reviewed video processing before public autoplay can launch. Use Hero Image or choose a public upload as Spotlight content for now.",
                       );
                     }}
                   >
-                    <Text style={styles.eventSecondaryButtonText}>Hero Reel · Coming later</Text>
+                    <Text style={styles.eventSecondaryButtonText}>Hero Reel status</Text>
                   </TouchableOpacity>
                 </View>
                 {platformBranding?.heroImage ? (
@@ -7180,12 +7179,12 @@ export function ChannelStudioScreen() {
                 </View>
                 {renderStudioActionRow({
                   title: "Watermark",
-                  body: "Video watermark rendering is not active yet. Save a Brand Mark draft without changing Player behavior.",
-                  value: platformBranding?.watermark ? formatPlatformBrandAssetStatus(platformBranding.watermark) : "Not available",
+                  body: "Video watermark rendering opens this status path. Save a Brand Mark draft without changing Player behavior.",
+                  value: platformBranding?.watermark ? formatPlatformBrandAssetStatus(platformBranding.watermark) : "Status path",
                   tone: "muted",
                   onPress: () => {
                     showStudioUnavailable(
-                      "Watermark not available yet",
+                      "Watermark status",
                       "Brand Mark upload can be staged later, but public video watermark rendering is not active in Player.",
                     );
                   },
@@ -8659,6 +8658,30 @@ export function ChannelStudioScreen() {
             { label: "Provider checks", value: providerOverallStatus, body: "Provider checks are the source of readiness truth.", tone: "unavailable" },
             { label: "Live money", value: getMoneyFeatureStateLabel(liveMoneyFeatureFlag.state), body: "Live money stays off until owner approval and provider checks pass.", tone: "unavailable" },
           ])}
+          <View style={styles.eventActionRow}>
+            <TouchableOpacity
+              style={styles.eventSecondaryButton}
+              activeOpacity={0.88}
+              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+              onPress={handleRefreshSandboxTesterExperience}
+              testID="money-center-status-refresh-button"
+              accessibilityRole="button"
+              accessibilityLabel="Refresh Money Center status"
+            >
+              <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eventSecondaryButton}
+              activeOpacity={0.88}
+              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+              onPress={openMoneyTransactions}
+              testID="money-center-status-transactions-button"
+              accessibilityRole="button"
+              accessibilityLabel="Open Money Center transaction status"
+            >
+              <Text style={styles.eventSecondaryButtonText}>View status ledger</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
@@ -9307,13 +9330,13 @@ export function ChannelStudioScreen() {
         <View style={styles.studioActionList}>
           {renderStudioActionRow({
             title: "Reports",
-            body: recentSafetyReportCount == null ? "Not available yet for normal creator review." : recentSafetyReportCount ? "Open report signal details." : "No reports waiting.",
-            value: recentSafetyReportCount == null ? "Not available" : recentSafetyReportCount ? String(recentSafetyReportCount) : "Clear",
+            body: recentSafetyReportCount == null ? "Report status opens the existing safety review path; normal creator review is not exposed here." : recentSafetyReportCount ? "Open report signal details." : "No reports waiting.",
+            value: recentSafetyReportCount == null ? "Status path" : recentSafetyReportCount ? String(recentSafetyReportCount) : "Clear",
             tone: recentSafetyReportCount ? "warning" : "muted",
             onPress: () => {
               if (recentSafetyReportCount == null) {
                 showStudioUnavailable(
-                  "Not available yet",
+                  "Report status",
                   "Creator-facing report review is not available to this account yet. Platform reports are still handled through the existing safety review flow.",
                 );
                 return;

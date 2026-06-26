@@ -268,10 +268,15 @@ export function AccessSheet({
       return;
     }
 
-    if (sheetState?.primaryDisabled) return;
-
     setStatusMessage("");
     setStatusTone("neutral");
+
+    if (sheetState?.primaryDisabled) {
+      setStatusTone("error");
+      setStatusMessage(sheetState.helperBody || "This access path needs provider/setup resolution. Restore, manage, or recheck status from this sheet.");
+      await loadSheetState().catch(() => undefined);
+      return;
+    }
 
     if (sheetState?.primaryAction === "retry" || !gate) {
       setLoadingState(true);
@@ -459,7 +464,7 @@ export function AccessSheet({
               </Text>
               <Text style={[styles.helperText, helperTextStyle]}>
                 {deferredMonetization
-                  ? "This surface can explain the current gate, but unlock, restore, and subscription actions are not active in this build yet."
+                  ? "This surface explains the current gate and routes you back to status, restore, manage, or support flows instead of leaving a dead end."
                   : sheetState?.helperBody}
               </Text>
             </View>
@@ -505,12 +510,12 @@ export function AccessSheet({
               <Text style={styles.secondaryText}>Not now</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.primaryButton, (busy || sheetState?.primaryDisabled) && styles.primaryButtonDisabled]}
+              style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
               onPress={() => {
                 void onPrimaryPress();
               }}
               activeOpacity={0.9}
-              disabled={busy || sheetState?.primaryDisabled}
+              disabled={busy}
             >
               {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryText}>{copy.actionLabel}</Text>}
             </TouchableOpacity>

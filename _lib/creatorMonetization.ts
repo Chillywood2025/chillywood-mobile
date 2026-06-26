@@ -366,7 +366,7 @@ export async function readCreatorMiniPlatformCommerceSurface(
       merchCheckoutStatus: settings.merchStoreEnabled && settings.liveMoneyEnabled ? "enabled_later" : "disabled",
       message: settings.liveMoneyEnabled
         ? "Platform commerce still needs provider and legal readiness before checkout can open."
-        : "Platform commerce is not active yet; checkout, tips, orders, and cash-out are disabled.",
+        : "Platform commerce status is active; checkout, tips, orders, and cash-out remain blocked until owner-approved provider readiness.",
     };
   } catch {
     return {
@@ -376,7 +376,7 @@ export async function readCreatorMiniPlatformCommerceSurface(
       tipsStatus: "disabled",
       paidContentCheckoutStatus: "disabled",
       merchCheckoutStatus: "disabled",
-      message: "Platform commerce is not available yet.",
+      message: "Platform commerce status is active, but the provider readback could not be reached.",
     };
   }
 }
@@ -419,7 +419,7 @@ export async function setCreatorContentPrice(input: {
     p_price_cents: Math.max(0, Math.trunc(input.priceCents || 0)),
     p_currency: input.currency ?? "usd",
   });
-  if (error) throw new Error("Creator pricing is not available yet.");
+  if (error) throw new Error("Creator pricing status is active, but the backed pricing save path is not reachable.");
   return data;
 }
 
@@ -437,7 +437,7 @@ export async function createCreatorProductListing(input: {
     p_product_type: input.productType ?? "merch",
     p_currency: input.currency ?? "usd",
   });
-  if (error) throw new Error("Product listing tools are not available yet.");
+  if (error) throw new Error("Product listing status is active, but the backed listing save path is not reachable.");
   return data;
 }
 
@@ -463,7 +463,7 @@ export async function requestCreatorPayout(input: {
     p_amount_cents: Math.max(0, Math.trunc(input.amountCents || 0)),
     p_payout_type: input.payoutType,
   });
-  if (error) throw new Error("Creator payouts are not available yet.");
+  if (error) throw new Error("Creator payout status is active, but payout movement remains unavailable.");
   return data;
 }
 
@@ -477,6 +477,6 @@ export async function creatorMonetizationCheckoutPreflight(input: {
     p_target_id: input.targetId ?? null,
     p_amount_cents: input.amountCents == null ? null : Math.max(0, Math.trunc(input.amountCents || 0)),
   });
-  if (error) throw new Error("Checkout preflight is not available yet.");
+  if (error) throw new Error("Checkout preflight status is active, but the backed preflight path is not reachable.");
   return data;
 }

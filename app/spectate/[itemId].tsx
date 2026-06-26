@@ -366,10 +366,12 @@ export default function SpectatorMetadataScreen() {
 
         <View style={styles.actionRow}>
           <TouchableOpacity
-            style={[styles.primaryButton, (!primaryCanStart || !!startingAction) && styles.buttonDisabled]}
+            style={[styles.primaryButton, !!startingAction && styles.buttonDisabled]}
             activeOpacity={0.86}
-            disabled={!primaryCanStart || !!startingAction}
-            onPress={() => handleStart(launchEligibility.primaryAction)}
+            disabled={!!startingAction}
+            onPress={() => primaryCanStart
+              ? handleStart(launchEligibility.primaryAction)
+              : Alert.alert("Watch party status", launchEligibility.disabledReason || "This source cannot start that room yet.")}
           >
             <Text style={styles.primaryButtonText}>
               {primaryBusy ? "Starting..." : launchEligibility.primaryLabel}
@@ -377,10 +379,12 @@ export default function SpectatorMetadataScreen() {
           </TouchableOpacity>
           {launchEligibility.kind === "live" ? (
             <TouchableOpacity
-              style={[styles.secondaryButton, (!launchEligibility.canStartLiveWatchParty || !!startingAction) && styles.buttonDisabled]}
+              style={[styles.secondaryButton, !!startingAction && styles.buttonDisabled]}
               activeOpacity={0.86}
-              disabled={!launchEligibility.canStartLiveWatchParty || !!startingAction}
-              onPress={() => handleStart("start_live_reaction")}
+              disabled={!!startingAction}
+              onPress={() => launchEligibility.canStartLiveWatchParty
+                ? handleStart("start_live_reaction")
+                : Alert.alert("Live Watch-Party status", launchEligibility.disabledReason || "This source cannot start a Live Watch-Party yet.")}
             >
               <Text style={styles.secondaryButtonText}>
                 {reactionBusy ? "Starting..." : launchEligibility.reactionLabel}
@@ -388,10 +392,12 @@ export default function SpectatorMetadataScreen() {
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
-            style={[styles.secondaryButton, (!primaryCanStart || !!startingAction) && styles.buttonDisabled]}
+            style={[styles.secondaryButton, !!startingAction && styles.buttonDisabled]}
             activeOpacity={0.86}
-            disabled={!primaryCanStart || !!startingAction}
-            onPress={() => handleStart(launchEligibility.primaryAction)}
+            disabled={!!startingAction}
+            onPress={() => primaryCanStart
+              ? handleStart(launchEligibility.primaryAction)
+              : Alert.alert("Watch party status", launchEligibility.disabledReason || "This source cannot start that room yet.")}
           >
             <Text style={styles.secondaryButtonText}>
               {primaryBusy ? "Starting..." : launchEligibility.secondaryLabel}
@@ -401,9 +407,8 @@ export default function SpectatorMetadataScreen() {
             <Text style={styles.actionHint}>{launchEligibility.disabledReason}</Text>
           ) : null}
           <TouchableOpacity
-            style={[styles.secondaryButton, !launchEligibility.canShare && styles.buttonDisabled]}
+            style={styles.secondaryButton}
             activeOpacity={0.86}
-            disabled={!launchEligibility.canShare}
             onPress={handleShare}
           >
             <Text style={styles.secondaryButtonText}>Share</Text>

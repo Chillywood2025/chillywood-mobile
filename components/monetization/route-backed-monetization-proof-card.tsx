@@ -1,5 +1,6 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import type { RouteBackedMonetizationProofConfig } from "../../_lib/routeBackedMonetizationVisualProof";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "./MoneyScopeInfoButton";
@@ -11,24 +12,24 @@ type Props = {
 
 const SURFACE_COPY: Record<Props["surface"], { title: string; body: string }> = {
   paid_content: {
-    title: "Paid content not available yet",
-    body: "This paid-access option is disabled until the app is ready for public purchases.",
+    title: "Paid content status",
+    body: "Open the status path for this paid-access option. Tester-safe access can run where provider setup exists; live settlement stays off.",
   },
   watch_party_ticket: {
-    title: "Watch-Party Seat Pass not available yet",
-    body: "Seat Pass checkout is disabled. Speaker controls still require host approval.",
+    title: "Watch-Party Seat Pass status",
+    body: "Open the Seat Pass status path. Speaker controls still require host approval and no payout or publish authority is granted.",
   },
   live_access: {
-    title: "Live access pass not available yet",
-    body: "Access pass checkout is disabled. It does not grant speaker, host, moderator, admin, or publish authority.",
+    title: "Live access pass status",
+    body: "Open the live access status path. It does not grant speaker, host, moderator, admin, or publish authority.",
   },
   live_seat: {
-    title: "Live seat pass not available yet",
-    body: "Seat pass checkout is disabled. Host approval is still required for mic, camera, and publish.",
+    title: "Live seat pass status",
+    body: "Open the live seat status path. Host approval is still required for mic, camera, and publish.",
   },
   event_pass: {
-    title: "Event pass not available yet",
-    body: "Event pass checkout is disabled until the app is ready for public purchases.",
+    title: "Event pass status",
+    body: "Open the event pass status path. Tester-safe purchase flows can run where provider setup exists; live settlement stays off.",
   },
 };
 
@@ -41,11 +42,12 @@ const SCOPE_BY_SURFACE: Record<Props["surface"], MoneyScopeKey> = {
 };
 
 export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
+  const router = useRouter();
   if (!config) return null;
   const copy = SURFACE_COPY[surface];
   const safeFlags = [
-    "Not available yet",
-    "Purchases off",
+    "Status flow active",
+    "Tester-safe only",
     "Payouts off",
     "No cash-out",
     "No publish authority",
@@ -58,6 +60,17 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
       <Text style={styles.title}>{copy.title}</Text>
       <Text style={styles.body}>{copy.body}</Text>
       <MoneyScopeInfoButton scope={SCOPE_BY_SURFACE[surface]} label="What does this unlock?" />
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          activeOpacity={0.86}
+          onPress={() => router.push("/support" as Parameters<typeof router.push>[0])}
+          accessibilityRole="button"
+          accessibilityLabel="Open money support and status"
+        >
+          <Text style={styles.primaryButtonText}>Open status / support</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.grid}>
         <View style={styles.row}>
           <Text style={styles.label}>Product</Text>
@@ -69,7 +82,7 @@ export function RouteBackedMonetizationProofCard({ config, surface }: Props) {
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Status</Text>
-          <Text style={styles.value}>Checkout disabled</Text>
+          <Text style={styles.value}>Status flow active</Text>
         </View>
       </View>
       <View style={styles.pills}>
@@ -96,6 +109,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(11,18,28,0.96)",
     padding: 14,
     gap: 9,
+  },
+  actionRow: {
+    flexDirection: "row",
+  },
+  primaryButton: {
+    borderRadius: 12,
+    backgroundColor: "#E43D5C",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
   },
   kicker: {
     color: "#9ED6FF",

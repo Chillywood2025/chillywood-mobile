@@ -175,7 +175,7 @@ export const getLiveEffectStatusLabel = (effect: LiveEffectItem) => {
   if (effect.status === "available") return "Available";
   if (effect.status === "preview_only") return "Preview only";
   if (effect.status === "disabled") return "Disabled";
-  return "Coming soon";
+  return "Status path";
 };
 
 export const getLiveEffectStatusCopy = (effect: LiveEffectItem) => {

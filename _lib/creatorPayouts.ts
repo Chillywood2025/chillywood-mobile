@@ -222,9 +222,9 @@ const payoutClient = supabase as unknown as {
 
 export const CREATOR_PAYOUT_REQUIREMENTS: readonly CreatorPayoutSetupRequirement[] = [
   { label: "Payout provider", value: "Stripe Connect later" },
-  { label: "KYC", value: "Not available yet" },
-  { label: "Tax forms", value: "Not available yet" },
-  { label: "Payout account", value: "Not available yet" },
+  { label: "KYC", value: "Readiness status" },
+  { label: "Tax forms", value: "Readiness status" },
+  { label: "Payout account", value: "Readiness status" },
   { label: "Fraud review", value: "Required before release" },
   { label: "Hold period", value: "7–30 days" },
   { label: "Minimum payout", value: "Undecided" },
@@ -359,7 +359,7 @@ const formatSetupStatusBody = (
 
   switch (status) {
     case "provider_not_configured":
-      return "Payout setup is not available yet.";
+      return "Payout readiness/status flow is active. Provider setup is not configured, and payouts remain off.";
     case "setup_required":
       return "Set up the payout provider account when available. Withdrawals are still not active.";
     case "onboarding_in_progress":

@@ -78,7 +78,7 @@ export const normalizeMoneyAccessReadout = (row: MoneyAccessReadoutDb | null | u
 
 export async function readAdminMoneyAccessReadout(): Promise<MoneyAccessReadout> {
   const { data, error } = await moneyAccessClient.rpc<MoneyAccessReadoutDb>("get_admin_money_access_readout");
-  if (error) throw new Error("Money access readout is not available yet.");
+  if (error) throw new Error("Money access status readout is active, but the backed read model is not reachable.");
   return normalizeMoneyAccessReadout(data);
 }
 

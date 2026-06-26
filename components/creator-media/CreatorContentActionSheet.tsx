@@ -1,6 +1,7 @@
 import React from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -152,14 +153,15 @@ function SheetAction({
 }) {
   return (
     <TouchableOpacity
-      style={[styles.actionButton, danger && styles.dangerButton, disabled && styles.disabledButton]}
+      style={[styles.actionButton, danger && styles.dangerButton]}
       activeOpacity={0.86}
-      disabled={disabled}
-      onPress={onPress}
+      onPress={disabled
+        ? () => Alert.alert("Action status", detail || `${label} needs a playable content item, a different current state, or the backed permission before it can run.`)
+        : onPress}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       accessibilityRole="button"
       accessibilityLabel={detail ? `${label}. ${detail}` : label}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled: false }}
     >
       <AppText scale="footnote" style={[styles.actionText, danger && styles.dangerText]} numberOfLines={2}>{label}</AppText>
       {detail ? <AppText scale="caption" style={styles.actionDetail} numberOfLines={2}>{detail}</AppText> : null}

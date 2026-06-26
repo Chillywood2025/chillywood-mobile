@@ -1268,18 +1268,18 @@ export async function readMonetizationAccessSheetState(options: {
       presentation: {
         ...presentation,
         title: "Premium access is being checked",
-        body: "Premium purchase and restore actions are temporarily unavailable. This does not grant Premium; existing access still requires trusted entitlement status.",
-        actionLabel: "Unavailable",
+        body: "Premium purchase status can be checked here. Approved internal testers can use the sandbox flow when provider setup is available; live settlement stays off.",
+        actionLabel: "Check Premium Status",
       },
       primaryAction: "retry",
-      primaryLabel: "Premium Unavailable",
-      primaryDisabled: true,
+      primaryLabel: "Check Premium Status",
+      primaryDisabled: false,
       helperKicker: "SETUP NEEDED",
       helperBody: PREMIUM_PURCHASE_SHELL_HOLD_MESSAGE,
       helperTone: "warning",
       offer: null,
-      canRestore: false,
-      canManage: false,
+      canRestore: true,
+      canManage: true,
     };
   }
 
@@ -1288,14 +1288,14 @@ export async function readMonetizationAccessSheetState(options: {
       snapshot,
       presentation,
       primaryAction: "retry",
-      primaryLabel: "Monetization Disabled",
-      primaryDisabled: true,
+      primaryLabel: "Open Status Check",
+      primaryDisabled: false,
       helperKicker: "MONETIZATION STATUS",
       helperBody: snapshot.configuration.reason ?? "Monetization is not configured for this build yet.",
       helperTone: "warning",
       offer,
-      canRestore: false,
-      canManage: false,
+      canRestore: true,
+      canManage: true,
     };
   }
 

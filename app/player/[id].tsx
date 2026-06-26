@@ -6137,7 +6137,7 @@ export default function PlayerScreen() {
     });
     if (!creatorVideo || paidVideoUnlockBusy) return;
     if (!paidVideoCheckoutAvailable) {
-      setPaidVideoUnlockMessage("Paid creator video checkout is not available yet.");
+      setPaidVideoUnlockMessage("Paid creator video status is active: checkout requires the owner-approved provider/test product path. No live money, payout, payable balance, or provider mutation was enabled.");
       return;
     }
     if (!isSignedIn) {
@@ -6929,6 +6929,10 @@ export default function PlayerScreen() {
           <TouchableOpacity
             style={[styles.partyParticipantControlBtn, dockLayout && styles.partyParticipantControlBtnDock]}
             onPress={() => {
+              if (!participant.canSpeak) {
+                Alert.alert("No mic access", "This participant does not have speaker access in this room. The control is active but does not grant LiveKit publish authority.");
+                return;
+              }
               setPartyParticipants((prev) => {
                 const target = prev.find((entry) => entry.id === participant.id);
                 if (!target) return prev;
@@ -6971,7 +6975,6 @@ export default function PlayerScreen() {
                 return nextParticipants;
               });
             }}
-            disabled={!participant.canSpeak}
             activeOpacity={0.85}
           >
             <Text style={styles.partyParticipantControlBtnText}>
@@ -8176,9 +8179,9 @@ export default function PlayerScreen() {
             </Text>
             <View style={styles.playerAccessActions}>
               <TouchableOpacity
-                style={[styles.playerAccessPrimaryBtn, styles.secondaryBtnDisabled]}
-                disabled
+                style={styles.playerAccessPrimaryBtn}
                 activeOpacity={0.85}
+                onPress={() => Alert.alert("Checking access", "Watch-Party access is being checked. This route will open automatically when room membership is confirmed.")}
               >
                 <Text style={styles.playerAccessPrimaryText}>Checking...</Text>
               </TouchableOpacity>
@@ -8739,10 +8742,10 @@ export default function PlayerScreen() {
                   style={[
                     styles.playerAccessPrimaryBtn,
                     styles.paidVideoUnlockPrimaryButton,
-                    (paidVideoUnlockBusy || !paidVideoCheckoutAvailable) && styles.secondaryBtnDisabled,
+                    paidVideoUnlockBusy && styles.secondaryBtnDisabled,
                   ]}
                   activeOpacity={0.86}
-                  disabled={paidVideoUnlockBusy || !paidVideoCheckoutAvailable}
+                  disabled={paidVideoUnlockBusy}
                   onPress={() => {
                     void handlePaidVideoUnlock();
                   }}
@@ -8754,7 +8757,7 @@ export default function PlayerScreen() {
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
                     <Text style={styles.playerAccessPrimaryText}>
-                      {paidVideoCheckoutAvailable ? "Unlock Video" : "Not Available Yet"}
+                      {paidVideoCheckoutAvailable ? "Unlock Video" : "Paid Video Status"}
                     </Text>
                   )}
                 </TouchableOpacity>

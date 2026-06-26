@@ -541,7 +541,10 @@ export default function WatchPartyIndexScreen() {
       return;
     }
     const code = joinCode.trim().toUpperCase();
-    if (!code) return;
+    if (!code) {
+      setJoinError("Enter a room code to find a Watch-Party room.");
+      return;
+    }
 
     setJoinLookupBusy(true);
     setJoinError(null);
@@ -859,7 +862,7 @@ export default function WatchPartyIndexScreen() {
 
   const onSavePaidTicketOffer = useCallback(async () => {
     if (!paidWatchPartyCheckoutAvailable) {
-      setPaidTicketNotice("Paid Watch-Party Seat Passes are not available yet.");
+      setPaidTicketNotice("Seat Pass status is active. Tester-safe setup requires provider/test checkout readiness; live money, payouts, cash-out, and payable balances remain off.");
       return;
     }
     const targetRoom = preparedRoom?.room ?? preview?.room ?? null;
@@ -899,7 +902,7 @@ export default function WatchPartyIndexScreen() {
 
   const onBuyPaidTicketAndJoin = useCallback(async () => {
     if (!paidWatchPartyCheckoutAvailable) {
-      setPaidTicketNotice("Paid Watch-Party Seat Pass checkout is not available yet.");
+      setPaidTicketNotice("Seat Pass status is active. Tester-safe checkout requires provider/test readiness; live money, payouts, cash-out, and payable balances remain off.");
       return;
     }
     const targetPreview = preview ?? preparedRoom;
@@ -1486,10 +1489,10 @@ export default function WatchPartyIndexScreen() {
           <View style={styles.permissionsCard}>
             <AppText scale="caption" style={styles.permissionsLabel}>ROOM PASSES</AppText>
             <AppText scale="footnote" style={styles.permissionsBody}>
-              Paid Watch-Party Seat Passes are not available yet. This keeps live money off while room entry, Premium gates, and host controls remain available.
+              Paid Watch-Party Seat Pass status is active for setup and tester-safe resolution. Live money stays off while room entry, Premium gates, and host controls remain available.
             </AppText>
             <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this Seat Pass unlock?" />
-            {hostLabel === "You are hosting" && paidWatchPartyCheckoutAvailable ? (
+            {hostLabel === "You are hosting" ? (
               <>
                 <TextInput
                   value={paidTicketSeatLimit}
@@ -1513,7 +1516,7 @@ export default function WatchPartyIndexScreen() {
                   </AppText>
                 </TouchableOpacity>
               </>
-            ) : paidTicketGate?.requiresPurchase && paidWatchPartyCheckoutAvailable ? (
+            ) : paidTicketGate?.requiresPurchase ? (
               <TouchableOpacity
                 style={[styles.generateCodeButton, paidTicketBusy && styles.generateCodeButtonDisabled]}
                 onPress={onBuyPaidTicketAndJoin}
@@ -1524,7 +1527,7 @@ export default function WatchPartyIndexScreen() {
                 accessibilityLabel="Get Watch-Party Seat"
               >
                 <AppText scale="footnote" style={styles.generateCodeButtonText}>
-                  {paidTicketBusy ? "Opening Store" : "Get Seat Pass"}
+                  {paidTicketBusy ? "Opening Store" : paidWatchPartyCheckoutAvailable ? "Get Seat Pass" : "Seat Pass status"}
                 </AppText>
               </TouchableOpacity>
             ) : null}
@@ -1556,7 +1559,7 @@ export default function WatchPartyIndexScreen() {
               style={[styles.generateCodeButton, roomCodeActionBusy && styles.generateCodeButtonDisabled]}
               onPress={onGenerateNewCode}
               activeOpacity={0.85}
-              disabled={roomCodeActionBusy || !features.watchPartyEnabled}
+              disabled={roomCodeActionBusy}
             >
               {refreshingCode || isPreparingInitialCode ? (
                 <View style={styles.lookingRow}>
@@ -1764,21 +1767,21 @@ export default function WatchPartyIndexScreen() {
                   <View style={styles.inlineTicketGate}>
                     <AppText scale="subhead" style={styles.inlineTicketGateTitle}>Seat Pass required</AppText>
                     <AppText scale="footnote" style={styles.inlineTicketGateBody}>
-                      Paid Seat Pass checkout is not available yet. This room can still use signed-in and Premium-gated entry where allowed.
+                      Seat Pass status is active. Tester-safe checkout can run where provider setup supports it; otherwise this button returns the current resolution state.
                     </AppText>
                     <MoneyScopeInfoButton scope="watch_party_ticket" label="What does this unlock?" compact />
                     {paidTicketNotice ? <AppText scale="footnote" style={styles.errorText}>{paidTicketNotice}</AppText> : null}
                     <Pressable
                       style={({ pressed }) => [
                         styles.joinNowBtn,
-                        (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.primaryButtonDisabled,
+                        paidTicketBusy && styles.primaryButtonDisabled,
                         pressed && styles.previewActionPressed,
                       ]}
                       onPress={onBuyPaidTicketAndJoin}
-                      disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
+                      disabled={paidTicketBusy}
                       accessibilityRole="button"
                       accessibilityLabel="Get Watch-Party Seat"
-                      accessibilityState={{ disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable, busy: paidTicketBusy }}
+                      accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
                       hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                       testID="tester-watch-party-ticket-button"
                     >
@@ -1787,7 +1790,7 @@ export default function WatchPartyIndexScreen() {
                           ? "Opening Store"
                           : paidWatchPartyCheckoutAvailable
                             ? `Get Seat Pass ${formatPaidWatchPartyTicketPrice(paidTicketGate.priceCents ?? 99, paidTicketGate.currency ?? "usd")}`
-                            : "Not Available Yet"}
+                            : "Seat Pass status"}
                       </AppText>
                     </Pressable>
                   </View>
@@ -1817,14 +1820,14 @@ export default function WatchPartyIndexScreen() {
                   style={({ pressed }) => [
                     styles.primaryButton,
                     styles.joinLookupButton,
-                    (joinLookupBusy || !joinCode.trim()) && styles.primaryButtonDisabled,
+                    joinLookupBusy && styles.primaryButtonDisabled,
                     pressed && styles.previewActionPressed,
                   ]}
                   onPress={onLookup}
-                  disabled={joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled}
+                  disabled={joinLookupBusy}
                   accessibilityRole="button"
                   accessibilityLabel={joinLookupBusy ? "Looking up room" : "Find Room"}
-                  accessibilityState={{ disabled: joinLookupBusy || !joinCode.trim() || !features.watchPartyEnabled, busy: joinLookupBusy }}
+                  accessibilityState={{ disabled: joinLookupBusy, busy: joinLookupBusy }}
                   hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
                   testID="watch-party-find-room-button"
                 >

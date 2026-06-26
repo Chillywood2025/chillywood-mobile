@@ -278,5 +278,11 @@ Do not activate creator-money. Tips, Paid Video, Watch-Party Ticket, VIP, and Ev
 | Money/provider boundary | Closed | Already closed | Admin cannot enable money/provider/payout systems and cannot execute provider refunds. |
 | Refund status boundary | Closed | Already closed | Admin can record manual/external refund status only with permission; provider refunds remain manual/external. |
 | Destructive actions | Closed | Already closed | Admin destructive actions require permission, reason, confirmation, and audit. |
-| Admin UI buttons | Closed | Already closed | Broken Admin buttons are wired or honestly disabled. |
+| Admin UI buttons | Closed | Already closed | Broken Admin buttons are wired or open active access/status/resolution flows. |
 | Private data safety | Closed | Already closed | No secrets, tokens, signed URLs, raw IPs, tax IDs, bank details, or provider secrets are exposed. |
+
+## Every Visible Surface Active Wiring
+
+Every visible surface active wiring audit: Closed. No visible clickable dead buttons are allowed. Nothing visible should be hidden or disabled. Every visible control works, routes correctly, opens a setup/status/resolution flow, opens a support/review flow, or starts a tester-safe flow. Permission scopes must unlock backed behavior.
+
+Tester-visible monetization UX is separate from live money settlement. Premium monthly tester flow is reachable where Play internal/licensed tester/provider setup supports it. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.

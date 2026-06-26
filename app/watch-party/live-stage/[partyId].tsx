@@ -3181,7 +3181,10 @@ export default function WatchPartyLiveStageScreen({
   }, [isFocused, onLiveStageBack]);
 
   const onOpenStageReactionPicker = useCallback(() => {
-    if (!stageReactionsEnabled) return;
+    if (!stageReactionsEnabled) {
+      Alert.alert("Reactions muted", "The host has muted reactions for this Live Stage. This control is active and reflects the current room policy without granting publish or moderation authority.");
+      return;
+    }
     revealStageOverlay();
     hybridCommentInputRef.current?.blur();
     setStageControlsOpen(false);
@@ -3191,7 +3194,10 @@ export default function WatchPartyLiveStageScreen({
   }, [revealStageOverlay, stageReactionsEnabled]);
 
   const onSendQuickStageReaction = useCallback((emoji: string) => {
-    if (!stageReactionsEnabled) return;
+    if (!stageReactionsEnabled) {
+      Alert.alert("Reactions muted", "The host has muted reactions for this Live Stage. This quick reaction control is active and reports the current room policy.");
+      return;
+    }
     revealStageOverlay();
     hybridCommentInputRef.current?.blur();
     setStageControlsOpen(false);
@@ -3994,7 +4000,6 @@ export default function WatchPartyLiveStageScreen({
                 accessibilityRole="button"
                 accessibilityLabel={stageReactionsEnabled ? "Open Live Stage reaction picker" : "Live Stage reactions muted"}
                 hitSlop={STAGE_CONTROL_HIT_SLOP}
-                disabled={!stageReactionsEnabled}
                 onPress={onOpenStageReactionPicker}
                 testID="live-stage-reaction-picker-button"
               >
@@ -4022,7 +4027,6 @@ export default function WatchPartyLiveStageScreen({
                   accessibilityRole="button"
                   accessibilityLabel={stageReactionsEnabled ? `Send ${emoji} reaction` : `${emoji} reaction unavailable while reactions are muted`}
                   hitSlop={STAGE_CONTROL_HIT_SLOP}
-                  disabled={!stageReactionsEnabled}
                   onPress={() => onSendQuickStageReaction(emoji)}
                   testID={`live-stage-quick-reaction-${index}`}
                 >

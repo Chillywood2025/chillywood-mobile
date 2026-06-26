@@ -555,6 +555,13 @@ export default function PublicChannelScreen() {
     } as unknown as Parameters<typeof router.push>[0]);
   };
 
+  const openCreatorMoneyResolution = (title: string, message: string) => {
+    Alert.alert(title, message, [
+      { text: "Open support", onPress: () => router.push("/support" as Parameters<typeof router.push>[0]) },
+      { text: "OK", style: "cancel" },
+    ]);
+  };
+
   const handleSubscribe = async () => {
     if (!routeUserId || subscriptionBusy || isOwner) return;
     if (!viewerUserId) {
@@ -566,7 +573,7 @@ export default function PublicChannelScreen() {
       return;
     }
     if (!subscriptionAccess?.requiresPurchase) {
-      Alert.alert("Subscribe", "This creator subscription is not available right now.");
+      openSubscriberArea();
       return;
     }
 
@@ -612,7 +619,7 @@ export default function PublicChannelScreen() {
       return;
     }
     if (!vipAccess?.requiresPurchase) {
-      Alert.alert("Get VIP", "VIP is not available for this creator right now.");
+      openVipArea();
       return;
     }
 
@@ -1325,17 +1332,17 @@ export default function PublicChannelScreen() {
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
           <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
           <TouchableOpacity
-            style={[styles.playButton, (subscriptionBusy || unavailable) && styles.actionButtonDisabled]}
+            style={[styles.playButton, subscriptionBusy && styles.actionButtonDisabled]}
             activeOpacity={0.86}
-            disabled={subscriptionBusy || unavailable}
-            onPress={subscribed ? openSubscriberArea : handleSubscribe}
+            disabled={subscriptionBusy}
+            onPress={subscribed || unavailable ? openSubscriberArea : handleSubscribe}
             testID="tester-channel-subscribe-button"
             accessibilityLabel="Sandbox Test Subscribe to Creator Channel"
           >
             {subscriptionBusy ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.playButtonText}>{subscribed ? "Open Subscriber Area" : "Subscribe"}</Text>
+              <Text style={styles.playButtonText}>{subscribed ? "Open Subscriber Area" : unavailable ? "Subscription status" : "Subscribe"}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -1392,17 +1399,17 @@ export default function PublicChannelScreen() {
           {unavailable ? <Text style={styles.metaText}>{unavailableCopy}</Text> : null}
           <MoneyScopeInfoButton scope="vip_pass" label="What does this unlock?" />
           <TouchableOpacity
-            style={[styles.playButton, (vipBusy || unavailable) && styles.actionButtonDisabled]}
+            style={[styles.playButton, vipBusy && styles.actionButtonDisabled]}
             activeOpacity={0.86}
-            disabled={vipBusy || unavailable}
-            onPress={isVip ? openVipArea : handleGetVip}
+            disabled={vipBusy}
+            onPress={isVip || unavailable ? openVipArea : handleGetVip}
             testID="tester-vip-pass-button"
             accessibilityLabel="Sandbox Test Get Creator VIP"
           >
             {vipBusy ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.playButtonText}>{isVip ? "Open VIP Area" : "Get VIP"}</Text>
+              <Text style={styles.playButtonText}>{isVip ? "Open VIP Area" : unavailable ? "VIP status" : "Get VIP"}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -1569,11 +1576,11 @@ export default function PublicChannelScreen() {
         scopeKey: "channel_subscription" as MoneyScopeKey,
         body: "Support this Platform monthly. Does not include Premium.",
         price: subscriptionOffer ? formatChannelSubscriptionPrice(subscriptionOffer.priceCents, subscriptionOffer.currency) : null,
-        button: subscriptionAccess?.allowed ? "Open Subscriber Area" : sandboxTesterActive ? "Subscribe in test mode" : "Subscribe",
+        button: subscriptionAccess?.allowed ? "Open Subscriber Area" : subscriptionOffer ? sandboxTesterActive ? "Subscribe in test mode" : "Subscribe" : "Subscription status",
         testID: sandboxTesterActive ? "tester-channel-subscribe-button" : "platform-support-subscribe-button",
         available: subscriptionAvailable,
         busy: subscriptionBusy,
-        onPress: subscriptionAccess?.allowed ? openSubscriberArea : handleSubscribe,
+        onPress: subscriptionAccess?.allowed || !subscriptionOffer ? openSubscriberArea : handleSubscribe,
       },
       {
         title: "VIP",
@@ -1589,13 +1596,17 @@ export default function PublicChannelScreen() {
       {
         title: "Paid video",
         scopeKey: "paid_creator_video" as MoneyScopeKey,
-        body: firstVideo ? "Unlock this video only." : "Paid video unavailable until a public video is ready.",
+        body: firstVideo ? "Unlock this video only." : "Paid video status and setup path for this Platform.",
         price: sandboxTesterActive ? "Sandbox unlock" : null,
         button: "Unlock video",
         testID: sandboxTesterActive ? "tester-paid-video-unlock-button" : "platform-support-paid-video-button",
         available: !!firstVideo,
         onPress: () => {
-          if (firstVideo) router.push({ pathname: "/player/[id]", params: { id: firstVideo.id, source: "creator-video" } });
+          if (firstVideo) {
+            router.push({ pathname: "/player/[id]", params: { id: firstVideo.id, source: "creator-video" } });
+            return;
+          }
+          openCreatorMoneyResolution("Paid video status", "This Platform does not have a public paid video target yet. Creators manage paid-video setup from Platform Studio; viewers can open support if this looks wrong.");
         },
       },
       {
@@ -1603,11 +1614,14 @@ export default function PublicChannelScreen() {
         scopeKey: "watch_party_ticket" as MoneyScopeKey,
         body: "Access this Watch-Party target only.",
         price: watchPartyTicketOffer ? formatPaidWatchPartyTicketPrice(watchPartyTicketOffer.priceCents, watchPartyTicketOffer.currency) : null,
-        button: "Get Seat",
+        button: watchPartyTicketOffer?.partyId ? "Get Seat" : "Seat Pass status",
         testID: sandboxTesterActive ? "tester-watch-party-ticket-button" : "platform-support-ticket-button",
         available: !!watchPartyTicketOffer?.partyId,
         onPress: () => {
-          if (!watchPartyTicketOffer?.partyId) return;
+          if (!watchPartyTicketOffer?.partyId) {
+            openCreatorMoneyResolution("Seat Pass status", "No backed Watch-Party Seat Pass target is attached yet. Creators manage room pass setup from Platform Studio; viewers can open support if this looks wrong.");
+            return;
+          }
           router.push({
             pathname: "/watch-party/[partyId]",
             params: { partyId: watchPartyTicketOffer.partyId },
@@ -1617,16 +1631,20 @@ export default function PublicChannelScreen() {
       {
         title: "Event pass",
         scopeKey: "event_pass" as MoneyScopeKey,
-        body: firstEvent ? "Access this event only." : "Event pass unavailable until an event is ready.",
+        body: firstEvent ? "Access this event only." : "Paid event status and setup path for this Platform.",
         price: sandboxTesterActive ? "Sandbox pass" : null,
-        button: "Get event pass",
+        button: firstEvent ? "Get event pass" : "Event pass status",
         testID: sandboxTesterActive ? "tester-event-pass-button" : "platform-support-event-pass-button",
         available: !!firstEvent,
         onPress: () => {
-          if (firstEvent) router.push(`/event/${firstEvent.id}` as Parameters<typeof router.push>[0]);
+          if (firstEvent) {
+            router.push(`/event/${firstEvent.id}` as Parameters<typeof router.push>[0]);
+            return;
+          }
+          openCreatorMoneyResolution("Event pass status", "This Platform does not have a backed paid event target yet. Creators manage paid-event setup from Platform Studio; viewers can open support if this looks wrong.");
         },
       },
-    ].filter((item) => item.available);
+    ];
 
     if (!supportItems.length) return null;
 

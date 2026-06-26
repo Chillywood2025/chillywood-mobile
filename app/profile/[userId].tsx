@@ -4413,7 +4413,7 @@ export default function ProfileScreen() {
                             ? "Replay window has expired."
                             : event.replay.policy === "none"
                               ? "Replay is not enabled for this event."
-                              : "Replay is configured but not available yet."}{"\n"}
+                              : "Replay status is configured and opens through the event detail when the window is active."}{"\n"}
                         {formatEventReminderLabel(event)} · {formatEventReminderEnrollmentLabel(enrollment)}
                         {event.linkedTitleId ? `\nWatch title: ${event.linkedTitleId}` : ""}
                       </AppText>

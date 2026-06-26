@@ -18,7 +18,7 @@ Required production wording:
 
 - Single Command Center entry point.
 - Admin UI is production-labeled, not proof/debug-labeled.
-- Unavailable tools are hidden or honestly disabled.
+- Unavailable tools open active setup/status/resolution, support/review, or access-status flows.
 - Dangerous actions require confirmation.
 - Destructive/sensitive actions require reason and audit where supported.
 - Admin search results are privacy-safe and limited/paginated.
@@ -26,7 +26,7 @@ Required production wording:
 - Admin UI does not show raw backend errors.
 - Admin UI does not expose service-role-only concepts.
 - Admin UI does not expose raw storage paths, signed URLs, private provider IDs, token values, raw IPs, secrets, tax IDs, or bank details.
-- Money/provider/payout actions remain disabled/read-only/manual/external.
+- Money/provider/payout actions open active readiness/status/manual/external review flows.
 
 ## Purpose
 
@@ -47,18 +47,18 @@ The Owner/Admin Command Center owns platform operations for Owner, First Owner, 
 | Area | Production label | Scope | Status |
 | --- | --- | --- | --- |
 | Overview | Overview | Owner/Admin/Moderator according to visible scoped tabs | Connected to safe readbacks |
-| Users / Roles | Users, Roles, Permission Templates | Owner/Admin-scoped; Moderator cannot manage staff | Backed or disabled with reason |
+| Users / Roles | Users, Roles, Permission Templates | Owner/Admin-scoped; Moderator cannot manage staff | Backed or status/resolution with reason |
 | Reports / Safety | Reports, Safety | Reports/moderation scopes | Backed report queue and safe audit rows |
 | Legal / DMCA | Legal, DMCA | Legal/DMCA scopes | Case/context based |
 | Content / Rachi | Content, Rachi | Content programming / official account scopes | Backed saves require reason and audit |
-| Money Center | Money Center | Read-only/fail-closed unless separate owner-approved money lane exists | Money/provider/payout actions remain disabled/read-only/manual/external |
+| Money Center | Money Center | Read-only/fail-closed unless separate owner-approved money lane exists | Money/provider/payout actions open readiness/status/manual-external review flows |
 | Live Ops | Live Ops, Live Cost Guard, Ops Alerts | Live ops scopes | Actions require reason and audit; remediation remains approval-gated |
 | Owner Security | Owner Security, Break Glass | First Owner / Owner security scope | Dangerous actions require confirmation and reason |
 | System / Audit | System, Audit, Audit Explorer, Canary | Audit/security scopes | Safe readback only |
 
-## Button Wiring / Disabled Tools
+## Button Wiring / Active Status Tools
 
-Visible controls are either wired to backed RPC/function/helper paths or hidden/disabled with honest copy. Unavailable tools are hidden or honestly disabled. No visible button should appear active while doing nothing.
+Visible controls are either wired to backed RPC/function/helper paths, active setup/status/resolution flows, support/review flows, or access-status explanations. No visible button should appear active while doing nothing.
 
 Wired examples:
 
@@ -67,7 +67,7 @@ Wired examples:
 - Reports, DMCA, legal, live ops, Owner Security, First Owner, and money-switch confirmation paths use scoped helpers and sanitized failure copy.
 - Search results open only tabs the current actor can access.
 
-Disabled examples:
+Active status examples:
 
 - Money/provider/payout actions are read-only/manual/external unless a separate owner-approved lane enables them.
 - Provider refunds are manual/external.
@@ -89,9 +89,9 @@ Dangerous action classes:
 - DMCA/legal handling;
 - Break Glass;
 - purge/de-identification related actions;
-- money/provider/payout controls, even when disabled.
+- money/provider/payout controls, even when routed to readiness/status flows.
 
-Dangerous actions are visually separated through danger buttons, confirmation sheets, disabled reason panels, or Owner Security emergency panels. The UI shows target/action summaries before confirmation where backed.
+Dangerous actions are visually separated through danger buttons, confirmation sheets, active status/reason panels, or Owner Security emergency panels. The UI shows target/action summaries before confirmation where backed.
 
 ## Audit / Readback Behavior
 
@@ -123,7 +123,7 @@ Search must not expose:
 - bank details;
 - full private evidence outside case/report context.
 
-Unsupported filters are disabled, hidden, or routed to unavailable copy.
+Unsupported filters open access/status/resolution copy or remain backed confirmation gates; visible controls must not become dead ends.
 
 ## Reporting / Moderation Queue
 
@@ -131,7 +131,7 @@ Reporting and moderation workflow: Closed after validation. The Command Center R
 
 Reports can be marked reviewed, dismissed, escalated, or actioned against supported targets only with reason and audit. Reported items are reviewed before action unless high-risk policy requires urgent temporary hiding/escalation. No reporter identity, raw storage paths, signed URLs, raw IPs, tokens, provider secrets, tax IDs, bank details, or private provider IDs are exposed.
 
-Content takedown decisions: Closed for production decision policy and current backed enforcement after validation. Target actions remain report-linked, scoped, reason-required, and audited. Unsupported target actions are honestly disabled or escalated; standalone manual mutation remains locked because immutable audit requires a selected `safety_reports` row. Paid-content takedown preserves access history and routes refund/access questions through manual/external support without provider refund execution, payout movement, or money activation.
+Content takedown decisions: Closed for production decision policy and current backed enforcement after validation. Target actions remain report-linked, scoped, reason-required, and audited. Unsupported target actions open status/escalation copy; standalone manual mutation remains locked behind selected `safety_reports` context because immutable audit requires it. Paid-content takedown preserves access history and routes refund/access questions through manual/external support without provider refund execution, payout movement, or money activation.
 
 Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation. Command Center live tools are incident/readback/escalation surfaces unless a backed live action exists. Force-end/remove/mute/revoke controls must require exact live scope, reason, report/case context where applicable, and audit. Staff UI must not grant LiveKit publish authority, bypass host/seat approval, weaken participant caps, revive stale rooms, or expose LiveKit tokens/raw room URLs.
 
@@ -157,7 +157,15 @@ Admin UI does not show raw backend errors. Admin UI does not expose service-role
 
 ## Money / Provider / Payout Boundary
 
-Money/provider/payout actions remain disabled/read-only/manual/external. The Command Center can show readiness, provider-status summaries, manual/external refund-support status, and fail-closed switch state. It cannot activate Premium public purchases, creator-money, `live_money_enabled`, payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, Google Play products/base plans, RevenueCat mappings, purchases, provider refunds, or payout actions.
+Money/provider/payout actions remain active as readiness/status/manual/external review flows. The Command Center can show readiness, provider-status summaries, manual/external refund-support status, and fail-closed switch state. It cannot activate Premium public purchases, creator-money, `live_money_enabled`, payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, Google Play products/base plans, RevenueCat mappings, purchases, provider refunds, or payout actions.
+
+## Every Visible Surface Active Wiring
+
+Every visible surface active wiring audit: Closed. No visible clickable dead buttons are allowed. Nothing visible should be hidden or disabled. Every visible control works, routes correctly, opens a setup/status/resolution flow, opens a support/review flow, or starts a tester-safe flow. Permission scopes must unlock backed behavior.
+
+Owner/Admin shared action buttons, section headers, and quick-link cards now open access/status explanations when scope or setup is missing instead of rendering inert locked controls. Dangerous actions still require confirmation, reason, and backend audit where backed. Moderator surfaces remain exact-scope and do not gain Admin/Owner powers.
+
+Tester-visible monetization UX is separate from live money settlement. Premium monthly tester flow is reachable where Play internal/licensed tester/provider setup supports it. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.
 
 ## Proof Status
 

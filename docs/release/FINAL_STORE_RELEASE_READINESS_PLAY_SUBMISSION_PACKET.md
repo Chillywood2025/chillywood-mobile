@@ -156,3 +156,10 @@ Final store/release readiness and Play submission packet alignment is Partial: t
 - `docs/admin/ADMIN_ROLE_SCOPE_AND_PERMISSIONS.md`
 - `docs/admin/FIRST_OWNER_AUTHORITY_AND_SUCCESSION.md`
 - `docs/admin/OWNER_ADMIN_COMMAND_CENTER_PRODUCTION_UI.md`
+- `docs/release/EVERY_VISIBLE_SURFACE_ACTIVE_WIRING_AUDIT.md`
+
+## Every Visible Surface Active Wiring Follow-Up
+
+Every visible surface active wiring audit: Closed. No visible clickable dead buttons are allowed. Nothing visible should be hidden or disabled. Every visible control works, routes correctly, opens a setup/status/resolution flow, opens a support/review flow, or starts a tester-safe flow. Permission scopes must unlock backed behavior.
+
+Tester-visible monetization UX is separate from live money settlement. Premium monthly tester flow is reachable where Play internal/licensed tester/provider setup supports it. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.

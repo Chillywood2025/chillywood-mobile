@@ -192,7 +192,7 @@ export default function ChannelSubscriptionScreen() {
             <Text style={styles.body}>
               {needsPurchase
                 ? `Subscribe to ${creatorName}'s Platform for ${formatChannelSubscriptionPrice(offer.priceCents, offer.currency)}. This does not include Chi'llywood Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, or other creators.`
-                : "This creator subscription is not available right now."}
+                : "Creator Channel Subscription is in provider-blocked/setup status for this Platform. This status screen stays active so testers can refresh, open support, or creators can manage the offer from Platform Studio."}
             </Text>
             <MoneyScopeStrip
               includes="Subscriber access for this creator Platform when active."
@@ -200,19 +200,29 @@ export default function ChannelSubscriptionScreen() {
             />
             <MoneyScopeInfoButton scope="channel_subscription" label="What does this unlock?" />
             {notice ? <Text style={styles.meta}>{notice}</Text> : null}
-            {needsPurchase ? (
+            <View style={styles.ownerActionStack}>
               <TouchableOpacity
                 style={[styles.primaryButton, busy && styles.buttonDisabled]}
                 activeOpacity={0.86}
                 disabled={busy}
-                onPress={handleSubscribe}
+                onPress={needsPurchase ? handleSubscribe : loadAccess}
                 testID="subscriber-area-subscribe-button"
                 accessibilityRole="button"
-                accessibilityLabel="Subscribe to creator Platform"
+                accessibilityLabel={needsPurchase ? "Subscribe to creator Platform" : "Refresh creator subscription status"}
               >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Subscribe</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{needsPurchase ? "Subscribe" : "Refresh subscription status"}</Text>}
               </TouchableOpacity>
-            ) : null}
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                activeOpacity={0.86}
+                onPress={() => router.push("/support" as Parameters<typeof router.push>[0])}
+                testID="subscriber-area-support-button"
+                accessibilityRole="button"
+                accessibilityLabel="Open subscription support"
+              >
+                <Text style={styles.secondaryButtonText}>Open support</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>

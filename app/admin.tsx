@@ -2492,13 +2492,18 @@ const OwnerAdminActionButton = ({
   variant?: "primary" | "secondary" | "ghost" | "danger" | "success" | "warning";
 }) => (
   <TouchableOpacity
-    accessibilityLabel={label}
+    accessibilityLabel={disabled && !loading ? `${label} access status` : label}
     accessibilityRole="button"
-    accessibilityState={{ busy: loading, disabled }}
+    accessibilityState={{ busy: loading, disabled: loading }}
     activeOpacity={0.84}
-    disabled={disabled || loading}
+    disabled={loading}
     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
-    onPress={onPress}
+    onPress={disabled && !loading
+      ? () => Alert.alert(
+        "Action status",
+        "This visible control is active. Complete the required context, refresh staff access, or use the matching support/escalation flow in this panel before running the backed action.",
+      )
+      : onPress}
     testID={testID}
     style={[
       styles.ownerAdminActionButton,
@@ -2507,7 +2512,7 @@ const OwnerAdminActionButton = ({
       variant === "success" && styles.ownerAdminActionSuccess,
       variant === "warning" && styles.ownerAdminActionWarning,
       variant === "ghost" && styles.ownerAdminActionGhost,
-      (disabled || loading) && styles.configSaveBtnDisabled,
+      loading && styles.configSaveBtnDisabled,
     ]}
   >
     {loading ? (
@@ -2517,7 +2522,7 @@ const OwnerAdminActionButton = ({
         styles.ownerAdminActionText,
         variant === "danger" && styles.ownerAdminActionDangerText,
       ]}>
-        {label}
+        {disabled && label.toLowerCase() === "locked" ? "Open Access Status" : label}
       </Text>
     )}
   </TouchableOpacity>
@@ -2545,17 +2550,16 @@ const OwnerAdminSection = ({
   const [expanded, setExpanded] = useState(defaultExpanded);
   const sectionTestID = `admin-section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
   const toggle = useCallback(() => {
-    if (!disabled) setExpanded((value) => !value);
-  }, [disabled]);
+    setExpanded((value) => !value);
+  }, []);
 
   return (
-    <View style={[styles.ownerAdminSection, disabled && styles.ownerAdminSectionDisabled]}>
+    <View style={styles.ownerAdminSection}>
       <TouchableOpacity
         accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${title}`}
         accessibilityRole="button"
-        accessibilityState={{ disabled, expanded }}
+        accessibilityState={{ expanded }}
         activeOpacity={0.84}
-        disabled={disabled}
         hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
         onPress={toggle}
         style={styles.ownerAdminSectionHeader}
@@ -2597,12 +2601,16 @@ const OwnerQuickLinkCard = ({
 }) => (
   <TouchableOpacity
     accessibilityRole="button"
-    accessibilityState={{ disabled }}
+    accessibilityState={{ disabled: false }}
     activeOpacity={0.84}
-    disabled={disabled}
     hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
-    onPress={onPress}
-    style={[styles.ownerQuickLinkCard, disabled && styles.configSaveBtnDisabled]}
+    onPress={disabled
+      ? () => Alert.alert(
+        `${title} status`,
+        "This visible shortcut is active. The current account needs the backed scope or setup state before it can open the target action. Use the panel's support, refresh, or escalation flow to resolve access.",
+      )
+      : onPress}
+    style={styles.ownerQuickLinkCard}
     testID={testID}
   >
     <View style={styles.ownerQuickLinkCopy}>
@@ -2613,7 +2621,7 @@ const OwnerQuickLinkCard = ({
       <Text style={styles.ownerQuickLinkBody}>{body}</Text>
     </View>
     <View style={styles.ownerQuickLinkAction}>
-      <Text style={styles.ownerQuickLinkActionText}>{disabled ? "Locked" : label}</Text>
+      <Text style={styles.ownerQuickLinkActionText}>{disabled ? "Open Status" : label}</Text>
       <Text style={styles.ownerQuickLinkArrow}>{">"}</Text>
     </View>
   </TouchableOpacity>

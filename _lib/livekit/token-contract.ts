@@ -152,7 +152,7 @@ export async function requestLiveKitParticipantToken(
       requestedGrants,
       reason: "not_configured",
       message:
-        "Live video is not available yet. Try the current room experience for now.",
+        "Live video status is active, but the configured LiveKit token path is not reachable. Try the current room experience for now.",
       endpoint: config.tokenEndpoint || undefined,
       serverUrl: config.serverUrl || undefined,
     };

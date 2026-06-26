@@ -1965,7 +1965,7 @@ export default function WatchPartyRoomScreen() {
     const normalizedPartyId = String(room?.partyId ?? partyId ?? "").trim();
     if (!normalizedPartyId || paidTicketBusy) return;
     if (!paidWatchPartyCheckoutAvailable) {
-      setPaidTicketNotice("Paid Watch-Party Seat Pass checkout is not available yet.");
+      setPaidTicketNotice("Seat Pass status is active: checkout requires the owner-approved provider/test product path. No live money, payout, payable balance, or provider mutation was enabled.");
       return;
     }
     setPaidTicketBusy(true);
@@ -2799,7 +2799,7 @@ export default function WatchPartyRoomScreen() {
           <Text style={styles.errorBody}>
             {paidTicketGate.requiresPurchase && paidWatchPartyCheckoutAvailable
               ? `This Seat Pass unlocks access to this Watch-Party room only for ${priceLabel}. It does not include Premium, subscriptions, VIP, paid videos, other rooms, or events.`
-              : "Paid Watch-Party Seat Pass checkout is not available yet."}
+              : "Seat Pass status is active. Checkout opens only when the owner-approved provider/test product path is available; live money and payouts remain off."}
           </Text>
           <MoneyScopeStrip
             includes="Access to this Watch-Party room target only."
@@ -2809,17 +2809,17 @@ export default function WatchPartyRoomScreen() {
           <RouteBackedMonetizationProofCard config={routeProofConfig} surface="watch_party_ticket" />
           {paidTicketGate.requiresPurchase ? (
             <TouchableOpacity
-              style={[styles.secondaryBtn, styles.accessPrimaryButton, (paidTicketBusy || !paidWatchPartyCheckoutAvailable) && styles.secondaryBtnDisabled]}
+              style={[styles.secondaryBtn, styles.accessPrimaryButton, paidTicketBusy && styles.secondaryBtnDisabled]}
               onPress={onBuyPaidTicketFromRoomGate}
               activeOpacity={0.85}
-              disabled={paidTicketBusy || !paidWatchPartyCheckoutAvailable}
+              disabled={paidTicketBusy}
               testID="watch-party-ticket-purchase-button"
               accessibilityRole="button"
               accessibilityLabel="Get Watch-Party Seat Pass"
-              accessibilityState={{ disabled: paidTicketBusy || !paidWatchPartyCheckoutAvailable, busy: paidTicketBusy }}
+              accessibilityState={{ disabled: paidTicketBusy, busy: paidTicketBusy }}
             >
               <Text style={[styles.secondaryBtnText, styles.accessPrimaryButtonText]}>
-                {paidTicketBusy ? "Opening Store" : paidWatchPartyCheckoutAvailable ? "Get Seat" : "Not Available Yet"}
+                {paidTicketBusy ? "Opening Store" : paidWatchPartyCheckoutAvailable ? "Get Seat" : "Seat Pass Status"}
               </Text>
             </TouchableOpacity>
           ) : null}

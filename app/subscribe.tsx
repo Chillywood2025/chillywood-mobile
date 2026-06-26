@@ -326,6 +326,10 @@ export default function SubscribeScreen() {
     }
   }, [canManage, isSignedIn, onSignIn]);
 
+  const onAnnualStatus = useCallback(() => {
+    setNotice("Premium annual is provider-blocked by the Google Play base-plan issue. Monthly tester flow and restore remain the active paths where the Play internal tester/provider setup supports them.");
+  }, []);
+
   return (
     <ImageBackground source={CHILLYWOOD_BACKGROUND_SOURCE} style={styles.background} resizeMode="cover">
       <View style={styles.routeContainer} testID="screen-premium" collapsable={false}>
@@ -412,6 +416,12 @@ export default function SubscribeScreen() {
               body={availabilitySummary}
               tone={purchaseStatusTone}
             />
+            <StatusLine
+              label="Premium annual"
+              value="Provider-blocked"
+              body="Annual opens this status path while Google Play base-plan setup is blocked. It is not claimed live or buyable."
+              tone="warning"
+            />
 
             <View style={styles.actionRow}>
               <TouchableOpacity
@@ -425,39 +435,48 @@ export default function SubscribeScreen() {
               >
                 {restoreBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Restore purchases</Text>}
               </TouchableOpacity>
-              {canManage ? (
-                <TouchableOpacity
-                  style={[styles.secondaryButton, busy && styles.secondaryButtonDisabled]}
-                  activeOpacity={0.86}
-                  disabled={busy}
-                  onPress={onManage}
-                  accessibilityRole="button"
-                  accessibilityLabel="Manage Chi'llywood Premium subscription"
-                >
-                  {manageBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Manage subscription</Text>}
-                </TouchableOpacity>
-              ) : null}
+              <TouchableOpacity
+                style={[styles.secondaryButton, busy && styles.secondaryButtonDisabled]}
+                activeOpacity={0.86}
+                disabled={busy}
+                onPress={onManage}
+                accessibilityRole="button"
+                accessibilityLabel="Manage Chi'llywood Premium subscription"
+              >
+                {manageBusy ? <ActivityIndicator color="#E5ECF8" /> : <Text style={styles.secondaryButtonText}>Manage subscription</Text>}
+              </TouchableOpacity>
             </View>
 
-            {canPurchase ? (
-              <TouchableOpacity
-                style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
-                activeOpacity={0.88}
-                disabled={busy}
-                onPress={onPurchase}
-                testID="premium-purchase-button"
-                accessibilityRole="button"
-                accessibilityLabel="Start Chi'llywood Premium purchase"
-              >
-                {purchaseBusy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>
-                    {sandboxMode.enabled ? "Start Sandbox Premium Test" : "Subscribe to Premium"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            ) : null}
+            <TouchableOpacity
+              style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}
+              activeOpacity={0.88}
+              disabled={busy}
+              onPress={onPurchase}
+              testID="premium-purchase-button"
+              accessibilityRole="button"
+              accessibilityLabel="Start Chi'llywood Premium purchase or open Premium status"
+            >
+              {purchaseBusy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {canPurchase
+                    ? sandboxMode.enabled ? "Start Sandbox Premium Test" : "Subscribe to Premium"
+                    : "Check Premium Monthly Status"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.ghostButton}
+              activeOpacity={0.86}
+              onPress={onAnnualStatus}
+              testID="premium-annual-status-button"
+              accessibilityRole="button"
+              accessibilityLabel="Open Premium annual provider-blocked status"
+            >
+              <Text style={styles.ghostButtonText}>Premium annual status</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.ghostButton, loading && styles.secondaryButtonDisabled]}

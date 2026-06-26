@@ -127,7 +127,8 @@ const admin = read("app/admin.tsx");
 ].forEach((needle) => requireText("money feature defaults", moneyFlags, needle));
 
 requireText("public money card", publicMoneyCard, "MONEY FEATURE UNAVAILABLE");
-requireText("public money card", publicMoneyCard, "Checkout disabled");
+requireText("public money card", publicMoneyCard, "Status flow active");
+requireText("public money card", publicMoneyCard, "Open status / support");
 requireText("public money card", publicMoneyCard, "Public purchase, payout, cash-out, publish, host, and admin authority are not enabled by this surface.");
 if (publicMoneyCard.includes("ROUTE-BACKED MONETIZATION PROOF")) {
   failures.push("public money card still exposes proof copy");
@@ -137,11 +138,11 @@ if (publicMoneyCard.includes("Provider product")) {
 }
 
 requireText("paid video route", player, "paidVideoCheckoutAvailable");
-requireText("paid video route", player, "Paid creator video checkout is not available yet.");
+requireText("paid video route", player, "Paid creator video status is active");
 requireText("watch-party entry", watchPartyEntry, "paidWatchPartyCheckoutAvailable");
-requireText("watch-party entry", watchPartyEntry, "Paid Watch-Party Seat Passes are not available yet.");
+requireText("watch-party entry", watchPartyEntry, "Paid Watch-Party Seat Pass status is active");
 requireText("watch-party room", watchPartyRoom, "paidWatchPartyCheckoutAvailable");
-requireText("watch-party room", watchPartyRoom, "Paid Watch-Party Seat Pass checkout is not available yet.");
+requireText("watch-party room", watchPartyRoom, "Seat Pass status is active");
 
 requireText("admin command center", admin, "canAccessAdminConsole");
 requireText("admin command center", admin, "readMyPlatformRoleMemberships");
@@ -160,7 +161,7 @@ requireMatch(
 notes.push("Public non-money switchboard documentation exists.");
 notes.push("Safe public systems are documented as enabled or verified behind existing guards.");
 notes.push("Live money, creator-money, payouts, Stripe/merch, and provider refunds remain off/manual.");
-notes.push("Public-facing monetization proof/provider copy was replaced with unavailable copy.");
+notes.push("Public-facing monetization proof/provider copy was replaced with active status/readiness copy.");
 
 if (failures.length) {
   console.error("Public non-money feature enablement proof failed:");

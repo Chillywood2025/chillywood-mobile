@@ -1587,10 +1587,10 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={[
                 styles.inlinePrimaryButton,
-                (usernameSaving || normalizeUsernameHandle(myProfile?.username) === normalizeUsernameHandle(usernameDraft) || !usernameAvailability.available) && styles.inlinePrimaryButtonDisabled,
+                usernameSaving && styles.inlinePrimaryButtonDisabled,
               ]}
               activeOpacity={0.86}
-              disabled={usernameSaving || normalizeUsernameHandle(myProfile?.username) === normalizeUsernameHandle(usernameDraft) || !usernameAvailability.available}
+              disabled={usernameSaving}
               onPress={onPressSaveUsername}
             >
               <Text style={styles.inlinePrimaryButtonText}>{usernameSaving ? "Saving..." : "Save Handle"}</Text>
