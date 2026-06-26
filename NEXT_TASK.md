@@ -1,5 +1,26 @@
 # NEXT TASK
 
+# Tester Build / Current Runtime Delivery Lane
+
+- [x] Previous commit `25ecf6d55180144b7202c901c163f9e28e469609` was verified aligned with `origin/main` before delivery work began.
+- [x] Published EAS Update to branch `production` with message `Tester update: current public non-money readiness changes`.
+- [x] Captured update group `4a21c89b-35ca-4997-8c62-28bb20f90469` / Android update ID `019f020a-96a7-71d1-890c-b8406e78ab49`.
+- [x] Verified installed Android package launch on `R5CR120QCBF`: `com.chillywood.mobile`, versionName `1.0.0`, versionCode `55`, installer `com.android.vending`.
+- [x] Added `docs/release/TESTER_BUILD_CURRENT_RUNTIME_DELIVERY.md`, proof script, and guard script.
+
+Status:
+- Verdict: Partial. EAS Update was sufficient and published for runtime `1.0.0`, and the installed Play/internal app launched, but the smoke window did not observe the device download/apply the new update group.
+- Required truth:
+  - This lane did not submit the app to production.
+  - This lane did not mutate Google Play, RevenueCat, Stripe, payouts, purchases, refunds, or provider dashboards.
+  - Safe public non-money systems remain enabled.
+  - Premium public purchase remains OFF.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF.
+  - Provider refunds remain manual/external.
+- Next lane recommendation: Run tester feedback triage after testers complete current-runtime QA. Premium monthly public purchase proof remains separate owner-approved lane.
+
 # Final Store / Release Readiness and Play Submission Packet Alignment Lane
 
 - [x] Previous commit `b318c6249271ac068ccaeef122477f6bc00f2663` was verified aligned with `origin/main` before release-packet edits began.

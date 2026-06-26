@@ -1,5 +1,7 @@
 # Final Store Release Readiness Play Submission Packet
 
+Tester build / current runtime delivery is tracked in `docs/release/TESTER_BUILD_CURRENT_RUNTIME_DELIVERY.md`. EAS Update was sufficient and published for runtime `1.0.0`, but installed-device uptake of the new update group was not observed during the short smoke window.
+
 Final store/release readiness and Play submission packet alignment: Partial.
 
 Status vocabulary: Final store/release readiness and Play submission packet alignment: Closed / Partial / Blocked.
