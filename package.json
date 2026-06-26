@@ -52,6 +52,7 @@
     "proof:android-tester-binary-build-install-smoke": "node ./scripts/proof-android-tester-binary-build-install-smoke.mjs",
     "proof:play-internal-test-aab-upload-tester-smoke": "node ./scripts/proof-play-internal-test-aab-upload-tester-smoke.mjs",
     "proof:owner-admin-moderator-provision-proof-accounts": "node ./scripts/provision-owner-admin-moderator-proof-accounts.mjs",
+    "proof:owner-rpc-staff-grant-path": "node ./scripts/proof-owner-rpc-staff-grant-path.mjs",
     "proof:local-bootstrap-seeded-staff-fixtures": "node ./scripts/local-bootstrap-seeded-staff-proof-fixtures.mjs",
     "proof:admin-role-scope": "node ./scripts/proof-admin-role-scope.mjs",
     "proof:moderator-role-scope": "node ./scripts/proof-moderator-role-scope.mjs",

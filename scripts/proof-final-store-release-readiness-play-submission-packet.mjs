@@ -122,7 +122,7 @@ const packageJson = read("package.json");
   "Attorney/legal review | Owner/legal external",
   "Final Play Console Data Safety/App Access/content rating acceptance | Owner/store external",
   "Final release build install/smoke | Release operation",
-  "Owner RPC staff grant path | Separate Partial/follow-up",
+  "Owner RPC staff grant path | Closed by `npm run proof:owner-rpc-staff-grant-path`",
 ].forEach((needle) => requireText("known blocker classification", releaseDoc, needle));
 
 [

@@ -1,5 +1,36 @@
 # NEXT TASK
 
+# Owner RPC Staff Grant Path Follow-Up
+
+Doc: `docs/admin/OWNER_ADMIN_MODERATOR_PRODUCTION_AUTHORITY_SEEDED_DEVICE_PROOF.md`.
+
+- [x] Added `scripts/proof-owner-rpc-staff-grant-path.mjs`.
+- [x] Added package script `proof:owner-rpc-staff-grant-path`.
+- [x] Proved the existing authenticated Owner RPC staff grant path with proof-only `@chillywood.test` accounts.
+- [x] Used a temporary proof-only Owner actor and revoked the proof Owner role after proof.
+- [x] Called `admin_grant_platform_role_by_email` and `admin_grant_platform_staff_permission_by_email`.
+- [x] Granted only `proof_moderator_001@chillywood.test` and `proof_admin_operator_001@chillywood.test`.
+- [x] Verified Moderator denial for Admin/operator grant.
+- [x] Kept credentials, passwords, service-role key, provider data, and private evidence out of git/artifacts/logs.
+
+Status:
+- Verdict: Closed for the authenticated Owner RPC staff grant path.
+- The prior `platform_staff_permission_denied` blocker was caused by the ignored local proof "Owner" env resolving as `operator`, not `owner`.
+- Provider dashboard private MFA/access proof remains owner-confirmation-required because repo code cannot verify private dashboard state without sanitized owner/provider evidence.
+- Required truth:
+  - no real staff accounts changed
+  - no real users changed
+  - no current First Owner touched
+  - no provider dashboard mutation
+  - no Google Play product/base-plan mutation
+  - no RevenueCat mapping change
+  - no Stripe mutation
+  - no purchases or provider refunds executed
+  - Premium public purchase remains OFF
+  - `live_money_enabled` remains OFF
+  - Creator-money remains OFF
+  - Payouts/Stripe/merch remain OFF
+
 # Play Internal / Closed Testing AAB Upload + Tester Smoke Lane
 
 Doc: `docs/release/PLAY_INTERNAL_TEST_AAB_UPLOAD_TESTER_SMOKE.md`.
@@ -116,11 +147,10 @@ Status:
 - [x] Installed Moderator traversal ran and closed.
 - [x] Installed Admin/operator traversal ran and closed.
 - [x] Signed-out and normal-user admin denial ran and closed.
-- [x] Owner RPC staff grant path was not claimed proved.
+- [x] Owner RPC staff grant path was later proved by `npm run proof:owner-rpc-staff-grant-path`.
 
 Status:
-- Verdict: Closed for installed Moderator/Admin traversal through proof-only service-role fixtures.
-- Remaining separate follow-up: Owner RPC staff grant path remains Partial unless separately fixed/proved.
+- Verdict: Closed for installed Moderator/Admin traversal through proof-only service-role fixtures. The separate Owner RPC staff grant path follow-up is also Closed.
 - Artifact: `/tmp/app-seeded-staff-proof-fixture-bootstrap-full-traversal-20260625-220019/`
 - Cleanup: not performed; proof roles/scopes are short-expiring.
 - Required truth:
@@ -140,17 +170,9 @@ Status:
 - [x] Kept credential values outside git and never printed passwords.
 - [x] Reran installed-device proof with a redacted credential key presence checklist.
 
-Status:
-- Verdict: Partial. Installed package/launch proof passed, static/guard coverage passed, and credential key presence is now redacted in `/tmp/app-owner-admin-moderator-seeded-full-traversal-YYYYMMDD-HHMMSS/`.
-- Provisioning blocker: the Owner-authenticated staff-role grant RPC returned `platform_staff_permission_denied`, so the lane did not bypass governance with direct service-role staff-role inserts.
-- Missing proof env keys:
-  - `CHILLYWOOD_E2E_MODERATOR_EMAIL`
-  - `CHILLYWOOD_E2E_MODERATOR_USER_ID`
-  - `CHILLYWOOD_E2E_MODERATOR_PASSWORD`
-  - `CHILLYWOOD_E2E_ADMIN_OPERATOR_EMAIL`
-  - `CHILLYWOOD_E2E_ADMIN_OPERATOR_USER_ID`
-  - `CHILLYWOOD_E2E_ADMIN_OPERATOR_PASSWORD`
-- Owner action: run the provisioner with an Owner/First Owner account that can grant `moderator` and `operator`, or provide pre-seeded credentials through an approved ignored env/secret manager.
+- Status update: this earlier Partial was superseded. Installed traversal closed through proof-only service-role fixtures, and the separate authenticated Owner RPC staff grant path closed later through `npm run proof:owner-rpc-staff-grant-path`.
+- Root cause: the ignored local proof "Owner" env used in the earlier attempt resolved as `operator`, not `owner`, which correctly produced `platform_staff_permission_denied`.
+- Owner action: none for Owner RPC proof. Provider dashboard private MFA/access proof still requires sanitized owner/provider confirmation.
 - Next lane recommendation: Continue production readiness with final store/release readiness and Play submission packet alignment, excluding known Google Play annual/channel base-plan provider blocker.
 
 ## Owner/Admin/Moderator Production Authority Seeded 1-Device Proof Lane
@@ -161,7 +183,7 @@ Status:
 - [x] Repo-safe seeded Moderator/Admin env key contract was added without committing credential values.
 
 Status:
-- Verdict: Partial. Static policy guards, seeded account availability checks, backend/RPC denial contract, installed-app package/launch probe, proof artifact generation, proof script, and guard coverage are closed. Installed multi-persona Moderator/Admin route traversal remains Partial until safe `CHILLYWOOD_E2E_MODERATOR_*` and `CHILLYWOOD_E2E_ADMIN_OPERATOR_*` credentials exist in ignored local env or a secret manager.
+- Verdict: Closed. Static policy guards, seeded account availability checks, backend/RPC denial contract, installed-app package/launch probe, proof artifact generation, proof script, guard coverage, installed Moderator/Admin traversal, and the authenticated Owner RPC staff grant path are closed.
 - Docs: `docs/admin/OWNER_ADMIN_MODERATOR_PRODUCTION_AUTHORITY_SEEDED_DEVICE_PROOF.md`
 - Proof script: `scripts/proof-owner-admin-moderator-production-authority-seeded-device.mjs`
 - Guard: `scripts/guard-owner-admin-moderator-production-authority-policy.mjs`
@@ -175,7 +197,7 @@ Status:
   - no reporter identity/private evidence exposure
   - safe public non-money systems remain enabled
   - `live_money_enabled`, creator-money, Premium public purchase, payouts, Stripe Connect, merch checkout, purchases, refunds, and provider mutation remain OFF/not performed
-- Next lane recommendation: Continue production readiness with final store/release readiness and Play submission packet alignment, excluding known Google Play annual/channel base-plan provider blocker.
+- Next lane recommendation: Run tester feedback triage after current non-money QA. Provider dashboard private MFA/access proof remains owner-confirmation-required.
 
 ## Provider Dashboard Ownership / Access Governance Lane
 

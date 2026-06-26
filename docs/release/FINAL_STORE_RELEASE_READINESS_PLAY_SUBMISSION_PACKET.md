@@ -76,7 +76,7 @@ Data Safety evidence map matches actual app behavior at repo level and still req
 | Owner/legal/provider confirmation blockers | Provider dashboard MFA/access proof | Owner-confirmation-required | Repo-side governance Partial, not app-code blocker | Owner confirms private dashboard owners/MFA/least privilege outside repo. |
 | Owner/legal/provider confirmation blockers | Attorney/legal review | Owner/legal external | Packet is not legal advice | Owner/legal approve public policy and listing claims. |
 | Owner/legal/provider confirmation blockers | Final release build install/smoke | Release operation | Not run in this lane unless separately approved | Build, upload, install, and smoke final artifact. |
-| Owner/legal/provider confirmation blockers | Owner RPC staff grant path | Separate Partial/follow-up | Not a release packet blocker if service-role proof fixtures are not used for real staff provisioning | Prove separately before relying on Owner RPC grant for staff provisioning. |
+| Owner/legal/provider confirmation blockers | Owner RPC staff grant path | Closed by `npm run proof:owner-rpc-staff-grant-path` | Not a release packet blocker; proof used only `@chillywood.test` accounts and existing authenticated Owner RPCs | Keep real staff provisioning under Owner/First Owner approval and audit. |
 | Future monetization blockers | Premium monthly public purchase | Separate owner-approved proof lane | Keep OFF in packet unless owner runs proof | Owner approves monthly proof if wanted before release. |
 | Future monetization blockers | Creator-money/live-money/payouts/Stripe/merch/refund automation | Future monetization lanes, OFF | Do not advertise as live | Keep switches OFF; run separate activation lanes later. |
 

@@ -1,12 +1,12 @@
 # Owner Admin Moderator Production Authority Seeded Device Proof
 
-Final store/release readiness and Play submission packet alignment is documented in `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`. The installed Moderator/Admin traversal remains Closed through proof-only service-role fixtures; Owner RPC staff grant path remains separate / Partial and is not claimed proved by the release packet. The release packet did not submit the app to production, mutate providers, activate money, or change staff roles.
+Final store/release readiness and Play submission packet alignment is documented in `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`. The installed Moderator/Admin traversal remains Closed through proof-only service-role fixtures; the Owner RPC staff grant path is Closed by `npm run proof:owner-rpc-staff-grant-path` using proof-only `@chillywood.test` accounts and the existing authenticated Owner RPCs. The release packet did not submit the app to production, mutate providers, activate money, or change real staff roles.
 
 Owner/Admin/Moderator production authority seeded 1-device proof: Closed for installed Moderator/Admin traversal through proof-only service-role fixtures, static policy guards, seeded account availability checks, backend/RPC denial contract, installed-app readback/launch probe, proof artifact generation, proof script, guard coverage, and redacted seeded credential key presence checks.
 
-Seeded Moderator/Admin credential provisioning result, June 26, 2026: Closed for installed traversal through proof-only service-role fixtures. The repo-safe credential key names exist, and the proof script checks ignored local env/process env without printing values. A narrow proof-account provisioner remains for the separate Owner-authenticated RPC path, but the local Owner actor was denied by `platform_staff_permission_denied`; therefore Owner RPC staff grant remains separate / Partial unless separately fixed and proved. This lane used `scripts/local-bootstrap-seeded-staff-proof-fixtures.mjs` as an explicit service-role proof fixture bootstrap for only `proof_moderator_001@chillywood.test` and `proof_admin_operator_001@chillywood.test`.
+Seeded Moderator/Admin credential provisioning result, June 26, 2026: Closed for installed traversal through proof-only service-role fixtures. The repo-safe credential key names exist, and the proof script checks ignored local env/process env without printing values. The later Owner RPC staff grant proof found the old blocker was caused by the local proof "Owner" env resolving as an `operator`, not an `owner`; `scripts/proof-owner-rpc-staff-grant-path.mjs` then created a temporary proof-only Owner actor, used the existing Owner-authenticated RPCs to grant/revoke proof Moderator/Admin roles and exact staff scopes, verified Moderator denial for Admin/operator grant, and revoked the proof Owner role afterward. This lane used `scripts/local-bootstrap-seeded-staff-proof-fixtures.mjs` as an explicit service-role proof fixture bootstrap for only `proof_moderator_001@chillywood.test` and `proof_admin_operator_001@chillywood.test`.
 
-Service-role proof fixture bootstrap was used. This proves installed Moderator/Admin traversal. This does not prove the Owner RPC staff grant path. No real staff accounts were changed. No real users were changed. No provider dashboards were changed. No money systems were enabled.
+Service-role proof fixture bootstrap was used for installed Moderator/Admin traversal. A separate Owner RPC proof was then run through `admin_grant_platform_role_by_email` and `admin_grant_platform_staff_permission_by_email` with proof-only `@chillywood.test` accounts. No real staff accounts were changed. No real users were changed. No provider dashboards were changed. No money systems were enabled.
 
 Status vocabulary: Owner/Admin/Moderator production authority seeded 1-device proof: Closed / Partial / Blocked.
 
@@ -61,7 +61,7 @@ Seeded Moderator/Admin credential values must live only in ignored local env or 
 
 Proof artifacts may include these key names and presence booleans only. They must not include passwords, full private emails, tokens, raw provider data, private evidence, raw audit logs, or screenshots showing credential entry.
 
-The current redacted credential checklist is Closed for fixture credentials: all six Moderator/Admin keys are present in ignored `.env.browserstack-monetization.local` and values are redacted in artifacts. The proof-account provisioning attempt for the Owner RPC path stopped at the audited Owner RPC role-grant boundary with `platform_staff_permission_denied`, so this lane does not claim the Owner RPC grant path is proved.
+The current redacted credential checklist is Closed for fixture credentials: all six Moderator/Admin keys are present in ignored `.env.browserstack-monetization.local` and values are redacted in artifacts. The Owner RPC staff grant path is Closed by `scripts/proof-owner-rpc-staff-grant-path.mjs`: the proof used a temporary proof-only Owner actor, called the existing authenticated Owner RPCs, granted only proof Moderator/Admin accounts, added exact proof staff scopes, verified a Moderator cannot grant Admin/operator, and revoked the temporary proof Owner role after the run.
 
 ## Seeded Persona Matrix
 
@@ -181,6 +181,19 @@ The current redacted credential checklist is Closed for fixture credentials: all
 | proof/test accounts | separate from staff accounts |
 | service accounts | not human staff accounts |
 
+## Owner RPC Staff Grant Path Proof
+
+Owner RPC staff grant path: Closed.
+
+The follow-up proof is `npm run proof:owner-rpc-staff-grant-path`. It uses `scripts/proof-owner-rpc-staff-grant-path.mjs` to create a run-scoped proof-only Owner actor such as `proof_owner_staff_grant_YYYYMMDDHHMMSS@chillywood.test`, bootstrap only that proof Owner role with service-role authority, then authenticate through the normal anon client and call the existing Owner RPCs:
+
+- `admin_grant_platform_role_by_email`
+- `admin_grant_platform_staff_permission_by_email`
+
+The proof grants only the two proof accounts `proof_moderator_001@chillywood.test` and `proof_admin_operator_001@chillywood.test`, uses exact canonical staff scopes needed for traversal, verifies a Moderator receives `platform_staff_permission_denied` when attempting an Admin/operator grant, writes sanitized proof artifacts under `/tmp/app-owner-rpc-staff-grant-path-YYYYMMDDHHMMSS/`, and revokes the temporary proof Owner role after the run.
+
+This closes the authenticated Owner RPC staff grant path behavior. It does not change real staff, does not touch the current First Owner, does not mutate provider dashboards, does not activate money, does not enable purchases or payouts, and does not prove private provider-dashboard MFA/access state.
+
 ## Auto-Fix Loop Rules
 
 Allowed auto-fixes: missing proof/guard scripts, stale docs, stale production wording, missing references, unsafe public copy, missing package scripts, missing guard markers, safe disabled-state copy, missing reason/audit wording, guard assertions, and TypeScript errors caused by this lane.
@@ -197,13 +210,12 @@ Combined bootstrap/traversal artifact: `/tmp/app-seeded-staff-proof-fixture-boot
 
 ## Remaining Blockers
 
-- Owner RPC staff grant path was not proved by this lane. The proof-account provisioning attempt could not grant Moderator/Admin roles through the audited Owner RPC path because the local Owner actor received `platform_staff_permission_denied`. Owner action is required only if the Owner RPC staff grant path must be separately closed.
 - Backend/RPC denial probes are contract/static-proof based unless a safe non-mutating RPC harness with seeded sessions exists for each persona.
 - Provider dashboard access proof remains owner-confirmation-required.
 
 ## Launch Verdict
 
-Launch verdict for this lane: Closed for installed Moderator/Admin traversal through proof-only service-role fixtures. Owner RPC staff grant path remains separate / Partial and was not claimed proved.
+Launch verdict for this lane: Closed for installed Moderator/Admin traversal through proof-only service-role fixtures and Closed for the authenticated Owner RPC staff grant path proof. Provider dashboard private MFA/access proof remains owner-confirmation-required outside repo-verifiable proof.
 
 ## Existing Proof References
 
