@@ -1,6 +1,6 @@
 # Emergency Controls Incident Response Kill Switch Governance
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Urgent moderation/live-safety reports feed incident escalation, privacy-safe templates, and post-action audit review without broad Moderator powers or reporter identity exposure.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Urgent moderation/live-safety reports feed incident escalation, privacy-safe templates, and post-action audit review without broad Moderator powers or reporter identity exposure. Coordinated-report and repeated-offender signals can escalate to emergency review but cannot auto-disable users, content, rooms, money, provider systems, or public features.
 
 Emergency controls, incident response, and kill-switch governance: Closed for repo-side governance, documented response ownership, runbooks, templates, rollback checklist, proof, and guard coverage. Partial for emergency controls that are manual/provider-dashboard/runbook-only or require a future exact backend lane.
 

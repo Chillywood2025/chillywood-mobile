@@ -1,6 +1,6 @@
 # Content Takedown Decisions
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Takedown actions remain tied to separated queue/case context where appropriate, require reasons where backed, prefer reversible actions where backed, and use privacy-safe user/creator notice templates that do not expose reporter identity or private evidence.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Takedown actions remain tied to separated queue/case context where appropriate, require reasons where backed, prefer reversible actions where backed, and use privacy-safe user/creator notice templates that do not expose reporter identity or private evidence. Coordinated-report and repeated-offender signals are review/risk flags only and do not auto-ban, auto-delete, auto-suspend, auto-restrict, auto-hide, or auto-punish.
 
 Emergency controls, incident response, and kill-switch governance is documented in `docs/ops/EMERGENCY_CONTROLS_INCIDENT_RESPONSE_KILL_SWITCH_GOVERNANCE.md`. Emergency moderation/takedown actions remain exact-scope, reasoned, audited where backed, and evidence-preserving; emergency disable is not hard delete, refund, payout movement, or provider mutation.
 

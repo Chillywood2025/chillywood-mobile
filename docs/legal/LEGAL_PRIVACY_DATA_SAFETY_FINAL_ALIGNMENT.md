@@ -1,6 +1,6 @@
 # Legal/privacy/Data Safety Final Alignment
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation notices, internal notes, DMCA/legal separation, payment/support separation, appeals separation, reporter privacy, and private-evidence protections remain aligned with legal/privacy/Data Safety documentation.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Moderation notices, internal notes, canned reason templates, coordinated-report signals, repeated-offender review flags, malicious-report handling, DMCA/legal separation, payment/support separation, appeals separation, reporter privacy, and private-evidence protections remain aligned with legal/privacy/Data Safety documentation.
 
 Status: Legal/privacy/Data Safety final alignment: Closed for repo-side documentation alignment; owner/legal review and Play Console acceptance remain external.
 

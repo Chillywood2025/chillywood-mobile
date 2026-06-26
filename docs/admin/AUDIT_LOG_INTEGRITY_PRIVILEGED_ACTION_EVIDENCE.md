@@ -1,6 +1,6 @@
 # Audit Log Integrity Privileged Action Evidence
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Case actions, notes, assignments, escalations, notices, and reversals require audit where backed, with sanitized metadata and no reporter identity or private evidence exposure.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Case actions, notes, assignments, escalations, notices, reason template selection, coordinated-report flags, repeated-offender flags, malicious-report flags, SLA escalation, and reversals require audit where backed, with sanitized metadata and no reporter identity, private evidence, raw logs, tokens, signed URLs, raw IPs, provider data, payment data, legal conclusions, or secrets.
 
 Status: Audit log integrity and privileged action evidence governance: Closed / Partial / Blocked.
 

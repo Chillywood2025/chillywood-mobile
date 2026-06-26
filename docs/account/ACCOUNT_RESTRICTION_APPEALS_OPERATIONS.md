@@ -1,6 +1,6 @@
 # Account Restriction And Appeals Operations
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Account restriction recommendations escalate from moderation/support cases; appeals remain separate from initial moderation review; notices are privacy-safe; reporter identity and private evidence are not exposed.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Account restriction recommendations escalate from moderation/support cases; repeated-offender and coordinated-report signals are review/risk flags only and do not auto-suspend, auto-restrict, or auto-punish; appeals remain separate from initial moderation review; notices are privacy-safe; reporter identity and private evidence are not exposed.
 
 ## Status
 

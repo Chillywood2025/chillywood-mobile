@@ -1,6 +1,6 @@
 # Monitoring, Analytics, Crash, And Runtime Diagnostics
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Reporting, escalation, malicious-report handling, and urgent live-safety SLA monitoring must use sanitized diagnostics and must not log reporter identity, private evidence, private chat bodies, raw IPs, tokens, signed URLs, or provider payloads.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Reporting, escalation, malicious-report handling, coordinated-report signals, repeated-offender review flags, and urgent live-safety SLA monitoring must use sanitized diagnostics and must not log reporter identity, private evidence, private chat bodies, raw IPs, tokens, signed URLs, provider payloads, payment data, legal conclusions, or secrets.
 
 Date: 2026-06-25
 

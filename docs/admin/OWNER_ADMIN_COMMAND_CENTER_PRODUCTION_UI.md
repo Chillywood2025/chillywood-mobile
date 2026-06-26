@@ -10,6 +10,8 @@ Emergency controls, incident response, and kill-switch governance: Closed / Part
 
 Staff access lifecycle, onboarding, and offboarding governance: Closed / Partial / Blocked. Current repo-side status is Closed for governance in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`; staff add/remove remains Owner/First Owner-approved where backed, Support is not a backend role, support-workflow access is exact-scope permission work, shared staff accounts are forbidden, proof/test accounts stay separate from staff accounts, and provider dashboard offboarding is a manual checklist in this lane.
 
+Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Command Center moderation assignment, internal notes, canned reason templates, coordinated-report signals, repeated-offender flags, malicious-report handling, and SLA escalation must remain exact-scope, case-bound, privacy-safe, audited where backed, and human-review only. No auto-ban, auto-delete, auto-suspend, auto-restrict, auto-hide, or auto-punishment is allowed from these surfaces.
+
 The app has a single Command Center entry point: `/admin` in `app/admin.tsx`. The Command Center is production-labeled, role-scoped, backend-authorized, and fail-closed. It is not a new role hierarchy, provider-product, money activation, payout, Stripe, merch, or broad redesign lane.
 
 Required production wording:

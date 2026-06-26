@@ -10,6 +10,8 @@ Emergency controls, incident response, and kill-switch governance is documented 
 
 Staff access lifecycle, onboarding, and offboarding governance is documented in `docs/admin/STAFF_ACCESS_LIFECYCLE_ONBOARDING_OFFBOARDING_GOVERNANCE.md`. Admin staff-management remains exact-scope only, staff actions must be attributable to one human account, shared staff accounts are forbidden, staff access should be temporary or reviewable by default, and provider dashboard offboarding is manual checklist only in this lane.
 
+Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Admin can approve or execute moderation assignment, internal notes, canned reason templates, coordinated-report flags, repeated-offender review flags, malicious-report handling, and urgent SLA escalation only through exact-scope, case-bound, audited where backed, human-review operations. These operations do not auto-ban, auto-delete, auto-suspend, auto-restrict, auto-hide, or auto-punish.
+
 This document defines the production Admin role for the app. Admin is a real production role, not a UI label. The backend represents public Admins as active `operator` rows in `platform_role_memberships`, and operational authority is granted through explicit rows in `platform_staff_permission_grants`.
 
 Role terminology is locked in `docs/admin/ROLE_TERMINOLOGY_LOCK.md`: `operator` is only the internal/backend alias for product-facing Admin, there is no separate product Operator role, Support is a work area and permission group rather than a staff role, and Moderator is separate from Admin while support-duty-capable through exact scopes. Moderator role scope is documented separately in `docs/admin/MODERATOR_ROLE_SCOPE_AND_SUPPORT_DUTIES.md`.

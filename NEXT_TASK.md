@@ -1,5 +1,36 @@
 # NEXT TASK
 
+## Moderation Case Operations Completion Lane
+
+- [x] Moderation queue commit `9714cac8491e56f75fd2dba8dc42fd31d2f42d2a` was already aligned with `origin/main` before new edits.
+- [x] Moderation case operations completion repo-side proof closed.
+
+Status:
+- Verdict: Closed for safe human-review operations governance, exact-scope assignment policy, private/audited internal note policy, template-only canned reasons, coordinated-report signal-only handling, repeated-offender review/risk flags, malicious-report privacy, urgent SLA owner/escalation, proof, and guard coverage. Future broad backend case-table/note-table/UI automation remains a separate exact implementation lane and must stay non-punitive unless a human scoped action records the decision.
+- Docs: `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`
+- Proof script: `scripts/proof-moderation-case-operations-completion.mjs`
+- Guard: `scripts/guard-moderation-case-operations-policy.mjs`
+- Required truth:
+  - Case assignment is exact-scope, case-bound, and audited where backed.
+  - Internal notes are private, scoped, sanitized, and audited where backed.
+  - Internal notes are never user-facing.
+  - Universal canned reasons are templates only.
+  - Canned reasons still require human review.
+  - Coordinated-report detection is flags/signals only.
+  - Coordinated-report detection does not auto-punish.
+  - Repeated-offender aggregation is review/risk flags only.
+  - Repeated-offender aggregation does not auto-punish.
+  - Malicious reporting is handled without exposing reporter identity.
+  - Urgent-report SLA owner and escalation are documented.
+  - No auto-ban, auto-delete, auto-suspend, auto-restrict, auto-hide, or auto-punishment was added.
+  - Safe public non-money systems remain enabled.
+  - `live_money_enabled` remains OFF.
+  - Creator-money remains OFF.
+  - Premium public purchase remains OFF.
+  - Payouts, payable balances, withdrawals, cash-out, transfers, Stripe Connect, merch checkout, and payout movement remain OFF.
+  - No Google Play, RevenueCat, Stripe, payout, purchase, refund, or provider mutation happened.
+- Next lane recommendation: Continue production readiness with provider dashboard ownership and access governance.
+
 ## Moderation Queue / Case Management / Escalation Governance Lane
 
 - [x] Staff lifecycle commit `eb66492a80a50d9aa61b99fde58031f97a185654` was already aligned with `origin/main` before new edits.

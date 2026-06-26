@@ -1,6 +1,6 @@
 # Chat Call Moderation Notification Abuse
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Chat-message and chat-thread reports remain case/report-context scoped; internal notes are private where backed; notices must not expose reporter identity, private chat evidence, raw logs, call content, push tokens, or LiveKit tokens.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Chat-message and chat-thread reports remain case/report-context scoped; internal notes are private, scoped, sanitized, audited where backed, and never user-facing; canned reasons still require human review; coordinated/repeated-offender signals do not auto-hide messages or auto-punish; notices must not expose reporter identity, private chat evidence, raw logs, call content, push tokens, or LiveKit tokens.
 
 Chat/call moderation and notification abuse controls: Closed after validation.
 Dedicated chat_thread report target: Closed after validation.

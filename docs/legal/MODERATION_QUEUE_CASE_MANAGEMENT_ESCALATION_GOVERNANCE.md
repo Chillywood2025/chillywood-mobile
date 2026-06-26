@@ -1,6 +1,6 @@
 # Moderation Queue Case Management Escalation Governance
 
-Moderation queue, case management, and escalation governance: Closed for repo-side queue separation, severity/SLA policy, notice templates, exact-scope action governance, proof, and guard coverage. Partial for broad general-case self-assignment, broad internal moderation case notes, universal canned-reason UI, coordinated-report automation, and universal repeated-offender automation where no backed model exists yet.
+Moderation queue, case management, and escalation governance: Closed for repo-side queue separation, severity/SLA policy, notice templates, exact-scope action governance, proof, and guard coverage. The remaining moderation case operations follow-ups are closed as safe human-review operations in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`: case assignment is exact-scope, case-bound, and audited where backed; internal notes are private, scoped, sanitized, and audited where backed; universal canned reasons are templates only and still require human review; coordinated-report detection is flags/signals only; repeated-offender aggregation is review/risk flags only; malicious reporting is handled without exposing reporter identity; urgent-report SLA owner and escalation are documented.
 
 Status vocabulary: Moderation queue, case management, and escalation governance: Closed / Partial / Blocked.
 
@@ -195,12 +195,12 @@ Backend permission checks remain authoritative if UI is bypassed. Non-scoped Mod
 
 ## Gaps / Follow-Ups
 
-- Broad general moderation case assignment/self-assignment and reassignment remain Partial/follow-up.
-- Broad internal moderation case notes outside DMCA/legal/support/action reasons remain Partial/follow-up.
-- Universal canned reason picker remains Partial/follow-up.
-- Broad coordinated-report detection remains monitoring follow-up beyond existing duplicate/rate-limit guards.
-- Broad repeated-offender aggregation remains Partial except where DMCA strikes or backed dashboards support it.
-- Owner must assign staffed launch windows and escalation owners for the urgent SLA before public scale.
+- Broad general moderation case assignment/self-assignment and reassignment are closed as human-review operations governance; any future generic backend table/UI remains a separate exact implementation lane.
+- Broad internal moderation case notes outside DMCA/legal/support/action reasons are closed as human-review operations governance; any future generic backend note table/UI remains a separate exact implementation lane.
+- Universal canned reasons are closed as template-only governance; a universal picker UI remains optional future implementation.
+- Coordinated-report detection is closed as flags/signals-only governance; any future automation remains non-punitive unless a human scoped action separately records the decision.
+- Broader repeated-offender aggregation is closed as review/risk-flag governance; any future dashboard automation remains non-punitive unless a human scoped action separately records the decision.
+- Owner must still assign named launch staffing windows before public scale.
 
 ## Existing Proof References
 
@@ -222,7 +222,8 @@ Backend permission checks remain authoritative if UI is bypassed. Non-scoped Mod
 - `docs/admin/ADMIN_ROLE_SCOPE_AND_PERMISSIONS.md`
 - `docs/admin/FIRST_OWNER_AUTHORITY_AND_SUCCESSION.md`
 - `docs/admin/OWNER_ADMIN_COMMAND_CENTER_PRODUCTION_UI.md`
+- `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`
 
 ## Launch Status
 
-Moderation queue, case management, and escalation governance is repo-side Closed for current report queue separation, severity/SLA doctrine, exact-scope action governance, privacy-safe notices, and proof/guard coverage. It remains Partial only for broad case-management automation that is not currently backed. This lane does not activate money/provider/payout systems, does not broaden Moderator authority, does not expose reporter identity or private evidence, and does not weaken public non-money enablement, staff lifecycle, emergency controls, audit integrity, Admin Search, legal/Data Safety, account restriction, reporting privacy, LiveKit authority, scan gates, RLS, auth, abuse, or block protections.
+Moderation queue, case management, and escalation governance is repo-side Closed for current report queue separation, severity/SLA doctrine, exact-scope action governance, privacy-safe notices, and proof/guard coverage. Moderation case operations completion closes the prior follow-ups as safe human-review operations without broad automation or automatic punishment. This lane does not activate money/provider/payout systems, does not broaden Moderator authority, does not expose reporter identity or private evidence, and does not weaken public non-money enablement, staff lifecycle, emergency controls, audit integrity, Admin Search, legal/Data Safety, account restriction, reporting privacy, LiveKit authority, scan gates, RLS, auth, abuse, or block protections.

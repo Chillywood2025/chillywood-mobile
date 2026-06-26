@@ -1,6 +1,6 @@
 # Moderator Role Scope And Support Duties
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderators can act only with exact scopes, can escalate cases where scoped, cannot receive broad case-management authority, and cannot use moderation queues to gain Admin/Owner powers.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Moderators can act only with exact scopes, can escalate cases where scoped, cannot receive broad case-management authority, cannot use moderation queues to gain Admin/Owner powers, and cannot turn coordinated-report or repeated-offender signals into automatic punishment.
 
 Moderator role scope: Closed.
 

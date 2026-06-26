@@ -1,6 +1,6 @@
 # Public Non-Money Feature Enablement Switchboard
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Safe public non-money systems remain enabled while reporting, separated queues, urgent live-safety escalation, privacy-safe notices, and exact-scope moderation actions remain aligned.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Safe public non-money systems remain enabled while reporting, separated queues, urgent live-safety escalation, privacy-safe notices, exact-scope moderation actions, non-punitive coordinated-report signals, and repeated-offender review flags remain aligned.
 
 Public non-money feature enablement: Closed for app-controlled public switchboard, route/copy cleanup, and guard coverage. Full public launch remains conditional on store release operations, owner decisions, and provider blockers that are outside this lane.
 

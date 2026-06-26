@@ -1,6 +1,6 @@
 # Live Room Moderation Incident Response
 
-Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Live safety reports are urgent, route separately from normal moderation where appropriate, use exact-scope escalation/action rules, and require privacy-safe notices that do not expose reporter identity, private evidence, raw logs, LiveKit tokens, or raw room URLs.
+Moderation queue, case management, and escalation governance is documented in `docs/legal/MODERATION_QUEUE_CASE_MANAGEMENT_ESCALATION_GOVERNANCE.md`. Moderation case operations completion is documented in `docs/legal/MODERATION_CASE_OPERATIONS_COMPLETION.md`. Live safety reports are urgent, route separately from normal moderation where appropriate, use exact-scope escalation/action rules, and require privacy-safe notices that do not expose reporter identity, private evidence, raw logs, LiveKit tokens, or raw room URLs. Live-safety reason templates still require human review, and coordinated/repeated-offender signals must not auto-end rooms or auto-punish users.
 
 Live-room moderation and incident response: Closed for production policy, current backed host controls, LiveKit token authority, and incident-response proof after validation. Staff force-end or deeper live mutation remains limited to backed live-ops paths; unsupported direct staff mutations escalate instead of using unsafe generic room writes.
 
