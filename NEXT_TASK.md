@@ -1,12 +1,13 @@
 # NEXT TASK
 
-# Seeded Account Installed Login Bridge + Role Traversal Rerun
+# Five Remaining One-Device Traversal Blockers Fix
 
 Docs:
 - `docs/release/STABLE_SEEDED_PROOF_ACCOUNT_PACK.md`
 - `docs/release/ONE_ATTACHED_DEVICE_FULL_APP_AUTOMATION_PROOF.md`
 - `docs/release/FULL_SEEDED_ONE_DEVICE_ROLE_TRAVERSAL_RERUN.md`
 - `docs/release/SEEDED_ACCOUNT_INSTALLED_LOGIN_BRIDGE.md`
+- `docs/release/FIVE_REMAINING_ONE_DEVICE_TRAVERSAL_BLOCKERS.md`
 
 - [x] Created `scripts/local-bootstrap-stable-seeded-proof-account-pack.mjs`.
 - [x] Added package script `bootstrap:stable-seeded-proof-account-pack`.
@@ -30,19 +31,28 @@ Docs:
 - [x] Added `scripts/guard-seeded-account-installed-login-policy.mjs`.
 - [x] Added package script `guard:seeded-account-installed-login-policy`.
 - [x] Confirmed all ten seeded credential pairs are saved locally only in ignored `.env.browserstack-monetization.local`.
+- [x] Fixed route opening to use Expo Router path-style deep links such as `chillywoodmobile:///chat`.
+- [x] Closed normal `/chat` route marker on the installed Play internal app.
+- [x] Closed normal `/admin` as expected denial/access-status behavior, not staff access.
+- [x] Closed creator `/channel-studio`, `/creator-monetization-setup`, and `/payouts` as active Premium-required Platform Studio setup/status gates for the non-Premium creator state.
+- [x] Created `scripts/proof-five-remaining-one-device-traversal-blockers.mjs`.
+- [x] Added package script `proof:five-remaining-one-device-traversal-blockers`.
+- [x] Created `scripts/guard-five-remaining-one-device-traversal-policy.mjs`.
+- [x] Added package script `guard:five-remaining-one-device-traversal-policy`.
+- [x] Reran affected role flows only on `R5CR120QCBF`; artifact `/tmp/app-five-remaining-one-device-traversal-blockers-20260626-215343/`.
 
 Status:
 - Stable seeded proof account pack: Closed.
-- Full seeded one-device role traversal rerun: Partial.
-- One attached device full app automation proof: Partial after rerun.
+- Full seeded one-device role traversal rerun: Closed for one-device route/control traversal.
+- One attached device full app automation proof: Closed for one-device route/control traversal after affected-only rerun.
 - Signed-out routes passed on the installed Play internal v57 app.
 - Backend auth readback passed for normal, creator, moderator, admin/operator, owner, blocked A, blocked B, Premium, and non-Premium.
 - Seeded account installed login bridge: Closed for non-restricted proof accounts.
 - Installed UI login passed for normal, creator, moderator, admin/operator, owner, blocked A, blocked B, Premium, and non-Premium.
 - Restricted account remained blocked/fail-closed by backed account state as expected.
 - Root cause of prior installed login blocker: automation credential injection failure; secondary harness issues were Settings Account-section logout prep and XML redaction of Android `password="false"` attributes.
-- Current remaining blockers are route-marker/control-proof items, not credential blockers: normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, and creator `/payouts`.
-- Latest role traversal status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`.
+- The five route-marker/control-proof blockers are Closed: normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, and creator `/payouts`.
+- Latest role traversal status counts: Pass `80`, Human review `28`, Blocked `0`, Two-device required `4`, Fail `0`.
 - Two-device live/watch-party/chat-call proof remains required for real simultaneous media/state behavior.
 - Required truth:
   - no service-role was used in the rerun
@@ -59,7 +69,7 @@ Status:
   - payouts/cashout/Stripe production/payable balances/provider refunds remain OFF/manual/external
 
 Next lane recommendation:
-- Fix remaining route-marker/control blockers and rerun only affected role traversal flows. After authenticated route/control traversal closes, run two-device live/watch-party/chat-call proof.
+- Two-device live/watch-party/chat-call proof for real-time flows.
 
 # Owner RPC Staff Grant Path Follow-Up
 

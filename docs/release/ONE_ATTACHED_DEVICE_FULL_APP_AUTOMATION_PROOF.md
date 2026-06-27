@@ -2,14 +2,14 @@
 
 One attached device full app automation proof: Closed / Partial / Blocked.
 
-Verdict for this lane: Partial after seeded installed-login bridge repair and role rerun.
+Verdict for this lane: Closed for one-device route/control traversal after seeded installed-login bridge repair, role rerun, and affected-only closure of the five remaining route-marker/control-proof blockers. Two-device realtime behavior remains a separate proof lane.
 
 Seeded account installed login bridge is tracked in `docs/release/SEEDED_ACCOUNT_INSTALLED_LOGIN_BRIDGE.md`. The root cause of the prior installed login blocker was automation credential injection failure, not app email validation, password mismatch, or account-profile readiness for the non-restricted accounts. The harness now uses the secure local `MAESTRO_` environment bridge and keeps credential values only in ignored `.env.browserstack-monetization.local`.
 
-Full seeded one-device role traversal rerun is tracked in `docs/release/FULL_SEEDED_ONE_DEVICE_ROLE_TRAVERSAL_RERUN.md`. The rerun used device `R5CR120QCBF`, the installed Google Play internal/closed testing package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `57`, and EAS update group `d7aac53c-65bb-4bf7-ae69-04bfea248e0a`. Stable seeded proof account pack: Closed before rerun. No service-role was used in this rerun. No accounts were created or recreated in this rerun. Signed-out route traversal passed; backend auth readback passed for normal, creator, moderator, admin/operator, owner, blocked A, blocked B, Premium, and non-Premium. Installed UI login passed for every non-restricted seeded proof account, and `proof_restricted_001` failed closed as expected. Full seeded one-device role traversal rerun status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`. Remaining Partial items are route-marker/control-proof blockers: normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, and creator `/payouts`. Missing roles are not called passed. Two-device proof still required.
+Full seeded one-device role traversal rerun is tracked in `docs/release/FULL_SEEDED_ONE_DEVICE_ROLE_TRAVERSAL_RERUN.md`. The rerun used device `R5CR120QCBF`, the installed Google Play internal/closed testing package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `57`, and EAS update group `d7aac53c-65bb-4bf7-ae69-04bfea248e0a`. Stable seeded proof account pack: Closed before rerun. No service-role was used in this rerun. No accounts were created or recreated in this rerun. Signed-out route traversal passed; backend auth readback passed for normal, creator, moderator, admin/operator, owner, blocked A, blocked B, Premium, and non-Premium. Installed UI login passed for every non-restricted seeded proof account, and `proof_restricted_001` failed closed as expected. The five remaining route-marker/control-proof blockers were fixed and rerun in `docs/release/FIVE_REMAINING_ONE_DEVICE_TRAVERSAL_BLOCKERS.md` with affected-only artifact `/tmp/app-five-remaining-one-device-traversal-blockers-20260626-215343/`. Updated one-device route/control counts: Pass `80`, Human review `28`, Blocked `0`, Two-device required `4`, Fail `0`. Missing roles are not called passed. Two-device proof still required.
 
 EAS update group under test: `d7aac53c-65bb-4bf7-ae69-04bfea248e0a`.
-Status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`.
+Status counts: Pass `80`, Human review `28`, Blocked `0`, Two-device required `4`, Fail `0`.
 
 ## Device / Install Metadata
 
@@ -53,9 +53,9 @@ The complete flow matrix is stored at `/tmp/app-full-seeded-one-device-role-trav
 
 | Category | Count | Notes |
 | --- | ---: | --- |
-| Pass | 75 | Installed Play launch, signed-out routes, installed seeded login, supported route markers/taps, and restricted fail-closed checks. |
+| Pass | 80 | Installed Play launch, signed-out routes, installed seeded login, supported route markers/taps, five affected route-marker closures, and restricted fail-closed checks. |
 | Human review | 28 | Expected controls/test IDs were not visible in the Android hierarchy for the captured role/state; these are not called passed. |
-| Blocked | 5 | Normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, creator `/payouts`. |
+| Blocked | 0 | Five prior route-marker/control-proof blockers are closed in `docs/release/FIVE_REMAINING_ONE_DEVICE_TRAVERSAL_BLOCKERS.md`. |
 | Fail | 0 | No hard app crash, raw-leak failure, provider mutation, or unsafe money action was recorded. |
 | Two-device required | 4 | True simultaneous live/chat/watch-party behavior remains outside one-device proof. |
 
@@ -72,6 +72,9 @@ No app feature code was changed. Proof harness fixes were made only to:
 - expand the Settings Account section before logout attempts;
 - preserve valid Android hierarchy XML while redacting real secrets;
 - treat restricted login denial as expected fail-closed.
+- use path-style app links such as `chillywoodmobile:///chat` for Expo Router route openings;
+- assert normal `/admin` as expected denial/access-status behavior, not staff access;
+- assert non-Premium creator Platform Studio, setup, and payout compatibility routes as active Premium-required setup/status gates.
 
 ## Proof Results
 
@@ -84,6 +87,7 @@ No app feature code was changed. Proof harness fixes were made only to:
 ## Artifact Paths
 
 - `/tmp/app-full-seeded-one-device-role-traversal-rerun-20260627012145/`
+- `/tmp/app-five-remaining-one-device-traversal-blockers-20260626-215343/`
 - `/tmp/app-seeded-account-installed-login-bridge-YYYYMMDD-HHMMSS/`
 
 ## Safety Confirmation
@@ -113,10 +117,9 @@ No app feature code was changed. Proof harness fixes were made only to:
 
 ## Remaining Blockers
 
-1. Fix or retest normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, and creator `/payouts` route-marker/control-proof items.
-2. Review Human review selector misses from the Android hierarchy.
-3. Run two-device live/watch-party/chat-call proof.
+1. Review Human review selector misses from the Android hierarchy; they are not blockers for the five-item closure.
+2. Run two-device live/watch-party/chat-call proof.
 
 ## Next Lane Recommendation
 
-Fix remaining route-marker/control blockers, then rerun only affected role traversal flows. After one-device route/control blockers close, run two-device live/watch-party/chat-call proof.
+Two-device live/watch-party/chat-call proof for real-time flows.

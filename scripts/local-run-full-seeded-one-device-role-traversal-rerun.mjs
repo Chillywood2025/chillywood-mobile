@@ -8,6 +8,7 @@ const root = process.cwd();
 const PACKAGE_ID = "com.chillywood.mobile";
 const SERIAL = process.env.PROOF_ANDROID_SERIAL || process.env.ADB_SERIAL || "R5CR120QCBF";
 const UPDATE_GROUP = "d7aac53c-65bb-4bf7-ae69-04bfea248e0a";
+const AFFECTED_FIVE_ONLY = process.env.FULL_SEEDED_ONE_DEVICE_AFFECTED_ONLY === "1";
 const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 const artifactDir = process.env.FULL_SEEDED_ONE_DEVICE_RERUN_ARTIFACT_DIR
   || path.join("/tmp", `app-full-seeded-one-device-role-traversal-rerun-${timestamp}`);
@@ -254,7 +255,7 @@ const focusAndType = (xml, fieldId, value) => {
 
 const openRoute = (route, label) => {
   const normalized = route.startsWith("/") ? route.slice(1) : route;
-  const url = normalized ? `chillywoodmobile://${normalized}` : "chillywoodmobile://";
+  const url = normalized ? `chillywoodmobile:///${normalized}` : "chillywoodmobile:///";
   const result = adb(["shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", url, PACKAGE_ID], { timeout: 25000 });
   writeText(`${label}-am-start.txt`, `${result.command}\n${result.stdout}\n${result.stderr}`);
   sleep(3000);
@@ -395,6 +396,7 @@ const makeRoute = (route, expected, controls = [], note = "") => ({ route, expec
 const creatorId = getEnv("CHILLYWOOD_E2E_CREATOR_ID") || getEnv("CHILLYWOOD_E2E_CREATOR_USER_ID");
 const blockedAId = getEnv("CHILLYWOOD_E2E_BLOCKED_A_USER_ID");
 const blockedBId = getEnv("CHILLYWOOD_E2E_BLOCKED_B_USER_ID");
+const premiumCreatorToolGateExpected = "Premium required|Manage Premium|Platform Studio|SIGNED-IN ACCESS";
 
 const routeSets = {
   signedOut: [
@@ -417,13 +419,13 @@ const routeSets = {
     makeRoute("/watch-party", "Watch-Party", ["watch-party-browse-titles-button", "watch-party-find-room-button"]),
     makeRoute("/watch-party/live-stage", "Live", []),
     makeRoute("/subscribe", "premium-screen", ["premium-restore-button", "premium-purchase-button", "premium-annual-status-button"]),
-    makeRoute("/admin", "not authorized", []),
+    makeRoute("/admin", "Admin access requires|SIGNED-IN ACCESS|Keep Browsing", ["Keep Browsing"], "normal users must see active access-status denial, not Admin tools"),
   ],
   creator: [
-    makeRoute("/channel-studio", "Channel", []),
+    makeRoute("/channel-studio", premiumCreatorToolGateExpected, ["Manage Premium"], "non-Premium creator sees active Premium-required Platform Studio status gate"),
     makeRoute("/creator-monetization", "Creator", []),
-    makeRoute("/creator-monetization-setup", "monetization", []),
-    makeRoute("/payouts", "payout", []),
+    makeRoute("/creator-monetization-setup", premiumCreatorToolGateExpected, ["Manage Premium"], "legacy creator setup route redirects to active Platform Studio status gate"),
+    makeRoute("/payouts", premiumCreatorToolGateExpected, ["Manage Premium"], "legacy payout route redirects to active Platform Studio payout-readiness gate without live payout execution"),
     makeRoute("/watch-party", "Watch-Party", ["tester-watch-party-ticket-button"]),
     makeRoute(`/channel-subscription/${encodeURIComponent(creatorId || "missing")}`, "Subscription", []),
     makeRoute(`/vip-pass/${encodeURIComponent(creatorId || "missing")}`, "VIP", []),
@@ -483,6 +485,20 @@ const personas = [
   { role: "Premium", label: "proof_premium_001", emailKey: "CHILLYWOOD_E2E_PREMIUM_EMAIL", passwordKey: "CHILLYWOOD_E2E_PREMIUM_PASSWORD", routes: routeSets.premium },
   { role: "non-Premium", label: "proof_nonpremium_001", emailKey: "CHILLYWOOD_E2E_NONPREMIUM_EMAIL", passwordKey: "CHILLYWOOD_E2E_NONPREMIUM_PASSWORD", routes: routeSets.nonpremium },
 ];
+
+const affectedFiveRoutes = new Map([
+  ["proof_normal_001", new Set(["/chat", "/admin"])],
+  ["proof_creator_001", new Set(["/channel-studio", "/creator-monetization-setup", "/payouts"])],
+]);
+
+const personasForRun = AFFECTED_FIVE_ONLY
+  ? personas
+    .filter((persona) => affectedFiveRoutes.has(persona.label))
+    .map((persona) => ({
+      ...persona,
+      routes: persona.routes.filter((routeDef) => affectedFiveRoutes.get(persona.label)?.has(routeDef.route)),
+    }))
+  : personas;
 
 const matrix = [];
 const failures = [];
@@ -599,11 +615,14 @@ const runLogCapture = () => {
 };
 
 const backendCredentialReadbacks = [];
-for (const persona of personas.filter((p) => p.emailKey && p.passwordKey)) {
+for (const persona of personasForRun.filter((p) => p.emailKey && p.passwordKey)) {
   backendCredentialReadbacks.push(await verifyBackendCredential(persona.label, persona.emailKey, persona.passwordKey));
 }
 
-const missingCredentialKeys = requiredCredentialKeys.filter((key) => !credentialStatus[key].present);
+const requiredCredentialKeysForRun = AFFECTED_FIVE_ONLY
+  ? [...new Set(personasForRun.flatMap((persona) => [persona.emailKey, persona.passwordKey]).filter(Boolean))]
+  : requiredCredentialKeys;
+const missingCredentialKeys = requiredCredentialKeysForRun.filter((key) => !credentialStatus[key].present);
 const metadata = deviceReadback();
 writeJson("device-install-metadata.json", metadata);
 writeJson("credential-key-presence.json", credentialStatus);
@@ -633,21 +652,34 @@ addMatrix({
 });
 if (launchLog.fatalFound) failures.push("Fatal crash marker found in launch log window.");
 
-const signedOutResult = signOutThroughUi("signed-out-prep");
-addMatrix({
-  role: "signed-out",
-  accountLabel: "signed-out",
-  routeScreen: "/settings",
-  visibleControl: "settings logout",
-  expectedOutcome: "known signed-out state reached through app UI where possible",
-  actualOutcome: signedOutResult.method,
-  status: signedOutResult.ok ? "Pass" : "Human review",
-  screenshotLogReference: "signed-out-prep-signout-0.txt",
-});
+if (!AFFECTED_FIVE_ONLY) {
+  const signedOutResult = signOutThroughUi("signed-out-prep");
+  addMatrix({
+    role: "signed-out",
+    accountLabel: "signed-out",
+    routeScreen: "/settings",
+    visibleControl: "settings logout",
+    expectedOutcome: "known signed-out state reached through app UI where possible",
+    actualOutcome: signedOutResult.method,
+    status: signedOutResult.ok ? "Pass" : "Human review",
+    screenshotLogReference: "signed-out-prep-signout-0.txt",
+  });
 
-for (const routeDef of routeSets.signedOut) exerciseRoute(personas[0], routeDef);
+  for (const routeDef of routeSets.signedOut) exerciseRoute(personas[0], routeDef);
+} else {
+  addMatrix({
+    role: "affected five rerun",
+    accountLabel: "proof_normal_001 / proof_creator_001",
+    routeScreen: "normal /chat, normal /admin, creator /channel-studio, creator /creator-monetization-setup, creator /payouts",
+    visibleControl: "affected-only scope",
+    expectedOutcome: "rerun only the five previously blocked route-marker/control-proof items",
+    actualOutcome: "signed-out and unrelated role traversals intentionally skipped for targeted rerun",
+    status: "Human review",
+    screenshotLogReference: "",
+  });
+}
 
-for (const persona of personas.slice(1)) {
+for (const persona of (AFFECTED_FIVE_ONLY ? personasForRun : personas.slice(1))) {
   forceCloseAndOpen();
   const signOut = signOutThroughUi(`${persona.label}-prep`);
   addMatrix({
@@ -747,9 +779,10 @@ const summary = {
   versionCode: metadata.versionCode,
   updateGroup: UPDATE_GROUP,
   stableSeededProofAccountPack: "Closed",
+  affectedFiveOnly: AFFECTED_FIVE_ONLY,
   serviceRoleUsedInThisRerun: false,
   accountsCreatedOrRecreatedInThisRerun: false,
-  rolesTested: personas.map((persona) => persona.role),
+  rolesTested: personasForRun.map((persona) => persona.role),
   statusCounts,
   failures,
   blockers,
@@ -774,6 +807,7 @@ versionCode: ${metadata.versionCode}
 EAS update group under test: ${UPDATE_GROUP}
 
 Stable seeded proof account pack: Closed.
+Affected-five-only rerun: ${AFFECTED_FIVE_ONLY ? "Yes" : "No"}.
 Service-role used in this rerun: No.
 Accounts created/recreated in this rerun: No.
 

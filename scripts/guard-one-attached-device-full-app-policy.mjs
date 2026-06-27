@@ -38,7 +38,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 
 [
   "One attached device full app automation proof: Closed / Partial / Blocked",
-  "Verdict for this lane: Partial after seeded installed-login bridge repair and role rerun",
+  "Verdict for this lane: Closed for one-device route/control traversal",
   "Stable seeded proof account pack: Closed",
   "Installed UI login passed for every non-restricted seeded proof account",
   "No sideload was used",
@@ -53,7 +53,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "No service-role was used in this rerun",
   "No accounts were created or recreated in this rerun",
   "Two-device proof still required",
-  "normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, and creator `/payouts`",
+  "Five prior route-marker/control-proof blockers are closed",
 ].forEach((needle) => requireText("one attached device proof doc", doc, needle));
 
 forbidPositiveSentence("one attached device proof doc", doc, /sideload (?:was|used|recommended|proves|proof)/i, "sideload tester proof");

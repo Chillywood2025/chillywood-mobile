@@ -66,12 +66,12 @@ const runner = read("scripts/local-run-full-seeded-one-device-role-traversal-rer
 [
   "Full seeded one-device role traversal rerun: Closed / Partial / Blocked",
   "The harness now uses the secure local `MAESTRO_` environment bridge",
-  "Status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`",
+  "Status counts after affected-only closure: Pass `80`, Human review `28`, Blocked `0`, Two-device required `4`, Fail `0`",
 ].forEach((needle) => requireText("full seeded one-device rerun doc", rerunDoc, needle));
 
 [
   "Seeded account installed login bridge",
-  "Status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`",
+  "Status counts: Pass `80`, Human review `28`, Blocked `0`, Two-device required `4`, Fail `0`",
 ].forEach((needle) => requireText("one attached device proof doc", oneDeviceDoc, needle));
 
 requireText("stable seeded proof account pack doc", stablePackDoc, "Credential values are stored only in `.env.browserstack-monetization.local`");
@@ -80,7 +80,7 @@ requireText("local rerun runner", runner, "MAESTRO_CHILLYWOOD_LOGIN_EMAIL");
 requireText("local rerun runner", runner, "MAESTRO_CHILLYWOOD_LOGIN_PASSWORD");
 
 notes.push("Seeded account installed login bridge doc exists with root cause, credential-source status, secure local bridge behavior, backend auth summary, installed UI login table, restricted fail-closed result, no-secrets proof, and safety confirmation.");
-notes.push("Full one-device traversal rerun docs now reflect the post-bridge installed UI login results and remaining blocked route-marker items honestly.");
+notes.push("Full one-device traversal rerun docs now reflect the post-bridge installed UI login results and the affected-only closure of the prior five route-marker/control-proof blockers.");
 
 if (failures.length) {
   console.error("Seeded account installed login bridge proof failed:");

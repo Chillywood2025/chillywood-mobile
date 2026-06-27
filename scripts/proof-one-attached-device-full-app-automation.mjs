@@ -24,7 +24,7 @@ const packageJson = read("package.json");
 
 [
   "One attached device full app automation proof: Closed / Partial / Blocked",
-  "Verdict for this lane: Partial after seeded installed-login bridge repair and role rerun",
+  "Verdict for this lane: Closed for one-device route/control traversal",
   "package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `57`",
   "EAS update group under test: `d7aac53c-65bb-4bf7-ae69-04bfea248e0a`",
   "Stable seeded proof account pack: Closed",
@@ -44,8 +44,8 @@ const packageJson = read("package.json");
   "proof_nonpremium_001",
   "Flow Matrix",
   "Pass / Fail / Blocked Summary",
-  "Status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`",
-  "normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, and creator `/payouts`",
+  "Status counts: Pass `80`, Human review `28`, Blocked `0`, Two-device required `4`, Fail `0`",
+  "Five prior route-marker/control-proof blockers are closed",
   "Two-device proof still required",
   "No sideload was used",
   "No uninstall/reinstall/clear-data happened",
@@ -62,8 +62,8 @@ const packageJson = read("package.json");
   "guard:one-attached-device-full-app-policy",
 ].forEach((needle) => requireText("package scripts", packageJson, needle));
 
-notes.push("One attached device proof doc records installed Play metadata, EAS update group, seeded account readiness, installed login bridge, flow matrix, blockers, two-device limitations, and safety confirmation.");
-notes.push("The lane is honestly Partial because the seeded login bridge closed, but five route-marker/control-proof blockers and two-device realtime proof remain.");
+notes.push("One attached device proof doc records installed Play metadata, EAS update group, seeded account readiness, installed login bridge, flow matrix, affected blocker closure, two-device limitations, and safety confirmation.");
+notes.push("The lane is Closed for one-device route/control traversal; two-device realtime proof remains separate.");
 
 if (failures.length) {
   console.error("One attached device full app automation proof failed:");

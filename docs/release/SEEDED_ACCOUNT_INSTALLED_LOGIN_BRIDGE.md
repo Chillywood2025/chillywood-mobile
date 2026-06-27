@@ -2,7 +2,7 @@
 
 Seeded account installed login bridge: Closed / Partial / Blocked.
 
-Verdict for this lane: Partial overall because the follow-up role traversal still has five route-marker/control-proof blockers. The installed login bridge itself is Closed for every non-restricted seeded proof account, and `proof_restricted_001` is Closed as restricted expected fail-closed.
+Verdict for this lane: Closed for the installed login bridge and the follow-up one-device route/control traversal after affected-only closure of the five remaining route-marker/control-proof blockers. `proof_restricted_001` remains Closed as restricted expected fail-closed. Two-device realtime behavior remains a separate proof lane.
 
 Backend auth readback passed for `proof_normal_001`, `proof_creator_001`, `proof_moderator_001`, `proof_admin_operator_001`, `proof_owner_001`, `proof_blocked_a_001`, `proof_blocked_b_001`, `proof_premium_001`, and `proof_nonpremium_001`. `proof_restricted_001` remained blocked by account status and failed closed as expected.
 
@@ -71,17 +71,17 @@ The values are not passed as command-line arguments, are not printed, and are re
 
 ## Role Traversal Rerun
 
-The full seeded one-device role traversal was rerun after the bridge fix. Result: Partial.
+The full seeded one-device role traversal was rerun after the bridge fix. Result after affected-only blocker closure: Closed for one-device route/control traversal.
 
-Status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`.
+Status counts: Pass `80`, Human review `28`, Blocked `0`, Two-device required `4`, Fail `0`.
 
-Remaining blocked route-marker/control-proof items:
+Five route-marker/control-proof items were closed in `docs/release/FIVE_REMAINING_ONE_DEVICE_TRAVERSAL_BLOCKERS.md`:
 
-- `proof_normal_001` `/chat`;
-- `proof_normal_001` `/admin`;
-- `proof_creator_001` `/channel-studio`;
-- `proof_creator_001` `/creator-monetization-setup`;
-- `proof_creator_001` `/payouts`.
+- `proof_normal_001` `/chat`: path-style deep link opened the chat inbox marker.
+- `proof_normal_001` `/admin`: normal user saw expected denial/access-status behavior, not staff access.
+- `proof_creator_001` `/channel-studio`: non-Premium creator saw active Premium-required Platform Studio status gate.
+- `proof_creator_001` `/creator-monetization-setup`: compatibility route reached the active Premium-required Platform Studio status gate.
+- `proof_creator_001` `/payouts`: compatibility route reached the active Premium-required Platform Studio status gate; no payout execution happened.
 
 Two-device proof still required for live video participant visibility, chat call media, Watch-Party sync, and real multi-user simultaneous participant state.
 
@@ -112,9 +112,10 @@ No passwords were printed or committed. No credential values were added to docs,
 ## Artifact Path
 
 - Login bridge and rerun source artifact: `/tmp/app-full-seeded-one-device-role-traversal-rerun-20260627012145/`
+- Five-blocker closure artifact: `/tmp/app-five-remaining-one-device-traversal-blockers-20260626-215343/`
 
 The separate lane artifact is `/tmp/app-seeded-account-installed-login-bridge-YYYYMMDD-HHMMSS/`.
 
 ## Next Lane Recommendation
 
-Fix remaining route-marker/control blockers and rerun only affected one-device role flows. After one-device route/control blockers close, run two-device live/watch-party/chat-call proof.
+Two-device live/watch-party/chat-call proof for real-time flows.

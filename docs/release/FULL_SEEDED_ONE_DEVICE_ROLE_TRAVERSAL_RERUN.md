@@ -2,7 +2,7 @@
 
 Full seeded one-device role traversal rerun: Closed / Partial / Blocked.
 
-Verdict for this lane: Partial.
+Verdict for this lane: Closed for one-device route/control traversal after the five affected blockers were fixed and rerun. Two-device realtime behavior remains a separate proof lane.
 
 This rerun used one attached device, `R5CR120QCBF`, and only the installed Google Play internal/closed testing app. Installed package metadata was package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `57`. EAS update group under test: `d7aac53c-65bb-4bf7-ae69-04bfea248e0a`.
 
@@ -13,6 +13,8 @@ Stable seeded proof account pack: Closed. Credential values remain stored only i
 No service-role was used in this rerun. No accounts were created or recreated in this rerun. No seeded account passwords were modified. Current First Owner was not touched.
 
 The harness now uses the secure local `MAESTRO_` environment bridge. The installed-login blocker was traced to automation credential injection failure: Maestro YAML used `${CHILLYWOOD_E2E_*}` placeholders without a secure environment bridge, so the installed app received bad literal/empty credentials and showed Login Error / Invalid login credentials even though backend auth readback passed. Secondary harness issues were also fixed: Settings logout preparation now expands the Account section, and XML redaction no longer corrupts Android hierarchy `password="false"` attributes.
+
+The five remaining one-device traversal blockers were fixed and rerun in `docs/release/FIVE_REMAINING_ONE_DEVICE_TRAVERSAL_BLOCKERS.md`. Affected-only artifact: `/tmp/app-five-remaining-one-device-traversal-blockers-20260626-215343/`. The runner now opens Expo Router deep links with path-style URLs such as `chillywoodmobile:///chat`; normal `/admin` is asserted as expected denial/access-status behavior, not staff access; and non-Premium creator Platform Studio, creator monetization setup, and payout compatibility routes are asserted as active Premium-required setup/status gates. No service-role, account creation/recreation, sideload, uninstall/reinstall/clear-data, auth bypass, RLS/account-status weakening, provider mutation, purchase, refund, payout, or live settlement happened.
 
 ## Device / Install Metadata
 
@@ -51,13 +53,13 @@ Missing roles are not called passed.
 
 Roles tested: signed-out, normal, creator, moderator, admin/operator, owner, restricted, blocked pair, Premium, and non-Premium.
 
-Status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`.
+Status counts after affected-only closure: Pass `80`, Human review `28`, Blocked `0`, Two-device required `4`, Fail `0`.
 
 | Role | Result |
 | --- | --- |
 | signed-out | Pass for launch, sign-out prep, login, forgot password, signup, legal/support, and signed-out Admin denial route. |
-| normal | Installed login passed. Home, Explore, Settings, Support, Account Deletion, Watch-Party, Live Stage, and Premium route markers passed. `/chat` and `/admin` route markers remained Blocked and need targeted route-marker/denial-copy follow-up. |
-| creator | Installed login passed. Creator monetization, Watch-Party, Channel Subscription status, VIP, and Premium routes passed. `/channel-studio`, `/creator-monetization-setup`, and `/payouts` route markers remained Blocked and need targeted creator route-marker/status-copy follow-up. |
+| normal | Installed login passed. Home, Explore, Settings, Support, Account Deletion, Chat, Watch-Party, Live Stage, Premium route markers, and normal `/admin` denial/access-status behavior passed. |
+| creator | Installed login passed. Creator monetization, Watch-Party, Channel Subscription status, VIP, Premium routes, and the creator `/channel-studio`, `/creator-monetization-setup`, and `/payouts` compatibility/status gates passed for the non-Premium creator state. |
 | moderator | Installed login passed. Scoped Admin route marker passed. Moderator did not gain Admin/Owner proof authority in this rerun, and broader seeded authority proof remains covered by the Owner/Admin/Moderator proof lane. Several tab/control selectors require Human review because the expected test IDs were not visible in the captured hierarchy. |
 | admin/operator | Installed login passed. Admin Command Center, Admin Search input tap, Admin Money sandbox route, and Settings markers passed. Some tab selectors require Human review because expected test IDs were not visible in the captured hierarchy. |
 | owner | Installed login passed. Owner/Admin route and Settings markers passed. Owner tab/security/staff selectors require Human review because expected test IDs were not visible in the captured hierarchy. Current First Owner was not touched. |
@@ -68,15 +70,15 @@ Status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4
 
 ## Flow Matrix
 
-The complete flow matrix is in `/tmp/app-full-seeded-one-device-role-traversal-rerun-20260627012145/flow-matrix.md`.
+The complete original flow matrix is in `/tmp/app-full-seeded-one-device-role-traversal-rerun-20260627012145/flow-matrix.md`. The affected-only closure matrix is in `/tmp/app-five-remaining-one-device-traversal-blockers-20260626-215343/flow-matrix.md`.
 
 ## Pass / Fail / Blocked Summary
 
 | Category | Count | Notes |
 | --- | ---: | --- |
-| Pass | 75 | Installed Play launch, signed-out routes, seeded login bridge, role route markers, supported taps, and restricted fail-closed checks. |
+| Pass | 80 | Installed Play launch, signed-out routes, seeded login bridge, role route markers, supported taps, five affected route-marker closures, and restricted fail-closed checks. |
 | Human review | 28 | Expected test IDs or controls were not visible in Android hierarchy for the captured role/state; these are not called pass. |
-| Blocked | 5 | Normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, creator `/payouts`. |
+| Blocked | 0 | The five prior blockers are closed in the affected-only rerun artifact. |
 | Fail | 0 | No hard app crash, raw-leak failure, provider mutation, or unsafe money action was recorded. |
 | Two-device required | 4 | True simultaneous realtime behavior remains outside one-device proof. |
 
@@ -97,13 +99,13 @@ No hard Fail rows were recorded.
 
 ## Blocked Flows
 
-- `proof_normal_001` `/chat`: expected `chat-inbox-screen` marker was not visible.
-- `proof_normal_001` `/admin`: expected `not authorized` marker was not visible.
-- `proof_creator_001` `/channel-studio`: expected `Channel` marker was not visible.
-- `proof_creator_001` `/creator-monetization-setup`: expected `monetization` marker was not visible.
-- `proof_creator_001` `/payouts`: expected `payout` marker was not visible.
+No one-device route-marker/control-proof blockers remain. The prior five items were closed as follows:
 
-These are route-marker/control-proof blockers, not credential blockers. Installed UI login is no longer the blocker for non-restricted proof accounts.
+- `proof_normal_001` `/chat`: path-style deep link opened `chat-inbox-screen`, and `chat-search-input` tapped without crash/raw leakage.
+- `proof_normal_001` `/admin`: normal user saw active denial/access-status copy; no Admin Command Center or staff data was exposed.
+- `proof_creator_001` `/channel-studio`: non-Premium creator reached the active Premium-required Platform Studio status gate.
+- `proof_creator_001` `/creator-monetization-setup`: legacy setup route reached the active Premium-required Platform Studio status gate.
+- `proof_creator_001` `/payouts`: legacy payout route reached the active Premium-required Platform Studio status gate; no payout execution, payable balance, or provider mutation happened.
 
 ## Two-Device Required Items
 
@@ -124,7 +126,10 @@ No app feature code was changed. Proof harness fixes were made only to:
 - keep command-line credential passing out of the process list;
 - expand the Settings Account section before logout attempts;
 - stop redacting Android XML `password="false"` attributes into malformed hierarchy output;
-- treat `proof_restricted_001` as expected fail-closed instead of a proof-account readiness failure.
+- treat `proof_restricted_001` as expected fail-closed instead of a proof-account readiness failure;
+- use path-style app links such as `chillywoodmobile:///chat` for Expo Router route openings;
+- assert normal `/admin` as expected denial/access-status behavior, not staff access;
+- assert non-Premium creator `/channel-studio`, `/creator-monetization-setup`, and `/payouts` compatibility routes as active Premium-required setup/status gates.
 
 ## Proof Results
 
@@ -137,6 +142,7 @@ No app feature code was changed. Proof harness fixes were made only to:
 ## Artifact Path
 
 - `/tmp/app-full-seeded-one-device-role-traversal-rerun-20260627012145/`
+- `/tmp/app-five-remaining-one-device-traversal-blockers-20260626-215343/`
 
 The artifact includes device/install metadata, seeded account pack status without passwords, role traversal command logs, flow matrix, screenshots/logs, blockers, proof output, guard output, validation output, safety confirmation, and secret scan result. It does not include passwords, service-role keys, tokens, provider secrets, signed URLs, raw storage paths, raw IPs, private messages, private evidence, tax IDs, bank details, or provider transaction/customer/order records.
 
@@ -167,16 +173,15 @@ The artifact includes device/install metadata, seeded account pack status withou
 
 ## Remaining Blockers
 
-1. Fix or retest the five blocked route-marker/control-proof items listed above.
-2. Review the Human review control selectors that were not visible in the captured Android hierarchy.
-3. Run two-device live/watch-party/chat-call proof for true simultaneous media/state behavior.
+1. Review the Human review control selectors that were not visible in the captured Android hierarchy; they are not blockers for this five-item closure.
+2. Run two-device live/watch-party/chat-call proof for true simultaneous media/state behavior.
 
 ## Owner Action Items
 
 1. Keep `.env.browserstack-monetization.local` local and ignored; it stores stable proof credentials for repeat use.
 2. Do not paste seeded passwords into docs, artifacts, chat, or command lines.
-3. After targeted route-marker/control fixes, rerun only affected role flows.
+3. Use the affected-only artifact as the closeout reference for the five route-marker/control-proof blockers.
 
 ## Next Lane Recommendation
 
-Fix remaining route-marker/control blockers, then rerun only affected role traversal flows. After one-device route/control blockers close, run two-device live/watch-party/chat-call proof.
+Two-device live/watch-party/chat-call proof for real-time flows.
