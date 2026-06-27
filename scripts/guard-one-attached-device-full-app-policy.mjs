@@ -38,8 +38,9 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 
 [
   "One attached device full app automation proof: Closed / Partial / Blocked",
-  "Verdict for this lane: Partial after account-pack repair",
+  "Verdict for this lane: Partial after seeded installed-login bridge repair and role rerun",
   "Stable seeded proof account pack: Closed",
+  "Installed UI login passed for every non-restricted seeded proof account",
   "No sideload was used",
   "No APK install was used as tester proof",
   "No uninstall/reinstall/clear-data happened",
@@ -49,9 +50,10 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF",
   "Current First Owner was not touched",
   "Missing roles are not called passed",
-  "Service-role bootstrap was not used as proof of role/permission authority",
+  "No service-role was used in this rerun",
+  "No accounts were created or recreated in this rerun",
   "Two-device proof still required",
-  "Blocked: full role UI traversal not rerun end-to-end",
+  "normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, and creator `/payouts`",
 ].forEach((needle) => requireText("one attached device proof doc", doc, needle));
 
 forbidPositiveSentence("one attached device proof doc", doc, /sideload (?:was|used|recommended|proves|proof)/i, "sideload tester proof");

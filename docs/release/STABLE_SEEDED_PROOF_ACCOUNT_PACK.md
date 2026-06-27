@@ -16,6 +16,7 @@ The stable seeded proof account pack gives installed-device and backend proof sc
 
 - Credential values are stored only in `.env.browserstack-monetization.local`.
 - `.env.browserstack-monetization.local` is ignored by git.
+- All ten seeded proof account credential pairs are saved locally in that ignored file for repeat proof use.
 - Credential values must not be printed, committed, pasted into chat, placed in docs, or included in artifacts.
 - Proof artifacts may include key names, account labels, user-id suffixes, and present/missing status only.
 - Proof accounts are not real staff accounts and are separate from staff accounts.
@@ -69,6 +70,13 @@ Independent readback proof passed:
 - `/tmp/app-stable-seeded-proof-account-pack-proof-20260626215043/`
 
 `npm run proof:stable-seeded-proof-account-pack` passed with all ten accounts usable. `npm run guard:stable-seeded-proof-account-pack-policy` guards the no-secret, proof-only, Owner RPC authority, First Owner safety, real-user safety, provider safety, and money-off boundaries.
+
+Installed login bridge proof:
+
+- `docs/release/SEEDED_ACCOUNT_INSTALLED_LOGIN_BRIDGE.md`
+- Installed UI login passed for every non-restricted seeded proof account through the secure local `MAESTRO_` environment bridge.
+- `proof_restricted_001` remains restricted expected fail-closed.
+- No credential values were printed, committed, included in artifacts, or passed as command-line arguments.
 
 ## Rerun Instructions
 

@@ -1,11 +1,12 @@
 # NEXT TASK
 
-# Full Seeded One-Device Role Traversal Rerun
+# Seeded Account Installed Login Bridge + Role Traversal Rerun
 
 Docs:
 - `docs/release/STABLE_SEEDED_PROOF_ACCOUNT_PACK.md`
 - `docs/release/ONE_ATTACHED_DEVICE_FULL_APP_AUTOMATION_PROOF.md`
 - `docs/release/FULL_SEEDED_ONE_DEVICE_ROLE_TRAVERSAL_RERUN.md`
+- `docs/release/SEEDED_ACCOUNT_INSTALLED_LOGIN_BRIDGE.md`
 
 - [x] Created `scripts/local-bootstrap-stable-seeded-proof-account-pack.mjs`.
 - [x] Added package script `bootstrap:stable-seeded-proof-account-pack`.
@@ -23,6 +24,12 @@ Docs:
 - [x] Added package script `proof:full-seeded-one-device-role-traversal-rerun`.
 - [x] Added `scripts/guard-full-seeded-one-device-role-traversal-policy.mjs`.
 - [x] Added package script `guard:full-seeded-one-device-role-traversal-policy`.
+- [x] Fixed installed seeded-login automation bridge without service-role, account recreation, auth bypass, or command-line credential passing.
+- [x] Added `scripts/proof-seeded-account-installed-login-bridge.mjs`.
+- [x] Added package script `proof:seeded-account-installed-login-bridge`.
+- [x] Added `scripts/guard-seeded-account-installed-login-policy.mjs`.
+- [x] Added package script `guard:seeded-account-installed-login-policy`.
+- [x] Confirmed all ten seeded credential pairs are saved locally only in ignored `.env.browserstack-monetization.local`.
 
 Status:
 - Stable seeded proof account pack: Closed.
@@ -30,8 +37,12 @@ Status:
 - One attached device full app automation proof: Partial after rerun.
 - Signed-out routes passed on the installed Play internal v57 app.
 - Backend auth readback passed for normal, creator, moderator, admin/operator, owner, blocked A, blocked B, Premium, and non-Premium.
-- Remaining blocker: installed role sign-in did not complete through the Play-installed app. `proof_normal_001` showed app-side Login Error / Invalid login credentials even though backend auth readback passed; later role sign-ins could not reach the login field after that app-side state.
-- Restricted account remained blocked/fail-closed.
+- Seeded account installed login bridge: Closed for non-restricted proof accounts.
+- Installed UI login passed for normal, creator, moderator, admin/operator, owner, blocked A, blocked B, Premium, and non-Premium.
+- Restricted account remained blocked/fail-closed by backed account state as expected.
+- Root cause of prior installed login blocker: automation credential injection failure; secondary harness issues were Settings Account-section logout prep and XML redaction of Android `password="false"` attributes.
+- Current remaining blockers are route-marker/control-proof items, not credential blockers: normal `/chat`, normal `/admin`, creator `/channel-studio`, creator `/creator-monetization-setup`, and creator `/payouts`.
+- Latest role traversal status counts: Pass `75`, Human review `28`, Blocked `5`, Two-device required `4`, Fail `0`.
 - Two-device live/watch-party/chat-call proof remains required for real simultaneous media/state behavior.
 - Required truth:
   - no service-role was used in the rerun
@@ -48,7 +59,7 @@ Status:
   - payouts/cashout/Stripe production/payable balances/provider refunds remain OFF/manual/external
 
 Next lane recommendation:
-- Fix the installed seeded login blocker, then rerun only affected role traversal flows. After authenticated role traversal closes, run two-device live/watch-party/chat-call proof.
+- Fix remaining route-marker/control blockers and rerun only affected role traversal flows. After authenticated route/control traversal closes, run two-device live/watch-party/chat-call proof.
 
 # Owner RPC Staff Grant Path Follow-Up
 

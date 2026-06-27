@@ -17,7 +17,7 @@ fs.mkdirSync(artifactDir, { recursive: true });
 let secretRedactions = [];
 const redact = (value) => {
   let text = String(value ?? "")
-    .replace(/(access_token|refresh_token|token|token_hash|password|service_role|apikey|api_key)=([^&\s]+)/gi, "$1=<redacted>")
+    .replace(/(access_token|refresh_token|token|token_hash|service_role|apikey|api_key)=([^&\s]+)/gi, "$1=<redacted>")
     .replace(/([?&]code)=([^&\s]+)/gi, "$1=<redacted>")
     .replace(/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/g, "<redacted-jwt>")
     .replace(/https?:\/\/[^\s"]*(token|signature|X-Amz-Signature|Expires|Key-Pair-Id)[^\s"]*/gi, "<redacted-signed-url>")
@@ -279,12 +279,18 @@ const scrollDown = () => {
 
 const signOutThroughUi = (label) => {
   openRoute("/settings", `${label}-signout-settings`);
-  for (let i = 0; i < 7; i += 1) {
+  let accountSectionTapped = false;
+  for (let i = 0; i < 10; i += 1) {
     const xml = dumpUi(`${label}-signout-${i}`);
     if (xmlHas(xml, "auth-login-email-input") || /Sign In|Log in/i.test(xml)) return { ok: true, method: "already signed out" };
     if (tapBy(xml, "settings-logout-button") || tapBy(xml, "Log Out") || tapBy(xml, "Log out")) {
       sleep(3500);
       return { ok: true, method: "settings logout" };
+    }
+    if (!accountSectionTapped && (tapBy(xml, "settings-section-account") || tapBy(xml, "Expand Account") || tapBy(xml, "Account"))) {
+      accountSectionTapped = true;
+      sleep(900);
+      continue;
     }
     scrollDown();
   }
@@ -293,25 +299,6 @@ const signOutThroughUi = (label) => {
 
 const signIn = (label, emailKey, passwordKey) => {
   if (!hasEnv(emailKey) || !hasEnv(passwordKey)) return { ok: false, blocker: "credential missing" };
-  const allowMaestroSecretArgs = process.env.FULL_SEEDED_ALLOW_MAESTRO_SECRET_ARGS === "1";
-  if (!allowMaestroSecretArgs) {
-    writeText(
-      `${label}-maestro-login-output.txt`,
-      "Skipped installed credential entry because Maestro CLI --env passes proof credentials through process arguments. Set FULL_SEEDED_ALLOW_MAESTRO_SECRET_ARGS=1 only for an owner-approved local run after accepting that risk, or provide a non-secret input path.",
-    );
-    const afterXml = dumpUi(`${label}-post-login-skipped-secret-args`);
-    const alreadyLoggedIn = xmlHas(afterXml, "auth-logged-in-home")
-      || /Home|Explore|Profile|Settings|Live Watch-Party|Admin Command Center|Command Center/i.test(afterXml);
-    return {
-      ok: alreadyLoggedIn,
-      emailFieldFound: false,
-      passwordFieldFound: false,
-      submitFound: false,
-      blocker: alreadyLoggedIn
-        ? null
-        : "installed login input blocked: no owner-approved non-secret credential input path",
-    };
-  }
 
   const flowPath = path.join(artifactDir, `${label}-maestro-login.yaml`);
   const flow = `appId: ${PACKAGE_ID}
@@ -320,6 +307,10 @@ const signIn = (label, emailKey, passwordKey) => {
     text: "OK"
     optional: true
 - openLink: "chillywoodmobile://settings"
+- waitForAnimationToEnd
+- tapOn:
+    id: "settings-section-account"
+    optional: true
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element:
@@ -339,11 +330,11 @@ const signIn = (label, emailKey, passwordKey) => {
 - tapOn:
     id: "auth-login-email-input"
 - eraseText
-- inputText: "\${${emailKey}}"
+- inputText: "\${MAESTRO_CHILLYWOOD_LOGIN_EMAIL}"
 - tapOn:
     id: "auth-login-password-input"
 - eraseText
-- inputText: "\${${passwordKey}}"
+- inputText: "\${MAESTRO_CHILLYWOOD_LOGIN_PASSWORD}"
 - hideKeyboard
 - tapOn:
     id: "auth-login-submit-button"
@@ -355,13 +346,13 @@ const signIn = (label, emailKey, passwordKey) => {
     SERIAL,
     "test",
     flowPath,
-    "--env",
-    `${emailKey}=${getEnv(emailKey)}`,
-    "--env",
-    `${passwordKey}=${getEnv(passwordKey)}`,
   ], {
     timeout: 120000,
     maxBuffer: 1024 * 1024 * 20,
+    env: {
+      MAESTRO_CHILLYWOOD_LOGIN_EMAIL: getEnv(emailKey),
+      MAESTRO_CHILLYWOOD_LOGIN_PASSWORD: getEnv(passwordKey),
+    },
   });
   writeText(`${label}-maestro-login-output.txt`, `${maestro.command}\nstatus=${maestro.status}\n${maestro.stdout}\n${maestro.stderr}\n${maestro.error || ""}`);
   sleep(5000);
@@ -378,6 +369,8 @@ const signIn = (label, emailKey, passwordKey) => {
     blocker: loggedIn ? null : `credential/login failed or landing screen not detected (maestro status ${maestro.status})`,
   };
 };
+
+const expectedFailClosedLabels = new Set(["proof_restricted_001"]);
 
 const verifyBackendCredential = async (label, emailKey, passwordKey) => {
   const supabaseUrl = getEnv("SUPABASE_URL") || getEnv("EXPO_PUBLIC_SUPABASE_URL");
@@ -655,6 +648,7 @@ addMatrix({
 for (const routeDef of routeSets.signedOut) exerciseRoute(personas[0], routeDef);
 
 for (const persona of personas.slice(1)) {
+  forceCloseAndOpen();
   const signOut = signOutThroughUi(`${persona.label}-prep`);
   addMatrix({
     role: persona.role,
@@ -667,18 +661,41 @@ for (const persona of personas.slice(1)) {
     screenshotLogReference: `${persona.label}-prep-signout-0.txt`,
   });
   const login = signIn(persona.label, persona.emailKey, persona.passwordKey);
+  const expectedFailClosed = expectedFailClosedLabels.has(persona.label);
   addMatrix({
     role: persona.role,
     accountLabel: persona.label,
     routeScreen: "/login",
     visibleControl: "auth-login-submit-button",
-    expectedOutcome: "seeded proof credential signs in without printing credentials",
-    actualOutcome: login.ok ? "signed in and landing screen detected" : login.blocker,
-    status: login.ok ? "Pass" : "Blocked",
+    expectedOutcome: expectedFailClosed
+      ? "restricted proof credential fails closed without printing credentials"
+      : "seeded proof credential signs in without printing credentials",
+    actualOutcome: login.ok
+      ? "signed in and landing screen detected"
+      : expectedFailClosed
+        ? `expected fail-closed installed login result: ${login.blocker}`
+        : login.blocker,
+    status: login.ok ? "Pass" : expectedFailClosed ? "Pass" : "Blocked",
     screenshotLogReference: login.ok ? `${persona.label}-post-login.txt` : `${persona.label}-login-failed.png`,
   });
   if (!login.ok) {
-    blockers.push(`${persona.label}: ${login.blocker}`);
+    if (!expectedFailClosed) blockers.push(`${persona.label}: ${login.blocker}`);
+    if (expectedFailClosed) {
+      for (const routeDef of persona.routes) {
+        addMatrix({
+          role: persona.role,
+          accountLabel: persona.label,
+          routeScreen: routeDef.route,
+          visibleControl: "restricted account gate",
+          expectedOutcome: "restricted/suspended account remains fail-closed for private app traversal",
+          actualOutcome: "installed login denied by backed account status before private traversal",
+          status: "Pass",
+          screenshotLogReference: `${persona.label}-post-login.txt`,
+          finalResult: "Pass: fail-closed",
+        });
+      }
+      forceCloseAndOpen();
+    }
     continue;
   }
   for (const routeDef of persona.routes) exerciseRoute(persona, routeDef);

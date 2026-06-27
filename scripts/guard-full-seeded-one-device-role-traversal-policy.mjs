@@ -52,7 +52,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF",
   "No provider dashboard mutation happened",
   "No Play production submission happened",
-  "The harness now blocks that path by default",
+  "The harness now uses the secure local `MAESTRO_` environment bridge",
 ].forEach((needle) => requireText("full seeded one-device rerun doc", doc, needle));
 
 [
@@ -60,8 +60,9 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "guard:full-seeded-one-device-role-traversal-policy",
 ].forEach((needle) => requireText("package scripts", packageJson, needle));
 
-requireText("local rerun runner", runner, "FULL_SEEDED_ALLOW_MAESTRO_SECRET_ARGS");
-requireText("local rerun runner", runner, "installed login input blocked: no owner-approved non-secret credential input path");
+requireText("local rerun runner", runner, "MAESTRO_CHILLYWOOD_LOGIN_EMAIL");
+requireText("local rerun runner", runner, "MAESTRO_CHILLYWOOD_LOGIN_PASSWORD");
+forbid("local rerun runner", runner, /"--env"[\s\S]{0,250}(passwordKey|getEnv\(passwordKey\)|PASSWORD)/, "Maestro CLI password env argument");
 
 forbidPositiveSentence("full seeded one-device rerun doc", doc, /service-role (?:was|used|bootstrap|created|repaired|authority)/i, "service-role use or authority proof claim");
 forbidPositiveSentence("full seeded one-device rerun doc", doc, /accounts? (?:were|was) (?:created|recreated)|created accounts?|recreated accounts?/i, "account creation/recreation claim");
