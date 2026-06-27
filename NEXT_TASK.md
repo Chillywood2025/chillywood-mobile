@@ -1,5 +1,58 @@
 # NEXT TASK
 
+# Watch-Party Realtime Callback / Second Play Client Follow-Up
+
+Docs:
+- `docs/release/TWENTY_FIVE_SEEDED_PARTICIPANTS_REALTIME_PROOF.md`
+- `docs/release/FIVE_REMAINING_ONE_DEVICE_TRAVERSAL_BLOCKERS.md`
+- `docs/release/FULL_SEEDED_ONE_DEVICE_ROLE_TRAVERSAL_RERUN.md`
+- `docs/release/ONE_ATTACHED_DEVICE_FULL_APP_AUTOMATION_PROOF.md`
+- `docs/release/FINAL_STORE_RELEASE_READINESS_PLAY_SUBMISSION_PACKET.md`
+- `docs/release/PLAY_INTERNAL_TEST_AAB_UPLOAD_TESTER_SMOKE.md`
+
+Status:
+- 25 seeded participants identity pack: Closed.
+- Live video media diagnostic with 25 seeded RTC-node participants: Closed.
+- Chat call media diagnostic with two seeded RTC-node clients: Closed.
+- Owner/Admin/Moderator realtime publish-authority diagnostic: Closed.
+- Watch-Party state/readback diagnostic: Closed for readback, Partial for realtime event callback.
+- Full Play-internal installed-app realtime UI proof: Partial, second Play-internal v57 active client required.
+
+Current blocker:
+- `watch_party_sync_events` realtime callback was not observed in the RTC-node diagnostic even though the channel reached `SUBSCRIBED` and Watch-Party playback readback matched.
+- Full installed-app UI proof still needs a second Play-internal v57 active Android client. The emulator sideload is diagnostic only, not tester delivery or Play proof.
+
+Required truth:
+- no sideload was used on the physical tester phone
+- no APK install was used as tester proof
+- no Play production submission
+- no provider mutation
+- no Google Play product/base-plan mutation
+- no RevenueCat mapping change
+- no Stripe mutation
+- no purchases or provider refunds executed
+- no payouts/cashout/withdrawals/transfers
+- no service-role role/permission authority proof
+- no current First Owner touched
+- no secrets, LiveKit tokens, push tokens, signed URLs, raw IPs, private messages, or private evidence committed/artifacted
+- `liveMoneyEnabled` remains OFF
+- payouts/cashout/Stripe production/payable balances/provider refunds remain OFF/manual/external
+
+Carry-forward visible-surface safety anchors:
+- Every visible surface active wiring audit: Closed.
+- No visible clickable dead buttons are allowed.
+- Nothing visible should be hidden or disabled.
+- Permission scopes must unlock backed behavior.
+- Tester-visible monetization UX is separate from live money settlement.
+- Premium annual opens an active provider-blocked status/resolution flow.
+- Creator Channel Subscription opens an active provider-blocked status/resolution flow.
+- liveMoneyEnabled remains OFF.
+- Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF.
+- No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.
+
+Next lane recommendation:
+- Investigate the `watch_party_sync_events` Supabase Realtime callback, then rerun only Watch-Party sync; or provision a second Play-internal v57 active client and run installed-app realtime UI proof.
+
 # Five Remaining One-Device Traversal Blockers Fix
 
 Docs:
