@@ -47,6 +47,8 @@ const anonKey = optionalEnv("SUPABASE_ANON_KEY") || requireEnv("EXPO_PUBLIC_SUPA
 const roomSuffix = randomBytes(4).toString("hex").toUpperCase();
 const watchRoomId = `WPRTCB${roomSuffix}`;
 const syncEventId = `wprtc-sync-${roomSuffix.toLowerCase()}`;
+const postSubscribeSettleMs = Number(process.env.WATCH_PARTY_CALLBACK_POST_SUBSCRIBE_SETTLE_MS || 2500);
+const callbackObservationMs = Number(process.env.WATCH_PARTY_CALLBACK_OBSERVATION_MS || 20000);
 
 const account = (label, prefix) => ({
   label,
@@ -72,6 +74,8 @@ const result = {
   callbackPayloadSummary: null,
   playbackReadbackMatched: false,
   staleEventConfusionAvoided: true,
+  postSubscribeSettleMs,
+  callbackObservationMs,
   safety: {
     serviceRoleUsed: false,
     noProviderMutation: true,
@@ -231,6 +235,8 @@ async function runCallbackProof(host, viewer) {
     }, 7000);
   });
 
+  if (result.subscribedBeforeEmit) await wait(postSubscribeSettleMs);
+
   await requireOk("insert_watch_party_sync_event", host.client.from("watch_party_sync_events").insert({
     id: syncEventId,
     kind: "play",
@@ -251,7 +257,7 @@ async function runCallbackProof(host, viewer) {
     updated_at: nowIso(),
   }).eq("party_id", watchRoomId));
 
-  await wait(8000);
+  await wait(callbackObservationMs);
   result.callbackObserved = observed;
   result.callbackPayloadSummary = callbackPayloadSummary;
 

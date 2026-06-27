@@ -191,7 +191,8 @@
     "guard:monetization-e2e-testids": "node ./scripts/guard-monetization-e2e-testids.mjs",
     "typecheck": "tsc --noEmit && npm run guard:android-launcher-icon-policy && npm run guard:watch-party-livekit && npm run guard:old-room-handling",
     "proof:chat-thread-report-and-message-actions": "node ./scripts/proof-chat-thread-report-and-message-actions.mjs",
-    "guard:chat-thread-report-message-actions-policy": "node ./scripts/guard-chat-thread-report-message-actions-policy.mjs"
+    "guard:chat-thread-report-message-actions-policy": "node ./scripts/guard-chat-thread-report-message-actions-policy.mjs",
+    "local-run:two-client-installed-app-realtime-ui": "node ./scripts/local-run-two-client-installed-app-realtime-ui-proof.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

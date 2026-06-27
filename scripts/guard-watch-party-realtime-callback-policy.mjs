@@ -42,7 +42,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "Observed",
   "Playback readback matched",
   "This is called Closed because callback proof and playback readback both passed.",
-  "Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627142209/`",
+  "Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627145327/`",
   "Diagnostic sideloaded emulator is not accepted as Play-internal UI proof",
   "No sideload was used on the physical tester phone",
   "No Play production submission happened",
@@ -55,7 +55,7 @@ forbidPositiveSentence("Watch-Party callback fix doc", doc, /readback-only .*Clo
 if (
   /callback observed/i.test(doc) &&
   !(
-    doc.includes("Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627142209/`") &&
+    doc.includes("Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627145327/`") &&
     doc.includes("| Status | `passed` |") &&
     doc.includes("This is called Closed because callback proof and playback readback both passed.")
   )

@@ -1,6 +1,6 @@
 # NEXT TASK
 
-# Two-Phone Installed-App Realtime UI Follow-Up
+# Realtime UI Proof Follow-Up
 
 Docs:
 - `docs/release/TARGETED_WATCH_PARTY_REALTIME_MIGRATION_APPLY.md`
@@ -21,10 +21,12 @@ Status:
 - Watch-Party state/readback diagnostic: Closed.
 - Watch-Party realtime callback: Closed after targeted migration apply and proof-runner Realtime auth bridge.
 - Targeted migration applied: `supabase/migrations/20260627131501_watch_party_realtime_publication.sql`.
-- Full Play-internal installed-app realtime UI proof: Partial; `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57 clients, but full realtime UI traversal still needs to run.
+- Full Play-internal installed-app realtime UI proof: Partial after a two-phone run with `R3CXA0DS5JV` and `R5CR120QCBF`.
+- Two-client matrix totals: 5 Closed, 4 Partial, 0 Blocked, 0 Failed.
+- Closed in installed/two-phone scope: both Play-internal v57 metadata preflights, seeded UI login on both phones, Watch-Party callback recheck, and Owner/Admin/Moderator realtime controls using same-lane staff UI evidence plus the 25-participant LiveKit publish-authority diagnostic.
 
 Current blocker:
-- Full installed-app UI proof no longer lacks a second physical client: `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57. The emulator sideload is diagnostic only, not tester delivery or Play proof. Run full two-client UI traversal next.
+- Full installed-app UI proof no longer lacks a second physical client: `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57. Remaining installed-app UI closeout blockers are: direct chat-call thread setup hits `chat_threads` RLS, Live participant UI hits active Premium-required/status gates for the proof accounts, and Watch-Party installed UI marker assertion did not close on both clients in the completed artifact. The emulator sideload is diagnostic only, not tester delivery or Play proof.
 
 Required truth:
 - no sideload was used on the physical tester phone
@@ -55,7 +57,7 @@ Carry-forward visible-surface safety anchors:
 - No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.
 
 Next lane recommendation:
-- Run full installed-app realtime UI proof on `R3CXA0DS5JV` and `R5CR120QCBF`.
+- Fix only the remaining installed-app realtime UI proof blockers, then rerun affected realtime flows: chat-call installed UI setup, Live installed UI with Premium-capable seeded participants or a safe proof entitlement path, and Watch-Party installed UI marker assertion.
 
 # Five Remaining One-Device Traversal Blockers Fix
 

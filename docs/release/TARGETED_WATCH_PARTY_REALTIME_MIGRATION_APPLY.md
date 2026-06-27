@@ -68,7 +68,7 @@ Post-apply verification confirmed:
 
 ## Watch-Party Callback Rerun
 
-Focused callback artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627142209/`.
+Focused callback artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627145327/`.
 
 Targeted migration apply artifact: `/tmp/app-targeted-watch-party-realtime-migration-apply-20260627-143034/`.
 

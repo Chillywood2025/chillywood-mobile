@@ -28,7 +28,7 @@ The targeted migration was applied in `docs/release/TARGETED_WATCH_PARTY_REALTIM
 
 ## Callback Proof Result
 
-Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627142209/`.
+Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627145327/`.
 
 Prior focused artifact before apply/auth fix: `/tmp/app-watch-party-realtime-callback-fix-20260627131636/`.
 
@@ -42,6 +42,8 @@ Prior focused artifact before apply/auth fix: `/tmp/app-watch-party-realtime-cal
 | Callback observed | Yes |
 | `watch_party_sync_events` callback observed / not observed | Observed |
 | Playback readback matched / did not match | Playback readback matched |
+| Post-subscribe settle | 2500 ms |
+| Callback observation window | 20000 ms |
 | Status | `passed` |
 
 watch_party_sync_events callback observed / not observed: observed.
@@ -56,7 +58,8 @@ This is called Closed because callback proof and playback readback both passed.
 4. Added `scripts/local-run-watch-party-realtime-callback-proof.mjs` for a focused authenticated RLS callback rerun.
 5. Fixed the local proof runner to reuse the signed-in Supabase client and call `client.realtime.setAuth(accessToken)` before subscribing.
 6. Tightened `scripts/local-run-25-seeded-participants-realtime-diagnostic.mjs` to filter `watch_party_sync_events` by exact `party_id` and unique event id.
-7. Added proof/guard coverage for this lane.
+7. Added post-subscribe settle and longer observation windows to avoid false negative callback timing after `SUBSCRIBED`.
+8. Added proof/guard coverage for this lane.
 
 No auth bypass was added. No RLS/account-status gate weakening happened.
 
@@ -64,7 +67,7 @@ No auth bypass was added. No RLS/account-status gate weakening happened.
 
 Two active Play-internal v57 Android clients are required for full installed-app realtime UI proof.
 
-Full installed-app two-client UI proof was not called Closed in this lane. A second Play-internal v57 Android client is available, and non-destructive two-client launch preflight is documented in `docs/release/TWO_CLIENT_INSTALLED_APP_REALTIME_UI_PROOF.md`, but the full realtime UI traversal remains Partial until the two clients are driven through the realtime flows.
+Full installed-app two-client UI proof was run with both Play-internal v57 Android clients and remains Partial for installed-app UI scope. Details are documented in `docs/release/TWO_CLIENT_INSTALLED_APP_REALTIME_UI_PROOF.md`.
 
 | Client | Source | Valid for Play-internal UI proof? |
 | --- | --- | --- |
@@ -76,8 +79,8 @@ Diagnostic sideloaded emulator is not accepted as Play-internal UI proof.
 
 ## Owner Action Items
 
-1. Run full two-client installed-app realtime UI traversal on `R3CXA0DS5JV` and `R5CR120QCBF`.
-2. Keep the focused Watch-Party callback proof runner available for regression checks.
+1. Keep the focused Watch-Party callback proof runner available for regression checks.
+2. Address the remaining installed-app UI proof blockers documented in `docs/release/TWO_CLIENT_INSTALLED_APP_REALTIME_UI_PROOF.md`.
 
 ## Safety Confirmation
 
@@ -100,4 +103,4 @@ Diagnostic sideloaded emulator is not accepted as Play-internal UI proof.
 
 ## Release Recommendation
 
-Watch-Party realtime callback proof is Closed. The next lane should run the full two-phone installed-app realtime UI proof on `R3CXA0DS5JV` and `R5CR120QCBF`.
+Watch-Party realtime callback proof is Closed. The remaining realtime work is installed-app UI proof closeout for chat-call UI setup, Live Premium-gated participant UI, and Watch-Party UI-marker assertion.

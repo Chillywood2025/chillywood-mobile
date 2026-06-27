@@ -62,6 +62,8 @@ const liveRoomId = `RT25LIVE${roomSuffix}`;
 const watchRoomId = `RT25WATCH${roomSuffix}`;
 const callRoomId = `RT25CALL${roomSuffix}`;
 const pairKey = `rt25:${roomSuffix.toLowerCase()}`;
+const watchPartyPostSubscribeSettleMs = Number(process.env.WATCH_PARTY_CALLBACK_POST_SUBSCRIBE_SETTLE_MS || 2500);
+const watchPartyCallbackObservationMs = Number(process.env.WATCH_PARTY_CALLBACK_OBSERVATION_MS || 20000);
 
 const supabaseUrl = optionalEnv("SUPABASE_URL") || requireEnv("EXPO_PUBLIC_SUPABASE_URL");
 const anonKey = optionalEnv("SUPABASE_ANON_KEY") || requireEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY");
@@ -434,6 +436,7 @@ async function runWatchPartySync(host, viewer) {
       }
     }, 5000);
   });
+  await wait(watchPartyPostSubscribeSettleMs);
   await requireOk("insert_watch_party_sync_event", host.client.from("watch_party_sync_events").insert({
     id: `rt25-sync-${roomSuffix}`,
     kind: "play",
@@ -448,7 +451,7 @@ async function runWatchPartySync(host, viewer) {
     playback_state: "playing",
     updated_at: nowIso(),
   }).eq("party_id", watchRoomId);
-  await wait(5000);
+  await wait(watchPartyCallbackObservationMs);
   await viewer.client.removeChannel(channel);
   const readback = await viewer.client
     .from("watch_party_rooms")
