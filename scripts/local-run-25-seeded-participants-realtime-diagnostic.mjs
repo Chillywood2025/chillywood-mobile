@@ -412,8 +412,12 @@ async function runWatchPartySync(host, viewer) {
         event: "INSERT",
         schema: "public",
         table: "watch_party_sync_events",
+        filter: `party_id=eq.${watchRoomId}`,
       }, (payload) => {
-        if (String(payload?.new?.party_id ?? "") === watchRoomId) observed = true;
+        if (
+          String(payload?.new?.party_id ?? "") === watchRoomId
+          && String(payload?.new?.id ?? "") === `rt25-sync-${roomSuffix}`
+        ) observed = true;
       })
       .subscribe((status) => {
         result.watchPartySync.channelStatuses.push(String(status));
