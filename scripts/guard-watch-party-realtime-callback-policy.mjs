@@ -37,10 +37,12 @@ const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 
 [
-  "This is not called Closed because readback-only proof is not callback proof.",
+  "Final verdict: Closed",
   "watch_party_sync_events callback observed / not observed",
-  "Not observed",
+  "Observed",
   "Playback readback matched",
+  "This is called Closed because callback proof and playback readback both passed.",
+  "Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627142209/`",
   "Diagnostic sideloaded emulator is not accepted as Play-internal UI proof",
   "No sideload was used on the physical tester phone",
   "No Play production submission happened",
@@ -50,7 +52,16 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 ].forEach((needle) => requireText("Watch-Party callback fix doc", doc, needle));
 
 forbidPositiveSentence("Watch-Party callback fix doc", doc, /readback-only .*Closed|callback proof .*Closed.*readback/i, "readback-only callback closeout");
-forbidPositiveSentence("Watch-Party callback fix doc", doc, /callback observed.*yes|callback observed.*true|watch_party_sync_events callback observed/i, "callback observed claim without evidence");
+if (
+  /callback observed/i.test(doc) &&
+  !(
+    doc.includes("Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627142209/`") &&
+    doc.includes("| Status | `passed` |") &&
+    doc.includes("This is called Closed because callback proof and playback readback both passed.")
+  )
+) {
+  failures.push("Watch-Party callback fix doc claims callback observed without latest passed artifact evidence.");
+}
 forbidPositiveSentence("Watch-Party callback fix doc", doc, /physical tester phone.*sideload|sideload.*physical tester phone/i, "physical phone sideload");
 forbidPositiveSentence("Watch-Party callback fix doc", doc, /diagnostic sideloaded emulator .*Play-internal UI proof|emulator-only diagnostic .*full installed-app realtime UI proof/i, "diagnostic emulator claimed as Play-internal UI proof");
 forbidPositiveSentence("Watch-Party callback fix doc", doc, /Play production submission happened|submitted? to production|promoted? to production/i, "Play production submission");

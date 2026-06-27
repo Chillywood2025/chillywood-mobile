@@ -40,7 +40,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "25 seeded participants realtime proof: Closed / Partial / Blocked",
   "At least two active clients are required for realtime proof",
   "Seeded accounts are identities; active clients prove simultaneous behavior",
-  "Partial: second Play-internal v57 active client is still required",
+  "Partial: full installed-app two-phone UI traversal still required",
   "No sideload was used",
   "No APK install was used as tester proof",
   "No uninstall/reinstall/clear-data happened",

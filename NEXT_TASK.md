@@ -1,9 +1,11 @@
 # NEXT TASK
 
-# Watch-Party Realtime Callback / Second Play Client Follow-Up
+# Two-Phone Installed-App Realtime UI Follow-Up
 
 Docs:
+- `docs/release/TARGETED_WATCH_PARTY_REALTIME_MIGRATION_APPLY.md`
 - `docs/release/WATCH_PARTY_REALTIME_CALLBACK_FIX.md`
+- `docs/release/TWO_CLIENT_INSTALLED_APP_REALTIME_UI_PROOF.md`
 - `docs/release/TWENTY_FIVE_SEEDED_PARTICIPANTS_REALTIME_PROOF.md`
 - `docs/release/FIVE_REMAINING_ONE_DEVICE_TRAVERSAL_BLOCKERS.md`
 - `docs/release/FULL_SEEDED_ONE_DEVICE_ROLE_TRAVERSAL_RERUN.md`
@@ -16,16 +18,13 @@ Status:
 - Live video media diagnostic with 25 seeded RTC-node participants: Closed.
 - Chat call media diagnostic with two seeded RTC-node clients: Closed.
 - Owner/Admin/Moderator realtime publish-authority diagnostic: Closed.
-- Watch-Party state/readback diagnostic: Closed for readback, Partial for realtime event callback.
-- Watch-Party realtime callback root cause: realtime publication/config issue.
-- Repo migration added: `supabase/migrations/20260627131501_watch_party_realtime_publication.sql`.
-- Full Play-internal installed-app realtime UI proof: Partial; `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57 clients, but full realtime UI traversal still needs to run after the Watch-Party callback backend migration is applied.
+- Watch-Party state/readback diagnostic: Closed.
+- Watch-Party realtime callback: Closed after targeted migration apply and proof-runner Realtime auth bridge.
+- Targeted migration applied: `supabase/migrations/20260627131501_watch_party_realtime_publication.sql`.
+- Full Play-internal installed-app realtime UI proof: Partial; `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57 clients, but full realtime UI traversal still needs to run.
 
 Current blocker:
-- `watch_party_sync_events` realtime callback was not observed in the RTC-node diagnostic or focused callback rerun even though the channel reached `SUBSCRIBED`, the event was emitted after subscription, and Watch-Party playback readback matched.
-- `supabase migration list` shows older unrelated local migrations are also pending remotely, so do not run a broad `supabase db push` just to apply the Watch-Party publication fix.
-- Apply `supabase/migrations/20260627131501_watch_party_realtime_publication.sql` through the approved backend migration process without bundling unrelated pending migrations, then rerun `node scripts/local-run-watch-party-realtime-callback-proof.mjs`.
-- Full installed-app UI proof no longer lacks a second physical client: `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57. The emulator sideload is diagnostic only, not tester delivery or Play proof. Run full two-client UI traversal after the Watch-Party callback backend migration is applied.
+- Full installed-app UI proof no longer lacks a second physical client: `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57. The emulator sideload is diagnostic only, not tester delivery or Play proof. Run full two-client UI traversal next.
 
 Required truth:
 - no sideload was used on the physical tester phone
@@ -56,7 +55,7 @@ Carry-forward visible-surface safety anchors:
 - No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.
 
 Next lane recommendation:
-- Apply the scoped Watch-Party realtime publication migration or reconcile the pending remote migration history, then rerun only Watch-Party callback proof. After callback closes, run full installed-app realtime UI proof on `R3CXA0DS5JV` and `R5CR120QCBF`.
+- Run full installed-app realtime UI proof on `R3CXA0DS5JV` and `R5CR120QCBF`.
 
 # Five Remaining One-Device Traversal Blockers Fix
 

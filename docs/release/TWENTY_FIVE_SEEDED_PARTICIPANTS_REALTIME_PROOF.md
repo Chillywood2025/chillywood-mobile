@@ -8,11 +8,11 @@ Closed: the 25 proof-only participant identity pack is ready, stored locally, an
 
 Closed: the authenticated RLS plus LiveKit RTC-node diagnostic used 25 seeded participant sessions and proved Live video media subscription, chat-call media subscription, Owner/Admin/Moderator LiveKit publish-authority downgrade, restricted fail-closed behavior, and safe cleanup.
 
-Partial: Watch-Party state readback matched, but the subscribed `watch_party_sync_events` realtime callback was not observed during the diagnostic window. Follow-up investigation classified the callback gap as a Supabase Realtime publication/config issue and added `supabase/migrations/20260627131501_watch_party_realtime_publication.sql` for Watch-Party realtime tables. The focused rerun still reported `SUBSCRIBED` plus matching readback but no callback because that migration has not been applied remotely; older unrelated local migrations are also pending, so a normal `supabase db push` was not used in this lane. The full Play-internal installed-app realtime UI proof also still needs a second Play-internal v57 active client. At least two active clients are required for realtime proof. Seeded accounts are identities; active clients prove simultaneous behavior.
+Closed: Watch-Party state readback matched and the subscribed `watch_party_sync_events` realtime callback was observed after the targeted Watch-Party realtime publication migration was applied. Follow-up investigation classified the original callback gap as a Supabase Realtime publication/config issue plus a Node proof-runner Realtime auth bridge issue. `supabase/migrations/20260627131501_watch_party_realtime_publication.sql` was applied without running a broad `supabase db push` and without applying unrelated pending migrations. The full Play-internal installed-app realtime UI proof still needs a synchronized two-phone UI traversal. At least two active clients are required for realtime proof. Seeded accounts are identities; active clients prove simultaneous behavior.
 
-Partial: second Play-internal v57 active client is still required.
+Partial: full installed-app two-phone UI traversal still required.
 
-The latest 25-participant diagnostic artifact is `/tmp/app-25-seeded-participants-realtime-proof-20260627123814/`. The focused Watch-Party callback rerun artifact is `/tmp/app-watch-party-realtime-callback-fix-20260627131636/`. The 25-participant run signed in 25 participant identities, connected 25 LiveKit viewer sessions, observed 50 live media track subscriptions, connected a two-party chat call with 2 media track subscriptions, verified Moderator/Admin/operator/Owner speaker requests were downgraded to viewer/no-publish, and ended the proof rooms. The focused Watch-Party callback rerun subscribed before emitting a unique event and still did not observe the callback while playback readback matched. Neither run printed passwords, service-role keys, LiveKit tokens, push tokens, signed URLs, raw IPs, provider secrets, private messages, private evidence, tax IDs, bank details, or provider transaction/customer/order records.
+The latest 25-participant diagnostic artifact is `/tmp/app-25-seeded-participants-realtime-proof-20260627123814/`. The focused Watch-Party callback rerun artifact after targeted migration apply is `/tmp/app-watch-party-realtime-callback-fix-20260627142209/`. The 25-participant run signed in 25 participant identities, connected 25 LiveKit viewer sessions, observed 50 live media track subscriptions, connected a two-party chat call with 2 media track subscriptions, verified Moderator/Admin/operator/Owner speaker requests were downgraded to viewer/no-publish, and ended the proof rooms. The focused Watch-Party callback rerun subscribed before emitting a unique event, observed the callback, and verified playback readback matched. Neither run printed passwords, service-role keys, LiveKit tokens, push tokens, signed URLs, raw IPs, provider secrets, private messages, private evidence, tax IDs, bank details, or provider transaction/customer/order records.
 
 The attached physical device `R5CR120QCBF` remains the approved Google Play internal/closed testing client: package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `57`, and EAS update group `d7aac53c-65bb-4bf7-ae69-04bfea248e0a`.
 
@@ -117,10 +117,10 @@ Chat call media is Closed for authenticated RTC-node diagnostic proof. Full inst
 | Title Watch-Party source contract | Pass | diagnostic creates title rooms with `source_type: platform_title` and source/title id |
 | Sync event insert contract | Pass | diagnostic emits canonical `kind: play` event |
 | Room playback readback | Pass | latest artifact shows `readbackStateMatched: true` |
-| Realtime sync callback | Partial | focused artifact shows `channelStatuses: [SUBSCRIBED, CLOSED]`, `subscribedBeforeEmit: true`, `callbackObserved: false`, `playbackReadbackMatched: true`; repo migration `20260627131501_watch_party_realtime_publication.sql` added but not remotely applied |
+| Realtime sync callback | Pass | focused artifact shows `channelStatuses: [SUBSCRIBED, CLOSED]`, `subscribedBeforeEmit: true`, `callbackObserved: true`, `playbackReadbackMatched: true`; targeted migration `20260627131501_watch_party_realtime_publication.sql` applied |
 | Installed app two-client player sync UI proof | Partial | needs second Play-internal v57 active UI client |
 
-Watch-Party database state/readback is Closed for the diagnostic path. Watch-Party realtime callback proof remains Partial because the subscribed `watch_party_sync_events` insert was not observed. Root cause classification is realtime publication/config issue. This is not called fully Closed.
+Watch-Party database state/readback is Closed for the diagnostic path. Watch-Party realtime callback proof is Closed because the subscribed `watch_party_sync_events` insert was observed and playback readback matched. Root cause classification was realtime publication/config issue plus proof-runner Realtime auth bridge.
 
 ## Simultaneous Multi-User State Proof
 
@@ -130,7 +130,7 @@ Watch-Party database state/readback is Closed for the diagnostic path. Watch-Par
 | 25 concurrent authenticated LiveKit viewer sessions | Pass | latest diagnostic connected 25 seeded viewer sessions |
 | Simultaneous media subscription state | Pass | latest diagnostic observed 50 live subscriptions and 2 chat-call subscriptions |
 | Watch-Party state readback | Pass | latest diagnostic readback matched the expected playback state |
-| Watch-Party realtime event callback | Partial | callback not observed before channel close |
+| Watch-Party realtime event callback | Pass | callback observed after targeted migration apply and Realtime auth bridge fix |
 | Full installed app simultaneous UI state | Partial | needs second Play-internal v57 active UI client |
 
 Real simultaneous media state is Closed for RTC-node diagnostic clients. Full installed-app simultaneous UI proof remains Partial.
@@ -161,8 +161,8 @@ Owner/Admin/Moderator route and authority proof remains Closed in existing one-d
 | `npm run bootstrap:25-seeded-participants` | Pass |
 | `npm run proof:25-seeded-participants` | Pass |
 | `npm run guard:25-seeded-participants-policy` | Pass |
-| `npm run local-run:25-seeded-participants-realtime-diagnostic` | Partial overall after status logic update; latest executed artifact passed hard media checks but left Watch-Party realtime callback Partial |
-| `node scripts/local-run-watch-party-realtime-callback-proof.mjs` | Partial: callback not observed, playback readback matched |
+| `npm run local-run:25-seeded-participants-realtime-diagnostic` | Pass for hard media diagnostics; full installed-app two-phone UI traversal remains separate |
+| `node scripts/local-run-watch-party-realtime-callback-proof.mjs` | Pass: callback observed, playback readback matched |
 | `npm run proof:watch-party-realtime-callback-fix` | Pending validation after this doc update |
 | `npm run guard:watch-party-realtime-callback-policy` | Pending validation after this doc update |
 | `npm run proof:25-seeded-participants-realtime` | Pending validation after this doc update |
@@ -174,15 +174,13 @@ The realtime guard must continue to fail any false claim that one-device sequent
 
 ## Remaining Blockers
 
-1. Apply the scoped Watch-Party realtime publication migration `supabase/migrations/20260627131501_watch_party_realtime_publication.sql` through the approved backend migration process, without bundling unrelated pending migrations; then rerun only Watch-Party sync.
-2. For official Play-internal installed-app realtime UI proof, create or repair a Play-enabled emulator that can install/update `com.chillywood.mobile` from Google Play internal/closed testing to versionCode `57`, or use a second physical Android device enrolled in the same Google Play internal/closed testing track.
-3. Rerun installed-app UI proof with at least two active Play-internal v57 clients in the same Live, chat call, and Watch-Party flows.
+1. Run installed-app UI proof with at least two active Play-internal v57 clients in the same Live, chat call, and Watch-Party flows.
 
 ## Owner Action Items
 
 1. Keep participant and role credentials only in ignored local env files.
 2. Do not treat the emulator sideload diagnostic as tester delivery or Play proof.
-3. Provide a second Play-internal v57 Android client when full installed-app realtime UI proof is required.
+3. Use the available Play-internal v57 Android clients `R3CXA0DS5JV` and `R5CR120QCBF` for full installed-app realtime UI proof.
 
 ## Safety Confirmation
 
@@ -208,4 +206,4 @@ The realtime guard must continue to fail any false claim that one-device sequent
 
 ## Release Recommendation
 
-Do not mark full realtime proof Closed until the Watch-Party realtime callback is observed and at least two active Play-internal v57 app clients prove installed-app Live video participant visibility, chat call media, Watch-Party sync, and real simultaneous multi-user UI state. The next lane should be a narrow Watch-Party realtime callback investigation or a Play-enabled second-client setup lane, followed by a rerun of only affected realtime flows.
+Do not mark full installed-app realtime UI proof Closed until at least two active Play-internal v57 app clients prove installed-app Live video participant visibility, chat call media, Watch-Party sync, and real simultaneous multi-user UI state. The next lane should run the full two-phone installed-app realtime UI proof.

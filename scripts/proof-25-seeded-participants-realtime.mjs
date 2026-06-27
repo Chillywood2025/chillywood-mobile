@@ -54,7 +54,7 @@ const packageJson = read("package.json");
   "Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF",
   "No provider mutation happened",
   "No LiveKit tokens, push tokens, signed URLs, raw IPs, secrets, private messages, or private evidence were exposed",
-  "Partial: second Play-internal v57 active client is still required",
+  "Partial: full installed-app two-phone UI traversal still required",
 ].forEach((needle) => requireText("25 seeded participants realtime proof doc", doc, needle));
 
 [

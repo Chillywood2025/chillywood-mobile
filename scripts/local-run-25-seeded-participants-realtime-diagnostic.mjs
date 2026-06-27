@@ -185,11 +185,12 @@ async function signIn(proofAccount) {
   if (error || !data.session?.access_token || !data.user?.id) {
     throw new Error(`sign_in_failed:${proofAccount.label}:${error?.message || "missing session"}`);
   }
+  client.realtime.setAuth(data.session.access_token);
   return {
     ...proofAccount,
     accessToken: data.session.access_token,
     authUserId: data.user.id,
-    client: makeClient(data.session.access_token),
+    client,
   };
 }
 

@@ -4,7 +4,7 @@ Two-client installed-app realtime UI proof: Closed / Partial / Blocked.
 
 Final verdict: Partial.
 
-Two active Play-internal v57 Android clients are now available for full installed-app realtime UI proof, but full realtime UI proof was not called Closed in this lane because the Watch-Party callback backend publication gap remains unresolved. The focused Watch-Party callback runner still showed `SUBSCRIBED` and matching playback readback but no `watch_party_sync_events` callback until `supabase/migrations/20260627131501_watch_party_realtime_publication.sql` is applied through the approved backend migration process.
+Two active Play-internal v57 Android clients are now available for full installed-app realtime UI proof, and the Watch-Party callback backend publication gap is Closed in `docs/release/TARGETED_WATCH_PARTY_REALTIME_MIGRATION_APPLY.md`. Full realtime UI proof was not called Closed in this lane because a stable synchronized two-phone UI automation traversal was not executed for Live video participant visibility, chat-call media, Watch-Party sync, simultaneous state, and Owner/Admin/Moderator realtime controls.
 
 This lane performed only non-destructive package metadata and launch preflight on both Play-internal clients. It did not run a full simultaneous Live video, chat-call, Watch-Party, Owner/Admin/Moderator realtime UI traversal.
 
@@ -31,11 +31,11 @@ No APK sideload was used on either physical tester phone. No uninstall/reinstall
 | --- | --- | --- |
 | Live video participant visibility | Partial | not rerun through installed UI in this lane |
 | Chat call media | Partial | not rerun through installed UI in this lane |
-| Watch-Party sync | Partial | blocked by `watch_party_sync_events` callback publication gap |
+| Watch-Party sync | Partial | backend callback proof is Closed; installed-app two-phone UI traversal was not executed to Closed |
 | Real simultaneous multi-user state | Partial | not rerun through installed UI in this lane |
 | Owner/Admin/Moderator realtime controls | Partial | not rerun through installed UI in this lane |
 
-Full installed-app realtime UI proof remains Partial until the Watch-Party realtime callback is fixed on the backend and the two Play-internal v57 clients are driven through the same Live, chat-call, Watch-Party, simultaneous-state, and Owner/Admin/Moderator realtime controls.
+Full installed-app realtime UI proof remains Partial until the two Play-internal v57 clients are driven through the same Live, chat-call, Watch-Party, simultaneous-state, and Owner/Admin/Moderator realtime controls.
 
 ## Safety Confirmation
 
@@ -59,4 +59,4 @@ Full installed-app realtime UI proof remains Partial until the Watch-Party realt
 
 ## Next Action
 
-Apply the scoped Watch-Party realtime publication migration or reconcile the pending remote migration history, rerun the focused Watch-Party callback proof, then run the full two-client installed-app realtime UI traversal using `R3CXA0DS5JV` and `R5CR120QCBF`.
+Run the full two-client installed-app realtime UI traversal using `R3CXA0DS5JV` and `R5CR120QCBF`.

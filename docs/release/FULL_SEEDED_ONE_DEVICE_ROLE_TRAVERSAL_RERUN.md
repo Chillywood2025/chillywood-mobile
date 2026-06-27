@@ -4,7 +4,7 @@ Full seeded one-device role traversal rerun: Closed / Partial / Blocked.
 
 Verdict for this lane: Closed for one-device route/control traversal after the five affected blockers were fixed and rerun. Two-device realtime behavior remains a separate proof lane.
 
-Realtime follow-up: `docs/release/TWENTY_FIVE_SEEDED_PARTICIPANTS_REALTIME_PROOF.md` is now Partial. It closes the 25 proof-only participant identity pack and proves LiveKit/chat-call media through authenticated RTC-node diagnostic sessions, but Watch-Party realtime callback proof remains Partial and full installed-app realtime UI proof still needs a second Play-internal v57 active client.
+Realtime follow-up: `docs/release/TWENTY_FIVE_SEEDED_PARTICIPANTS_REALTIME_PROOF.md` is now Partial only for full installed-app two-phone UI traversal. It closes the 25 proof-only participant identity pack and proves LiveKit/chat-call media through authenticated RTC-node diagnostic sessions. `docs/release/TARGETED_WATCH_PARTY_REALTIME_MIGRATION_APPLY.md` and `docs/release/WATCH_PARTY_REALTIME_CALLBACK_FIX.md` close the Watch-Party realtime callback after the targeted publication migration and proof-runner Realtime auth bridge. Two Play-internal v57 clients, `R3CXA0DS5JV` and `R5CR120QCBF`, are available; full installed-app realtime UI proof remains Partial until those clients are driven through synchronized UI flows.
 
 This rerun used one attached device, `R5CR120QCBF`, and only the installed Google Play internal/closed testing app. Installed package metadata was package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `57`. EAS update group under test: `d7aac53c-65bb-4bf7-ae69-04bfea248e0a`.
 

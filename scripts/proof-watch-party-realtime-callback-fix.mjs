@@ -31,7 +31,9 @@ const migration = read("supabase/migrations/20260627131501_watch_party_realtime_
   "Playback readback matched / did not match",
   "Callback observed",
   "Playback readback matched",
-  "Focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627131636/`",
+  "Latest focused artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627142209/`",
+  "This is called Closed because callback proof and playback readback both passed.",
+  "The targeted migration was applied in `docs/release/TARGETED_WATCH_PARTY_REALTIME_MIGRATION_APPLY.md` without running a broad `supabase db push` and without applying unrelated pending migrations.",
   "Two active Play-internal v57 Android clients are required for full installed-app realtime UI proof",
   "Diagnostic sideloaded emulator is not accepted as Play-internal UI proof",
   "No sideload was used on the physical tester phone",
@@ -61,4 +63,4 @@ if (failures.length) {
 }
 
 console.log("Watch-Party realtime callback fix proof passed.");
-console.log("- callback root cause, scoped migration, focused rerun result, safety wording, and remaining owner/backend action are documented.");
+console.log("- callback root cause, targeted migration apply, observed callback rerun result, safety wording, and remaining two-phone UI action are documented.");
