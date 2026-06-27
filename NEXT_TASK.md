@@ -1,10 +1,11 @@
 # NEXT TASK
 
-# Seeded Proof Account Pack Repair + One-Device Automation Rerun
+# Full Seeded One-Device Role Traversal Rerun
 
 Docs:
 - `docs/release/STABLE_SEEDED_PROOF_ACCOUNT_PACK.md`
 - `docs/release/ONE_ATTACHED_DEVICE_FULL_APP_AUTOMATION_PROOF.md`
+- `docs/release/FULL_SEEDED_ONE_DEVICE_ROLE_TRAVERSAL_RERUN.md`
 
 - [x] Created `scripts/local-bootstrap-stable-seeded-proof-account-pack.mjs`.
 - [x] Added package script `bootstrap:stable-seeded-proof-account-pack`.
@@ -16,13 +17,25 @@ Docs:
 - [x] Stored credentials only in ignored `.env.browserstack-monetization.local`.
 - [x] Proved all ten accounts usable with `npm run proof:stable-seeded-proof-account-pack`.
 - [x] Reran non-destructive attached-device Play-installed package/launch readback on `R5CR120QCBF`.
+- [x] Reran full seeded one-device role traversal attempt on the installed Play internal app.
+- [x] Added `scripts/local-run-full-seeded-one-device-role-traversal-rerun.mjs`.
+- [x] Added `scripts/proof-full-seeded-one-device-role-traversal-rerun.mjs`.
+- [x] Added package script `proof:full-seeded-one-device-role-traversal-rerun`.
+- [x] Added `scripts/guard-full-seeded-one-device-role-traversal-policy.mjs`.
+- [x] Added package script `guard:full-seeded-one-device-role-traversal-policy`.
 
 Status:
 - Stable seeded proof account pack: Closed.
-- One attached device full app automation proof: Partial after account-pack repair.
-- Remaining blocker: full post-repair role-by-role UI traversal has not been rerun end-to-end.
+- Full seeded one-device role traversal rerun: Partial.
+- One attached device full app automation proof: Partial after rerun.
+- Signed-out routes passed on the installed Play internal v57 app.
+- Backend auth readback passed for normal, creator, moderator, admin/operator, owner, blocked A, blocked B, Premium, and non-Premium.
+- Remaining blocker: installed role sign-in did not complete through the Play-installed app. `proof_normal_001` showed app-side Login Error / Invalid login credentials even though backend auth readback passed; later role sign-ins could not reach the login field after that app-side state.
+- Restricted account remained blocked/fail-closed.
 - Two-device live/watch-party/chat-call proof remains required for real simultaneous media/state behavior.
 - Required truth:
+  - no service-role was used in the rerun
+  - no accounts were created or recreated in the rerun
   - service-role bootstrap was proof-only account creation/repair
   - service-role bootstrap is not role/permission authority proof
   - Owner RPC staff grant path remains the authority proof
@@ -35,7 +48,7 @@ Status:
   - payouts/cashout/Stripe production/payable balances/provider refunds remain OFF/manual/external
 
 Next lane recommendation:
-- Run the full post-repair one-device role UI traversal with the completed stable account pack, then run two-device live/watch-party/chat-call proof.
+- Fix the installed seeded login blocker, then rerun only affected role traversal flows. After authenticated role traversal closes, run two-device live/watch-party/chat-call proof.
 
 # Owner RPC Staff Grant Path Follow-Up
 
