@@ -40,7 +40,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "25 seeded participants realtime proof: Closed / Partial / Blocked",
   "At least two active clients are required for realtime proof",
   "Seeded accounts are identities; active clients prove simultaneous behavior",
-  "Partial: full installed-app two-phone UI traversal was run with `R5CR120QCBF` and `R3CXA0DS5JV`, but installed-app UI proof remains Partial",
+  "Partial: full installed-app two-phone UI traversal was run with `R5CR120QCBF` and `R3CXA0DS5JV`, and focused affected reruns closed Watch-Party installed UI markers on both phones. Installed-app UI proof remains Partial for chat-call setup through `chat_threads` RLS and Live Premium-gated participant UI.",
   "No sideload was used",
   "No APK install was used as tester proof",
   "No uninstall/reinstall/clear-data happened",

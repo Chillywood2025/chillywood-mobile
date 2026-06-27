@@ -10,12 +10,14 @@ Watch-Party realtime callback remains Closed. The latest focused callback artifa
 
 The completed two-phone installed-app UI artifact is `/tmp/app-two-client-installed-app-realtime-ui-proof-20260627152317/`.
 
+The focused final installed realtime UI blockers artifacts are `/tmp/app-final-installed-realtime-ui-blockers-20260627-110519/` and `/tmp/app-final-installed-realtime-ui-blockers-participants-20260627-111028/`.
+
 ## Device / Client Metadata
 
 | Client | Source | Package | Version | versionCode | Installer | Account label |
 | --- | --- | --- | --- | --- | --- | --- |
 | `R5CR120QCBF` | Google Play internal/closed testing | `com.chillywood.mobile` | `1.0.0` | `57` | `com.android.vending` | `proof_participant_001` |
-| `R3CXA0DS5JV` | Google Play internal/closed testing | `com.chillywood.mobile` | `1.0.0` | `57` | `com.android.vending` | `proof_participant_002` |
+| `R3CXA0DS5JV` | Google Play internal/closed testing | `com.chillywood.mobile` | `1.0.0` | `57` | `com.android.vending` | `proof_participant_002`; `proof_premium_001` in focused Live rerun |
 
 Both devices were verified through package metadata and installed-app launch preflight. Both seeded participant accounts logged in through the installed app.
 
@@ -39,9 +41,9 @@ Both physical clients report versionCode `57`.
 | Preflight `R3CXA0DS5JV` | Closed | Play-internal v57 metadata verified |
 | Seeded UI login on both physical devices | Closed | both seeded participant accounts logged in through installed UI |
 | Watch-Party callback recheck | Closed | callback observed and playback readback matched |
-| Watch-Party sync | Partial | both physical clients were used, but the completed artifact did not expose the expected Watch-Party UI marker on both clients at assertion time |
-| Chat call media | Partial | direct installed-app chat-call setup hit `chat_threads` RLS; the 25-participant realtime diagnostic remains the media proof fallback |
-| Live video participant visibility | Partial | installed UI reached active Premium-required/status gate for the participant accounts; the 25-participant realtime diagnostic remains the media proof fallback |
+| Watch-Party sync | Closed | focused affected reruns showed expected Watch-Party installed UI markers on both physical clients while callback/readback stayed Closed |
+| Chat call media | Partial | direct installed-app chat-call setup still hits `chat_threads` RLS after app-safe setup-order fix; the 25-participant realtime diagnostic remains the media proof fallback |
+| Live video participant visibility | Partial | installed UI still reaches an active Premium-required/status gate on the non-Premium side; the focused rerun used one Premium proof account without bypassing Premium gates |
 | Real simultaneous multi-user state | Partial | two active clients were used, but not every installed realtime surface closed |
 | Owner/Admin/Moderator realtime controls | Closed | same-lane installed UI staff artifact reached scoped Moderator/Admin/Owner surfaces; 25-participant diagnostic closed LiveKit publish-authority downgrade to viewer/no-publish |
 
@@ -49,23 +51,24 @@ Live video participant visibility: Partial.
 
 Chat call media: Partial.
 
-Watch-Party sync: Partial.
+Watch-Party sync: Closed.
 
 Real simultaneous multi-user state: Partial.
 
 Owner/Admin/Moderator realtime controls: Closed.
 
-Matrix totals: 5 Closed, 4 Partial, 0 Blocked, 0 Failed.
+Matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed.
 
 ## Remaining Blockers
 
-1. Installed-app Chat call media remains Partial because the proof runner cannot create the direct chat thread through current `chat_threads` RLS without a normal app-created thread or a dedicated safe proof path.
-2. Installed-app Live video participant visibility remains Partial because the participant proof accounts hit the active Premium-required gate; use Premium-capable seeded accounts or a safe proof entitlement path for a full installed UI closeout.
-3. Installed-app Watch-Party sync remains Partial at the UI-marker layer even though the realtime callback and playback readback are Closed.
+1. Installed-app Chat call media remains Partial because direct proof setup still hits current `chat_threads` RLS. The runner was narrowed to the app-safe setup order, and reruns with `proof_participant_001` + `proof_participant_002` and `proof_participant_001` + `proof_premium_001` still returned `new row violates row-level security policy for table "chat_threads"`. This needs a normal app-created thread or an existing dedicated safe proof path; do not weaken RLS or use service-role as proof.
+2. Installed-app Live video participant visibility remains Partial because the focused rerun with `proof_premium_001` only removed the gate on one client. The other active physical client still reached the active Premium-required/status gate. This needs two Premium-capable seeded clients or a safe existing proof entitlement path for both active clients; do not bypass or weaken Premium gates.
 
 ## Artifact Paths
 
 - Two-phone installed-app UI artifact: `/tmp/app-two-client-installed-app-realtime-ui-proof-20260627152317/`
+- Final installed realtime UI blockers artifact: `/tmp/app-final-installed-realtime-ui-blockers-20260627-110519/`
+- Final installed realtime UI blockers participant-pair artifact: `/tmp/app-final-installed-realtime-ui-blockers-participants-20260627-111028/`
 - Latest Watch-Party callback artifact: `/tmp/app-watch-party-realtime-callback-fix-20260627145327/`
 - Prior 25-participant realtime diagnostic artifact: `/tmp/app-25-seeded-participants-realtime-proof-20260627123814/`
 
@@ -93,4 +96,4 @@ Matrix totals: 5 Closed, 4 Partial, 0 Blocked, 0 Failed.
 
 ## Release Recommendation
 
-Two-client installed-app realtime UI proof is Partial. Fix only the remaining installed-app realtime UI proof blockers, then rerun affected realtime flows: chat-call installed UI, Live installed UI with Premium-capable participants, and Watch-Party UI-marker assertion.
+Two-client installed-app realtime UI proof is Partial. Watch-Party installed UI is Closed. Fix only the remaining installed-app realtime UI proof blockers, then rerun affected realtime flows: chat-call installed UI through a safe app-created direct thread path, and Live installed UI with two Premium-capable seeded clients or a safe existing proof entitlement path.

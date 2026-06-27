@@ -21,12 +21,13 @@ Status:
 - Watch-Party state/readback diagnostic: Closed.
 - Watch-Party realtime callback: Closed after targeted migration apply and proof-runner Realtime auth bridge.
 - Targeted migration applied: `supabase/migrations/20260627131501_watch_party_realtime_publication.sql`.
-- Full Play-internal installed-app realtime UI proof: Partial after a two-phone run with `R3CXA0DS5JV` and `R5CR120QCBF`.
-- Two-client matrix totals: 5 Closed, 4 Partial, 0 Blocked, 0 Failed.
-- Closed in installed/two-phone scope: both Play-internal v57 metadata preflights, seeded UI login on both phones, Watch-Party callback recheck, and Owner/Admin/Moderator realtime controls using same-lane staff UI evidence plus the 25-participant LiveKit publish-authority diagnostic.
+- Full Play-internal installed-app realtime UI proof: Partial after two-phone run and affected reruns with `R3CXA0DS5JV` and `R5CR120QCBF`.
+- Final installed realtime UI blockers: Partial in `docs/release/FINAL_INSTALLED_REALTIME_UI_BLOCKERS.md`.
+- Two-client matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed.
+- Closed in installed/two-phone scope: both Play-internal v57 metadata preflights, seeded UI login on both phones, Watch-Party callback recheck, Watch-Party installed UI markers on both phones, and Owner/Admin/Moderator realtime controls using same-lane staff UI evidence plus the 25-participant LiveKit publish-authority diagnostic.
 
 Current blocker:
-- Full installed-app UI proof no longer lacks a second physical client: `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57. Remaining installed-app UI closeout blockers are: direct chat-call thread setup hits `chat_threads` RLS, Live participant UI hits active Premium-required/status gates for the proof accounts, and Watch-Party installed UI marker assertion did not close on both clients in the completed artifact. The emulator sideload is diagnostic only, not tester delivery or Play proof.
+- Full installed-app UI proof no longer lacks a second physical client: `R3CXA0DS5JV` and `R5CR120QCBF` are both Play-internal v57. Watch-Party installed UI marker assertion is Closed on both clients. Remaining installed-app UI closeout blockers are direct chat-call thread setup still hitting `chat_threads` RLS after app-safe setup-order repair, and Live participant UI still requiring a second Premium-capable seeded client or safe existing proof entitlement path. Premium gates must not be bypassed or weakened, and `chat_threads` RLS must not be weakened. The emulator sideload is diagnostic only, not tester delivery or Play proof.
 
 Required truth:
 - no sideload was used on the physical tester phone
@@ -57,7 +58,7 @@ Carry-forward visible-surface safety anchors:
 - No Google Play, RevenueCat, Stripe, payout, refund, purchase, or provider mutation happened.
 
 Next lane recommendation:
-- Fix only the remaining installed-app realtime UI proof blockers, then rerun affected realtime flows: chat-call installed UI setup, Live installed UI with Premium-capable seeded participants or a safe proof entitlement path, and Watch-Party installed UI marker assertion.
+- Fix only the remaining installed-app realtime UI proof blockers, then rerun affected realtime flows: chat-call installed UI setup through a real app-backed thread path, and Live installed UI with two Premium-capable seeded clients or a safe existing proof entitlement path.
 
 # Five Remaining One-Device Traversal Blockers Fix
 

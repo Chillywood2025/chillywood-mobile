@@ -103,4 +103,4 @@ Diagnostic sideloaded emulator is not accepted as Play-internal UI proof.
 
 ## Release Recommendation
 
-Watch-Party realtime callback proof is Closed. The remaining realtime work is installed-app UI proof closeout for chat-call UI setup, Live Premium-gated participant UI, and Watch-Party UI-marker assertion.
+Watch-Party realtime callback proof is Closed. Watch-Party installed UI markers also closed in the final installed realtime UI blockers rerun. The remaining realtime installed-app UI work is chat-call UI setup through a safe app-backed direct thread path and Live Premium-gated participant UI with two Premium-capable seeded clients or a safe existing proof entitlement path.

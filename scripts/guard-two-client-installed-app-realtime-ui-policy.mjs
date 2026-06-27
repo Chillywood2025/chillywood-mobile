@@ -47,7 +47,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "R3CXA0DS5JV and R5CR120QCBF were both active clients",
   "Watch-Party realtime callback remains Closed",
   "Diagnostic sideloaded emulator is not accepted as Play-internal UI proof",
-  "Matrix totals: 5 Closed, 4 Partial, 0 Blocked, 0 Failed",
+  "Matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed",
   "No sideload was used on either physical tester phone",
   "No uninstall/reinstall/clear-data happened",
   "No Play production submission happened",
@@ -57,6 +57,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 
 forbidPositiveSentence("two-client installed app realtime UI proof doc", doc, /single active client.*full realtime|one active client.*full realtime|only one active client.*Closed/i, "one-client full realtime claim");
 forbidPositiveSentence("two-client installed app realtime UI proof doc", doc, /diagnostic sideloaded emulator .*Play-internal UI proof|emulator-only diagnostic .*full installed-app realtime UI proof/i, "diagnostic emulator claimed as Play-internal UI proof");
+forbid("two-client installed app realtime UI proof doc", doc, /Watch-Party sync: Partial/i, "stale Watch-Party installed UI Partial status");
 forbidPositiveSentence("two-client installed app realtime UI proof doc", doc, /Play production submission happened|submitted? to production|promoted? to production/i, "Play production submission");
 forbidPositiveSentence("two-client installed app realtime UI proof doc", doc, /provider mutation happened|mutated provider|Google Play product|base-plan mutation|RevenueCat mapping change|Stripe mutation/i, "provider mutation");
 forbidPositiveSentence("two-client installed app realtime UI proof doc", doc, /provider refunds? executed|refunds? executed|payouts? executed|cashout executed|withdrawals? executed|transfers? executed/i, "refund/payout execution");

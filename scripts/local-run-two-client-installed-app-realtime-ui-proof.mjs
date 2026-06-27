@@ -12,6 +12,10 @@ const PACKAGE_ID = "com.chillywood.mobile";
 const UPDATE_GROUP = "d7aac53c-65bb-4bf7-ae69-04bfea248e0a";
 const DEVICE_A = process.env.TWO_CLIENT_DEVICE_A || "R5CR120QCBF";
 const DEVICE_B = process.env.TWO_CLIENT_DEVICE_B || "R3CXA0DS5JV";
+const DEVICE_A_ACCOUNT_PREFIX = process.env.TWO_CLIENT_DEVICE_A_ACCOUNT_PREFIX || "PARTICIPANT_001";
+const DEVICE_B_ACCOUNT_PREFIX = process.env.TWO_CLIENT_DEVICE_B_ACCOUNT_PREFIX || "PARTICIPANT_002";
+const DEVICE_A_ACCOUNT_LABEL = process.env.TWO_CLIENT_DEVICE_A_ACCOUNT_LABEL || "proof_participant_001";
+const DEVICE_B_ACCOUNT_LABEL = process.env.TWO_CLIENT_DEVICE_B_ACCOUNT_LABEL || "proof_participant_002";
 const RUN_STAFF_UI = process.env.TWO_CLIENT_RUN_STAFF_UI === "1";
 const STAFF_UI_EVIDENCE_ARTIFACT = process.env.TWO_CLIENT_STAFF_UI_EVIDENCE_ARTIFACT
   || "/tmp/app-two-client-installed-app-realtime-ui-proof-20260627152317";
@@ -91,8 +95,8 @@ const result = {
   easUpdateGroup: UPDATE_GROUP,
   devices: {},
   accountsUsed: {
-    deviceA: { serial: DEVICE_A, label: "proof_participant_001" },
-    deviceB: { serial: DEVICE_B, label: "proof_participant_002" },
+    deviceA: { serial: DEVICE_A, label: DEVICE_A_ACCOUNT_LABEL, prefix: DEVICE_A_ACCOUNT_PREFIX },
+    deviceB: { serial: DEVICE_B, label: DEVICE_B_ACCOUNT_LABEL, prefix: DEVICE_B_ACCOUNT_PREFIX },
     moderator: "proof_moderator_001",
     adminOperator: "proof_admin_operator_001",
     owner: "proof_owner_001",
@@ -535,6 +539,23 @@ async function emitWatchPartySync(host, participant) {
 
 async function createChatCallProofState(host, participant) {
   const now = nowIso();
+  const pairKey = [host.userId, participant.userId].sort().join("::");
+
+  await requireOk("insert_chat_thread", host.client.from("chat_threads").insert({
+    id: threadId,
+    created_by: host.userId,
+    last_message_at: now,
+    last_message_preview: "Two-phone realtime proof call state.",
+    participant_pair_key: pairKey,
+    thread_kind: "direct",
+    updated_at: now,
+  }).select("id").single());
+
+  await requireOk("insert_chat_members", host.client.from("chat_thread_members").insert([
+    { thread_id: threadId, user_id: host.userId, display_name: host.label, joined_at: now, last_read_at: now, unread_count: 0 },
+    { thread_id: threadId, user_id: participant.userId, display_name: participant.label, joined_at: now, last_read_at: null, unread_count: 1 },
+  ]).select("thread_id"));
+
   await requireOk("insert_communication_room", host.client.from("communication_rooms").insert({
     capture_policy: "best_effort",
     content_access_rule: "open",
@@ -571,21 +592,13 @@ async function createChatCallProofState(host, participant) {
     joined_at: now,
   }).select("room_id").single());
 
-  await requireOk("insert_chat_thread", host.client.from("chat_threads").insert({
-    id: threadId,
+  await requireOk("update_chat_thread_active_call", host.client.from("chat_threads").update({
     active_communication_room_id: communicationRoomId,
     active_call_type: "video",
-    created_by: host.userId,
     last_message_at: now,
     last_message_preview: "Two-phone realtime proof call state.",
-    participant_pair_key: [host.userId, participant.userId].sort().join("::"),
     updated_at: now,
-  }).select("id").single());
-
-  await requireOk("insert_chat_members", host.client.from("chat_thread_members").insert([
-    { thread_id: threadId, user_id: host.userId, display_name: host.label, joined_at: now, last_read_at: now, unread_count: 0 },
-    { thread_id: threadId, user_id: participant.userId, display_name: participant.label, joined_at: now, last_read_at: null, unread_count: 1 },
-  ]).select("thread_id"));
+  }).eq("id", threadId).select("id").single());
 
   await requireOk("insert_chat_call_invite", host.client.from("chat_call_invites").insert({
     callee_user_id: participant.userId,
@@ -634,17 +647,17 @@ async function main() {
       screenshot(serial, `${serial}-preflight-launch`);
     }
 
-    const hostLogin = signInWithMaestro(DEVICE_A, "proof_participant_001", "CHILLYWOOD_E2E_PARTICIPANT_001_EMAIL", "CHILLYWOOD_E2E_PARTICIPANT_001_PASSWORD");
-    const participantLogin = signInWithMaestro(DEVICE_B, "proof_participant_002", "CHILLYWOOD_E2E_PARTICIPANT_002_EMAIL", "CHILLYWOOD_E2E_PARTICIPANT_002_PASSWORD");
+    const hostLogin = signInWithMaestro(DEVICE_A, DEVICE_A_ACCOUNT_LABEL, `CHILLYWOOD_E2E_${DEVICE_A_ACCOUNT_PREFIX}_EMAIL`, `CHILLYWOOD_E2E_${DEVICE_A_ACCOUNT_PREFIX}_PASSWORD`);
+    const participantLogin = signInWithMaestro(DEVICE_B, DEVICE_B_ACCOUNT_LABEL, `CHILLYWOOD_E2E_${DEVICE_B_ACCOUNT_PREFIX}_EMAIL`, `CHILLYWOOD_E2E_${DEVICE_B_ACCOUNT_PREFIX}_PASSWORD`);
     addFlow("seeded UI login on both physical devices", hostLogin.ok && participantLogin.ok ? "Closed" : "Blocked", hostLogin.ok && participantLogin.ok ? "Both seeded accounts logged in through installed UI." : "At least one seeded account login did not reach a signed-in marker.", {
-      deviceAAccount: "proof_participant_001",
-      deviceBAccount: "proof_participant_002",
+      deviceAAccount: DEVICE_A_ACCOUNT_LABEL,
+      deviceBAccount: DEVICE_B_ACCOUNT_LABEL,
       deviceALogin: hostLogin.ok ? "pass" : "blocked",
       deviceBLogin: participantLogin.ok ? "pass" : "blocked",
     });
 
-    host = await signInBackend("proof_participant_001", "PARTICIPANT_001");
-    const participant = await signInBackend("proof_participant_002", "PARTICIPANT_002");
+    host = await signInBackend(DEVICE_A_ACCOUNT_LABEL, DEVICE_A_ACCOUNT_PREFIX);
+    const participant = await signInBackend(DEVICE_B_ACCOUNT_LABEL, DEVICE_B_ACCOUNT_PREFIX);
     const roomSetup = await createProofRooms(host, participant);
     let chatCallReady = false;
     let chatCallBlocker = "";
