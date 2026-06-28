@@ -4,8 +4,12 @@
 
 Current lane doc:
 - `docs/release/PLAY_INTERNAL_TWO_PHONE_CHAT_LIVE_PROOF.md`
+- `docs/release/PLAY_INTERNAL_V58_BINARY_DELIVERY.md`
 
 Truth to preserve:
+- Play internal v58 binary delivery is Closed for build and submit to Google Play internal track.
+- EAS Build ID `b6bbe9d0-5e32-4ef8-b611-f68acec0bd2e` produced Android App Bundle versionCode `58`, runtime `1.0.0`, commit `f6869be8ed37890b564b7d6f2c818283dde923fc`.
+- EAS Submit ID `cb94e585-4330-4ed5-999c-a240b68b1f28` submitted to Google Play `internal` track only.
 - Play-internal two-phone Chat/Live proof is Partial.
 - EAS Update was published to `production` runtime `1.0.0` with update group `ccf8ee01-efa6-4792-bd4a-bf7e015bcd36`, Android update `019f0c20-a752-7fd2-a61e-c9fa1a27a734`, commit `873bb515e73930ef1b1cb6fb047293e18ce84449`.
 - Both physical Play-internal v57 phones were attached and launched: `R5CR120QCBF` and `R3CXA0DS5JV`, package `com.chillywood.mobile`, installer `com.android.vending`, version `1.0.0`, versionCode `57`.
@@ -15,7 +19,7 @@ Truth to preserve:
 - No sideload, uninstall, reinstall, clear-data, auth/RLS/Premium/chat/account-status/staff weakening, provider/live-money mutation, First Owner touch, or secrets exposure happened. `liveMoneyEnabled` remains OFF.
 
 Next product action:
-- Either add a safe visible update-readback path or ship the fixes in the next Play internal build if OTA uptake cannot be confirmed.
+- Update both physical phones from Google Play internal testing to v58 when Play makes the internal release available.
 - Use two accounts that can reach each other through a normal visible Chi'lly Chat path.
 - Use two Premium-capable Live accounts or an approved proof entitlement path.
 - Rerun only affected actual-user Chat video, fullscreen RTC fit, Live remote video, and Live host controls on both physical Play-internal phones.
