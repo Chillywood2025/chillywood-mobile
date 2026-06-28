@@ -852,6 +852,17 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
 
   const roomId = toText(created.roomId);
   const calleeUserId = toText(thread.otherMember?.userId);
+  if (!calleeUserId) {
+    await endCommunicationRoom(roomId).catch(() => null);
+    logChatCall("thread_call_missing_callee", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId,
+      mode,
+    });
+    throw new Error("Unable to start Chi'lly Chat call. The receiver is unavailable.");
+  }
+
   const startCallUpdate: ChatThreadUpdate = {
     active_communication_room_id: roomId,
     active_call_type: mode,
@@ -892,43 +903,36 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   }
 
   let delivery: ChillyChatCallInviteDelivery | null = null;
-  if (calleeUserId) {
-    try {
-      const invite = await createChillyChatCallInvite({
-        calleeUserId,
-        callerUserId: currentUserId,
-        callType: mode,
-        communicationRoomId: roomId,
-        threadId: thread.threadId,
-      });
-      delivery = invite.delivery;
-      logChatCall("thread_call_invite_delivery", {
-        currentUserId,
-        threadId: thread.threadId,
-        roomId,
-        mode,
-        notificationCreated: delivery.notificationCreated,
-        pushSent: delivery.pushSent,
-        reason: delivery.reason,
-        status: delivery.status,
-      });
-    } catch (inviteError) {
-      delivery = {
-        attempted: true,
-        eligible: null,
-        notificationCreated: false,
-        pushSent: false,
-        reason: inviteError instanceof Error ? inviteError.message : "invite_failed",
-        status: "failed",
-      };
-      logChatCall("thread_call_invite_failed", {
-        currentUserId,
-        threadId: thread.threadId,
-        roomId,
-        mode,
-        message: delivery.reason,
-      });
-    }
+  try {
+    const invite = await createChillyChatCallInvite({
+      calleeUserId,
+      callerUserId: currentUserId,
+      callType: mode,
+      communicationRoomId: roomId,
+      threadId: thread.threadId,
+    });
+    delivery = invite.delivery;
+    logChatCall("thread_call_invite_delivery", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId,
+      mode,
+      notificationCreated: delivery.notificationCreated,
+      pushSent: delivery.pushSent,
+      reason: delivery.reason,
+      status: delivery.status,
+    });
+  } catch (inviteError) {
+    await clearEndedChatThreadCall(thread.threadId).catch(() => null);
+    await endCommunicationRoom(roomId).catch(() => null);
+    logChatCall("thread_call_invite_failed", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId,
+      mode,
+      message: inviteError instanceof Error ? inviteError.message : "invite_failed",
+    });
+    throw new Error("Unable to start Chi'lly Chat call. The receiver invite could not be saved.");
   }
 
   const updated = await getChatThread(thread.threadId);

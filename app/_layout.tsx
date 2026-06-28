@@ -24,7 +24,14 @@ import { bootstrapLiveKitFoundation } from "../_lib/livekit/bootstrap";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import {
+  readLatestRingingChillyChatCallInviteForCallee,
+  subscribeToIncomingChillyChatCallInvites,
+  type ChillyChatCallInvite,
+} from "../_lib/chillyChatCalls";
+import { getChatThread } from "../_lib/chat";
+import {
   configureNotificationRuntime,
+  readNotificationPreferences,
   refreshAndroidPushRegistrationIfGranted,
   subscribeToForegroundNotificationAlerts,
   subscribeToNotificationResponses,
@@ -394,19 +401,52 @@ function RouteAnalyticsBridge() {
   return null;
 }
 
+const buildIncomingCallPath = (invite: ChillyChatCallInvite) => {
+  const params = new URLSearchParams({
+    callInviteId: invite.id,
+    openCall: "1",
+  });
+  return `/chat/${invite.threadId}?${params.toString()}`;
+};
+
+const buildIncomingCallAlertFromInvite = async (invite: ChillyChatCallInvite): Promise<ForegroundNotificationAlert> => {
+  const callLabel = invite.callType === "voice" ? "voice" : "video";
+  const thread = await getChatThread(invite.threadId).catch(() => null);
+  const callerName = String(thread?.otherMember?.displayName ?? "").trim();
+  return {
+    body: callerName
+      ? `${callerName} is calling you on Chi'lly Chat.`
+      : `Incoming Chi'lly Chat ${callLabel} call.`,
+    inviteId: invite.id,
+    path: buildIncomingCallPath(invite),
+    title: `Incoming Chi'lly Chat ${callLabel} call`,
+    triggerType: "chilly_chat_call_invite",
+  };
+};
+
 function IncomingCallNotificationBridge() {
   const router = useRouter();
+  const { isSignedIn, user } = useSession();
   const [alert, setAlert] = useState<ForegroundNotificationAlert | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestInviteAlertIdRef = useRef("");
+
+  const showAlert = (nextAlert: ForegroundNotificationAlert) => {
+    if (nextAlert.inviteId && latestInviteAlertIdRef.current === nextAlert.inviteId) {
+      return;
+    }
+    if (nextAlert.inviteId) latestInviteAlertIdRef.current = nextAlert.inviteId;
+    setAlert(nextAlert);
+    if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
+    dismissTimeoutRef.current = setTimeout(() => {
+      setAlert(null);
+      dismissTimeoutRef.current = null;
+    }, 45_000);
+  };
 
   useEffect(() => {
     const subscription = subscribeToForegroundNotificationAlerts((nextAlert) => {
-      setAlert(nextAlert);
-      if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
-      dismissTimeoutRef.current = setTimeout(() => {
-        setAlert(null);
-        dismissTimeoutRef.current = null;
-      }, 45_000);
+      showAlert(nextAlert);
     });
 
     return () => {
@@ -414,6 +454,46 @@ function IncomingCallNotificationBridge() {
       if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const currentUserId = String(user?.id ?? "").trim();
+    if (!isSignedIn || !currentUserId) {
+      latestInviteAlertIdRef.current = "";
+      setAlert(null);
+      return () => {};
+    }
+
+    let active = true;
+    const refreshIncomingInvite = async () => {
+      const preferences = await readNotificationPreferences(currentUserId).catch(() => null);
+      if (!active) return;
+      if (preferences?.chillyChatCallsEnabled === false || preferences?.inAppEnabled === false) {
+        setAlert((current) => current?.triggerType === "chilly_chat_call_invite" ? null : current);
+        return;
+      }
+
+      const invite = await readLatestRingingChillyChatCallInviteForCallee(currentUserId).catch(() => null);
+      if (!active) return;
+      if (!invite) {
+        latestInviteAlertIdRef.current = "";
+        setAlert((current) => current?.triggerType === "chilly_chat_call_invite" ? null : current);
+        return;
+      }
+
+      const nextAlert = await buildIncomingCallAlertFromInvite(invite);
+      if (active) showAlert(nextAlert);
+    };
+
+    void refreshIncomingInvite();
+    const unsubscribe = subscribeToIncomingChillyChatCallInvites(currentUserId, () => {
+      void refreshIncomingInvite();
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [isSignedIn, user?.id]);
 
   if (!alert) return null;
 

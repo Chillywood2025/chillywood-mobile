@@ -1,3 +1,4 @@
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.types";
 
 import { supabase } from "./supabase";
@@ -375,6 +376,56 @@ export async function readLatestRingingChillyChatCallInvite(threadId: string): P
 
   if (error || !data?.length) return null;
   return parseInvite(data[0]);
+}
+
+export async function readLatestRingingChillyChatCallInviteForCallee(calleeUserId?: string): Promise<ChillyChatCallInvite | null> {
+  const explicitCalleeUserId = toText(calleeUserId);
+  const viewerUserId = explicitCalleeUserId || toText((await supabase.auth.getSession()).data.session?.user?.id);
+  if (!viewerUserId) return null;
+
+  const { data, error } = await supabase
+    .from(CHAT_CALL_INVITES_TABLE)
+    .select(CALL_INVITE_SELECT)
+    .eq("callee_user_id", viewerUserId)
+    .eq("status", "ringing")
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .returns<CallInviteRow[]>();
+
+  if (error || !data?.length) return null;
+  const invite = parseInvite(data[0]);
+  if (!invite || invite.callerUserId === viewerUserId) return null;
+  return invite;
+}
+
+export function subscribeToIncomingChillyChatCallInvites(
+  calleeUserId: string,
+  onChange: () => void,
+) {
+  const normalizedCalleeUserId = toText(calleeUserId);
+  if (!normalizedCalleeUserId) return () => {};
+
+  let channel: RealtimeChannel | null = supabase
+    .channel(`chat-call-invites-callee-${normalizedCalleeUserId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: CHAT_CALL_INVITES_TABLE,
+        filter: `callee_user_id=eq.${normalizedCalleeUserId}`,
+      },
+      () => onChange(),
+    )
+    .subscribe();
+
+  return () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+  };
 }
 
 export async function updateChillyChatCallInviteStatus(input: {

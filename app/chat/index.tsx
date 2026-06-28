@@ -15,8 +15,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
 import {
+  getOrCreateDirectThread,
   listChatThreads,
   subscribeToInbox,
+  type ChatCallType,
   type ChatThreadSummary,
 } from "../../_lib/chat";
 import { searchPublicPeople, type PublicPeopleSearchResult } from "../../_lib/publicPeopleSearch";
@@ -97,6 +99,7 @@ export default function ChillyChatInboxScreen() {
   const [searchPeopleLoading, setSearchPeopleLoading] = useState(false);
   const [searchPeopleError, setSearchPeopleError] = useState<string | null>(null);
   const [searchPeopleResults, setSearchPeopleResults] = useState<PublicPeopleSearchResult[]>([]);
+  const [startingChatUserId, setStartingChatUserId] = useState("");
   const [quickActionThreadId, setQuickActionThreadId] = useState("");
   const [activeFriendUserIds, setActiveFriendUserIds] = useState<string[]>([]);
   const [areThreadsExpanded, setAreThreadsExpanded] = useState(false);
@@ -315,6 +318,49 @@ export default function ChillyChatInboxScreen() {
     });
   }, [router]);
 
+  const openDirectThreadForPerson = useCallback(async (
+    person: PublicPeopleSearchResult,
+    startCall?: ChatCallType,
+  ) => {
+    const officialAccount = getOfficialPlatformAccount(person.userId);
+    if (officialAccount || person.isOfficial) {
+      openProfileByPerson(person);
+      return;
+    }
+
+    const existingThread = threadByOtherUserId.get(person.userId);
+    if (existingThread) {
+      openThread(existingThread, startCall);
+      return;
+    }
+
+    setStartingChatUserId(person.userId);
+    setSearchPeopleError(null);
+    try {
+      const thread = await getOrCreateDirectThread({
+        userId: person.userId,
+        displayName: person.displayName,
+        avatarUrl: person.avatarUrl,
+        tagline: person.shortBio,
+      });
+      trackEvent("chat_inbox_start_chat_created", {
+        surface: "chat-inbox-search",
+        targetUserId: person.userId,
+        entryMode: startCall ?? "thread",
+      });
+      setSearchQuery("");
+      setSearchPeopleResults([]);
+      openThread(thread, startCall);
+    } catch (threadError) {
+      const message = threadError instanceof Error
+        ? threadError.message
+        : "Unable to open Chi'lly Chat with this person right now.";
+      setSearchPeopleError(message);
+    } finally {
+      setStartingChatUserId("");
+    }
+  }, [openProfileByPerson, openThread, threadByOtherUserId]);
+
   const openSearchSuggestion = useCallback((person: PublicPeopleSearchResult) => {
     const thread = threadByOtherUserId.get(person.userId);
     if (thread) {
@@ -322,8 +368,12 @@ export default function ChillyChatInboxScreen() {
       return;
     }
 
-    openProfileByPerson(person);
-  }, [openProfileByPerson, openThread, threadByOtherUserId]);
+    void openDirectThreadForPerson(person);
+  }, [openDirectThreadForPerson, openThread, threadByOtherUserId]);
+
+  const openSearchSuggestionCall = useCallback((person: PublicPeopleSearchResult, mode: ChatCallType) => {
+    void openDirectThreadForPerson(person, mode);
+  }, [openDirectThreadForPerson]);
 
   const renderPeopleSuggestionRows = () => {
     const query = debouncedSearchQuery.trim();
@@ -348,29 +398,68 @@ export default function ChillyChatInboxScreen() {
             {searchPeopleResults.slice(0, 5).map((person, index) => {
               const initial = person.displayName.slice(0, 1).toUpperCase();
               const hasAvatar = Boolean(person.avatarUrl);
+              const officialAccount = getOfficialPlatformAccount(person.userId);
+              const callsAvailable = !officialAccount && !person.isOfficial;
+              const isOpening = startingChatUserId === person.userId;
               return (
-                <TouchableOpacity
+                <View
                   key={person.userId}
-                  testID={`chat-search-suggestion-row-${index}`}
-                  activeOpacity={0.86}
-                  style={styles.suggestionRow}
-                  onPress={() => openSearchSuggestion(person)}
+                  style={styles.suggestionResultCard}
                 >
-                  <View style={styles.suggestionAvatar}>
-                {hasAvatar ? (
-                      <Image source={{ uri: person.avatarUrl as string }} style={styles.suggestionAvatarImage} />
-                    ) : (
-                      <Text style={styles.suggestionAvatarText}>{initial}</Text>
-                    )}
-                  </View>
-                  <View style={styles.suggestionCopy}>
-                    <Text style={styles.suggestionName} numberOfLines={1}>{person.displayName}</Text>
-                    <Text style={styles.suggestionMeta} numberOfLines={1}>
-                      {person.username ? `@${person.username}` : "Profile"}
-                    </Text>
-                  </View>
-                  <Text style={styles.suggestionAction}>View</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    testID={`chat-search-suggestion-row-${index}`}
+                    activeOpacity={0.86}
+                    style={styles.suggestionRow}
+                    disabled={isOpening}
+                    onPress={() => openSearchSuggestion(person)}
+                  >
+                    <View style={styles.suggestionAvatar}>
+                      {hasAvatar ? (
+                        <Image source={{ uri: person.avatarUrl as string }} style={styles.suggestionAvatarImage} />
+                      ) : (
+                        <Text style={styles.suggestionAvatarText}>{initial}</Text>
+                      )}
+                    </View>
+                    <View style={styles.suggestionCopy}>
+                      <Text style={styles.suggestionName} numberOfLines={1}>{person.displayName}</Text>
+                      <Text style={styles.suggestionMeta} numberOfLines={1}>
+                        {person.username ? `@${person.username}` : "Visible profile result"}
+                      </Text>
+                    </View>
+                    <Text style={styles.suggestionAction}>{isOpening ? "Opening..." : callsAvailable ? "Chat" : "Profile"}</Text>
+                  </TouchableOpacity>
+                  {callsAvailable ? (
+                    <View style={styles.suggestionActionRow}>
+                      <TouchableOpacity
+                        testID={`chat-search-suggestion-chat-${index}`}
+                        activeOpacity={0.84}
+                        disabled={isOpening}
+                        style={[styles.suggestionActionButton, isOpening && styles.suggestionActionButtonDisabled]}
+                        onPress={() => openSearchSuggestion(person)}
+                      >
+                        <Text style={styles.suggestionActionButtonText}>Chi'lly Chat</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        testID={`chat-search-suggestion-voice-${index}`}
+                        activeOpacity={0.84}
+                        disabled={isOpening}
+                        style={[styles.suggestionActionButton, styles.suggestionActionButtonAccent, isOpening && styles.suggestionActionButtonDisabled]}
+                        onPress={() => openSearchSuggestionCall(person, "voice")}
+                      >
+                        <Text style={styles.suggestionActionButtonAccentText}>Voice Call</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        testID={`chat-search-suggestion-video-${index}`}
+                        activeOpacity={0.84}
+                        disabled={isOpening}
+                        style={[styles.suggestionActionButton, styles.suggestionActionButtonAccent, isOpening && styles.suggestionActionButtonDisabled]}
+                        onPress={() => openSearchSuggestionCall(person, "video")}
+                      >
+                        <Text style={styles.suggestionActionButtonAccentText}>Video Call</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </View>
               );
             })}
           </View>
@@ -537,6 +626,7 @@ export default function ChillyChatInboxScreen() {
     openProfile,
     openThread,
     openSearchSuggestion,
+    openSearchSuggestionCall,
     quickActionThread,
     searchQuery,
     debouncedSearchQuery,
@@ -544,6 +634,7 @@ export default function ChillyChatInboxScreen() {
     searchPeopleLoading,
     searchPeopleResults,
     shouldCollapseThreads,
+    startingChatUserId,
     threads.length,
     unreadThreadCount,
     visibleThreads.length,
@@ -918,12 +1009,18 @@ const styles = StyleSheet.create({
   suggestionPanelList: {
     gap: 8,
   },
-  suggestionRow: {
+  suggestionResultCard: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    padding: 8,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 7,
+    gap: 7,
+  },
+  suggestionRow: {
+    borderRadius: 10,
+    paddingHorizontal: 2,
+    paddingVertical: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -965,6 +1062,38 @@ const styles = StyleSheet.create({
   },
   suggestionAction: {
     color: "#EAF0FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  suggestionActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  suggestionActionButton: {
+    minHeight: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    justifyContent: "center",
+  },
+  suggestionActionButtonAccent: {
+    borderColor: "rgba(169,246,210,0.26)",
+    backgroundColor: "rgba(169,246,210,0.1)",
+  },
+  suggestionActionButtonDisabled: {
+    opacity: 0.55,
+  },
+  suggestionActionButtonText: {
+    color: "#EAF0FF",
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  suggestionActionButtonAccentText: {
+    color: "#A9F6D2",
     fontSize: 10.5,
     fontWeight: "900",
   },

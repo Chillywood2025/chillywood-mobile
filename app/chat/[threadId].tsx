@@ -157,24 +157,27 @@ const getThreadGuideBody = ({
 
 const getCallDeliveryMessage = (delivery: ChillyChatCallInviteDelivery | null | undefined) => {
   if (!delivery) {
-    return "Call started in this thread. Receiver notification status is not available yet.";
+    return "Call is active in this thread. Receiver delivery status is not available for the reused call.";
   }
   if (delivery.pushSent) {
-    return "Call started. The receiver was sent an Android call notification.";
+    return "Delivery status: push sent. The receiver was sent an Android call notification.";
   }
   if (delivery.notificationCreated) {
-    return "Call started. The receiver has an in-app call alert; background push was not confirmed.";
+    return "Delivery status: receiver notified. The receiver has an in-app call alert; background push is unconfirmed.";
   }
   if (delivery.status === "blocked") {
-    return "Call started, but the receiver was not notified because the call invite was blocked by current safety/status rules.";
+    return "Delivery status: receiver unavailable. Current safety or account-status rules blocked the receiver call alert.";
   }
   if (delivery.status === "failed") {
-    return "Call started in this thread, but receiver notification could not be confirmed. Ask them to open this Chi'lly Chat thread or try again.";
+    return "Delivery status: push unconfirmed. The receiver invite is saved for in-app ringing if they are online, but notification dispatch failed.";
   }
   if (delivery.status === "skipped") {
-    return "Call started in this thread, but receiver background notification was skipped by notification settings or device registration.";
+    return "Delivery status: push unconfirmed. The receiver invite is saved for in-app ringing, but background push is not available.";
   }
-  return "Call started in this thread. Receiver notification is pending or unconfirmed.";
+  if (delivery.status === "created") {
+    return "Delivery status: in-app banner available. Background push was not confirmed.";
+  }
+  return "Delivery status: push unconfirmed. The receiver invite is saved, but delivery confirmation is pending.";
 };
 
 const buildSmartReplySuggestions = ({
@@ -822,7 +825,7 @@ export default function ChillyChatThreadScreen() {
       });
       const message = callStartError instanceof Error ? callStartError.message : "Unable to start Chi'lly Chat call.";
       setError(message);
-      setCallDeliveryStatus("Call was not started. Receiver notification was not sent.");
+      setCallDeliveryStatus("Delivery status: invite failed. Call was not started and receiver notification was not sent.");
       reportRuntimeError("chat-thread-start-call", callStartError, {
         threadId,
         mode,

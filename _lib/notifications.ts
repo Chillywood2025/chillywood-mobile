@@ -936,6 +936,7 @@ export type PushRegistrationState = {
 
 export type ForegroundNotificationAlert = {
   body: string;
+  inviteId?: string;
   path: string;
   title: string;
   triggerType: string;
@@ -1382,6 +1383,7 @@ export function subscribeToForegroundNotificationAlerts(onAlert: (alert: Foregro
 
     onAlert({
       body: normalizeText(content.body) || "Tap to open the Chi'lly Chat call.",
+      inviteId: normalizeText(data.callInviteId) || undefined,
       path,
       title: normalizeText(content.title) || "Incoming Chi'lly Chat call",
       triggerType: triggerType || "chilly_chat_call",

@@ -3286,8 +3286,26 @@ export default function ProfileScreen() {
             <AppText scale="caption" style={styles.sectionKicker}>PROFILE</AppText>
             <AppText scale="title3" style={styles.sectionTitle}>Profile unavailable</AppText>
             <AppText scale="body" style={styles.sectionBody}>
-              This profile is not available for public browsing.
+              This profile is not available for public browsing. Use Chi'lly Chat search to find or start a direct thread through the normal app path.
             </AppText>
+            <View style={styles.profileUnavailableActionRow}>
+              <TouchableOpacity
+                testID="profile-unavailable-open-chat-search"
+                accessibilityLabel="Open Chi'lly Chat search"
+                style={[styles.actionBtn, styles.actionBtnConnected]}
+                activeOpacity={0.86}
+                onPress={() => router.push("/chat")}
+              >
+                <Text style={[styles.actionBtnText, styles.actionBtnTextConnected]}>Open Chi'lly Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnSecondary]}
+                activeOpacity={0.86}
+                onPress={() => router.back()}
+              >
+                <Text style={styles.actionBtnText}>Back</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </View>
@@ -5555,6 +5573,13 @@ const styles = StyleSheet.create({
   actionBtnTextConnected: { color: "#E4E8FF" },
   actionBtnTextLive: { color: "#FFD7DE" },
   actionBtnTextPlaceholder: { color: "#9BA4B7" },
+  profileUnavailableActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+    marginTop: 8,
+    width: "100%",
+  },
   actionChip: {
     borderRadius: 999,
     borderWidth: 1,

@@ -601,7 +601,7 @@ Deno.serve(async (req): Promise<Response> => {
       await isAccountAccessRestricted(adminClient, callerUserId)
       || await isAccountAccessRestricted(adminClient, calleeUserId)
     ) {
-      return jsonResponse(403, {
+      return jsonResponse(200, {
         blockedReason: "account_access_restricted",
         eligible: false,
         pushSent: false,
