@@ -23,6 +23,7 @@ const migration = read("supabase/migrations/202605290003_public_people_search_op
 const usernameMigration = read("supabase/migrations/20260602032030_modern_username_handle_system.sql");
 const accountDeletionMigration = read("supabase/migrations/20260603014500_self_service_account_deletion_30_day_restore.sql");
 const helper = read("_lib/publicPeopleSearch.ts");
+const normalizationHelper = read("_lib/peopleSearchNormalization.ts");
 const usernameHelper = read("_lib/usernameHandles.ts");
 const explore = read("app/(tabs)/explore.tsx");
 const packageJson = read("package.json");
@@ -82,6 +83,8 @@ assertIncludes(accountDeletionMigration, "not public.is_account_deletion_schedul
 assertIncludes(accountDeletionMigration, "if public.is_account_deletion_scheduled(owner_user_id) then", "profile visibility hides scheduled-deletion accounts");
 
 assertIncludes(helper, "searchPublicPeople", "client search helper");
+assertIncludes(helper, "normalizePeopleSearchQuery", "client people search normalization");
+assertIncludes(helper, "normalized.candidates", "client candidate fanout");
 assertIncludes(helper, "queryWithoutHandlePrefix.includes(\"@\")", "client email query block");
 assertIncludes(helper, "PublicPeopleSearchResult", "public-safe result type");
 assertIncludes(helper, "isPublicPeopleResultAllowed", "client public people internal-account filter");
@@ -102,6 +105,12 @@ assertIncludes(usernameHelper, "Already taken", "safe taken username copy");
 assertNotIncludes(usernameHelper, "duplicate key", "no raw uniqueness copy");
 assertNotIncludes(usernameHelper, "RLS", "no raw RLS copy");
 
+assertIncludes(normalizationHelper, "normalizePeopleSearchQuery", "cross-app people search normalizer");
+assertIncludes(normalizationHelper, "compactSearchText", "compact handle candidate");
+assertIncludes(normalizationHelper, "alphaNumberBoundaryVariants", "letter-number handle variants");
+assertIncludes(normalizationHelper, "PEOPLE_SEARCH_NO_RESULTS_COPY", "shared no-results copy");
+assertNotIncludes(normalizationHelper, "replace(/[^a-z]+/g", "numbers must not be stripped from handles");
+
 assertIncludes(explore, "EXPLORE_SEARCH_SCOPES", "Explore search scopes");
 assertIncludes(explore, 'label: "People"', "Explore People scope");
 assertIncludes(explore, 'label: "Originals"', "Explore Originals scope");
@@ -114,7 +123,7 @@ assertIncludes(explore, "View Profile", "People result Profile action");
 assertIncludes(explore, "View Platform", "People result Platform action");
 assertIncludes(explore, "person.officialLabel", "Rachi official label path");
 assertIncludes(explore, "No people found", "People empty state");
-assertIncludes(explore, "Try a username or creator name.", "People safe search prompt");
+assertIncludes(explore, "Try a username, handle, or display name.", "People safe search prompt");
 assertIncludes(explore, "No matches found", "Explore typeahead empty state");
 assertIncludes(explore, "Try a username, creator, or title.", "Explore safe typeahead prompt");
 assertIncludes(explore, "isPrivateIdentifierLikePublicQuery", "Explore private identifier block");

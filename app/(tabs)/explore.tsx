@@ -39,6 +39,13 @@ import { readLatestPublicEventSummaries, type CreatorEventSummary } from "../../
 import { RACHI_OFFICIAL_ACCOUNT } from "../../_lib/officialAccounts";
 import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import {
+  getPrimaryPeopleSearchCandidate,
+  matchesPeopleSearchValues,
+  normalizePeopleSearchQuery,
+  PEOPLE_SEARCH_NO_RESULTS_COPY,
+  rankPeopleSearchValues,
+} from "../../_lib/peopleSearchNormalization";
+import {
   searchPublicPeople,
   type PublicPeopleSearchResult,
 } from "../../_lib/publicPeopleSearch";
@@ -177,41 +184,33 @@ const matchesExploreSearch = (item: TitleRow, rawQuery: string) => {
   if (!query) return true;
   if (isPrivateIdentifierLikePublicQuery(rawQuery)) return false;
 
-  return [
+  return matchesPeopleSearchValues([
     item.title,
     item.category,
     item.synopsis,
     item.year,
     item.runtime,
-  ].some((value) => String(value ?? "").toLowerCase().includes(query));
+  ], rawQuery);
 };
 
 const matchesTextSearch = (rawQuery: string, values: unknown[]) => {
   const query = getPublicSearchNeedle(rawQuery);
   if (!query) return true;
   if (isPrivateIdentifierLikePublicQuery(rawQuery)) return false;
-  return values.some((value) => String(value ?? "").toLowerCase().includes(query));
+  return matchesPeopleSearchValues(values, rawQuery);
 };
 
-const getPublicSearchNeedle = (rawQuery: string) => rawQuery.trim().replace(/^@+/, "").toLowerCase();
+const getPublicSearchNeedle = (rawQuery: string) => getPrimaryPeopleSearchCandidate(rawQuery);
 
 const isPrivateIdentifierLikePublicQuery = (rawQuery: string) => {
   const queryWithoutHandlePrefix = rawQuery.trim().replace(/^@+/, "");
-  return queryWithoutHandlePrefix.includes("@");
+  return queryWithoutHandlePrefix.includes("@") || normalizePeopleSearchQuery(rawQuery).blocked;
 };
 
 const getTypeaheadRank = (rawQuery: string, values: unknown[]) => {
   const query = getPublicSearchNeedle(rawQuery);
   if (!query || isPrivateIdentifierLikePublicQuery(rawQuery)) return 99;
-
-  return values.reduce<number>((best, value) => {
-    const text = String(value ?? "").trim().toLowerCase();
-    if (!text) return best;
-    if (text === query) return Math.min(best, 0);
-    if (text.startsWith(query)) return Math.min(best, 1);
-    if (text.includes(query)) return Math.min(best, 2);
-    return best;
-  }, 99);
+  return rankPeopleSearchValues(rawQuery, values);
 };
 
 const sortByTypeaheadRank = <T,>(
@@ -643,10 +642,11 @@ export default function ExploreScreen() {
   }, [searchQuery]);
 
   useEffect(() => {
-    const query = debouncedSearchQuery.trim();
+    const search = normalizePeopleSearchQuery(debouncedSearchQuery);
+    const query = search.cleaned;
     const queryWithoutHandlePrefix = query.replace(/^@+/, "");
 
-    if (!showPeopleScope || queryWithoutHandlePrefix.length < 2 || queryWithoutHandlePrefix.includes("@")) {
+    if (!showPeopleScope || !search.searchable || queryWithoutHandlePrefix.includes("@")) {
       setPeopleResults([]);
       setPeopleLoading(false);
       setPeopleError(null);
@@ -924,8 +924,9 @@ export default function ExploreScreen() {
 
   const renderPeopleSearchSection = () => {
     if (!showPeopleScope) return null;
-    const query = debouncedSearchQuery.trim().replace(/^@+/, "");
-    const hasPeopleQuery = query.length >= 2 && !query.includes("@");
+    const search = normalizePeopleSearchQuery(debouncedSearchQuery);
+    const query = search.cleaned.replace(/^@+/, "");
+    const hasPeopleQuery = search.searchable && !query.includes("@");
     const showPeoplePrompt = activeScope === "people" && !hasPeopleQuery;
 
     if (!hasPeopleQuery && !showPeoplePrompt) return null;
@@ -939,7 +940,7 @@ export default function ExploreScreen() {
         {showPeoplePrompt ? (
           <View testID="explore-people-empty" style={styles.inlineEmpty}>
             <Text style={styles.inlineEmptyTitle}>Search public people</Text>
-            <Text style={styles.inlineEmptyText}>Try a username or creator name.</Text>
+            <Text style={styles.inlineEmptyText}>Try a username, handle, or display name.</Text>
           </View>
         ) : peopleLoading ? (
           <View style={styles.inlineEmpty}>
@@ -957,7 +958,7 @@ export default function ExploreScreen() {
         ) : (
           <View testID="explore-people-empty" style={styles.inlineEmpty}>
             <Text style={styles.inlineEmptyTitle}>No people found</Text>
-            <Text style={styles.inlineEmptyText}>Try a username or creator name.</Text>
+            <Text style={styles.inlineEmptyText}>{PEOPLE_SEARCH_NO_RESULTS_COPY}</Text>
           </View>
         )}
       </View>

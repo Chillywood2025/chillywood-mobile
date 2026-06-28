@@ -24,6 +24,11 @@ import {
 import { searchPublicPeople, type PublicPeopleSearchResult } from "../../_lib/publicPeopleSearch";
 import { readActiveFriendUserIds } from "../../_lib/friendGraph";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
+import {
+  matchesPeopleSearchValues,
+  normalizePeopleSearchQuery,
+  PEOPLE_SEARCH_NO_RESULTS_COPY,
+} from "../../_lib/peopleSearchNormalization";
 import { useSession } from "../../_lib/session";
 import { formatUsernameHandle } from "../../_lib/usernameHandles";
 
@@ -72,18 +77,13 @@ function getThreadKindLabel(thread: ChatThreadSummary) {
 }
 
 function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
-  const query = rawQuery.trim().toLowerCase();
-  if (!query) return true;
-
-  const searchFields = [
+  return matchesPeopleSearchValues([
     thread.otherMember?.displayName,
     thread.otherMember?.username,
     thread.otherMember?.tagline,
     thread.lastMessagePreview,
     thread.activeCallType,
-  ];
-
-  return searchFields.some((value) => String(value ?? "").toLowerCase().includes(query));
+  ], rawQuery);
 }
 
 export default function ChillyChatInboxScreen() {
@@ -208,8 +208,9 @@ export default function ChillyChatInboxScreen() {
   }, [searchQuery]);
 
   useEffect(() => {
-    const query = debouncedSearchQuery.trim();
-    if (query.length < CHAT_SUGGESTION_MIN_LENGTH) {
+    const search = normalizePeopleSearchQuery(debouncedSearchQuery);
+    const query = search.cleaned;
+    if (!search.searchable || search.candidates.every((candidate) => candidate.length < CHAT_SUGGESTION_MIN_LENGTH)) {
       setSearchPeopleLoading(false);
       setSearchPeopleError(null);
       setSearchPeopleResults([]);
@@ -376,8 +377,8 @@ export default function ChillyChatInboxScreen() {
   }, [openDirectThreadForPerson]);
 
   const renderPeopleSuggestionRows = () => {
-    const query = debouncedSearchQuery.trim();
-    if (query.length < CHAT_SUGGESTION_MIN_LENGTH) {
+    const search = normalizePeopleSearchQuery(debouncedSearchQuery);
+    if (!search.searchable || search.candidates.every((candidate) => candidate.length < CHAT_SUGGESTION_MIN_LENGTH)) {
       return null;
     }
 
@@ -466,7 +467,7 @@ export default function ChillyChatInboxScreen() {
         ) : (
           <View style={styles.suggestionPanelState}>
             <Text style={styles.suggestionPanelText}>No matching people</Text>
-            <Text style={styles.suggestionSubtext}>Try another name or exact username.</Text>
+            <Text style={styles.suggestionSubtext}>{PEOPLE_SEARCH_NO_RESULTS_COPY}</Text>
           </View>
         )}
       </View>
@@ -686,7 +687,7 @@ export default function ChillyChatInboxScreen() {
             <Text style={styles.emptyTitle}>{searchQuery.trim() ? "No matching threads" : "No Chi'lly Chat threads yet"}</Text>
             <Text style={styles.emptyBody}>
               {searchQuery.trim()
-                ? "Try another name or clear your search."
+                ? "Try another name, handle, or clear your search."
                 : "Open Chi'lly Chat from a profile to start your first direct thread."}
             </Text>
             {error ? <Text style={styles.errorText}>{error.message}</Text> : null}

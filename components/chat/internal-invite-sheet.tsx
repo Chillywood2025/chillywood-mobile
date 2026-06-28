@@ -13,6 +13,11 @@ import {
 
 import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
 import { sendDirectInviteMessage, searchChatPeople, type ChatThreadSummary, type ChatUserSearchResult } from "../../_lib/chat";
+import {
+  matchesPeopleSearchValues,
+  normalizePeopleSearchQuery,
+  PEOPLE_SEARCH_NO_RESULTS_COPY,
+} from "../../_lib/peopleSearchNormalization";
 
 const logInviteDebug = (..._args: unknown[]) => {};
 
@@ -28,14 +33,10 @@ type InternalInviteSheetProps = {
   onSystemShareFallback?: () => void;
 };
 
-const normalizeInviteSearchText = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/^@+/, "");
-
 const matchesSuggestedTarget = (target: ChatUserSearchResult, rawQuery: string) => {
-  const normalizedQuery = normalizeInviteSearchText(rawQuery);
-  if (normalizedQuery.length < 2) return false;
-  return [target.displayName, target.username, target.tagline, target.userId].some((value) =>
-    normalizeInviteSearchText(value).includes(normalizedQuery),
-  );
+  const normalizedQuery = normalizePeopleSearchQuery(rawQuery);
+  if (!normalizedQuery.searchable) return false;
+  return matchesPeopleSearchValues([target.displayName, target.username, target.tagline], rawQuery);
 };
 
 const mergeInviteTargets = (
@@ -121,14 +122,15 @@ export function InternalInviteSheet({
 
   useEffect(() => {
     if (!visible) return;
-    const trimmed = query.trim();
+    const search = normalizePeopleSearchQuery(query);
+    const trimmed = search.cleaned;
     if (__DEV__) {
       logInviteDebug("[CH_SEARCH]", "query_changed", {
         sourceSurface,
         query: trimmed,
       });
     }
-    if (trimmed.length < 2) {
+    if (!search.searchable) {
       setResults([]);
       setLoading(false);
       setError(null);
@@ -184,9 +186,9 @@ export function InternalInviteSheet({
   }, [query, visible]);
 
   const emptyText = useMemo(() => {
-    if (query.trim().length < 2) return "Type at least 2 characters to find a Chi'llywood member.";
+    if (!normalizePeopleSearchQuery(query).searchable) return "Type at least 2 characters to find a Chi'llywood member.";
     if (loading) return "Searching Chi'llywood people...";
-    return "No matching Chi'llywood members found yet.";
+    return PEOPLE_SEARCH_NO_RESULTS_COPY;
   }, [loading, query]);
 
   const matchedSuggestedTargets = useMemo(
@@ -255,7 +257,7 @@ export function InternalInviteSheet({
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search by name, username, or tagline"
+              placeholder="Search by name, @handle, or username"
               placeholderTextColor="#77839B"
               style={styles.searchInput}
               autoCapitalize="none"

@@ -1,4 +1,7 @@
 import { supabase } from "./supabase";
+import {
+  normalizePeopleSearchQuery,
+} from "./peopleSearchNormalization";
 
 export type PublicPeopleSearchResult = {
   userId: string;
@@ -98,24 +101,40 @@ const parsePublicPeopleSearchRow = (row: PublicPeopleSearchRow): PublicPeopleSea
 };
 
 export async function searchPublicPeople(query: string, options?: { limit?: number }): Promise<PublicPeopleSearchResult[]> {
-  const normalizedQuery = toText(query);
-  const queryWithoutHandlePrefix = normalizedQuery.replace(/^@+/, "");
-  if (queryWithoutHandlePrefix.length < 2 || queryWithoutHandlePrefix.includes("@")) return [];
+  const normalized = normalizePeopleSearchQuery(query);
+  const queryWithoutHandlePrefix = toText(query).replace(/^@+/, "");
+  if (!normalized.searchable || queryWithoutHandlePrefix.includes("@")) return [];
 
   const limit = Math.max(1, Math.min(25, Math.floor(Number(options?.limit ?? 12)) || 12));
-  const rpc = (supabase.rpc as unknown as (
-    fn: "search_public_people",
-    args: { p_query: string; p_limit: number },
-  ) => PublicPeopleSearchRpc)("search_public_people", {
-    p_query: normalizedQuery,
-    p_limit: limit,
-  });
 
-  const { data, error } = await rpc;
-  if (error || !data) return [];
+  const resultsByUserId = new Map<string, PublicPeopleSearchResult>();
+  let sawSuccessfulRead = false;
 
-  return data
-    .map(parsePublicPeopleSearchRow)
-    .filter((item): item is PublicPeopleSearchResult => !!item)
-    .filter(isPublicPeopleResultAllowed);
+  for (const candidate of normalized.candidates) {
+    const rpc = (supabase.rpc as unknown as (
+      fn: "search_public_people",
+      args: { p_query: string; p_limit: number },
+    ) => PublicPeopleSearchRpc)("search_public_people", {
+      p_query: candidate,
+      p_limit: limit,
+    });
+
+    const { data, error } = await rpc;
+    if (error) continue;
+    sawSuccessfulRead = true;
+    (data ?? [])
+      .map(parsePublicPeopleSearchRow)
+      .filter((item): item is PublicPeopleSearchResult => !!item)
+      .filter(isPublicPeopleResultAllowed)
+      .forEach((item) => {
+        if (!resultsByUserId.has(item.userId)) resultsByUserId.set(item.userId, item);
+      });
+    if (resultsByUserId.size >= limit) break;
+  }
+
+  if (!sawSuccessfulRead) {
+    throw new Error("People search is unavailable right now.");
+  }
+
+  return Array.from(resultsByUserId.values()).slice(0, limit);
 }

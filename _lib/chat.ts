@@ -22,6 +22,7 @@ import {
   type SocialAttachmentFile,
 } from "./socialAttachments";
 import { supabase } from "./supabase";
+import { normalizePeopleSearchQuery } from "./peopleSearchNormalization";
 import { readUserProfile } from "./userData";
 import { getWritablePartyUserId } from "./watchParty";
 
@@ -332,7 +333,7 @@ async function enrichChatThreadsWithUsernames(threads: ChatThreadSummary[]) {
 }
 
 function escapeIlikeValue(value: string) {
-  return value.replace(/[%_,()]/g, "").trim();
+  return value.replace(/[%(),]/g, "").trim();
 }
 
 function parseChatUserSearchResult(row: ChatUserProfileRow): ChatUserSearchResult | null {
@@ -586,14 +587,16 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
 
 export async function searchChatPeople(rawQuery: string, limit = 12): Promise<ChatUserSearchResult[]> {
   const currentUserId = await getRequiredChatUserId();
-  const query = escapeIlikeValue(rawQuery);
+  const normalized = normalizePeopleSearchQuery(rawQuery);
+  const query = escapeIlikeValue(normalized.cleaned);
+  const candidates = normalized.candidates.map(escapeIlikeValue).filter(Boolean);
   logChatSearch("search_start", {
     currentUserId,
     rawQuery,
     query,
     limit,
   });
-  if (query.length < 2) {
+  if (!normalized.searchable || !candidates.length) {
     logChatSearch("search_skipped_short_query", {
       currentUserId,
       query,
@@ -604,7 +607,11 @@ export async function searchChatPeople(rawQuery: string, limit = 12): Promise<Ch
   const { data, error } = await supabase
     .from(CHAT_USER_PROFILES_TABLE)
     .select(CHAT_USER_SEARCH_SELECT)
-    .or(`display_name.ilike.%${query}%,username.ilike.%${query}%,tagline.ilike.%${query}%`)
+    .or(candidates.flatMap((candidate) => [
+      `display_name.ilike.%${candidate}%`,
+      `username.ilike.%${candidate}%`,
+      `tagline.ilike.%${candidate}%`,
+    ]).join(","))
     .order("updated_at", { ascending: false })
     .limit(limit)
     .returns<ChatUserProfileRow[]>();

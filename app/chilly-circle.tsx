@@ -24,6 +24,12 @@ import {
   type ChillyCircleListItem,
 } from "../_lib/friendGraph";
 import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
+import {
+  getPrimaryPeopleSearchCandidate,
+  matchesPeopleSearchValues,
+  normalizePeopleSearchQuery,
+  PEOPLE_SEARCH_NO_RESULTS_COPY,
+} from "../_lib/peopleSearchNormalization";
 import { searchPublicPeople, type PublicPeopleSearchResult } from "../_lib/publicPeopleSearch";
 import { useSession } from "../_lib/session";
 
@@ -49,17 +55,16 @@ type CircleSectionKey = "circle" | "incoming" | "outgoing";
 
 const CIRCLE_SECTION_COLLAPSE_THRESHOLD = 6;
 
-const normalizeCircleSearchNeedle = (value: string) => value.trim().toLowerCase();
+const normalizeCircleSearchNeedle = (value: string) => getPrimaryPeopleSearchCandidate(value);
 
 const matchesCircleItem = (item: ChillyCircleListItem, needle: string) => {
   if (!needle) return true;
-  const haystacks = [
+  return matchesPeopleSearchValues([
     item.displayName,
     item.handle,
     item.tagline,
     item.relationshipStatus,
-  ].map((value) => String(value ?? "").toLowerCase());
-  return haystacks.some((value) => value.includes(needle));
+  ], needle);
 };
 
 const formatUpdatedAt = (value: string) => {
@@ -80,7 +85,7 @@ const normalizeCircleError = (error: unknown) => {
 };
 
 const includesNeedle = (value: unknown, needle: string) => {
-  return String(value ?? "").trim().toLowerCase().includes(needle);
+  return matchesPeopleSearchValues([value], needle);
 };
 
 export default function ChillyCircleScreen() {
@@ -165,8 +170,9 @@ export default function ChillyCircleScreen() {
   }, [searchQuery]);
 
   useEffect(() => {
-    const query = debouncedSearchQuery.trim();
-    if (query.length < CHILLY_CIRCLE_SUGGESTION_MIN_LENGTH) {
+    const search = normalizePeopleSearchQuery(debouncedSearchQuery);
+    const query = search.cleaned;
+    if (!search.searchable || search.candidates.every((candidate) => candidate.length < CHILLY_CIRCLE_SUGGESTION_MIN_LENGTH)) {
       setPeopleLoading(false);
       setPeopleError(null);
       setPeopleResults([]);
@@ -292,7 +298,7 @@ export default function ChillyCircleScreen() {
     return next
       .map((group) => ({
         ...group,
-        rows: group.rows.filter((row) => row.title.toLowerCase().includes(normalizedNeedle)),
+        rows: group.rows.filter((row) => matchesPeopleSearchValues([row.title, row.subtitle], normalizedNeedle)),
       }))
       .filter((group) => group.rows.length > 0);
   }, [circleSearchResults, incomingSearchResults, outgoingSearchResults, hasSearchQuery, isOfficialSuggestionMatch, normalizedNeedle, openProfile, peopleResults]);
@@ -631,7 +637,7 @@ export default function ChillyCircleScreen() {
           ) : (
             <View style={styles.suggestionPanelState}>
               <Text style={styles.emptyText}>No matching Circle connections, requests, or people.</Text>
-              <Text style={styles.emptySmall}>Try another name or open “Find people” from Profiles.</Text>
+              <Text style={styles.emptySmall}>{PEOPLE_SEARCH_NO_RESULTS_COPY}</Text>
             </View>
           )}
         </View>
