@@ -12,6 +12,8 @@ June 28, 2026 v59 Google Play internal follow-up: `docs/release/CHILLY_CHAT_GOOG
 
 June 28, 2026 `user230455` follow-up: installed v59 Chat People search can find the updated normal-user handle `user230455`, but tapping `Chi'lly Chat` or `Voice Call` from that visible result fails before direct-thread open/create. Owner evidence also showed Settings current handle `@user230455` while Profile/Chat still displayed stale `@user230456`. Source now fixes signed-in profile cache freshness, Settings handle cache persistence, direct-thread username enrichment, and authenticated direct-thread open/create repair, but source fixed is not installed-app proof.
 
+June 28, 2026 v60 Google-signed follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` is Partial. Both phones are Play-installed versionCode `60` from `com.android.vending`; visible Chat search for `user230455` opens the direct thread after live authenticated RPC ambiguity fixes; caller can start a voice call; and receiver elsewhere in app sees an app-wide incoming call banner. Actual-user call closure is still not Closed because tapping the receiver banner opens `This Chi'lly Chat thread could not be found.` instead of joining, and video/background/same-thread/full cleanup matrices remain incomplete.
+
 ## Required Proof Doctrine
 
 Same-thread proof is not enough.

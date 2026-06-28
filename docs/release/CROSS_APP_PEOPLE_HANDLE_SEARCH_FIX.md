@@ -4,6 +4,8 @@ Current verdict: Partial.
 
 Cross-app people/handle search proof: Partial for actual-user installed-app closure.
 
+June 28, 2026 v60 installed follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` proved Chi'lly Chat installed search can find `user230455` as `user230455` / `@user230455` on the Google Play-installed versionCode `60` build. The visible result opened the direct thread after live authenticated RPC ambiguity fixes. Cross-app search remains Partial because the full term matrix across `@user230455`, `User230455`, `user 230455`, display name, Explore People, Profile entry, and direct-thread creation from every visible surface was not completed, and an existing Chat inbox row still displayed stale `@user230456` before the fresh search/open path.
+
 ## Scope
 
 This lane fixes the shared source path for people and handle discovery across normal visible app surfaces. It covers Chi'lly Chat inbox people search/start-chat, Explore public People search and typeahead, Profile entry through search results, Chi'lly Circle people discovery, and the direct-message/internal invite recipient picker.

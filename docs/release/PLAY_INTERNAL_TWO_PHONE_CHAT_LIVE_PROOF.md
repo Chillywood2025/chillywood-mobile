@@ -6,6 +6,8 @@ June 28, 2026 v58 Chi'lly Chat call follow-up: `docs/release/CHILLY_CHAT_PLAY_V5
 
 June 28, 2026 v59 Chi'lly Chat call follow-up: `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md` is Partial. EAS Build `7cf16ebe-a3de-4efb-8170-63a5e9799653` and EAS Submit `0c9b2162-c259-4934-a0e8-5679f524b609` delivered versionCode `59` to Google Play internal testing. Both physical phones updated through Google Play internal and stayed signed in, but actual-user call proof remains Partial because no fresh v59 end-to-end voice/video call completed with receiver incoming state, background push/ringing, local/remote video, fullscreen fit, and call cleanup proof.
 
+June 28, 2026 v60 Chi'lly Chat follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` is Partial. EAS Build `8642fea7-b782-4c18-98c8-5805b6c7c20e` delivered versionCode `60` to Google Play internal testing and both physical phones updated through Google Play with installer `com.android.vending`. Visible Chat search and direct-thread open/create for `user230455` now work after authenticated RPC ambiguity fixes, and receiver elsewhere in app sees an incoming call banner. Two-phone call proof remains Partial because tapping the banner opens `This Chi'lly Chat thread could not be found.` instead of joining, so joined voice/video and cleanup matrices remain incomplete.
+
 Source fixed is not installed-app proof. EAS Update published is not installed-app proof. Both physical Play-internal phones must run the updated code. One attached device cannot close two-phone proof. If Robert/testers cannot reproduce it in the Play-internal installed app, it is not actual-user Closed. Out-of-scope is not an excuse to ignore visible user-facing problems.
 
 ## Repo Commit Proved

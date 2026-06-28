@@ -1,5 +1,29 @@
 # NEXT TASK
 
+# Chi'lly Chat Google-Signed v60 Direct Chat + Call Follow-Up
+
+Current lane doc:
+- `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md`
+- `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md`
+- `docs/release/CHILLY_CHAT_END_TO_END_CALL_INITIATION_PROOF.md`
+
+Truth to preserve:
+- Google Play internal versionCode `60` was built from commit `c08c4bd1d98d3ea6672df5c3441c8d7b232b6b82`, includes required fix `0b563c79384e5270440bc0ad076bbc4ca687bf57`, and was installed by Google Play on both physical phones with installer `com.android.vending`.
+- No logout, uninstall, reinstall, clear-data, reset session, sideload, manual APK install, or Play production submission happened.
+- Settings/Profile/Chat search/direct-thread header now show fresh `@user230455`, but an existing Chat inbox row can still display stale `@user230456`.
+- Visible Chat search -> direct-thread open/create passed on the Google-signed installed app after targeted live Supabase RPC fixes for ambiguous pair-key and member-upsert resolution.
+- Receiver elsewhere-in-app incoming banner appeared from a real voice-call invite, but tapping it opened `This Chi'lly Chat thread could not be found.` and the caller stayed `1 in call`.
+- Code review points to receiver readback being blocked by the current platform-owner chat guard for owner-to-user direct threads. Do not blindly weaken RLS or owner privacy to close proof.
+- Full call closure is Partial. Same-thread proof is not enough, source fixed is not installed-app proof, and Google Play internal install is not enough without actual user flow proof.
+- No auth/RLS/chat/account-status permission weakening happened, no service-role chat proof was counted, no provider/live-money mutation happened, current First Owner was not touched, and `liveMoneyEnabled` remains OFF.
+
+Next product action:
+- Decide the supported product rule for owner-to-user direct Chat/calls. If owner-to-user calls are supported, add a narrow, reviewed policy/source fix so an explicitly invited non-owner member can read and join that direct thread without opening broader owner visibility.
+- If owner-to-user calls are not supported, rerun the proof with two normal users that can find each other through normal visible paths, and make owner-to-user caller copy fail honestly instead of showing fake success.
+- Fix stale existing inbox participant metadata so Settings/Profile/Chat agree on `@user230455`.
+- Build and deliver v61 or newer through Google Play internal if mobile source changes.
+- Rerun installed proof only after both phones are Play-installed on the same Google-signed build from `com.android.vending`: inbox/search path, existing-thread path, normal Profile path, receiver same-thread, receiver elsewhere-in-app, receiver background/push, voice, video local/remote, fullscreen fit, and call end/decline/missed cleanup.
+
 # Chi'lly Chat Google Play Internal Call Closure Follow-Up
 
 Current lane doc:
