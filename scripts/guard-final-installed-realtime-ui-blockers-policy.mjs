@@ -38,7 +38,8 @@ const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 
 [
-  "Final verdict: Partial",
+  "Final verdict: Partial under `docs/release/ACTUAL_USER_PROOF_STANDARD.md`.",
+  "Actual-user correction",
   "Two physical Play-internal v57 Android clients were used",
   "No physical phone sideload was used",
   "Premium gates were not bypassed or weakened",
@@ -47,9 +48,9 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "Watch-Party installed UI proof",
   "Closed: both clients exposed the expected Watch-Party installed UI state",
   "Chat Call installed UI proof",
-  "Partial: `chat_threads` insert remained RLS-denied",
+  "Partial: code fix is published by EAS Update, but active update uptake and manual receiver ring/push were not proven in this run.",
   "Live installed UI proof",
-  "Partial: `proof_premium_001` no longer showed the Premium gate",
+  "Partial: actual-user Live UI still needs rerun through the normal waiting-room path.",
   "Owner/Admin/Moderator realtime controls remain Closed",
   "liveMoneyEnabled remains OFF",
 ].forEach((needle) => requireText("final installed realtime UI blockers doc", doc, needle));
@@ -57,6 +58,7 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 forbidPositiveSentence("final installed realtime UI blockers doc", doc, /Premium gates?.*(?:bypassed|weakened|disabled|turned off)|bypass(?:ed)? Premium|weaken(?:ed)? Premium/i, "Premium gate bypass/weakening");
 forbidPositiveSentence("final installed realtime UI blockers doc", doc, /chat_threads.*RLS.*(?:weakened|disabled|bypassed)|RLS.*(?:weakened|disabled|bypassed)/i, "chat_threads RLS weakening");
 forbidPositiveSentence("final installed realtime UI blockers doc", doc, /backend-only.*installed UI.*Closed|diagnostic.*installed UI.*Closed/i, "backend-only diagnostic called installed UI Closed");
+forbid("final installed realtime UI blockers doc", doc, /Final verdict: Closed/i, "stale final Closed verdict");
 forbidPositiveSentence("final installed realtime UI blockers doc", doc, /only one device.*Closed|single physical.*Closed|one active client.*Closed/i, "one-device closeout claim");
 forbidPositiveSentence("final installed realtime UI blockers doc", doc, /physical phone sideload|sideloaded.*physical|APK install.*physical/i, "physical phone sideload/install");
 forbidPositiveSentence("final installed realtime UI blockers doc", doc, /Play production submission happened|submitted? to production|promoted? to production/i, "Play production submission");

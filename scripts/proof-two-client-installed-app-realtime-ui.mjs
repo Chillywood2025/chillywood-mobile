@@ -23,7 +23,8 @@ const packageJson = read("package.json");
 
 [
   "Two-client installed-app realtime UI proof: Closed / Partial / Blocked",
-  "Final verdict: Partial",
+  "Final verdict: Partial under `docs/release/ACTUAL_USER_PROOF_STANDARD.md`.",
+  "Actual-user correction",
   "R3CXA0DS5JV",
   "R5CR120QCBF",
   "com.chillywood.mobile",
@@ -43,9 +44,9 @@ const packageJson = read("package.json");
   "Real simultaneous multi-user state: Partial",
   "Owner/Admin/Moderator realtime controls",
   "Owner/Admin/Moderator realtime controls: Closed",
-  "Matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed",
+  "Matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed under the actual-user correction.",
   "/tmp/app-two-client-installed-app-realtime-ui-proof-20260627152317/",
-  "/tmp/app-final-installed-realtime-ui-blockers-20260627-110519/",
+  "/tmp/app-final-live-chat-installed-realtime-ui-closure-20260627-170821/",
   "No sideload was used on either physical tester phone",
   "No uninstall/reinstall/clear-data happened",
   "No Play production submission happened",
@@ -66,4 +67,4 @@ if (failures.length) {
 }
 
 console.log("two-client installed app realtime UI proof passed.");
-console.log("- proof document records two Play-internal v57 clients, launch preflight, honest Partial status, and safety boundaries.");
+console.log("- proof document records two Play-internal v57 clients, launch preflight, actual-user Partial Chat/Live status, and safety boundaries.");

@@ -2,9 +2,11 @@
 
 Final installed realtime UI blockers: Closed / Partial / Blocked.
 
-Final verdict: Partial.
+Final verdict: Partial under `docs/release/ACTUAL_USER_PROOF_STANDARD.md`.
 
-Commit `b23ee469eb6e0c33d606b45dcc2972b14dd702ee` was pushed to `origin/main` before this lane. `main` was aligned with `origin/main` before the affected installed realtime UI proof reruns started.
+Actual-user correction: the prior harness-based Closed language is superseded for Chat Call installed UI, Live installed UI, and real simultaneous multi-user state. Pre-created thread/call state, diagnostic media proof, and screenshot fallback evidence are not counted as actual-user Closed. The governing follow-up is `docs/release/ACTUAL_USER_CHAT_CALL_AND_LIVE_CLOSURE.md`.
+
+Commit `b23ee469eb6e0c33d606b45dcc2972b14dd702ee` was pushed to `origin/main` before the prior blockers lane. Commit `03f6d4bf191f872df54d626a3449550b8bcba1a1` was pushed to `origin/main` before the final Live + Chat closure lane continued.
 
 Two physical Play-internal v57 Android clients were used:
 
@@ -17,23 +19,23 @@ No physical phone sideload was used. No install, uninstall, reinstall, clear-dat
 
 ## Previous Partial Status
 
-The previous installed-app realtime UI proof matrix was 5 Closed, 4 Partial, 0 Blocked, 0 Failed.
+The previous installed-app realtime UI proof matrix was 6 Closed, 3 Partial, 0 Blocked, 0 Failed.
 
 Remaining installed-app realtime UI proof blockers were:
 
-1. Live video participant visibility: installed UI hit active Premium-required/status gates.
-2. Chat call media: installed UI setup hit `chat_threads` RLS.
-3. Watch-Party sync: backend callback and readback were Closed, but installed UI marker/assertion did not close on both clients.
-4. Real simultaneous multi-user state: Partial only because not every installed realtime surface closed.
+1. Live installed UI proof: the non-Premium side still reached an active Premium-required/status gate or the animated Live screen could not be asserted.
+2. Chat Call installed UI proof: direct proof setup still hit `chat_threads` RLS.
+3. Real simultaneous multi-user state: Partial only because Live UI and Chat Call UI remained Partial.
+
+Watch-Party installed UI proof was already Closed.
 
 ## Affected Rerun Results
 
 | Area | Root cause | Fix applied | Rerun result | Artifact |
 | --- | --- | --- | --- | --- |
-| Watch-Party installed UI proof | Route/marker assertion timing against installed UI. Backend callback/readback were already Closed. | Reran both physical Play-internal clients with callback recheck and installed UI marker assertion after the callback fix. | Closed: both clients exposed the expected Watch-Party installed UI state, and callback/readback stayed Closed. | `/tmp/app-final-installed-realtime-ui-blockers-20260627-110519/` and `/tmp/app-final-installed-realtime-ui-blockers-participants-20260627-111028/` |
-| Chat Call installed UI proof | Direct proof setup still hit `chat_threads` RLS when creating a direct thread for seeded users. | Updated the proof runner to use the app-safe direct-thread setup order: insert direct thread without active-call fields, add both memberships, create communication room/memberships, then update active call state. Reran with `proof_participant_001` + `proof_premium_001`, then with `proof_participant_001` + `proof_participant_002`. | Partial: `chat_threads` insert remained RLS-denied for the installed proof setup. `chat_threads` RLS was not weakened, and no service-role bypass was used. | `/tmp/app-final-installed-realtime-ui-blockers-20260627-110519/` and `/tmp/app-final-installed-realtime-ui-blockers-participants-20260627-111028/` |
-| Live installed UI proof | Active Premium-required gate. | Reran with one Premium-capable seeded participant, `proof_premium_001`, while preserving Premium gates. | Partial: `proof_premium_001` no longer showed the Premium gate, but the other active physical client still reached the active Premium-required/status gate. Live installed UI needs two Premium-capable seeded clients or a safe existing proof entitlement path for both sides. Premium gates were not bypassed or weakened. | `/tmp/app-final-installed-realtime-ui-blockers-20260627-110519/` |
-| Real simultaneous multi-user state | It depends on all installed realtime surfaces closing. | Recomputed after affected reruns. | Partial: two physical clients were active at the same time, Watch-Party UI closed, but Chat Call and Live installed UI remain Partial. | `/tmp/app-final-installed-realtime-ui-blockers-20260627-110519/` |
+| Chat Call installed UI proof | The prior proof did not cover Robert's normal manual call/ring path; invite dispatch failures were swallowed and receiver notification status was not shown. | `_lib/chat.ts`, `_lib/chillyChatCalls.ts`, `app/chat/[threadId].tsx`, `_lib/notifications.ts`, and `app/_layout.tsx` now expose thread-update failure, invite delivery status, caller status, and foreground incoming-call banner behavior. | Partial: code fix is published by EAS Update, but active update uptake and manual receiver ring/push were not proven in this run. | `docs/release/ACTUAL_USER_CHAT_CALL_AND_LIVE_CLOSURE.md` |
+| Live installed UI proof | The prior proof did not close the normal actual-user waiting-room/entry path with both active clients satisfying Premium/readiness. | Premium gates remain intact; no bypass was added. | Partial: actual-user Live UI still needs rerun through the normal waiting-room path. | `docs/release/ACTUAL_USER_CHAT_CALL_AND_LIVE_CLOSURE.md` |
+| Real simultaneous multi-user state | Depends on actual-user Chat Call and Live UI closure. | Recomputed under the actual-user proof standard. | Partial: Watch-Party remains Closed, while Chat Call and Live actual-user UI remain Partial. | `docs/release/ACTUAL_USER_CHAT_CALL_AND_LIVE_CLOSURE.md` |
 
 ## Updated Matrix
 
@@ -41,15 +43,23 @@ Remaining installed-app realtime UI proof blockers were:
 | --- | --- | --- |
 | Preflight `R5CR120QCBF` | Closed | Play-internal v57 metadata verified |
 | Preflight `R3CXA0DS5JV` | Closed | Play-internal v57 metadata verified |
-| Seeded UI login on both physical devices | Closed | seeded accounts logged in through installed UI |
+| Seeded UI login on both physical devices | Closed | proof accounts logged in through installed UI |
 | Watch-Party callback recheck | Closed | `watch_party_sync_events` callback observed and playback readback matched |
-| Watch-Party installed UI proof | Closed | both physical Play-internal clients exposed expected Watch-Party UI markers |
-| Chat Call installed UI proof | Partial | direct thread setup remains RLS-denied by `chat_threads`; no RLS weakening or bypass was added |
-| Live installed UI proof | Partial | active Premium gate remains on the non-Premium side; one Premium proof account is not enough for two-client Live UI closeout |
-| Real simultaneous multi-user state | Partial | two clients were active, but Chat Call and Live installed UI surfaces are still Partial |
+| Watch-Party installed UI proof | Closed | both clients exposed the expected Watch-Party installed UI state |
+| Chat Call installed UI proof | Partial | actual-user manual call initiation/ringing path still needs installed-app rerun after update uptake |
+| Live installed UI proof | Partial | actual-user waiting-room/entry path still needs installed-app rerun with both active clients satisfying Premium/readiness |
+| Real simultaneous multi-user state | Partial | remains Partial because actual-user Chat Call and Live UI remain Partial |
 | Owner/Admin/Moderator realtime controls | Closed | same-lane staff UI evidence remains valid, and publish-authority downgrade remains Closed |
 
-Matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed.
+Matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed under the actual-user correction.
+
+Canonical realtime flow summary:
+
+- Live video participant visibility: Partial under the actual-user proof standard.
+- Chat call media: Partial under the actual-user proof standard.
+- Watch-Party sync: Closed.
+- Closed: both clients exposed the expected Watch-Party installed UI state.
+- Real simultaneous multi-user state: Partial.
 
 Live installed UI proof: Partial.
 
@@ -66,14 +76,15 @@ Owner/Admin/Moderator realtime controls remain Closed.
 - Premium gates were not bypassed or weakened.
 - `chat_threads` RLS was not weakened.
 - No auth/account-status/chat permission bypass was added.
-- No service-role was used.
+- No service-role chat permission proof was used.
+- No service-role role-authority proof was used.
 - No account creation or recreation happened.
 - No physical phone sideload was used.
 - No install, uninstall, reinstall, clear-data, or wipe-cache happened on either physical phone.
 - No Play production submission happened.
 - No provider mutation happened.
 - No Google Play product/base-plan mutation happened.
-- No RevenueCat products, offerings, mappings, or entitlements were mutated.
+- No RevenueCat products, offerings, mappings, provider configuration, or entitlements were mutated.
 - No Stripe mutation happened.
 - No purchases were executed.
 - No provider refunds were executed.
@@ -87,14 +98,12 @@ Owner/Admin/Moderator realtime controls remain Closed.
 
 ## Remaining Blockers
 
-1. Chat Call installed UI proof needs a normal app-created direct thread or an existing dedicated safe proof path that satisfies current `chat_threads` RLS. Do not use service-role as proof and do not weaken RLS.
-2. Live installed UI proof needs two Premium-capable seeded clients or a safe existing proof entitlement path for both active clients. Do not bypass or weaken Premium gates.
+Actual-user Chat Call and Live UI remain open as Partial.
 
 ## Owner Action Items
 
-1. Approve or provide a second Premium-capable proof account, or approve use of an existing repo-backed proof entitlement path for one additional proof-only seeded client.
-2. Provide or approve a safe app-created direct chat thread path for two seeded users if the installed UI cannot create it during automation.
+Confirm update uptake on both Play-internal phones, then manually rerun Chat Call and Live UI through the normal visible user paths.
 
 ## Release Recommendation
 
-Final installed realtime UI blockers are Partial. Watch-Party installed UI is Closed. The next lane should fix only the remaining Chat Call direct-thread RLS proof path and Live two-Premium-client proof setup, then rerun those affected installed realtime UI flows.
+Final installed realtime UI blockers are Partial under the actual-user standard. Recommended next lane: confirm update uptake or ship the fix in the next Play internal build, then rerun only actual-user Chat Call and Live UI paths.

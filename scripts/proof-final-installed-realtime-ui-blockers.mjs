@@ -24,7 +24,8 @@ const packageJson = read("package.json");
 
 [
   "Final installed realtime UI blockers: Closed / Partial / Blocked",
-  "Final verdict: Partial",
+  "Final verdict: Partial under `docs/release/ACTUAL_USER_PROOF_STANDARD.md`.",
+  "Actual-user correction",
   "R5CR120QCBF",
   "R3CXA0DS5JV",
   "Two physical Play-internal v57 Android clients were used",
@@ -36,9 +37,9 @@ const packageJson = read("package.json");
   "Watch-Party installed UI proof",
   "Closed: both clients exposed the expected Watch-Party installed UI state",
   "Chat Call installed UI proof",
-  "Partial: `chat_threads` insert remained RLS-denied",
+  "Partial: code fix is published by EAS Update, but active update uptake and manual receiver ring/push were not proven in this run.",
   "Live installed UI proof",
-  "Partial: `proof_premium_001` no longer showed the Premium gate",
+  "Partial: actual-user Live UI still needs rerun through the normal waiting-room path.",
   "Real simultaneous multi-user state: Partial",
   "Owner/Admin/Moderator realtime controls remain Closed",
   "Premium gates were not bypassed or weakened",
@@ -47,8 +48,7 @@ const packageJson = read("package.json");
   "liveMoneyEnabled remains OFF",
   "Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF",
   "No provider mutation happened",
-  "/tmp/app-final-installed-realtime-ui-blockers-20260627-110519/",
-  "/tmp/app-final-installed-realtime-ui-blockers-participants-20260627-111028/",
+  "docs/release/ACTUAL_USER_CHAT_CALL_AND_LIVE_CLOSURE.md",
 ].forEach((needle) => requireText("final installed realtime UI blockers doc", doc, needle));
 
 [
@@ -56,7 +56,7 @@ const packageJson = read("package.json");
   "Chat call media: Partial",
   "Live video participant visibility: Partial",
   "Real simultaneous multi-user state: Partial",
-  "Matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed",
+  "Matrix totals: 6 Closed, 3 Partial, 0 Blocked, 0 Failed under the actual-user correction.",
 ].forEach((needle) => requireText("two-client installed app realtime UI proof doc", twoClientDoc, needle));
 
 [

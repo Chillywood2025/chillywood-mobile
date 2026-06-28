@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -23,7 +23,13 @@ import { bootstrapFirebaseRemoteConfig, getRemoteConfigBoolean } from "../_lib/f
 import { bootstrapLiveKitFoundation } from "../_lib/livekit/bootstrap";
 import { reportRuntimeError } from "../_lib/logger";
 import { bootstrapMonetizationFoundation } from "../_lib/monetization";
-import { configureNotificationRuntime, refreshAndroidPushRegistrationIfGranted, subscribeToNotificationResponses } from "../_lib/notifications";
+import {
+  configureNotificationRuntime,
+  refreshAndroidPushRegistrationIfGranted,
+  subscribeToForegroundNotificationAlerts,
+  subscribeToNotificationResponses,
+  type ForegroundNotificationAlert,
+} from "../_lib/notifications";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
 import { SessionProvider, useSession } from "../_lib/session";
@@ -388,6 +394,81 @@ function RouteAnalyticsBridge() {
   return null;
 }
 
+function IncomingCallNotificationBridge() {
+  const router = useRouter();
+  const [alert, setAlert] = useState<ForegroundNotificationAlert | null>(null);
+  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const subscription = subscribeToForegroundNotificationAlerts((nextAlert) => {
+      setAlert(nextAlert);
+      if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = setTimeout(() => {
+        setAlert(null);
+        dismissTimeoutRef.current = null;
+      }, 45_000);
+    });
+
+    return () => {
+      subscription.remove();
+      if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
+    };
+  }, []);
+
+  if (!alert) return null;
+
+  const openCall = () => {
+    if (dismissTimeoutRef.current) {
+      clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = null;
+    }
+    const path = alert.path;
+    setAlert(null);
+    router.push(path as Parameters<typeof router.push>[0]);
+  };
+
+  const dismiss = () => {
+    if (dismissTimeoutRef.current) {
+      clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = null;
+    }
+    setAlert(null);
+  };
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={styles.incomingCallOverlay}
+      testID="app-wide-incoming-call-overlay"
+      accessibilityLabel="Incoming Chi'lly Chat call overlay"
+    >
+      <View style={styles.incomingCallCard}>
+        <TouchableOpacity
+          activeOpacity={0.86}
+          onPress={openCall}
+          style={styles.incomingCallOpenAction}
+          testID="app-wide-incoming-call-banner"
+          accessibilityLabel="Open incoming Chi'lly Chat call"
+        >
+          <Text style={styles.incomingCallEyebrow}>Chi'lly Chat</Text>
+          <Text style={styles.incomingCallTitle}>{alert.title}</Text>
+          <Text style={styles.incomingCallBody}>{alert.body}</Text>
+          <Text style={styles.incomingCallActionText}>Tap to answer</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.82}
+          onPress={dismiss}
+          style={styles.incomingCallDismiss}
+          testID="app-wide-incoming-call-dismiss"
+          accessibilityLabel="Dismiss incoming Chi'lly Chat call alert"
+        >
+          <Text style={styles.incomingCallDismissText}>Dismiss</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 const serializeRedirectTarget = (pathname: string, params: Record<string, unknown>) => {
   const search = new URLSearchParams();
 
@@ -507,6 +588,7 @@ function RootNavigator() {
   return (
     <>
       <RouteAnalyticsBridge />
+      <IncomingCallNotificationBridge />
       <InterstitialAdController />
       <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
@@ -764,5 +846,61 @@ const styles = StyleSheet.create({
     color: "#F4F7FC",
     fontSize: 13,
     fontWeight: "600",
+  },
+  incomingCallOverlay: {
+    position: "absolute",
+    top: 18,
+    left: 14,
+    right: 14,
+    zIndex: 40,
+  },
+  incomingCallCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(169,246,210,0.34)",
+    backgroundColor: "rgba(7,16,20,0.96)",
+    padding: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.26,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  incomingCallOpenAction: {
+    gap: 4,
+  },
+  incomingCallEyebrow: {
+    color: "#A9F6D2",
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  incomingCallTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  incomingCallBody: {
+    color: "#D7E4EA",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  incomingCallActionText: {
+    color: "#A9F6D2",
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  incomingCallDismiss: {
+    alignSelf: "flex-end",
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  incomingCallDismissText: {
+    color: "#B7C1CC",
+    fontSize: 12,
+    fontWeight: "800",
   },
 });

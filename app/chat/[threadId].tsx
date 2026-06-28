@@ -25,6 +25,7 @@ import {
   readLatestRingingChillyChatCallInvite,
   updateChillyChatCallInviteStatus,
   type ChillyChatCallEvent,
+  type ChillyChatCallInviteDelivery,
   type ChillyChatCallInvite,
 } from "../../_lib/chillyChatCalls";
 import {
@@ -154,6 +155,28 @@ const getThreadGuideBody = ({
     : "Message here first, then start voice or video from the same thread.";
 };
 
+const getCallDeliveryMessage = (delivery: ChillyChatCallInviteDelivery | null | undefined) => {
+  if (!delivery) {
+    return "Call started in this thread. Receiver notification status is not available yet.";
+  }
+  if (delivery.pushSent) {
+    return "Call started. The receiver was sent an Android call notification.";
+  }
+  if (delivery.notificationCreated) {
+    return "Call started. The receiver has an in-app call alert; background push was not confirmed.";
+  }
+  if (delivery.status === "blocked") {
+    return "Call started, but the receiver was not notified because the call invite was blocked by current safety/status rules.";
+  }
+  if (delivery.status === "failed") {
+    return "Call started in this thread, but receiver notification could not be confirmed. Ask them to open this Chi'lly Chat thread or try again.";
+  }
+  if (delivery.status === "skipped") {
+    return "Call started in this thread, but receiver background notification was skipped by notification settings or device registration.";
+  }
+  return "Call started in this thread. Receiver notification is pending or unconfirmed.";
+};
+
 const buildSmartReplySuggestions = ({
   activeCallType,
   lastIncomingMessage,
@@ -227,6 +250,7 @@ export default function ChillyChatThreadScreen() {
   const [callPanelOpen, setCallPanelOpen] = useState(false);
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
+  const [callDeliveryStatus, setCallDeliveryStatus] = useState<string | null>(null);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
   const [friendState, setFriendState] = useState<FriendRelationshipState | null>(null);
@@ -338,6 +362,9 @@ export default function ChillyChatThreadScreen() {
       );
       setError(null);
       setLoading(false);
+      if (!nextThread.activeCommunicationRoomId) {
+        setCallDeliveryStatus(null);
+      }
       logChatThread("load_state_success", {
         threadId,
         messageCount: nextMessages.length,
@@ -747,7 +774,19 @@ export default function ChillyChatThreadScreen() {
       callBusy,
       activeCommunicationRoomId: activeCallRoomId,
     });
-    if (!threadId || callBusy || !!activeCallRoomId || officialAccount) return;
+    if (!threadId) {
+      setError("Open a valid Chi'lly Chat thread before starting a call.");
+      return;
+    }
+    if (callBusy) return;
+    if (activeCallRoomId) {
+      setCallDeliveryStatus("A call is already active in this thread. Open Call to continue.");
+      return;
+    }
+    if (officialAccount) {
+      setError("Calls are unavailable for the official Chi'llywood support thread.");
+      return;
+    }
     if (!appConfig.runtimeControls.chat_enabled) {
       setError("Chi'lly Chat calls are temporarily paused. You can still read existing messages.");
       return;
@@ -755,15 +794,20 @@ export default function ChillyChatThreadScreen() {
 
     try {
       setCallBusy(true);
+      setCallDeliveryStatus(null);
       void requestAndroidPushPermissionAndRegister();
       const result = await startChatThreadCall(threadId, mode);
       setThread(result.thread);
       setCallPanelOpen(true);
+      setCallDeliveryStatus(getCallDeliveryMessage(result.delivery));
       logChatCall("handle_start_call_success", {
         threadId,
         mode,
         roomId: result.roomId,
         activeCommunicationRoomIdAfter: result.thread.activeCommunicationRoomId ?? "",
+        deliveryStatus: result.delivery?.status ?? "",
+        receiverPushSent: result.delivery?.pushSent === true,
+        receiverNotificationCreated: result.delivery?.notificationCreated === true,
       });
       trackEvent("chat_call_started", {
         surface: "chat-thread",
@@ -778,6 +822,7 @@ export default function ChillyChatThreadScreen() {
       });
       const message = callStartError instanceof Error ? callStartError.message : "Unable to start Chi'lly Chat call.";
       setError(message);
+      setCallDeliveryStatus("Call was not started. Receiver notification was not sent.");
       reportRuntimeError("chat-thread-start-call", callStartError, {
         threadId,
         mode,
@@ -801,6 +846,7 @@ export default function ChillyChatThreadScreen() {
       });
       setIncomingCallInvite(null);
       setCallPanelOpen(true);
+      setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
       trackEvent("chat_call_accepted", {
         surface: "chat-thread",
         threadId,
@@ -829,6 +875,7 @@ export default function ChillyChatThreadScreen() {
       await clearEndedChatThreadCall(threadId);
       setIncomingCallInvite(null);
       setCallPanelOpen(false);
+      setCallDeliveryStatus("Incoming call declined. Call state was cleared.");
       trackEvent("chat_call_declined", {
         surface: "chat-thread",
         threadId,
@@ -888,6 +935,7 @@ export default function ChillyChatThreadScreen() {
       if (!snapshot || snapshot.room.status !== "active") {
         await clearEndedChatThreadCall(threadId).catch(() => null);
         setCallPanelOpen(false);
+        setCallDeliveryStatus("The previous call ended. Start a new call when both people are ready.");
         logChatCall("handle_join_or_close_decision", {
           threadId,
           decision: "blocked_stale_room",
@@ -903,6 +951,7 @@ export default function ChillyChatThreadScreen() {
         mode: thread?.activeCallType ?? null,
       });
       setCallPanelOpen(true);
+      setCallDeliveryStatus("Opening the active call from this thread.");
       logChatCall("handle_join_or_close_decision", {
         threadId,
         decision: "open_existing_call",
@@ -923,6 +972,9 @@ export default function ChillyChatThreadScreen() {
         await clearEndedChatThreadCall(threadId);
       }
       setCallPanelOpen(false);
+      setCallDeliveryStatus(isHost
+        ? "The call ended and the receiver-visible call state was cleared."
+        : "You left the call. The call may stay open for the other participant.");
       await loadThreadState();
     } catch (leaveError) {
       logChatCall("handle_join_or_close_failed", {
@@ -1467,6 +1519,17 @@ export default function ChillyChatThreadScreen() {
           <Text style={styles.callBannerBody}>
             {otherMemberDisplayName} can join from this same thread. Open Chi'lly Chat to join.
           </Text>
+        </View>
+      ) : null}
+
+      {callDeliveryStatus ? (
+        <View
+          style={styles.callDeliveryStatusCard}
+          testID="chat-call-delivery-status"
+          accessibilityLabel="Chi'lly Chat call delivery status"
+        >
+          <MaterialIcons name="notifications-active" size={16} color="#A9F6D2" />
+          <Text style={styles.callDeliveryStatusText}>{callDeliveryStatus}</Text>
         </View>
       ) : null}
 
@@ -2193,6 +2256,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     fontWeight: "600",
+  },
+  callDeliveryStatusCard: {
+    marginHorizontal: 18,
+    marginBottom: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(169,246,210,0.26)",
+    backgroundColor: "rgba(35,122,88,0.16)",
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  callDeliveryStatusText: {
+    flex: 1,
+    color: "#DDFBEF",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "800",
   },
   callEventStack: {
     gap: 8,

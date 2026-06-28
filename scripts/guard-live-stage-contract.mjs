@@ -34,7 +34,9 @@ assertIncludes(appLayout, '<Stack.Screen name="watch-party/live-stage/[partyId]"
 assertIncludes(liveStage, "export default function WatchPartyLiveStageScreen", "Live Stage canonical screen owner");
 assertIncludes(watchPartyIndex, 'import WatchPartyLiveStageScreen from "./live-stage/[partyId]";', "Live waiting room embedded Live Stage owner import");
 assertIncludes(watchPartyIndex, 'const liveStageRoute = `/watch-party/live-stage${queryString ? `?${queryString}` : ""}`;', "Live waiting room handoff route");
-assertIncludes(partyRoom, 'pathname: "/watch-party/live-stage/[partyId]"', "Party Room Go Live route remains explicit");
+assertIncludes(partyRoom, 'pathname: "/watch-party/live-stage"', "Party Room Go Live query-backed route remains explicit");
+assertIncludes(partyRoom, "partyId,", "Party Room Go Live route carries the concrete room id");
+assertNotIncludes(partyRoom, 'pathname: "/watch-party/live-stage/[partyId]"', "Party Room Go Live must not use the dynamic route object that can drop the room id");
 assertNotIncludes(player, "WatchPartyLiveStageScreen", "Player must not import or merge the Live Stage screen");
 assertNotIncludes(player, 'pathname: "/watch-party/live-stage/[partyId]"', "Player must not route directly into Live Stage");
 assertNotIncludes(player, "watch-party/live-stage/[partyId]", "Player must not own Live Stage route strings");

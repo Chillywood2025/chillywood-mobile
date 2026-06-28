@@ -2,6 +2,19 @@
 
 # Realtime UI Proof Follow-Up
 
+Actual-user correction:
+- `docs/release/ACTUAL_USER_PROOF_STANDARD.md` is now the governing standard.
+- `docs/release/ACTUAL_USER_CHAT_CALL_AND_LIVE_CLOSURE.md` records Actual-user Chat Call proof Partial and Actual-user Live UI proof Partial.
+- Exact Chat Call root cause: `startChatThreadCall()` did not verify the receiver-visible `chat_threads` update, and invite/push dispatch failure was swallowed.
+- Fix shipped repo-side and EAS-published to production runtime `1.0.0`: group `bc66e544-d7b8-44d7-8236-9957f378b95a`, Android update `019f0bc2-d794-71c3-8ab9-4502df41e790`.
+- Both phones logged Expo Updates `CheckCompleteUnavailable`; active update ID was not directly readable, so actual installed manual call/ring closure remains Partial.
+- Next task: confirm update uptake or ship the same code in the next Play internal build, then rerun only actual-user Chat Call and Live UI paths.
+- Pre-created thread/call state is not actual-user Closed.
+- `chat_threads` RLS was not weakened.
+- Premium gates were not bypassed or weakened.
+- No service-role chat permission proof was used.
+- No provider/live-money mutation happened.
+
 Docs:
 - `docs/release/TARGETED_WATCH_PARTY_REALTIME_MIGRATION_APPLY.md`
 - `docs/release/WATCH_PARTY_REALTIME_CALLBACK_FIX.md`

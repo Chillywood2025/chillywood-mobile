@@ -54,7 +54,12 @@ const packageJson = read("package.json");
   "Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF",
   "No provider mutation happened",
   "No LiveKit tokens, push tokens, signed URLs, raw IPs, secrets, private messages, or private evidence were exposed",
-  "Partial: full installed-app two-phone UI traversal was run with `R5CR120QCBF` and `R3CXA0DS5JV`, and focused affected reruns closed Watch-Party installed UI markers on both phones. Installed-app UI proof remains Partial for chat-call setup through `chat_threads` RLS and Live Premium-gated participant UI.",
+  "Final verdict: Partial under `docs/release/ACTUAL_USER_PROOF_STANDARD.md`.",
+  "Partial: full installed-app two-phone UI traversal was run with `R5CR120QCBF` and `R3CXA0DS5JV`",
+  "Actual-user Chat Call and Live UI remain Partial",
+  "Actual-user Live installed UI proof is Partial",
+  "Actual-user Chat Call installed UI proof is Partial",
+  "Watch-Party installed UI remains Closed",
 ].forEach((needle) => requireText("25 seeded participants realtime proof doc", doc, needle));
 
 [
@@ -74,4 +79,4 @@ if (failures.length) {
 }
 
 console.log("25 seeded participants realtime proof passed.");
-console.log("- proof document lists the participant pack, device/client state, realtime results, honest Partial blocker, and required safety boundaries.");
+console.log("- proof document lists the participant pack, device/client state, diagnostic realtime closeout, actual-user installed UI Partial status, and required safety boundaries.");

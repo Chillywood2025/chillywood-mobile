@@ -37,6 +37,28 @@ export type ChillyChatCallInvite = {
   endedAt: string | null;
 };
 
+export type ChillyChatCallDeliveryStatus =
+  | "sent"
+  | "created"
+  | "skipped"
+  | "failed"
+  | "blocked"
+  | "unknown";
+
+export type ChillyChatCallInviteDelivery = {
+  attempted: boolean;
+  eligible: boolean | null;
+  notificationCreated: boolean;
+  pushSent: boolean;
+  reason: string;
+  status: ChillyChatCallDeliveryStatus;
+};
+
+export type CreatedChillyChatCallInvite = {
+  delivery: ChillyChatCallInviteDelivery;
+  invite: ChillyChatCallInvite;
+};
+
 export type ChillyChatCallEvent = {
   id: string;
   threadId: string;
@@ -183,18 +205,94 @@ const parseEvent = (row: CallEventRow | null): ChillyChatCallEvent | null => {
   };
 };
 
+const DEFAULT_CALL_DELIVERY: ChillyChatCallInviteDelivery = {
+  attempted: false,
+  eligible: null,
+  notificationCreated: false,
+  pushSent: false,
+  reason: "not_attempted",
+  status: "unknown",
+};
+
+const normalizeDeliveryStatus = (value: unknown): ChillyChatCallDeliveryStatus => {
+  const normalized = toText(value).toLowerCase();
+  if (
+    normalized === "sent"
+    || normalized === "created"
+    || normalized === "skipped"
+    || normalized === "failed"
+    || normalized === "blocked"
+  ) {
+    return normalized;
+  }
+  return "unknown";
+};
+
+const normalizeDispatchResponse = (value: unknown): ChillyChatCallInviteDelivery => {
+  if (!value || typeof value !== "object") {
+    return {
+      ...DEFAULT_CALL_DELIVERY,
+      attempted: true,
+      reason: "empty_dispatch_response",
+      status: "unknown",
+    };
+  }
+
+  const payload = value as {
+    blockedReason?: unknown;
+    eligible?: unknown;
+    result?: {
+      notificationCreated?: unknown;
+      pushSent?: unknown;
+      reason?: unknown;
+      status?: unknown;
+    } | null;
+  };
+  const result = payload.result ?? null;
+  const blockedReason = toText(payload.blockedReason);
+  const reason = toText(result?.reason) || blockedReason || "unknown";
+  const status = blockedReason
+    ? "blocked"
+    : normalizeDeliveryStatus(result?.status);
+
+  return {
+    attempted: true,
+    eligible: typeof payload.eligible === "boolean" ? payload.eligible : null,
+    notificationCreated: result?.notificationCreated === true,
+    pushSent: result?.pushSent === true,
+    reason,
+    status,
+  };
+};
+
 async function dispatchChillyChatCallPush(input: {
   action: "incoming" | "missed";
   inviteId: string;
-}) {
+}): Promise<ChillyChatCallInviteDelivery> {
   const inviteId = toText(input.inviteId);
-  if (!inviteId) return;
-  await supabase.functions.invoke("chilly-chat-call-dispatch", {
+  if (!inviteId) {
+    return {
+      ...DEFAULT_CALL_DELIVERY,
+      attempted: false,
+      reason: "missing_invite_id",
+      status: "failed",
+    };
+  }
+  const { data, error } = await supabase.functions.invoke("chilly-chat-call-dispatch", {
     body: {
       action: input.action,
       inviteId,
     },
   });
+  if (error) {
+    return {
+      ...DEFAULT_CALL_DELIVERY,
+      attempted: true,
+      reason: toText(error.message) || "dispatch_failed",
+      status: "failed",
+    };
+  }
+  return normalizeDispatchResponse(data);
 }
 
 export async function createChillyChatCallInvite(input: {
@@ -203,7 +301,7 @@ export async function createChillyChatCallInvite(input: {
   callerUserId: string;
   calleeUserId: string;
   callType: ChillyChatCallType;
-}): Promise<ChillyChatCallInvite | null> {
+}): Promise<CreatedChillyChatCallInvite> {
   const now = new Date();
   const payload: CallInviteInsert = {
     callee_user_id: input.calleeUserId,
@@ -223,22 +321,28 @@ export async function createChillyChatCallInvite(input: {
     .returns<CallInviteRow>()
     .single();
 
-  if (error || !data) return null;
-  const invite = parseInvite(data);
-  if (invite) {
-    await insertChillyChatCallEvent({
-      actorUserId: input.callerUserId,
-      callInviteId: invite.id,
-      callType: input.callType,
-      eventType: "started",
-      threadId: input.threadId,
-    }).catch(() => null);
-    void dispatchChillyChatCallPush({
-      action: "incoming",
-      inviteId: invite.id,
-    }).catch(() => null);
+  if (error || !data) {
+    throw error ?? new Error("Unable to create Chi'lly Chat call invite.");
   }
-  return invite;
+  const invite = parseInvite(data);
+  if (!invite) {
+    throw new Error("Unable to read Chi'lly Chat call invite.");
+  }
+
+  await insertChillyChatCallEvent({
+    actorUserId: input.callerUserId,
+    callInviteId: invite.id,
+    callType: input.callType,
+    eventType: "started",
+    threadId: input.threadId,
+  }).catch(() => null);
+
+  const delivery = await dispatchChillyChatCallPush({
+    action: "incoming",
+    inviteId: invite.id,
+  });
+
+  return { delivery, invite };
 }
 
 export async function listChillyChatCallEvents(threadId: string): Promise<ChillyChatCallEvent[]> {

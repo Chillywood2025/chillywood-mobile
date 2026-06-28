@@ -934,6 +934,13 @@ export type PushRegistrationState = {
   message: string;
 };
 
+export type ForegroundNotificationAlert = {
+  body: string;
+  path: string;
+  title: string;
+  triggerType: string;
+};
+
 const NOTIFICATION_INSTALL_ID_STORAGE_KEY = "chillywood.notification.install_id.v1";
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
@@ -1359,5 +1366,25 @@ export function subscribeToNotificationResponses(onPath: (path: string) => void)
     const data = response.notification.request.content.data as Record<string, unknown>;
     const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
     if (path) onPath(path);
+  });
+}
+
+export function subscribeToForegroundNotificationAlerts(onAlert: (alert: ForegroundNotificationAlert) => void) {
+  return Notifications.addNotificationReceivedListener((notification) => {
+    const content = notification.request.content;
+    const data = content.data as Record<string, unknown>;
+    const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
+    if (!path) return;
+
+    const triggerType = normalizeText(data.triggerType || data.notificationType || data.category).toLowerCase();
+    const isIncomingChillyChatCall = triggerType === "chilly_chat_call" || data.openCall === true;
+    if (!isIncomingChillyChatCall) return;
+
+    onAlert({
+      body: normalizeText(content.body) || "Tap to open the Chi'lly Chat call.",
+      path,
+      title: normalizeText(content.title) || "Incoming Chi'lly Chat call",
+      triggerType: triggerType || "chilly_chat_call",
+    });
   });
 }

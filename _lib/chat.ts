@@ -3,12 +3,18 @@ import type { Tables, TablesInsert, TablesUpdate } from "../supabase/database.ty
 
 import {
   createCommunicationRoom,
+  endCommunicationRoom,
   formatCommunicationRoomCode,
   getCommunicationRoomSnapshot,
   isCommunicationRoomActive,
   readCommunicationIdentity,
 } from "./communication";
-import { CHAT_CALL_EVENTS_TABLE, CHAT_CALL_INVITES_TABLE, createChillyChatCallInvite } from "./chillyChatCalls";
+import {
+  CHAT_CALL_EVENTS_TABLE,
+  CHAT_CALL_INVITES_TABLE,
+  createChillyChatCallInvite,
+  type ChillyChatCallInviteDelivery,
+} from "./chillyChatCalls";
 import {
   createSocialAttachmentForSurface,
   readSocialAttachmentsForSurfaces,
@@ -781,6 +787,7 @@ export async function clearEndedChatThreadCall(threadId: string): Promise<void> 
 }
 
 export async function startChatThreadCall(threadId: string, mode: ChatCallType): Promise<{
+  delivery: ChillyChatCallInviteDelivery | null;
   thread: ChatThreadSummary;
   roomId: string;
   callType: ChatCallType;
@@ -812,6 +819,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
         mode: thread.activeCallType ?? mode,
       });
       return {
+        delivery: null,
         thread,
         roomId: existingRoomId,
         callType: thread.activeCallType ?? mode,
@@ -849,19 +857,78 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
     active_call_type: mode,
   };
 
-  await supabase
+  const updatedThreadResponse = await supabase
     .from(CHAT_THREADS_TABLE)
     .update(startCallUpdate)
-    .eq("id", thread.threadId);
+    .eq("id", thread.threadId)
+    .select(CHAT_THREAD_SELECT)
+    .returns<ChatThreadRow>()
+    .single();
 
-  if (calleeUserId) {
-    await createChillyChatCallInvite({
-      calleeUserId,
-      callerUserId: currentUserId,
-      callType: mode,
-      communicationRoomId: roomId,
+  const updatedThreadRow = updatedThreadResponse.data as ChatThreadRow | null;
+
+  if (updatedThreadResponse.error || !updatedThreadRow) {
+    await endCommunicationRoom(roomId).catch(() => null);
+    logChatCall("thread_call_thread_update_failed", {
+      currentUserId,
       threadId: thread.threadId,
-    }).catch(() => null);
+      roomId,
+      mode,
+      message: updatedThreadResponse.error?.message ?? "no_data",
+    });
+    throw new Error("Unable to start Chi'lly Chat call. The thread could not be updated for the receiver.");
+  }
+
+  const threadAfterStart = parseChatThread(updatedThreadRow, currentUserId);
+  if (!threadAfterStart?.activeCommunicationRoomId) {
+    await endCommunicationRoom(roomId).catch(() => null);
+    logChatCall("thread_call_thread_update_missing_room", {
+      currentUserId,
+      threadId: thread.threadId,
+      roomId,
+      mode,
+    });
+    throw new Error("Unable to start Chi'lly Chat call. The receiver-visible call state was not saved.");
+  }
+
+  let delivery: ChillyChatCallInviteDelivery | null = null;
+  if (calleeUserId) {
+    try {
+      const invite = await createChillyChatCallInvite({
+        calleeUserId,
+        callerUserId: currentUserId,
+        callType: mode,
+        communicationRoomId: roomId,
+        threadId: thread.threadId,
+      });
+      delivery = invite.delivery;
+      logChatCall("thread_call_invite_delivery", {
+        currentUserId,
+        threadId: thread.threadId,
+        roomId,
+        mode,
+        notificationCreated: delivery.notificationCreated,
+        pushSent: delivery.pushSent,
+        reason: delivery.reason,
+        status: delivery.status,
+      });
+    } catch (inviteError) {
+      delivery = {
+        attempted: true,
+        eligible: null,
+        notificationCreated: false,
+        pushSent: false,
+        reason: inviteError instanceof Error ? inviteError.message : "invite_failed",
+        status: "failed",
+      };
+      logChatCall("thread_call_invite_failed", {
+        currentUserId,
+        threadId: thread.threadId,
+        roomId,
+        mode,
+        message: delivery.reason,
+      });
+    }
   }
 
   const updated = await getChatThread(thread.threadId);
@@ -883,6 +950,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   });
 
   return {
+    delivery,
     thread: updated,
     roomId,
     callType: mode,
