@@ -27,7 +27,8 @@ const getInitials = (value: string) => {
 
 const getConnectionLabel = (participant: CommunicationParticipantView) => {
   if (participant.isSelf) return participant.micOn ? "You · live mic" : "You · muted";
-  if (participant.connectionState === "connected") return participant.micOn ? "Connected" : "Muted";
+  if (participant.streamURL) return participant.micOn ? "Video connected" : "Video connected · muted";
+  if (participant.connectionState === "connected") return participant.micOn ? "Connected" : "Connected · muted";
   if (participant.connectionState === "failed") return "Connection failed";
   if (participant.connectionState === "disconnected") return "Disconnected";
   if (participant.connectionState === "connecting") return "Connecting";
@@ -67,8 +68,8 @@ export function CommunicationParticipantGrid({
     logCallDebug("[CH_CALL]", "participant_grid_render", {
       participantCount: participants.length,
       presentation,
-      remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL && participant.cameraOn).length,
-      fallbackCount: participants.filter((participant) => !(!!RTCView && !!participant.streamURL && participant.cameraOn)).length,
+      remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL).length,
+      fallbackCount: participants.filter((participant) => !(!!RTCView && !!participant.streamURL)).length,
       participants: participants.map((participant) => ({
         userId: participant.userId,
         isSelf: participant.isSelf,
@@ -89,7 +90,8 @@ export function CommunicationParticipantGrid({
       ]}
     >
       {participants.map((participant, index) => {
-        const showVideo = !!RTCView && !!participant.streamURL && participant.cameraOn;
+        const hasVideoStream = !!participant.streamURL;
+        const showVideo = !!RTCView && hasVideoStream;
         const videoObjectFit = isFullscreen ? "contain" : "cover";
         const tileWide = participants.length <= 1;
         const compactTile = participants.length > 2;
@@ -152,7 +154,7 @@ export function CommunicationParticipantGrid({
                   ) : (
                     <Text style={styles.avatarInitial}>{getInitials(participant.displayName)}</Text>
                   )}
-                  <Text style={styles.cameraLabel}>{participant.cameraOn ? "Camera warming up" : "Camera off"}</Text>
+                  <Text style={styles.cameraLabel}>{hasVideoStream ? "Video connecting" : participant.cameraOn ? "Camera warming up" : "Camera off"}</Text>
                 </View>
               )}
               <View style={styles.topRow}>
@@ -173,8 +175,8 @@ export function CommunicationParticipantGrid({
                   <Text style={styles.status} numberOfLines={1}>{getConnectionLabel(participant)}</Text>
                 </View>
                 <View style={styles.mediaPills}>
-                  <View style={[styles.mediaPill, participant.cameraOn ? styles.mediaPillOn : styles.mediaPillOff]}>
-                    <Text style={styles.mediaPillText}>{participant.cameraOn ? "Cam" : "Cam Off"}</Text>
+                  <View style={[styles.mediaPill, (participant.cameraOn || hasVideoStream) ? styles.mediaPillOn : styles.mediaPillOff]}>
+                    <Text style={styles.mediaPillText}>{(participant.cameraOn || hasVideoStream) ? "Cam" : "Cam Off"}</Text>
                   </View>
                   <View style={[styles.mediaPill, participant.micOn ? styles.mediaPillOn : styles.mediaPillOff]}>
                     <Text style={styles.mediaPillText}>{participant.micOn ? "Mic" : "Muted"}</Text>

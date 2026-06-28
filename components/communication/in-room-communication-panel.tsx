@@ -125,7 +125,7 @@ export function InRoomCommunicationPanel({
           </View>
         ) : null}
         <View style={styles.metaPill}>
-          <Text style={styles.metaText}>{participantCount} connected</Text>
+          <Text style={styles.metaText}>{participantCount} in call</Text>
         </View>
         <View style={styles.metaPill}>
           <Text style={styles.metaText}>{isHost ? "Host" : "Participant"}</Text>

@@ -8,6 +8,8 @@ Actual-user correction: the earlier Closed wording below is superseded for Chat 
 
 Latest targeted follow-up: `docs/release/CHAT_CALL_REMOTE_VIDEO_LIVE_ACTION_UX_SWEEP.md` fixes source-level remote video visibility, fullscreen RTC aspect fit, and Live seat-action stuck controls. Two-phone installed-app proof remains Partial until both physical Play-internal v57 phones run the updated code and reproduce the normal visible Chat Call and Live waiting-room paths.
 
+Cross-lane QA follow-up: `docs/release/CROSS_LANE_ACTUAL_USER_PRODUCT_QA_SWEEP.md` found that source still had two user-facing clarity gaps after the prior lane: remote RTC video could still be hidden behind stale `cameraOn` presence despite a real stream URL, and call/room count copy could imply all peers were connected. Those source/copy issues are fixed, but actual-user installed-app proof remains Partial until the updated code is verified on the Play-internal runtime.
+
 Two physical Play-internal v57 Android clients were used. R3CXA0DS5JV and R5CR120QCBF were both active clients. No physical phone sideload was used, no install/uninstall/reinstall/clear-data happened, and diagnostic sideloaded emulator evidence is not accepted as Play-internal UI proof.
 
 Watch-Party realtime callback remains Closed. The latest focused callback artifact is `/tmp/app-watch-party-realtime-callback-fix-20260627145327/`; it reached `SUBSCRIBED`, emitted after subscription readiness, observed the `watch_party_sync_events` callback, and matched playback readback.

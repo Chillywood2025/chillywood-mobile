@@ -37,8 +37,14 @@ Available last-12-hour evidence:
   - Add delayed audio-first binding when the peer connection exposes a later video receiver.
   - Keep remote connection state connected when the delayed stream bind succeeds.
 - `components/communication/communication-participant-grid.tsx`
+  - Cross-lane QA correction: render remote RTC video when a real stream URL exists, even if presence `cameraOn` is stale.
+  - Cross-lane QA correction: show `Video connected` from stream presence instead of showing a remote card as `Connection failed` when media is already available.
   - Use `objectFit="contain"` for fullscreen RTC video so mismatched device ratios do not crop the remote feed.
   - Keep embedded grid tiles on `cover` so compact cards still feel filled.
+- `components/communication/in-room-communication-panel.tsx` and `components/communication/communication-room-header.tsx`
+  - Cross-lane QA correction: change participant count copy from `connected` to `in call` / `in room` so a count does not imply every peer has a healthy media connection.
+- `app/watch-party/live-stage/[partyId].tsx`
+  - Cross-lane QA correction: render remote Live Stage RTC video from stream URL presence instead of requiring stale `cameraOn` presence.
 - `app/watch-party/live-stage/[partyId].tsx`
   - Add a per-participant busy state for host seat/mute/remove actions.
   - Collapse host participant controls before showing failure alerts.

@@ -45,7 +45,7 @@ export function CommunicationRoomHeader({
         ) : null}
         <View style={styles.metaRow}>
           <View style={styles.metaPill}>
-            <Text style={styles.metaText}>{participantCount} connected</Text>
+            <Text style={styles.metaText}>{participantCount} in room</Text>
           </View>
           <View style={styles.metaPill}>
             <Text style={styles.metaText}>{isHost ? "Host" : "Participant"}</Text>

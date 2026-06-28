@@ -2491,7 +2491,7 @@ export default function WatchPartyLiveStageScreen({
   const heroMediaParticipant = heroParticipant ? stageMediaParticipantsByUserId[heroParticipant.userId] as CommunicationParticipantView | undefined : undefined;
   const heroParticipantIsCurrentUser = heroParticipant?.userId === currentUserParticipantId;
   const showHeroLocalRtcVideo = heroParticipantIsCurrentUser && !!RTCView && !!localStreamURL;
-  const showHeroRemoteVideo = !heroParticipantIsCurrentUser && !!RTCView && !!heroMediaParticipant?.streamURL && heroMediaParticipant.cameraOn;
+  const showHeroRemoteVideo = !heroParticipantIsCurrentUser && !!RTCView && !!heroMediaParticipant?.streamURL;
   const heroParticipantPreviewUri = String(
     heroParticipantIsCurrentUser
       ? (myCameraPreviewUrlRef.current || heroParticipant?.cameraPreviewUrl || heroParticipant?.avatarUrl || "")
@@ -4612,7 +4612,7 @@ export default function WatchPartyLiveStageScreen({
                       });
                       const participantDisplayName = isCurrentUser ? "You" : participant.displayName;
                       const showLocalRtcPreview = isCurrentUser && !!RTCView && !!localStreamURL && !heroOwnsLocalFeed;
-                      const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL && mediaParticipant.cameraOn;
+                      const showRemoteLiveVideo = !isCurrentUser && !!RTCView && !!mediaParticipant?.streamURL;
                       const shouldUseHybridLiveKitVideo = shouldRenderLiveKitStage && !!liveKitJoinContract;
                       const bubbleMediaUri = isCurrentUser
                         ? (heroOwnsLocalFeed ? (participant.avatarUrl || "") : (myCameraPreviewUrlRef.current || participant.cameraPreviewUrl || participant.avatarUrl || ""))

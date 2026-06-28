@@ -1,5 +1,22 @@
 # NEXT TASK
 
+# Cross-Lane Actual-User Product QA Follow-Up
+
+Current lane doc:
+- `docs/release/CROSS_LANE_ACTUAL_USER_PRODUCT_QA_SWEEP.md`
+
+Truth to preserve:
+- Cross-Lane Actual-User Product QA Sweep is Partial for actual-user installed-app closure.
+- Small safe source fixes are applied for Chi'lly Chat remote video rendering from real stream URL presence, confusing call/room count copy, and Live Stage remote video rendering from stream URL presence.
+- Proof scripts passing is not enough; diagnostic/backend proof is not actual-user proof.
+- If Robert/testers cannot reproduce it in the Play-internal installed app, it is not actual-user Closed.
+- No auth/RLS/Premium/chat/account-status/staff permission weakening happened, no provider/live-money mutation happened, and `liveMoneyEnabled` remains OFF.
+
+Next product QA action:
+- Deliver or pick up the JS fix on the Play-internal runtime or next Play internal build.
+- Rerun only affected actual-user paths on both physical Play-internal phones: Chi'lly Chat video call local/remote video, fullscreen RTC aspect fit, Live waiting-room seat request, and host seat/mute/remove controls.
+- Visually recheck Admin Platform Snapshot Refresh control.
+
 # Owner/Admin/Moderator Proof Truth Audit Follow-Up
 
 Current lane doc:
