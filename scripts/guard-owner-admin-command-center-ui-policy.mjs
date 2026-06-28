@@ -22,7 +22,7 @@ const packageJson = read("package.json");
 assertIncludes(doc, "Owner/Admin Command Center UI: Closed", "closed command center doc");
 assertIncludes(doc, "Single Command Center entry point", "single entry point");
 assertIncludes(doc, "Admin UI is production-labeled", "production-labeled rule");
-assertIncludes(doc, "Unavailable tools are hidden or honestly disabled", "disabled unavailable rule");
+assertIncludes(doc, "Unavailable tools open active setup/status/resolution, support/review, or access-status flows.", "active unavailable rule");
 assertIncludes(doc, "Dangerous actions require confirmation", "confirmation rule");
 assertIncludes(doc, "Destructive/sensitive actions require reason and audit where supported", "reason audit rule");
 assertIncludes(doc, "Admin search results are privacy-safe and limited/paginated", "search privacy rule");
@@ -30,7 +30,7 @@ assertIncludes(doc, "Admin UI fails closed if backend functions are unavailable"
 assertIncludes(doc, "Admin UI does not show raw backend errors", "raw error rule");
 assertIncludes(doc, "Admin UI does not expose service-role-only concepts", "service-role concept rule");
 assertIncludes(doc, "Admin UI does not expose raw storage paths, signed URLs, private provider IDs, token values, raw IPs, secrets, tax IDs, or bank details", "private exposure rule");
-assertIncludes(doc, "Money/provider/payout actions remain disabled/read-only/manual/external", "money disabled rule");
+assertIncludes(doc, "Money/provider/payout actions open active readiness/status/manual/external review flows.", "money active readiness rule");
 
 for (const phrase of [
   "Operator center",

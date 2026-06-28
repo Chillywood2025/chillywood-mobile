@@ -1,5 +1,24 @@
 # NEXT TASK
 
+# Owner/Admin/Moderator Proof Truth Audit Follow-Up
+
+Current lane doc:
+- `docs/release/OWNER_ADMIN_MODERATOR_PROOF_TRUTH_AUDIT.md`
+
+Truth to preserve:
+- Owner/Admin/Moderator Proof Truth Audit is Closed as an audit, but launch-meaningful actual-user staff proof remains Partial where the evidence is backend/RPC, diagnostic, controlled seeded, service-role/bootstrap, or provider-dashboard owner-confirmation.
+- Diagnostic/backend proof is not actual-user proof.
+- Service-role/bootstrap proof is not role-authority proof.
+- Owner RPC staff grant path remains app-backed RPC/backend Closed where applicable.
+- Provider dashboard MFA/access remains owner-confirmation-required unless sanitized owner/provider evidence exists.
+- Normal-user `/admin` denial and seeded Moderator/Admin/Owner installed route/control traversal are actual-user installed-app Closed only within the narrow proof-account route/control scope.
+- Current First Owner was not touched, no real users were modified, no auth/RLS/staff permission weakening happened, no provider/live-money mutation happened, and `liveMoneyEnabled` remains OFF.
+
+Next staff-proof action:
+- If launch needs deeper staff proof, run a focused installed-app actual-user Owner/Admin/Moderator lane against safe proof targets only.
+- Do not use service-role as role-authority proof.
+- Do not call backend readback or marker-only evidence actual-user Closed.
+
 # Targeted Chat/Live UX Sweep Follow-Up
 
 Current lane doc:

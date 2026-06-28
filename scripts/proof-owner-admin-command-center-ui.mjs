@@ -58,7 +58,7 @@ const requiredScripts = [
 
 add("doc_exists", text.adminDoc.includes("Owner/Admin Command Center UI: Closed"), "Command Center production UI doc exists and is closed.");
 add("single_entry", hasAll(text.adminDoc + text.adminUi, ["Single Command Center entry point", "/admin", "Admin Command Center"]), "Single /admin Command Center entry point is documented and present.");
-add("production_labels", hasAll(text.adminDoc, ["Admin UI is production-labeled", "Unavailable tools are hidden or honestly disabled"]) || hasAll(text.adminDoc, ["production-labeled", "honestly disabled"]), "Production-label and unavailable-tool rules are documented.");
+add("production_labels", hasAll(text.adminDoc, ["Admin UI is production-labeled", "Unavailable tools open active setup/status/resolution, support/review, or access-status flows."]) || hasAll(text.adminDoc, ["production-labeled", "active setup/status/resolution"]), "Production-label and unavailable-tool active-flow rules are documented.");
 add("operator_not_product", hasAll(text.hierarchy + text.adminDoc, ["operator is the internal/backend alias for Admin", "Admin is the product-facing"]) && !visibleText.includes("Operator center"), "Operator remains internal and product UI says Admin.");
 add("support_not_role", hasAll(text.adminDoc + text.hierarchy, ["Support is a work area", "not a staff role"]) && !visibleText.includes("Support role"), "Support remains workflow/permission area, not role UI.");
 add("danger_confirmation", hasAll(text.adminUi + text.adminDoc, ["Confirm", "confirmation", "Dangerous actions require confirmation"]), "Dangerous action confirmation markers exist.");
@@ -67,9 +67,9 @@ add("audit_readback", hasAll(text.adminUi + text.adminDoc, ["audit", "readback",
 add("fail_closed", hasAll(text.adminUi + text.adminDoc, ["fail closed", "Unable to", "Admin UI fails closed"]), "Fail-closed behavior is documented and represented.");
 add("safe_errors", hasAll(text.adminUi + text.adminDoc, ["formatAdminOperationFailure", "Admin UI does not show raw backend errors"]), "Sanitized backend error path is present.");
 add("search_privacy", hasAll(text.adminUi + text.adminDoc, ["ADMIN_SEARCH_MIN_LENGTH", "Search / Filter Privacy", "masked email/identity display"]) && hasAll(text.adminUi, ["slice(0,", "maskOperatorIdentity"]), "Search/filter privacy and bounded result markers exist.");
-add("disabled_markers", hasAll(text.adminUi + text.adminDoc, ["OwnerDisabledReason", "Unavailable", "honestly disabled"]), "Disabled/unavailable tool markers exist.");
+add("disabled_markers", hasAll(text.adminUi + text.adminDoc, ["OwnerDisabledReason", "Unavailable", "active setup/status/resolution"]), "Unavailable tool markers open active setup/status/resolution flows.");
 add("no_forbidden_visible_copy", hasNone(visibleText, forbiddenVisibleCopy), "Forbidden product-facing labels and raw secret exposure copy are absent.");
-add("money_disabled", hasAll(text.adminDoc + text.adminUi, ["Money/provider/payout actions remain disabled/read-only/manual/external", "No provider secrets, checkout, transfer, withdrawal, payout, balance, or live-money movement is created"]), "Money/provider/payout actions remain disabled/read-only/manual/external.");
+add("money_disabled", hasAll(text.adminDoc + text.adminUi, ["Money/provider/payout actions open active readiness/status/manual/external review flows", "No provider secrets, checkout, transfer, withdrawal, payout, balance, or live-money movement is created"]), "Money/provider/payout actions remain active readiness/status/manual/external flows.");
 add("role_guard_refs", requiredScripts.every((script) => text.packageJson.includes(script)), "Command Center plus role proof/guard package scripts are wired.");
 
 const failed = checks.filter((check) => !check.ok);
