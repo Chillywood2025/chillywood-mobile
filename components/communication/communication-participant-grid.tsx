@@ -90,6 +90,7 @@ export function CommunicationParticipantGrid({
     >
       {participants.map((participant, index) => {
         const showVideo = !!RTCView && !!participant.streamURL && participant.cameraOn;
+        const videoObjectFit = isFullscreen ? "contain" : "cover";
         const tileWide = participants.length <= 1;
         const compactTile = participants.length > 2;
         const oddLastTile = isFullscreen
@@ -133,7 +134,7 @@ export function CommunicationParticipantGrid({
                     isFullscreen && participants.length === 2 && { height: fullscreenTileHeight },
                     isFullscreen && participants.length > 2 && { height: fullscreenTileHeight },
                   ]}
-                  objectFit="cover"
+                  objectFit={videoObjectFit}
                   mirror={participant.isSelf}
                 />
               ) : (

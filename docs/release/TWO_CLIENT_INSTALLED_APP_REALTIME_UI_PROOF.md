@@ -6,6 +6,8 @@ Final verdict: Partial under `docs/release/ACTUAL_USER_PROOF_STANDARD.md`.
 
 Actual-user correction: the earlier Closed wording below is superseded for Chat Call and Live UI. The prior same-thread/prepared Chat Call path and Live diagnostic/screenshot evidence remain diagnostic evidence, but they do not close Robert's normal manual call/ring path or normal Live waiting-room path. `docs/release/ACTUAL_USER_CHAT_CALL_AND_LIVE_CLOSURE.md` is the governing current result.
 
+Latest targeted follow-up: `docs/release/CHAT_CALL_REMOTE_VIDEO_LIVE_ACTION_UX_SWEEP.md` fixes source-level remote video visibility, fullscreen RTC aspect fit, and Live seat-action stuck controls. Two-phone installed-app proof remains Partial until both physical Play-internal v57 phones run the updated code and reproduce the normal visible Chat Call and Live waiting-room paths.
+
 Two physical Play-internal v57 Android clients were used. R3CXA0DS5JV and R5CR120QCBF were both active clients. No physical phone sideload was used, no install/uninstall/reinstall/clear-data happened, and diagnostic sideloaded emulator evidence is not accepted as Play-internal UI proof.
 
 Watch-Party realtime callback remains Closed. The latest focused callback artifact is `/tmp/app-watch-party-realtime-callback-fix-20260627145327/`; it reached `SUBSCRIBED`, emitted after subscription readiness, observed the `watch_party_sync_events` callback, and matched playback readback.

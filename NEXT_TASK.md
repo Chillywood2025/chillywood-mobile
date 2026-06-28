@@ -1,5 +1,32 @@
 # NEXT TASK
 
+# Targeted Chat/Live UX Sweep Follow-Up
+
+Current lane doc:
+- `docs/release/CHAT_CALL_REMOTE_VIDEO_LIVE_ACTION_UX_SWEEP.md`
+
+Source fixes are applied for the owner-reported issues:
+- Chi'lly Chat remote video could be hidden when the remote media stream existed but presence camera state was stale.
+- Android audio-first RTC track arrival could skip binding until video appeared.
+- Fullscreen RTC video used crop behavior and could cut off a remote feed on mismatched device aspect ratios.
+- Live Watch-Party host participant action controls could remain open and feel stuck after `Seat update unavailable`.
+
+Current status:
+- Source fix: ready for validation.
+- Actual-user installed-app proof: Partial.
+- `R5CR120QCBF` was attached and verified as Play-internal v57.
+- `R3CXA0DS5JV` was not visible to adb during the sweep, so two-phone actual-user remote-video/live-seat repro is still pending.
+
+Next task:
+- Deliver/pick up this JS fix on the Play-internal runtime or next Play internal build.
+- Connect both physical Play-internal v57 phones.
+- Rerun only affected paths:
+  - Chi'lly Chat video call through normal visible app path, verifying local and remote video on both phones.
+  - Fullscreen/large RTC video aspect fit on the mismatched phone.
+  - Live Watch-Party waiting-room seat request and host Approve/Mute/Seat/Remove controls.
+- Keep actual-user proof Partial unless Robert/testers can reproduce the fixed behavior in the installed app.
+- No physical phone sideload, provider mutation, live money, payout/refund execution, RLS/Premium/auth weakening, or secrets exposure.
+
 # Realtime UI Proof Follow-Up
 
 Actual-user correction:

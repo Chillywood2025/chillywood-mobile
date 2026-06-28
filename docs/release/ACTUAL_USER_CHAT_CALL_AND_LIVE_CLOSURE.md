@@ -6,6 +6,8 @@ Actual-user Live UI proof: Partial.
 
 Real simultaneous multi-user state: Partial.
 
+Latest targeted follow-up: `docs/release/CHAT_CALL_REMOTE_VIDEO_LIVE_ACTION_UX_SWEEP.md` fixes source-level remote video rendering, fullscreen RTC aspect fit, and Live seat-action stuck controls. Actual-user installed-app proof remains Partial until both physical Play-internal v57 phones run the updated code and reproduce the normal visible paths.
+
 This lane follows `docs/release/ACTUAL_USER_PROOF_STANDARD.md`. A proof is not Closed unless Robert or a normal tester can reproduce it in the Play-internal installed app through the normal visible user path.
 
 ## Root Cause

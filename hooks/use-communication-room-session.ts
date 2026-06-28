@@ -794,10 +794,45 @@ export function useCommunicationRoomSession({
         typeof primaryStream?.getVideoTracks === "function"
           ? primaryStream.getVideoTracks().length > 0
           : false;
+      const hasReceiverVideoTrack =
+        typeof peerConnection?.getReceivers === "function"
+          ? peerConnection.getReceivers().some((receiver: any) => String(receiver?.track?.kind ?? "") === "video")
+          : false;
 
-      // Android can surface the audio stream first. Only bind RTCView
-      // once we have a stream that actually carries video frames.
-      if (track?.kind !== "video" && !hasVideoTrack) return;
+      // Android can surface the audio stream first, and some devices do not
+      // fire a second track event when the video receiver becomes available.
+      // Bind as soon as the peer connection exposes any video receiver.
+      if (track?.kind !== "video" && !hasVideoTrack && !hasReceiverVideoTrack) {
+        setTimeout(() => {
+          const delayedStream = buildRemoteRenderStream(rtc, peerConnection, primaryStream, track);
+          const delayedHasVideo =
+            typeof delayedStream?.getVideoTracks === "function"
+              ? delayedStream.getVideoTracks().length > 0
+              : false;
+          if (!delayedHasVideo) return;
+          logChatRtc("remote_stream_attached", {
+            roomId,
+            remoteUserId,
+            trackKind: String(track?.kind ?? ""),
+            delayedAudioFirstBind: true,
+            eventTrack: describeTrack(track),
+            receiverTrack: describeTrack(event?.receiver?.track),
+            primaryStream: describeStream(primaryStream),
+            boundStream: describeStream(delayedStream),
+            peer: describePeerConnection(peerConnection),
+          });
+          setRemoteStreamsByUserId((prev) => ({
+            ...prev,
+            [remoteUserId]: delayedStream,
+          }));
+          setConnectionStateByUserId((prev) => ({
+            ...prev,
+            [remoteUserId]: "connected",
+          }));
+          void logInboundVideoDiagnostics(remoteUserId, peerConnection, "track_audio_first_delayed");
+        }, 350);
+        return;
+      }
 
       const stream = buildRemoteRenderStream(
         rtc,
@@ -1771,16 +1806,23 @@ export function useCommunicationRoomSession({
 
     const merged = presenceParticipants
       .filter((participant) => activeIds.has(participant.userId) || participant.userId === localUserId)
-      .map((participant) => ({
-        ...participant,
-        isSelf: participant.userId === localUserId,
-        streamURL: participant.userId === localUserId
-          ? localStreamURL || undefined
-          : getCommunicationStreamURL(remoteStreamsByUserId[participant.userId] ?? null) || undefined,
-        connectionState: participant.userId === localUserId
-          ? "connected"
-          : (connectionStateByUserId[participant.userId] ?? "waiting"),
-      }))
+      .map((participant) => {
+        const isSelf = participant.userId === localUserId;
+        const remoteStreamURL = isSelf
+          ? ""
+          : getCommunicationStreamURL(remoteStreamsByUserId[participant.userId] ?? null) || "";
+        return {
+          ...participant,
+          isSelf,
+          cameraOn: isSelf ? participant.cameraOn : participant.cameraOn || !!remoteStreamURL,
+          streamURL: isSelf
+            ? localStreamURL || undefined
+            : remoteStreamURL || undefined,
+          connectionState: isSelf
+            ? "connected"
+            : (connectionStateByUserId[participant.userId] ?? "waiting"),
+        };
+      })
       .sort((a, b) => {
         const aSelf = a.isSelf ? 1 : 0;
         const bSelf = b.isSelf ? 1 : 0;
