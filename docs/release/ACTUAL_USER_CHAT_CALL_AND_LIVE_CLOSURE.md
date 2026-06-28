@@ -8,6 +8,8 @@ Real simultaneous multi-user state: Partial.
 
 Latest targeted follow-up: `docs/release/CHAT_CALL_REMOTE_VIDEO_LIVE_ACTION_UX_SWEEP.md` fixes source-level remote video rendering, fullscreen RTC aspect fit, and Live seat-action stuck controls. Actual-user installed-app proof remains Partial until both physical Play-internal v57 phones run the updated code and reproduce the normal visible paths.
 
+June 28, 2026 Play v58 follow-up: `docs/release/CHILLY_CHAT_PLAY_V58_ACTUAL_USER_CALL_PROOF.md` records v58 installed-app Chat call proof as Partial. Both target phones were Play-installed v58, but the v58 search path is deferred to v59 per owner instruction, receiver elsewhere-in-app did not visibly receive the app-wide banner on R5, and background push/ringing was not proved. v58 installed is not enough without actual user flow proof.
+
 This lane follows `docs/release/ACTUAL_USER_PROOF_STANDARD.md`. A proof is not Closed unless Robert or a normal tester can reproduce it in the Play-internal installed app through the normal visible user path.
 
 ## Root Cause

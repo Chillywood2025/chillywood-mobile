@@ -6,6 +6,8 @@ Final verdict: Partial.
 
 Source is fixed for normal visible call initiation paths. Installed-app actual-user proof remains Partial until a Play-internal build containing these source changes is installed on both tester phones and proves receiver ringing from same-thread, elsewhere-in-app, and background states.
 
+June 28, 2026 v58 installed-app follow-up: `docs/release/CHILLY_CHAT_PLAY_V58_ACTUAL_USER_CALL_PROOF.md` is Partial. Both attached phones were Play-installed v58 from `com.android.vending`, and source commit `0a22ab3e2612d4f888b4f56eac03c0639cac26ae` was pushed/aligned with `origin/main`, but v58 actual-user call proof did not close. The owner confirmed the search problem was fixed separately and instructed not to use the v58 search box again until a v59 Play-internal build. No search-box-dependent v58 result is counted as Closed. Receiver elsewhere-in-app banner and background push/ringing remain Partial.
+
 ## Required Proof Doctrine
 
 Same-thread proof is not enough.
