@@ -10,6 +10,8 @@ June 28, 2026 v58 installed-app follow-up: `docs/release/CHILLY_CHAT_PLAY_V58_AC
 
 June 28, 2026 v59 Google Play internal follow-up: `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md` is Partial. Both physical phones updated to Play-installed versionCode `59` from `com.android.vending`, and sessions survived without logout, uninstall, reinstall, clear-data, or sideload. Actual-user call proof did not close because no fresh v59 voice/video call completed through normal visible paths with receiver-visible incoming state, background push/ringing, local/remote video, fullscreen fit, and call cleanup proof.
 
+June 28, 2026 `user230455` follow-up: installed v59 Chat People search can find the updated normal-user handle `user230455`, but tapping `Chi'lly Chat` or `Voice Call` from that visible result fails before direct-thread open/create. Owner evidence also showed Settings current handle `@user230455` while Profile/Chat still displayed stale `@user230456`. Source now fixes signed-in profile cache freshness, Settings handle cache persistence, direct-thread username enrichment, and authenticated direct-thread open/create repair, but source fixed is not installed-app proof.
+
 ## Required Proof Doctrine
 
 Same-thread proof is not enough.

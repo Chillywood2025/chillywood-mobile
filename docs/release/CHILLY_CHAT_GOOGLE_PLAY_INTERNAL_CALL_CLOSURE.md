@@ -108,15 +108,27 @@ Owner/Admin `R3CXA0DS5JV` searching the normal user handle/display target `user2
 
 The owner reported other normal people search works. That report is consistent with the expected Owner/Admin search policy, but it is not counted as a full installed-app proof artifact by itself.
 
+June 28 retry with updated normal-user handle:
+
+- Owner/Admin R3 searched `user230455`.
+- The People result appeared as `user230455 @user230455` with visible `Chi'lly Chat`, `Voice Call`, and `Video Call` actions.
+- Public-safe anon comparison found `user230455` and did not find `user230456`; only hashed identity comparison was used, and no raw backend user IDs were retained in this proof.
+- Tapping `Voice Call` from the visible People result did not start a call. The app stayed in the inbox search surface and showed safe copy: `Unable to open Chi'lly Chat with this person right now.`
+- Tapping `Chi'lly Chat` from the same visible People result produced the same safe failure copy.
+- This confirms the v59 installed blocker moved from search discovery to direct-thread open/create before call start.
+- The owner also showed Settings reporting the handle as current at `@user230455` while normal Profile still displayed the stale `@user230456` handle. That is documented as a Settings/Profile/Chat stale identity propagation bug, not as Closed call proof.
+
 ## Inbox/Search Call Path Result
 
 Status: Partial.
 
 R3 opened Chi'lly Chat through the normal visible Profile -> Chi'lly Chat path and searched for the normal user `user230456`. The existing direct thread was found through the visible search/filter path.
 
+The later `user230455` retry proved the updated handle can be found through the visible Chat inbox People search, but both `Chi'lly Chat` and `Voice Call` failed before opening or creating the direct thread. The user-facing error was sanitized and did not expose raw backend/provider details.
+
 This does not close the full inbox/search path because no new v59 Voice Call or Video Call was completed from the search result with receiver-visible incoming call state.
 
-If the direct thread does not exist, the source path still routes suggestion actions through `getOrCreateDirectThread()`, but this v59 installed proof did not create a brand-new direct thread between the two physical phones because their thread already existed.
+If the direct thread does not exist, the source path still routes suggestion actions through `getOrCreateDirectThread()`, but v59 installed proof showed that the visible result can fail before thread open/create when stale identity/thread state exists. This remained Partial on installed v59.
 
 ## Existing Thread Call Path Result
 
@@ -134,8 +146,9 @@ Both phones opened normal in-app self Profile routes after the v59 Play update:
 
 - R3 profile showed `Chi'llywood Admin Proof @chillywood92` with visible `Chi'lly Chat`.
 - R5 profile showed `user230456 @user230456` with visible `Chi'lly Chat`.
+- The owner later showed the same user phone Settings reporting current handle `@user230455` while normal Profile still displayed stale `@user230456`.
 
-Normal profile navigation works. The profile-to-other-user call path was not fully proved on v59, because the fresh call flow did not complete.
+Normal profile navigation works, but Profile handle freshness is not Closed on v59. The profile-to-other-user call path was not fully proved on v59, because the fresh call flow did not complete.
 
 ## Deep-Link Fallback Result
 
@@ -217,11 +230,23 @@ The existing source guards still require signed-in users, receiver-visible threa
 | Normal user searching Owner/Admin handle `chillywood92` returns no public People result. | Not a bug / expected behavior | Owner/Admin proof identity should not be used as the normal public People target. Use Owner/Admin -> normal user or normal user -> normal public user for search proof. |
 | Existing inbox rows showed stale `Video call live` / `Voice call live` state before thread open. | Must fix before full call closure | Opening the thread refreshed one stale row to `No Active Call`; inbox stale state still needs launch-blocker cleanup proof. |
 | Public People suggestions hide existing direct-thread participants, leaving thread search as the visible result. | Not a bug / expected behavior | Existing direct thread path can be opened through the thread result; brand-new start-chat proof still needs a non-existing normal target. |
+| Settings showed current handle `@user230455` while normal Profile and the existing Chat thread still showed stale `@user230456`. | Must fix before full call closure | Source fix now makes signed-in profile reads prefer remote profile data over stale AsyncStorage and saves handle updates into the shared profile cache. Installed proof still requires a new Play internal build. |
+| Visible `user230455` People result exposed `Chi'lly Chat`, `Voice Call`, and `Video Call`, but both Chat and Voice failed before thread open/create. | Must fix before full call closure | Source fix now adds an authenticated direct-thread open/create repair RPC and client fallback after pair-key conflicts, member repair failures, and readback failures. Installed proof still requires a new Play internal build. |
 | R3 left the target app during proof continuation. | Human review / proof blocker | Non-target captures were deleted and not counted. Installed call proof stopped rather than faking actual-user closure. |
 
 ## Fixes Made
 
-The safe correction made during this lane was documentation/proof-policy only. A mistaken source edit to treat Chat inbox search as authenticated staff search was reverted before commit because Owner/Admin public hiding is expected.
+Initial v59 lane fixes were documentation/proof-policy only. A mistaken source edit to treat Chat inbox search as authenticated staff search was reverted because Owner/Admin public hiding is expected.
+
+Follow-up source fixes after the `user230455` retry:
+
+Source fixes are now applied but not installed-app proof until a newer Google Play internal build contains these changes and the actual user flow is rerun.
+
+- `_lib/userData.ts`: signed-in `readUserProfile()` now prefers the remote profile over stale AsyncStorage and only falls back to local cache when remote profile data is unavailable.
+- `app/settings.tsx`: after a handle update succeeds, Settings writes the updated username into the shared local profile cache via `saveUserProfile()`.
+- `_lib/chat.ts`: existing direct threads returned by `getOrCreateDirectThread()` are enriched with current username/profile data before navigation.
+- `_lib/chat.ts`: direct-thread open/create now falls back to authenticated `get_or_create_direct_chat_thread` repair when a pair-key conflict, member repair failure, membership insert failure, or post-create readback failure prevents the visible People result from opening the thread.
+- `supabase/migrations/20260628205325_chilly_chat_direct_thread_open_repair.sql`: adds a narrow authenticated direct-thread open/create repair function. It only operates on the caller/target pair, preserves platform-owner chat restrictions, returns only the thread id, and still requires normal RLS readback in the app before the caller sees success.
 
 Small safe visible issues were fixed where found in prior source lanes. Risky or larger issues were documented instead of hidden.
 
@@ -229,6 +254,8 @@ Small safe visible issues were fixed where found in prior source lanes. Risky or
 
 - Full v59 actual-user call flow was not completed after both phones updated.
 - Stale live-call inbox state remains visible before thread refresh.
+- v59 installed app still has stale handle propagation: Settings can show `@user230455` while Profile/Chat show `@user230456`.
+- v59 installed app can find `user230455` in Chat People search but fail to open/create the direct thread before call start.
 - Receiver elsewhere-in-app incoming call banner was not proved on v59.
 - Background push/ringing was not proved on v59.
 - Video local/remote on both phones was not proved on v59.
@@ -239,11 +266,14 @@ Small safe visible issues were fixed where found in prior source lanes. Risky or
 1. Keep both phones on Play-installed v59 or newer from Google Play internal testing.
 2. Put both phones on the target Chi'llywood app and keep them there during proof.
 3. Use a proof direction that respects policy: Owner/Admin -> normal user, or normal public user -> normal public user. Do not treat normal user -> Owner/Admin no-result as a product search failure.
-4. Rerun inbox/search start-chat, existing direct thread, and normal Profile paths.
-5. Prove receiver same-thread, receiver elsewhere-in-app, and receiver background/push separately.
-6. Prove Voice Call and Video Call with joined state on both phones.
-7. Prove local/remote video and fullscreen aspect-fit behavior.
-8. Prove call end/decline/missed cleanup clears active call state and does not leave stale inbox/thread rows.
+4. Deliver the source fixes after `e5d26fbe141e2c716c6154b5ab6a994fe821d5ee` through a new Google Play internal build.
+5. Verify Settings, normal Profile, Chat inbox rows, and People search all agree on the current handle after a handle change.
+6. Rerun inbox/search start-chat from `user230455` or another normal target and prove the direct thread opens/creates before starting a call.
+7. Rerun existing direct thread and normal Profile paths.
+8. Prove receiver same-thread, receiver elsewhere-in-app, and receiver background/push separately.
+9. Prove Voice Call and Video Call with joined state on both phones.
+10. Prove local/remote video and fullscreen aspect-fit behavior.
+11. Prove call end/decline/missed cleanup clears active call state and does not leave stale inbox/thread rows.
 
 ## Screenshots/XML/Log Artifact Paths
 
@@ -290,6 +320,15 @@ Session/profile/chat:
 - `/tmp/chillywood-google-play-internal-call-closure-20260628/R3CXA0DS5JV-chat-search-user230456-v59.png`
 - `/tmp/chillywood-google-play-internal-call-closure-20260628/R3CXA0DS5JV-existing-thread-after-stale-open-v59.png`
 - `/tmp/chillywood-google-play-internal-call-closure-20260628/R3CXA0DS5JV-existing-thread-after-stale-open-v59.xml`
+
+June 28 `user230455` retry:
+
+- `/tmp/chillywood-chilly-chat-retry-user230455-20260628/R3CXA0DS5JV-chat-search-user230455.png`
+- `/tmp/chillywood-chilly-chat-retry-user230455-20260628/R3CXA0DS5JV-chat-search-user230455.xml`
+- `/tmp/chillywood-chilly-chat-retry-user230455-20260628/R3CXA0DS5JV-after-user230455-voice-start-retry2.png`
+- `/tmp/chillywood-chilly-chat-retry-user230455-20260628/R3CXA0DS5JV-after-user230455-voice-start-retry2.xml`
+- `/tmp/chillywood-chilly-chat-retry-user230455-20260628/R3CXA0DS5JV-after-user230455-chat-action.png`
+- `/tmp/chillywood-chilly-chat-retry-user230455-20260628/R3CXA0DS5JV-after-user230455-chat-action.xml`
 
 Any accidental non-target or private-account screenshots captured during navigation were deleted and are not listed, counted, committed, or used as proof.
 

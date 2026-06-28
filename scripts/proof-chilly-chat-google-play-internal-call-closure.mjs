@@ -23,6 +23,10 @@ const packageJson = read("package.json");
 const v58Doc = read("docs/release/CHILLY_CHAT_PLAY_V58_ACTUAL_USER_CALL_PROOF.md");
 const sourceDoc = read("docs/release/CHILLY_CHAT_END_TO_END_CALL_INITIATION_PROOF.md");
 const playDoc = read("docs/release/PLAY_INTERNAL_TWO_PHONE_CHAT_LIVE_PROOF.md");
+const chatLib = read("_lib/chat.ts");
+const userData = read("_lib/userData.ts");
+const settings = read("app/settings.tsx");
+const directThreadRepairMigration = read("supabase/migrations/20260628205325_chilly_chat_direct_thread_open_repair.sql");
 
 [
   "Chi’lly Chat Google Play internal actual-user call proof: Closed / Partial / Blocked",
@@ -71,6 +75,18 @@ const playDoc = read("docs/release/PLAY_INTERNAL_TWO_PHONE_CHAT_LIVE_PROOF.md");
 ].forEach((needle) => requireText("Google Play internal call closure doc", doc, needle));
 
 [
+  "Owner/Admin R3 searched `user230455`",
+  "user230455 @user230455",
+  "Unable to open Chi'lly Chat with this person right now.",
+  "Settings reporting the handle as current at `@user230455` while normal Profile still displayed the stale `@user230456` handle",
+  "direct-thread open/create before call start",
+  "signed-in `readUserProfile()` now prefers the remote profile over stale AsyncStorage",
+  "Settings writes the updated username into the shared local profile cache",
+  "get_or_create_direct_chat_thread",
+  "Source fixes are now applied but not installed-app proof",
+].forEach((needle) => requireText("user230455 retry proof", doc, needle));
+
+[
   "7cf16ebe-a3de-4efb-8170-63a5e9799653",
   "0c9b2162-c259-4934-a0e8-5679f524b609",
   "versionCode `59`",
@@ -94,6 +110,13 @@ const playDoc = read("docs/release/PLAY_INTERNAL_TWO_PHONE_CHAT_LIVE_PROOF.md");
 requireText("v58 proof doc", v58Doc, "Final verdict: Partial");
 requireText("source call initiation proof doc", sourceDoc, "Source fixed is not installed-app proof");
 requireText("Play internal two-phone proof doc", playDoc, "Play-internal two-phone Chat/Live proof: Partial");
+requireText("chat direct thread repair source", chatLib, "openOrRepairDirectThreadWithRpc");
+requireText("chat direct thread repair source", chatLib, "get_or_create_direct_chat_thread");
+requireText("chat direct thread repair source", chatLib, "return openOrRepairDirectThreadWithRpc(target);");
+requireText("profile cache source", userData, "const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;");
+requireText("settings handle cache source", settings, "await saveUserProfile(updatedProfile);");
+requireText("direct thread repair migration", directThreadRepairMigration, "create or replace function public.get_or_create_direct_chat_thread");
+requireText("direct thread repair migration", directThreadRepairMigration, "grant execute on function public.get_or_create_direct_chat_thread(text, text, text, text) to authenticated;");
 
 if (failures.length) {
   console.error("Chi'lly Chat Google Play internal call closure proof failed:");

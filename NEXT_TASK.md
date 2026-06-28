@@ -8,6 +8,10 @@ Current lane doc:
 - `docs/release/CHILLY_CHAT_END_TO_END_CALL_INITIATION_PROOF.md`
 
 Truth to preserve:
+- Follow-up after v59: Owner/Admin -> normal-user Chat People search now finds `user230455 @user230455` with visible `Chi'lly Chat`, `Voice Call`, and `Video Call`, but installed v59 fails before direct-thread open/create with safe copy: `Unable to open Chi'lly Chat with this person right now.`
+- Settings/Profile identity propagation is a real blocker: owner evidence showed Settings reporting current handle `@user230455` while normal Profile and the existing Chat thread still showed stale `@user230456`.
+- Source now fixes this path, but it is not installed-app proof until a new Google Play internal build is delivered: remote profile wins over stale AsyncStorage for signed-in profile reads, Settings saves handle updates into the shared profile cache, reused Chat threads are enriched before navigation, and authenticated `get_or_create_direct_chat_thread` repairs direct-thread open/create after stale/orphan pair-state failures.
+- The new RPC is not service-role chat proof and does not weaken RLS; it operates only on the authenticated caller/target pair and still requires normal RLS readback before the app treats the thread as open.
 - Chi'lly Chat Google Play internal actual-user call proof is Partial.
 - EAS Build `7cf16ebe-a3de-4efb-8170-63a5e9799653` and EAS Submit `0c9b2162-c259-4934-a0e8-5679f524b609` delivered v59 to Google Play internal testing only.
 - Both attached phones updated from Google Play internal testing, not sideload: `R5CR120QCBF` and `R3CXA0DS5JV`, package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `59`.
@@ -20,9 +24,11 @@ Truth to preserve:
 - No auth/RLS/chat/account-status permission weakening happened, no service-role chat proof was counted, no provider/live-money mutation happened, and `liveMoneyEnabled` remains OFF.
 
 Next product action:
-- Keep both phones on Play-installed v59 or newer from `com.android.vending`.
+- Build and deliver v60 or newer through Google Play internal testing with the handle freshness/direct-thread repair source fix.
+- Keep both phones on Play-installed v60 or newer from `com.android.vending`.
 - Put both phones on the target Chi'llywood app before proof and keep them there.
-- Use Owner/Admin -> normal user or normal public user -> normal public user as the search direction; do not use normal user -> Owner/Admin as a public People search proof target.
+- Use Owner/Admin -> `user230455` or normal public user -> normal public user as the search direction; do not use normal user -> Owner/Admin as a public People search proof target.
+- First prove Settings/Profile/Chat agree on the current handle after handle change, then prove `Chi'lly Chat`, `Voice Call`, and `Video Call` from the visible People result open/create the direct thread.
 - Rerun normal visible paths: inbox/search start-chat, existing direct thread, normal Profile path, receiver same-thread, receiver elsewhere-in-app, receiver background/push, voice, video local/remote, fullscreen fit, and end/decline/missed cleanup.
 
 Superseded v58 truth:

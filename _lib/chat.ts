@@ -130,6 +130,11 @@ type ChatThreadMemberInsert = TablesInsert<"chat_thread_members">;
 type ChatThreadMemberUpdate = TablesUpdate<"chat_thread_members">;
 type ChatMessageInsert = TablesInsert<"chat_messages">;
 
+type DirectChatThreadOpenRepairRpc = PromiseLike<{
+  data: { thread_id?: unknown }[] | null;
+  error: { message?: string } | null;
+}>;
+
 const CHAT_THREAD_MEMBER_SELECT =
   "thread_id,user_id,display_name,avatar_url,tagline,joined_at,last_read_at,unread_count";
 const CHAT_THREAD_SELECT =
@@ -199,6 +204,54 @@ const buildDirectThreadMemberRows = (
 
 export const buildDirectParticipantPairKey = (a: string, b: string) =>
   [toText(a), toText(b)].filter(Boolean).sort().join("::");
+
+async function openOrRepairDirectThreadWithRpc(target: ChatTargetIdentity): Promise<ChatThreadSummary> {
+  const targetUserId = toText(target.userId);
+  const rpc = (supabase.rpc as unknown as (
+    fn: "get_or_create_direct_chat_thread",
+    args: {
+      p_target_user_id: string;
+      p_target_display_name: string | null;
+      p_target_avatar_url: string | null;
+      p_target_tagline: string | null;
+    },
+  ) => DirectChatThreadOpenRepairRpc)("get_or_create_direct_chat_thread", {
+    p_target_user_id: targetUserId,
+    p_target_display_name: toText(target.displayName) || null,
+    p_target_avatar_url: toText(target.avatarUrl) || null,
+    p_target_tagline: toText(target.tagline) || null,
+  });
+
+  const { data, error } = await rpc;
+  if (error) {
+    logChatThread("direct_thread_rpc_repair_failed", {
+      targetUserId,
+      message: error.message ?? "unknown_error",
+    });
+    throw new Error("Unable to open Chi'lly Chat with this person right now.");
+  }
+
+  const threadId = toText(data?.[0]?.thread_id);
+  if (!threadId) {
+    logChatThread("direct_thread_rpc_repair_missing_thread", { targetUserId });
+    throw new Error("Unable to open Chi'lly Chat with this person right now.");
+  }
+
+  const thread = await getChatThread(threadId);
+  if (!thread?.currentMember || !thread.otherMember) {
+    logChatThread("direct_thread_rpc_repair_readback_failed", {
+      targetUserId,
+      threadId,
+    });
+    throw new Error("Unable to open Chi'lly Chat with this person right now.");
+  }
+
+  logChatThread("direct_thread_rpc_repair_success", {
+    targetUserId,
+    threadId: thread.threadId,
+  });
+  return thread;
+}
 
 async function getRequiredChatUserId() {
   const userId = toText(await getWritablePartyUserId());
@@ -469,12 +522,13 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
   if (existingRow) {
     const thread = parseChatThread(existingRow, currentUserId, { requireCurrentMember: false });
     if (thread?.currentMember && thread.otherMember) {
+      const enriched = (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
       logChatThread("direct_thread_existing", {
-        threadId: thread.threadId,
+        threadId: enriched.threadId,
         currentUserId,
         targetUserId,
       });
-      return thread;
+      return enriched;
     }
 
     const existingThreadId = thread?.threadId ?? "";
@@ -497,7 +551,7 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
           targetUserId,
           message: repairInsert.error.message,
         });
-        throw repairInsert.error;
+        return openOrRepairDirectThreadWithRpc(target);
       }
 
       const repaired = await getChatThread(existingThreadId);
@@ -510,6 +564,8 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
         return repaired;
       }
     }
+
+    return openOrRepairDirectThreadWithRpc(target);
   }
 
   const threadId = createChatThreadId();
@@ -535,6 +591,7 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
         });
         return raced;
       }
+      return openOrRepairDirectThreadWithRpc(target);
     }
     logChatThread("direct_thread_insert_failed", {
       currentUserId,
@@ -563,7 +620,7 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
       targetUserId,
       message: membershipInsert.error.message,
     });
-    throw membershipInsert.error;
+    return openOrRepairDirectThreadWithRpc(target);
   }
 
   const thread = await getChatThread(threadId);
@@ -573,7 +630,7 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
       currentUserId,
       targetUserId,
     });
-    throw new Error("Failed to load the new Chi'lly Chat thread.");
+    return openOrRepairDirectThreadWithRpc(target);
   }
 
   logChatThread("direct_thread_created", {
@@ -651,7 +708,9 @@ async function getChatThreadByPairKey(pairKey: string) {
     .maybeSingle();
 
   if (error || !data) return null;
-  return parseChatThread(data, currentUserId);
+  const thread = parseChatThread(data, currentUserId);
+  if (!thread) return null;
+  return (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
 }
 
 export async function sendChatMessage(

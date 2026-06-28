@@ -1001,17 +1001,6 @@ export function getAvatarEmoji(index: number): string {
 
 export async function readUserProfile(): Promise<UserProfile> {
   const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
-  if (cached.username) {
-    const normalized = normalizeUserProfile(cached);
-    logChatProfile("local_profile_loaded", {
-      source: "async_storage",
-      username: normalized.username,
-      displayName: normalized.displayName ?? "",
-    });
-    await syncUserProfileToRemote(normalized);
-    return normalized;
-  }
-
   const signedInUser = await getSignedInUserSnapshot();
   const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;
   if (remoteProfile?.username) {
@@ -1022,8 +1011,17 @@ export async function readUserProfile(): Promise<UserProfile> {
       displayName: remoteProfile.displayName ?? "",
     });
     await writeJsonValue(USER_PROFILE_KEY, remoteProfile);
-    await syncUserProfileToRemote(remoteProfile);
     return remoteProfile;
+  }
+
+  if (cached.username) {
+    const normalized = normalizeUserProfile(cached);
+    logChatProfile("local_profile_loaded", {
+      source: "async_storage",
+      username: normalized.username,
+      displayName: normalized.displayName ?? "",
+    });
+    return normalized;
   }
 
   // Generate a non-email local identity if the remote profile is not available yet.

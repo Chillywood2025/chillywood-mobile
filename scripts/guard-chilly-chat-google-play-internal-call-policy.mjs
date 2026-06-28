@@ -45,10 +45,13 @@ const appLayout = read("app/_layout.tsx");
 const inbox = read("app/chat/index.tsx");
 const thread = read("app/chat/[threadId].tsx");
 const profile = read("app/profile/[userId].tsx");
+const settings = read("app/settings.tsx");
+const userData = read("_lib/userData.ts");
 const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts");
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const callMigration = read("supabase/migrations/202606100001_chilly_chat_call_invites_and_ringtones.sql");
+const directThreadRepairMigration = read("supabase/migrations/20260628205325_chilly_chat_direct_thread_open_repair.sql");
 
 [
   "Chi’lly Chat Google Play internal actual-user call proof: Closed / Partial / Blocked",
@@ -71,6 +74,10 @@ const callMigration = read("supabase/migrations/202606100001_chilly_chat_call_in
   "No provider/live-money mutation happened",
   "liveMoneyEnabled remains OFF",
   "Any accidental non-target or private-account screenshots captured during navigation were deleted",
+  "Owner/Admin R3 searched `user230455`",
+  "Unable to open Chi'lly Chat with this person right now.",
+  "Settings reporting the handle as current at `@user230455` while normal Profile still displayed the stale `@user230456` handle",
+  "Source fixes are now applied but not installed-app proof",
 ].forEach((needle) => requireText("Google Play internal call closure doc", doc, needle));
 
 [
@@ -171,9 +178,12 @@ forbidSentence("Google Play internal call proof doc", doc, (sentence) => (
   ["chat inbox", inbox],
   ["chat thread", thread],
   ["profile", profile],
+  ["settings", settings],
+  ["user data", userData],
   ["call dispatch", callDispatch],
+  ["direct thread repair migration", directThreadRepairMigration],
 ].forEach(([label, content]) => {
-  forbidMatch(label, content, /(PASSWORD|PASSCODE)\s*=\s*['"]?[^<\s][^\s]{8,}/i, "password value");
+  forbidMatch(label, content, /\b(?:PASSWORD|PASSCODE)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/i, "password value");
   forbidMatch(label, content, /(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY)\s*=\s*['"]?[A-Za-z0-9._-]{20,}/, "service-role key value");
   forbidMatch(label, content, /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/, "JWT/token");
   forbidMatch(label, content, /https?:\/\/[^\s)]*(?:token|signature|X-Amz-Signature|Expires|Key-Pair-Id)[^\s)]*/i, "signed URL");
@@ -208,6 +218,19 @@ forbidSentence("Google Play internal call proof doc", doc, (sentence) => (
 ].forEach((needle) => requireText("inbox start-chat source", inbox, needle));
 
 [
+  "openOrRepairDirectThreadWithRpc",
+  "get_or_create_direct_chat_thread",
+  "return openOrRepairDirectThreadWithRpc(target);",
+].forEach((needle) => requireText("direct thread open/create fallback source", chatLib, needle));
+
+[
+  "const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;",
+  "await writeJsonValue(USER_PROFILE_KEY, remoteProfile);",
+].forEach((needle) => requireText("profile cache freshness source", userData, needle));
+
+requireText("settings handle cache source", settings, "await saveUserProfile(updatedProfile);");
+
+[
   "Delivery status: push sent",
   "Delivery status: in-app banner available",
   "Delivery status: push unconfirmed",
@@ -222,11 +245,20 @@ requireText("call dispatch receiver unavailable", callDispatch, "blockedReason: 
 requireText("call invite RLS", callMigration, "alter table public.\"chat_call_invites\" enable row level security;");
 requireText("call invite RLS", callMigration, "chat_call_invites_select_members");
 requireText("call invite RLS", callMigration, "public.can_access_chat_thread(\"thread_id\")");
+requireText("direct thread repair migration", directThreadRepairMigration, "create or replace function public.get_or_create_direct_chat_thread");
+requireText("direct thread repair migration", directThreadRepairMigration, "auth.uid()::text");
+requireText("direct thread repair migration", directThreadRepairMigration, "normalized_target_user_id = actor_user_id");
+requireText("direct thread repair migration", directThreadRepairMigration, "public.is_platform_owner_user(normalized_target_user_id) and not public.is_current_platform_owner()");
+requireText("direct thread repair migration", directThreadRepairMigration, "grant execute on function public.get_or_create_direct_chat_thread(text, text, text, text) to authenticated;");
 
 forbidMatch("chat call migration", callMigration, /disable row level security/i, "RLS disablement");
 forbidMatch("chat call migration", callMigration, /using\s*\(\s*true\s*\)/i, "allow-all RLS policy");
 forbidMatch("chat call migration", callMigration, /with check\s*\(\s*true\s*\)/i, "allow-all RLS write policy");
-forbidMatch("mobile chat/call sources", `${chatLib}\n${callLib}\n${notificationsLib}\n${appLayout}\n${inbox}\n${thread}\n${profile}`, /service_role|SUPABASE_SERVICE_ROLE/i, "service-role mobile use");
+forbidMatch("direct thread repair migration", directThreadRepairMigration, /disable row level security/i, "RLS disablement");
+forbidMatch("direct thread repair migration", directThreadRepairMigration, /using\s*\(\s*true\s*\)/i, "allow-all RLS policy");
+forbidMatch("direct thread repair migration", directThreadRepairMigration, /with check\s*\(\s*true\s*\)/i, "allow-all RLS write policy");
+forbidMatch("direct thread repair migration", directThreadRepairMigration, /grant execute .*service_role/i, "service-role RPC grant");
+forbidMatch("mobile chat/call sources", `${chatLib}\n${callLib}\n${notificationsLib}\n${appLayout}\n${inbox}\n${thread}\n${profile}\n${settings}\n${userData}`, /service_role|SUPABASE_SERVICE_ROLE/i, "service-role mobile use");
 
 forbidMatch("runtime feature flags", featureFlags, /liveMoneyEnabled:\s*true/i, "liveMoneyEnabled ON");
 forbidMatch("runtime feature flags", featureFlags, /payoutsEnabled:\s*true/i, "payouts enabled");

@@ -65,6 +65,7 @@ import {
   isProfileMediaActive,
   readMyProfileAccessVisibility,
   readUserProfile,
+  saveUserProfile,
   updateMyDisplayName,
   updateMyProfileAccessVisibility,
   type ProfileAppearanceFitMode,
@@ -1067,7 +1068,10 @@ export default function SettingsScreen() {
     setUsernameNotice(null);
     try {
       const result = await updateMyUsername(normalizedUsername);
-      setMyProfile((current) => current ? { ...current, username: result.username } : current);
+      const baseProfile = myProfile ?? await readUserProfile().catch(() => null);
+      const updatedProfile = baseProfile ? { ...baseProfile, username: result.username } : null;
+      if (updatedProfile) await saveUserProfile(updatedProfile);
+      setMyProfile(updatedProfile);
       setUsernameDraft(result.username);
       setUsernameNotice("Handle updated.");
       Alert.alert("Handle", "Handle updated.");
@@ -1078,7 +1082,7 @@ export default function SettingsScreen() {
     } finally {
       setUsernameSaving(false);
     }
-  }, [myProfile?.username, usernameAvailability.available, usernameAvailability.message, usernameAvailability.username, usernameDraft, usernameSaving]);
+  }, [myProfile, usernameAvailability.available, usernameAvailability.message, usernameAvailability.username, usernameDraft, usernameSaving]);
 
   const openExternalDestination = useCallback(async (url: string, label: string) => {
     try {
