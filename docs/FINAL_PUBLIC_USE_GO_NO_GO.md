@@ -50,6 +50,8 @@ Date: 2026-06-24
 
 Verdict: Conditional Go.
 
+June 28, 2026 update: Chi'lly Chat Google Play internal actual-user call proof is Partial in `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md`. v59 is delivered through Google Play internal testing on both attached phones without logout/uninstall/reinstall/clear-data/sideload, but voice/video call closure is not launch-Closed because receiver incoming state, background push/ringing, local/remote video, fullscreen fit, and call end/decline/missed cleanup were not proved on a fresh v59 actual-user flow. This is a remaining launch blocker for full Chi'lly Chat call closure. No provider/live-money mutation happened and liveMoneyEnabled remains OFF.
+
 The app is a conditional broad public launch candidate. The proof waves materially improved production safety, and Wave 5.1 closed the known app-controlled disabled/deactivated account lifecycle blockers. Firebase dashboard receipt is browser-proved. Play/internal versionCode `55` runtime proof, signed-in Home/Settings visual smoke, blocked-viewer Profile/Platform visual proof, account deletion scheduled-state visual proof, controlled account purge/de-identification, and password reset/auth email provider proof are now closed. Conditional launch still depends on keeping provider refunds manual/external, keeping purge automation controlled/config-gated, and not claiming instant permanent deletion or automated provider refunds.
 
 Latest Wave 6 artifact:

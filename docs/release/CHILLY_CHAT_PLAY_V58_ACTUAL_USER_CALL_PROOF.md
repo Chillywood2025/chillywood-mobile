@@ -8,6 +8,8 @@ v58 is Play-installed on both attached phones, and the latest amended source fix
 
 The owner later confirmed the search problem was fixed in a separate chat and instructed not to use the search box again until Chat is fixed and a v59 Play-internal build is available. No search-box-dependent v58 result is counted as Closed.
 
+Follow-up: `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md` records the v59 Google Play internal build/install result. v59 delivery is complete on both phones, but actual-user call proof remains Partial because a fresh v59 end-to-end Voice/Video Call was not completed with receiver-visible incoming state, background push/ringing, local/remote video, fullscreen fit, or call cleanup proof.
+
 ## Required Proof Doctrine
 
 Same-thread proof is not enough.

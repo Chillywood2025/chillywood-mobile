@@ -1,12 +1,31 @@
 # NEXT TASK
 
-# Chi'lly Chat v59 Actual-User Call Proof
+# Chi'lly Chat Google Play Internal Call Closure Follow-Up
 
 Current lane doc:
+- `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md`
 - `docs/release/CHILLY_CHAT_PLAY_V58_ACTUAL_USER_CALL_PROOF.md`
 - `docs/release/CHILLY_CHAT_END_TO_END_CALL_INITIATION_PROOF.md`
 
 Truth to preserve:
+- Chi'lly Chat Google Play internal actual-user call proof is Partial.
+- EAS Build `7cf16ebe-a3de-4efb-8170-63a5e9799653` and EAS Submit `0c9b2162-c259-4934-a0e8-5679f524b609` delivered v59 to Google Play internal testing only.
+- Both attached phones updated from Google Play internal testing, not sideload: `R5CR120QCBF` and `R3CXA0DS5JV`, package `com.chillywood.mobile`, installer `com.android.vending`, versionName `1.0.0`, versionCode `59`.
+- No logout, uninstall, reinstall, clear-data, reset session, or sideload happened; sessions survived after update.
+- Normal user -> Owner/Admin public People search no-result is expected and is not a product search failure.
+- Owner/Admin -> normal user found the existing direct thread through visible Chat search, but no fresh v59 call completed.
+- Stale live-call inbox rows were visible before thread open; one thread refreshed to `No Active Call` when opened.
+- Receiver elsewhere-in-app, background push/ringing, video local/remote on both phones, fullscreen fit, and call end/decline/missed cleanup remain Partial.
+- Same-thread proof is not enough. Google Play internal install is not enough without actual user flow proof. Source fixed is not installed-app proof.
+- No auth/RLS/chat/account-status permission weakening happened, no service-role chat proof was counted, no provider/live-money mutation happened, and `liveMoneyEnabled` remains OFF.
+
+Next product action:
+- Keep both phones on Play-installed v59 or newer from `com.android.vending`.
+- Put both phones on the target Chi'llywood app before proof and keep them there.
+- Use Owner/Admin -> normal user or normal public user -> normal public user as the search direction; do not use normal user -> Owner/Admin as a public People search proof target.
+- Rerun normal visible paths: inbox/search start-chat, existing direct thread, normal Profile path, receiver same-thread, receiver elsewhere-in-app, receiver background/push, voice, video local/remote, fullscreen fit, and end/decline/missed cleanup.
+
+Superseded v58 truth:
 - Chi'lly Chat Play v58 actual-user call proof is Partial.
 - Source commit `0a22ab3e2612d4f888b4f56eac03c0639cac26ae` was pushed and aligned with `origin/main`.
 - Both attached phones were Play-installed v58 from `com.android.vending`: `R5CR120QCBF` and `R3CXA0DS5JV`, package `com.chillywood.mobile`, versionName `1.0.0`, versionCode `58`.
@@ -17,11 +36,6 @@ Truth to preserve:
 - Background push/ringing and video local/remote proof on both phones were not proved.
 - Same-thread proof is not enough. Source fixed is not installed-app proof. v58 installed is not enough without actual user flow proof.
 - No auth/RLS/chat/account-status permission weakening happened, no service-role chat proof was counted, no provider/live-money mutation happened, and `liveMoneyEnabled` remains OFF.
-
-Next product action:
-- Build and distribute v59 through Google Play internal testing with the separate search fix and latest Chat call source fix.
-- Verify both attached phones are Play-installed v59 from `com.android.vending`.
-- Rerun normal visible paths without relying on pre-created thread/call state: inbox/search start-chat, existing direct thread, normal Profile path, receiver same-thread, receiver elsewhere-in-app, receiver background/push, voice, video local/remote, fullscreen fit, and end-call clearing.
 
 # Play-Internal Two-Phone Chat/Live Follow-Up
 

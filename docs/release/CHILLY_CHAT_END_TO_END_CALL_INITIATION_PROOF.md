@@ -8,6 +8,8 @@ Source is fixed for normal visible call initiation paths. Installed-app actual-u
 
 June 28, 2026 v58 installed-app follow-up: `docs/release/CHILLY_CHAT_PLAY_V58_ACTUAL_USER_CALL_PROOF.md` is Partial. Both attached phones were Play-installed v58 from `com.android.vending`, and source commit `0a22ab3e2612d4f888b4f56eac03c0639cac26ae` was pushed/aligned with `origin/main`, but v58 actual-user call proof did not close. The owner confirmed the search problem was fixed separately and instructed not to use the v58 search box again until a v59 Play-internal build. No search-box-dependent v58 result is counted as Closed. Receiver elsewhere-in-app banner and background push/ringing remain Partial.
 
+June 28, 2026 v59 Google Play internal follow-up: `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md` is Partial. Both physical phones updated to Play-installed versionCode `59` from `com.android.vending`, and sessions survived without logout, uninstall, reinstall, clear-data, or sideload. Actual-user call proof did not close because no fresh v59 voice/video call completed through normal visible paths with receiver-visible incoming state, background push/ringing, local/remote video, fullscreen fit, and call cleanup proof.
+
 ## Required Proof Doctrine
 
 Same-thread proof is not enough.
