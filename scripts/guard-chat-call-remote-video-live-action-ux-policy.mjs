@@ -33,6 +33,8 @@ const requireText = (label, content, needle) => {
 };
 
 const doc = read("docs/release/CHAT_CALL_REMOTE_VIDEO_LIVE_ACTION_UX_SWEEP.md");
+const participantGrid = read("components/communication/communication-participant-grid.tsx");
+const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 
@@ -45,7 +47,21 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "liveMoneyEnabled remains OFF.",
   "Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF.",
   "No provider mutation happened.",
+  "Direct Chat video lower tile can sit under bottom controls",
+  "Participant metadata card covers too much of video feed",
 ].forEach((needle) => requireText("sweep doc", doc, needle));
+
+[
+  'const videoObjectFit = "cover";',
+  "isFullscreen && participants.length === 2 && styles.tileFullscreenSplit",
+  "position: \"relative\"",
+].forEach((needle) => requireText("communication participant grid", participantGrid, needle));
+
+[
+  "const fullscreenBottomInset = Math.max(insets.bottom, 12);",
+  "isFullscreen && { paddingBottom: fullscreenBottomInset }",
+  "controlsWrapFullscreen",
+].forEach((needle) => requireText("communication panel", communicationPanel, needle));
 
 forbidPositiveSentence("sweep doc", doc, /Actual-user installed-app proof result:\s*Closed|Primary issue result:\s*Closed|Verdict:\s*Closed/i, "Closed actual-user claim");
 forbidPositiveSentence("sweep doc", doc, /physical phone sideload|sideloaded.*physical|APK install.*physical/i, "physical phone sideload");

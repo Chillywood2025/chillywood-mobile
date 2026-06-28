@@ -220,7 +220,7 @@ Small safe visible issues were fixed where found in the source lane. In this v58
 3. Rerun normal inbox/search start-chat path without pre-created call state.
 4. Rerun normal Profile path to other user without relying on broken deep-link-only state.
 5. Prove receiver same-thread, receiver elsewhere-in-app, and receiver background/push separately.
-6. Prove voice and video calls end-to-end, including local and remote video on both phones and fullscreen contain/aspect-fit behavior.
+6. Prove voice and video calls end-to-end, including local and remote video on both phones and fullscreen video fit.
 7. Prove caller delivery status does not overclaim receiver alert availability.
 
 ## Screenshots/XML/Log Artifact Paths

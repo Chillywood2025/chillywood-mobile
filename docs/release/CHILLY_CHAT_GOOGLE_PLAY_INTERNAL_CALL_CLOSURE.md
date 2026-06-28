@@ -6,7 +6,7 @@ Final verdict: Partial.
 
 Google Play internal v59 delivery is complete on both physical phones, but Chi'lly Chat end-to-end actual-user call closure is not Closed. Google Play internal install is not enough without actual user flow proof. Source fixed is not installed-app proof. If Robert/testers cannot reproduce it in the Play-internal installed app, it is not actual-user Closed.
 
-June 28, 2026 v60 receiver banner thread-readback follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` is Partial. Both attached phones updated through Google Play internal to versionCode `60` with installer `com.android.vending`, and no logout, uninstall, reinstall, sideload, or clear-data happened. Fresh `user230455` search and visible direct-thread open succeeded after targeted authenticated RPC ambiguity fixes. A live receiver readback migration fixed the installed blocker where tapping the receiver banner opened `This Chi'lly Chat thread could not be found.`; after the fix, R5 tapped the real incoming banner and both phones showed `2 in call`. Full actual-user call closure remains Partial because installed v60 recorded a false `Missed voice call` after the joined call ended, the source cleanup fix is not installed in Google Play yet, and video, background push, same-thread, decline/missed, and full cleanup proof remain incomplete.
+June 28, 2026 v60 receiver banner thread-readback + video layout follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` is Partial. Both attached phones updated through Google Play internal to versionCode `60` with installer `com.android.vending`, and no logout, uninstall, reinstall, sideload, or clear-data happened. Fresh `user230455` search and visible direct-thread open succeeded after targeted authenticated RPC ambiguity fixes. A live receiver readback migration fixed the installed blocker where tapping the receiver banner opened `This Chi'lly Chat thread could not be found.`; after the fix, R5 tapped the real incoming banner and both phones showed `2 in call`. Source now also fixes the observed video layout issue where the lower feed could be cut off by bottom controls and a dark participant card covered too much of the feed. Full actual-user call closure remains Partial because installed v60 recorded a false `Missed voice call` after the joined call ended, the cleanup/video layout source fixes are not installed in Google Play yet, and video, background push, same-thread, decline/missed, and full cleanup proof remain incomplete.
 
 ## Required Proof Doctrine
 
@@ -203,7 +203,7 @@ Video call Closed cannot be claimed without local and remote video on both phone
 
 Status: Partial.
 
-Fullscreen video contain/aspect-fit behavior is source-fixed in earlier lanes, but no v59 installed two-phone video call reached the local/remote video state on both phones. Fullscreen video fit remains installed proof pending.
+Direct Chat fullscreen video layout is source-fixed in the v60+ layout lane so bottom controls reserve safe-area space and participant metadata stays compact at the tile edge, but no v59 installed two-phone video call reached the local/remote video state on both phones. Fullscreen video fit remains installed proof pending.
 
 ## Call End / Decline / Missed Cleanup Result
 

@@ -38,6 +38,8 @@ const packageJson = read("package.json");
   "Live Watch-Party participant action controls appear",
   "Root Cause",
   "Fix Applied",
+  "Direct Chat video lower tile can sit under bottom controls",
+  "Participant metadata card covers too much of video feed",
   "Adjacent UI / UX Issues Found",
   "Actual-user installed-app proof result: Partial.",
   "R3CXA0DS5JV",
@@ -56,8 +58,10 @@ const packageJson = read("package.json");
 ].forEach((needle) => requireText("communication room session hook", sessionHook, needle));
 
 [
-  'const videoObjectFit = isFullscreen ? "contain" : "cover";',
+  'const videoObjectFit = "cover";',
   "objectFit={videoObjectFit}",
+  "isFullscreen && participants.length === 2 && styles.tileFullscreenSplit",
+  "position: \"relative\"",
 ].forEach((needle) => requireText("communication participant grid", participantGrid, needle));
 
 [

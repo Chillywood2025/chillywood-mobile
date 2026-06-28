@@ -27,7 +27,7 @@ Available last-12-hour evidence:
 
 1. Chat remote video could be hidden by stale presence state. `useCommunicationRoomSession()` provided a remote stream URL, but `CommunicationParticipantGrid` rendered `RTCView` only when `participant.cameraOn` was also true. If the media track arrived before presence/membership camera state updated, the remote tile showed avatar/waiting state even though the stream existed.
 2. Android can surface audio before video. The prior track handler returned early for audio-first events unless the primary stream already had a video track. On some devices, the video receiver can become available without a second clean video track callback, leaving the remote render stream unbound.
-3. Fullscreen RTC tiles used `objectFit="cover"`, which crops video on mismatched phone aspect ratios.
+3. A later direct Chat video-call layout lane found a separate fullscreen issue after receiver banner/thread-readback was fixed: the participant grid used guessed fixed heights, the lower tile could sit behind bottom controls, and the metadata card covered too much of the video feed.
 4. Live host participant actions had no busy state and kept the action grid open on persistence failure. When `emitParticipantUpdate()` returned false, the alert appeared but the action controls stayed open behind it, matching the supplied screenshot.
 
 ## Fix Applied
@@ -39,8 +39,9 @@ Available last-12-hour evidence:
 - `components/communication/communication-participant-grid.tsx`
   - Cross-lane QA correction: render remote RTC video when a real stream URL exists, even if presence `cameraOn` is stale.
   - Cross-lane QA correction: show `Video connected` from stream presence instead of showing a remote card as `Connection failed` when media is already available.
-  - Use `objectFit="contain"` for fullscreen RTC video so mismatched device ratios do not crop the remote feed.
-  - Keep embedded grid tiles on `cover` so compact cards still feel filled.
+  - Later direct Chat video layout cleanup: flex fullscreen participant tiles inside the actual remaining stage, fill each tile with the RTC video view, and keep participant metadata as compact edge badges instead of a wide card across the feed.
+- `components/communication/in-room-communication-panel.tsx`
+  - Later direct Chat video layout cleanup: reserve Android safe-area bottom control space outside the video stage so Camera/Mic/End Call cannot cover the lower participant feed.
 - `components/communication/in-room-communication-panel.tsx` and `components/communication/communication-room-header.tsx`
   - Cross-lane QA correction: change participant count copy from `connected` to `in call` / `in room` so a count does not imply every peer has a healthy media connection.
 - `app/watch-party/live-stage/[partyId].tsx`
@@ -56,7 +57,8 @@ Available last-12-hour evidence:
 | Issue | Classification | Result |
 | --- | --- | --- |
 | Remote video hidden while stream exists | Must fix now | Fixed in source. |
-| Remote video cropped on mismatched phone ratio | Must fix now | Fixed in source with fullscreen contain rendering. |
+| Direct Chat video lower tile can sit under bottom controls | Must fix now | Fixed in source with safe-area control spacing and flexed fullscreen tiles; installed proof pending. |
+| Participant metadata card covers too much of video feed | Must fix now | Fixed in source with compact edge metadata; installed proof pending. |
 | Live participant action controls stay open behind seat failure alert | Must fix now | Fixed in source. |
 | Live participant action buttons were very small and had no in-flight feedback | Should fix now if small/safe | Fixed in source. |
 | Prior actual-user Chat Call manual ring/background push remains Partial | Human review | Existing Partial status preserved; this lane did not claim background ringing Closed. |
@@ -80,7 +82,7 @@ Required rerun after delivery/update uptake:
 
 1. Chi'lly Chat video call from normal visible app path on both physical Play-internal phones.
 2. Verify local and remote video render on both sides.
-3. Verify fullscreen/large remote video is not cropped on the differently sized phone.
+3. Verify fullscreen/large remote video is not cut off by bottom controls, participant metadata does not block the center of the video, and the camera feed fills the participant tile cleanly.
 4. Live Watch-Party waiting-room/seat request path.
 5. Verify Approve Seat, Mute, Seat Participant, and Remove either persist, show `Saving...`, collapse controls on failure, and leave the host with a clear retry path.
 

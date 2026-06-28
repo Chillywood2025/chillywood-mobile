@@ -43,25 +43,6 @@ export function CommunicationParticipantGrid({
   const { width, height } = useWindowDimensions();
   const isFullscreen = presentation === "fullscreen";
   const isLandscape = width > height;
-  const gap = 12;
-  const availableWidth = Math.max(width - 32, 240);
-  const availableHeight = Math.max(height - 260, 280);
-
-  const getGridColumns = () => {
-    if (participants.length <= 2) return 1;
-    if (participants.length === 3) return isLandscape ? 3 : 2;
-    if (participants.length === 4) return 2;
-    return isLandscape ? 3 : 2;
-  };
-
-  const fullscreenColumns = getGridColumns();
-  const fullscreenRows = participants.length <= 2 ? 2 : Math.ceil(participants.length / fullscreenColumns);
-  const fullscreenTileWidth = participants.length === 2
-    ? availableWidth
-    : Math.max(120, Math.floor((availableWidth - gap * (fullscreenColumns - 1)) / fullscreenColumns));
-  const fullscreenTileHeight = participants.length === 2
-    ? Math.max(180, Math.floor((availableHeight - gap) / 2))
-    : Math.max(132, Math.floor((availableHeight - gap * (fullscreenRows - 1)) / fullscreenRows));
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -92,14 +73,10 @@ export function CommunicationParticipantGrid({
       {participants.map((participant, index) => {
         const hasVideoStream = !!participant.streamURL;
         const showVideo = !!RTCView && hasVideoStream;
-        const videoObjectFit = isFullscreen ? "contain" : "cover";
+        const videoObjectFit = "cover";
         const tileWide = participants.length <= 1;
         const compactTile = participants.length > 2;
-        const oddLastTile = isFullscreen
-          && participants.length > 2
-          && fullscreenColumns === 2
-          && participants.length % 2 === 1
-          && index === participants.length - 1;
+        const oddLastTile = isFullscreen && participants.length > 2 && !isLandscape && participants.length % 2 === 1 && index === participants.length - 1;
 
         return (
           <View
@@ -111,10 +88,8 @@ export function CommunicationParticipantGrid({
               isFullscreen && styles.tileFullscreen,
               isFullscreen && participants.length === 2 && styles.tileFullscreenSplit,
               isFullscreen && participants.length === 2 && (isLandscape ? styles.tileFullscreenSplitLandscape : styles.tileFullscreenSplitPortrait),
-              isFullscreen && participants.length > 2 && {
-                width: oddLastTile ? availableWidth : fullscreenTileWidth,
-                minHeight: fullscreenTileHeight,
-              },
+              isFullscreen && participants.length > 2 && (isLandscape ? styles.tileFullscreenMultiLandscape : styles.tileFullscreenMultiPortrait),
+              oddLastTile && styles.tileFullscreenOddLast,
             ]}
           >
             <View
@@ -122,8 +97,6 @@ export function CommunicationParticipantGrid({
                 styles.mediaFrame,
                 compactTile && styles.mediaFrameCompact,
                 isFullscreen && styles.mediaFrameFullscreen,
-                isFullscreen && participants.length === 2 && { minHeight: fullscreenTileHeight, height: fullscreenTileHeight },
-                isFullscreen && participants.length > 2 && { minHeight: fullscreenTileHeight, height: fullscreenTileHeight },
               ]}
             >
               {showVideo && RTCView ? (
@@ -131,10 +104,7 @@ export function CommunicationParticipantGrid({
                   streamURL={participant.streamURL as string}
                   style={[
                     styles.video,
-                    compactTile && styles.videoCompact,
                     isFullscreen && styles.videoFullscreen,
-                    isFullscreen && participants.length === 2 && { height: fullscreenTileHeight },
-                    isFullscreen && participants.length > 2 && { height: fullscreenTileHeight },
                   ]}
                   objectFit={videoObjectFit}
                   mirror={participant.isSelf}
@@ -144,9 +114,6 @@ export function CommunicationParticipantGrid({
                   style={[
                     styles.avatarFrame,
                     compactTile && styles.avatarFrameCompact,
-                    isFullscreen && styles.avatarFrameFullscreen,
-                    isFullscreen && participants.length === 2 && { minHeight: fullscreenTileHeight, height: fullscreenTileHeight },
-                    isFullscreen && participants.length > 2 && { minHeight: fullscreenTileHeight, height: fullscreenTileHeight },
                   ]}
                 >
                   {participant.avatarUrl ? (
@@ -199,6 +166,7 @@ const styles = StyleSheet.create({
   },
   gridFullscreen: {
     flex: 1,
+    minHeight: 0,
     alignContent: "stretch",
   },
   gridFullscreenTwoPortrait: {
@@ -218,10 +186,13 @@ const styles = StyleSheet.create({
   },
   tileFullscreen: {
     width: "100%",
+    flexGrow: 1,
+    flexShrink: 1,
     minHeight: 0,
   },
   tileFullscreenSplit: {
     flex: 1,
+    minHeight: 0,
   },
   tileFullscreenSplitPortrait: {
     width: "100%",
@@ -229,11 +200,24 @@ const styles = StyleSheet.create({
   tileFullscreenSplitLandscape: {
     width: 0,
   },
+  tileFullscreenMultiPortrait: {
+    width: "48%",
+    minHeight: 0,
+  },
+  tileFullscreenMultiLandscape: {
+    flexBasis: "31%",
+    flexGrow: 1,
+    minHeight: 0,
+  },
+  tileFullscreenOddLast: {
+    width: "100%",
+  },
   tileCompact: {
     minHeight: 132,
   },
   mediaFrame: {
     overflow: "hidden",
+    position: "relative",
     minHeight: 216,
     borderRadius: 18,
     borderWidth: 1,
@@ -248,32 +232,30 @@ const styles = StyleSheet.create({
     minHeight: 132,
   },
   video: {
-    width: "100%",
-    height: 216,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     backgroundColor: "#050608",
   },
   videoFullscreen: {
-    flex: 1,
-    height: undefined,
-  },
-  videoCompact: {
-    height: 132,
+    width: "100%",
+    height: "100%",
   },
   avatarFrame: {
-    width: "100%",
-    minHeight: 216,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
     paddingHorizontal: 18,
     backgroundColor: "#090B10",
   },
-  avatarFrameFullscreen: {
-    flex: 1,
-    minHeight: 0,
-  },
   avatarFrameCompact: {
-    minHeight: 132,
     paddingHorizontal: 14,
   },
   avatarImage: {
@@ -322,15 +304,19 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     bottom: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(11,14,20,0.86)",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
     gap: 8,
   },
   nameBlock: {
+    maxWidth: "66%",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(5,8,14,0.68)",
+    paddingHorizontal: 9,
+    paddingVertical: 7,
     gap: 2,
   },
   name: {
@@ -347,11 +333,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    justifyContent: "flex-end",
+    flexShrink: 1,
   },
   mediaPill: {
     borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
     borderWidth: 1,
   },
   mediaPillOn: {

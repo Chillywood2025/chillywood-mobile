@@ -6,7 +6,7 @@ June 28, 2026 v58 Chi'lly Chat call follow-up: `docs/release/CHILLY_CHAT_PLAY_V5
 
 June 28, 2026 v59 Chi'lly Chat call follow-up: `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md` is Partial. EAS Build `7cf16ebe-a3de-4efb-8170-63a5e9799653` and EAS Submit `0c9b2162-c259-4934-a0e8-5679f524b609` delivered versionCode `59` to Google Play internal testing. Both physical phones updated through Google Play internal and stayed signed in, but actual-user call proof remains Partial because no fresh v59 end-to-end voice/video call completed with receiver incoming state, background push/ringing, local/remote video, fullscreen fit, and call cleanup proof.
 
-June 28, 2026 v60 Chi'lly Chat receiver banner thread-readback follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` is Partial. EAS Build `8642fea7-b782-4c18-98c8-5805b6c7c20e` delivered versionCode `60` to Google Play internal testing and both physical phones updated through Google Play with installer `com.android.vending`. Visible Chat search and direct-thread open/create for `user230455` now work after authenticated RPC ambiguity fixes. A live receiver readback migration fixed the installed blocker where tapping the app-wide banner opened `This Chi'lly Chat thread could not be found.`; after the fix, the receiver tapped the banner and both phones showed `2 in call`. Two-phone call proof remains Partial because installed v60 recorded a false `Missed voice call` after the joined call ended, the source cleanup fix is not installed in Google Play yet, and video/background/decline/missed cleanup matrices remain incomplete.
+June 28, 2026 v60 Chi'lly Chat receiver banner thread-readback + video layout follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` is Partial. EAS Build `8642fea7-b782-4c18-98c8-5805b6c7c20e` delivered versionCode `60` to Google Play internal testing and both physical phones updated through Google Play with installer `com.android.vending`. Visible Chat search and direct-thread open/create for `user230455` now work after authenticated RPC ambiguity fixes. A live receiver readback migration fixed the installed blocker where tapping the app-wide banner opened `This Chi'lly Chat thread could not be found.`; after the fix, the receiver tapped the banner and both phones showed `2 in call`. Source now also fixes the video layout issue where the bottom feed could be cut off by controls and participant metadata blocked too much of the feed. Two-phone call proof remains Partial because installed v60 recorded a false `Missed voice call` after the joined call ended, the cleanup/video layout source fixes are not installed in Google Play yet, and video/background/decline/missed cleanup matrices remain incomplete.
 
 Source fixed is not installed-app proof. EAS Update published is not installed-app proof. Both physical Play-internal phones must run the updated code. One attached device cannot close two-phone proof. If Robert/testers cannot reproduce it in the Play-internal installed app, it is not actual-user Closed. Out-of-scope is not an excuse to ignore visible user-facing problems.
 
@@ -16,6 +16,7 @@ Source fixed is not installed-app proof. EAS Update published is not installed-a
 - Local `main` was aligned with `origin/main` before this lane.
 - Latest source fixes are present in the repo:
   - Chi'lly Chat remote video renders from actual stream URL presence instead of stale `cameraOn`.
+  - Direct Chat fullscreen video layout reserves bottom control/safe-area space and uses compact edge metadata.
   - Chat count copy says `in call` instead of a false all-connected claim.
   - Live room count copy says `in room`.
   - Live Stage remote video renders from stream URL presence.
@@ -97,7 +98,7 @@ Background/push ringing was not proved. No Android push/ring proof was captured.
 
 Status: Partial.
 
-Source now uses fullscreen contain/aspect-fit behavior for RTC video, but no actual installed two-phone call reached the fullscreen remote-video state in this lane. Fullscreen video fit remains source-fixed and installed-app proof pending.
+Source now reserves safe-area bottom control space and keeps participant metadata compact for direct Chat fullscreen video, but no actual installed two-phone call reached the fullscreen remote-video state in this lane. Fullscreen video fit remains source-fixed and installed-app proof pending.
 
 ## Live Remote Video Result
 

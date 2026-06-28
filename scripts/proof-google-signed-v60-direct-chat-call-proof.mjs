@@ -32,6 +32,8 @@ const ownerReadbackMigration = read("supabase/migrations/20260628223157_chilly_c
 const directMemberReadbackMigration = read("supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql");
 const callLib = read("_lib/chillyChatCalls.ts");
 const threadScreen = read("app/chat/[threadId].tsx");
+const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
+const participantGrid = read("components/communication/communication-participant-grid.tsx");
 
 [
   "Google-signed Play internal install proof: Closed / Partial / Blocked",
@@ -49,6 +51,10 @@ const threadScreen = read("app/chat/[threadId].tsx");
   "Receiver banner tap must join or open the correct call thread",
   "Same-thread proof is not enough",
   "Background push/ringing is Partial without installed-app evidence",
+  "Video feed must not be cut off by bottom controls",
+  "Participant metadata overlay must not block the center of the video",
+  "Local and remote video must be visible on both phones",
+  "Fullscreen video fit is not Closed until proved on installed app",
   "Call end/decline/missed cleanup must be proved before full call closure",
   "Source fixed is not installed-app proof",
   "Google Play internal install is not enough without actual user flow proof",
@@ -132,6 +138,10 @@ const threadScreen = read("app/chat/[threadId].tsx");
   "Participant",
   "false `Missed voice call`",
   "requires a newer Google Play internal build",
+  "Video call layout cleanup",
+  "bottom controls from covering the lower participant feed",
+  "participant metadata is compact at the tile edge",
+  "Fullscreen video fit is not Closed until proved on installed app",
   "/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R5-after-second-banner-tap.png",
   "/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R3-after-second-banner-tap.xml",
 ].forEach((needle) => requireText("v60 proof facts", doc, needle));
@@ -174,6 +184,13 @@ requireText("call invite stale missed guard", callLib, "query = query.eq(\"statu
 requireText("call invite stale missed guard", callLib, "if (!updatedInvite) return null;");
 requireText("banner auto accept source", threadScreen, "Incoming call could not be accepted. Ask the caller to start a new call.");
 requireText("banner auto accept source", threadScreen, "status: \"accepted\"");
+requireText("video call layout panel", communicationPanel, "const fullscreenBottomInset = Math.max(insets.bottom, 12);");
+requireText("video call layout panel", communicationPanel, "isFullscreen && { paddingBottom: fullscreenBottomInset }");
+requireText("video call layout panel", communicationPanel, "participantStageFullscreen");
+requireText("video call layout grid", participantGrid, "const videoObjectFit = \"cover\";");
+requireText("video call layout grid", participantGrid, "isFullscreen && participants.length === 2 && styles.tileFullscreenSplit");
+requireText("video call layout grid", participantGrid, "position: \"relative\"");
+requireText("video call layout grid", participantGrid, "styles.bottomRow");
 
 if (failures.length) {
   console.error("Google-signed v60 direct chat call proof failed:");

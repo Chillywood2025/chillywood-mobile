@@ -63,6 +63,7 @@ export function InRoomCommunicationPanel({
 }: InRoomCommunicationPanelProps) {
   const insets = useSafeAreaInsets();
   const isFullscreen = presentation === "fullscreen";
+  const fullscreenBottomInset = Math.max(insets.bottom, 12);
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -89,7 +90,7 @@ export function InRoomCommunicationPanel({
         isFullscreen && styles.fullscreenCard,
         isFullscreen && {
           paddingTop: insets.top + 10,
-          paddingBottom: Math.max(insets.bottom, 12),
+          paddingBottom: 0,
         },
       ]}
     >
@@ -158,7 +159,13 @@ export function InRoomCommunicationPanel({
       )}
 
       {controlsVisible ? (
-        <View style={[styles.controlsWrap, isFullscreen && styles.controlsWrapFullscreen]}>
+        <View
+          style={[
+            styles.controlsWrap,
+            isFullscreen && styles.controlsWrapFullscreen,
+            isFullscreen && { paddingBottom: fullscreenBottomInset },
+          ]}
+        >
           <CommunicationControlBar
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}
@@ -188,6 +195,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     backgroundColor: "#05070C",
     paddingHorizontal: 16,
+    gap: 10,
   },
   copyBlock: {
     gap: 6,
@@ -197,6 +205,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
+    flexShrink: 0,
   },
   fullscreenHeaderCopy: {
     flex: 1,
@@ -247,6 +256,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    flexShrink: 0,
   },
   metaPill: {
     borderRadius: 999,
@@ -292,8 +302,11 @@ const styles = StyleSheet.create({
   },
   controlsWrap: {
     marginTop: 2,
+    flexShrink: 0,
   },
   controlsWrapFullscreen: {
-    paddingTop: 4,
+    marginTop: 0,
+    paddingTop: 8,
+    backgroundColor: "#05070C",
   },
 });
