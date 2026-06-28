@@ -103,6 +103,12 @@ import { getBetaAccessBlockCopy, useBetaProgram } from "../_lib/betaProgram";
 import { reportDebugError, reportDebugQuery } from "../_lib/devDebug";
 import { RACHI_OFFICIAL_ACCOUNT } from "../_lib/officialAccounts";
 import {
+  getPrimaryPeopleSearchCandidate,
+  matchesPeopleSearchValues,
+  normalizePeopleSearchQuery,
+  rankPeopleSearchValues,
+} from "../_lib/peopleSearchNormalization";
+import {
   chooseOfficialRachiProfileImageFromGallery,
   clearOfficialRachiProfileImage,
   createOfficialRachiPost,
@@ -1831,17 +1837,34 @@ const formatAuditDisplayText = (value: unknown) => {
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, (match) => formatCompactIdentifier(match));
 };
 
-const normalizeAdminSearchQuery = (value: string) => value.trim().toLowerCase();
+const isEmailLikeAdminSearchQuery = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
+
+const normalizeAdminSearchQuery = (value: string) => {
+  const query = value.trim();
+  if (isEmailLikeAdminSearchQuery(query)) return query.toLowerCase();
+  return getPrimaryPeopleSearchCandidate(query);
+};
 
 const adminSearchMatches = (query: string, values: readonly unknown[]) => {
-  const needle = normalizeAdminSearchQuery(query);
+  const rawQuery = query.trim();
+  const needle = normalizeAdminSearchQuery(rawQuery);
   if (needle.length < ADMIN_SEARCH_MIN_LENGTH) return false;
-  return values.some((value) => String(value ?? "").toLowerCase().includes(needle));
+  if (isEmailLikeAdminSearchQuery(rawQuery)) {
+    return values.some((value) => String(value ?? "").toLowerCase().includes(needle));
+  }
+  return matchesPeopleSearchValues([...values], rawQuery);
 };
 
 const adminSearchRank = (query: string, values: readonly unknown[]): number => {
-  const needle = normalizeAdminSearchQuery(query);
+  const rawQuery = query.trim();
+  const needle = normalizeAdminSearchQuery(rawQuery);
   if (needle.length < ADMIN_SEARCH_MIN_LENGTH) return 0;
+  if (!isEmailLikeAdminSearchQuery(rawQuery)) {
+    const rank = rankPeopleSearchValues(rawQuery, [...values]);
+    if (rank === 0) return 120;
+    if (rank === 1) return 100;
+    if (rank === 2) return 60;
+  }
   return values.reduce<number>((best, value) => {
     const haystack = normalizeAdminSearchQuery(String(value ?? ""));
     if (!haystack) return best;
@@ -1853,12 +1876,11 @@ const adminSearchRank = (query: string, values: readonly unknown[]): number => {
   }, 0);
 };
 
-const isEmailLikeAdminSearchQuery = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
-
 const shouldRememberAdminSearchQuery = (value: string) => {
   const query = value.trim();
   if (query.length < ADMIN_SEARCH_MIN_LENGTH) return false;
   if (isEmailLikeAdminSearchQuery(query)) return false;
+  if (!normalizePeopleSearchQuery(query).searchable) return false;
   return !/(secret|token|bearer|service[_-]?role|whsec_|sk_|pk_live|rk_live)/i.test(query);
 };
 
@@ -3765,23 +3787,22 @@ export default function AdminStudioScreen() {
     [activePlatformRoleRoster],
   );
   const filteredPlatformRoleRoster = useMemo(() => {
-    const normalizedQuery = normalizeAdminSearchQuery(adminUsersQuery);
+    const query = adminUsersQuery.trim();
     return platformRoleRoster.filter((entry) => {
       const roleMatches = adminUsersRoleFilter === "all"
         || (adminUsersRoleFilter === "inactive"
           ? entry.status !== "active"
           : entry.role === adminUsersRoleFilter);
       if (!roleMatches) return false;
-      if (!normalizedQuery) return true;
-      const haystack = [
+      if (!query) return true;
+      return adminSearchMatches(query, [
         entry.identityLabel,
         entry.email,
         entry.userId,
         entry.role,
         entry.status,
-        entry.permissionKeys.join(" "),
-      ].map((value) => normalizeAdminSearchQuery(String(value ?? ""))).join(" ");
-      return haystack.includes(normalizedQuery);
+        ...entry.permissionKeys,
+      ]);
     });
   }, [adminUsersQuery, adminUsersRoleFilter, platformRoleRoster]);
   const staffRosterLastRefreshedLabel = platformRoleRosterGeneratedAt
@@ -11394,7 +11415,7 @@ export default function AdminStudioScreen() {
             <Text style={styles.configKicker}>SEARCH ADMIN</Text>
             <Text style={styles.adminSearchTitle}>Search Admin</Text>
             <Text style={styles.adminSearchBody}>
-              Search users, reports, money events, rooms, or cases. Email lookup is admin-only.
+              Search users by name or @handle, plus reports, money events, rooms, or cases. Email lookup is admin-only.
             </Text>
           </View>
           <OwnerStatusPill label="Owner/Admin only" tone="info" />
@@ -11405,7 +11426,7 @@ export default function AdminStudioScreen() {
           value={adminSearchQuery}
           onChangeText={setAdminSearchQuery}
           accessibilityLabel="Admin search input"
-          placeholder="Search users, reports, money events, rooms, or cases"
+          placeholder="Search users, @handles, reports, rooms, or cases"
           placeholderTextColor="#8d8d8d"
           style={styles.input}
           autoCapitalize="none"
@@ -11540,7 +11561,7 @@ export default function AdminStudioScreen() {
           ) : (
             <View testID="admin-user-search-empty-state" style={styles.configListRowSubtle}>
               <Text style={styles.configListTitle}>No admin matches</Text>
-              <Text style={styles.configListBody}>Try another user, report, money event, room, or case.</Text>
+              <Text style={styles.configListBody}>Try the full handle, display name, report, money event, room, or case. Backend-unavailable states appear in the audit card.</Text>
             </View>
           )
         ) : (
@@ -13511,7 +13532,7 @@ export default function AdminStudioScreen() {
                     />
                     <TextInput
                       autoCapitalize="none"
-                      placeholder="Filter visible staff roster"
+                      placeholder="Filter visible staff roster by name or @handle"
                       placeholderTextColor="#788196"
                       style={styles.input}
                       value={adminUsersQuery}

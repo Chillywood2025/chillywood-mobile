@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { normalizePeopleSearchQuery } from "./peopleSearchNormalization";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -422,6 +423,44 @@ const normalizeUserSummary = (value: unknown): AdminUserReadModelSummary => {
   };
 };
 
+const isEmailLikeAdminReadModelQuery = (value: string) => /\S+@\S+\.\S+/.test(value.trim());
+
+const buildAdminUsersReadModelQueries = (value?: string | null) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return [null];
+  if (isEmailLikeAdminReadModelQuery(raw)) return [raw];
+
+  const normalized = normalizePeopleSearchQuery(raw);
+  if (!normalized.searchable) return [raw];
+
+  return Array.from(new Set([
+    raw,
+    normalized.cleaned,
+    normalized.display,
+    normalized.compact,
+    ...normalized.candidates,
+  ].map((query) => query.trim()).filter(Boolean))).slice(0, 6);
+};
+
+const mergeAdminUsersReadModels = (models: AdminUsersReadModel[]): AdminUsersReadModel => {
+  const primary = models.find((model) => model.connected) ?? models[0] ?? createEmptyAdminUsersReadModel();
+  const items = Array.from(
+    models.flatMap((model) => model.items).reduce((map, item) => {
+      if (!map.has(item.userId)) map.set(item.userId, item);
+      return map;
+    }, new Map<string, AdminUserReadModelItem>()),
+  ).map(([, item]) => item);
+
+  return {
+    ...primary,
+    summary: {
+      ...primary.summary,
+      filteredUsers: models.length > 1 ? items.length : primary.summary.filteredUsers,
+    },
+    items,
+  };
+};
+
 const normalizeUsageSummary = (value: unknown): AdminUsageDetailSummary => {
   const row = asRecord(value);
   return {
@@ -550,18 +589,22 @@ export async function readAdminUsersReadModel(options?: {
   limit?: number;
 }): Promise<AdminUsersReadModel> {
   try {
-    const { data, error } = await adminReadModelRpc.rpc("get_admin_users_read_model", {
-      p_query: options?.query ?? null,
-      p_limit: options?.limit ?? 50,
-    });
-    if (error) throw error;
-    const payload = asRecord(data);
-    return {
-      connected: payload.connected === true,
-      generatedAt: asString(payload.generatedAt) ?? nowIso(),
-      summary: normalizeUserSummary(payload.summary),
-      items: asArray(payload.items).map(normalizeUserItem).filter((entry): entry is AdminUserReadModelItem => !!entry),
-    };
+    const queries = buildAdminUsersReadModelQueries(options?.query);
+    const models = await Promise.all(queries.map(async (query) => {
+      const { data, error } = await adminReadModelRpc.rpc("get_admin_users_read_model", {
+        p_query: query,
+        p_limit: options?.limit ?? 50,
+      });
+      if (error) throw error;
+      const payload = asRecord(data);
+      return {
+        connected: payload.connected === true,
+        generatedAt: asString(payload.generatedAt) ?? nowIso(),
+        summary: normalizeUserSummary(payload.summary),
+        items: asArray(payload.items).map(normalizeUserItem).filter((entry): entry is AdminUserReadModelItem => !!entry),
+      };
+    }));
+    return mergeAdminUsersReadModels(models);
   } catch {
     return createEmptyAdminUsersReadModel();
   }
