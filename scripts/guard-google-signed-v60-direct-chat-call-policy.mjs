@@ -59,6 +59,7 @@ const ownerReadbackMigration = read("supabase/migrations/20260628223157_chilly_c
 const directMemberReadbackMigration = read("supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const participantGrid = read("components/communication/communication-participant-grid.tsx");
+const responsiveLayout = read("hooks/use-responsive-layout.ts");
 
 [
   "Google-signed Play internal install proof: Closed / Partial / Blocked",
@@ -78,6 +79,9 @@ const participantGrid = read("components/communication/communication-participant
   "Video feed must not be cut off by bottom controls",
   "Participant metadata overlay must not block the center of the video",
   "Local and remote video must be visible on both phones",
+  "Video tiles must adapt to phone size instead of hard-coded device hacks",
+  "Cross-platform responsive support is not Closed without tested device/simulator coverage",
+  "iOS/tablet/foldable proof remains Pending unless tested",
   "Fullscreen video fit is not Closed until proved on installed app",
   "Call end/decline/missed cleanup must be proved before full call closure",
   "Source fixed is not installed-app proof",
@@ -104,7 +108,13 @@ const participantGrid = read("components/communication/communication-participant
   "2 in call",
   "false `Missed voice call`",
   "requires a newer Google Play internal build",
-  "Video call layout cleanup",
+  "Responsive video call layout cleanup",
+  "Responsive foundation added.",
+  "Direct Chat video call layout adapts by dimensions and safe area.",
+  "Android two-phone installed proof remains Partial",
+  "iOS proof result: Pending",
+  "Tablet/foldable proof result: Pending",
+  "Whole-app responsive audit result",
   "bottom controls from covering the lower participant feed",
   "participant metadata is compact at the tile edge",
 ].forEach((needle) => requireText("v60 proof doc", doc, needle));
@@ -232,6 +242,7 @@ forbidSentence("v60 proof doc", doc, (sentence) => (
   ["direct member readback migration", directMemberReadbackMigration],
   ["communication panel", communicationPanel],
   ["participant grid", participantGrid],
+  ["responsive layout hook", responsiveLayout],
 ].forEach(([label, content]) => {
   forbidMatch(label, content, /\b(?:PASSWORD|PASSCODE)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/i, "password value");
   forbidMatch(label, content, /(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY)\s*=\s*['"]?[A-Za-z0-9._-]{20,}/, "service-role key value");
@@ -280,13 +291,30 @@ requireText("call invite stale missed guard", callLib, "query = query.eq(\"statu
 requireText("call invite stale missed guard", callLib, "if (!updatedInvite) return null;");
 requireText("banner auto accept source", thread, "Incoming call could not be accepted. Ask the caller to start a new call.");
 requireText("banner auto accept source", thread, "status: \"accepted\"");
-requireText("video call layout panel", communicationPanel, "const fullscreenBottomInset = Math.max(insets.bottom, 12);");
-requireText("video call layout panel", communicationPanel, "isFullscreen && { paddingBottom: fullscreenBottomInset }");
+requireText("responsive layout hook", responsiveLayout, "export type DeviceClass");
+requireText("responsive layout hook", responsiveLayout, "useWindowDimensions");
+requireText("responsive layout hook", responsiveLayout, "useSafeAreaInsets");
+requireText("responsive layout hook", responsiveLayout, "PixelRatio");
+requireText("responsive layout hook", responsiveLayout, "getSafeBottomControlPadding");
+requireText("responsive layout hook", responsiveLayout, "responsiveTileHeight");
+requireText("responsive layout hook", responsiveLayout, "foldableOrExpanded");
+requireText("responsive layout hook", responsiveLayout, "compactPhone");
+requireText("responsive layout hook", responsiveLayout, "largePhone");
+requireText("video call layout panel", communicationPanel, "const responsiveLayout = useResponsiveLayout();");
+requireText("video call layout panel", communicationPanel, "paddingBottom: responsiveLayout.safeBottomPadding");
+requireText("video call layout panel", communicationPanel, "minimumTouchTarget={responsiveLayout.minimumTouchTarget}");
+requireText("video call layout panel", communicationPanel, "responsiveLayout={responsiveLayout}");
 requireText("video call layout panel", communicationPanel, "controlsWrapFullscreen");
 requireText("video call layout grid", participantGrid, "const videoObjectFit = \"cover\";");
+requireText("video call layout grid", participantGrid, "responsiveLayout.videoTileGap");
 requireText("video call layout grid", participantGrid, "isFullscreen && participants.length === 2 && styles.tileFullscreenSplit");
 requireText("video call layout grid", participantGrid, "position: \"relative\"");
 requireText("video call layout grid", participantGrid, "styles.bottomRow");
+
+const deviceSpecificHackPattern = /Samsung|\bPixel\s+(?:[0-9]|Fold|Tablet|XL|Pro)\b|Motorola|OnePlus|iPhone\s*\d|S2[0-9]\s*Ultra|R5CR120QCBF|R3CXA0DS5JV/i;
+forbidMatch("responsive layout hook", responsiveLayout, deviceSpecificHackPattern, "device-specific responsive hack");
+forbidMatch("communication panel", communicationPanel, deviceSpecificHackPattern, "device-specific responsive hack");
+forbidMatch("participant grid", participantGrid, deviceSpecificHackPattern, "device-specific responsive hack");
 
 forbidMatch("chat call migration", callMigration, /disable row level security/i, "RLS disablement");
 forbidMatch("chat call migration", callMigration, /using\s*\(\s*true\s*\)/i, "allow-all RLS policy");

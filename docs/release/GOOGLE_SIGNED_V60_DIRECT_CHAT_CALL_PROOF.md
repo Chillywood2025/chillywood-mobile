@@ -40,6 +40,12 @@ Participant metadata overlay must not block the center of the video.
 
 Local and remote video must be visible on both phones.
 
+Video tiles must adapt to phone size instead of hard-coded device hacks.
+
+Cross-platform responsive support is not Closed without tested device/simulator coverage.
+
+iOS/tablet/foldable proof remains Pending unless tested.
+
 Fullscreen video fit is not Closed until proved on installed app.
 
 Call end/decline/missed cleanup must be proved before full call closure.
@@ -121,14 +127,21 @@ Receiver banner thread-readback fix:
 - Live receiver-context verification after the second migration returned `callee_can_access=true`, `thread_readable_by_callee=true`, `callee_member_readable=true`, `has_platform_owner=true`, and `actor_is_current_platform_owner=false` for the latest proof thread.
 - Supabase advisors still report existing project-wide warnings unrelated to this targeted function; this function keeps a fixed `search_path` and does not use service-role as chat proof.
 
-Video call layout cleanup:
+Responsive video call layout cleanup:
 
-- Root cause: Robert's physical-phone screenshots showed the fullscreen Chi'lly Chat video grid using guessed tile heights derived from the full window, not from the actual space left after the header, status pills, bottom controls, and Android safe area. The lower participant tile could sit behind the Camera/Mic/End Call row. The participant metadata overlay was also a wide dark card across the bottom of the tile, and fullscreen video used a mode that could leave the actual camera feed boxed inside the available participant card.
-- Files changed: `components/communication/in-room-communication-panel.tsx` and `components/communication/communication-participant-grid.tsx`.
+- Root cause: Robert's physical-phone screenshots showed the fullscreen Chi'lly Chat video grid using guessed tile heights derived from the full window, not from the actual space left after the header, status pills, bottom controls, and safe area. The lower participant tile could sit behind the Camera/Mic/End Call row. The participant metadata overlay was also a wide dark card across the bottom of the tile, and fullscreen video could leave the actual camera feed boxed inside the available participant card.
+- Files changed: `hooks/use-responsive-layout.ts`, `components/communication/in-room-communication-panel.tsx`, `components/communication/communication-participant-grid.tsx`, and `components/communication/communication-control-bar.tsx`.
+- Responsive utilities added or verified: `useResponsiveLayout()`, `getDeviceClass()`, `responsiveSpacing()`, `responsiveFontSize()`, `responsiveTileHeight()`, `getContentBottomPadding()`, and `getSafeBottomControlPadding()`.
 - Screenshots reviewed: Robert's physical-phone video-call screenshots showing connected video state, `2 in call`, and the lower feed cut off under the Camera/Mic/End Call controls. The issue was observed on an owner-involved call path as well.
-- UI issues fixed in source: fullscreen controls now reserve bottom safe-area space as a normal layout sibling, the participant stage flexes only in the remaining space, tiles no longer use guessed fixed fullscreen heights, RTC video fills the tile, and participant metadata is compact at the tile edge instead of a wide black card across the video.
-- Out-of-scope issues documented: stale existing inbox handle metadata, false missed-call event after a joined call ends, background push/ringing proof, and installed two-phone video proof remain separate blockers.
-- Proof result: source/typecheck/proof-script Partial. The layout source is fixed, but source fixed is not installed-app proof and Google Play internal install is not enough without actual user flow proof.
+- UI issues fixed in source: fullscreen controls now reserve bottom safe-area space as a normal layout sibling, the participant stage flexes only in the remaining space, tiles no longer use guessed fixed fullscreen heights, RTC video fills the tile, participant metadata is compact at the tile edge instead of a wide black card across the video, and control/back buttons use responsive minimum touch targets.
+- Device classes supported by source rules: `compactPhone`, `regularPhone`, `tallPhone`, `largePhone`, `tablet`, `foldableOrExpanded`, and `landscape`. The rules use window dimensions, safe-area insets, orientation, and font scale, not exact device names.
+- Per-class behavior documented in source: safe top padding comes from safe-area top plus responsive spacing; safe bottom padding uses `getSafeBottomControlPadding()` for Android gesture/three-button and iOS home-indicator behavior; content max width is capped for tablet/foldable/landscape; bottom control spacing comes from `bottomControlSpacing`; minimum touch target is `48` on Android and `44` on iOS; tile sizing comes from responsive tile minimums plus flex in the available stage; font scale is clamped more tightly on compact phones; content remains flexible/scroll-compatible where screens own scrolling outside this fullscreen call surface.
+- Android proof result: source/dev proof passed. Android two-phone installed proof remains Partial until v61+ is installed from Google Play internal and reproduced on `R5CR120QCBF` and `R3CXA0DS5JV`.
+- iOS proof result: Pending. Cross-platform responsive support is not Closed without tested device/simulator coverage.
+- Tablet/foldable proof result: Pending. iOS/tablet/foldable proof remains Pending unless tested.
+- Out-of-scope issues documented: stale existing inbox handle metadata, false missed-call event after a joined call ends, background push/ringing proof, wrong role/owner badge review, possible local/remote naming issues, camera mirror/rotation review, confusing status pills review, and installed two-phone video proof remain separate blockers.
+- Whole-app responsive audit result: Direct Chat video call is source-fixed now. Chat inbox and thread generally use safe-area padding but need future keyboard/long-list verification; Profile needs future responsive card/header audit; Settings needs long-form/large-font review; Player and Watch-Party/Live Stage already contain local safe-area logic but need consolidation into the shared foundation; Waiting rooms, Home, Search/Explore People, and Money Center are not fully inspected in this lane.
+- Proof result: source/typecheck/proof-script Partial. Responsive foundation added. Direct Chat video call layout adapts by dimensions and safe area. Source fixed is not installed-app proof and Google Play internal install is not enough without actual user flow proof.
 - Remaining blockers: deliver a v61+ Google Play internal build containing this layout cleanup and prove local and remote video are visible on both phones with no bottom feed cutoff, no control overlap, no center-blocking metadata card, Back to Thread working, and End Call working.
 
 ## Google Play Internal Build Result

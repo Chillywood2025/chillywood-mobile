@@ -22,6 +22,8 @@ const doc = read("docs/release/CHAT_CALL_REMOTE_VIDEO_LIVE_ACTION_UX_SWEEP.md");
 const standard = read("docs/release/ACTUAL_USER_PROOF_STANDARD.md");
 const sessionHook = read("hooks/use-communication-room-session.ts");
 const participantGrid = read("components/communication/communication-participant-grid.tsx");
+const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
+const responsiveLayout = read("hooks/use-responsive-layout.ts");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const packageJson = read("package.json");
 
@@ -40,6 +42,8 @@ const packageJson = read("package.json");
   "Fix Applied",
   "Direct Chat video lower tile can sit under bottom controls",
   "Participant metadata card covers too much of video feed",
+  "Responsive foundation added.",
+  "Direct Chat video call layout adapts by dimensions and safe area.",
   "Adjacent UI / UX Issues Found",
   "Actual-user installed-app proof result: Partial.",
   "R3CXA0DS5JV",
@@ -60,9 +64,25 @@ const packageJson = read("package.json");
 [
   'const videoObjectFit = "cover";',
   "objectFit={videoObjectFit}",
+  "responsiveLayout.videoTileGap",
   "isFullscreen && participants.length === 2 && styles.tileFullscreenSplit",
   "position: \"relative\"",
 ].forEach((needle) => requireText("communication participant grid", participantGrid, needle));
+
+[
+  "useWindowDimensions",
+  "useSafeAreaInsets",
+  "getDeviceClass",
+  "getSafeBottomControlPadding",
+  "responsiveTileHeight",
+  "foldableOrExpanded",
+].forEach((needle) => requireText("responsive layout hook", responsiveLayout, needle));
+
+[
+  "const responsiveLayout = useResponsiveLayout();",
+  "paddingBottom: responsiveLayout.safeBottomPadding",
+  "minimumTouchTarget={responsiveLayout.minimumTouchTarget}",
+].forEach((needle) => requireText("communication panel", communicationPanel, needle));
 
 [
   "stageParticipantActionBusyId",

@@ -36,12 +36,16 @@ Available last-12-hour evidence:
   - Treat a remote participant as camera-ready when a real remote stream URL exists.
   - Add delayed audio-first binding when the peer connection exposes a later video receiver.
   - Keep remote connection state connected when the delayed stream bind succeeds.
+- `hooks/use-responsive-layout.ts`
+  - Responsive foundation added.
+  - Direct Chat video call layout adapts by dimensions and safe area.
+  - Device classes use dimensions/orientation/safe-area/font-scale rules instead of hard-coded device names.
 - `components/communication/communication-participant-grid.tsx`
   - Cross-lane QA correction: render remote RTC video when a real stream URL exists, even if presence `cameraOn` is stale.
   - Cross-lane QA correction: show `Video connected` from stream presence instead of showing a remote card as `Connection failed` when media is already available.
-  - Later direct Chat video layout cleanup: flex fullscreen participant tiles inside the actual remaining stage, fill each tile with the RTC video view, and keep participant metadata as compact edge badges instead of a wide card across the feed.
+  - Later responsive direct Chat video layout cleanup: flex fullscreen participant tiles inside the actual remaining stage, fill each tile with the RTC video view, and keep participant metadata as compact edge badges instead of a wide card across the feed.
 - `components/communication/in-room-communication-panel.tsx`
-  - Later direct Chat video layout cleanup: reserve Android safe-area bottom control space outside the video stage so Camera/Mic/End Call cannot cover the lower participant feed.
+  - Later responsive direct Chat video layout cleanup: reserve Android/iOS safe-area bottom control space outside the video stage so Camera/Mic/End Call cannot cover the lower participant feed.
 - `components/communication/in-room-communication-panel.tsx` and `components/communication/communication-room-header.tsx`
   - Cross-lane QA correction: change participant count copy from `connected` to `in call` / `in room` so a count does not imply every peer has a healthy media connection.
 - `app/watch-party/live-stage/[partyId].tsx`

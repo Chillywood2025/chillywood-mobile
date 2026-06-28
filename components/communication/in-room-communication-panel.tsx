@@ -1,7 +1,7 @@
 import type { CommunicationParticipantView } from "../../_lib/communication";
 import React, { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useResponsiveLayout } from "../../hooks/use-responsive-layout";
 
 import { CommunicationControlBar } from "./communication-control-bar";
 import { CommunicationParticipantGrid } from "./communication-participant-grid";
@@ -61,9 +61,12 @@ export function InRoomCommunicationPanel({
   onLeave,
   onCloseSurface,
 }: InRoomCommunicationPanelProps) {
-  const insets = useSafeAreaInsets();
+  const responsiveLayout = useResponsiveLayout();
   const isFullscreen = presentation === "fullscreen";
-  const fullscreenBottomInset = Math.max(insets.bottom, 12);
+  const fullscreenContentStyle = isFullscreen && responsiveLayout.isExpanded
+    ? { alignSelf: "center" as const, maxWidth: responsiveLayout.contentMaxWidth, width: "100%" as const }
+    : null;
+  const textMaxFontSizeMultiplier = responsiveLayout.isCompactPhone ? 1.12 : 1.2;
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -76,8 +79,9 @@ export function InRoomCommunicationPanel({
       showControls,
       participantRenderCount: participants.length,
       presentation,
+      deviceClass: responsiveLayout.deviceClass,
     });
-  }, [channelState, loading, participantCount, participants.length, presentation, showControls, statusMessage, surfaceLabel]);
+  }, [channelState, loading, participantCount, participants.length, presentation, responsiveLayout.deviceClass, showControls, statusMessage, surfaceLabel]);
 
   const controlsVisible = showControls && !loading && !statusMessage;
   const resolvedTitle = titleText ?? `${surfaceLabel} Chi'lly Chat`;
@@ -89,25 +93,26 @@ export function InRoomCommunicationPanel({
         styles.card,
         isFullscreen && styles.fullscreenCard,
         isFullscreen && {
-          paddingTop: insets.top + 10,
+          paddingTop: responsiveLayout.safeTopPadding,
           paddingBottom: 0,
+          paddingHorizontal: responsiveLayout.contentHorizontalPadding,
         },
       ]}
     >
       {isFullscreen ? (
-        <View style={styles.fullscreenHeader}>
+        <View style={[styles.fullscreenHeader, fullscreenContentStyle]}>
           <View style={styles.fullscreenHeaderCopy}>
-            <Text style={styles.kicker}>CHI'LLY CHAT</Text>
-            <Text style={styles.fullscreenTitle}>{resolvedTitle}</Text>
-            <Text style={styles.fullscreenBody}>{resolvedBody}</Text>
+            <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.kicker}>CHI'LLY CHAT</Text>
+            <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.fullscreenTitle}>{resolvedTitle}</Text>
+            <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.fullscreenBody}>{resolvedBody}</Text>
           </View>
           {onCloseSurface ? (
             <TouchableOpacity
-              style={styles.closeButton}
+              style={[styles.closeButton, { minHeight: responsiveLayout.minimumTouchTarget }]}
               activeOpacity={0.86}
               onPress={onCloseSurface}
             >
-              <Text style={styles.closeButtonText}>Back to Thread</Text>
+              <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.closeButtonText}>Back to Thread</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -119,41 +124,49 @@ export function InRoomCommunicationPanel({
         </View>
       )}
 
-      <View style={styles.metaRow}>
+      <View style={[styles.metaRow, fullscreenContentStyle]}>
         {roomCode ? (
           <View style={styles.metaPill}>
-            <Text style={styles.metaText}>{roomCode}</Text>
+            <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{roomCode}</Text>
           </View>
         ) : null}
         <View style={styles.metaPill}>
-          <Text style={styles.metaText}>{participantCount} in call</Text>
+          <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{participantCount} in call</Text>
         </View>
         <View style={styles.metaPill}>
-          <Text style={styles.metaText}>{isHost ? "Host" : "Participant"}</Text>
+          <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{isHost ? "Host" : "Participant"}</Text>
         </View>
         <View style={styles.metaPill}>
-          <Text style={styles.metaText}>{getStatusLabel(channelState)}</Text>
+          <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{getStatusLabel(channelState)}</Text>
         </View>
       </View>
 
       {loading ? (
-        <View style={[styles.stateCard, isFullscreen && styles.fullscreenStateCard]}>
+        <View style={[styles.stateCard, isFullscreen && styles.fullscreenStateCard, fullscreenContentStyle]}>
           <ActivityIndicator size="small" color="#DCE6FC" />
           <Text style={styles.stateText}>{loadingText ?? "Connecting Chi'lly Chat…"}</Text>
         </View>
       ) : statusMessage ? (
-        <View style={[styles.stateCard, isFullscreen && styles.fullscreenStateCard]}>
+        <View style={[styles.stateCard, isFullscreen && styles.fullscreenStateCard, fullscreenContentStyle]}>
           <Text style={styles.stateText}>{statusMessage}</Text>
         </View>
       ) : participants.length > 0 ? (
-        <View style={[styles.participantStage, isFullscreen && styles.participantStageFullscreen]}>
+        <View
+          style={[
+            styles.participantStage,
+            isFullscreen && styles.participantStageFullscreen,
+            isFullscreen && { gap: responsiveLayout.videoTileGap },
+            fullscreenContentStyle,
+          ]}
+        >
           <CommunicationParticipantGrid
             participants={participants}
             presentation={isFullscreen ? "fullscreen" : "embedded"}
+            responsiveLayout={responsiveLayout}
           />
         </View>
       ) : (
-        <View style={[styles.stateCard, isFullscreen && styles.fullscreenStateCard]}>
+        <View style={[styles.stateCard, isFullscreen && styles.fullscreenStateCard, fullscreenContentStyle]}>
           <Text style={styles.stateText}>{emptyStateText ?? "Waiting for participants to join Chi'lly Chat."}</Text>
         </View>
       )}
@@ -163,12 +176,17 @@ export function InRoomCommunicationPanel({
           style={[
             styles.controlsWrap,
             isFullscreen && styles.controlsWrapFullscreen,
-            isFullscreen && { paddingBottom: fullscreenBottomInset },
+            isFullscreen && {
+              marginTop: responsiveLayout.bottomControlSpacing,
+              paddingBottom: responsiveLayout.safeBottomPadding,
+            },
+            fullscreenContentStyle,
           ]}
         >
           <CommunicationControlBar
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}
+            minimumTouchTarget={responsiveLayout.minimumTouchTarget}
             leaveLabel={isHost ? "End Call" : "Leave"}
             onToggleCamera={onToggleCamera}
             onToggleMic={onToggleMic}

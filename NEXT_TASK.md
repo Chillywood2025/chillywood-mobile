@@ -14,14 +14,15 @@ Truth to preserve:
 - Visible Chat search -> direct-thread open/create passed on the Google-signed installed app after targeted live Supabase RPC fixes for ambiguous pair-key and member-upsert resolution.
 - Receiver elsewhere-in-app incoming banner appeared from a real voice-call invite, and the targeted receiver banner thread-readback migration let the receiver tap the banner, open the valid readable direct thread, and join the voice call on the Google-signed installed v60 app.
 - Root cause was the platform-owner direct-thread readback guard denying an explicit direct-thread member when the stale/direct pair row contained a platform owner but was not owner-created. The fix keeps creation/open restrictions in the authenticated direct-thread RPC and allows only valid explicit direct-thread members with account-status and block checks preserved.
-- Source now fixes the observed direct Chat video layout issue where the lower feed could be cut off by bottom controls and participant metadata covered too much video.
-- Full call closure remains Partial because installed v60 still recorded a false `Missed voice call` event after the joined call ended, fullscreen video fit is not Closed until proved on installed app, background push/ringing was not proved, decline/missed cleanup was not proved, and the source cleanup/layout fixes are not installed-app proof until v61 or newer is delivered through Google Play internal.
+- Source now adds a shared responsive layout foundation and fixes the observed direct Chat video layout issue where the lower feed could be cut off by bottom controls and participant metadata covered too much video.
+- Direct Chat video call layout adapts by dimensions and safe area. Video tiles must adapt to phone size instead of hard-coded device hacks. Cross-platform responsive support is not Closed without tested device/simulator coverage, and iOS/tablet/foldable proof remains Pending unless tested.
+- Full call closure remains Partial because installed v60 still recorded a false `Missed voice call` event after the joined call ended, fullscreen video fit is not Closed until proved on installed app, background push/ringing was not proved, decline/missed cleanup was not proved, and the source cleanup/responsive layout fixes are not installed-app proof until v61 or newer is delivered through Google Play internal.
 - No auth/RLS/chat/account-status permission weakening happened, no service-role chat proof was counted, no provider/live-money mutation happened, current First Owner was not touched, and `liveMoneyEnabled` remains OFF.
 
 Next product action:
-- Build and deliver v61 or newer through Google Play internal with the source cleanup fix that prevents stale ringing invite updates from recording false missed/declined/accepted events after a receiver has joined and the direct Chat video layout cleanup that keeps bottom controls out of the feed.
+- Build and deliver v61 or newer through Google Play internal with the source cleanup fix that prevents stale ringing invite updates from recording false missed/declined/accepted events after a receiver has joined and the responsive direct Chat video layout cleanup that keeps bottom controls out of the feed.
 - Fix stale existing inbox participant metadata so Settings/Profile/Chat agree on `@user230455`.
-- Rerun installed proof only after both phones are Play-installed on the same Google-signed build from `com.android.vending`: inbox/search path, existing-thread path, normal Profile path, receiver same-thread, receiver elsewhere-in-app, receiver background/push, voice, video local/remote, fullscreen fit with no bottom feed cutoff/control overlap/center-blocking metadata, Back to Thread, End Call, and call end/decline/missed cleanup.
+- Rerun installed proof only after both phones are Play-installed on the same Google-signed build from `com.android.vending`: inbox/search path, existing-thread path, normal Profile path, receiver same-thread, receiver elsewhere-in-app, receiver background/push, voice, video local/remote, fullscreen fit with no bottom feed cutoff/control overlap/center-blocking metadata, Back to Thread, End Call, and call end/decline/missed cleanup. Android two-phone proof cannot close iOS/tablet/foldable coverage.
 
 # Chi'lly Chat Google Play Internal Call Closure Follow-Up
 
@@ -134,7 +135,7 @@ Current lane doc:
 Source fixes are applied for the owner-reported issues:
 - Chi'lly Chat remote video could be hidden when the remote media stream existed but presence camera state was stale.
 - Android audio-first RTC track arrival could skip binding until video appeared.
-- Direct Chat fullscreen video layout could let the lower feed sit under bottom controls and show an oversized participant metadata card over the video.
+- Direct Chat fullscreen video layout could let the lower feed sit under bottom controls and show an oversized participant metadata card over the video; the current source adds a shared responsive foundation, but installed and cross-platform device proof remain pending.
 - Live Watch-Party host participant action controls could remain open and feel stuck after `Seat update unavailable`.
 
 Current status:

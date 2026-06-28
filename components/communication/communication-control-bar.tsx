@@ -6,6 +6,7 @@ const logCallDebug = (..._args: unknown[]) => {};
 type CommunicationControlBarProps = {
   cameraEnabled: boolean;
   micEnabled: boolean;
+  minimumTouchTarget?: number;
   onToggleCamera: () => void;
   onToggleMic: () => void;
   onLeave: () => void;
@@ -15,6 +16,7 @@ type CommunicationControlBarProps = {
 export function CommunicationControlBar({
   cameraEnabled,
   micEnabled,
+  minimumTouchTarget = 48,
   onToggleCamera,
   onToggleMic,
   onLeave,
@@ -26,13 +28,14 @@ export function CommunicationControlBar({
       cameraEnabled,
       micEnabled,
       leaveLabel,
+      minimumTouchTarget,
     });
-  }, [cameraEnabled, leaveLabel, micEnabled]);
+  }, [cameraEnabled, leaveLabel, micEnabled, minimumTouchTarget]);
 
   return (
     <View style={styles.row}>
       <TouchableOpacity
-        style={[styles.control, cameraEnabled ? styles.controlOn : styles.controlOff]}
+        style={[styles.control, { minHeight: minimumTouchTarget }, cameraEnabled ? styles.controlOn : styles.controlOff]}
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
@@ -46,7 +49,7 @@ export function CommunicationControlBar({
         <Text style={styles.controlLabel}>{cameraEnabled ? "Camera On" : "Camera Off"}</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.control, micEnabled ? styles.controlOn : styles.controlOff]}
+        style={[styles.control, { minHeight: minimumTouchTarget }, micEnabled ? styles.controlOn : styles.controlOff]}
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
@@ -60,7 +63,7 @@ export function CommunicationControlBar({
         <Text style={styles.controlLabel}>{micEnabled ? "Mic On" : "Mic Muted"}</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.control, styles.controlLeave]}
+        style={[styles.control, { minHeight: minimumTouchTarget }, styles.controlLeave]}
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
@@ -84,7 +87,6 @@ const styles = StyleSheet.create({
   },
   control: {
     flex: 1,
-    minHeight: 48,
     borderRadius: 16,
     borderWidth: 1,
     alignItems: "center",

@@ -35,6 +35,7 @@ const requireText = (label, content, needle) => {
 const doc = read("docs/release/CHAT_CALL_REMOTE_VIDEO_LIVE_ACTION_UX_SWEEP.md");
 const participantGrid = read("components/communication/communication-participant-grid.tsx");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
+const responsiveLayout = read("hooks/use-responsive-layout.ts");
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 
@@ -49,19 +50,38 @@ const moneyFlags = read("_lib/moneyFeatureFlags.ts");
   "No provider mutation happened.",
   "Direct Chat video lower tile can sit under bottom controls",
   "Participant metadata card covers too much of video feed",
+  "Responsive foundation added.",
+  "Direct Chat video call layout adapts by dimensions and safe area.",
 ].forEach((needle) => requireText("sweep doc", doc, needle));
 
 [
   'const videoObjectFit = "cover";',
+  "responsiveLayout.videoTileGap",
   "isFullscreen && participants.length === 2 && styles.tileFullscreenSplit",
   "position: \"relative\"",
 ].forEach((needle) => requireText("communication participant grid", participantGrid, needle));
 
 [
-  "const fullscreenBottomInset = Math.max(insets.bottom, 12);",
-  "isFullscreen && { paddingBottom: fullscreenBottomInset }",
+  "const responsiveLayout = useResponsiveLayout();",
+  "paddingBottom: responsiveLayout.safeBottomPadding",
+  "minimumTouchTarget={responsiveLayout.minimumTouchTarget}",
   "controlsWrapFullscreen",
 ].forEach((needle) => requireText("communication panel", communicationPanel, needle));
+
+[
+  "export type DeviceClass",
+  "useWindowDimensions",
+  "useSafeAreaInsets",
+  "getDeviceClass",
+  "getSafeBottomControlPadding",
+  "responsiveTileHeight",
+  "foldableOrExpanded",
+].forEach((needle) => requireText("responsive layout hook", responsiveLayout, needle));
+
+const deviceSpecificHackPattern = /Samsung|\bPixel\s+(?:[0-9]|Fold|Tablet|XL|Pro)\b|Motorola|OnePlus|iPhone\s*\d|S2[0-9]\s*Ultra|R5CR120QCBF|R3CXA0DS5JV/i;
+forbid("responsive layout hook", responsiveLayout, deviceSpecificHackPattern, "device-specific responsive hack");
+forbid("communication panel", communicationPanel, deviceSpecificHackPattern, "device-specific responsive hack");
+forbid("participant grid", participantGrid, deviceSpecificHackPattern, "device-specific responsive hack");
 
 forbidPositiveSentence("sweep doc", doc, /Actual-user installed-app proof result:\s*Closed|Primary issue result:\s*Closed|Verdict:\s*Closed/i, "Closed actual-user claim");
 forbidPositiveSentence("sweep doc", doc, /physical phone sideload|sideloaded.*physical|APK install.*physical/i, "physical phone sideload");

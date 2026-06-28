@@ -1,13 +1,15 @@
 import React, { useEffect } from "react";
-import { Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 
 import { getCommunicationRTCModule, type CommunicationParticipantView } from "../../_lib/communication";
+import { responsiveFontSize, type ResponsiveLayout, useResponsiveLayout } from "../../hooks/use-responsive-layout";
 
 const logCallDebug = (..._args: unknown[]) => {};
 
 type CommunicationParticipantGridProps = {
   participants: CommunicationParticipantView[];
   presentation?: "embedded" | "fullscreen";
+  responsiveLayout?: ResponsiveLayout;
 };
 
 type CommunicationRTCViewComponent = React.ComponentType<{
@@ -38,17 +40,21 @@ const getConnectionLabel = (participant: CommunicationParticipantView) => {
 export function CommunicationParticipantGrid({
   participants,
   presentation = "embedded",
+  responsiveLayout: providedResponsiveLayout,
 }: CommunicationParticipantGridProps) {
   const RTCView = getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
-  const { width, height } = useWindowDimensions();
+  const fallbackResponsiveLayout = useResponsiveLayout();
+  const responsiveLayout = providedResponsiveLayout ?? fallbackResponsiveLayout;
   const isFullscreen = presentation === "fullscreen";
-  const isLandscape = width > height;
+  const isLandscape = responsiveLayout.isLandscape;
+  const textMaxFontSizeMultiplier = responsiveLayout.isCompactPhone ? 1.12 : 1.2;
 
   useEffect(() => {
     if (!__DEV__) return;
     logCallDebug("[CH_CALL]", "participant_grid_render", {
       participantCount: participants.length,
       presentation,
+      deviceClass: responsiveLayout.deviceClass,
       remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL).length,
       fallbackCount: participants.filter((participant) => !(!!RTCView && !!participant.streamURL)).length,
       participants: participants.map((participant) => ({
@@ -60,12 +66,13 @@ export function CommunicationParticipantGrid({
         connectionState: participant.connectionState,
       })),
     });
-  }, [participants, presentation]);
+  }, [participants, presentation, responsiveLayout.deviceClass]);
 
   return (
     <View
       style={[
         styles.grid,
+        { gap: responsiveLayout.videoTileGap },
         isFullscreen && styles.gridFullscreen,
         isFullscreen && participants.length === 2 && (isLandscape ? styles.gridFullscreenTwoLandscape : styles.gridFullscreenTwoPortrait),
       ]}
@@ -83,8 +90,9 @@ export function CommunicationParticipantGrid({
             key={participant.userId}
             style={[
               styles.tile,
+              { minHeight: responsiveLayout.videoTileMinHeight },
               tileWide && styles.tileWide,
-              compactTile && styles.tileCompact,
+              compactTile && { minHeight: responsiveLayout.compactVideoTileMinHeight },
               isFullscreen && styles.tileFullscreen,
               isFullscreen && participants.length === 2 && styles.tileFullscreenSplit,
               isFullscreen && participants.length === 2 && (isLandscape ? styles.tileFullscreenSplitLandscape : styles.tileFullscreenSplitPortrait),
@@ -95,7 +103,7 @@ export function CommunicationParticipantGrid({
             <View
               style={[
                 styles.mediaFrame,
-                compactTile && styles.mediaFrameCompact,
+                { minHeight: compactTile ? responsiveLayout.compactVideoTileMinHeight : responsiveLayout.videoTileMinHeight },
                 isFullscreen && styles.mediaFrameFullscreen,
               ]}
             >
@@ -127,26 +135,47 @@ export function CommunicationParticipantGrid({
               <View style={styles.topRow}>
                 {participant.isHost ? (
                   <View style={[styles.badge, styles.hostBadge]}>
-                    <Text style={styles.badgeText}>Host</Text>
+                    <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.badgeText}>Host</Text>
                   </View>
                 ) : null}
                 {participant.isSelf ? (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>You</Text>
+                    <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.badgeText}>You</Text>
                   </View>
                 ) : null}
               </View>
               <View style={styles.bottomRow}>
-                <View style={styles.nameBlock}>
-                  <Text style={styles.name} numberOfLines={1}>{participant.displayName}</Text>
-                  <Text style={styles.status} numberOfLines={1}>{getConnectionLabel(participant)}</Text>
+                <View
+                  style={[
+                    styles.nameBlock,
+                    {
+                      maxWidth: responsiveLayout.metadataBadgeMaxWidth,
+                      paddingHorizontal: responsiveLayout.metadataBadgePaddingHorizontal,
+                      paddingVertical: responsiveLayout.metadataBadgePaddingVertical,
+                    },
+                  ]}
+                >
+                  <Text
+                    maxFontSizeMultiplier={textMaxFontSizeMultiplier}
+                    style={[styles.name, { fontSize: responsiveFontSize(14, responsiveLayout.fontScale, 0.9, 1.12) }]}
+                    numberOfLines={1}
+                  >
+                    {participant.displayName}
+                  </Text>
+                  <Text
+                    maxFontSizeMultiplier={textMaxFontSizeMultiplier}
+                    style={[styles.status, { fontSize: responsiveFontSize(11.5, responsiveLayout.fontScale, 0.9, 1.12) }]}
+                    numberOfLines={1}
+                  >
+                    {getConnectionLabel(participant)}
+                  </Text>
                 </View>
                 <View style={styles.mediaPills}>
                   <View style={[styles.mediaPill, (participant.cameraOn || hasVideoStream) ? styles.mediaPillOn : styles.mediaPillOff]}>
-                    <Text style={styles.mediaPillText}>{(participant.cameraOn || hasVideoStream) ? "Cam" : "Cam Off"}</Text>
+                    <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.mediaPillText}>{(participant.cameraOn || hasVideoStream) ? "Cam" : "Cam Off"}</Text>
                   </View>
                   <View style={[styles.mediaPill, participant.micOn ? styles.mediaPillOn : styles.mediaPillOff]}>
-                    <Text style={styles.mediaPillText}>{participant.micOn ? "Mic" : "Muted"}</Text>
+                    <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.mediaPillText}>{participant.micOn ? "Mic" : "Muted"}</Text>
                   </View>
                 </View>
               </View>
@@ -162,7 +191,6 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
   },
   gridFullscreen: {
     flex: 1,
@@ -179,7 +207,6 @@ const styles = StyleSheet.create({
   },
   tile: {
     width: "48%",
-    minHeight: 216,
   },
   tileWide: {
     width: "100%",
@@ -212,13 +239,9 @@ const styles = StyleSheet.create({
   tileFullscreenOddLast: {
     width: "100%",
   },
-  tileCompact: {
-    minHeight: 132,
-  },
   mediaFrame: {
     overflow: "hidden",
     position: "relative",
-    minHeight: 216,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
@@ -227,9 +250,6 @@ const styles = StyleSheet.create({
   mediaFrameFullscreen: {
     flex: 1,
     minHeight: 0,
-  },
-  mediaFrameCompact: {
-    minHeight: 132,
   },
   video: {
     position: "absolute",
@@ -310,13 +330,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   nameBlock: {
-    maxWidth: "66%",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "rgba(5,8,14,0.68)",
-    paddingHorizontal: 9,
-    paddingVertical: 7,
     gap: 2,
   },
   name: {
