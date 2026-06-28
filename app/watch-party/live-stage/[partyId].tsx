@@ -164,6 +164,13 @@ type StageParticipant = SharedParticipantIdentity & {
   username: string;
 };
 
+const canStageMembershipPublishMedia = (membership?: WatchPartyRoomMembership | null) => {
+  if (!membership) return false;
+  if (membership.membershipState === "removed" || membership.membershipState === "left") return false;
+  if (membership.isMuted) return false;
+  return membership.role === "host" || membership.stageRole === "host" || membership.stageRole === "speaker" || membership.canSpeak;
+};
+
 type FloatingReaction = {
   id: string;
   emoji: string;
@@ -598,6 +605,45 @@ function LiveKitHybridCommunityRoomHost({
   }, [disableHybridLocalMediaQuietly, joinContract.participantRole, publishLocalCamera]);
 
   useEffect(() => {
+    let cancelled = false;
+    const localParticipant = room.localParticipant as {
+      setCameraEnabled?: (enabled: boolean, options?: unknown) => Promise<unknown>;
+      setMicrophoneEnabled?: (enabled: boolean) => Promise<unknown>;
+    };
+    const shouldPublishCamera = publishLocalCamera && joinContract.participantRole !== "viewer";
+    const shouldPublishAudio = publishLocalAudio && joinContract.participantRole !== "viewer";
+
+    localParticipant.setCameraEnabled?.(shouldPublishCamera, LIVE_VIDEO_CAPTURE_OPTIONS).catch((error) => {
+      if (cancelled) return;
+      debugLog("livekit", "explicit hybrid stage camera publish toggle failed", {
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        shouldPublishCamera,
+        error: error instanceof Error ? error.message : String(error ?? ""),
+      });
+    });
+    localParticipant.setMicrophoneEnabled?.(shouldPublishAudio).catch((error) => {
+      if (cancelled) return;
+      debugLog("livekit", "explicit hybrid stage microphone publish toggle failed", {
+        roomName: joinContract.roomName,
+        participantRole: joinContract.participantRole,
+        shouldPublishAudio,
+        error: error instanceof Error ? error.message : String(error ?? ""),
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    joinContract.participantRole,
+    joinContract.roomName,
+    publishLocalAudio,
+    publishLocalCamera,
+    room.localParticipant,
+  ]);
+
+  useEffect(() => {
     let active = true;
 
     HybridLiveKitAudioSession.startAudioSession().catch((error) => {
@@ -786,6 +832,7 @@ export default function WatchPartyLiveStageScreen({
   const [liveWatchPartyPremiumGate, setLiveWatchPartyPremiumGate] = useState<PremiumWatchPartyFeatureAccessDecision | null>(null);
   const [liveWatchPartyAccessSheetVisible, setLiveWatchPartyAccessSheetVisible] = useState(false);
   const [livePremiumGateKind, setLivePremiumGateKind] = useState<"live_first" | "live_watch_party">("live_watch_party");
+  const [accessRetryToken, setAccessRetryToken] = useState(0);
   const [roomMissing, setRoomMissing] = useState(false);
   const [roomEntryError, setRoomEntryError] = useState("");
   const [sourceAttribution, setSourceAttribution] = useState<string | null>(null);
@@ -1019,6 +1066,7 @@ export default function WatchPartyLiveStageScreen({
       const resolvedUserId = String(p?.userId ?? presenceKey).trim();
       if (!resolvedUserId) return null;
       const membership = membershipMapRef.current[resolvedUserId];
+      if (!membership && resolvedUserId !== options.trackedUserId) return null;
       if (membership && (membership.membershipState === "removed" || membership.membershipState === "left")) return null;
 
       const identity = buildSharedParticipantIdentity({
@@ -1327,20 +1375,34 @@ export default function WatchPartyLiveStageScreen({
         syncStageSnapshot(snapshot, trackedUserId);
         const sessionMembership = currentMembership ?? membershipMapRef.current[trackedUserId] ?? null;
         const sessionIsHost = trackedUserId === snapshot.room.hostUserId;
-        await joinPartyRoomSession({
+        const sessionCanPublishMedia = sessionIsHost || canStageMembershipPublishMedia(sessionMembership);
+        const persistedSessionMembership = await joinPartyRoomSession({
           partyId,
           userId: trackedUserId,
           role: sessionIsHost ? "host" : sessionMembership?.role ?? "viewer",
           stageRole: sessionMembership?.stageRole ?? (sessionIsHost ? "host" : undefined),
           canSpeak: sessionMembership?.canSpeak ?? (sessionIsHost ? true : undefined),
-          cameraEnabled: !!profileCameraPreviewUrl,
-          micEnabled: true,
+          cameraEnabled: sessionCanPublishMedia && !!profileCameraPreviewUrl,
+          micEnabled: sessionCanPublishMedia,
           displayName: username,
           avatarUrl: profileAvatarUrl,
           cameraPreviewUrl: profileCameraPreviewUrl,
         }).catch(() => null);
-        if (!cancelled) {
-          await refreshStageSnapshot(trackedUserId).catch(() => null);
+        if (cancelled) return;
+        const refreshedSnapshot = await refreshStageSnapshot(trackedUserId).catch(() => null);
+        const persistedTrackedMembership = persistedSessionMembership
+          ?? refreshedSnapshot?.memberships.find((membership) => membership.userId === trackedUserId)
+          ?? membershipMapRef.current[trackedUserId]
+          ?? null;
+        if (!persistedTrackedMembership) {
+          debugLog("live-stage", "blocked presence tracking without persisted membership", {
+            partyId,
+            trackedUserId,
+            sessionIsHost,
+          });
+          setRoomEntryError("Unable to save your live-room seat yet. Check access and rejoin the room.");
+          setLoading(false);
+          return;
         }
 
         const roomChannelName = `room-${partyId}`;
@@ -1485,14 +1547,15 @@ export default function WatchPartyLiveStageScreen({
         heartbeatRef.current = setInterval(() => {
           const heartbeatMembership = membershipMapRef.current[trackedUserId];
           const heartbeatIsHost = snapshot.room.hostUserId === trackedUserId;
+          const heartbeatCanPublishMedia = heartbeatIsHost || canStageMembershipPublishMedia(heartbeatMembership);
           void touchPartyRoomSession({
             partyId,
             userId: trackedUserId,
             role: heartbeatIsHost ? "host" : heartbeatMembership?.role ?? "viewer",
             stageRole: heartbeatMembership?.stageRole ?? (heartbeatIsHost ? "host" : undefined),
             canSpeak: heartbeatMembership?.canSpeak ?? (heartbeatIsHost ? true : undefined),
-            cameraEnabled: !!profileCameraPreviewUrl,
-            micEnabled: true,
+            cameraEnabled: heartbeatCanPublishMedia && !!profileCameraPreviewUrl,
+            micEnabled: heartbeatCanPublishMedia,
             displayName: username,
             avatarUrl: profileAvatarUrl,
             cameraPreviewUrl: profileCameraPreviewUrl,
@@ -1527,7 +1590,7 @@ export default function WatchPartyLiveStageScreen({
         roomRealtimeChannelRef.current = null;
       }
     };
-  }, [buildStageParticipantsFromPresence, canUseBetaStage, partyId, partyIdParam, refreshStageSnapshot, syncStageSnapshot]);
+  }, [accessRetryToken, buildStageParticipantsFromPresence, canUseBetaStage, partyId, partyIdParam, refreshStageSnapshot, syncStageSnapshot]);
 
   useEffect(() => {
     if (!canUseBetaStage || !isFocused || !partyId || !room?.hostUserId || liveSurface === "room" || communicationRoomId) return;
@@ -1585,6 +1648,7 @@ export default function WatchPartyLiveStageScreen({
       if (!partyId || !currentUserId) return;
       const currentMembership = membershipMapRef.current[currentUserId];
       const currentIsHost = isHost;
+      const currentCanPublishMedia = currentIsHost || canStageMembershipPublishMedia(currentMembership);
 
       if (nextState === "active") {
         void touchPartyRoomSession({
@@ -1593,8 +1657,8 @@ export default function WatchPartyLiveStageScreen({
           role: currentIsHost ? "host" : currentMembership?.role ?? "viewer",
           stageRole: currentMembership?.stageRole ?? (currentIsHost ? "host" : undefined),
           canSpeak: currentMembership?.canSpeak ?? (currentIsHost ? true : undefined),
-          cameraEnabled: !!myCameraPreviewUrlRef.current,
-          micEnabled: true,
+          cameraEnabled: currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
+          micEnabled: currentCanPublishMedia,
           displayName: myUsername || "You",
           cameraPreviewUrl: myCameraPreviewUrlRef.current,
           membershipState: "active",
@@ -1608,8 +1672,8 @@ export default function WatchPartyLiveStageScreen({
         role: currentIsHost ? "host" : currentMembership?.role ?? "viewer",
         stageRole: currentMembership?.stageRole ?? (currentIsHost ? "host" : undefined),
         canSpeak: currentMembership?.canSpeak ?? (currentIsHost ? true : undefined),
-        cameraEnabled: !!myCameraPreviewUrlRef.current,
-        micEnabled: true,
+        cameraEnabled: currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
+        micEnabled: currentCanPublishMedia,
         displayName: myUsername || "You",
         cameraPreviewUrl: myCameraPreviewUrlRef.current,
         membershipState: "reconnecting",
@@ -1973,11 +2037,15 @@ export default function WatchPartyLiveStageScreen({
       ? (changes.role === "host" ? "host" : changes.role)
       : currentMembership?.stageRole;
     const shouldRemove = typeof changes.isRemoved === "boolean" ? changes.isRemoved : currentMembership?.membershipState === "removed";
+    const nextIsMuted = typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership?.isMuted ?? false;
+    const nextCanPublishMedia = !shouldRemove && !nextIsMuted && (nextStageRole === "host" || nextStageRole === "speaker");
 
     const updatedMembership = await setPartyParticipantState(partyId, participantId, {
-      isMuted: typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership?.isMuted,
+      isMuted: nextIsMuted,
       stageRole: nextStageRole,
       canSpeak: nextStageRole === "host" || nextStageRole === "speaker",
+      cameraEnabled: nextCanPublishMedia,
+      micEnabled: nextCanPublishMedia,
       membershipState: shouldRemove ? "removed" : "active",
       leftAt: shouldRemove ? new Date().toISOString() : null,
     }).catch(() => null);
@@ -2054,6 +2122,21 @@ export default function WatchPartyLiveStageScreen({
       isMuted: false,
     });
     if (!canRequestSeat(currentState) || seatRequestsById[nextParticipantId]) return;
+    const currentMembership = membershipMapRef.current[nextParticipantId];
+    if (!currentMembership) {
+      const refreshedSnapshot = await refreshStageSnapshot(nextParticipantId).catch(() => null);
+      const refreshedMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === nextParticipantId)
+        ?? membershipMapRef.current[nextParticipantId]
+        ?? null;
+      if (!refreshedMembership) {
+        debugLog("live-stage", "blocked seat request without persisted membership", {
+          partyId,
+          participantId: nextParticipantId,
+        });
+        setRoomEntryError("Your live-room seat is still syncing. Rejoin the room before requesting camera.");
+        return;
+      }
+    }
 
     revealStageOverlay();
     setSeatRequestsById((prev) => ({ ...prev, [nextParticipantId]: true }));
@@ -2063,7 +2146,9 @@ export default function WatchPartyLiveStageScreen({
     isHost,
     myUserId,
     participantStateById,
+    partyId,
     revealStageOverlay,
+    refreshStageSnapshot,
     seatRequestsById,
   ]);
 
@@ -4086,9 +4171,32 @@ export default function WatchPartyLiveStageScreen({
         premiumUpsellBody: monetizationConfig.premiumUpsellBody,
       })
     : null;
+  const blockedRoomAccessSheetReason = blockedRoomAccess && isAccessSheetReason(blockedRoomAccess.reason)
+    ? blockedRoomAccess.reason
+    : null;
+  const activeLiveAccessSheetReason = liveWatchPartyPremiumGate && isAccessSheetReason(liveWatchPartyPremiumGate.reason)
+    ? liveWatchPartyPremiumGate.reason
+    : blockedRoomAccessSheetReason;
+  const activeLiveAccessSheetGate = liveWatchPartyPremiumGate && isAccessSheetReason(liveWatchPartyPremiumGate.reason)
+    ? liveWatchPartyPremiumGate
+    : blockedRoomAccessSheetReason
+      ? blockedRoomAccess
+      : null;
+  const blockedRoomAccessGatePresentation = blockedRoomAccessSheetReason
+    ? getMonetizationAccessSheetPresentation({
+        gate: blockedRoomAccess,
+        appDisplayName: branding.appDisplayName,
+        premiumUpsellTitle: monetizationConfig.premiumUpsellTitle,
+        premiumUpsellBody: monetizationConfig.premiumUpsellBody,
+      })
+    : null;
   const livePremiumGateCopy = livePremiumGateKind === "live_first"
     ? LIVE_FIRST_PREMIUM_UPSELL_COPY
     : LIVE_WATCH_PARTY_PREMIUM_UPSELL_COPY;
+  const activeLiveAccessPresentation = liveWatchPartyGatePresentation ?? blockedRoomAccessGatePresentation;
+  const blockedRoomAccessPrimaryLabel = blockedRoomAccessSheetReason
+    ? activeLiveAccessPresentation?.actionLabel ?? (blockedRoomAccessSheetReason === "premium_required" ? "View Premium Access" : "View Room Access")
+    : "Open Party Room";
 
   if (authLoading || betaLoading) {
     return (
@@ -4159,16 +4267,20 @@ export default function WatchPartyLiveStageScreen({
               style={styles.routeGatePrimaryButton}
               activeOpacity={0.86}
               onPress={() => {
+                if (blockedRoomAccessSheetReason) {
+                  setLiveWatchPartyAccessSheetVisible(true);
+                  return;
+                }
                 router.replace({
                   pathname: "/watch-party/[partyId]",
                   params: { partyId },
                 });
               }}
               accessibilityRole="button"
-              accessibilityLabel="Open Party Room"
+              accessibilityLabel={blockedRoomAccessSheetReason ? blockedRoomAccessPrimaryLabel : "Open Party Room"}
               hitSlop={{ bottom: 6, left: 6, right: 6, top: 6 }}
             >
-              <Text style={styles.routeGatePrimaryText}>Open Party Room</Text>
+              <Text style={styles.routeGatePrimaryText}>{blockedRoomAccessPrimaryLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -4461,6 +4573,7 @@ export default function WatchPartyLiveStageScreen({
                     {participantRow.map((participant) => {
                       const isCurrentUser = participant.userId === currentUserParticipantId;
                       const mediaParticipant = stageMediaParticipantsByUserId[participant.userId] as CommunicationParticipantView | undefined;
+                      const persistedParticipantMembership = membershipMapRef.current[participant.userId];
                       const participantState = participantStateById[participant.userId] ?? {
                         isMuted: !!participant.isMuted,
                         role: participant.role === "host" ? "host" : participant.isSpeaking ? "speaker" : "listener",
@@ -4473,10 +4586,10 @@ export default function WatchPartyLiveStageScreen({
                       const isSpeakerRole = participantState.role === "speaker";
                       const isRemoved = participantState.isRemoved;
                       const isFeatured = !!featuredParticipantById[participant.userId];
-                      const isRequesting = !!seatRequestsById[participant.userId] && participantState.role === "listener" && !isRemoved;
+                      const isRequesting = !!persistedParticipantMembership && !!seatRequestsById[participant.userId] && participantState.role === "listener" && !isRemoved;
                       const presentation = participantPresentationById[participant.userId] ?? "compact";
                       const isExpanded = presentation === "expanded";
-                      const canModerateParticipant = participantState.role !== "host";
+                      const canModerateParticipant = !!persistedParticipantMembership && participantState.role !== "host";
                       const roleLabel = getParticipantLayerLabel({
                         state: participantState,
                         isFeatured,
@@ -4961,18 +5074,18 @@ export default function WatchPartyLiveStageScreen({
           setReportTarget(null);
         }}
       />
-      {liveWatchPartyPremiumGate && isAccessSheetReason(liveWatchPartyPremiumGate.reason) ? (
+      {activeLiveAccessSheetGate && activeLiveAccessSheetReason ? (
         <AccessSheet
           visible={liveWatchPartyAccessSheetVisible}
-          reason={liveWatchPartyPremiumGate.reason}
-          gate={liveWatchPartyPremiumGate}
+          reason={activeLiveAccessSheetReason}
+          gate={activeLiveAccessSheetGate}
           appDisplayName={branding.appDisplayName}
           premiumUpsellTitle={monetizationConfig.premiumUpsellTitle}
           premiumUpsellBody={monetizationConfig.premiumUpsellBody}
-          kickerOverride={liveWatchPartyGatePresentation?.kicker}
-          titleOverride={livePremiumGateCopy.title}
-          bodyOverride={livePremiumGateCopy.message}
-          actionLabelOverride={liveWatchPartyGatePresentation?.actionLabel}
+          kickerOverride={activeLiveAccessPresentation?.kicker}
+          titleOverride={liveWatchPartyPremiumGate ? livePremiumGateCopy.title : activeLiveAccessPresentation?.title}
+          bodyOverride={liveWatchPartyPremiumGate ? livePremiumGateCopy.message : activeLiveAccessPresentation?.body}
+          actionLabelOverride={activeLiveAccessPresentation?.actionLabel}
           onPurchaseResult={(result) => {
             if (!result.ok) {
               return {
@@ -4980,6 +5093,8 @@ export default function WatchPartyLiveStageScreen({
                 tone: "error" as const,
               };
             }
+            setLoading(true);
+            setAccessRetryToken((value) => value + 1);
             return {
               message: "Premium access updated. Try Live Watch-Party again.",
               tone: "success" as const,
@@ -4992,6 +5107,8 @@ export default function WatchPartyLiveStageScreen({
                 tone: "error" as const,
               };
             }
+            setLoading(true);
+            setAccessRetryToken((value) => value + 1);
             return {
               message: "Purchases restored. Try Live Watch-Party again.",
               tone: "success" as const,

@@ -199,6 +199,21 @@ type SetPartyParticipantStateOptions = {
   leftAt?: string | null;
 };
 
+const canWatchPartyMembershipPublishMedia = (options: {
+  role?: unknown;
+  stageRole?: unknown;
+  canSpeak?: unknown;
+  isMuted?: unknown;
+  membershipState?: unknown;
+}) => {
+  const role = String(options.role ?? "").trim().toLowerCase();
+  const stageRole = String(options.stageRole ?? "").trim().toLowerCase();
+  const membershipState = normalizeRoomMembershipState(options.membershipState);
+  if (membershipState === "removed" || membershipState === "left") return false;
+  if (options.isMuted) return false;
+  return role === "host" || stageRole === "host" || stageRole === "speaker" || !!options.canSpeak;
+};
+
 export const PARTY_ROOMS_TABLE = "watch_party_rooms";
 export const PARTY_SYNC_TABLE = "watch_party_sync_events";
 export const WATCH_PARTY_TABLE = "watch_party_rooms";
@@ -656,6 +671,13 @@ function rowToMembership(row: PartyMembershipRow): WatchPartyRoomMembership | nu
     canSpeak,
     currentStageRole: row.stage_role,
   });
+  const canPublishMedia = canWatchPartyMembershipPublishMedia({
+    role,
+    stageRole,
+    canSpeak,
+    isMuted: row.is_muted,
+    membershipState: row.membership_state,
+  });
   const now = new Date().toISOString();
 
   return {
@@ -666,8 +688,8 @@ function rowToMembership(row: PartyMembershipRow): WatchPartyRoomMembership | nu
     canSpeak,
     isMuted: !!row.is_muted,
     membershipState: normalizeRoomMembershipState(row.membership_state),
-    cameraEnabled: !!row.camera_enabled,
-    micEnabled: typeof row.mic_enabled === "boolean" ? row.mic_enabled : true,
+    cameraEnabled: canPublishMedia && !!row.camera_enabled,
+    micEnabled: canPublishMedia && (typeof row.mic_enabled === "boolean" ? row.mic_enabled : role === "host"),
     displayName: String(row.display_name ?? "").trim() || undefined,
     avatarUrl: String(row.avatar_url ?? "").trim() || undefined,
     cameraPreviewUrl: String(row.camera_preview_url ?? "").trim() || undefined,
@@ -812,6 +834,13 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
     : shouldPreserveHostAuthority && existingMembership.membershipState === "removed"
       ? existingMembership.leftAt ?? null
       : null;
+  const canPublishMedia = canWatchPartyMembershipPublishMedia({
+    role,
+    stageRole,
+    canSpeak,
+    isMuted,
+    membershipState,
+  });
 
   const payload: PartyMembershipInsert = {
     party_id: partyId,
@@ -821,8 +850,8 @@ async function upsertMembership(options: MembershipUpsertOptions): Promise<Watch
     can_speak: canSpeak,
     is_muted: isMuted,
     membership_state: membershipState,
-    camera_enabled: !!options.cameraEnabled,
-    mic_enabled: typeof options.micEnabled === "boolean" ? options.micEnabled : true,
+    camera_enabled: canPublishMedia && !!options.cameraEnabled,
+    mic_enabled: canPublishMedia && (typeof options.micEnabled === "boolean" ? options.micEnabled : role === "host"),
     display_name: String(options.displayName ?? "").trim() || null,
     avatar_url: String(options.avatarUrl ?? "").trim() || null,
     camera_preview_url: String(options.cameraPreviewUrl ?? "").trim() || null,
@@ -1363,6 +1392,8 @@ export async function setPartyParticipantState(
 
   const nextRole = String(updates.role ?? currentMembership?.role ?? "viewer").trim().toLowerCase();
   const nextCanSpeak = typeof updates.can_speak === "boolean" ? updates.can_speak : currentMembership?.canSpeak;
+  const nextIsMuted = typeof updates.is_muted === "boolean" ? updates.is_muted : currentMembership?.isMuted;
+  const nextMembershipState = updates.membership_state ?? currentMembership?.membershipState ?? "active";
   const shouldPreserveStageRole = changes.stageRole === undefined
     && changes.canSpeak === undefined
     && changes.role === undefined;
@@ -1371,6 +1402,25 @@ export async function setPartyParticipantState(
     canSpeak: nextCanSpeak,
     currentStageRole: shouldPreserveStageRole ? currentMembership?.stageRole : undefined,
   });
+  const nextCanPublishMedia = canWatchPartyMembershipPublishMedia({
+    role: nextRole,
+    stageRole: updates.stage_role,
+    canSpeak: nextCanSpeak,
+    isMuted: nextIsMuted,
+    membershipState: nextMembershipState,
+  });
+  const authorityChanged = changes.stageRole !== undefined
+    || changes.canSpeak !== undefined
+    || changes.role !== undefined
+    || changes.membershipState !== undefined
+    || changes.isMuted !== undefined;
+  if (!nextCanPublishMedia) {
+    updates.camera_enabled = false;
+    updates.mic_enabled = false;
+  } else if (authorityChanged) {
+    if (changes.cameraEnabled === undefined) updates.camera_enabled = true;
+    if (changes.micEnabled === undefined) updates.mic_enabled = true;
+  }
 
   const { data, error } = await supabase
     .from(WATCH_PARTY_ROOM_MEMBERSHIPS_TABLE)

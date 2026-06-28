@@ -200,6 +200,13 @@ type LocalMsg = {
   attachments: SocialAttachment[];
 };
 
+const canRoomMembershipPublishMedia = (membership?: WatchPartyRoomMembership | null) => {
+  if (!membership) return false;
+  if (membership.membershipState === "removed" || membership.membershipState === "left") return false;
+  if (membership.isMuted) return false;
+  return membership.role === "host" || membership.stageRole === "host" || membership.stageRole === "speaker" || membership.canSpeak;
+};
+
 type RoomChatMessageRow = {
   id: string;
   party_id: string;
@@ -699,6 +706,7 @@ export default function WatchPartyRoomScreen() {
       if (!normalizedUserId) return null;
 
       const membership = membershipMapRef.current[normalizedUserId];
+      if (!membership && normalizedUserId !== options.trackedUserId) return null;
       if (membership && (membership.membershipState === "removed" || membership.membershipState === "left")) return null;
 
       const normalizedCameraPreviewUrl = String(
@@ -881,18 +889,30 @@ export default function WatchPartyRoomScreen() {
         let roomAccessAllowed = false;
         if (exactTicketAllowsEntry) {
           roomAccessAllowed = true;
-          await joinPartyRoomSession({
+          const sessionIsHost = userId === snapshot.room.hostUserId;
+          const sessionCanPublishMedia = sessionIsHost || canRoomMembershipPublishMedia(currentMembership);
+          const joinedMembership = await joinPartyRoomSession({
             partyId,
             userId,
-            role: userId === snapshot.room.hostUserId ? "host" : "viewer",
-            canSpeak: userId === snapshot.room.hostUserId,
-            cameraEnabled: !!profileCameraPreviewUrl,
-            micEnabled: true,
+            role: sessionIsHost ? "host" : "viewer",
+            canSpeak: sessionIsHost,
+            cameraEnabled: sessionCanPublishMedia && !!profileCameraPreviewUrl,
+            micEnabled: sessionCanPublishMedia,
             displayName: myProfileUsernameRef.current,
             cameraPreviewUrl: profileCameraPreviewUrl,
           }).catch(() => null);
+          let refreshedSnapshot = null;
           if (!cancelled) {
-            await refreshRoomSnapshot(userId).catch(() => null);
+            refreshedSnapshot = await refreshRoomSnapshot(userId).catch(() => null);
+          }
+          const persistedMembership = joinedMembership
+            ?? refreshedSnapshot?.memberships.find((membership) => membership.userId === userId)
+            ?? membershipMapRef.current[userId]
+            ?? null;
+          if (!persistedMembership) {
+            setConnState("error");
+            setLoading(false);
+            return;
           }
         } else {
           const access = await resolveRoomAccess({
@@ -907,18 +927,30 @@ export default function WatchPartyRoomScreen() {
 
           if (access?.isAllowed) {
             roomAccessAllowed = true;
-            await joinPartyRoomSession({
+            const sessionIsHost = userId === snapshot.room.hostUserId;
+            const sessionCanPublishMedia = sessionIsHost || canRoomMembershipPublishMedia(currentMembership);
+            const joinedMembership = await joinPartyRoomSession({
               partyId,
               userId,
-              role: userId === snapshot.room.hostUserId ? "host" : "viewer",
-              canSpeak: userId === snapshot.room.hostUserId,
-              cameraEnabled: !!profileCameraPreviewUrl,
-              micEnabled: true,
+              role: sessionIsHost ? "host" : "viewer",
+              canSpeak: sessionIsHost,
+              cameraEnabled: sessionCanPublishMedia && !!profileCameraPreviewUrl,
+              micEnabled: sessionCanPublishMedia,
               displayName: myProfileUsernameRef.current,
               cameraPreviewUrl: profileCameraPreviewUrl,
             }).catch(() => null);
+            let refreshedSnapshot = null;
             if (!cancelled) {
-              await refreshRoomSnapshot(userId).catch(() => null);
+              refreshedSnapshot = await refreshRoomSnapshot(userId).catch(() => null);
+            }
+            const persistedMembership = joinedMembership
+              ?? refreshedSnapshot?.memberships.find((membership) => membership.userId === userId)
+              ?? membershipMapRef.current[userId]
+              ?? null;
+            if (!persistedMembership) {
+              setConnState("error");
+              setLoading(false);
+              return;
             }
           } else if (access?.reason === "identity_required") {
             setConnState("error");
@@ -992,13 +1024,16 @@ export default function WatchPartyRoomScreen() {
 
         if (roomAccessAllowed) {
           heartbeatRef.current = setInterval(() => {
+            const heartbeatMembership = membershipMapRef.current[userId];
+            const heartbeatCanPublishMedia = myRoleRef.current === "host" || canRoomMembershipPublishMedia(heartbeatMembership);
             void touchPartyRoomSession({
               partyId,
               userId,
               role: myRoleRef.current === "host" ? "host" : "viewer",
-              canSpeak: myRoleRef.current === "host",
-              cameraEnabled: !!myCameraPreviewUrlRef.current,
-              micEnabled: true,
+              stageRole: heartbeatMembership?.stageRole ?? (myRoleRef.current === "host" ? "host" : undefined),
+              canSpeak: heartbeatMembership?.canSpeak ?? (myRoleRef.current === "host"),
+              cameraEnabled: heartbeatCanPublishMedia && !!myCameraPreviewUrlRef.current,
+              micEnabled: heartbeatCanPublishMedia,
               displayName: myProfileUsernameRef.current,
               cameraPreviewUrl: myCameraPreviewUrlRef.current,
             }).then(() => refreshRoomSnapshot(userId));
@@ -1195,13 +1230,16 @@ export default function WatchPartyRoomScreen() {
           });
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           setConnState("reconnecting");
+          const reconnectMembership = membershipMapRef.current[trackedUserId];
+          const reconnectCanPublishMedia = role === "host" || canRoomMembershipPublishMedia(reconnectMembership);
           void touchPartyRoomSession({
             partyId,
             userId: trackedUserId,
-            role: membershipMapRef.current[trackedUserId]?.role ?? role,
-            canSpeak: membershipMapRef.current[trackedUserId]?.canSpeak ?? (role === "host"),
-            cameraEnabled: !!myCameraPreviewUrlRef.current,
-            micEnabled: true,
+            role: reconnectMembership?.role ?? role,
+            stageRole: reconnectMembership?.stageRole ?? (role === "host" ? "host" : undefined),
+            canSpeak: reconnectMembership?.canSpeak ?? (role === "host"),
+            cameraEnabled: reconnectCanPublishMedia && !!myCameraPreviewUrlRef.current,
+            micEnabled: reconnectCanPublishMedia,
             displayName: myProfileUsernameRef.current,
             cameraPreviewUrl: myCameraPreviewUrlRef.current,
             membershipState: "reconnecting",
@@ -1386,6 +1424,8 @@ export default function WatchPartyRoomScreen() {
     const subscription = AppState.addEventListener("change", (nextState) => {
       const currentUserId = String(myUserIdRef.current ?? "").trim();
       if (!partyId || !currentUserId) return;
+      const currentMembership = membershipMapRef.current[currentUserId];
+      const currentCanPublishMedia = myRoleRef.current === "host" || canRoomMembershipPublishMedia(currentMembership);
 
       if (nextState === "active") {
         setConnState((prev) => (prev === "reconnecting" ? "connecting" : prev));
@@ -1393,9 +1433,10 @@ export default function WatchPartyRoomScreen() {
           partyId,
           userId: currentUserId,
           role: myRoleRef.current === "host" ? "host" : "viewer",
-          canSpeak: myRoleRef.current === "host",
-          cameraEnabled: !!myCameraPreviewUrlRef.current,
-          micEnabled: true,
+          stageRole: currentMembership?.stageRole ?? (myRoleRef.current === "host" ? "host" : undefined),
+          canSpeak: currentMembership?.canSpeak ?? (myRoleRef.current === "host"),
+          cameraEnabled: currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
+          micEnabled: currentCanPublishMedia,
           displayName: myProfileUsernameRef.current,
           cameraPreviewUrl: myCameraPreviewUrlRef.current,
           membershipState: "active",
@@ -1412,9 +1453,10 @@ export default function WatchPartyRoomScreen() {
         partyId,
         userId: currentUserId,
         role: myRoleRef.current === "host" ? "host" : "viewer",
-        canSpeak: myRoleRef.current === "host",
-        cameraEnabled: !!myCameraPreviewUrlRef.current,
-        micEnabled: true,
+        stageRole: currentMembership?.stageRole ?? (myRoleRef.current === "host" ? "host" : undefined),
+        canSpeak: currentMembership?.canSpeak ?? (myRoleRef.current === "host"),
+        cameraEnabled: currentCanPublishMedia && !!myCameraPreviewUrlRef.current,
+        micEnabled: currentCanPublishMedia,
         displayName: myProfileUsernameRef.current,
         cameraPreviewUrl: myCameraPreviewUrlRef.current,
         membershipState: "reconnecting",
@@ -1492,6 +1534,7 @@ export default function WatchPartyRoomScreen() {
     if (!nextStageRole) return false;
     const nextIsMuted = typeof changes.isMuted === "boolean" ? changes.isMuted : currentMembership?.isMuted ?? false;
     const shouldRemove = typeof changes.isRemoved === "boolean" ? changes.isRemoved : currentMembership?.membershipState === "removed";
+    const nextCanPublishMedia = !shouldRemove && !nextIsMuted && (nextStageRole === "host" || nextStageRole === "speaker");
     trackModerationActionUsed({
       surface: "watch-party-room",
       action: shouldRemove
@@ -1512,6 +1555,8 @@ export default function WatchPartyRoomScreen() {
       isMuted: nextIsMuted,
       stageRole: nextStageRole,
       canSpeak: nextStageRole === "host" || nextStageRole === "speaker",
+      cameraEnabled: nextCanPublishMedia,
+      micEnabled: nextCanPublishMedia,
       membershipState: shouldRemove ? "removed" : "active",
       leftAt: shouldRemove ? new Date().toISOString() : null,
     }).catch(() => null);
@@ -1552,6 +1597,20 @@ export default function WatchPartyRoomScreen() {
     if (!partyId || !participantId || participantId !== currentUserId || myRoleRef.current === "host") return;
     const currentMembership = membershipMapRef.current[participantId];
     if (currentMembership?.stageRole === "speaker" || currentMembership?.canSpeak) return;
+    if (!currentMembership) {
+      const refreshedSnapshot = await refreshRoomSnapshot(currentUserId).catch(() => null);
+      const refreshedMembership = refreshedSnapshot?.memberships.find((membership) => membership.userId === participantId)
+        ?? membershipMapRef.current[participantId]
+        ?? null;
+      if (!refreshedMembership) {
+        debugLog("watch-party", "blocked visible speaker request without persisted membership", {
+          partyId,
+          participantId,
+        });
+        setConnState("error");
+        return;
+      }
+    }
 
     setParticipantSeatRequestById((prev) => ({ ...prev, [participantId]: true }));
     await broadcastParticipantSeatRequest(participantId, true);
@@ -1559,7 +1618,7 @@ export default function WatchPartyRoomScreen() {
       partyId,
       participantId,
     });
-  }, [broadcastParticipantSeatRequest, partyId]);
+  }, [broadcastParticipantSeatRequest, partyId, refreshRoomSnapshot]);
 
   useEffect(() => {
     if (!isNativeCameraPlatform) return;
@@ -3470,17 +3529,18 @@ export default function WatchPartyRoomScreen() {
                 isRemoved: false,
               };
               const isCurrentUser = participant.userId === currentUserBubbleId;
+              const persistedParticipantMembership = membershipMapRef.current[participant.userId];
               const isFeatured = !!featuredParticipantById[participant.userId];
               const isPinned = participant.userId === pinnedParticipantId;
               const isPinActionVisible = participant.userId === pinActionParticipantId;
               const isFocused = participant.userId === activeParticipantId;
               const isMuted = participantState.isMuted;
               const isSpeakerRole = participantState.role === "speaker";
-              const isRequestingSeat = !!participantSeatRequestById[participant.userId] && !isSpeakerRole;
+              const isRequestingSeat = !!persistedParticipantMembership && !!participantSeatRequestById[participant.userId] && !isSpeakerRole;
               const isRemoved = participantState.isRemoved;
               const presentation = participantPresentationById[participant.userId] ?? "compact";
               const isExpanded = presentation === "expanded";
-              const canModerateParticipant = participantState.role !== "host";
+              const canModerateParticipant = !!persistedParticipantMembership && participantState.role !== "host";
               const showLocalCameraPreview = allowLocalCameraPreview && isCurrentUser && !!cameraPermission?.granted;
               const roleLabel = getParticipantRoleLabel(participantState);
               const bubbleMediaUri = (isCurrentUser ? myCameraPreviewUrlRef.current : "") || participant.cameraPreviewUrl || participant.avatarUrl || "";
@@ -3725,11 +3785,13 @@ export default function WatchPartyRoomScreen() {
         {isLiveRoom && watchPartyLiveControlsVisible ? (
           <TouchableOpacity
             style={styles.watchCTA}
+            testID="party-room-go-live-button"
+            accessibilityLabel="Go Live from Party Room"
             activeOpacity={0.88}
             onPress={() => {
               if (!partyId) return;
               router.push({
-                pathname: "/watch-party/live-stage/[partyId]",
+                pathname: "/watch-party/live-stage",
                 params: {
                   partyId,
                   mode: sharedRoomMode,
