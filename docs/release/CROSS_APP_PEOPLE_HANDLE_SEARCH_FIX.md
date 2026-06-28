@@ -4,7 +4,7 @@ Current verdict: Partial.
 
 Cross-app people/handle search proof: Partial for actual-user installed-app closure.
 
-June 28, 2026 v60 installed follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` proved Chi'lly Chat installed search can find `user230455` as `user230455` / `@user230455` on the Google Play-installed versionCode `60` build. The visible result opened the direct thread after live authenticated RPC ambiguity fixes. Cross-app search remains Partial because the full term matrix across `@user230455`, `User230455`, `user 230455`, display name, Explore People, Profile entry, and direct-thread creation from every visible surface was not completed, and an existing Chat inbox row still displayed stale `@user230456` before the fresh search/open path.
+June 28, 2026 v60 installed follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` proved Chi'lly Chat installed search can find `user230455` as `user230455` / `@user230455` on the Google Play-installed versionCode `60` build. The visible result opened the direct thread after live authenticated RPC ambiguity fixes. A later receiver readback migration also proved the real incoming call banner can open/join the readable direct thread, with both phones showing `2 in call`; full call closure remains Partial because installed v60 recorded a false missed-call event after end and the cleanup source fix is not installed yet. Cross-app search remains Partial because the full term matrix across `@user230455`, `User230455`, `user 230455`, display name, Explore People, Profile entry, and direct-thread creation from every visible surface was not completed, and an existing Chat inbox row still displayed stale `@user230456` before the fresh search/open path.
 
 ## Scope
 

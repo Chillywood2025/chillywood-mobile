@@ -840,13 +840,20 @@ export default function ChillyChatThreadScreen() {
     Vibration.cancel();
     void stopChillyChatCallSound(incomingCallSoundRef.current);
     incomingCallSoundRef.current = null;
+    if (incomingCallTimeoutRef.current) {
+      clearTimeout(incomingCallTimeoutRef.current);
+      incomingCallTimeoutRef.current = null;
+    }
     setCallBusy(true);
     try {
-      await updateChillyChatCallInviteStatus({
+      const acceptedInvite = await updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
         invite: incomingCallInvite,
         status: "accepted",
       });
+      if (!acceptedInvite) {
+        throw new Error("Unable to accept this Chi'lly Chat call right now.");
+      }
       setIncomingCallInvite(null);
       setCallPanelOpen(true);
       setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
@@ -948,6 +955,32 @@ export default function ChillyChatThreadScreen() {
         return;
       }
 
+      if (
+        incomingCallInvite
+        && currentUserId
+        && incomingCallInvite.calleeUserId === currentUserId
+        && incomingCallInvite.callerUserId !== currentUserId
+      ) {
+        if (incomingCallTimeoutRef.current) {
+          clearTimeout(incomingCallTimeoutRef.current);
+          incomingCallTimeoutRef.current = null;
+        }
+        Vibration.cancel();
+        void stopChillyChatCallSound(incomingCallSoundRef.current);
+        incomingCallSoundRef.current = null;
+        const acceptedInvite = await updateChillyChatCallInviteStatus({
+          actorUserId: currentUserId,
+          invite: incomingCallInvite,
+          status: "accepted",
+        });
+        if (!acceptedInvite) {
+          setError("Unable to accept this Chi'lly Chat call right now.");
+          setCallDeliveryStatus("Incoming call could not be accepted. Ask the caller to start a new call.");
+          return;
+        }
+        setIncomingCallInvite(null);
+      }
+
       trackEvent("chat_call_join_requested", {
         surface: "chat-thread",
         threadId,
@@ -991,7 +1024,7 @@ export default function ChillyChatThreadScreen() {
         role: isHost ? "host" : "viewer",
       });
     }
-  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, leaveRoom, loadThreadState, officialAccount, thread?.activeCallType, threadId]);
+  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";

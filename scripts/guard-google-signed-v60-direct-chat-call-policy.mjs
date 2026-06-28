@@ -55,6 +55,8 @@ const safetyMigration = read("supabase/migrations/20260628212500_chilly_chat_dir
 const grantsMigration = read("supabase/migrations/20260628213000_chilly_chat_direct_thread_repair_execute_grants.sql");
 const pairKeyMigration = read("supabase/migrations/20260628215750_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql");
 const memberUpsertMigration = read("supabase/migrations/20260628215943_chilly_chat_direct_thread_repair_member_upsert_constraint.sql");
+const ownerReadbackMigration = read("supabase/migrations/20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql");
+const directMemberReadbackMigration = read("supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql");
 
 [
   "Google-signed Play internal install proof: Closed / Partial / Blocked",
@@ -66,7 +68,11 @@ const memberUpsertMigration = read("supabase/migrations/20260628215943_chilly_ch
   "Visible People result must open or create a direct thread",
   "Direct-thread repair must be authenticated and RLS-safe",
   "Unable to open Chi’lly Chat with this person right now is not Closed",
+  "Receiver banner must resolve a valid readable direct thread",
+  "This Chi’lly Chat thread could not be found is not Closed",
+  "Receiver banner tap must join or open the correct call thread",
   "Same-thread proof is not enough",
+  "Background push/ringing is Partial without installed-app evidence",
   "Call end/decline/missed cleanup must be proved before full call closure",
   "Source fixed is not installed-app proof",
   "Google Play internal install is not enough without actual user flow proof",
@@ -81,9 +87,17 @@ const memberUpsertMigration = read("supabase/migrations/20260628215943_chilly_ch
   "Google Play internal testing upload status: delivered to internal testing",
   "Status: Passed for installed visible Chat search open/create after live RPC fixes.",
   "This Chi'lly Chat thread could not be found.",
-  "Full actual-user call closure is not Closed because the receiver cannot join from the app-wide incoming call banner.",
   "20260628215838 chilly_chat_direct_thread_repair_ambiguous_pair_key",
   "20260628220027 chilly_chat_direct_thread_repair_member_upsert_constraint",
+  "20260628223330 chilly_chat_owner_initiated_thread_member_readback",
+  "20260628223918 chilly_chat_direct_member_platform_owner_thread_readback",
+  "Receiver banner thread-readback fix",
+  "callee_can_access=true",
+  "thread_readable_by_callee=true",
+  "R5CR120QCBF` tapped the app-wide banner and joined the correct call surface",
+  "2 in call",
+  "false `Missed voice call`",
+  "requires a newer Google Play internal build",
 ].forEach((needle) => requireText("v60 proof doc", doc, needle));
 
 [
@@ -205,6 +219,8 @@ forbidSentence("v60 proof doc", doc, (sentence) => (
   ["grants repair migration", grantsMigration],
   ["pair-key repair migration", pairKeyMigration],
   ["member-upsert repair migration", memberUpsertMigration],
+  ["owner readback migration", ownerReadbackMigration],
+  ["direct member readback migration", directMemberReadbackMigration],
 ].forEach(([label, content]) => {
   forbidMatch(label, content, /\b(?:PASSWORD|PASSCODE)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/i, "password value");
   forbidMatch(label, content, /(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY)\s*=\s*['"]?[A-Za-z0-9._-]{20,}/, "service-role key value");
@@ -244,6 +260,15 @@ requireText("pair-key repair migration", pairKeyMigration, "v_participant_pair_k
 requireText("pair-key repair migration", pairKeyMigration, "where thread.\"participant_pair_key\" = v_participant_pair_key");
 requireText("member-upsert repair migration", memberUpsertMigration, "on conflict on constraint chat_thread_members_pkey do update");
 requireText("member-upsert repair migration", memberUpsertMigration, "revoke all on function public.get_or_create_direct_chat_thread(text, text, text, text) from service_role;");
+requireText("owner readback migration", ownerReadbackMigration, "create or replace function public.can_access_chat_thread");
+requireText("owner readback migration", ownerReadbackMigration, "explicit members of owner-created direct threads");
+requireText("direct member readback migration", directMemberReadbackMigration, "create or replace function public.can_access_chat_thread");
+requireText("direct member readback migration", directMemberReadbackMigration, "Direct threads that contain a platform owner remain member-only");
+requireText("direct member readback migration", directMemberReadbackMigration, "public.\"has_channel_audience_block_between\"(actor.user_id, other_member.\"user_id\")");
+requireText("call invite stale missed guard", callLib, "query = query.eq(\"status\", \"ringing\");");
+requireText("call invite stale missed guard", callLib, "if (!updatedInvite) return null;");
+requireText("banner auto accept source", thread, "Incoming call could not be accepted. Ask the caller to start a new call.");
+requireText("banner auto accept source", thread, "status: \"accepted\"");
 
 forbidMatch("chat call migration", callMigration, /disable row level security/i, "RLS disablement");
 forbidMatch("chat call migration", callMigration, /using\s*\(\s*true\s*\)/i, "allow-all RLS policy");
@@ -253,6 +278,8 @@ forbidMatch("safety repair migration", safetyMigration, /disable row level secur
 forbidMatch("grants repair migration", grantsMigration, /disable row level security/i, "RLS disablement");
 forbidMatch("pair-key repair migration", pairKeyMigration, /disable row level security/i, "RLS disablement");
 forbidMatch("member-upsert repair migration", memberUpsertMigration, /disable row level security/i, "RLS disablement");
+forbidMatch("owner readback migration", ownerReadbackMigration, /disable row level security/i, "RLS disablement");
+forbidMatch("direct member readback migration", directMemberReadbackMigration, /disable row level security/i, "RLS disablement");
 forbidMatch("mobile chat/call sources", `${chatLib}\n${callLib}\n${notificationsLib}\n${appLayout}\n${inbox}\n${thread}\n${profile}\n${settings}\n${userData}`, /service_role|SUPABASE_SERVICE_ROLE/i, "service-role mobile use");
 
 forbidMatch("runtime feature flags", featureFlags, /liveMoneyEnabled:\s*true/i, "liveMoneyEnabled ON");

@@ -28,6 +28,10 @@ const safetyMigration = read("supabase/migrations/20260628212500_chilly_chat_dir
 const grantsMigration = read("supabase/migrations/20260628213000_chilly_chat_direct_thread_repair_execute_grants.sql");
 const pairKeyMigration = read("supabase/migrations/20260628215750_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql");
 const memberUpsertMigration = read("supabase/migrations/20260628215943_chilly_chat_direct_thread_repair_member_upsert_constraint.sql");
+const ownerReadbackMigration = read("supabase/migrations/20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql");
+const directMemberReadbackMigration = read("supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql");
+const callLib = read("_lib/chillyChatCalls.ts");
+const threadScreen = read("app/chat/[threadId].tsx");
 
 [
   "Google-signed Play internal install proof: Closed / Partial / Blocked",
@@ -40,7 +44,11 @@ const memberUpsertMigration = read("supabase/migrations/20260628215943_chilly_ch
   "Visible People result must open or create a direct thread",
   "Direct-thread repair must be authenticated and RLS-safe",
   "Unable to open Chi’lly Chat with this person right now is not Closed",
+  "Receiver banner must resolve a valid readable direct thread",
+  "This Chi’lly Chat thread could not be found is not Closed",
+  "Receiver banner tap must join or open the correct call thread",
   "Same-thread proof is not enough",
+  "Background push/ringing is Partial without installed-app evidence",
   "Call end/decline/missed cleanup must be proved before full call closure",
   "Source fixed is not installed-app proof",
   "Google Play internal install is not enough without actual user flow proof",
@@ -109,9 +117,23 @@ const memberUpsertMigration = read("supabase/migrations/20260628215943_chilly_ch
   "Status: Passed for installed visible Chat search open/create after live RPC fixes.",
   "R5CR120QCBF` showed an app-wide incoming banner",
   "This Chi'lly Chat thread could not be found.",
-  "Caller End Call returned the thread header to `No Active Call`.",
+  "Caller End Call returned both phones to readable direct-thread screens with `No Active Call`.",
   "20260628215838 chilly_chat_direct_thread_repair_ambiguous_pair_key",
   "20260628220027 chilly_chat_direct_thread_repair_member_upsert_constraint",
+  "20260628223330 chilly_chat_owner_initiated_thread_member_readback",
+  "20260628223918 chilly_chat_direct_member_platform_owner_thread_readback",
+  "Receiver banner thread-readback fix",
+  "callee_can_access=true",
+  "thread_readable_by_callee=true",
+  "callee_member_readable=true",
+  "R5CR120QCBF` tapped the app-wide banner and joined the correct call surface",
+  "Voice call active",
+  "2 in call",
+  "Participant",
+  "false `Missed voice call`",
+  "requires a newer Google Play internal build",
+  "/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R5-after-second-banner-tap.png",
+  "/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R3-after-second-banner-tap.xml",
 ].forEach((needle) => requireText("v60 proof facts", doc, needle));
 
 [
@@ -143,6 +165,15 @@ requireText("pair key direct thread repair migration", pairKeyMigration, "v_part
 requireText("pair key direct thread repair migration", pairKeyMigration, "where thread.\"participant_pair_key\" = v_participant_pair_key");
 requireText("member upsert direct thread repair migration", memberUpsertMigration, "on conflict on constraint chat_thread_members_pkey do update");
 requireText("member upsert direct thread repair migration", memberUpsertMigration, "avoids ambiguous pair-key and member-upsert resolution");
+requireText("owner readback migration", ownerReadbackMigration, "create or replace function public.can_access_chat_thread");
+requireText("owner readback migration", ownerReadbackMigration, "explicit members of owner-created direct threads");
+requireText("direct member readback migration", directMemberReadbackMigration, "create or replace function public.can_access_chat_thread");
+requireText("direct member readback migration", directMemberReadbackMigration, "Direct threads that contain a platform owner remain member-only");
+requireText("direct member readback migration", directMemberReadbackMigration, "public.\"has_channel_audience_block_between\"(actor.user_id, other_member.\"user_id\")");
+requireText("call invite stale missed guard", callLib, "query = query.eq(\"status\", \"ringing\");");
+requireText("call invite stale missed guard", callLib, "if (!updatedInvite) return null;");
+requireText("banner auto accept source", threadScreen, "Incoming call could not be accepted. Ask the caller to start a new call.");
+requireText("banner auto accept source", threadScreen, "status: \"accepted\"");
 
 if (failures.length) {
   console.error("Google-signed v60 direct chat call proof failed:");

@@ -441,15 +441,29 @@ export async function updateChillyChatCallInviteStatus(input: {
   if (input.status === "accepted") updates.accepted_at = now;
   if (input.status === "ended") updates.ended_at = now;
 
-  const { data, error } = await supabase
+  let query = supabase
     .from(CHAT_CALL_INVITES_TABLE)
     .update(updates)
-    .eq("id", input.invite.id)
+    .eq("id", input.invite.id);
+
+  if (
+    input.status === "accepted"
+    || input.status === "declined"
+    || input.status === "missed"
+    || input.status === "busy"
+  ) {
+    query = query.eq("status", "ringing");
+  }
+
+  const { data, error } = await query
     .select(CALL_INVITE_SELECT)
     .returns<CallInviteRow>()
     .maybeSingle();
 
   if (error) return null;
+  const updatedInvite = parseInvite(data ?? null);
+  if (!updatedInvite) return null;
+
   await insertChillyChatCallEvent({
     actorUserId: input.actorUserId,
     callInviteId: input.invite.id,
@@ -468,7 +482,6 @@ export async function updateChillyChatCallInviteStatus(input: {
               : "ended",
     threadId: input.invite.threadId,
   }).catch(() => null);
-  const updatedInvite = parseInvite(data ?? null);
   if (updatedInvite && input.status === "missed") {
     void dispatchChillyChatCallPush({
       action: "missed",

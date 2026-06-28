@@ -4,7 +4,7 @@ Google-signed Play internal install proof: Closed / Partial / Blocked
 
 Final verdict: Partial.
 
-This lane delivered a Google Play internal, Google-signed versionCode `60` build to both attached phones and proved the fresh handle/search/direct-thread open path far enough to start a real voice call from a normal visible Chat search result. Full Chi'lly Chat call closure remains Partial because the receiver elsewhere-in-app can see the incoming call banner, but tapping it on `R5CR120QCBF` opens `This Chi'lly Chat thread could not be found.` and the caller remains `1 in call`.
+This lane delivered a Google Play internal, Google-signed versionCode `60` build to both attached phones and proved the fresh handle/search/direct-thread open path far enough to start a real voice call from a normal visible Chat search result. A follow-up receiver banner thread-readback migration fixed the installed v60 blocker where tapping the real incoming call banner opened `This Chi'lly Chat thread could not be found.` After the live migration, `R5CR120QCBF` tapped the incoming banner, opened the readable direct call thread, joined the call, and both phones showed `2 in call`. Full Chi'lly Chat call closure remains Partial because v60 still recorded a false `Missed voice call` after a joined call ended, the app-side source fix for that cleanup is not installed in a Google Play build yet, and video/background/decline/missed cleanup matrices remain incomplete.
 
 ## Required Proof Doctrine
 
@@ -25,6 +25,14 @@ Direct-thread repair must be authenticated and RLS-safe.
 Unable to open Chi’lly Chat with this person right now is not Closed.
 
 Same-thread proof is not enough.
+
+Receiver banner must resolve a valid readable direct thread.
+
+This Chi’lly Chat thread could not be found is not Closed.
+
+Receiver banner tap must join or open the correct call thread.
+
+Background push/ringing is Partial without installed-app evidence.
 
 Call end/decline/missed cleanup must be proved before full call closure.
 
@@ -69,6 +77,8 @@ Repo migration files:
 - `supabase/migrations/20260628213000_chilly_chat_direct_thread_repair_execute_grants.sql`
 - `supabase/migrations/20260628215750_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql`
 - `supabase/migrations/20260628215943_chilly_chat_direct_thread_repair_member_upsert_constraint.sql`
+- `supabase/migrations/20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql`
+- `supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql`
 
 Target Supabase migration history shows the repair path applied:
 
@@ -77,6 +87,8 @@ Target Supabase migration history shows the repair path applied:
 - `20260628211813 chilly_chat_direct_thread_repair_execute_grants`
 - `20260628215838 chilly_chat_direct_thread_repair_ambiguous_pair_key`
 - `20260628220027 chilly_chat_direct_thread_repair_member_upsert_constraint`
+- `20260628223330 chilly_chat_owner_initiated_thread_member_readback`
+- `20260628223918 chilly_chat_direct_member_platform_owner_thread_readback`
 
 Live RPC verification:
 
@@ -93,7 +105,17 @@ Live RPC verification:
 
 The repair function is authenticated and RLS-safe for this lane: it operates only on the authenticated caller and requested target pair, denies account-restricted/unavailable/blocked/unauthorized targets before creating a thread, preserves platform-owner chat restrictions, returns only the thread id, and still requires normal RLS readback in the app before the caller sees success. No service-role chat proof was counted.
 
+Receiver banner thread-readback fix:
+
+- Root cause: the app-wide incoming call banner carried the correct invite/thread route, but receiver readback through `getChatThread(invite.threadId)` returned no readable thread when the direct thread contained a platform-owner member and the thread row had been created by the receiver/stale side. The receiver was an explicit `chat_thread_members` member, but the earlier platform-owner read guard still denied the thread.
+- Files changed: `supabase/migrations/20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql`, `supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql`, `_lib/chillyChatCalls.ts`, and `app/chat/[threadId].tsx`.
+- Migration/RPC changes: `public.can_access_chat_thread(uuid)` now lets authenticated explicit direct-thread members read a direct thread they already belong to even when a platform-owner member is present, while preserving account restriction checks, block checks, direct-thread membership checks, and direct-thread creation/open restrictions in `get_or_create_direct_chat_thread`.
+- Live receiver-context verification after the second migration returned `callee_can_access=true`, `thread_readable_by_callee=true`, `callee_member_readable=true`, `has_platform_owner=true`, and `actor_is_current_platform_owner=false` for the latest proof thread.
+- Supabase advisors still report existing project-wide warnings unrelated to this targeted function; this function keeps a fixed `search_path` and does not use service-role as chat proof.
+
 ## Google Play Internal Build Result
+
+No new Google Play build was created for the receiver thread-readback backend migration. The installed proof below reuses Google Play-installed v60 because the failing path was a live Supabase read policy/RLS readback issue, not a binary routing issue. Source fixed is not installed-app proof: the app-side false missed-call cleanup fix in this commit requires a newer Google Play internal build, expected versionCode `61` or higher, before cleanup can be Closed.
 
 EAS production Android store build:
 
@@ -188,13 +210,15 @@ Installed proof that passed:
 - Phone A tapped Voice Call.
 - Caller saw `Voice call active`, `Connected`, `1 in call`, and delivery status `push sent`.
 - Phone B, while elsewhere in app, received an incoming call banner.
-- Caller End Call returned the thread to `No Active Call`.
+- After `20260628223918_chilly_chat_direct_member_platform_owner_thread_readback`, Phone B tapped the incoming banner and joined the call.
+- Both phones showed `Voice call active`, `Connected`, and `2 in call`.
+- Caller End Call returned both phones to readable direct-thread screens with `No Active Call`.
 
-Remaining blocker:
+Remaining blockers:
 
-- Phone B tapping the incoming banner did not join. It opened `This Chi'lly Chat thread could not be found.`
-- Code review after proof points to the normal `/chat/{threadId}` readback path, not the banner tap handler: the app-wide banner pushes the correct chat route, but the receiver cannot read that owner-to-user thread under the current platform-owner chat guard. Changing that guard is a policy/RLS decision and was not made in this lane.
-- Video Call was not attempted after the voice join blocker.
+- Installed v60 recorded `Voice call ended` and then a false `Missed voice call` event for the same joined call because banner auto-join did not mark the invite accepted in the installed binary.
+- The source fix for that cleanup is present in `_lib/chillyChatCalls.ts` and `app/chat/[threadId].tsx`, but it is not installed-app proof until delivered through Google Play.
+- Video Call was not attempted after the source cleanup blocker was found.
 
 ## Existing Thread Call Path Result
 
@@ -225,12 +249,13 @@ Installed proof that passed:
 - `R5CR120QCBF` was signed in and remained on its Profile, not inside the thread.
 - `R3CXA0DS5JV` started a real voice call from the visible search-opened direct thread.
 - `R5CR120QCBF` showed an app-wide incoming banner: `Incoming Chi'lly Chat voice call`, caller copy, `Tap to answer`, and `Dismiss`.
+- After the receiver thread-readback migration, `R5CR120QCBF` tapped the app-wide banner and joined the correct call surface.
+- `R5CR120QCBF` showed `Voice call active`, `2 in call`, `Participant`, and `Connected`.
+- `R3CXA0DS5JV` showed `Voice call active`, `2 in call`, and `Connected`.
 
-Installed proof that failed:
+Remaining Partial reason:
 
-- Tapping the banner opened `This Chi'lly Chat thread could not be found.`
-- `R3CXA0DS5JV` stayed at `1 in call`.
-- Both phones did not reach joined state.
+- This only proves the voice receiver-elsewhere banner join path. Background push/ringing, video local/remote, decline/missed cleanup, and installed source cleanup remain incomplete.
 
 ## Receiver Background/Push Result
 
@@ -244,7 +269,9 @@ The caller delivery status said `push sent`, and the receiver saw a foreground/a
 
 Status: Partial.
 
-Voice call start from the visible direct thread worked for the caller and produced receiver-visible incoming state. Voice call join did not close because tapping the receiver banner routed to a missing-thread screen.
+Installed v60 plus live receiver readback migration proved voice call start, receiver app-wide banner, banner tap, receiver join, both phones in `2 in call`, and caller end returning the thread to `No Active Call`.
+
+Voice remains Partial for full closure because installed v60 also recorded a false `Missed voice call` after the joined call ended, and decline/missed/repeated/background cleanup was not fully proved.
 
 ## Video Call Local/Remote Result
 
@@ -264,8 +291,16 @@ Status: Partial.
 
 Installed proof that passed:
 
-- Caller End Call returned the thread header to `No Active Call`.
+- Caller End Call returned the thread header to `No Active Call` on `R3CXA0DS5JV`.
+- `R5CR120QCBF` returned to the readable direct thread with `No Active Call`.
+- Live backend readback after the joined call showed `chat_threads.active_communication_room_id` cleared and `chat_threads.active_call_type` cleared.
 - No stuck incoming banner remained on R5 after caller ended the attempted calls.
+
+Installed proof that failed:
+
+- Installed v60 recorded `Voice call ended` and then `Missed voice call` at `5:42 PM` for the same joined call. Live readback showed the latest invite status as `missed` with no `accepted_at`, even though both phones had been in `2 in call`.
+- Source fix: `_lib/chillyChatCalls.ts` now prevents stale missed/declined/busy/accepted updates from overwriting a non-ringing invite and only inserts call events when the invite row actually changed. `app/chat/[threadId].tsx` now marks the incoming invite `accepted` when the receiver joins through the banner/open-call route and clears the incoming timeout.
+- Source fixed is not installed-app proof. This cleanup fix requires a new Google Play internal build and installed two-phone proof before cleanup can be Closed.
 
 Not proved:
 
@@ -288,7 +323,8 @@ RPC safety checks deny restricted/unavailable/blocked/unauthorized targets befor
 | Issue | Classification | Disposition |
 | --- | --- | --- |
 | Existing Chat inbox row can still display stale `@user230456` after Settings/Profile/search show `@user230455`. | Must fix before launch | Documented; do not call Settings/Profile/Chat handle agreement fully Closed. |
-| Receiver tapping the app-wide incoming call banner opens `This Chi'lly Chat thread could not be found.` | Must fix before launch | Documented as the installed call-closure blocker. Code review points to the receiver thread readback being blocked by the current platform-owner chat guard for owner-to-user direct threads. |
+| Receiver tapping the app-wide incoming call banner opened `This Chi'lly Chat thread could not be found.` | Fixed in backend / installed proof passed | `20260628223918_chilly_chat_direct_member_platform_owner_thread_readback` fixed the receiver readback path. R5 tapped the real incoming banner and joined the correct voice call surface with both phones showing `2 in call`. |
+| Joined installed v60 call recorded `Voice call ended` and then a false `Missed voice call`. | Must fix before launch | Source fixed in this commit; requires Google Play internal v61+ installed proof before cleanup can be Closed. |
 | `R5CR120QCBF` Profile displays an `Owner` badge for `user230455` during proof. | Human review | Review account role/badge source before launch; no account mutation happened in this lane. |
 | Android logcat included Firebase push/FIS auth errors while Settings showed push not registered on R5 earlier. | Should fix before launch | Push/ringing remains Partial until background push is proved on installed app. |
 
@@ -305,24 +341,27 @@ Risky or larger issues were documented instead of hidden.
 - Added/applied `20260628213000_chilly_chat_direct_thread_repair_execute_grants.sql`.
 - Added/applied `20260628215750_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql`.
 - Added/applied `20260628215943_chilly_chat_direct_thread_repair_member_upsert_constraint.sql`.
+- Added/applied `20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql`.
+- Added/applied `20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql`.
+- Updated `_lib/chillyChatCalls.ts` so stale missed/declined/busy/accepted invite updates only apply while the invite is still ringing and do not insert events when the invite row did not change.
+- Updated `app/chat/[threadId].tsx` so receiver banner/open-call auto-join marks the invite accepted and clears the missed-call timeout before opening the call surface.
 - Built EAS Android App Bundle `8642fea7-b782-4c18-98c8-5805b6c7c20e`, versionCode `60`.
 - Submitted only to Google Play internal testing; both phones updated through Google Play.
 
 ## Issues Documented But Not Fixed
 
-- Receiver banner answer route cannot read/open the target thread on R5.
 - Existing inbox row stale handle can still appear.
 - Full search term matrix across all surfaces remains incomplete.
 - Video call local/remote proof remains incomplete.
 - Background push/ring proof remains incomplete.
-- Decline/missed/killed-app cleanup matrix remains incomplete.
+- The joined-call false missed-event source fix is not installed in Google Play yet.
+- Decline/missed/killed-app cleanup matrix remains incomplete on installed app.
 
 ## Remaining Launch Blockers
 
-1. Fix receiver answer route/thread readback so app-wide incoming call banner joins the active call instead of showing thread-not-found.
-   - The current evidence suggests this requires an explicit owner-to-user chat policy decision or a two-normal-user proof path, not a blind RLS relaxation.
-2. Fix or refresh stale existing inbox participant handle metadata.
-3. Rebuild and deliver a new Google Play internal version after source changes that affect the installed app.
+1. Rebuild and deliver a new Google Play internal version after the source cleanup fix, expected versionCode `61` or higher.
+2. Prove that receiver banner/open-call auto-join marks the invite accepted and does not record a false missed event after a joined call ends.
+3. Fix or refresh stale existing inbox participant handle metadata.
 4. Prove receiver same-thread, elsewhere-in-app, and background/push separately.
 5. Prove Video Call local/remote media on both phones and fullscreen fit.
 6. Prove call end/decline/missed/background cleanup with active call state cleared.
@@ -332,6 +371,7 @@ Risky or larger issues were documented instead of hidden.
 Artifact root:
 
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/`
 
 Key artifacts:
 
@@ -348,6 +388,15 @@ Key artifacts:
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/R5-second-voice-after-answer-tap-v60.png`
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/R3-after-ending-voice-call-v60.png`
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/R3-visible-direct-thread-failure-sanitized-logcat.txt`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R5-after-second-fresh-voice-banner.png`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R5-after-second-banner-tap.png`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R3-after-second-banner-tap.xml`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R3-after-second-banner-tap.png`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R3-after-second-call-end.xml`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R3-after-second-call-end.png`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R5-after-second-call-end.png`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R5-package-after-readback-proof.txt`
+- `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R3-package-after-readback-proof.txt`
 
 Do not commit or list raw signed URLs, tokens, private user IDs, private emails, private phone numbers, provider IDs, raw IPs, or secrets.
 
@@ -355,7 +404,7 @@ Do not commit or list raw signed URLs, tokens, private user IDs, private emails,
 
 Google-signed v60+ Direct Chat + Call actual-user proof remains Partial.
 
-Google Play internal install proof for versionCode `60` on both attached phones is documented above. Visible Chat search -> direct-thread open is proved after live RPC repair. Full actual-user call closure is not Closed because the receiver cannot join from the app-wide incoming call banner.
+Google Play internal install proof for versionCode `60` on both attached phones is documented above. Visible Chat search -> direct-thread open is proved after live RPC repair. Receiver banner thread-readback and voice join are proved after the live readback migration. Full actual-user call closure is not Closed because the app-side cleanup fix is source-only until a new Google Play internal build is installed, and video/background/decline/missed cleanup proof remains Partial.
 
 ## Safety Confirmation
 
