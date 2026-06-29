@@ -10,7 +10,7 @@ This cleanup fixed pre-existing validation noise outside the product proof lane:
 
 ## Chi’lly Chat delete/hide conversation
 
-Source status: fixed. Installed-app status: Pending until a Google Play internal build and actual user flow proof exercise the long-press hide path.
+Source status: fixed. Installed-app status: Partial after Google Play internal versionCode `64` actual-user proof on `R5CR120QCBF`.
 
 Root cause: the old Proof Normal / @user230456 row is a legitimate separate proof account/thread, not stale metadata for user230455, but the inbox lacked a production-safe way for a user to remove old proof/test conversations from their own view.
 
@@ -24,7 +24,7 @@ Long-press action behavior: the inbox thread row keeps Open Thread, Open Profile
 
 Delete from my inbox is a per-user hide, not a hard delete. The other participant’s copy is not deleted. Message and call history are preserved. Hidden direct threads must not create duplicate direct threads. Profile/Search → Chi’lly Chat must reopen the existing direct thread. Do not hide identity bugs by deleting rows. Proof Normal / @user230456 is a legitimate separate proof account/thread and may be hidden from the tester inbox without renaming or merging.
 
-Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. installerPackageName must be com.android.vending. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat/social proof was counted. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
+Google-signed v64 proof is documented in `docs/release/GOOGLE_SIGNED_V64_CHAT_THREAD_HIDE_PROOF.md`. EAS Build `c3fd4029-48b4-49ad-a1a4-7a33fbfbad84` / EAS Submit `cbcaae0e-650e-4c5d-a3c7-9b5ab819a8c1` delivered versionCode `64` from commit `5c21c3b4282fa45a2f62106deba68d944b6024e4` through Google Play internal testing. `R5CR120QCBF` installed from Google Play with `installerPackageName=com.android.vending`; long-press, action sheet, confirmation copy, hide, Search → Chi’lly Chat reopen/unhide, message history preservation, composer, Voice Call, Video Call, and duplicate prevention passed. `R3CXA0DS5JV` was not visible to ADB, so other-participant copy proof and new-message reappear proof remain Pending/Partial. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. installerPackageName must be com.android.vending. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat/social proof was counted. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
 
 ## Direct thread messaging UX restoration
 
