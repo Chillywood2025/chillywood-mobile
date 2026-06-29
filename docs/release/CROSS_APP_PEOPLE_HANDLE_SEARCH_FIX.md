@@ -4,7 +4,7 @@ Current verdict: Partial.
 
 ## Direct thread messaging UX restoration
 
-Source status: fixed. Installed-app status: Pending.
+Source status: fixed. Installed-app status: Closed for direct-thread messaging UX on Play-installed v63; Partial for stale identity closure.
 
 Chi’lly Chat direct thread must remain a real messaging thread. Calls live inside the thread, but must not replace the thread. Actual chat content must remain primary. Call event rows must not dominate the direct thread. Thread status UI must not push real chat content out.
 
@@ -16,7 +16,7 @@ Call event rendering path reviewed: call events now render as lightweight timeli
 
 Composer path reviewed: composer and attachment behavior remain in place.
 
-Proof result: source fixed. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. `installerPackageName` must be `com.android.vending`. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
+Proof result: source fixed and Play-installed v63 direct-thread UX proof passed. EAS Build `1c7c497e-805f-4a30-9f67-ff34ed945645` / EAS Submit `7f4bd948-3554-42e7-926f-b3659bde5a5a` delivered versionCode `63` from commit `82364c4dccffa1c60e66a5ee10bbb4ad186fa920` through Google Play internal testing. Both attached phones reported `installerPackageName=com.android.vending`. The `user230455` thread opened on the installed app with fresh header identity, Voice Call / Video Call actions, `MESSAGE THREAD`, `Chat stays primary`, compact recent-call rows, and the `Write a message` composer. Google Play internal install is not enough without actual user flow proof; this item has actual thread-flow proof. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
 
 Cross-app people/handle search proof: Partial for actual-user installed-app closure.
 
@@ -38,11 +38,13 @@ No RLS, auth, chat permission, profile visibility, account-status, staff permiss
 
 ## Cross-surface stale identity metadata fix
 
-Source status: fixed. Installed-app status: Partial pending v62+ Google Play internal proof.
+Source status: fixed. Installed-app status: Partial after Play-installed v63 proof.
 
 One user identity must render consistently across profile, chat, search, circle, followers, and following. Fresh remote profile must win over stale AsyncStorage. Settings/Profile/Chat must agree on the current handle. Circle/Followers/Following must not keep stale handle metadata as primary identity. Existing inbox rows must not show stale participant metadata as primary identity. Stale @user230456 is not Closed if it still appears as the primary inbox, circle, follower, following, or user-card identity.
 
 Root cause: existing user-list and participant surfaces could let stale local options, denormalized member rows, or role/read-model identity labels win over the current remote `user_profiles` row. This is why Settings/Profile/Chat search could show fresh `@user230455` while an existing Chat inbox row still displayed stale `@user230456`.
+
+June 28, 2026 v63 installed result: both physical phones updated through Google Play internal testing to versionCode `63` with `installerPackageName=com.android.vending`. Reached current surfaces now show fresh identity where expected: `R5CR120QCBF` Profile showed `user230455` / `@user230455`, `R3CXA0DS5JV` Chat inbox search/filter retained the `user230455` / `@user230455` thread, and the opened fresh direct-thread header showed `user230455` / `@user230455`. Full stale identity closure remains Partial because a separate existing Chat row still displayed `Proof Normal` / `@user230456` and opened to the same stale header on v63. Circle was reachable but the target identity was not visible; Followers, Following, shared user-card, call/room identity, and platform/admin/moderator role surfaces were not closed in this rerun. Artifact: `/tmp/app-installed-stale-identity-closeout-proof-20260628-212601/`.
 
 Source fixes made:
 

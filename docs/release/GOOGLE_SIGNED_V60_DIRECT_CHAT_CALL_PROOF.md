@@ -459,6 +459,18 @@ Call end/decline/missed cleanup must be proved before full call closure.
 
 Status: Source/RPC verified / installed proof partial.
 
+## VersionCode 63 direct-thread UX and stale identity installed proof
+
+Verdict: Partial.
+
+EAS Build `1c7c497e-805f-4a30-9f67-ff34ed945645` and EAS Submit `7f4bd948-3554-42e7-926f-b3659bde5a5a` delivered versionCode `63`, versionName `1.0.0`, commit `82364c4dccffa1c60e66a5ee10bbb4ad186fa920` to Google Play internal testing. Both attached physical phones updated only through Google Play with `installerPackageName=com.android.vending`. No logout, uninstall, reinstall, clear-data, sideload, manual APK install, Play production rollout, auth/RLS/chat/account-status permission weakening, service-role chat proof, provider/live-money mutation, or First Owner touch happened. `liveMoneyEnabled` remains OFF.
+
+Direct thread messaging UX restoration: Closed for installed Android proof. `R3CXA0DS5JV` opened the `user230455` direct thread and showed fresh `user230455` / `@user230455` identity, Voice Call, Video Call, `MESSAGE THREAD`, `Chat stays primary`, compact `RECENT CALLS IN THIS THREAD`, and the `Write a message` composer. Calls live inside the thread, but must not replace the thread. Actual chat content must remain primary. Call event rows must not dominate the direct thread. Thread status UI must not push real chat content out.
+
+Cross-surface stale identity metadata: Partial. `R5CR120QCBF` Profile showed `user230455` / `@user230455`; `R3CXA0DS5JV` Chat inbox search/filter retained the `user230455` / `@user230455` thread; the opened fresh direct-thread header showed `user230455` / `@user230455`. Full stale identity closure is not claimed because a separate existing Chat row still displayed `Proof Normal` / `@user230456` and opened to the same stale header on v63. Circle was reachable but the target identity was not visible; Followers, Following, shared user-card, call/room identity, and platform/admin/moderator role surfaces remain Pending installed proof.
+
+Artifact: `/tmp/app-installed-stale-identity-closeout-proof-20260628-212601/`.
+
 RPC safety checks deny restricted/unavailable/blocked/unauthorized targets before thread creation. Manual installed proof for blocked/restricted/signed-out cases was not rerun in this pass.
 
 ## Cross-surface stale identity metadata fix

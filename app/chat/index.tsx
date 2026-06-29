@@ -381,6 +381,7 @@ export default function ChillyChatInboxScreen() {
     if (!search.searchable || search.candidates.every((candidate) => candidate.length < CHAT_SUGGESTION_MIN_LENGTH)) {
       return null;
     }
+    const hasMatchingThreadResults = filteredThreads.length > 0;
 
     return (
       <View style={styles.suggestionPanel}>
@@ -466,8 +467,14 @@ export default function ChillyChatInboxScreen() {
           </View>
         ) : (
           <View style={styles.suggestionPanelState}>
-            <Text style={styles.suggestionPanelText}>No matching people</Text>
-            <Text style={styles.suggestionSubtext}>{PEOPLE_SEARCH_NO_RESULTS_COPY}</Text>
+            <Text style={styles.suggestionPanelText}>
+              {hasMatchingThreadResults ? "Already in your threads" : "No matching people"}
+            </Text>
+            <Text style={styles.suggestionSubtext}>
+              {hasMatchingThreadResults
+                ? "Open the matching thread below."
+                : PEOPLE_SEARCH_NO_RESULTS_COPY}
+            </Text>
           </View>
         )}
       </View>

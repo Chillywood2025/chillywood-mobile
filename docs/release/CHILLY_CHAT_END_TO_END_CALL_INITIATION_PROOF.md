@@ -6,7 +6,7 @@ Final verdict: Partial.
 
 ## Direct thread messaging UX restoration
 
-Source status: fixed. Installed-app status: Pending.
+Source status: fixed. Installed-app status: Closed for Play-installed Android versionCode `63`.
 
 Chi’lly Chat direct thread must remain a real messaging thread. Calls live inside the thread, but must not replace the thread. Actual chat content must remain primary. Call event rows must not dominate the direct thread. Thread status UI must not push real chat content out.
 
@@ -22,7 +22,7 @@ Thread status card reviewed: status guidance is reduced and no longer dominates 
 
 Composer path reviewed: text input, attachment action, and Send remain unchanged.
 
-Proof result: source fixed. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. `installerPackageName` must be `com.android.vending`. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
+Proof result: source fixed and installed proof passed for the direct-thread messaging UX on versionCode `63`. Both attached phones updated through Google Play internal testing with `installerPackageName=com.android.vending`; the `user230455` direct thread showed fresh header identity, Voice Call / Video Call actions, `MESSAGE THREAD`, `Chat stays primary`, compact `RECENT CALLS IN THIS THREAD`, and the `Write a message` composer. Google Play internal install is not enough without actual user flow proof; this item has actual thread-flow proof. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
 
 Source is fixed for normal visible call initiation paths. Installed-app actual-user proof remains Partial until a Play-internal build containing these source changes is installed on both tester phones and proves receiver ringing from same-thread, elsewhere-in-app, and background states.
 
@@ -36,7 +36,7 @@ June 28, 2026 v60 Google-signed receiver banner thread-readback + responsive vid
 
 June 28, 2026 v61 Google-signed responsive video call proof: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` now proves the responsive Direct Chat video layout on both Play-installed Android phones. Both phones updated through Google Play internal to versionCode `61` with installer `com.android.vending`, no logout/uninstall/reinstall/clear-data happened, and the build includes commit `70b276c336b1164a674a8ae51b421e0a039d0d35`. Owner -> user video call proof passed with receiver banner tap, readable thread/call surface, `2 in call`, local/remote video on both phones, bottom controls below video, compact metadata overlays, Back to Thread, End Call, no visible false missed-call text after joined video calls, and repeated call after end using a new room. Android two-phone installed proof passed for responsive video layout. iOS/tablet/foldable proof remains Pending unless tested, and background push/ringing plus decline/missed/background cleanup remain Partial.
 
-June 28, 2026 cross-surface stale identity follow-up: source now fixes the stale identity metadata path where Settings/Profile/Chat search could show `@user230455` while an existing Chat inbox row still showed stale `@user230456`. One user identity must render consistently across profile, chat, search, circle, followers, and following. Fresh remote profile must win over stale AsyncStorage. Existing inbox rows and Circle/Followers/Following/user-card/platform-role surfaces must not show stale metadata as primary identity. Source fixed is not installed-app proof; v62+ Google Play internal proof is required before identity consistency can be actual-user Closed.
+June 28, 2026 cross-surface stale identity follow-up: source now fixes the stale identity metadata path where Settings/Profile/Chat search could show `@user230455` while an existing Chat inbox row still showed stale `@user230456`. Play-installed versionCode `63` proof is Partial: reached fresh surfaces showed `user230455` / `@user230455`, but a separate existing Chat row still displayed `Proof Normal` / `@user230456` and opened to the same stale header. One user identity must render consistently across profile, chat, search, circle, followers, and following. Fresh remote profile must win over stale AsyncStorage. Existing inbox rows and Circle/Followers/Following/user-card/platform-role surfaces must not show stale metadata as primary identity.
 
 ## Required Proof Doctrine
 

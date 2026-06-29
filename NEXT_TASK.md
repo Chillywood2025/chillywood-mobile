@@ -14,8 +14,8 @@ Direct thread messaging UX restoration:
 - Call event rows must not dominate the direct thread.
 - Thread status UI must not push real chat content out.
 - Source now reduces the oversized thread status surface, moves call history into the message timeline as lightweight recent-call rows, keeps the composer visible, and preserves voice/video call actions from `app/chat/[threadId].tsx`.
-- Source fixed is not installed-app proof.
-- Google Play internal install is not enough without actual user flow proof.
+- Play-installed versionCode `63` proof passed for this UX restoration: the `user230455` thread opened with fresh header identity, Voice Call / Video Call actions, `MESSAGE THREAD`, `Chat stays primary`, compact `RECENT CALLS IN THIS THREAD`, and the `Write a message` composer.
+- Google Play internal install is not enough without actual user flow proof; this item has both Google Play install readback and actual thread-flow proof.
 - `installerPackageName` must be `com.android.vending`.
 - Sideloaded APK proof is not accepted.
 - No logout, uninstall, reinstall, or clear-data happened.
@@ -47,10 +47,10 @@ Cross-surface stale identity source fix now added:
 - Fresh remote profile must win over stale AsyncStorage.
 - Existing inbox rows, Circle, Followers, Following, shared user cards, and Platform/owner/admin/moderator/creator surfaces must not keep stale `@user230456` as primary identity.
 - Role badges may show role/status, but they must not cause stale handle/name/avatar metadata to win.
-- Source fixed is not installed-app proof; v62+ Google Play internal installed proof is the next identity closure step.
+- Play-installed versionCode `63` proof is Partial: fresh Profile, fresh Chat inbox/filter row, and fresh direct-thread header showed `user230455` / `@user230455`, but a separate existing Chat row still displayed `Proof Normal` / `@user230456` and opened to the same stale header.
 
 Next product action:
-- Build/deliver a v62+ Google Play internal update with the cross-surface identity fix.
+- Investigate the remaining existing `Proof Normal` / `@user230456` direct-thread row on the Play-installed v63 app without service-role chat proof or permission weakening.
 - Prove Settings/Profile/Chat/Search/Thread/Inbox/Circle/Followers/Following/shared user-card/platform-role surfaces agree on `@user230455` and do not show stale `@user230456` as primary identity.
 - Rerun remaining installed proof only on Google Play-installed builds from `com.android.vending`: user -> owner direction, receiver background/push, decline/missed/background/killed-app cleanup, full same-thread rerun if needed, and any iOS/tablet/foldable responsive coverage.
 - Android two-phone proof cannot close iOS/tablet/foldable coverage.
