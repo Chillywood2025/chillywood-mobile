@@ -4,6 +4,7 @@ import { getOfficialPlatformAccount } from "./officialAccounts";
 import type { PlatformAdminAuditLogRow } from "./platformAudit";
 import { isBetaOperatorIdentity } from "./runtimeConfig";
 import { supabase } from "./supabase";
+import { formatUsernameHandle } from "./usernameHandles";
 
 export const SAFETY_REPORTS_TABLE = "safety_reports";
 export const PLATFORM_ROLE_MEMBERSHIPS_TABLE = "platform_role_memberships";
@@ -118,6 +119,8 @@ export type PlatformRoleRosterEntry = PlatformRoleMembership & {
   grantedBy: string | null;
   notes: string | null;
   identityLabel: string;
+  username: string | null;
+  displayName: string | null;
 };
 
 export type PlatformRoleRosterReadModel = {
@@ -439,14 +442,28 @@ export const formatPlatformRoleDisplayLabel = (role: PlatformRole | PlatformStaf
 
 const formatPlatformRoleToken = (role: PlatformRole) => formatPlatformRoleDisplayLabel(role).toUpperCase();
 
+const maskRoleEmailIdentity = (value: string) => {
+  const [local = "", domain = ""] = value.split("@");
+  if (!local || !domain) return "Staff identity unavailable";
+  const prefix = local.slice(0, 2);
+  return `${prefix}${local.length > 2 ? "***" : "*"}@${domain}`;
+};
+
 const buildRoleIdentityLabel = (entry: {
   user_id?: unknown;
   email?: unknown;
+  display_name?: unknown;
+  displayName?: unknown;
+  username?: unknown;
 }) => {
+  const displayName = normalizeText(entry.display_name ?? entry.displayName);
+  const username = normalizeText(entry.username);
   const userId = normalizeText(entry.user_id);
   const email = normalizeText(entry.email).toLowerCase();
-  if (email) return email;
-  if (userId) return `USER ${userId}`;
+  if (displayName) return displayName;
+  if (username) return formatUsernameHandle(username) || username;
+  if (email) return maskRoleEmailIdentity(email);
+  if (userId) return "User profile unavailable";
   return "UNKNOWN IDENTITY";
 };
 
@@ -894,22 +911,56 @@ export async function readPlatformRoleRoster(options?: {
 
   if (error) throw error;
 
-  const items = (data ?? [])
+  const rows = data ?? [];
+  const userIds = Array.from(new Set(
+    rows
+      .map((entry) => normalizeText(entry.user_id))
+      .filter(Boolean),
+  ));
+  const profileIdentityByUserId = new Map<string, { displayName: string | null; username: string | null }>();
+
+  if (userIds.length) {
+    const { data: profileRows, error: profileError } = await supabase
+      .from("user_profiles")
+      .select("user_id,display_name,username")
+      .in("user_id", userIds);
+
+    if (!profileError) {
+      for (const profile of profileRows ?? []) {
+        const userId = normalizeText(profile.user_id);
+        if (!userId) continue;
+        profileIdentityByUserId.set(userId, {
+          displayName: normalizeText(profile.display_name) || null,
+          username: normalizeText(profile.username) || null,
+        });
+      }
+    }
+  }
+
+  const items = rows
     .map((entry): PlatformRoleRosterEntry | null => {
       const role = normalizePlatformRole(entry.role);
       if (!role) return null;
       const status = normalizePlatformRoleStatus(entry.status);
+      const userId = normalizeText(entry.user_id) || null;
+      const profileIdentity = userId ? profileIdentityByUserId.get(userId) : null;
       return {
         id: Number(entry.id ?? 0),
         role,
-        userId: normalizeText(entry.user_id) || null,
+        userId,
         email: normalizeText(entry.email).toLowerCase() || null,
         status,
         grantedAt: normalizeText(entry.granted_at) || null,
         permissionKeys: [] as PlatformStaffPermissionKey[],
         grantedBy: normalizeText(entry.granted_by) || null,
         notes: normalizeText(entry.notes) || null,
-        identityLabel: buildRoleIdentityLabel(entry),
+        identityLabel: buildRoleIdentityLabel({
+          ...entry,
+          displayName: profileIdentity?.displayName,
+          username: profileIdentity?.username,
+        }),
+        username: profileIdentity?.username ?? null,
+        displayName: profileIdentity?.displayName ?? null,
       } satisfies PlatformRoleRosterEntry;
     })
     .filter((entry): entry is PlatformRoleRosterEntry => !!entry);

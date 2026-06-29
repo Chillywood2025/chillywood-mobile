@@ -31,10 +31,15 @@ const memberUpsertMigration = read("supabase/migrations/20260628215943_chilly_ch
 const ownerReadbackMigration = read("supabase/migrations/20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql");
 const directMemberReadbackMigration = read("supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql");
 const callLib = read("_lib/chillyChatCalls.ts");
+const communicationLib = read("_lib/communication.ts");
 const threadScreen = read("app/chat/[threadId].tsx");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const participantGrid = read("components/communication/communication-participant-grid.tsx");
 const responsiveLayout = read("hooks/use-responsive-layout.ts");
+const inviteSheet = read("components/chat/internal-invite-sheet.tsx");
+const adminReadModels = read("_lib/adminReadModels.ts");
+const moderationLib = read("_lib/moderation.ts");
+const platformIdentity = read("_lib/platformIdentity.ts");
 
 [
   "Google-signed Play internal install proof: Closed / Partial / Blocked",
@@ -44,6 +49,14 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "No logout, uninstall, reinstall, or clear-data happened",
   "Fresh remote profile must win over stale AsyncStorage",
   "Settings/Profile/Chat must agree on the current handle",
+  "One user identity must render consistently across profile, chat, search, circle, followers, and following",
+  "Circle/Followers/Following must not keep stale handle metadata as primary identity",
+  "Existing inbox rows must not show stale participant metadata as primary identity",
+  "Stale @user230456 is not Closed if it still appears as the primary inbox, circle, follower, following, or user-card identity",
+  "Platform/owner/admin/moderator/creator surfaces must use the same fresh profile identity source as Chat/Profile/Search/Circle/Followers",
+  "Role badges may show role/status, but they must not cause stale handle/name/avatar metadata to win",
+  "The app must not confuse role identity with profile identity",
+  "First Owner permissions and ownership rules were not changed",
   "Visible People result must open or create a direct thread",
   "Direct-thread repair must be authenticated and RLS-safe",
   "Unable to open Chi’lly Chat with this person right now is not Closed",
@@ -65,6 +78,7 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "If Robert/testers cannot reproduce it in the Google-signed Play-internal installed app, it is not actual-user Closed",
   "No auth/RLS/chat/account-status permission weakening happened",
   "No service-role chat proof was counted",
+  "No service-role chat/social proof was counted",
   "No provider/live-money mutation happened",
   "liveMoneyEnabled remains OFF",
   "Repo Commit Proved",
@@ -141,7 +155,7 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "2 in call",
   "Participant",
   "false `Missed voice call`",
-  "background push/ringing, decline/missed/background cleanup, user -> owner direction, stale existing inbox metadata, and iOS/tablet/foldable responsive proof remain incomplete",
+  "background push/ringing, decline/missed/background cleanup, user -> owner direction, and iOS/tablet/foldable responsive proof remain incomplete",
   "Responsive video call layout cleanup",
   "Responsive foundation added.",
   "Direct Chat video call layout adapts by dimensions and safe area.",
@@ -175,6 +189,9 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "R5CR120QCBF-final-after-second-end-v61.xml",
   "Room `622ZK4` proved the first joined call; room `5ZVR4J` proved repeated call after end",
   "Closed for Google-signed v61 Android two-phone Direct Chat responsive video layout; Partial for full cross-platform responsive coverage and full call cleanup matrix.",
+  "Cross-surface stale identity metadata fix",
+  "Source fixed / installed proof pending v62+",
+  "v62+ Google Play internal proof is still required",
 ].forEach((needle) => requireText("v60 proof facts", doc, needle));
 
 [
@@ -191,9 +208,23 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
 [
   "const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;",
   "await writeJsonValue(USER_PROFILE_KEY, remoteProfile);",
+  "refreshSignedInIdentitySnapshots",
+  ".from(\"chat_thread_members\")",
+  ".from(\"communication_room_memberships\")",
+  ".from(\"watch_party_room_memberships\")",
 ].forEach((needle) => requireText("fresh profile source", userData, needle));
 
 requireText("settings handle cache source", settings, "await saveUserProfile(updatedProfile);");
+requireText("chat inbox freshness source", chatLib, "enrichChatThreadsWithUsernames");
+requireText("chat inbox freshness source", chatLib, "table: CHAT_THREAD_MEMBERS_TABLE");
+requireText("call identity freshness source", communicationLib, "profile,");
+requireText("invite/user-card freshness source", inviteSheet, "displayName: target.displayName ?? existing?.displayName");
+requireText("admin role identity freshness source", adminReadModels, "profileIdentityLabel");
+requireText("admin role identity safety source", adminReadModels, "sanitizeProfileIdentityLabel");
+requireText("platform role identity freshness source", moderationLib, "profileIdentityByUserId");
+requireText("platform role identity freshness source", moderationLib, "formatUsernameHandle");
+requireText("platform role identity safety source", moderationLib, "maskRoleEmailIdentity");
+requireText("platform display identity freshness source", platformIdentity, "const handle = profileHandle ?? channelHandle ?? platformHandle");
 requireText("initial direct thread repair migration", initialRepairMigration, "create or replace function public.get_or_create_direct_chat_thread");
 requireText("initial direct thread repair migration", initialRepairMigration, "auth.uid()::text");
 requireText("safety direct thread repair migration", safetyMigration, "public.\"assert_account_private_feature_allowed\"(actor_user_id, 'chat_direct_thread_open')");

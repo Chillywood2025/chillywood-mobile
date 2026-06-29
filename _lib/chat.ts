@@ -370,11 +370,12 @@ async function enrichChatThreadsWithUsernames(threads: ChatThreadSummary[]) {
     const members = thread.members.map((member) => {
       const profile = profileByUserId.get(member.userId);
       const username = toText(profile?.username);
-      if (!username) return member;
+      const displayName = toText(profile?.display_name) || username;
+      if (!profile && !username && !displayName) return member;
       return {
         ...member,
-        username,
-        displayName: toText(profile?.display_name) || member.displayName,
+        username: username || member.username,
+        displayName: displayName || member.displayName,
         avatarUrl: toText(profile?.avatar_url) || member.avatarUrl,
         tagline: toText(profile?.tagline) || member.tagline,
       };
@@ -1043,7 +1044,6 @@ export function subscribeToInbox(onChange: () => void) {
             event: "*",
             schema: "public",
             table: CHAT_THREAD_MEMBERS_TABLE,
-            filter: `user_id=eq.${currentUserId}`,
           },
           () => onChange(),
         )

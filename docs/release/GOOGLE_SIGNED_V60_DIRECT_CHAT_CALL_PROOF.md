@@ -4,7 +4,7 @@ Google-signed Play internal install proof: Closed / Partial / Blocked
 
 Final verdict: Partial.
 
-This lane delivered a Google Play internal, Google-signed versionCode `60` build to both attached phones and proved the fresh handle/search/direct-thread open path far enough to start a real voice call from a normal visible Chat search result. A follow-up receiver banner thread-readback migration fixed the installed v60 blocker where tapping the real incoming call banner opened `This Chi'lly Chat thread could not be found.` After the live migration, `R5CR120QCBF` tapped the incoming banner, opened the readable direct call thread, joined the call, and both phones showed `2 in call`. The responsive video layout fix was then delivered in Google Play internal versionCode `61`; both attached phones updated through Google Play with installer `com.android.vending`, and the owner-involved Direct Chi'lly Chat video path passed Android two-phone installed proof for local/remote video visibility, bottom-control safe-area spacing, compact participant metadata, Back to Thread, End Call, and repeated call after end. Full Chi'lly Chat call closure remains Partial because background push/ringing, decline/missed/background cleanup, user -> owner direction, stale existing inbox metadata, and iOS/tablet/foldable responsive proof remain incomplete.
+This lane delivered a Google Play internal, Google-signed versionCode `60` build to both attached phones and proved the fresh handle/search/direct-thread open path far enough to start a real voice call from a normal visible Chat search result. A follow-up receiver banner thread-readback migration fixed the installed v60 blocker where tapping the real incoming call banner opened `This Chi'lly Chat thread could not be found.` After the live migration, `R5CR120QCBF` tapped the incoming banner, opened the readable direct call thread, joined the call, and both phones showed `2 in call`. The responsive video layout fix was then delivered in Google Play internal versionCode `61`; both attached phones updated through Google Play with installer `com.android.vending`, and the owner-involved Direct Chi'lly Chat video path passed Android two-phone installed proof for local/remote video visibility, bottom-control safe-area spacing, compact participant metadata, Back to Thread, End Call, and repeated call after end. Source now adds a cross-surface stale identity metadata fix so existing Chat inbox rows, call/room participant labels, shared profile display, Circle, Followers, Following, invite/user-card, and platform role surfaces prefer fresh remote profile identity over stale snapshots. Full Chi'lly Chat call closure remains Partial because that identity fix is source-only until a v62+ Google Play internal build is installed and proved, and background push/ringing, decline/missed/background cleanup, user -> owner direction, and iOS/tablet/foldable responsive proof remain incomplete.
 
 ## Required Proof Doctrine
 
@@ -17,6 +17,26 @@ No logout, uninstall, reinstall, or clear-data happened.
 Fresh remote profile must win over stale AsyncStorage.
 
 Settings/Profile/Chat must agree on the current handle.
+
+One user identity must render consistently across profile, chat, search, circle, followers, and following.
+
+Fresh remote profile must win over stale AsyncStorage.
+
+Circle/Followers/Following must not keep stale handle metadata as primary identity.
+
+Existing inbox rows must not show stale participant metadata as primary identity.
+
+Stale @user230456 is not Closed if it still appears as the primary inbox, circle, follower, following, or user-card identity.
+
+Platform/owner/admin/moderator/creator surfaces must use the same fresh profile identity source as Chat/Profile/Search/Circle/Followers.
+
+Role badges may show role/status, but they must not cause stale handle/name/avatar metadata to win.
+
+The app must not confuse role identity with profile identity.
+
+Platform-owner paths must not be used to bypass normal user identity/RLS/chat/social rules.
+
+First Owner permissions and ownership rules were not changed in this lane.
 
 Visible People result must open or create a direct thread.
 
@@ -59,6 +79,8 @@ If Robert/testers cannot reproduce it in the Google-signed Play-internal install
 No auth/RLS/chat/account-status permission weakening happened.
 
 No service-role chat proof was counted.
+
+No service-role chat/social proof was counted.
 
 No provider/live-money mutation happened.
 
@@ -417,11 +439,49 @@ Status: Source/RPC verified / installed proof partial.
 
 RPC safety checks deny restricted/unavailable/blocked/unauthorized targets before thread creation. Manual installed proof for blocked/restricted/signed-out cases was not rerun in this pass.
 
+## Cross-surface stale identity metadata fix
+
+Status: Source fixed / installed proof pending v62+.
+
+Root cause: existing user-list and participant surfaces could let stale local options, denormalized member rows, or role/read-model identity labels win over the current remote `user_profiles` row. That allowed Settings/Profile/Chat search/direct-thread header to show fresh `@user230455` while an existing Chat inbox row could still show stale `@user230456`.
+
+One user identity must render consistently across profile, chat, search, circle, followers, and following. Fresh remote profile must win over stale AsyncStorage. Settings/Profile/Chat must agree on the current handle. Circle/Followers/Following must not keep stale handle metadata as primary identity. Existing inbox rows must not show stale participant metadata as primary identity. Stale @user230456 is not Closed if it still appears as the primary inbox, circle, follower, following, or user-card identity.
+
+Files changed:
+
+- `_lib/userData.ts`
+- `_lib/chat.ts`
+- `_lib/communication.ts`
+- `_lib/adminReadModels.ts`
+- `_lib/moderation.ts`
+- `_lib/platformIdentity.ts`
+- `components/chat/internal-invite-sheet.tsx`
+
+Cache path reviewed: signed-in Profile now prefers fresh remote profile over stale AsyncStorage, and Settings saves still write the shared profile cache after the remote username/display state is known.
+
+Remote profile path reviewed: `buildUserChannelProfile()` now chooses remote `displayName`, `username`, active profile avatar, and tagline before stale caller-provided options.
+
+Inbox metadata query/render path reviewed: `listChatThreads()` enriches thread members from current `user_profiles`, and `subscribeToInbox()` reloads when any readable thread member metadata changes. Existing inbox rows should no longer keep stale participant metadata as primary identity after the updated app refreshes.
+
+Circle query/render path reviewed: Circle rows are built through `readUserProfileByUserId()` and the shared channel-profile helper, so they inherit fresh remote profile priority.
+
+Followers query/render path reviewed: channel audience/follower rows read `user_profiles` directly and do not rely on relationship-table display snapshots; installed proof remains pending.
+
+Following query/render path reviewed: friend/following rows are built through `readUserProfileByUserId()` and the shared channel-profile helper, so they inherit fresh remote profile priority.
+
+Shared user-card/profile-display path reviewed: invite/user-card merge now prefers fresh search results over existing thread snapshots; profile and channel display helpers prefer remote profile identity before stale fallback metadata.
+
+Platform and role identity path reviewed: Platform/owner/admin/moderator/creator surfaces must use the same fresh profile identity source as Chat/Profile/Search/Circle/Followers. Role badges may show role/status, but they must not cause stale handle/name/avatar metadata to win. The app must not confuse role identity with profile identity. A user can have a platform role, but their visible handle must still refresh from the current remote profile. Platform-owner paths must not be used to bypass normal user identity/RLS/chat/social rules. First Owner permissions and ownership rules were not changed. Role surfaces not reached in installed proof are Not inspected, not Closed.
+
+Supabase RPC / migration changes: none for this lane. This is an app-side identity display and self-snapshot refresh fix using the authenticated client and existing RLS.
+
+Proof result: Source fixed. Google Play internal install is not enough without actual user flow proof, and this source fix is not installed-app proof until a v62+ Google Play internal build is installed by Google Play on both phones and the identity comparison is rerun.
+
 ## Cross-Lane Issues Found
 
 | Issue | Classification | Disposition |
 | --- | --- | --- |
-| Existing Chat inbox row can still display stale `@user230456` after Settings/Profile/search show `@user230455`. | Must fix before launch | Documented; do not call Settings/Profile/Chat handle agreement fully Closed. |
+| Existing Chat inbox row can still display stale `@user230456` after Settings/Profile/search show `@user230455`. | Source fixed / installed proof pending | Cross-surface stale identity metadata fix updates the shared profile display priority, refreshes signed-in denormalized membership snapshots after remote profile save, reloads inbox on any readable member metadata change, and refreshes platform-role labels from `user_profiles`. Source fixed is not installed-app proof; v62+ Google Play internal proof is still required. |
 | Receiver tapping the app-wide incoming call banner opened `This Chi'lly Chat thread could not be found.` | Fixed in backend / installed proof passed | `20260628223918_chilly_chat_direct_member_platform_owner_thread_readback` fixed the receiver readback path. R5 tapped the real incoming banner and joined the correct voice call surface with both phones showing `2 in call`. |
 | Joined installed v60 call recorded `Voice call ended` and then a false `Missed voice call`. | Partially fixed / more cleanup proof needed | v61 joined video-call end proof showed `No Active Call` on both phones and no visible false missed-call text; receiver decline, ignored/missed, background/killed-app cleanup, and database field readback remain Partial. |
 | Video call lower participant feed is cut off by bottom controls and participant metadata covers too much video. | Closed for Android two-phone installed responsive layout | Google Play-installed v61 proved no bottom feed cutoff, no control overlap, compact metadata, and local/remote video on both phones. iOS/tablet/foldable proof remains Pending unless tested. |
@@ -436,6 +496,13 @@ Risky or larger issues were documented instead of hidden.
 
 ## Fixes Made
 
+- Added cross-surface stale identity metadata source fix.
+- Updated `_lib/userData.ts` so `buildUserChannelProfile()` prefers fresh remote profile display name, handle, avatar, and tagline over stale options/AsyncStorage snapshots.
+- Updated `_lib/userData.ts` so successful Settings profile saves refresh the signed-in user's `chat_thread_members`, `communication_room_memberships`, and `watch_party_room_memberships` display snapshots without logout, reinstall, clear-data, or service-role proof.
+- Updated `_lib/chat.ts` so existing inbox rows are enriched from current `user_profiles` and the inbox subscription reloads when any readable thread member metadata changes, not only the current user's member row.
+- Updated `_lib/communication.ts` so call/room identity reads pass the full current profile into the shared profile display helper.
+- Updated `components/chat/internal-invite-sheet.tsx` so fresh search results win over existing thread snapshots in the invite/user-card merge path.
+- Updated `_lib/adminReadModels.ts`, `_lib/moderation.ts`, and `_lib/platformIdentity.ts` so Platform owner, Admin, Moderator, Creator, and role roster identity labels prefer fresh profile display/handle while role badges remain role/status only.
 - Applied target Supabase migration `chilly_chat_direct_thread_open_repair`.
 - Added/applied `20260628212500_chilly_chat_direct_thread_repair_safety_guards.sql`.
 - Added/applied `20260628213000_chilly_chat_direct_thread_repair_execute_grants.sql`.
@@ -452,7 +519,8 @@ Risky or larger issues were documented instead of hidden.
 
 ## Issues Documented But Not Fixed
 
-- Existing inbox row stale handle can still appear.
+- Cross-surface stale identity source fix is not installed-app proof. v62+ Google Play internal proof must confirm Settings/Profile/Chat/Search/Thread/Inbox/Circle/Followers/Following/shared user-card/platform-role surfaces no longer show stale `@user230456` as primary identity.
+- Platform owner, First Owner, Admin, Moderator, Creator, Host, and role-badge surfaces were source-audited for identity priority; any surface not reached in the installed app remains Not inspected, not Closed.
 - Full search term matrix across all surfaces remains incomplete.
 - Video call local/remote Android installed proof is Closed for the owner -> user v61 path; user -> owner direction and iOS/tablet/foldable proof remain incomplete.
 - Background push/ring proof remains incomplete.
@@ -460,7 +528,7 @@ Risky or larger issues were documented instead of hidden.
 
 ## Remaining Launch Blockers
 
-1. Fix or refresh stale existing inbox participant handle metadata.
+1. Build and install a v62+ Google Play internal update containing the cross-surface stale identity metadata fix, then prove existing inbox, Circle, Followers, Following, shared user-card, and platform/role identity surfaces agree on the current handle.
 2. Prove receiver decline, ignored/missed, background/killed-app cleanup, and database-level active-call field readback.
 3. Prove receiver same-thread and background/push separately where not already covered by the v60/v61 foreground proofs.
 4. Prove user -> owner video direction if needed for symmetric proof.
@@ -520,6 +588,8 @@ Google Play internal install proof for versionCode `60` on both attached phones 
 No auth/RLS/chat/account-status permission weakening happened.
 
 No service-role chat proof was counted.
+
+No service-role chat/social proof was counted.
 
 No provider/live-money mutation happened.
 

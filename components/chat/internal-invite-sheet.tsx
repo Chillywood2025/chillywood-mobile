@@ -60,10 +60,10 @@ const mergeInviteTargets = (
     const existing = merged.get(userId);
     merged.set(userId, {
       userId,
-      displayName: existing?.displayName ?? target.displayName,
-      username: existing?.username ?? target.username,
-      avatarUrl: existing?.avatarUrl ?? target.avatarUrl ?? null,
-      tagline: existing?.tagline ?? target.tagline ?? null,
+      displayName: target.displayName ?? existing?.displayName,
+      username: target.username ?? existing?.username,
+      avatarUrl: target.avatarUrl ?? existing?.avatarUrl ?? null,
+      tagline: target.tagline ?? existing?.tagline ?? null,
     });
   });
 

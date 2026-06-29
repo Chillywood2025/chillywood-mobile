@@ -400,10 +400,10 @@ export const buildUserChannelProfile = (options: {
     ? normalizeTextValue(profile?.profileBackgroundUrl)
     : undefined;
   const resolvedDisplayName = resolveProfileDisplayName(
-    options.displayName,
-    options.username,
     profile?.displayName,
     profile?.username,
+    options.displayName,
+    options.username,
   );
 
   return {
@@ -411,7 +411,7 @@ export const buildUserChannelProfile = (options: {
     displayName: officialAccount?.displayName ?? (resolvedDisplayName !== "User" ? resolvedDisplayName : fallbackDisplayName),
     avatarUrl: officialAccount
       ? profileAvatarUrl ?? normalizeTextValue(officialAccount.avatarUrl)
-      : normalizeTextValue(options.avatarUrl) ?? profileAvatarUrl,
+      : profileAvatarUrl ?? normalizeTextValue(options.avatarUrl),
     profileAvatarMediaStatus,
     profileAvatarMediaFlaggedAt: normalizeTextValue(profile?.profileAvatarMediaFlaggedAt),
     profileAvatarFitMode: normalizeProfileAppearanceFitMode(profile?.profileAvatarFitMode),
@@ -427,9 +427,9 @@ export const buildUserChannelProfile = (options: {
       ? 0.58
       : normalizeProfileAppearanceNumber(profile?.profileBackgroundOverlayStrength, 0.58, 0, 0.9),
     tagline: officialAccount?.tagline
+      ?? normalizeTextValue(profile?.tagline)
       ?? normalizeTextValue(options.tagline)
-      ?? normalizeTextValue(options.bio)
-      ?? normalizeTextValue(profile?.tagline),
+      ?? normalizeTextValue(options.bio),
     role: officialAccount?.channelRole ?? normalizeChannelRole(options.role ?? profile?.channelRole),
     isLive: !!options.isLive,
     identityKind: officialAccount ? "official_platform" : "member",
@@ -437,7 +437,7 @@ export const buildUserChannelProfile = (options: {
     platformOwnershipLabel: officialAccount?.platformOwnershipLabel,
     platformRoleLabel: officialAccount?.platformRoleLabel,
     isProtectedFromClaim: !!officialAccount,
-    handle: officialAccount?.handle ?? formatUsernameHandle(options.username ?? profile?.username),
+    handle: officialAccount?.handle ?? formatUsernameHandle(profile?.username ?? options.username),
     auditOwnerKey: officialAccount?.auditOwnerKey,
   };
 };
@@ -546,9 +546,9 @@ export async function readUserProfileByUserId(userId: string): Promise<UserProfi
   return readRemoteUserProfile(userId);
 }
 
-async function syncUserProfileToRemote(profile: UserProfile): Promise<void> {
+async function syncUserProfileToRemote(profile: UserProfile): Promise<boolean> {
   const userId = await getSignedInUserId();
-  if (!userId) return;
+  if (!userId) return false;
 
   try {
     logChatProfile("remote_upsert_start", {
@@ -566,13 +566,14 @@ async function syncUserProfileToRemote(profile: UserProfile): Promise<void> {
         displayName: profile.displayName ?? "",
         message: error.message,
       });
-      return;
+      return false;
     }
     logChatProfile("remote_upsert_success", {
       userId,
       username: profile.username,
       displayName: profile.displayName ?? "",
     });
+    return true;
   } catch (error) {
     logChatProfile("remote_upsert_failed", {
       userId,
@@ -580,8 +581,45 @@ async function syncUserProfileToRemote(profile: UserProfile): Promise<void> {
       displayName: profile.displayName ?? "",
       message: error instanceof Error ? error.message : "unknown_error",
     });
-    // social identity foundation is best-effort for now
+    return false;
   }
+}
+
+async function refreshSignedInIdentitySnapshots(profile: UserProfile): Promise<void> {
+  const userId = await getSignedInUserId();
+  if (!userId) return;
+
+  const displayName = normalizeTextValue(profile.displayName) ?? normalizeTextValue(profile.username) ?? "User";
+  const avatarUrl = isProfileMediaActive(profile.profileAvatarMediaStatus) ? normalizeTextValue(profile.avatarUrl) ?? null : null;
+  const tagline = normalizeTextValue(profile.tagline) ?? null;
+  const now = new Date().toISOString();
+
+  await Promise.allSettled([
+    supabase
+      .from("chat_thread_members")
+      .update({
+        display_name: displayName,
+        avatar_url: avatarUrl,
+        tagline,
+      })
+      .eq("user_id", userId),
+    supabase
+      .from("communication_room_memberships")
+      .update({
+        display_name: displayName,
+        avatar_url: avatarUrl,
+        updated_at: now,
+      })
+      .eq("user_id", userId),
+    supabase
+      .from("watch_party_room_memberships")
+      .update({
+        display_name: displayName,
+        avatar_url: avatarUrl,
+        updated_at: now,
+      })
+      .eq("user_id", userId),
+  ]);
 }
 
 async function readJsonValue<T>(key: string, fallback: T): Promise<T> {
@@ -1186,7 +1224,10 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
     displayName: normalized.displayName ?? "",
   });
   await writeJsonValue(USER_PROFILE_KEY, normalized);
-  await syncUserProfileToRemote(normalized);
+  const remoteSynced = await syncUserProfileToRemote(normalized);
+  if (remoteSynced) {
+    await refreshSignedInIdentitySnapshots(normalized);
+  }
 }
 
 // ── Last Party Session (for auto-rejoin) ──────────────────────────────────────

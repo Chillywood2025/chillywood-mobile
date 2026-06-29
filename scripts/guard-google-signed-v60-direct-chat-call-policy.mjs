@@ -60,6 +60,11 @@ const directMemberReadbackMigration = read("supabase/migrations/20260628223918_c
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const participantGrid = read("components/communication/communication-participant-grid.tsx");
 const responsiveLayout = read("hooks/use-responsive-layout.ts");
+const inviteSheet = read("components/chat/internal-invite-sheet.tsx");
+const communicationLib = read("_lib/communication.ts");
+const adminReadModels = read("_lib/adminReadModels.ts");
+const moderationLib = read("_lib/moderation.ts");
+const platformIdentity = read("_lib/platformIdentity.ts");
 
 [
   "Google-signed Play internal install proof: Closed / Partial / Blocked",
@@ -68,6 +73,13 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "Sideloaded APK proof is not accepted",
   "Fresh remote profile must win over stale AsyncStorage",
   "Settings/Profile/Chat must agree on the current handle",
+  "One user identity must render consistently across profile, chat, search, circle, followers, and following",
+  "Circle/Followers/Following must not keep stale handle metadata as primary identity",
+  "Existing inbox rows must not show stale participant metadata as primary identity",
+  "Stale @user230456 is not Closed if it still appears as the primary inbox, circle, follower, following, or user-card identity",
+  "Platform/owner/admin/moderator/creator surfaces must use the same fresh profile identity source as Chat/Profile/Search/Circle/Followers",
+  "Role badges may show role/status, but they must not cause stale handle/name/avatar metadata to win",
+  "The app must not confuse role identity with profile identity",
   "Visible People result must open or create a direct thread",
   "Direct-thread repair must be authenticated and RLS-safe",
   "Unable to open Chi’lly Chat with this person right now is not Closed",
@@ -88,6 +100,7 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "Google Play internal install is not enough without actual user flow proof",
   "No auth/RLS/chat/account-status permission weakening happened",
   "No service-role chat proof was counted",
+  "No service-role chat/social proof was counted",
   "No provider/live-money mutation happened",
   "liveMoneyEnabled remains OFF",
   "Supabase RPC / Migration Verification",
@@ -107,7 +120,7 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "R5CR120QCBF` tapped the app-wide banner and joined the correct call surface",
   "2 in call",
   "false `Missed voice call`",
-  "background push/ringing, decline/missed/background cleanup, user -> owner direction, stale existing inbox metadata, and iOS/tablet/foldable responsive proof remain incomplete",
+  "background push/ringing, decline/missed/background cleanup, user -> owner direction, and iOS/tablet/foldable responsive proof remain incomplete",
   "Responsive video call layout cleanup",
   "Responsive foundation added.",
   "Direct Chat video call layout adapts by dimensions and safe area.",
@@ -126,6 +139,9 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "lastUpdateTime=2026-06-28 19:05:47",
   "Room `622ZK4` proved the first joined call; room `5ZVR4J` proved repeated call after end",
   "Closed for Google-signed v61 Android two-phone Direct Chat responsive video layout; Partial for full cross-platform responsive coverage and full call cleanup matrix.",
+  "Cross-surface stale identity metadata fix",
+  "Source fixed / installed proof pending v62+",
+  "v62+ Google Play internal proof is still required",
 ].forEach((needle) => requireText("v60 proof doc", doc, needle));
 
 [
@@ -254,6 +270,11 @@ forbidSentence("v60 proof doc", doc, (sentence) => (
   ["communication panel", communicationPanel],
   ["participant grid", participantGrid],
   ["responsive layout hook", responsiveLayout],
+  ["invite sheet", inviteSheet],
+  ["communication lib", communicationLib],
+  ["admin read models", adminReadModels],
+  ["moderation lib", moderationLib],
+  ["platform identity", platformIdentity],
 ].forEach(([label, content]) => {
   forbidMatch(label, content, /\b(?:PASSWORD|PASSCODE)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/i, "password value");
   forbidMatch(label, content, /(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY)\s*=\s*['"]?[A-Za-z0-9._-]{20,}/, "service-role key value");
@@ -276,9 +297,25 @@ forbidSentence("v60 proof doc", doc, (sentence) => (
 [
   "const remoteProfile = signedInUser.userId ? await readRemoteUserProfile(signedInUser.userId) : null;",
   "await writeJsonValue(USER_PROFILE_KEY, remoteProfile);",
+  "refreshSignedInIdentitySnapshots",
+  ".from(\"chat_thread_members\")",
+  ".from(\"communication_room_memberships\")",
+  ".from(\"watch_party_room_memberships\")",
 ].forEach((needle) => requireText("profile cache source", userData, needle));
 
 requireText("settings handle cache source", settings, "await saveUserProfile(updatedProfile);");
+requireText("chat inbox freshness source", chatLib, "enrichChatThreadsWithUsernames");
+requireText("chat inbox freshness source", chatLib, "table: CHAT_THREAD_MEMBERS_TABLE");
+requireText("invite/user-card freshness source", inviteSheet, "displayName: target.displayName ?? existing?.displayName");
+requireText("call identity freshness source", communicationLib, "profile,");
+requireText("admin role identity freshness source", adminReadModels, "profileIdentityLabel");
+requireText("admin role identity safety source", adminReadModels, "sanitizeProfileIdentityLabel");
+requireText("admin role identity safety source", adminReadModels, "maskEmailIdentity");
+requireText("platform role identity freshness source", moderationLib, "profileIdentityByUserId");
+requireText("platform role identity freshness source", moderationLib, "formatUsernameHandle");
+requireText("platform role identity safety source", moderationLib, "maskRoleEmailIdentity");
+requireText("platform role identity safety source", moderationLib, "User profile unavailable");
+requireText("platform display identity freshness source", platformIdentity, "const handle = profileHandle ?? channelHandle ?? platformHandle");
 requireText("call invite RLS", callMigration, "alter table public.\"chat_call_invites\" enable row level security;");
 requireText("initial repair migration", initialRepairMigration, "grant execute on function public.get_or_create_direct_chat_thread(text, text, text, text) to authenticated;");
 requireText("safety repair migration", safetyMigration, "public.\"assert_account_private_feature_allowed\"(actor_user_id, 'chat_direct_thread_open')");

@@ -220,6 +220,23 @@ const asString = (value: unknown): string | null => {
   return trimmed.length ? trimmed : null;
 };
 
+const UUID_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
+
+const maskEmailIdentity = (value: string) => {
+  const [local = "", domain = ""] = value.split("@");
+  if (!local || !domain) return "User profile unavailable";
+  return `${local.slice(0, 2)}${local.length > 2 ? "***" : "*"}@${domain}`;
+};
+
+const sanitizeProfileIdentityLabel = (value: unknown) => {
+  const label = asString(value);
+  if (!label) return "User profile unavailable";
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(label)) return maskEmailIdentity(label);
+  if (UUID_PATTERN.test(label)) return "User profile unavailable";
+  if (/^user\s+[0-9a-f]{6,}$/i.test(label)) return "User profile unavailable";
+  return label;
+};
+
 const asNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -379,13 +396,16 @@ const normalizeUserItem = (value: unknown): AdminUserReadModelItem | null => {
   const row = asRecord(value);
   const userId = asString(row.userId);
   if (!userId) return null;
+  const username = asString(row.username);
+  const displayName = asString(row.displayName);
+  const profileIdentityLabel = displayName ?? (username ? `@${username.replace(/^@+/, "")}` : null);
 
   return {
     userId,
     email: asString(row.email),
-    identityLabel: asString(row.identityLabel) ?? `User ${userId.slice(0, 8)}`,
-    username: asString(row.username),
-    displayName: asString(row.displayName),
+    identityLabel: profileIdentityLabel ?? sanitizeProfileIdentityLabel(row.identityLabel),
+    username,
+    displayName,
     authStatus: asString(row.authStatus) ?? "unknown",
     profileVisibility: asString(row.profileVisibility) ?? "public",
     profileRole: asString(row.profileRole),

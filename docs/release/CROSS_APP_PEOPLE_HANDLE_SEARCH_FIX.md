@@ -4,19 +4,42 @@ Current verdict: Partial.
 
 Cross-app people/handle search proof: Partial for actual-user installed-app closure.
 
-June 28, 2026 v60 installed follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` proved Chi'lly Chat installed search can find `user230455` as `user230455` / `@user230455` on the Google Play-installed versionCode `60` build. The visible result opened the direct thread after live authenticated RPC ambiguity fixes. A later receiver readback migration also proved the real incoming call banner can open/join the readable direct thread, with both phones showing `2 in call`; full call closure remains Partial because installed v60 recorded a false missed-call event after end and the cleanup source fix is not installed yet. Cross-app search remains Partial because the full term matrix across `@user230455`, `User230455`, `user 230455`, display name, Explore People, Profile entry, and direct-thread creation from every visible surface was not completed, and an existing Chat inbox row still displayed stale `@user230456` before the fresh search/open path.
+June 28, 2026 v60/v61 installed follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` proved Chi'lly Chat installed search can find `user230455` as `user230455` / `@user230455` on the Google Play-installed versionCode `60` build. The visible result opened the direct thread after live authenticated RPC ambiguity fixes. A later receiver readback migration also proved the real incoming call banner can open/join the readable direct thread, with both phones showing `2 in call`; v61 then proved the Android two-phone responsive video layout. Full call closure remains Partial because background push/ringing, decline/missed/background cleanup, user -> owner direction, and cross-platform responsive proof remain incomplete. Cross-app search/identity remains Partial because the full term matrix across `@user230455`, `User230455`, `user 230455`, display name, Explore People, Profile entry, direct-thread creation, Circle, Followers, Following, shared user cards, and role/platform surfaces has not been completed on a v62+ installed build.
 
 ## Scope
 
-This lane fixes the shared source path for people and handle discovery across normal visible app surfaces. It covers Chi'lly Chat inbox people search/start-chat, Explore public People search and typeahead, Profile entry through search results, Chi'lly Circle people discovery, and the direct-message/internal invite recipient picker.
+This lane fixes the shared source path for people and handle discovery across normal visible app surfaces. It covers Chi'lly Chat inbox people search/start-chat, Explore public People search and typeahead, Profile entry through search results, Chi'lly Circle people discovery, Followers/Following-style user rows that reuse the shared profile helper, Platform/owner/admin/moderator/creator identity surfaces where present, and the direct-message/internal invite recipient picker.
 
 Owner standard: If Robert/testers cannot find the user by visible handle in the Play-internal installed app, this is not actual-user Closed. Source fixed is not installed-app proof.
+
+Google Play internal install is not enough without actual user flow proof.
 
 ## Root Cause
 
 People search was not using one shared normalization contract. The public search helper stripped a leading `@` and sent one raw query to `search_public_people`; Explore had its own local `getPublicSearchNeedle`; Chi'lly Chat thread filtering used raw lowercase `includes`; Chi'lly Circle and the invite sheet had separate local normalizers. As a result, a visible handle such as `chillywood92`, `@chillywood92`, `Chillywood92`, or `chillywood 92` could behave differently across Chat, Explore, Profile entry, and recipient pickers.
 
-No RLS, auth, chat permission, profile visibility, account-status, or staff permission weakening was used to fix this.
+No RLS, auth, chat permission, profile visibility, account-status, staff permission, platform-owner, or First Owner permission weakening was used to fix this.
+
+## Cross-surface stale identity metadata fix
+
+Source status: fixed. Installed-app status: Partial pending v62+ Google Play internal proof.
+
+One user identity must render consistently across profile, chat, search, circle, followers, and following. Fresh remote profile must win over stale AsyncStorage. Settings/Profile/Chat must agree on the current handle. Circle/Followers/Following must not keep stale handle metadata as primary identity. Existing inbox rows must not show stale participant metadata as primary identity. Stale @user230456 is not Closed if it still appears as the primary inbox, circle, follower, following, or user-card identity.
+
+Root cause: existing user-list and participant surfaces could let stale local options, denormalized member rows, or role/read-model identity labels win over the current remote `user_profiles` row. This is why Settings/Profile/Chat search could show fresh `@user230455` while an existing Chat inbox row still displayed stale `@user230456`.
+
+Source fixes made:
+
+- `_lib/userData.ts` now makes fresh remote profile display name, username/handle, active avatar, and tagline win inside `buildUserChannelProfile()`.
+- `_lib/userData.ts` now refreshes the signed-in user's `chat_thread_members`, `communication_room_memberships`, and `watch_party_room_memberships` display snapshots after a successful remote profile save.
+- `_lib/chat.ts` now enriches existing inbox rows from current `user_profiles` and reloads the inbox when any readable thread member metadata changes.
+- `_lib/communication.ts` now builds call/room identity from the full current profile instead of a username-only fallback.
+- `components/chat/internal-invite-sheet.tsx` now prefers fresh search results over existing thread snapshots when merging user cards.
+- `_lib/adminReadModels.ts`, `_lib/moderation.ts`, and `_lib/platformIdentity.ts` now prefer fresh profile display/handle for Platform owner, First Owner-visible, Admin, Moderator, Creator, and role-roster identity labels where the surface has a profile user id.
+
+Platform/owner/admin/moderator/creator surfaces must use the same fresh profile identity source as Chat/Profile/Search/Circle/Followers. Role badges may show role/status, but they must not cause stale handle/name/avatar metadata to win. The app must not confuse role identity with profile identity. A user can have a platform role, but their visible handle must still refresh from the current remote profile. Platform-owner paths must not be used to bypass normal user identity/RLS/chat/social rules. First Owner permissions and ownership rules were not changed in this lane. Role surfaces not present or not reachable are Not inspected, not Closed.
+
+Supabase RPC / migration changes: none. The fix uses the authenticated app client with existing RLS; no service-role chat/social proof was counted.
 
 ## Search Surfaces Audited
 
@@ -28,7 +51,10 @@ No RLS, auth, chat permission, profile visibility, account-status, or staff perm
 | Creator/user discovery search | Explore People/Platform result flow now shares handle candidates. | Source fixed |
 | Direct-message recipient picker | Used `searchChatPeople` and local lowercase matching. | Uses shared handle candidates and no-results copy. | Source fixed |
 | Chi'lly Circle people discovery | Used local lowercase title-only suggestion filtering. | Uses shared handle/name matching against title and subtitle, preserving handle matches. | Source fixed |
-| Admin/moderator/support user search | Not changed in this lane; admin search has separate privacy/governance guards and should not be mixed with public people search. | Human review if the same user-facing handle discovery issue is reported there. | Human review |
+| Followers list | Reads or builds user rows from `user_profiles` / shared profile helpers. | Fresh remote profile must win before installed proof can call this Closed. | Source fixed / installed proof pending |
+| Following list | Reads or builds user rows from `user_profiles` / shared profile helpers. | Fresh remote profile must win before installed proof can call this Closed. | Source fixed / installed proof pending |
+| Shared user cards / invite picker | Could merge existing thread snapshots over fresh search results. | Fresh search result identity now wins over stale existing thread snapshots. | Source fixed |
+| Platform owner / Admin / Moderator / Creator role surfaces | Could display role/read-model identity labels separately from current profile identity. | Fresh profile identity now wins where profile fields are available; role/status remains a separate badge. | Source fixed / installed proof pending |
 
 ## Normalization Behavior
 
@@ -59,6 +85,11 @@ No-results is not the same as search unavailable. Empty results now use: `No pub
 - `app/(tabs)/explore.tsx`
 - `app/chilly-circle.tsx`
 - `components/chat/internal-invite-sheet.tsx`
+- `_lib/userData.ts`
+- `_lib/communication.ts`
+- `_lib/adminReadModels.ts`
+- `_lib/moderation.ts`
+- `_lib/platformIdentity.ts`
 - `scripts/guard-public-user-search-policy.mjs`
 - `scripts/proof-cross-app-people-handle-search-fix.mjs`
 - `scripts/guard-cross-app-people-handle-search-policy.mjs`
@@ -104,15 +135,16 @@ Installed-app result: Partial until the normal visible search result creates/ope
 
 ## Cross-Lane Issues Found
 
-The visible Chat Call actual-user proof cannot be considered Closed while users cannot find each other through normal visible handle/name search. No additional small safe UI issue outside this search path was changed in this lane.
+The visible Chat Call actual-user proof cannot be considered Closed while users cannot find each other through normal visible handle/name search or while stale primary identity remains in existing inbox, Circle, Followers, Following, shared user-card, or platform/role surfaces. Source fixed is not installed-app proof.
 
 ## Remaining Blockers
 
-1. Deliver this JS/TS source fix to the installed Play-internal runtime by the approved delivery path.
+1. Deliver this JS/TS source fix to the installed Play-internal runtime by the approved Google Play internal path.
 2. Rerun actual-user installed-app search in Chi'lly Chat, Explore People, Profile entry, and direct thread creation.
-3. Confirm the two intended tester accounts have public/reachable profile rows and handles without using service-role repair as proof.
-4. Rerun the actual-user Chat Call initiation/ringing path only after visible people search finds the receiver.
+3. Rerun Settings/Profile/Chat/Search/Thread/Inbox/Circle/Followers/Following/shared user-card/platform-role handle comparison for `@user230455` versus stale `@user230456`.
+4. Confirm the two intended tester accounts have public/reachable profile rows and handles without using service-role repair as proof.
+5. Rerun the actual-user Chat Call initiation/ringing path only after visible people search and existing user-list identity agree.
 
 ## Safety Confirmation
 
-No auth/RLS/chat/profile/account-status permission weakening happened. No private user data was exposed. No private email, phone, raw auth ID, provider ID, token, signed URL, raw IP, password, or service-role key was committed or artifacted. No service-role setup was counted as actual-user proof. No provider mutation happened. No live-money, payout, cashout, Stripe production, payable balance, purchase, refund, Play production submission, sideload, uninstall, reinstall, or clear-data action happened. Current First Owner was not touched.
+No auth/RLS/chat/profile/account-status permission weakening happened. No auth/RLS/chat/account-status permission weakening happened. No private user data was exposed. No private email, phone, raw auth ID, provider ID, token, signed URL, raw IP, password, or service-role key was committed or artifacted. No service-role setup was counted as actual-user proof. No service-role chat/social proof was counted. No provider mutation happened. No live-money, payout, cashout, Stripe production, payable balance, purchase, refund, Play production submission, sideload, uninstall, reinstall, logout, or clear-data action happened. Current First Owner was not touched. No provider/live-money mutation happened. liveMoneyEnabled remains OFF. Sideloaded APK proof is not accepted. installerPackageName must be com.android.vending.

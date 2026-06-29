@@ -10,23 +10,31 @@ Current lane doc:
 Truth to preserve:
 - Google Play internal versionCode `60` was built from commit `c08c4bd1d98d3ea6672df5c3441c8d7b232b6b82`, includes required fix `0b563c79384e5270440bc0ad076bbc4ca687bf57`, and was installed by Google Play on both physical phones with installer `com.android.vending`.
 - No logout, uninstall, reinstall, clear-data, reset session, sideload, manual APK install, or Play production submission happened.
-- Settings/Profile/Chat search/direct-thread header now show fresh `@user230455`, but an existing Chat inbox row can still display stale `@user230456`.
+- Settings/Profile/Chat search/direct-thread header showed fresh `@user230455`; source now fixes the cross-surface stale identity path where an existing Chat inbox row could still display stale `@user230456`.
 - Visible Chat search -> direct-thread open/create passed on the Google-signed installed app after targeted live Supabase RPC fixes for ambiguous pair-key and member-upsert resolution.
 - Receiver elsewhere-in-app incoming banner appeared from a real voice-call invite, and the targeted receiver banner thread-readback migration let the receiver tap the banner, open the valid readable direct thread, and join the voice call on the Google-signed installed v60 app.
 - Root cause was the platform-owner direct-thread readback guard denying an explicit direct-thread member when the stale/direct pair row contained a platform owner but was not owner-created. The fix keeps creation/open restrictions in the authenticated direct-thread RPC and allows only valid explicit direct-thread members with account-status and block checks preserved.
 - Source now adds a shared responsive layout foundation and fixes the observed direct Chat video layout issue where the lower feed could be cut off by bottom controls and participant metadata covered too much video.
 - Direct Chat video call layout adapts by dimensions and safe area. Video tiles must adapt to phone size instead of hard-coded device hacks. Cross-platform responsive support is not Closed without tested device/simulator coverage, and iOS/tablet/foldable proof remains Pending unless tested.
-- Full call closure remains Partial because installed v60 still recorded a false `Missed voice call` event after the joined call ended, fullscreen video fit is not Closed until proved on installed app, background push/ringing was not proved, decline/missed cleanup was not proved, and the source cleanup/responsive layout fixes are not installed-app proof until v61 or newer is delivered through Google Play internal.
+- Full call closure remains Partial because installed v60 still recorded a false `Missed voice call` event after the joined call ended, background push/ringing was not proved, decline/missed cleanup was not proved, and source cleanup/identity fixes are not installed-app proof until delivered through Google Play internal.
 - No auth/RLS/chat/account-status permission weakening happened, no service-role chat proof was counted, no provider/live-money mutation happened, current First Owner was not touched, and `liveMoneyEnabled` remains OFF.
 
 v61 responsive video proof now added:
 - Google Play internal versionCode `61`, versionName `1.0.0`, commit `70b276c336b1164a674a8ae51b421e0a039d0d35` was built by EAS Build `bc2e9532-6a1e-4174-a153-679345c6ef20` and submitted to Google Play internal by EAS Submit `36c7bae7-4181-4c67-ac46-75070f76142f`.
 - Both physical phones updated only through Google Play with installer `com.android.vending`; no logout, uninstall, reinstall, clear-data, sideload, or manual APK install happened.
 - Android two-phone installed responsive Direct Chat video layout proof passed for owner -> user: `2 in call`, local/remote video on both phones, no bottom feed cutoff, no control overlap, compact participant metadata, Back to Thread, End Call, no visible false missed-call text after joined video calls, and repeated call after end with a new room.
-- iOS/tablet/foldable proof remains Pending unless tested. Background push/ringing, decline/missed/background cleanup, user -> owner direction, and stale existing inbox metadata remain Partial.
+- iOS/tablet/foldable proof remains Pending unless tested. Background push/ringing, decline/missed/background cleanup, user -> owner direction, and installed cross-surface stale identity proof remain Partial.
+
+Cross-surface stale identity source fix now added:
+- One user identity must render consistently across profile, chat, search, circle, followers, and following.
+- Fresh remote profile must win over stale AsyncStorage.
+- Existing inbox rows, Circle, Followers, Following, shared user cards, and Platform/owner/admin/moderator/creator surfaces must not keep stale `@user230456` as primary identity.
+- Role badges may show role/status, but they must not cause stale handle/name/avatar metadata to win.
+- Source fixed is not installed-app proof; v62+ Google Play internal installed proof is the next identity closure step.
 
 Next product action:
-- Fix stale existing inbox participant metadata so Settings/Profile/Chat agree on `@user230455`.
+- Build/deliver a v62+ Google Play internal update with the cross-surface identity fix.
+- Prove Settings/Profile/Chat/Search/Thread/Inbox/Circle/Followers/Following/shared user-card/platform-role surfaces agree on `@user230455` and do not show stale `@user230456` as primary identity.
 - Rerun remaining installed proof only on Google Play-installed builds from `com.android.vending`: user -> owner direction, receiver background/push, decline/missed/background/killed-app cleanup, full same-thread rerun if needed, and any iOS/tablet/foldable responsive coverage.
 - Android two-phone proof cannot close iOS/tablet/foldable coverage.
 

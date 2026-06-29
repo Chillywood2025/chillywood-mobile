@@ -45,16 +45,16 @@ export const resolvePlatformDisplayIdentity = (input: {
   const fallbackDisplayName = nullableText(input.fallbackDisplayName) ?? "Untitled Platform";
 
   const displayCandidates = [
-    platformDisplayName,
     profileDisplayName,
     channelDisplayName,
+    platformDisplayName,
     profileUsername,
     channelHandle?.replace(/^@/, ""),
   ].filter(Boolean) as string[];
 
   const displayName = displayCandidates.find((candidate) => !isGeneratedPlatformIdentityValue(candidate))
     ?? fallbackDisplayName;
-  const handle = platformHandle ?? profileHandle ?? channelHandle;
+  const handle = profileHandle ?? channelHandle ?? platformHandle;
 
   return {
     displayName,
@@ -64,4 +64,3 @@ export const resolvePlatformDisplayIdentity = (input: {
     isUsingGeneratedFallback: isGeneratedPlatformIdentityValue(displayName),
   };
 };
-

@@ -875,7 +875,7 @@ export async function readCommunicationIdentity(): Promise<CommunicationIdentity
 
   const channelProfile = buildUserChannelProfile({
     id: userId,
-    username: profile.username,
+    profile,
     avatarUrl,
     fallbackDisplayName: "You",
   });
