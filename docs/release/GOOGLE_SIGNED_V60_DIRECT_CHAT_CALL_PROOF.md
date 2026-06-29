@@ -20,7 +20,7 @@ Thread message list path reviewed: `renderedMessages` still maps real `chat_mess
 
 Call event rendering path reviewed: `listChillyChatCallEvents(threadId)` remains intact, but call events now render inside the message timeline as a compact `Recent calls in this thread` section, limited to the latest three lightweight rows.
 
-Thread status card reviewed: the former `THREAD STATUS` card is now a compact `MESSAGE THREAD` context strip with smaller copy and pills. It no longer sits as the visual purpose of the page.
+Thread status card reviewed: the former `THREAD STATUS` card was reduced for the v63 installed proof, and the later Home Settings + Direct Thread UI cleanup removes the large `MESSAGE THREAD` / `Chat stays primary` explainer card entirely from current source. The direct thread now relies on the header, call controls, message timeline, compact recent-call rows, and composer rather than a tutorial/status card.
 
 Composer path reviewed: `chat-thread-composer`, attachment picker, text input, and Send behavior remain in place.
 

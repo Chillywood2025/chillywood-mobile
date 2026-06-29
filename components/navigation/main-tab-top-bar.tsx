@@ -82,10 +82,9 @@ export function MainTabTopBar({ surface, label, style }: MainTabTopBarProps) {
           activeOpacity={0.86}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Open settings"
+          accessibilityLabel="Settings"
         >
           <MaterialIcons name="settings" size={17} color="#F4F7FC" />
-          <Text style={styles.settingsText}>Settings</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID={`main-tab-${surface}-profile-entry`}
@@ -129,21 +128,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   settingsButton: {
-    minHeight: 36,
-    borderRadius: 999,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(12,12,16,0.84)",
-    paddingHorizontal: 12,
-    flexDirection: "row",
+    backgroundColor: "rgba(12,12,16,0.68)",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-  },
-  settingsText: {
-    color: "#F4F7FC",
-    fontSize: 12.5,
-    fontWeight: "800",
   },
   avatarButton: {
     width: 44,

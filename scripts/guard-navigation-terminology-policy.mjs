@@ -103,6 +103,9 @@ assertIncludes(homeRoute, '<Redirect href="/(tabs)" />', "Home user-facing route
 assertIncludes(libraryRoute, '<Redirect href="/(tabs)/my-list" />', "Library user-facing route alias");
 assertIncludes(home, 'testID="main-tab-home-profile-entry"', "Home top Profile entry test id");
 assertIncludes(home, 'testID="main-tab-home-settings-action"', "Home top Settings test id");
+assertIncludes(home, 'accessibilityLabel="Settings"', "Home icon-only Settings accessibility label");
+assertNotIncludes(home, 'accessibilityLabel="Open settings"', "Home Settings outdated accessibility label");
+assertNotIncludes(home, "utilitySettingsText", "Home Settings visible text style");
 assertIncludes(home, 'pathname: "/profile/[userId]"', "Home top Profile route");
 assertIncludes(home, "CHILLYWOOD_BACKGROUND_SOURCE", "Home branded background");
 assertIncludes(home, "homeHeroWrap", "Home cinematic hero wrapper");

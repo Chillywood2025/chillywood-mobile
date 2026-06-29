@@ -1,4 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     buildUserChannelProfile,
@@ -963,8 +964,7 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.utilityRow, { marginTop: Math.max(safeAreaInsets.top, 8) }]}>
-            <Text style={styles.utilityKicker}>HOME</Text>
-            <View style={styles.utilityActions}>
+            <View style={styles.utilityLabelGroup}>
               <TouchableOpacity
                 testID="main-tab-home-settings-action"
                 style={styles.utilitySettingsButton}
@@ -972,10 +972,13 @@ export default function HomeScreen() {
                 activeOpacity={0.86}
                 hitSlop={12}
                 accessibilityRole="button"
-                accessibilityLabel="Open settings"
+                accessibilityLabel="Settings"
               >
-                <Text style={styles.utilitySettingsText}>Settings</Text>
+                <MaterialIcons name="settings" size={18} color="#F4F7FC" />
               </TouchableOpacity>
+              <Text style={styles.utilityKicker}>HOME</Text>
+            </View>
+            <View style={styles.utilityActions}>
               <TouchableOpacity
                 testID="main-tab-home-profile-entry"
                 style={[styles.profileAvatarButton, !currentChannel?.id && styles.profileAvatarButtonDisabled]}
@@ -1112,25 +1115,26 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0,
   },
+  utilityLabelGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 1,
+  },
   utilityActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
   utilitySettingsButton: {
-    minHeight: 36,
-    borderRadius: 999,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(12,12,16,0.84)",
-    paddingHorizontal: 14,
+    backgroundColor: "rgba(12,12,16,0.68)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  utilitySettingsText: {
-    color: "#F4F7FC",
-    fontSize: 12.5,
-    fontWeight: "800",
   },
   profileAvatarButton: {
     width: 44,

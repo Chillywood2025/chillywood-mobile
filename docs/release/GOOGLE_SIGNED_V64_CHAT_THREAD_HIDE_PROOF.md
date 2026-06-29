@@ -80,7 +80,7 @@ Backend live status: `supabase db push --dry-run` showed only `20260629140032_gu
 
 ## Regression Notes
 
-- Direct-thread messaging UX remains message-first: `MESSAGE THREAD`, `Chat stays primary`, composer, and compact recent-call rows were visible.
+- Direct-thread messaging UX remained message-first in the v64 installed proof, where the older compact context strip, composer, and compact recent-call rows were visible. Later source polish removes the large `MESSAGE THREAD` / `Chat stays primary` explainer card entirely so messages start higher while preserving Voice Call, Video Call, history, and composer behavior.
 - Voice Call and Video Call controls remained available in the reopened/reappeared thread. New voice/video calls were not started during this focused completion lane to avoid unnecessary live-call noise.
 - Receiver banner thread-readback was not rerun in this completion lane; prior receiver banner proof remains the governing evidence.
 - People/Threads existing-thread copy remains governed by the v64 source behavior and the existing proof scripts.

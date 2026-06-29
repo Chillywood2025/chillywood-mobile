@@ -26,6 +26,14 @@ Google-signed v64 proof is documented in `docs/release/GOOGLE_SIGNED_V64_CHAT_TH
 
 Chat thread hide final hardening audit: Closed for source/backend behavior. Migration `20260629140032_guard_active_chat_thread_hide.sql` is applied remotely and makes `hide_chat_thread_from_inbox(text)` refuse active-call threads with `active_communication_room_id`. This prevents active receiver-visible call state from being silently hidden. App source now shows `Call active in this thread` and `Finish or leave the active call before removing this conversation from your inbox.` before attempting active-call hide; that friendly UI copy is source-fixed and requires future Google Play internal v65+ installed proof if exact-copy installed proof is required. Unread behavior is server-backed through `last_message_at`, `hidden_at`, and `unread_count`; attachment metadata, storage objects, message history, and call history are preserved; block/restrict/account-status behavior remains governed by existing chat access, direct-thread open, membership, and message guards.
 
+## Home Settings + Direct Thread UI cleanup
+
+Source status: fixed. Installed-app status: pending unless a future Google Play internal build is shipped for this UI polish.
+
+Home now places a compact icon-only Settings gear in the left header cluster beside `HOME`, with accessibility label `Settings`, no visible Settings word, and no oversized pill treatment. Shared Explore/Live/Saved top bars also use compact icon-only Settings controls.
+
+Direct chat threads no longer render the large `MESSAGE THREAD` / `Chat stays primary` explainer card. Header identity, Voice Call, Video Call, message history, lightweight recent-call rows, and the composer remain in place, with messages starting higher in the thread. Source fixed is not installed-app proof. No auth/RLS/chat/account-status permission weakening happened. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
+
 ## Direct thread messaging UX restoration
 
 Source status: fixed. Installed-app status: Closed for Play-installed Android versionCode `63`.

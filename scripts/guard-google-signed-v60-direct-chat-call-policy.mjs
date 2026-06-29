@@ -345,14 +345,14 @@ requireText("call invite stale missed guard", callLib, "query = query.eq(\"statu
 requireText("call invite stale missed guard", callLib, "if (!updatedInvite) return null;");
 requireText("banner auto accept source", thread, "Incoming call could not be accepted. Ask the caller to start a new call.");
 requireText("banner auto accept source", thread, "status: \"accepted\"");
-requireText("direct thread messaging UX source", thread, "MESSAGE THREAD");
-requireText("direct thread messaging UX source", thread, "Chat stays primary");
 requireText("direct thread messaging UX source", thread, "chat-thread-messages-scroll");
 requireText("direct thread messaging UX source", thread, "chat-thread-composer");
 requireText("direct thread messaging UX source", thread, "chat-thread-call-events");
 requireText("direct thread messaging UX source", thread, "Recent calls in this thread");
 requireText("direct thread messaging UX source", thread, "callEvents.slice(-3)");
-requireText("direct thread messaging UX source", thread, "Voice/video available");
+requireText("direct thread messaging UX source", thread, "Voice Call");
+requireText("direct thread messaging UX source", thread, "Video Call");
+forbidMatch("direct thread messaging UX source", thread, /MESSAGE THREAD|Chat stays primary/, "large direct-thread explainer card copy");
 requireText("responsive layout hook", responsiveLayout, "export type DeviceClass");
 requireText("responsive layout hook", responsiveLayout, "useWindowDimensions");
 requireText("responsive layout hook", responsiveLayout, "useSafeAreaInsets");

@@ -10,6 +10,20 @@ Current lane doc:
 - `docs/release/PARTY_ROOM_LIVE_STAGE_ROUTE_SEMANTICS.md`
 - `docs/release/GOOGLE_SIGNED_V64_CHAT_THREAD_HIDE_PROOF.md`
 
+Home Settings + Direct Thread UI cleanup:
+- Status: source-fixed.
+- Home now places a compact icon-only Settings gear in the left header cluster beside `HOME`, with accessibility label `Settings`, no visible Settings word, and no oversized pill treatment.
+- The shared Explore/Live/Saved top bars also use compact icon-only Settings controls instead of the heavier text pill treatment.
+- Tapping the Settings icon still routes to `/settings`.
+- Direct chat threads no longer show the large `MESSAGE THREAD` / `Chat stays primary` explainer card.
+- Header identity, Voice Call, Video Call, recent-call timeline rows, message history, composer, and hide/reopen behavior remain in place.
+- Messages and thread content start higher, so the direct thread reads as message-first instead of tutorial/status-first.
+- Source fixed is not installed-app proof.
+- No auth/RLS/chat/account-status permission weakening happened.
+- No service-role chat/social proof was counted.
+- No provider/live-money mutation happened.
+- `liveMoneyEnabled` remains OFF.
+
 Google-signed v64 Chi’lly Chat delete/hide conversation proof:
 - Status: Closed.
 - EAS Build `c3fd4029-48b4-49ad-a1a4-7a33fbfbad84` / EAS Submit `cbcaae0e-650e-4c5d-a3c7-9b5ab819a8c1` delivered commit `5c21c3b4282fa45a2f62106deba68d944b6024e4` to Google Play internal testing as versionCode `64`, versionName `1.0.0`.

@@ -130,31 +130,6 @@ const getThreadStatusLabel = (thread: ChatThreadSummary | null) => {
   return "Direct thread";
 };
 
-const getThreadKindLabel = () => {
-  return "Direct thread";
-};
-
-const getThreadGuideTitle = ({
-  activeCallType,
-}: {
-  activeCallType?: ChatCallType;
-}) => {
-  if (activeCallType) {
-    return "Call ready here";
-  }
-  return "Direct thread";
-};
-
-const getThreadGuideBody = ({
-  activeCallType,
-}: {
-  activeCallType?: ChatCallType;
-}) => {
-  return activeCallType
-    ? "Both people can rejoin the active call from this thread."
-    : "Message here first, then start voice or video from the same thread.";
-};
-
 const getCallDeliveryMessage = (delivery: ChillyChatCallInviteDelivery | null | undefined) => {
   if (!delivery) {
     return "Call is active in this thread. Receiver delivery status is not available for the reused call.";
@@ -571,13 +546,6 @@ export default function ChillyChatThreadScreen() {
     [currentUserId, messages, thread?.members],
   );
 
-  const threadKindLabel = getThreadKindLabel();
-  const threadGuideTitle = getThreadGuideTitle({
-    activeCallType: thread?.activeCallType,
-  });
-  const threadGuideBody = getThreadGuideBody({
-    activeCallType: thread?.activeCallType,
-  });
   const friendStatusSummary = useMemo(() => {
     if (!otherMember?.userId || officialAccount) {
       return null;
@@ -645,20 +613,6 @@ export default function ChillyChatThreadScreen() {
       body: "Messaging here does not automatically add someone to Chi'lly Circle. Add them only if you both want a private mutual connection.",
     };
   }, [friendLoading, friendState, officialAccount, otherMember?.userId, otherMemberDisplayName]);
-
-  const latestThreadHint = useMemo(() => {
-    if (renderedMessages.length === 0) {
-      return "Start with a message or a call.";
-    }
-
-    const latestMessage = renderedMessages[renderedMessages.length - 1];
-    const author = latestMessage.isMe ? "You" : latestMessage.authorLabel;
-    const preview = latestMessage.body.length > 88
-      ? `${latestMessage.body.slice(0, 85)}...`
-      : latestMessage.body;
-
-    return `Latest: ${author} · ${preview}`;
-  }, [renderedMessages]);
 
   const emptyThreadPrompts = useMemo(() => {
     return buildSmartReplySuggestions({
@@ -1518,39 +1472,6 @@ export default function ChillyChatThreadScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.threadGuideCard}>
-        <View style={styles.threadGuideHeader}>
-          <Text style={styles.threadGuideKicker}>MESSAGE THREAD</Text>
-          <View style={styles.threadGuideKindPill}>
-            <Text style={styles.threadGuideKindPillText}>
-              {threadKindLabel}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.threadGuideTitle}>
-          {activeCallRoomId ? threadGuideTitle : "Chat stays primary"}
-        </Text>
-        <Text style={styles.threadGuideBody}>{threadGuideBody}</Text>
-        <View style={styles.threadGuideMetaRow}>
-          <View style={styles.threadGuideMetaPill}>
-            <Text style={styles.threadGuideMetaPillText}>
-              {activeCallRoomId ? "Call ready here" : "Voice/video available"}
-            </Text>
-          </View>
-          <View style={styles.threadGuideMetaPill}>
-            <Text style={styles.threadGuideMetaPillText}>
-              {thread.currentMember?.lastReadAt ? "Read up to date" : "Read on open"}
-            </Text>
-          </View>
-          {friendStatusSummary ? (
-            <View style={styles.threadGuideMetaPill}>
-              <Text style={styles.threadGuideMetaPillText}>{friendStatusSummary.pill}</Text>
-            </View>
-          ) : null}
-        </View>
-        <Text style={styles.threadGuideHint}>{latestThreadHint}</Text>
-      </View>
-
       {activeCallRoomId && !callPanelOpen ? (
         <View style={styles.callBanner}>
           <Text style={styles.callBannerTitle}>{callTitle}</Text>
@@ -2142,88 +2063,6 @@ const styles = StyleSheet.create({
     color: "#EDF3FF",
     fontSize: 12,
     fontWeight: "900",
-  },
-  threadGuideCard: {
-    gap: 7,
-    marginHorizontal: 18,
-    marginBottom: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.11)",
-    backgroundColor: "rgba(255,255,255,0.035)",
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-  },
-  threadGuideCardOfficial: {
-    borderColor: "rgba(242,194,91,0.24)",
-    backgroundColor: "rgba(96,72,20,0.16)",
-  },
-  threadGuideHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  threadGuideKicker: {
-    color: "#8FA0BC",
-    fontSize: 9.5,
-    fontWeight: "900",
-    letterSpacing: 1.1,
-  },
-  threadGuideKindPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(6,10,18,0.28)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  threadGuideKindPillOfficial: {
-    borderColor: "rgba(242,194,91,0.32)",
-    backgroundColor: "rgba(242,194,91,0.12)",
-  },
-  threadGuideKindPillText: {
-    color: "#DFE8F7",
-    fontSize: 9.5,
-    fontWeight: "900",
-  },
-  threadGuideKindPillTextOfficial: {
-    color: "#FFE6A6",
-  },
-  threadGuideTitle: {
-    color: "#F8FBFF",
-    fontSize: 13.5,
-    fontWeight: "900",
-  },
-  threadGuideBody: {
-    color: "#C5D0E2",
-    fontSize: 11.5,
-    lineHeight: 16,
-    fontWeight: "600",
-  },
-  threadGuideMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  threadGuideMetaPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(6,10,18,0.28)",
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  threadGuideMetaPillText: {
-    color: "#E5EDFB",
-    fontSize: 9.5,
-    fontWeight: "900",
-  },
-  threadGuideHint: {
-    color: "#94A4BD",
-    fontSize: 10,
-    lineHeight: 14,
-    fontWeight: "700",
   },
   officialPresenceCard: {
     gap: 8,

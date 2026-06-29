@@ -17,6 +17,9 @@ const read = (relativePath) => {
 const requireText = (label, content, needle) => {
   if (!content.includes(needle)) failures.push(`${label} missing required text: ${needle}`);
 };
+const forbidText = (label, content, needle) => {
+  if (content.includes(needle)) failures.push(`${label} contains removed text: ${needle}`);
+};
 
 const doc = read("docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md");
 const packageJson = read("package.json");
@@ -252,14 +255,15 @@ requireText("call invite stale missed guard", callLib, "query = query.eq(\"statu
 requireText("call invite stale missed guard", callLib, "if (!updatedInvite) return null;");
 requireText("banner auto accept source", threadScreen, "Incoming call could not be accepted. Ask the caller to start a new call.");
 requireText("banner auto accept source", threadScreen, "status: \"accepted\"");
-requireText("direct thread messaging UX source", threadScreen, "MESSAGE THREAD");
-requireText("direct thread messaging UX source", threadScreen, "Chat stays primary");
 requireText("direct thread messaging UX source", threadScreen, "chat-thread-messages-scroll");
 requireText("direct thread messaging UX source", threadScreen, "chat-thread-composer");
 requireText("direct thread messaging UX source", threadScreen, "chat-thread-call-events");
 requireText("direct thread messaging UX source", threadScreen, "Recent calls in this thread");
 requireText("direct thread messaging UX source", threadScreen, "callEvents.slice(-3)");
-requireText("direct thread messaging UX source", threadScreen, "Voice/video available");
+requireText("direct thread messaging UX source", threadScreen, "Voice Call");
+requireText("direct thread messaging UX source", threadScreen, "Video Call");
+forbidText("direct thread messaging UX source", threadScreen, "MESSAGE THREAD");
+forbidText("direct thread messaging UX source", threadScreen, "Chat stays primary");
 requireText("responsive layout hook", responsiveLayout, "export type DeviceClass");
 requireText("responsive layout hook", responsiveLayout, "useWindowDimensions");
 requireText("responsive layout hook", responsiveLayout, "useSafeAreaInsets");
