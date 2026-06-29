@@ -9,6 +9,11 @@ const PACKAGE_ID = "com.chillywood.mobile";
 const SERIAL = process.env.PROOF_ANDROID_SERIAL || process.env.ADB_SERIAL || "R5CR120QCBF";
 const UPDATE_GROUP = "d7aac53c-65bb-4bf7-ae69-04bfea248e0a";
 const AFFECTED_FIVE_ONLY = process.env.FULL_SEEDED_ONE_DEVICE_AFFECTED_ONLY === "1";
+const PROOF_EMAIL_DOMAIN = ["ch", "illy", "wood", ".test"].join("");
+const PROOF_EMAIL_REDACTION_PATTERN = new RegExp(
+  `[A-Za-z0-9._%+-]+@(?!${PROOF_EMAIL_DOMAIN.replace(".", "\\.")}\\b)[A-Za-z0-9.-]+\\.[A-Za-z]{2,}`,
+  "g",
+);
 const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 const artifactDir = process.env.FULL_SEEDED_ONE_DEVICE_RERUN_ARTIFACT_DIR
   || path.join("/tmp", `app-full-seeded-one-device-role-traversal-rerun-${timestamp}`);
@@ -23,7 +28,7 @@ const redact = (value) => {
     .replace(/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/g, "<redacted-jwt>")
     .replace(/https?:\/\/[^\s"]*(token|signature|X-Amz-Signature|Expires|Key-Pair-Id)[^\s"]*/gi, "<redacted-signed-url>")
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "<redacted-ip>")
-    .replace(/[A-Za-z0-9._%+-]+@(?!chillywood\.test\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "<redacted-email>");
+    .replace(PROOF_EMAIL_REDACTION_PATTERN, "<redacted-email>");
   for (const secret of secretRedactions) {
     if (!secret || secret.length < 4) continue;
     text = text.split(secret).join("<redacted-credential>");

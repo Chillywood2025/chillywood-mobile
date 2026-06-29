@@ -3791,7 +3791,7 @@ export default function WatchPartyRoomScreen() {
             onPress={() => {
               if (!partyId) return;
               router.push({
-                pathname: "/watch-party/live-stage",
+                pathname: "/watch-party/live-stage/[partyId]",
                 params: {
                   partyId,
                   mode: sharedRoomMode,

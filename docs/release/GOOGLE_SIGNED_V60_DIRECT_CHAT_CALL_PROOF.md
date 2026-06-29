@@ -130,13 +130,13 @@ Only unrelated pre-existing untracked local artifact/temp files were present; th
 
 Repo migration files:
 
-- `supabase/migrations/20260628205325_chilly_chat_direct_thread_open_repair.sql`
-- `supabase/migrations/20260628212500_chilly_chat_direct_thread_repair_safety_guards.sql`
-- `supabase/migrations/20260628213000_chilly_chat_direct_thread_repair_execute_grants.sql`
-- `supabase/migrations/20260628215750_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql`
-- `supabase/migrations/20260628215943_chilly_chat_direct_thread_repair_member_upsert_constraint.sql`
-- `supabase/migrations/20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql`
-- `supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql`
+- `supabase/migrations/20260628211504_chilly_chat_direct_thread_open_repair.sql`
+- `supabase/migrations/20260628211710_chilly_chat_direct_thread_repair_safety_guards.sql`
+- `supabase/migrations/20260628211813_chilly_chat_direct_thread_repair_execute_grants.sql`
+- `supabase/migrations/20260628215838_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql`
+- `supabase/migrations/20260628220027_chilly_chat_direct_thread_repair_member_upsert_constraint.sql`
+- `supabase/migrations/20260628223330_chilly_chat_owner_initiated_thread_member_readback.sql`
+- `supabase/migrations/20260628223956_chilly_chat_direct_member_platform_owner_thread_readback.sql`
 
 Target Supabase migration history shows the repair path applied:
 
@@ -146,7 +146,7 @@ Target Supabase migration history shows the repair path applied:
 - `20260628215838 chilly_chat_direct_thread_repair_ambiguous_pair_key`
 - `20260628220027 chilly_chat_direct_thread_repair_member_upsert_constraint`
 - `20260628223330 chilly_chat_owner_initiated_thread_member_readback`
-- `20260628223918 chilly_chat_direct_member_platform_owner_thread_readback`
+- `20260628223956 chilly_chat_direct_member_platform_owner_thread_readback`
 
 Live RPC verification:
 
@@ -166,7 +166,7 @@ The repair function is authenticated and RLS-safe for this lane: it operates onl
 Receiver banner thread-readback fix:
 
 - Root cause: the app-wide incoming call banner carried the correct invite/thread route, but receiver readback through `getChatThread(invite.threadId)` returned no readable thread when the direct thread contained a platform-owner member and the thread row had been created by the receiver/stale side. The receiver was an explicit `chat_thread_members` member, but the earlier platform-owner read guard still denied the thread.
-- Files changed: `supabase/migrations/20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql`, `supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql`, `_lib/chillyChatCalls.ts`, and `app/chat/[threadId].tsx`.
+- Files changed: `supabase/migrations/20260628223330_chilly_chat_owner_initiated_thread_member_readback.sql`, `supabase/migrations/20260628223956_chilly_chat_direct_member_platform_owner_thread_readback.sql`, `_lib/chillyChatCalls.ts`, and `app/chat/[threadId].tsx`.
 - Migration/RPC changes: `public.can_access_chat_thread(uuid)` now lets authenticated explicit direct-thread members read a direct thread they already belong to even when a platform-owner member is present, while preserving account restriction checks, block checks, direct-thread membership checks, and direct-thread creation/open restrictions in `get_or_create_direct_chat_thread`.
 - Live receiver-context verification after the second migration returned `callee_can_access=true`, `thread_readable_by_callee=true`, `callee_member_readable=true`, `has_platform_owner=true`, and `actor_is_current_platform_owner=false` for the latest proof thread.
 - Supabase advisors still report existing project-wide warnings unrelated to this targeted function; this function keeps a fixed `search_path` and does not use service-role as chat proof.
@@ -345,7 +345,7 @@ Installed proof that passed:
 - Phone A tapped Voice Call.
 - Caller saw `Voice call active`, `Connected`, `1 in call`, and delivery status `push sent`.
 - Phone B, while elsewhere in app, received an incoming call banner.
-- After `20260628223918_chilly_chat_direct_member_platform_owner_thread_readback`, Phone B tapped the incoming banner and joined the call.
+- After `20260628223956_chilly_chat_direct_member_platform_owner_thread_readback`, Phone B tapped the incoming banner and joined the call.
 - Both phones showed `Voice call active`, `Connected`, and `2 in call`.
 - Caller End Call returned both phones to readable direct-thread screens with `No Active Call`.
 
@@ -516,7 +516,7 @@ Proof result: Source fixed. Google Play internal install is not enough without a
 | Issue | Classification | Disposition |
 | --- | --- | --- |
 | Existing Chat inbox row can still display stale `@user230456` after Settings/Profile/search show `@user230455`. | Source fixed / installed proof pending | Cross-surface stale identity metadata fix updates the shared profile display priority, refreshes signed-in denormalized membership snapshots after remote profile save, reloads inbox on any readable member metadata change, and refreshes platform-role labels from `user_profiles`. Source fixed is not installed-app proof; v62+ Google Play internal proof is still required. |
-| Receiver tapping the app-wide incoming call banner opened `This Chi'lly Chat thread could not be found.` | Fixed in backend / installed proof passed | `20260628223918_chilly_chat_direct_member_platform_owner_thread_readback` fixed the receiver readback path. R5 tapped the real incoming banner and joined the correct voice call surface with both phones showing `2 in call`. |
+| Receiver tapping the app-wide incoming call banner opened `This Chi'lly Chat thread could not be found.` | Fixed in backend / installed proof passed | `20260628223956_chilly_chat_direct_member_platform_owner_thread_readback` fixed the receiver readback path. R5 tapped the real incoming banner and joined the correct voice call surface with both phones showing `2 in call`. |
 | Joined installed v60 call recorded `Voice call ended` and then a false `Missed voice call`. | Partially fixed / more cleanup proof needed | v61 joined video-call end proof showed `No Active Call` on both phones and no visible false missed-call text; receiver decline, ignored/missed, background/killed-app cleanup, and database field readback remain Partial. |
 | Video call lower participant feed is cut off by bottom controls and participant metadata covers too much video. | Closed for Android two-phone installed responsive layout | Google Play-installed v61 proved no bottom feed cutoff, no control overlap, compact metadata, and local/remote video on both phones. iOS/tablet/foldable proof remains Pending unless tested. |
 | `R5CR120QCBF` Profile displays an `Owner` badge for `user230455` during proof. | Human review | Review account role/badge source before launch; no account mutation happened in this lane. |
@@ -538,12 +538,12 @@ Risky or larger issues were documented instead of hidden.
 - Updated `components/chat/internal-invite-sheet.tsx` so fresh search results win over existing thread snapshots in the invite/user-card merge path.
 - Updated `_lib/adminReadModels.ts`, `_lib/moderation.ts`, and `_lib/platformIdentity.ts` so Platform owner, Admin, Moderator, Creator, and role roster identity labels prefer fresh profile display/handle while role badges remain role/status only.
 - Applied target Supabase migration `chilly_chat_direct_thread_open_repair`.
-- Added/applied `20260628212500_chilly_chat_direct_thread_repair_safety_guards.sql`.
-- Added/applied `20260628213000_chilly_chat_direct_thread_repair_execute_grants.sql`.
-- Added/applied `20260628215750_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql`.
-- Added/applied `20260628215943_chilly_chat_direct_thread_repair_member_upsert_constraint.sql`.
-- Added/applied `20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql`.
-- Added/applied `20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql`.
+- Added/applied `20260628211710_chilly_chat_direct_thread_repair_safety_guards.sql`.
+- Added/applied `20260628211813_chilly_chat_direct_thread_repair_execute_grants.sql`.
+- Added/applied `20260628215838_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql`.
+- Added/applied `20260628220027_chilly_chat_direct_thread_repair_member_upsert_constraint.sql`.
+- Added/applied `20260628223330_chilly_chat_owner_initiated_thread_member_readback.sql`.
+- Added/applied `20260628223956_chilly_chat_direct_member_platform_owner_thread_readback.sql`.
 - Updated `_lib/chillyChatCalls.ts` so stale missed/declined/busy/accepted invite updates only apply while the invite is still ringing and do not insert events when the invite row did not change.
 - Updated `app/chat/[threadId].tsx` so receiver banner/open-call auto-join marks the invite accepted and clears the missed-call timeout before opening the call surface.
 - Updated `components/communication/in-room-communication-panel.tsx` so fullscreen controls are pinned below the video stage with Android safe-area padding instead of competing with or covering the lower video tile.

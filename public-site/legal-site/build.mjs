@@ -88,6 +88,7 @@ function escapeHtml(value) {
 
 function slugify(value) {
   return String(value)
+    .replace(/['\u2019\u2018`\u00b4]+/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");

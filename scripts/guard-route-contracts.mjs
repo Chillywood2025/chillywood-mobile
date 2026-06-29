@@ -99,7 +99,7 @@ assertIncludes(partyRoom, 'pathname: "/watch-party/live-stage/[partyId]"', "Part
 const paidTicketPurchaseScope = assertScopedIncludes(
   watchPartyIndex,
   "const onBuyPaidTicketAndJoin = useCallback(async () => {",
-  "}, [isSignedIn, navigateToPreviewRoom, preparedRoom, preview, router]);",
+  "}, [isSignedIn, navigateToPreviewRoom, paidWatchPartyCheckoutAvailable, preparedRoom, preview, router]);",
   "navigateToPreviewRoom(targetPreview);",
   "Paid Watch-Party ticket buyer post-purchase path",
 );

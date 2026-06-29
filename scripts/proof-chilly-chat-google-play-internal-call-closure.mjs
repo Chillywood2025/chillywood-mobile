@@ -26,7 +26,7 @@ const playDoc = read("docs/release/PLAY_INTERNAL_TWO_PHONE_CHAT_LIVE_PROOF.md");
 const chatLib = read("_lib/chat.ts");
 const userData = read("_lib/userData.ts");
 const settings = read("app/settings.tsx");
-const directThreadRepairMigration = read("supabase/migrations/20260628205325_chilly_chat_direct_thread_open_repair.sql");
+const directThreadRepairMigration = read("supabase/migrations/20260628211504_chilly_chat_direct_thread_open_repair.sql");
 
 [
   "Chi’lly Chat Google Play internal actual-user call proof: Closed / Partial / Blocked",

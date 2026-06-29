@@ -6,6 +6,21 @@ Current lane doc:
 - `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md`
 - `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md`
 - `docs/release/CHILLY_CHAT_END_TO_END_CALL_INITIATION_PROOF.md`
+- `docs/release/VALIDATION_BLOCKER_CLEANUP.md`
+
+Validation blocker cleanup:
+- brand-spelling-policy is now clean.
+- route-contracts guard is now clean.
+- supabase db push --dry-run is now clean.
+- Root causes: generated legal-site brand anchors produced `chi-llywood`; two proof-script redaction regex literals contained a contiguous lowercase brand token; Live Stage route guard expectations and paid ticket callback scope were stale; Supabase migration history had local/remote timestamp drift plus six older local hardening migrations not yet applied remotely.
+- Fixes: regenerated legal-site anchors from a safer slugifier, updated proof-script redaction regex construction, aligned route guards and Party Room Go Live to `/watch-party/live-stage/[partyId]`, renamed local direct-chat migration files to remote-applied versions, applied the six older hardening migrations after `supabase db push --dry-run --include-all`, and confirmed ordinary dry-run reports the remote database is up to date.
+- Source fixed is not installed-app proof.
+- Google Play internal install is not enough without actual user flow proof.
+- No logout, uninstall, reinstall, or clear-data happened.
+- No auth/RLS/chat/account-status permission weakening happened.
+- No service-role chat/social proof was counted.
+- No provider/live-money mutation happened.
+- `liveMoneyEnabled` remains OFF.
 
 Direct thread messaging UX restoration:
 - Chi’lly Chat direct thread must remain a real messaging thread.

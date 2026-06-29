@@ -274,7 +274,7 @@ Source fixes are now applied but not installed-app proof until a newer Google Pl
 - `app/settings.tsx`: after a handle update succeeds, Settings writes the updated username into the shared local profile cache via `saveUserProfile()`.
 - `_lib/chat.ts`: existing direct threads returned by `getOrCreateDirectThread()` are enriched with current username/profile data before navigation.
 - `_lib/chat.ts`: direct-thread open/create now falls back to authenticated `get_or_create_direct_chat_thread` repair when a pair-key conflict, member repair failure, membership insert failure, or post-create readback failure prevents the visible People result from opening the thread.
-- `supabase/migrations/20260628205325_chilly_chat_direct_thread_open_repair.sql`: adds a narrow authenticated direct-thread open/create repair function. It only operates on the caller/target pair, preserves platform-owner chat restrictions, returns only the thread id, and still requires normal RLS readback in the app before the caller sees success.
+- `supabase/migrations/20260628211504_chilly_chat_direct_thread_open_repair.sql`: adds a narrow authenticated direct-thread open/create repair function. It only operates on the caller/target pair, preserves platform-owner chat restrictions, returns only the thread id, and still requires normal RLS readback in the app before the caller sees success.
 
 Small safe visible issues were fixed where found in prior source lanes. Risky or larger issues were documented instead of hidden.
 

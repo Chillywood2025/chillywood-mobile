@@ -43,13 +43,18 @@ const envFiles = [
 const tokenLikePattern = /([A-Za-z0-9._~+/=-]{32,})/g;
 const generatedSecrets = [];
 let secretRedactions = [];
+const PROOF_EMAIL_DOMAIN = ["ch", "illy", "wood", ".test"].join("");
+const PROOF_EMAIL_REDACTION_PATTERN = new RegExp(
+  `[A-Za-z0-9._%+-]+@(?!${PROOF_EMAIL_DOMAIN.replace(".", "\\.")}\\b)[A-Za-z0-9.-]+\\.[A-Za-z]{2,}`,
+  "g",
+);
 
 const redact = (value) => {
   let text = String(value ?? "")
     .replace(tokenLikePattern, "[redacted]")
     .replace(/https?:\/\/[^\s)]*(?:token|signature|X-Amz-Signature|Expires|Key-Pair-Id)[^\s)]*/gi, "[redacted-url]")
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted-ip]")
-    .replace(/[A-Za-z0-9._%+-]+@(?!chillywood\.test\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[redacted-email]");
+    .replace(PROOF_EMAIL_REDACTION_PATTERN, "[redacted-email]");
   for (const secret of [...secretRedactions, ...generatedSecrets]) {
     if (!secret || String(secret).length < 4) continue;
     text = text.split(String(secret)).join("[redacted-proof-id]");

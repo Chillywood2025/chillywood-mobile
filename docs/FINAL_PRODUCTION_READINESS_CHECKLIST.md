@@ -1,5 +1,13 @@
 # Final Production Readiness Checklist
 
+## Validation blocker cleanup
+
+brand-spelling-policy is now clean. route-contracts guard is now clean. supabase db push --dry-run is now clean.
+
+Root causes were generated legal-site brand anchors with `chi-llywood`, proof-script redaction regex literals with a contiguous lowercase brand token, stale Live Stage route guard expectations, stale paid Watch-Party ticket callback scope, and Supabase migration drift. The cleanup regenerated public legal pages from the safer slugifier, aligned route guards to the locked dynamic Live Stage route, renamed direct-chat migrations to match remote history, applied six older local hardening migrations after a clean include-all dry-run, and verified ordinary `supabase db push --dry-run` reports the remote database is up to date.
+
+No database reset, data drop, migration squash, production Play submission, provider/live-money mutation, Premium change, RLS weakening, auth weakening, chat/account-status permission weakening, logout, uninstall, reinstall, or clear-data happened. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. No service-role chat/social proof was counted. liveMoneyEnabled remains OFF.
+
 ## Chi’lly Chat delete/hide conversation
 
 Source status: fixed. Installed-app status: Pending until a Google Play internal build and actual user flow proof exercise the long-press hide path.

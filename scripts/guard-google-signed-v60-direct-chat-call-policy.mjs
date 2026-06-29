@@ -50,13 +50,13 @@ const userData = read("_lib/userData.ts");
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const callMigration = read("supabase/migrations/202606100001_chilly_chat_call_invites_and_ringtones.sql");
-const initialRepairMigration = read("supabase/migrations/20260628205325_chilly_chat_direct_thread_open_repair.sql");
-const safetyMigration = read("supabase/migrations/20260628212500_chilly_chat_direct_thread_repair_safety_guards.sql");
-const grantsMigration = read("supabase/migrations/20260628213000_chilly_chat_direct_thread_repair_execute_grants.sql");
-const pairKeyMigration = read("supabase/migrations/20260628215750_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql");
-const memberUpsertMigration = read("supabase/migrations/20260628215943_chilly_chat_direct_thread_repair_member_upsert_constraint.sql");
-const ownerReadbackMigration = read("supabase/migrations/20260628223157_chilly_chat_owner_initiated_thread_member_readback.sql");
-const directMemberReadbackMigration = read("supabase/migrations/20260628223918_chilly_chat_direct_member_platform_owner_thread_readback.sql");
+const initialRepairMigration = read("supabase/migrations/20260628211504_chilly_chat_direct_thread_open_repair.sql");
+const safetyMigration = read("supabase/migrations/20260628211710_chilly_chat_direct_thread_repair_safety_guards.sql");
+const grantsMigration = read("supabase/migrations/20260628211813_chilly_chat_direct_thread_repair_execute_grants.sql");
+const pairKeyMigration = read("supabase/migrations/20260628215838_chilly_chat_direct_thread_repair_ambiguous_pair_key.sql");
+const memberUpsertMigration = read("supabase/migrations/20260628220027_chilly_chat_direct_thread_repair_member_upsert_constraint.sql");
+const ownerReadbackMigration = read("supabase/migrations/20260628223330_chilly_chat_owner_initiated_thread_member_readback.sql");
+const directMemberReadbackMigration = read("supabase/migrations/20260628223956_chilly_chat_direct_member_platform_owner_thread_readback.sql");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const participantGrid = read("components/communication/communication-participant-grid.tsx");
 const responsiveLayout = read("hooks/use-responsive-layout.ts");
@@ -119,7 +119,7 @@ const platformIdentity = read("_lib/platformIdentity.ts");
   "20260628215838 chilly_chat_direct_thread_repair_ambiguous_pair_key",
   "20260628220027 chilly_chat_direct_thread_repair_member_upsert_constraint",
   "20260628223330 chilly_chat_owner_initiated_thread_member_readback",
-  "20260628223918 chilly_chat_direct_member_platform_owner_thread_readback",
+  "20260628223956 chilly_chat_direct_member_platform_owner_thread_readback",
   "Receiver banner thread-readback fix",
   "callee_can_access=true",
   "thread_readable_by_callee=true",

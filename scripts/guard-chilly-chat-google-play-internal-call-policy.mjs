@@ -51,7 +51,7 @@ const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const callMigration = read("supabase/migrations/202606100001_chilly_chat_call_invites_and_ringtones.sql");
-const directThreadRepairMigration = read("supabase/migrations/20260628205325_chilly_chat_direct_thread_open_repair.sql");
+const directThreadRepairMigration = read("supabase/migrations/20260628211504_chilly_chat_direct_thread_open_repair.sql");
 
 [
   "Chi’lly Chat Google Play internal actual-user call proof: Closed / Partial / Blocked",
