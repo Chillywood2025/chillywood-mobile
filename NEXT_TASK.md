@@ -11,6 +11,31 @@ Current lane doc:
 - `docs/release/GOOGLE_SIGNED_V64_CHAT_THREAD_HIDE_PROOF.md`
 - `docs/release/GOOGLE_SIGNED_V65_HOME_SETTINGS_CHAT_UI_PROOF.md`
 - `docs/release/HEADER_CONTROL_CONSISTENCY_CLEANUP.md`
+- `docs/release/GOOGLE_SIGNED_V66_HEADER_CHAT_UI_PROOF.md`
+
+Google-signed v66 Header + Chat UI proof:
+- Status: Closed.
+- EAS Build `e4f13ffc-eb68-4e39-9605-277b4332dcee` / EAS Submit `262c27f6-19ef-4d68-aedd-92bce42b81f2` delivered commit `0373e99220e3094b304c81651e6c65ec744c2d8b` to Google Play internal testing as versionCode `66`, versionName `1.0.0`.
+- `R5CR120QCBF` and `R3CXA0DS5JV` updated only through Google Play internal testing and both read back package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `66`, versionName `1.0.0`.
+- Home is the canonical header style.
+- Settings is icon-only.
+- The visible word Settings must not appear on Home, Explore, Live, or Saved top controls.
+- Settings accessibility label remains Settings.
+- Profile/avatar control sits alone on the right.
+- Header controls must not overlap page labels, hero text, or content.
+- Explore, Live, and Saved mirror Home's header-control treatment.
+- Installed proof passed Home, Explore, Live, and Saved headers on both phones and proved Settings opened from each tab.
+- The MESSAGE THREAD / Chat stays primary card is removed.
+- Direct thread remains message-first.
+- Composer, Voice Call, and Video Call remain available.
+- Source fixed is not installed-app proof.
+- Google Play internal install is not enough without actual user flow proof.
+- `installerPackageName` must be `com.android.vending`.
+- Sideloaded APK proof is not accepted.
+- No logout, uninstall, reinstall, or clear-data happened.
+- No auth/RLS/chat/account-status permission weakening happened.
+- No provider/live-money mutation happened.
+- `liveMoneyEnabled` remains OFF.
 
 Header control consistency cleanup:
 - Status: source-Closed.
