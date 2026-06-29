@@ -2707,3 +2707,16 @@ Visible-surface active wiring tester delivery: Closed. Commit 7138dd2 was pushed
 EAS Update group `d7aac53c-65bb-4bf7-ae69-04bfea248e0a` with Android update `019f0533-920e-7fca-8f45-74b1f538040a` was published to branch `production` for runtime `1.0.0`. Play internal/closed testing remains the approved tester path. Sideload is not an approved tester delivery path. No APK sideload was used. No app uninstall/reinstall/clear-data happened unless explicitly owner-approved.
 
 Next lane: Play internal tester full visible-surface QA pass. Testers must verify visible controls in the installed tester build after closing and reopening the Play internal app on a good network. No Play production submission happened. No provider mutation happened. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. Premium annual remains provider-blocked. Creator Channel Subscription remains provider-blocked.
+## Stale Proof Normal / @user230456 DB Readback
+
+Status: Classified / no app fix applied.
+
+Play-installed v63 on `R3CXA0DS5JV` reproduced the old normal inbox row and direct-thread header as `Proof Normal` / `@user230456`. Sanitized diagnostic DB readback proved the row points to a legitimate separate profile/thread: the profile username is `user230456`, display name is `Proof Normal`, and the expected current `user230455` profile is a different redacted user hash. There is no duplicate thread for that stale row's pair, no missing readable profile row for the stale member, and the stale member snapshot agrees with its `user_profiles` row.
+
+Root cause classification: old/different user record that legitimately still exists.
+
+Do not hide or delete stale rows just to pass proof. Do not falsely merge separate users. Fresh remote profile must win over stale AsyncStorage and stale participant snapshots where the same user is involved, but this row is not the same user as `user230455`. Existing direct-thread matches appear under Threads by design. Source commit `8938356` updates People copy to `Already in your threads. Open the matching thread below.`, but source fixed is not installed-app proof; Google Play internal install is not enough without actual user flow proof. `installerPackageName` must be `com.android.vending`, and sideloaded APK proof is not accepted.
+
+Artifact: `/tmp/app-stale-chat-identity-readback-20260629-010030/`.
+
+Safety: no logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat/social proof was counted as actual-user proof. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
