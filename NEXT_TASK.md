@@ -24,6 +24,25 @@ Direct thread messaging UX restoration:
 - No provider/live-money mutation happened.
 - `liveMoneyEnabled` remains OFF.
 
+Chi’lly Chat delete/hide conversation:
+- Delete from my inbox is a per-user hide, not a hard delete.
+- The other participant’s copy is not deleted.
+- Message and call history are preserved.
+- Hidden direct threads must not create duplicate direct threads.
+- Profile/Search → Chi’lly Chat must reopen the existing direct thread.
+- Do not hide identity bugs by deleting rows.
+- Proof Normal / @user230456 is a legitimate separate proof account/thread and may be hidden from the tester inbox without renaming or merging.
+- Long-press thread actions now include `Delete from my inbox` with confirmation copy: `This removes the conversation from your inbox. It does not delete it for the other person.`
+- Source fixed is not installed-app proof.
+- Google Play internal install is not enough without actual user flow proof.
+- `installerPackageName` must be `com.android.vending`.
+- Sideloaded APK proof is not accepted.
+- No logout, uninstall, reinstall, or clear-data happened.
+- No auth/RLS/chat/account-status permission weakening happened.
+- No service-role chat/social proof was counted.
+- No provider/live-money mutation happened.
+- `liveMoneyEnabled` remains OFF.
+
 Truth to preserve:
 - Google Play internal versionCode `60` was built from commit `c08c4bd1d98d3ea6672df5c3441c8d7b232b6b82`, includes required fix `0b563c79384e5270440bc0ad076bbc4ca687bf57`, and was installed by Google Play on both physical phones with installer `com.android.vending`.
 - No logout, uninstall, reinstall, clear-data, reset session, sideload, manual APK install, or Play production submission happened.

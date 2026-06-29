@@ -53,6 +53,7 @@ export type ChatThreadMember = {
   tagline?: string;
   joinedAt: string;
   lastReadAt?: string;
+  hiddenAt?: string;
   unreadCount: number;
 };
 
@@ -88,7 +89,7 @@ export type ChatMessage = {
 
 type ChatThreadMemberRow = Pick<
   Tables<"chat_thread_members">,
-  "thread_id" | "user_id" | "display_name" | "avatar_url" | "tagline" | "joined_at" | "last_read_at" | "unread_count"
+  "thread_id" | "user_id" | "display_name" | "avatar_url" | "tagline" | "joined_at" | "last_read_at" | "hidden_at" | "unread_count"
 >;
 
 type ChatThreadRow = Pick<
@@ -135,8 +136,13 @@ type DirectChatThreadOpenRepairRpc = PromiseLike<{
   error: { message?: string } | null;
 }>;
 
+type ChatThreadVisibilityRpc = PromiseLike<{
+  data: Record<string, unknown> | null;
+  error: { message?: string } | null;
+}>;
+
 const CHAT_THREAD_MEMBER_SELECT =
-  "thread_id,user_id,display_name,avatar_url,tagline,joined_at,last_read_at,unread_count";
+  "thread_id,user_id,display_name,avatar_url,tagline,joined_at,last_read_at,hidden_at,unread_count";
 const CHAT_THREAD_SELECT =
   `id,participant_pair_key,created_by,created_at,updated_at,last_message_at,last_message_preview,active_communication_room_id,active_call_type,members:${CHAT_THREAD_MEMBERS_TABLE}(${CHAT_THREAD_MEMBER_SELECT})`;
 const CHAT_MESSAGE_SELECT =
@@ -246,11 +252,14 @@ async function openOrRepairDirectThreadWithRpc(target: ChatTargetIdentity): Prom
     throw new Error("Unable to open Chi'lly Chat with this person right now.");
   }
 
+  await unhideChatThreadForMe(thread.threadId);
+  const visibleThread = await getChatThread(thread.threadId);
+
   logChatThread("direct_thread_rpc_repair_success", {
     targetUserId,
     threadId: thread.threadId,
   });
-  return thread;
+  return visibleThread ?? thread;
 }
 
 async function getRequiredChatUserId() {
@@ -274,8 +283,21 @@ function parseChatThreadMember(row: ChatThreadMemberRow): ChatThreadMember | nul
     tagline: toText(row.tagline) || undefined,
     joinedAt: toText(row.joined_at) || new Date().toISOString(),
     lastReadAt: toText(row.last_read_at) || undefined,
+    hiddenAt: toText(row.hidden_at) || undefined,
     unreadCount: Math.max(0, Number(row.unread_count ?? 0) || 0),
   };
+}
+
+function isHiddenFromCurrentInbox(thread: ChatThreadSummary) {
+  const hiddenAt = toText(thread.currentMember?.hiddenAt);
+  if (!hiddenAt) return false;
+  const hiddenTime = Date.parse(hiddenAt);
+  if (!Number.isFinite(hiddenTime)) return false;
+
+  const lastMessageAt = toText(thread.lastMessageAt);
+  if (!lastMessageAt) return true;
+  const lastMessageTime = Date.parse(lastMessageAt);
+  return !Number.isFinite(lastMessageTime) || lastMessageTime <= hiddenTime;
 }
 
 function parseChatThread(
@@ -416,7 +438,8 @@ export async function listChatThreads(): Promise<ChatThreadSummary[]> {
 
   const threads = data
     .map((row) => parseChatThread(row, currentUserId))
-    .filter(isDefined);
+    .filter(isDefined)
+    .filter((thread) => !isHiddenFromCurrentInbox(thread));
   return enrichChatThreadsWithUsernames(threads);
 }
 
@@ -458,6 +481,49 @@ export async function getChatThreadByActiveCommunicationRoomId(roomId: string): 
     .find((thread) => toText(thread.activeCommunicationRoomId).toUpperCase() === normalizedRoomId) ?? null;
   if (!thread) return null;
   return (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
+}
+
+export async function hideChatThreadFromInbox(threadId: string): Promise<void> {
+  const normalizedThreadId = toText(threadId);
+  if (!normalizedThreadId) {
+    throw new Error("This Chi'lly Chat thread is unavailable.");
+  }
+
+  const rpc = (supabase.rpc as unknown as (
+    fn: "hide_chat_thread_from_inbox",
+    args: { p_thread_id: string },
+  ) => ChatThreadVisibilityRpc)("hide_chat_thread_from_inbox", {
+    p_thread_id: normalizedThreadId,
+  });
+
+  const { error } = await rpc;
+  if (error) {
+    logChatThread("thread_hide_failed", {
+      threadId: normalizedThreadId,
+      message: error.message ?? "unknown_error",
+    });
+    throw new Error("Couldn't remove this conversation right now. Please try again.");
+  }
+}
+
+export async function unhideChatThreadForMe(threadId: string): Promise<void> {
+  const normalizedThreadId = toText(threadId);
+  if (!normalizedThreadId) return;
+
+  const rpc = (supabase.rpc as unknown as (
+    fn: "unhide_chat_thread_for_me",
+    args: { p_thread_id: string },
+  ) => ChatThreadVisibilityRpc)("unhide_chat_thread_for_me", {
+    p_thread_id: normalizedThreadId,
+  });
+
+  const { error } = await rpc;
+  if (error) {
+    logChatThread("thread_unhide_failed", {
+      threadId: normalizedThreadId,
+      message: error.message ?? "unknown_error",
+    });
+  }
 }
 
 export async function listChatMessages(threadId: string): Promise<ChatMessage[]> {
@@ -523,7 +589,9 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
   if (existingRow) {
     const thread = parseChatThread(existingRow, currentUserId, { requireCurrentMember: false });
     if (thread?.currentMember && thread.otherMember) {
-      const enriched = (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
+      await unhideChatThreadForMe(thread.threadId);
+      const reopened = await getChatThread(thread.threadId);
+      const enriched = reopened ?? (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
       logChatThread("direct_thread_existing", {
         threadId: enriched.threadId,
         currentUserId,
@@ -557,12 +625,14 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
 
       const repaired = await getChatThread(existingThreadId);
       if (repaired) {
+        await unhideChatThreadForMe(repaired.threadId);
+        const reopened = await getChatThread(repaired.threadId);
         logChatThread("direct_thread_repaired", {
-          threadId: repaired.threadId,
+          threadId: (reopened ?? repaired).threadId,
           currentUserId,
           targetUserId,
         });
-        return repaired;
+        return reopened ?? repaired;
       }
     }
 
@@ -585,12 +655,14 @@ export async function getOrCreateDirectThread(target: ChatTargetIdentity): Promi
     if (errorCode === "23505") {
       const raced = await getChatThreadByPairKey(participantPairKey);
       if (raced) {
+        await unhideChatThreadForMe(raced.threadId);
+        const reopened = await getChatThread(raced.threadId);
         logChatThread("direct_thread_race_reused", {
-          threadId: raced.threadId,
+          threadId: (reopened ?? raced).threadId,
           currentUserId,
           targetUserId,
         });
-        return raced;
+        return reopened ?? raced;
       }
       return openOrRepairDirectThreadWithRpc(target);
     }

@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   FlatList,
   RefreshControl,
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../../_lib/analytics";
 import {
   getOrCreateDirectThread,
+  hideChatThreadFromInbox,
   listChatThreads,
   subscribeToInbox,
   type ChatCallType,
@@ -304,6 +306,41 @@ export default function ChillyChatInboxScreen() {
     });
   }, [router]);
 
+  const confirmHideThread = useCallback((thread: ChatThreadSummary) => {
+    Alert.alert(
+      "Delete from my inbox",
+      "This removes the conversation from your inbox. It does not delete it for the other person.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete from my inbox",
+          style: "destructive",
+          onPress: () => {
+            setQuickActionThreadId("");
+            setThreads((current) => current.filter((item) => item.threadId !== thread.threadId));
+            void hideChatThreadFromInbox(thread.threadId)
+              .then(() => {
+                trackEvent("chat_thread_hidden_from_inbox", {
+                  surface: "chat-inbox",
+                  threadId: thread.threadId,
+                });
+                void loadThreads(true);
+              })
+              .catch((hideError) => {
+                setThreads((current) => current.some((item) => item.threadId === thread.threadId) ? current : [thread, ...current]);
+                Alert.alert(
+                  "Couldn't remove conversation",
+                  hideError instanceof Error
+                    ? hideError.message
+                    : "Couldn't remove this conversation right now. Please try again.",
+                );
+              });
+          },
+        },
+      ],
+    );
+  }, [loadThreads]);
+
   const openProfileByPerson = useCallback((person: PublicPeopleSearchResult) => {
     const officialAccount = getOfficialPlatformAccount(person.userId);
     const avatarUrl = officialAccount ? undefined : person.avatarUrl;
@@ -516,7 +553,7 @@ export default function ChillyChatInboxScreen() {
           </TouchableOpacity>
         </View>
       ) : null}
-      <Text style={styles.headerHint}>Tap an avatar for profile. Long-press a thread for quick call actions.</Text>
+      <Text style={styles.headerHint}>Tap an avatar for profile. Long-press a thread for profile, call, and inbox actions.</Text>
       {quickActionThread ? (
         <View style={styles.quickActionCard}>
           <Text style={styles.quickActionKicker}>THREAD SHORTCUTS</Text>
@@ -524,7 +561,7 @@ export default function ChillyChatInboxScreen() {
             {quickActionThread.otherMember?.displayName ?? "Chi'lly Chat Thread"}
           </Text>
           <Text style={styles.quickActionBody}>
-            Open the thread, jump to the profile, or start voice/video from the same inbox surface.
+            Open the thread, jump to the profile, start voice/video, or remove this conversation from your inbox only.
           </Text>
           <View style={styles.quickActionRow}>
             <TouchableOpacity
@@ -571,6 +608,13 @@ export default function ChillyChatInboxScreen() {
               <Text style={styles.quickActionAccentButtonText}>Video Call</Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            style={[styles.quickActionButton, styles.quickActionDeleteButton]}
+            activeOpacity={0.86}
+            onPress={() => confirmHideThread(quickActionThread)}
+          >
+            <Text style={styles.quickActionDeleteButtonText}>Delete from my inbox</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
       <View style={styles.searchShell}>
@@ -631,6 +675,7 @@ export default function ChillyChatInboxScreen() {
     filteredThreads.length,
     liveCallCount,
     loadThreads,
+    confirmHideThread,
     openProfile,
     openThread,
     openSearchSuggestion,
@@ -1420,6 +1465,15 @@ const styles = StyleSheet.create({
   },
   quickActionAccentButtonText: {
     color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  quickActionDeleteButton: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,184,200,0.34)",
+  },
+  quickActionDeleteButtonText: {
+    color: "#FFD8E2",
     fontSize: 12,
     fontWeight: "900",
   },

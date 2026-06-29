@@ -2,6 +2,24 @@ Cross-app people/handle search proof: Closed / Partial / Blocked.
 
 Current verdict: Partial.
 
+## Chi’lly Chat delete/hide conversation
+
+Source status: fixed. Installed-app status: Pending until a Google Play internal build and actual user flow proof exercise the long-press hide path.
+
+Root cause: the old Proof Normal / @user230456 row is a legitimate separate proof account/thread, not stale metadata for user230455, but the inbox lacked a production-safe way for a user to remove old proof/test conversations from their own view.
+
+Files changed: `app/chat/index.tsx`, `_lib/chat.ts`, `supabase/database.types.ts`, `supabase/migrations/20260629063526_chat_thread_hide_from_inbox.sql`, `scripts/proof-chat-thread-hide-from-inbox.mjs`, `package.json`, and tracker/readiness docs.
+
+Schema/RPC changes: `chat_thread_members.hidden_at` records a per-user inbox hide timestamp. `hide_chat_thread_from_inbox` updates only the caller’s membership row. `unhide_chat_thread_for_me` clears only the caller’s hidden state when the existing direct thread is reopened.
+
+RLS behavior: authenticated RPC checks the signed-in caller and existing thread access before updating only that caller’s membership row. It does not hard-delete `chat_threads`, `chat_messages`, call events, call invites, or the other participant’s inbox copy.
+
+Long-press action behavior: the inbox thread row keeps Open Thread, Open Profile, Voice Call, and Video Call, and adds Delete from my inbox. Confirmation copy: `This removes the conversation from your inbox. It does not delete it for the other person.`
+
+Delete from my inbox is a per-user hide, not a hard delete. The other participant’s copy is not deleted. Message and call history are preserved. Hidden direct threads must not create duplicate direct threads. Profile/Search → Chi’lly Chat must reopen the existing direct thread. Do not hide identity bugs by deleting rows. Proof Normal / @user230456 is a legitimate separate proof account/thread and may be hidden from the tester inbox without renaming or merging.
+
+Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. installerPackageName must be com.android.vending. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat/social proof was counted. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
+
 ## Direct thread messaging UX restoration
 
 Source status: fixed. Installed-app status: Closed for direct-thread messaging UX on Play-installed v63; Partial for stale identity closure.

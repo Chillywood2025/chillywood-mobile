@@ -1,5 +1,15 @@
 # Final Production Readiness Checklist
 
+## Chi’lly Chat delete/hide conversation
+
+Source status: fixed. Installed-app status: Pending until a Google Play internal build and actual user flow proof exercise the long-press hide path.
+
+Delete from my inbox is a per-user hide, not a hard delete. The other participant’s copy is not deleted. Message and call history are preserved. Hidden direct threads must not create duplicate direct threads. Profile/Search → Chi’lly Chat must reopen the existing direct thread. Do not hide identity bugs by deleting rows. Proof Normal / @user230456 is a legitimate separate proof account/thread and may be hidden from the tester inbox without renaming or merging.
+
+Implementation adds `chat_thread_members.hidden_at`, authenticated `hide_chat_thread_from_inbox` and `unhide_chat_thread_for_me`, app-side inbox filtering for the current user, and a long-press inbox action with confirmation copy: `This removes the conversation from your inbox. It does not delete it for the other person.` The shared `chat_threads`, `chat_messages`, call events, call invites, moderation, and other participant inbox state are preserved.
+
+Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. installerPackageName must be com.android.vending. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat/social proof was counted. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
+
 ## Direct thread messaging UX restoration
 
 Source status: fixed. Installed-app status: Closed for Play-installed Android versionCode `63`.

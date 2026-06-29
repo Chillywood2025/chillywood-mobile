@@ -946,6 +946,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           display_name: string | null
+          hidden_at: string | null
           joined_at: string
           last_read_at: string | null
           tagline: string | null
@@ -956,6 +957,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           display_name?: string | null
+          hidden_at?: string | null
           joined_at?: string
           last_read_at?: string | null
           tagline?: string | null
@@ -966,6 +968,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           display_name?: string | null
+          hidden_at?: string | null
           joined_at?: string
           last_read_at?: string | null
           tagline?: string | null
