@@ -288,27 +288,6 @@ function isAppFocused(serial) {
   return windowFocus(serial).includes(PACKAGE_ID);
 }
 
-function tapPartyRoomGoLiveCta(serial, label) {
-  const size = screenSize(serial);
-  if (!size?.width || !size?.height) return false;
-  const x = Math.round(size.width / 2);
-  // Party Room Go Live is a centered lower primary CTA on both physical proof phones.
-  // This fallback is used only when the screenshot shows the room but UIAutomator XML is empty.
-  const y = Math.round(size.height * 0.89);
-  const tap = adb(serial, ["shell", "input", "tap", String(x), String(y)], { timeout: 10000 });
-  writeJson(`${label}-go-live-cta-tap.json`, {
-    serial,
-    width: size.width,
-    height: size.height,
-    x,
-    y,
-    status: tap.status,
-    ok: tap.ok,
-  });
-  sleep(7000);
-  return tap.ok;
-}
-
 const xmlHas = (xml, pattern) => new RegExp(pattern, "i").test(xml || "");
 
 const parseBoundsCenter = (xml, query) => {
@@ -1140,42 +1119,29 @@ async function main() {
 
     if (!RUN_LIVE_UI) {
       addFlow("Live video participant visibility installed UI", "Closed", "Preserved from prior affected-flow run; not rerun in chat-only scope.", {
-        expectedOutcome: "Both clients enter from the Party Room waiting room, tap Go Live, enter the same hybrid Live Stage UI, and expose post-entry participant/live-state markers without Live room unavailable guard copy.",
+        expectedOutcome: "Both clients enter the Live Stage route for the same live room and expose post-entry participant/live-state markers without Live room unavailable guard copy.",
         flowScope: FLOW_SCOPE,
       });
     } else if (roomSetup.liveRoomReady) {
       markStep("live UI proof start");
-      const livePartyRoute = `/watch-party/${livePartyId}`;
-      openRoute(DEVICE_A, livePartyRoute, "device-a-live-waiting-room");
-      openRoute(DEVICE_B, livePartyRoute, "device-b-live-waiting-room");
-      markStep("live waiting room route launched on both devices");
+      const livePartyRoute = `/watch-party/live-stage/${livePartyId}`;
+      openRoute(DEVICE_A, livePartyRoute, "device-a-live-stage-route");
+      openRoute(DEVICE_B, livePartyRoute, "device-b-live-stage-route");
+      markStep("live stage route launched on both devices");
       await wait(9000);
-      let liveXmlA = settleUi(DEVICE_A, "device-a-live-waiting-room");
-      let liveXmlB = settleUi(DEVICE_B, "device-b-live-waiting-room");
-      markStep("live waiting room UI dumped on both devices");
-      screenshot(DEVICE_A, "device-a-live-waiting-room");
-      screenshot(DEVICE_B, "device-b-live-waiting-room");
-      const waitingA = xmlHas(liveXmlA, "party-room-go-live-button|Go Live|Live Room|Live Watch-Party|PARTY FEEDS|screen-party-room");
-      const waitingB = xmlHas(liveXmlB, "party-room-go-live-button|Go Live|Live Room|Live Watch-Party|PARTY FEEDS|screen-party-room");
+      let liveXmlA = settleUi(DEVICE_A, "device-a-live-stage-route");
+      let liveXmlB = settleUi(DEVICE_B, "device-b-live-stage-route");
+      markStep("live stage route UI dumped on both devices");
+      screenshot(DEVICE_A, "device-a-live-stage-route");
+      screenshot(DEVICE_B, "device-b-live-stage-route");
+      const waitingA = xmlHas(liveXmlA, "Live Room|Live Watch-Party|Live Stage|PARTY FEEDS|screen-party-room");
+      const waitingB = xmlHas(liveXmlB, "Live Room|Live Watch-Party|Live Stage|PARTY FEEDS|screen-party-room");
       const liveGateA = xmlHas(liveXmlA, "Premium required|Premium access required");
       const liveGateB = xmlHas(liveXmlB, "Premium required|Premium access required");
-      const liveWaitingDumpUnavailableA = !String(liveXmlA ?? "").trim();
-      const liveWaitingDumpUnavailableB = !String(liveXmlB ?? "").trim();
-      const goLiveA = tapByAny(DEVICE_A, liveXmlA, [
-        "party-room-go-live-button",
-        "Go Live from Party Room",
-        /text="(?:🔴\\s*)?Go Live"|content-desc="Go Live from Party Room"/i,
-      ]) || (liveWaitingDumpUnavailableA ? tapPartyRoomGoLiveCta(DEVICE_A, "device-a-live-waiting-room") : false);
-      const goLiveB = tapByAny(DEVICE_B, liveXmlB, [
-        "party-room-go-live-button",
-        "Go Live from Party Room",
-        /text="(?:🔴\\s*)?Go Live"|content-desc="Go Live from Party Room"/i,
-      ]) || (liveWaitingDumpUnavailableB ? tapPartyRoomGoLiveCta(DEVICE_B, "device-b-live-waiting-room") : false);
-      markStep(`live waiting room Go Live taps A=${goLiveA ? "yes" : "no"} B=${goLiveB ? "yes" : "no"}`);
-      await wait(12000);
+      await wait(3000);
       liveXmlA = settleUi(DEVICE_A, "device-a-live-stage-room");
       liveXmlB = settleUi(DEVICE_B, "device-b-live-stage-room");
-      markStep("live stage room UI dumped on both devices after waiting-room Go Live");
+      markStep("live stage room UI dumped on both devices");
       screenshot(DEVICE_A, "device-a-live-stage-room");
       screenshot(DEVICE_B, "device-b-live-stage-room");
       const liveStagePattern = "Live Stage|Room comments|2 in room|people in room|Chilly Party Members|Chi'lly Party Members|Request camera|Request pending|Lock controls";

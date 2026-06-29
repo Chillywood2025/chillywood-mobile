@@ -3781,28 +3781,6 @@ export default function WatchPartyRoomScreen() {
           </View>
         ) : null}
 
-        {/* ── Primary CTA ─────────────────────────────────────────────── */}
-        {isLiveRoom && watchPartyLiveControlsVisible ? (
-          <TouchableOpacity
-            style={styles.watchCTA}
-            testID="party-room-go-live-button"
-            accessibilityLabel="Go Live from Party Room"
-            activeOpacity={0.88}
-            onPress={() => {
-              if (!partyId) return;
-              router.push({
-                pathname: "/watch-party/live-stage/[partyId]",
-                params: {
-                  partyId,
-                  mode: sharedRoomMode,
-                  ...(source ? { source } : {}),
-                },
-              });
-            }}
-          >
-            <Text style={styles.watchCTAText}>🔴  Go Live</Text>
-          </TouchableOpacity>
-        ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 

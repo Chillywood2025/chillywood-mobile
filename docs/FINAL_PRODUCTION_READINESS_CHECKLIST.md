@@ -1,5 +1,11 @@
 # Final Production Readiness Checklist
 
+## Party Room / Live Stage route semantics verification
+
+Party Room and Live Stage are separate product routes. Party Room normal watch-party flow must not route to Live Stage. Player → Watch-Party Live → Party Waiting Room → Party Room remains intact. Home → Live Watch-Party → Live Waiting Room → Live Room → Live Stage remains intact. Live Stage remains `/watch-party/live-stage/[partyId]`. Party Room remains `/watch-party/[partyId]`. Legacy `/communication/*` remains compatibility-only.
+
+The ambiguous Party Room Go Live handoff introduced during validation cleanup was removed. Route-contract guards now enforce route separation. No auth/RLS/chat/account-status permission weakening happened. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
+
 ## Validation blocker cleanup
 
 brand-spelling-policy is now clean. route-contracts guard is now clean. supabase db push --dry-run is now clean.

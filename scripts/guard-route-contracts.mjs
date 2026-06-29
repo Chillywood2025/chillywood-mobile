@@ -94,7 +94,9 @@ assertIncludes(watchPartyIndex, 'pathname: "/watch-party/[partyId]"', "Party Wai
 assertIncludes(watchPartyIndex, 'const liveStageRoute = `/watch-party/live-stage${queryString ? `?${queryString}` : ""}`;', "Live Waiting Room to Live Stage handoff");
 assertIncludes(watchPartyIndex, "if (options.roomType === \"live\")", "Live Waiting Room branch");
 assertIncludes(watchPartyIndex, "setEmbeddedLiveStageEntry", "Live Stage embedded handoff owner");
-assertIncludes(partyRoom, 'pathname: "/watch-party/live-stage/[partyId]"', "Party Room explicit Go Live route");
+assertNotIncludes(partyRoom, 'pathname: "/watch-party/live-stage/[partyId]"', "Party Room normal watch-party flow");
+assertIncludes(routeDoc, "Watch-Party Live must not be routed into Live Stage.", "Watch-Party Live route separation doc");
+assertIncludes(routeDoc, "Party Room must not be renamed to Live Stage.", "Party Room route separation doc");
 
 const paidTicketPurchaseScope = assertScopedIncludes(
   watchPartyIndex,

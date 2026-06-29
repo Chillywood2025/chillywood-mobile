@@ -24,7 +24,7 @@ Result: brand-spelling-policy is now clean.
 
 Root cause: route checks drifted after the Live Stage route contract settled on the dynamic `/watch-party/live-stage/[partyId]` route. `guard:route-contracts` expected the dynamic route, while `guard:live-stage-contract` still expected the older query-backed route. The paid Watch-Party ticket buyer scoped assertion also had a stale hook dependency-array boundary.
 
-Fix: Party Room Go Live now uses the locked dynamic route object with `partyId` params, `guard:live-stage-contract` now checks the same route truth, and `guard:route-contracts` uses the current paid-ticket callback scope. The paid Watch-Party ticket buyer path still returns to the Party Room flow and does not route into Live Stage.
+Follow-up correction: this cleanup briefly made Party Room own a direct `/watch-party/live-stage/[partyId]` handoff. That was too broad for the product route truth. The corrected route contract is that Party Room and Live Stage are separate product routes, Party Room normal watch-party flow must not route to Live Stage, and Live Stage remains owned by the Live Watch-Party / Live First flow.
 
 Result: route-contracts guard is now clean.
 
