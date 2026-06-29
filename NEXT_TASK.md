@@ -19,10 +19,16 @@ Truth to preserve:
 - Full call closure remains Partial because installed v60 still recorded a false `Missed voice call` event after the joined call ended, fullscreen video fit is not Closed until proved on installed app, background push/ringing was not proved, decline/missed cleanup was not proved, and the source cleanup/responsive layout fixes are not installed-app proof until v61 or newer is delivered through Google Play internal.
 - No auth/RLS/chat/account-status permission weakening happened, no service-role chat proof was counted, no provider/live-money mutation happened, current First Owner was not touched, and `liveMoneyEnabled` remains OFF.
 
+v61 responsive video proof now added:
+- Google Play internal versionCode `61`, versionName `1.0.0`, commit `70b276c336b1164a674a8ae51b421e0a039d0d35` was built by EAS Build `bc2e9532-6a1e-4174-a153-679345c6ef20` and submitted to Google Play internal by EAS Submit `36c7bae7-4181-4c67-ac46-75070f76142f`.
+- Both physical phones updated only through Google Play with installer `com.android.vending`; no logout, uninstall, reinstall, clear-data, sideload, or manual APK install happened.
+- Android two-phone installed responsive Direct Chat video layout proof passed for owner -> user: `2 in call`, local/remote video on both phones, no bottom feed cutoff, no control overlap, compact participant metadata, Back to Thread, End Call, no visible false missed-call text after joined video calls, and repeated call after end with a new room.
+- iOS/tablet/foldable proof remains Pending unless tested. Background push/ringing, decline/missed/background cleanup, user -> owner direction, and stale existing inbox metadata remain Partial.
+
 Next product action:
-- Build and deliver v61 or newer through Google Play internal with the source cleanup fix that prevents stale ringing invite updates from recording false missed/declined/accepted events after a receiver has joined and the responsive direct Chat video layout cleanup that keeps bottom controls out of the feed.
 - Fix stale existing inbox participant metadata so Settings/Profile/Chat agree on `@user230455`.
-- Rerun installed proof only after both phones are Play-installed on the same Google-signed build from `com.android.vending`: inbox/search path, existing-thread path, normal Profile path, receiver same-thread, receiver elsewhere-in-app, receiver background/push, voice, video local/remote, fullscreen fit with no bottom feed cutoff/control overlap/center-blocking metadata, Back to Thread, End Call, and call end/decline/missed cleanup. Android two-phone proof cannot close iOS/tablet/foldable coverage.
+- Rerun remaining installed proof only on Google Play-installed builds from `com.android.vending`: user -> owner direction, receiver background/push, decline/missed/background/killed-app cleanup, full same-thread rerun if needed, and any iOS/tablet/foldable responsive coverage.
+- Android two-phone proof cannot close iOS/tablet/foldable coverage.
 
 # Chi'lly Chat Google Play Internal Call Closure Follow-Up
 

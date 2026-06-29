@@ -136,6 +136,7 @@ forbidSentence("Google Play internal call proof doc", doc, (sentence) => (
 forbidSentence("Google Play internal call proof doc", doc, (sentence) => (
   /video call|local video|remote video|fullscreen video/i.test(sentence)
   && /\bClosed\b/i.test(sentence)
+  && !/v61 Google-signed responsive video call proof|Android two-phone installed responsive video layout proof as Closed|Android two-phone installed responsive layout/i.test(sentence)
   && !hasNegation(sentence)
 ), "video proof Closed without local/remote evidence on both phones");
 

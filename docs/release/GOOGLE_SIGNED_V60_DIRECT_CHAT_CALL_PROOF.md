@@ -4,7 +4,7 @@ Google-signed Play internal install proof: Closed / Partial / Blocked
 
 Final verdict: Partial.
 
-This lane delivered a Google Play internal, Google-signed versionCode `60` build to both attached phones and proved the fresh handle/search/direct-thread open path far enough to start a real voice call from a normal visible Chat search result. A follow-up receiver banner thread-readback migration fixed the installed v60 blocker where tapping the real incoming call banner opened `This Chi'lly Chat thread could not be found.` After the live migration, `R5CR120QCBF` tapped the incoming banner, opened the readable direct call thread, joined the call, and both phones showed `2 in call`. A later source-only video call layout cleanup fixes the observed cut-off lower video tile, oversized participant overlay, and unsafe bottom control spacing. Full Chi'lly Chat call closure remains Partial because v60 still recorded a false `Missed voice call` after a joined call ended, the app-side source fixes are not installed in a Google Play build yet, and video/background/decline/missed cleanup matrices remain incomplete.
+This lane delivered a Google Play internal, Google-signed versionCode `60` build to both attached phones and proved the fresh handle/search/direct-thread open path far enough to start a real voice call from a normal visible Chat search result. A follow-up receiver banner thread-readback migration fixed the installed v60 blocker where tapping the real incoming call banner opened `This Chi'lly Chat thread could not be found.` After the live migration, `R5CR120QCBF` tapped the incoming banner, opened the readable direct call thread, joined the call, and both phones showed `2 in call`. The responsive video layout fix was then delivered in Google Play internal versionCode `61`; both attached phones updated through Google Play with installer `com.android.vending`, and the owner-involved Direct Chi'lly Chat video path passed Android two-phone installed proof for local/remote video visibility, bottom-control safe-area spacing, compact participant metadata, Back to Thread, End Call, and repeated call after end. Full Chi'lly Chat call closure remains Partial because background push/ringing, decline/missed/background cleanup, user -> owner direction, stale existing inbox metadata, and iOS/tablet/foldable responsive proof remain incomplete.
 
 ## Required Proof Doctrine
 
@@ -136,17 +136,52 @@ Responsive video call layout cleanup:
 - UI issues fixed in source: fullscreen controls now reserve bottom safe-area space as a normal layout sibling, the participant stage flexes only in the remaining space, tiles no longer use guessed fixed fullscreen heights, RTC video fills the tile, participant metadata is compact at the tile edge instead of a wide black card across the video, and control/back buttons use responsive minimum touch targets.
 - Device classes supported by source rules: `compactPhone`, `regularPhone`, `tallPhone`, `largePhone`, `tablet`, `foldableOrExpanded`, and `landscape`. The rules use window dimensions, safe-area insets, orientation, and font scale, not exact device names.
 - Per-class behavior documented in source: safe top padding comes from safe-area top plus responsive spacing; safe bottom padding uses `getSafeBottomControlPadding()` for Android gesture/three-button and iOS home-indicator behavior; content max width is capped for tablet/foldable/landscape; bottom control spacing comes from `bottomControlSpacing`; minimum touch target is `48` on Android and `44` on iOS; tile sizing comes from responsive tile minimums plus flex in the available stage; font scale is clamped more tightly on compact phones; content remains flexible/scroll-compatible where screens own scrolling outside this fullscreen call surface.
-- Android proof result: source/dev proof passed. Android two-phone installed proof remains Partial until v61+ is installed from Google Play internal and reproduced on `R5CR120QCBF` and `R3CXA0DS5JV`.
+- Android proof result: Google-signed v61 Android two-phone installed proof passed on `R5CR120QCBF` and `R3CXA0DS5JV` for the owner -> user Direct Chi'lly Chat video layout path.
 - iOS proof result: Pending. Cross-platform responsive support is not Closed without tested device/simulator coverage.
 - Tablet/foldable proof result: Pending. iOS/tablet/foldable proof remains Pending unless tested.
 - Out-of-scope issues documented: stale existing inbox handle metadata, false missed-call event after a joined call ends, background push/ringing proof, wrong role/owner badge review, possible local/remote naming issues, camera mirror/rotation review, confusing status pills review, and installed two-phone video proof remain separate blockers.
 - Whole-app responsive audit result: Direct Chat video call is source-fixed now. Chat inbox and thread generally use safe-area padding but need future keyboard/long-list verification; Profile needs future responsive card/header audit; Settings needs long-form/large-font review; Player and Watch-Party/Live Stage already contain local safe-area logic but need consolidation into the shared foundation; Waiting rooms, Home, Search/Explore People, and Money Center are not fully inspected in this lane.
-- Proof result: source/typecheck/proof-script Partial. Responsive foundation added. Direct Chat video call layout adapts by dimensions and safe area. Source fixed is not installed-app proof and Google Play internal install is not enough without actual user flow proof.
-- Remaining blockers: deliver a v61+ Google Play internal build containing this layout cleanup and prove local and remote video are visible on both phones with no bottom feed cutoff, no control overlap, no center-blocking metadata card, Back to Thread working, and End Call working.
+- Proof result: Android two-phone installed responsive video layout proof passed. Responsive foundation added. Direct Chat video call layout adapts by dimensions and safe area. Source fixed is not installed-app proof; this result is based on Google Play-installed v61 actual user flow proof.
+- Remaining blockers: iOS/tablet/foldable proof remains Pending unless tested; background push/ringing and decline/missed/background cleanup remain Partial; user -> owner video direction was not separately rerun; stale existing inbox participant metadata can still appear.
+
+Google-signed v61 responsive video call proof:
+
+- Repo commit proved: `70b276c336b1164a674a8ae51b421e0a039d0d35` (`Fix responsive cross-platform video layout`).
+- Origin/main alignment before build: `git status --short --branch` showed `## main...origin/main`; tracked working tree was clean except unrelated untracked local artifact/temp files.
+- EAS build id: `bc2e9532-6a1e-4174-a153-679345c6ef20`.
+- Build artifact type: Android App Bundle / store distribution.
+- VersionCode/versionName: versionCode `61`, versionName `1.0.0`, runtimeVersion `1.0.0`.
+- Commit SHA included: `70b276c336b1164a674a8ae51b421e0a039d0d35`.
+- Google Play internal upload status: EAS Submit `36c7bae7-4181-4c67-ac46-75070f76142f` completed with release track `internal` and release status `COMPLETED`; no Play production release happened.
+- Tester availability / rollout result: both phones saw the Google Play `Update` button and updated through Google Play only.
+- Installed package proof: `R3CXA0DS5JV` and `R5CR120QCBF` both show package `com.chillywood.mobile`, installerPackageName `com.android.vending`, versionCode `61`, versionName `1.0.0`.
+- `R3CXA0DS5JV` update proof: lastUpdateTime `2026-06-28 19:05:47`.
+- `R5CR120QCBF` update proof: lastUpdateTime `2026-06-28 19:06:13`.
+- No logout/data reset confirmation: both apps launched after the Play update into signed-in Home/Profile surfaces, not login. No logout, uninstall, reinstall, or clear-data happened.
+- Responsive layout proof result: Android two-phone installed proof passed for the Direct Chi'lly Chat video path. Video feed must not be cut off by bottom controls. Bottom controls must respect safe area. Participant metadata overlay must not block the center of the video. Local and remote video must be visible on both phones. Video tiles must adapt to phone size instead of hard-coded device hacks.
+- Direct Chat video call result: `R3CXA0DS5JV` opened Chi'lly Chat from the visible Profile button, opened the visible `user230455 @user230455` thread from the inbox, tapped `Video Call`, and `R5CR120QCBF` received a real incoming video call overlay while elsewhere in app.
+- Receiver banner result: `R5CR120QCBF` tapped `Open incoming Chi'lly Chat call`; the app opened the readable direct thread/call surface and did not show `This Chi'lly Chat thread could not be found`.
+- Two-phone video result: both phones showed `2 in call`, `Connected`, local video, and remote video. Room `622ZK4` proved the first joined call; room `5ZVR4J` proved repeated call after end used a new active room rather than stale ended state.
+- Bottom feed cutoff result: passed on both phones; bottom video tile stayed above the Camera/Mic/End Call row.
+- Participant overlay/card result: passed; metadata appeared as compact edge badging, not a wide dark card across the center of video.
+- Video fill result: passed; local and remote camera feeds filled the available tile/card cleanly with no visible control overlap.
+- Owner-involved video result: passed for owner account `chillywood92` -> user `user230455`. User -> owner direction was not separately rerun and remains unproved.
+- Back to Thread result: passed. `Back to Thread` returned `R3CXA0DS5JV` to the thread while preserving a visible `Join Video Call` active-call path.
+- End Call result: passed. Host `End Call` returned both phones to direct-thread screens with `No Active Call`.
+- Call cleanup result: passed for caller-ended joined video calls and repeated call after end. After both ended calls, final XML showed `No Active Call`, no `Video call active`, and no visible `Missed voice/video call`. Receiver decline, ignored/missed, background/killed-app cleanup, and raw database field readback were not fully tested and remain Partial.
+- Fresh profile handle result: passed for current primary surfaces. `R5CR120QCBF` profile showed `user230455` / `@user230455`, `R3CXA0DS5JV` inbox/thread showed `user230455` / `@user230455`; stale `Proof Normal @user230456` remains visible as an existing separate inbox metadata row and is documented, not hidden.
+- Android proof result: Android two-phone installed proof passed.
+- iOS proof result: Pending. Cross-platform responsive support is not Closed without tested device/simulator coverage.
+- Tablet/foldable proof result: Pending. iOS/tablet/foldable proof remains Pending unless tested.
+- Screenshots/XML/log artifact paths: `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/`.
+- Key artifacts: `R3CXA0DS5JV-package-after-play-v61.txt`, `R5CR120QCBF-package-after-play-v61.txt`, `R5CR120QCBF-video-call-banner-v61.png`, `R5CR120QCBF-after-banner-tap-v61.png`, `R3CXA0DS5JV-after-receiver-banner-tap-v61.png`, `R3CXA0DS5JV-back-to-thread-during-call-v61.png`, `R3CXA0DS5JV-after-end-call-v61.png`, `R5CR120QCBF-after-end-call-v61.png`, `R3CXA0DS5JV-second-call-after-wait-v61.png`, `R5CR120QCBF-second-call-after-wait-v61.png`, `R3CXA0DS5JV-final-after-second-end-v61.xml`, `R5CR120QCBF-final-after-second-end-v61.xml`, and paired logcat files.
+- Out-of-scope issues found: stale existing inbox handle metadata, background push/ringing proof still pending, receiver decline/missed/background/killed-app cleanup pending, user -> owner direction pending, and whole-app responsive audit pending for non-call surfaces.
+- Actual-user proof classification: Closed for Google-signed v61 Android two-phone Direct Chat responsive video layout; Partial for full cross-platform responsive coverage and full call cleanup matrix.
+- Safety confirmation: No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. liveMoneyEnabled remains OFF. Sideloaded APK proof is not accepted and was not used.
 
 ## Google Play Internal Build Result
 
-No new Google Play build was created for the receiver thread-readback backend migration. The installed proof below reuses Google Play-installed v60 because the failing path was a live Supabase read policy/RLS readback issue, not a binary routing issue. Source fixed is not installed-app proof: the app-side false missed-call cleanup fix in this commit requires a newer Google Play internal build, expected versionCode `61` or higher, before cleanup can be Closed.
+No new Google Play build was created for the receiver thread-readback backend migration. The receiver readback installed proof below reused Google Play-installed v60 because the failing path was a live Supabase read policy/RLS readback issue, not a binary routing issue. A later Google Play internal v61 build was created and installed for the responsive Direct Chat video layout proof.
 
 EAS production Android store build:
 
@@ -166,6 +201,24 @@ EAS production Android store build:
 
 No Play production release happened.
 
+EAS production Android store build for responsive v61:
+
+- Build ID: `bc2e9532-6a1e-4174-a153-679345c6ef20`
+- Artifact type: Android App Bundle / store distribution
+- Build profile: `production`
+- Channel: `production`
+- VersionCode: `61`
+- VersionName: `1.0.0`
+- RuntimeVersion: `1.0.0`
+- Commit SHA included: `70b276c336b1164a674a8ae51b421e0a039d0d35`
+- Build status: FINISHED
+- AAB artifact: `https://expo.dev/artifacts/eas/0KeAVPInuAxlT12896tNzivWnSdwPlvbI5r0b3vCFT0.aab`
+- EAS submit ID: `36c7bae7-4181-4c67-ac46-75070f76142f`
+- Google Play internal testing upload status: submitted to Google Play internal; EAS output ended with `Submitted your app to Google Play Store!`
+- Tester availability status: both attached phones received the Play `Update`
+- Rollout/download availability status: both attached phones updated through Google Play
+- No Play production release happened.
+
 ## Google-Signed Install Verification
 
 Status: Closed for Google-signed install only.
@@ -178,6 +231,13 @@ Both physical phones updated through Google Play internal testing. No `adb insta
 | --- | --- | --- | --- | --- |
 | `R5CR120QCBF` | `com.chillywood.mobile` | `com.android.vending` | versionCode `60`, versionName `1.0.0` | `lastUpdateTime=2026-06-28 16:49:54`, first install time remained `2026-06-26 01:26:01` |
 | `R3CXA0DS5JV` | `com.chillywood.mobile` | `com.android.vending` | versionCode `60`, versionName `1.0.0` | `lastUpdateTime=2026-06-28 16:49:28`, first install time remained present from the prior Play install |
+
+Google-signed v61 responsive video layout proof:
+
+| Device | Package | Installer | Version | Update proof |
+| --- | --- | --- | --- | --- |
+| `R5CR120QCBF` | `com.chillywood.mobile` | `com.android.vending` | versionCode `61`, versionName `1.0.0` | `lastUpdateTime=2026-06-28 19:06:13`, first install time remained `2026-06-26 01:26:01` |
+| `R3CXA0DS5JV` | `com.chillywood.mobile` | `com.android.vending` | versionCode `61`, versionName `1.0.0` | `lastUpdateTime=2026-06-28 19:05:47`, first install time remained present from the prior Play install |
 
 ## No Logout / No Data Reset Confirmation
 
@@ -339,14 +399,14 @@ Installed proof that failed:
 
 - Installed v60 recorded `Voice call ended` and then `Missed voice call` at `5:42 PM` for the same joined call. Live readback showed the latest invite status as `missed` with no `accepted_at`, even though both phones had been in `2 in call`.
 - Source fix: `_lib/chillyChatCalls.ts` now prevents stale missed/declined/busy/accepted updates from overwriting a non-ringing invite and only inserts call events when the invite row actually changed. `app/chat/[threadId].tsx` now marks the incoming invite `accepted` when the receiver joins through the banner/open-call route and clears the incoming timeout.
-- Source fixed is not installed-app proof. This cleanup fix requires a new Google Play internal build and installed two-phone proof before cleanup can be Closed.
+- Source fixed is not installed-app proof. The v61 installed proof passed for joined video-call end cleanup and repeated call after end at the UI level: both phones returned to `No Active Call`, no visible false missed-call text appeared, and the repeated call used a new room. Receiver decline, ignored/missed, background/killed-app cleanup, and database-level active-call field readback remain Partial.
 
 Not proved:
 
 - Receiver decline.
 - Missed call event cleanup.
 - Backgrounded/killed app cleanup.
-- Repeated call after end across both joined participants.
+- Repeated video call after end across both joined participants was proved once on v61 with new room `5ZVR4J`.
 - Database-level verification that `chat_threads.active_communication_room_id` and `chat_threads.active_call_type` cleared after every required state.
 
 Call end/decline/missed cleanup must be proved before full call closure.
@@ -363,8 +423,8 @@ RPC safety checks deny restricted/unavailable/blocked/unauthorized targets befor
 | --- | --- | --- |
 | Existing Chat inbox row can still display stale `@user230456` after Settings/Profile/search show `@user230455`. | Must fix before launch | Documented; do not call Settings/Profile/Chat handle agreement fully Closed. |
 | Receiver tapping the app-wide incoming call banner opened `This Chi'lly Chat thread could not be found.` | Fixed in backend / installed proof passed | `20260628223918_chilly_chat_direct_member_platform_owner_thread_readback` fixed the receiver readback path. R5 tapped the real incoming banner and joined the correct voice call surface with both phones showing `2 in call`. |
-| Joined installed v60 call recorded `Voice call ended` and then a false `Missed voice call`. | Must fix before launch | Source fixed in this commit; requires Google Play internal v61+ installed proof before cleanup can be Closed. |
-| Video call lower participant feed is cut off by bottom controls and participant metadata covers too much video. | Source fixed / installed proof pending | `components/communication` layout now reserves safe-area control space and uses compact edge metadata; requires v61+ installed proof before fullscreen video fit can be Closed. |
+| Joined installed v60 call recorded `Voice call ended` and then a false `Missed voice call`. | Partially fixed / more cleanup proof needed | v61 joined video-call end proof showed `No Active Call` on both phones and no visible false missed-call text; receiver decline, ignored/missed, background/killed-app cleanup, and database field readback remain Partial. |
+| Video call lower participant feed is cut off by bottom controls and participant metadata covers too much video. | Closed for Android two-phone installed responsive layout | Google Play-installed v61 proved no bottom feed cutoff, no control overlap, compact metadata, and local/remote video on both phones. iOS/tablet/foldable proof remains Pending unless tested. |
 | `R5CR120QCBF` Profile displays an `Owner` badge for `user230455` during proof. | Human review | Review account role/badge source before launch; no account mutation happened in this lane. |
 | Android logcat included Firebase push/FIS auth errors while Settings showed push not registered on R5 earlier. | Should fix before launch | Push/ringing remains Partial until background push is proved on installed app. |
 
@@ -394,19 +454,17 @@ Risky or larger issues were documented instead of hidden.
 
 - Existing inbox row stale handle can still appear.
 - Full search term matrix across all surfaces remains incomplete.
-- Video call local/remote installed proof remains incomplete until v61+ is delivered through Google Play internal and reproduced on both phones.
+- Video call local/remote Android installed proof is Closed for the owner -> user v61 path; user -> owner direction and iOS/tablet/foldable proof remain incomplete.
 - Background push/ring proof remains incomplete.
-- The joined-call false missed-event source fix is not installed in Google Play yet.
-- Decline/missed/killed-app cleanup matrix remains incomplete on installed app.
+- Joined video-call end cleanup is proved at the UI level on v61, but decline/missed/background/killed-app cleanup and database-level active-call field readback remain incomplete.
 
 ## Remaining Launch Blockers
 
-1. Rebuild and deliver a new Google Play internal version after the source cleanup and video layout fixes, expected versionCode `61` or higher.
-2. Prove that receiver banner/open-call auto-join marks the invite accepted and does not record a false missed event after a joined call ends.
-3. Fix or refresh stale existing inbox participant handle metadata.
-4. Prove receiver same-thread, elsewhere-in-app, and background/push separately.
-5. Prove Video Call local/remote media on both phones and fullscreen fit, including no bottom feed cutoff, no control overlap, no center-blocking metadata card, Back to Thread working, and End Call working.
-6. Prove call end/decline/missed/background cleanup with active call state cleared.
+1. Fix or refresh stale existing inbox participant handle metadata.
+2. Prove receiver decline, ignored/missed, background/killed-app cleanup, and database-level active-call field readback.
+3. Prove receiver same-thread and background/push separately where not already covered by the v60/v61 foreground proofs.
+4. Prove user -> owner video direction if needed for symmetric proof.
+5. Prove iOS/tablet/foldable responsive coverage before claiming cross-platform responsive support Closed.
 
 ## Screenshots/XML/Log Artifact Paths
 
@@ -414,6 +472,7 @@ Artifact root:
 
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/`
 - `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/`
 
 Key artifacts:
 
@@ -428,6 +487,14 @@ Key artifacts:
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/R3-visible-chat-action-after-live-rpc-fixes-v60.png`
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/R5-voice-call-incoming-elsewhere-result-v60.png`
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/R5-second-voice-after-answer-tap-v60.png`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/R3CXA0DS5JV-package-after-play-v61.txt`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/R5CR120QCBF-package-after-play-v61.txt`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/R5CR120QCBF-video-call-banner-v61.png`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/R5CR120QCBF-after-banner-tap-v61.png`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/R3CXA0DS5JV-after-receiver-banner-tap-v61.png`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/R3CXA0DS5JV-back-to-thread-during-call-v61.png`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/R3CXA0DS5JV-final-after-second-end-v61.xml`
+- `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/R5CR120QCBF-final-after-second-end-v61.xml`
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/R3-after-ending-voice-call-v60.png`
 - `/tmp/chillywood-google-signed-v60-direct-chat-call-proof-20260628/R3-visible-direct-thread-failure-sanitized-logcat.txt`
 - `/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R5-after-second-fresh-voice-banner.png`

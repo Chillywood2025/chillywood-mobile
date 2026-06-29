@@ -107,16 +107,25 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "R5CR120QCBF` tapped the app-wide banner and joined the correct call surface",
   "2 in call",
   "false `Missed voice call`",
-  "requires a newer Google Play internal build",
+  "background push/ringing, decline/missed/background cleanup, user -> owner direction, stale existing inbox metadata, and iOS/tablet/foldable responsive proof remain incomplete",
   "Responsive video call layout cleanup",
   "Responsive foundation added.",
   "Direct Chat video call layout adapts by dimensions and safe area.",
-  "Android two-phone installed proof remains Partial",
+  "Google-signed v61 responsive video call proof",
+  "Android two-phone installed proof passed",
   "iOS proof result: Pending",
   "Tablet/foldable proof result: Pending",
   "Whole-app responsive audit result",
   "bottom controls from covering the lower participant feed",
   "participant metadata is compact at the tile edge",
+  "bc2e9532-6a1e-4174-a153-679345c6ef20",
+  "36c7bae7-4181-4c67-ac46-75070f76142f",
+  "70b276c336b1164a674a8ae51b421e0a039d0d35",
+  "versionCode `61`",
+  "lastUpdateTime=2026-06-28 19:06:13",
+  "lastUpdateTime=2026-06-28 19:05:47",
+  "Room `622ZK4` proved the first joined call; room `5ZVR4J` proved repeated call after end",
+  "Closed for Google-signed v61 Android two-phone Direct Chat responsive video layout; Partial for full cross-platform responsive coverage and full call cleanup matrix.",
 ].forEach((needle) => requireText("v60 proof doc", doc, needle));
 
 [
@@ -177,12 +186,14 @@ forbidSentence("v60 proof doc", doc, (sentence) => (
 forbidSentence("v60 proof doc", doc, (sentence) => (
   /video call|local video|remote video|fullscreen video/i.test(sentence)
   && /\bClosed\b/i.test(sentence)
+  && !/Google-signed v61 Android two-phone Direct Chat responsive video layout|Android two-phone installed responsive layout|Video call local\/remote Android installed proof is Closed for the owner -> user v61 path/i.test(sentence)
   && !hasNegation(sentence)
 ), "video proof Closed without local/remote evidence on both phones");
 
 forbidSentence("v60 proof doc", doc, (sentence) => (
   /cleanup|active call state|stale.*state|end\/decline\/missed/i.test(sentence)
   && /\bClosed\b/i.test(sentence)
+  && !/Partial for full cross-platform responsive coverage and full call cleanup matrix/i.test(sentence)
   && !hasNegation(sentence)
 ), "call cleanup Closed without cleanup matrix evidence");
 

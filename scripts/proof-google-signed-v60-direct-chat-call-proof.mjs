@@ -141,7 +141,7 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "2 in call",
   "Participant",
   "false `Missed voice call`",
-  "requires a newer Google Play internal build",
+  "background push/ringing, decline/missed/background cleanup, user -> owner direction, stale existing inbox metadata, and iOS/tablet/foldable responsive proof remain incomplete",
   "Responsive video call layout cleanup",
   "Responsive foundation added.",
   "Direct Chat video call layout adapts by dimensions and safe area.",
@@ -152,15 +152,29 @@ const responsiveLayout = read("hooks/use-responsive-layout.ts");
   "tablet",
   "foldableOrExpanded",
   "landscape",
-  "Android two-phone installed proof remains Partial",
+  "Google-signed v61 responsive video call proof",
+  "Android two-phone installed proof passed",
   "iOS proof result: Pending",
   "Tablet/foldable proof result: Pending",
   "Whole-app responsive audit result",
   "bottom controls from covering the lower participant feed",
   "participant metadata is compact at the tile edge",
   "Fullscreen video fit is not Closed until proved on installed app",
-  "/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R5-after-second-banner-tap.png",
-  "/tmp/chillywood-receiver-banner-thread-readback-fix-20260628/R3-after-second-banner-tap.xml",
+  "bc2e9532-6a1e-4174-a153-679345c6ef20",
+  "36c7bae7-4181-4c67-ac46-75070f76142f",
+  "70b276c336b1164a674a8ae51b421e0a039d0d35",
+  "VersionCode: `61`",
+  "versionCode `61`",
+  "lastUpdateTime=2026-06-28 19:06:13",
+  "lastUpdateTime=2026-06-28 19:05:47",
+  "R5CR120QCBF-video-call-banner-v61.png",
+  "R5CR120QCBF-after-banner-tap-v61.png",
+  "R3CXA0DS5JV-after-receiver-banner-tap-v61.png",
+  "R3CXA0DS5JV-back-to-thread-during-call-v61.png",
+  "R3CXA0DS5JV-final-after-second-end-v61.xml",
+  "R5CR120QCBF-final-after-second-end-v61.xml",
+  "Room `622ZK4` proved the first joined call; room `5ZVR4J` proved repeated call after end",
+  "Closed for Google-signed v61 Android two-phone Direct Chat responsive video layout; Partial for full cross-platform responsive coverage and full call cleanup matrix.",
 ].forEach((needle) => requireText("v60 proof facts", doc, needle));
 
 [
@@ -227,5 +241,5 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Google-signed v60 direct chat call proof passed.");
-console.log("- Google Play v60 install, fresh handle/search, visible direct-thread open, voice-call incoming banner, receiver join blocker, RPC fixes, artifact paths, and safety boundaries are documented.");
+console.log("Google-signed v60/v61 direct chat call proof passed.");
+console.log("- Google Play v60 receiver-thread proof and v61 Android responsive video layout proof, artifact paths, remaining Partial scope, and safety boundaries are documented.");

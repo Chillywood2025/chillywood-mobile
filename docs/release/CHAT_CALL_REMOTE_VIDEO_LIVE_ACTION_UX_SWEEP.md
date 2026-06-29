@@ -61,8 +61,8 @@ Available last-12-hour evidence:
 | Issue | Classification | Result |
 | --- | --- | --- |
 | Remote video hidden while stream exists | Must fix now | Fixed in source. |
-| Direct Chat video lower tile can sit under bottom controls | Must fix now | Fixed in source with safe-area control spacing and flexed fullscreen tiles; installed proof pending. |
-| Participant metadata card covers too much of video feed | Must fix now | Fixed in source with compact edge metadata; installed proof pending. |
+| Direct Chat video lower tile can sit under bottom controls | Must fix now | Fixed in source and proved on Google Play-installed v61 with both physical Android phones. |
+| Participant metadata card covers too much of video feed | Must fix now | Fixed in source and proved on Google Play-installed v61 with compact edge metadata on both physical Android phones. |
 | Live participant action controls stay open behind seat failure alert | Must fix now | Fixed in source. |
 | Live participant action buttons were very small and had no in-flight feedback | Should fix now if small/safe | Fixed in source. |
 | Prior actual-user Chat Call manual ring/background push remains Partial | Human review | Existing Partial status preserved; this lane did not claim background ringing Closed. |
@@ -71,28 +71,29 @@ Available last-12-hour evidence:
 
 ## Actual-User Installed-App Proof Result
 
-Actual-user installed-app proof result: Partial.
+Actual-user installed-app proof result: Partial. Direct Chat Android two-phone responsive video layout is Closed on Google Play-installed v61; Live Watch-Party action proof and cross-platform responsive coverage remain Partial.
 
-Preflight saw one physical Play-internal v57 phone:
+Latest Direct Chat responsive video proof used two Google Play-installed v61 phones:
 
 | Device | Status | Package | Version | versionCode | Installer |
 | --- | --- | --- | --- | --- | --- |
-| `R5CR120QCBF` | Attached | `com.chillywood.mobile` | `1.0.0` | `57` | `com.android.vending` |
-| `R3CXA0DS5JV` | Not attached in adb during this lane | Not verified in this lane | Not verified in this lane | Not verified in this lane | Not verified in this lane |
+| `R5CR120QCBF` | Attached, updated through Google Play | `com.chillywood.mobile` | `1.0.0` | `61` | `com.android.vending` |
+| `R3CXA0DS5JV` | Attached, updated through Google Play | `com.chillywood.mobile` | `1.0.0` | `61` | `com.android.vending` |
 
-Because the second physical Play-internal phone was not attached and this JS fix still needs delivery to the installed runtime, the affected two-phone normal user paths were not honestly Closed in this lane.
+Google-signed v61 Direct Chat proof result: owner -> user video call passed with receiver banner tap, `2 in call`, local/remote video visible on both phones, bottom video feed not cut off, bottom controls not covering video, compact participant edge metadata, Back to Thread, End Call, and repeated call after end with a new room. Artifact directory: `/tmp/chillywood-google-signed-v61-responsive-video-proof-20260628/`.
 
-Required rerun after delivery/update uptake:
+Required remaining rerun:
 
-1. Chi'lly Chat video call from normal visible app path on both physical Play-internal phones.
-2. Verify local and remote video render on both sides.
-3. Verify fullscreen/large remote video is not cut off by bottom controls, participant metadata does not block the center of the video, and the camera feed fills the participant tile cleanly.
+1. User -> owner video direction if needed for symmetry.
+2. iOS/tablet/foldable responsive simulator/device coverage.
+3. Background push/ringing and decline/missed/background cleanup.
 4. Live Watch-Party waiting-room/seat request path.
 5. Verify Approve Seat, Mute, Seat Participant, and Remove either persist, show `Saving...`, collapse controls on failure, and leave the host with a clear retry path.
 
 ## Issues Left For Human Review
 
-- Reproduce the updated Chat Call path on two physical Play-internal phones after the EAS update is active or the code ships in the next Play internal build.
+- Reproduce user -> owner Chat Call video direction if needed for symmetric proof.
+- Reproduce iOS/tablet/foldable responsive coverage before claiming cross-platform responsive support Closed.
 - Reproduce the updated Live waiting-room seat approval path using the normal installed UI.
 - Confirm whether Android background ringing/push is required for the manual Chat Call experience beyond the same-thread/app-foreground path.
 
