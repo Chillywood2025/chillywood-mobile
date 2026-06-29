@@ -28,11 +28,13 @@ Chat thread hide final hardening audit: Closed for source/backend behavior. Migr
 
 ## Home Settings + Direct Thread UI cleanup
 
-Source status: fixed. Installed-app status: pending unless a future Google Play internal build is shipped for this UI polish.
+Source status: fixed. Installed-app status: Partial after Google Play internal versionCode `65` proof.
 
 Home now places a compact icon-only Settings gear in the left header cluster beside `HOME`, with accessibility label `Settings`, no visible Settings word, and no oversized pill treatment. Shared Explore/Live/Saved top bars also use compact icon-only Settings controls.
 
 Direct chat threads no longer render the large `MESSAGE THREAD` / `Chat stays primary` explainer card. Header identity, Voice Call, Video Call, message history, lightweight recent-call rows, and the composer remain in place, with messages starting higher in the thread. Source fixed is not installed-app proof. No auth/RLS/chat/account-status permission weakening happened. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
+
+Google-signed v65 proof is documented in `docs/release/GOOGLE_SIGNED_V65_HOME_SETTINGS_CHAT_UI_PROOF.md`. EAS Build `3a5e65e3-352e-4c72-bc89-2347474496e2` / EAS Submit `482a1080-8a7a-4c86-9f79-64ea13b7f82a` delivered commit `a38e5ac5587591fab2ed4a9308c8dd90d46005a0` to Google Play internal testing as versionCode `65`, versionName `1.0.0`. `R5CR120QCBF` updated through Google Play internal testing with `installerPackageName=com.android.vending`, versionCode `65`, and lastUpdateTime `2026-06-29 12:23:25`. R5 installed proof passed Home only: Home Settings control is icon-only, the visible word Settings does not appear on the Home top control, accessibility label remains Settings, the icon does not overlap `HOME` or hero text, and tapping it opened Settings without logout or data reset. Explore/Live/Saved installed captures and v65 direct-thread installed captures remain Pending because R5 became ADB unauthorized before those flows were captured and `R3CXA0DS5JV` was not visible to ADB. Google Play internal install is not enough without actual user flow proof. Sideloaded APK proof is not accepted.
 
 ## Direct thread messaging UX restoration
 

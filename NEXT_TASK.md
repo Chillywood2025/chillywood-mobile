@@ -9,9 +9,17 @@ Current lane doc:
 - `docs/release/VALIDATION_BLOCKER_CLEANUP.md`
 - `docs/release/PARTY_ROOM_LIVE_STAGE_ROUTE_SEMANTICS.md`
 - `docs/release/GOOGLE_SIGNED_V64_CHAT_THREAD_HIDE_PROOF.md`
+- `docs/release/GOOGLE_SIGNED_V65_HOME_SETTINGS_CHAT_UI_PROOF.md`
 
 Home Settings + Direct Thread UI cleanup:
-- Status: source-fixed.
+- Status: Partial for Google-signed v65 installed proof.
+- EAS Build `3a5e65e3-352e-4c72-bc89-2347474496e2` / EAS Submit `482a1080-8a7a-4c86-9f79-64ea13b7f82a` delivered commit `a38e5ac5587591fab2ed4a9308c8dd90d46005a0` to Google Play internal testing as versionCode `65`, versionName `1.0.0`.
+- `R5CR120QCBF` updated through Google Play internal testing and read back package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `65`, versionName `1.0.0`, and lastUpdateTime `2026-06-29 12:23:25`.
+- R5 installed proof passed the Home top Settings requirement: Home Settings control is icon-only, the visible word Settings does not appear on the Home top control, accessibility label remains Settings, and the Settings icon does not overlap `HOME` or hero text.
+- Tapping the Home Settings icon opened `/settings` and the signed-in session remained intact.
+- Explore/Live/Saved installed captures remain Pending because `R5CR120QCBF` became ADB unauthorized before those flows were captured.
+- v65 direct-thread installed proof remains Pending because ADB authorization was lost before a direct-thread capture could be completed.
+- `R3CXA0DS5JV` was not visible to ADB during this proof window.
 - Home now places a compact icon-only Settings gear in the left header cluster beside `HOME`, with accessibility label `Settings`, no visible Settings word, and no oversized pill treatment.
 - The shared Explore/Live/Saved top bars also use compact icon-only Settings controls instead of the heavier text pill treatment.
 - Tapping the Settings icon still routes to `/settings`.
@@ -19,6 +27,9 @@ Home Settings + Direct Thread UI cleanup:
 - Header identity, Voice Call, Video Call, recent-call timeline rows, message history, composer, and hide/reopen behavior remain in place.
 - Messages and thread content start higher, so the direct thread reads as message-first instead of tutorial/status-first.
 - Source fixed is not installed-app proof.
+- Google Play internal install is not enough without actual user flow proof.
+- `installerPackageName` must be `com.android.vending`.
+- Sideloaded APK proof is not accepted.
 - No auth/RLS/chat/account-status permission weakening happened.
 - No service-role chat/social proof was counted.
 - No provider/live-money mutation happened.
