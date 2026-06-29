@@ -13,10 +13,15 @@ import {
 
 import {
   buildUserChannelProfile,
+  readCachedUserProfile,
   readUserProfile,
   type UserChannelProfile,
 } from "../../_lib/userData";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
+import {
+  getMainTabHeaderProfileSnapshot,
+  setMainTabHeaderProfileSnapshot,
+} from "./main-tab-profile-cache";
 
 type MainTabTopBarProps = {
   surface: "home" | "explore" | "live" | "library";
@@ -25,27 +30,58 @@ type MainTabTopBarProps = {
 };
 
 export function MainTabTopBar({ surface, label, style }: MainTabTopBarProps) {
-  const [profile, setProfile] = useState<UserChannelProfile | null>(null);
+  const initialProfileSnapshot = getMainTabHeaderProfileSnapshot();
+  const [profile, setProfile] = useState<UserChannelProfile | null>(() => initialProfileSnapshot.profile);
+  const [profileResolved, setProfileResolved] = useState(() => initialProfileSnapshot.resolved);
+
+  const applyProfile = useCallback((nextProfile: UserChannelProfile | null, resolved = true) => {
+    setMainTabHeaderProfileSnapshot(nextProfile, resolved);
+    setProfile((existingProfile) => {
+      if (
+        nextProfile
+        && !resolved
+        && !nextProfile.avatarUrl
+        && existingProfile?.id === nextProfile.id
+        && existingProfile.avatarUrl
+      ) {
+        return existingProfile;
+      }
+
+      return nextProfile;
+    });
+    setProfileResolved(resolved);
+  }, []);
 
   const refreshProfile = useCallback(async () => {
-    const [userProfile, userId] = await Promise.all([
-      readUserProfile().catch(() => null),
+    const [cachedProfile, userId] = await Promise.all([
+      readCachedUserProfile().catch(() => null),
       getWritablePartyUserId().catch(() => null),
     ]);
 
     const safeUserId = String(userId ?? "").trim();
     if (!safeUserId) {
-      setProfile(null);
+      applyProfile(null);
       return;
     }
 
-    setProfile(buildUserChannelProfile({
+    if (cachedProfile?.username) {
+      const cachedChannel = buildUserChannelProfile({
+        id: safeUserId,
+        profile: cachedProfile,
+        fallbackDisplayName: "You",
+        isLive: false,
+      });
+      applyProfile(cachedChannel, !!cachedChannel.avatarUrl);
+    }
+
+    const userProfile = await readUserProfile().catch(() => cachedProfile);
+    applyProfile(buildUserChannelProfile({
       id: safeUserId,
       profile: userProfile,
       fallbackDisplayName: "You",
       isLive: false,
     }));
-  }, []);
+  }, [applyProfile]);
 
   useFocusEffect(
     useCallback(() => {
@@ -100,10 +136,12 @@ export function MainTabTopBar({ surface, label, style }: MainTabTopBarProps) {
         >
           {profile?.avatarUrl ? (
             <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
-          ) : (
+          ) : profileResolved ? (
             <View style={styles.avatarFallback}>
               <Text style={styles.avatarInitial}>{initial}</Text>
             </View>
+          ) : (
+            <View style={styles.avatarPlaceholder} />
           )}
         </TouchableOpacity>
       </View>
@@ -170,6 +208,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(220,20,60,0.24)",
+  },
+  avatarPlaceholder: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   avatarInitial: {
     color: "#fff",

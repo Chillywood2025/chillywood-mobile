@@ -1,5 +1,13 @@
 # Final Production Readiness Checklist
 
+## Header profile avatar flicker fix
+
+Source status: fixed. Installed-app status: Pending if Google Play internal v67+ proof is required.
+
+Profile/avatar fallback must not flash while the real avatar is still loading. Last known avatar should remain visible during profile revalidation. Fallback avatar is only valid after profile loading completes and no avatar exists. The source fix keeps a shared last-known header profile snapshot, seeds it from Home, reads cached local profile before remote revalidation, renders a neutral placeholder while unresolved, and preserves the unified Home/Explore/Live/Saved header layout.
+
+Source fixed is not installed-app proof. No auth/RLS/profile permission weakening happened. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
+
 ## Party Room / Live Stage route semantics verification
 
 Party Room and Live Stage are separate product routes. Party Room normal watch-party flow must not route to Live Stage. Player → Watch-Party Live → Party Waiting Room → Party Room remains intact. Home → Live Watch-Party → Live Waiting Room → Live Room → Live Stage remains intact. Live Stage remains `/watch-party/live-stage/[partyId]`. Party Room remains `/watch-party/[partyId]`. Legacy `/communication/*` remains compatibility-only.

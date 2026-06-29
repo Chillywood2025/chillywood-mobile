@@ -12,6 +12,20 @@ Current lane doc:
 - `docs/release/GOOGLE_SIGNED_V65_HOME_SETTINGS_CHAT_UI_PROOF.md`
 - `docs/release/HEADER_CONTROL_CONSISTENCY_CLEANUP.md`
 - `docs/release/GOOGLE_SIGNED_V66_HEADER_CHAT_UI_PROOF.md`
+- `docs/release/HEADER_PROFILE_AVATAR_FLICKER_FIX.md`
+
+Header profile avatar flicker fix:
+- Status: source-Closed.
+- Root cause: the shared tab header profile/avatar control could mount with empty profile state during tab changes, especially after Saved remounted from its loading state, so the initials fallback rendered before cached/remote profile hydration replaced it with the real avatar.
+- The profile/avatar hydration path now keeps a shared last-known header profile snapshot, seeds it from Home, reads cached local profile before remote revalidation, and updates only when the profile resolves.
+- Profile/avatar fallback must not flash while the real avatar is still loading.
+- Last known avatar should remain visible during profile revalidation.
+- Fallback avatar is only valid after profile loading completes and no avatar exists.
+- Home/Explore/Live/Saved header layout remains unified.
+- Source fixed is not installed-app proof.
+- No auth/RLS/profile permission weakening happened.
+- No provider/live-money mutation happened.
+- `liveMoneyEnabled` remains OFF.
 
 Google-signed v66 Header + Chat UI proof:
 - Status: Closed.

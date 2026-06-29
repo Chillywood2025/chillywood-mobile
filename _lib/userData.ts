@@ -1078,6 +1078,11 @@ export async function readUserProfile(): Promise<UserProfile> {
   return generated;
 }
 
+export async function readCachedUserProfile(): Promise<UserProfile | null> {
+  const cached = await readJsonValue<UserProfile>(USER_PROFILE_KEY, { username: "", avatarIndex: 0 });
+  return cached.username ? normalizeUserProfile(cached) : null;
+}
+
 export async function readMyProfileVisibility(): Promise<ProfileVisibility> {
   const userId = await getSignedInUserId();
   if (!userId) return "everyone";

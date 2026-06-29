@@ -3,6 +3,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     buildUserChannelProfile,
+    readCachedUserProfile,
     readMergedWatchProgress,
     readUserProfile,
     readUserProfileByUserId,
@@ -63,6 +64,7 @@ import { ROOM_ACTIVITY_ACTIVE_WINDOW_MS } from "../../_lib/performancePolicy";
 import { AppEmptyState, AppSection } from "../../components/ui/app-surface";
 import { StableImage } from "../../components/ui/StableImage";
 import { AppText } from "../../components/ui/typography";
+import { setMainTabHeaderProfileSnapshot } from "../../components/navigation/main-tab-profile-cache";
 
 type TitleRow = Omit<
   Pick<
@@ -293,17 +295,36 @@ export default function HomeScreen() {
   }
 
   async function fetchCurrentChannelProfile() {
-    const [profile, userId] = await Promise.all([
-      readUserProfile().catch(() => null),
+    const [cachedProfile, userId] = await Promise.all([
+      readCachedUserProfile().catch(() => null),
       getWritablePartyUserId().catch(() => null),
     ]);
 
     const signedInUserId = String(userId ?? "").trim();
     if (!signedInUserId) {
       setCurrentChannel(null);
+      setMainTabHeaderProfileSnapshot(null);
       return;
     }
 
+    if (cachedProfile?.username) {
+      const cachedChannel = buildUserChannelProfile({
+        id: signedInUserId,
+        profile: cachedProfile,
+        fallbackDisplayName: "You",
+        isLive: false,
+      });
+
+      setCurrentChannel((existingChannel) => {
+        if (!cachedChannel.avatarUrl && existingChannel?.id === signedInUserId && existingChannel.avatarUrl) {
+          return existingChannel;
+        }
+        return cachedChannel;
+      });
+      setMainTabHeaderProfileSnapshot(cachedChannel, !!cachedChannel.avatarUrl);
+    }
+
+    const profile = await readUserProfile().catch(() => cachedProfile);
     const nextChannel = buildUserChannelProfile({
       id: signedInUserId,
       profile,
@@ -312,6 +333,7 @@ export default function HomeScreen() {
     });
 
     setCurrentChannel(nextChannel);
+    setMainTabHeaderProfileSnapshot(nextChannel);
   }
 
   async function fetchDiscoveryFeedV1() {
