@@ -4,6 +4,26 @@ Chi’lly Chat end-to-end call initiation proof: Closed / Partial / Blocked
 
 Final verdict: Partial.
 
+## Direct thread messaging UX restoration
+
+Source status: fixed. Installed-app status: Pending.
+
+Chi’lly Chat direct thread must remain a real messaging thread. Calls live inside the thread, but must not replace the thread. Actual chat content must remain primary. Call event rows must not dominate the direct thread. Thread status UI must not push real chat content out.
+
+Root cause: the direct-thread UI hierarchy put a large status card and repeated call event cards ahead of the message timeline, making the route feel like a call log with a composer rather than a real direct-message thread with calling.
+
+Files changed: `app/chat/[threadId].tsx`.
+
+Thread message list path reviewed: real `chat_messages` remain the primary scroll content.
+
+Call event rendering path reviewed: `chat_call_events` remain visible as compact recent-call timeline rows, limited to the latest three entries.
+
+Thread status card reviewed: status guidance is reduced and no longer dominates the page.
+
+Composer path reviewed: text input, attachment action, and Send remain unchanged.
+
+Proof result: source fixed. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. `installerPackageName` must be `com.android.vending`. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
+
 Source is fixed for normal visible call initiation paths. Installed-app actual-user proof remains Partial until a Play-internal build containing these source changes is installed on both tester phones and proves receiver ringing from same-thread, elsewhere-in-app, and background states.
 
 June 28, 2026 v58 installed-app follow-up: `docs/release/CHILLY_CHAT_PLAY_V58_ACTUAL_USER_CALL_PROOF.md` is Partial. Both attached phones were Play-installed v58 from `com.android.vending`, and source commit `0a22ab3e2612d4f888b4f56eac03c0639cac26ae` was pushed/aligned with `origin/main`, but v58 actual-user call proof did not close. The owner confirmed the search problem was fixed separately and instructed not to use the v58 search box again until a v59 Play-internal build. No search-box-dependent v58 result is counted as Closed. Receiver elsewhere-in-app banner and background push/ringing remain Partial.

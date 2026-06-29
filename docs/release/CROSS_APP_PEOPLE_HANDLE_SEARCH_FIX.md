@@ -2,6 +2,22 @@ Cross-app people/handle search proof: Closed / Partial / Blocked.
 
 Current verdict: Partial.
 
+## Direct thread messaging UX restoration
+
+Source status: fixed. Installed-app status: Pending.
+
+Chi’lly Chat direct thread must remain a real messaging thread. Calls live inside the thread, but must not replace the thread. Actual chat content must remain primary. Call event rows must not dominate the direct thread. Thread status UI must not push real chat content out.
+
+This direct-thread source fix does not change identity resolution. It keeps fresh profile identity source rules intact while restoring the message-first thread hierarchy in `app/chat/[threadId].tsx`.
+
+Thread message list path reviewed: current profile/user identity still flows into rendered message authors through the shared thread member data.
+
+Call event rendering path reviewed: call events now render as lightweight timeline rows inside the message body so they do not overpower user messages.
+
+Composer path reviewed: composer and attachment behavior remain in place.
+
+Proof result: source fixed. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. `installerPackageName` must be `com.android.vending`. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
+
 Cross-app people/handle search proof: Partial for actual-user installed-app closure.
 
 June 28, 2026 v60/v61 installed follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` proved Chi'lly Chat installed search can find `user230455` as `user230455` / `@user230455` on the Google Play-installed versionCode `60` build. The visible result opened the direct thread after live authenticated RPC ambiguity fixes. A later receiver readback migration also proved the real incoming call banner can open/join the readable direct thread, with both phones showing `2 in call`; v61 then proved the Android two-phone responsive video layout. Full call closure remains Partial because background push/ringing, decline/missed/background cleanup, user -> owner direction, and cross-platform responsive proof remain incomplete. Cross-app search/identity remains Partial because the full term matrix across `@user230455`, `User230455`, `user 230455`, display name, Explore People, Profile entry, direct-thread creation, Circle, Followers, Following, shared user cards, and role/platform surfaces has not been completed on a v62+ installed build.

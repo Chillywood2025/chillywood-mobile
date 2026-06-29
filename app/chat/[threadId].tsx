@@ -1520,19 +1520,21 @@ export default function ChillyChatThreadScreen() {
 
       <View style={styles.threadGuideCard}>
         <View style={styles.threadGuideHeader}>
-          <Text style={styles.threadGuideKicker}>THREAD STATUS</Text>
+          <Text style={styles.threadGuideKicker}>MESSAGE THREAD</Text>
           <View style={styles.threadGuideKindPill}>
             <Text style={styles.threadGuideKindPillText}>
               {threadKindLabel}
             </Text>
           </View>
         </View>
-        <Text style={styles.threadGuideTitle}>{threadGuideTitle}</Text>
+        <Text style={styles.threadGuideTitle}>
+          {activeCallRoomId ? threadGuideTitle : "Chat stays primary"}
+        </Text>
         <Text style={styles.threadGuideBody}>{threadGuideBody}</Text>
         <View style={styles.threadGuideMetaRow}>
           <View style={styles.threadGuideMetaPill}>
             <Text style={styles.threadGuideMetaPillText}>
-              {activeCallRoomId ? "Call ready here" : "Voice/video starts here"}
+              {activeCallRoomId ? "Call ready here" : "Voice/video available"}
             </Text>
           </View>
           <View style={styles.threadGuideMetaPill}>
@@ -1566,26 +1568,6 @@ export default function ChillyChatThreadScreen() {
         >
           <MaterialIcons name="notifications-active" size={16} color="#A9F6D2" />
           <Text style={styles.callDeliveryStatusText}>{callDeliveryStatus}</Text>
-        </View>
-      ) : null}
-
-      {callEvents.length ? (
-        <View style={styles.callEventStack}>
-          {callEvents.slice(-4).map((event) => (
-            <View key={event.id} style={styles.callEventCard}>
-              <View style={styles.callEventIcon}>
-                <MaterialIcons
-                  name={event.callType === "video" ? "videocam" : "call"}
-                  size={15}
-                  color="#FFE4EA"
-                />
-              </View>
-              <View style={styles.callEventCopy}>
-                <Text style={styles.callEventTitle}>{formatCallEventTitle(event, currentUserId)}</Text>
-                <Text style={styles.callEventMeta}>{formatStamp(event.createdAt)}</Text>
-              </View>
-            </View>
-          ))}
         </View>
       ) : null}
 
@@ -1631,7 +1613,7 @@ export default function ChillyChatThreadScreen() {
             </TouchableOpacity>
           </View>
         ))}
-      {renderedMessages.length === 0 ? (
+        {renderedMessages.length === 0 ? (
           <View
             style={styles.emptyCard}
             testID="chat-thread-empty-state"
@@ -1656,6 +1638,26 @@ export default function ChillyChatThreadScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+        ) : null}
+        {callEvents.length ? (
+          <View style={styles.callEventStack} testID="chat-thread-call-events">
+            <Text style={styles.callEventSectionLabel}>Recent calls in this thread</Text>
+            {callEvents.slice(-3).map((event) => (
+              <View key={event.id} style={styles.callEventCard}>
+                <View style={styles.callEventIcon}>
+                  <MaterialIcons
+                    name={event.callType === "video" ? "videocam" : "call"}
+                    size={12}
+                    color="#FFDCE5"
+                  />
+                </View>
+                <View style={styles.callEventCopy}>
+                  <Text style={styles.callEventTitle}>{formatCallEventTitle(event, currentUserId)}</Text>
+                  <Text style={styles.callEventMeta}>{formatStamp(event.createdAt)}</Text>
+                </View>
+              </View>
+            ))}
           </View>
         ) : null}
       </ScrollView>
@@ -2142,14 +2144,15 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   threadGuideCard: {
-    gap: 9,
+    gap: 7,
     marginHorizontal: 18,
-    marginBottom: 12,
-    borderRadius: 22,
+    marginBottom: 10,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(168,192,245,0.14)",
-    backgroundColor: "rgba(255,255,255,0.055)",
-    padding: 17,
+    borderColor: "rgba(168,192,245,0.11)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 13,
+    paddingVertical: 11,
   },
   threadGuideCardOfficial: {
     borderColor: "rgba(242,194,91,0.24)",
@@ -2163,7 +2166,7 @@ const styles = StyleSheet.create({
   },
   threadGuideKicker: {
     color: "#8FA0BC",
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "900",
     letterSpacing: 1.1,
   },
@@ -2172,8 +2175,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(6,10,18,0.28)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
   threadGuideKindPillOfficial: {
     borderColor: "rgba(242,194,91,0.32)",
@@ -2181,7 +2184,7 @@ const styles = StyleSheet.create({
   },
   threadGuideKindPillText: {
     color: "#DFE8F7",
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "900",
   },
   threadGuideKindPillTextOfficial: {
@@ -2189,13 +2192,13 @@ const styles = StyleSheet.create({
   },
   threadGuideTitle: {
     color: "#F8FBFF",
-    fontSize: 16,
+    fontSize: 13.5,
     fontWeight: "900",
   },
   threadGuideBody: {
     color: "#C5D0E2",
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: "600",
   },
   threadGuideMetaRow: {
@@ -2208,18 +2211,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(6,10,18,0.28)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
   threadGuideMetaPillText: {
     color: "#E5EDFB",
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontWeight: "900",
   },
   threadGuideHint: {
     color: "#94A4BD",
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 14,
     fontWeight: "700",
   },
   officialPresenceCard: {
@@ -2313,41 +2316,52 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   callEventStack: {
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingBottom: 12,
+    gap: 6,
+    marginTop: 2,
+    paddingTop: 4,
+  },
+  callEventSectionLabel: {
+    alignSelf: "center",
+    color: "#8897B0",
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
   },
   callEventCard: {
-    minHeight: 50,
-    borderRadius: 16,
+    alignSelf: "center",
+    maxWidth: "86%",
+    minHeight: 32,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(255,255,255,0.045)",
-    padding: 11,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 9,
+    paddingVertical: 6,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 7,
   },
   callEventIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(243,75,116,0.2)",
+    backgroundColor: "rgba(243,75,116,0.16)",
   },
   callEventCopy: {
     flex: 1,
     gap: 2,
   },
   callEventTitle: {
-    color: "#F7FAFF",
-    fontSize: 13,
+    color: "#E9EFFB",
+    fontSize: 11,
     fontWeight: "900",
   },
   callEventMeta: {
     color: "#9CAAC0",
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontWeight: "700",
   },
   callOverlay: {

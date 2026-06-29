@@ -4,6 +4,28 @@ Chi’lly Chat Google Play internal actual-user call proof: Closed / Partial / B
 
 Final verdict: Partial.
 
+## Direct thread messaging UX restoration
+
+Source status: fixed. Installed-app status: Pending.
+
+Chi’lly Chat direct thread must remain a real messaging thread. Calls live inside the thread, but must not replace the thread. Actual chat content must remain primary. Call event rows must not dominate the direct thread. Thread status UI must not push real chat content out.
+
+Root cause: the current direct-thread screen made call/status surfaces visually heavier than the actual message thread when recent call events existed.
+
+Files changed: `app/chat/[threadId].tsx`.
+
+Screenshots reviewed: Pic 1 is the intended message-first thread direction; Pic 2 is the call/status-heavy drift that this source change corrects.
+
+Thread message list path reviewed: real message history remains rendered in `chat-thread-messages-scroll`.
+
+Call event rendering path reviewed: call events stay in-thread but now appear as lightweight recent-call timeline rows inside the message area, not large pre-message cards.
+
+Thread status card reviewed: the card is reduced to compact message-thread context.
+
+Composer path reviewed: composer, attachments, and Send remain visible and usable.
+
+Proof result: source fixed. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. `installerPackageName` must be `com.android.vending`. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
+
 Google Play internal v59 delivery is complete on both physical phones, but Chi'lly Chat end-to-end actual-user call closure is not Closed. Google Play internal install is not enough without actual user flow proof. Source fixed is not installed-app proof. If Robert/testers cannot reproduce it in the Play-internal installed app, it is not actual-user Closed.
 
 June 28, 2026 v60 receiver banner thread-readback + responsive video layout follow-up: `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md` is Partial. Both attached phones updated through Google Play internal to versionCode `60` with installer `com.android.vending`, and no logout, uninstall, reinstall, sideload, or clear-data happened. Fresh `user230455` search and visible direct-thread open succeeded after targeted authenticated RPC ambiguity fixes. A live receiver readback migration fixed the installed blocker where tapping the receiver banner opened `This Chi'lly Chat thread could not be found.`; after the fix, R5 tapped the real incoming banner and both phones showed `2 in call`. Source now adds a shared responsive layout foundation and fixes the observed video layout issue where the lower feed could be cut off by bottom controls and a dark participant card covered too much of the feed. Video tiles must adapt to phone size instead of hard-coded device hacks, but fullscreen video fit is not Closed until proved on installed app. Full actual-user call closure remains Partial because installed v60 recorded a false `Missed voice call` after the joined call ended, the cleanup/responsive video layout source fixes are not installed in Google Play yet, iOS/tablet/foldable proof remains Pending unless tested, and video, background push, same-thread, decline/missed, and full cleanup proof remain incomplete.

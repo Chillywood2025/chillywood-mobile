@@ -7,6 +7,23 @@ Current lane doc:
 - `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md`
 - `docs/release/CHILLY_CHAT_END_TO_END_CALL_INITIATION_PROOF.md`
 
+Direct thread messaging UX restoration:
+- Chi’lly Chat direct thread must remain a real messaging thread.
+- Calls live inside the thread, but must not replace the thread.
+- Actual chat content must remain primary.
+- Call event rows must not dominate the direct thread.
+- Thread status UI must not push real chat content out.
+- Source now reduces the oversized thread status surface, moves call history into the message timeline as lightweight recent-call rows, keeps the composer visible, and preserves voice/video call actions from `app/chat/[threadId].tsx`.
+- Source fixed is not installed-app proof.
+- Google Play internal install is not enough without actual user flow proof.
+- `installerPackageName` must be `com.android.vending`.
+- Sideloaded APK proof is not accepted.
+- No logout, uninstall, reinstall, or clear-data happened.
+- No auth/RLS/chat/account-status permission weakening happened.
+- No service-role chat proof was counted.
+- No provider/live-money mutation happened.
+- `liveMoneyEnabled` remains OFF.
+
 Truth to preserve:
 - Google Play internal versionCode `60` was built from commit `c08c4bd1d98d3ea6672df5c3441c8d7b232b6b82`, includes required fix `0b563c79384e5270440bc0ad076bbc4ca687bf57`, and was installed by Google Play on both physical phones with installer `com.android.vending`.
 - No logout, uninstall, reinstall, clear-data, reset session, sideload, manual APK install, or Play production submission happened.

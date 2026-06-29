@@ -2,6 +2,16 @@
 
 Play-internal two-phone Chat/Live proof: Partial.
 
+## Direct thread messaging UX restoration
+
+Source status: fixed. Installed-app status: Pending.
+
+Chi’lly Chat direct thread must remain a real messaging thread. Calls live inside the thread, but must not replace the thread. Actual chat content must remain primary. Call event rows must not dominate the direct thread. Thread status UI must not push real chat content out.
+
+Root cause: direct-thread call/status UI drifted ahead of the actual message timeline. The fix in `app/chat/[threadId].tsx` restores a message-first hierarchy while preserving Voice Call, Video Call, active-call state, and Back to Thread behavior.
+
+Proof result: source fixed. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. `installerPackageName` must be `com.android.vending`. Sideloaded APK proof is not accepted. No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat proof was counted. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
+
 June 28, 2026 v58 Chi'lly Chat call follow-up: `docs/release/CHILLY_CHAT_PLAY_V58_ACTUAL_USER_CALL_PROOF.md` is Partial. Both physical phones were Play-installed v58 from Google Play internal testing, but source fixed is not installed-app proof and v58 installed is not enough without actual user flow proof. The owner said the search problem was fixed separately and not to use the v58 search box again until v59. Receiver elsewhere-in-app did not show a visible app-wide incoming call banner on R5 during the captured v58 voice-call attempt, so Chat call actual-user proof remains Partial.
 
 June 28, 2026 v59 Chi'lly Chat call follow-up: `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md` is Partial. EAS Build `7cf16ebe-a3de-4efb-8170-63a5e9799653` and EAS Submit `0c9b2162-c259-4934-a0e8-5679f524b609` delivered versionCode `59` to Google Play internal testing. Both physical phones updated through Google Play internal and stayed signed in, but actual-user call proof remains Partial because no fresh v59 end-to-end voice/video call completed with receiver incoming state, background push/ringing, local/remote video, fullscreen fit, and call cleanup proof.
