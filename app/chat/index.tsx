@@ -307,6 +307,14 @@ export default function ChillyChatInboxScreen() {
   }, [router]);
 
   const confirmHideThread = useCallback((thread: ChatThreadSummary) => {
+    if (thread.activeCommunicationRoomId) {
+      Alert.alert(
+        "Call active in this thread",
+        "Finish or leave the active call before removing this conversation from your inbox.",
+      );
+      return;
+    }
+
     Alert.alert(
       "Delete from my inbox",
       "This removes the conversation from your inbox. It does not delete it for the other person.",

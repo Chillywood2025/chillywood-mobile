@@ -35,6 +35,28 @@ Google-signed v64 Chi’lly Chat delete/hide conversation proof:
 - No provider/live-money mutation happened.
 - `liveMoneyEnabled` remains OFF.
 
+Chat thread hide final hardening audit:
+- Status: Closed for source/backend hardening; friendly active-call UI copy is source-fixed and requires future Google Play internal v65+ installed proof if product wants installed proof of that exact copy.
+- Migration `20260629140032_guard_active_chat_thread_hide.sql` is applied remotely and makes `hide_chat_thread_from_inbox(text)` refuse active-call threads with `active_communication_room_id` instead of silently hiding receiver-visible call state.
+- App source shows `Call active in this thread` and `Finish or leave the active call before removing this conversation from your inbox.` before attempting active-call hide.
+- Unread behavior is server-backed: message inserts update `last_message_at`, sender read state, and receiver `unread_count`; hidden threads reappear when newer message activity is later than `hidden_at`.
+- Attachment and call history remain preserved because hide/unhide only updates the caller's `chat_thread_members.hidden_at` value.
+- Block/restrict/account-status rules remain enforced through existing chat access, direct-thread open, membership, and message guards.
+- Delete from my inbox is a per-user hide, not a hard delete.
+- The other participant’s copy is not deleted.
+- Message and call history are preserved.
+- Hidden direct threads must not create duplicate direct threads.
+- New message activity must reappear a hidden thread.
+- Profile/Search → Chi’lly Chat must reopen the existing direct thread.
+- Do not hide identity bugs by deleting rows.
+- Source fixed is not installed-app proof.
+- Google Play internal install is not enough without actual user flow proof.
+- No logout, uninstall, reinstall, or clear-data happened.
+- No auth/RLS/chat/account-status permission weakening happened.
+- No service-role chat/social proof was counted.
+- No provider/live-money mutation happened.
+- `liveMoneyEnabled` remains OFF.
+
 Party Room / Live Stage route semantics verification:
 - Party Room and Live Stage are separate product routes.
 - Party Room normal watch-party flow must not route to Live Stage.

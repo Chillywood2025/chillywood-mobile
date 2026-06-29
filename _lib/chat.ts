@@ -502,6 +502,9 @@ export async function hideChatThreadFromInbox(threadId: string): Promise<void> {
       threadId: normalizedThreadId,
       message: error.message ?? "unknown_error",
     });
+    if (String(error.message ?? "").includes("active_call_in_progress")) {
+      throw new Error("Finish or leave the active call before removing this conversation from your inbox.");
+    }
     throw new Error("Couldn't remove this conversation right now. Please try again.");
   }
 }

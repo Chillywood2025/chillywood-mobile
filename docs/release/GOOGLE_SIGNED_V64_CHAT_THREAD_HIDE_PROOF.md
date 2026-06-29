@@ -56,6 +56,28 @@ Duplicate thread prevention: Closed. The same redacted thread id `e4db...05c` wa
 
 `Proof Normal / @user230456` remained a legitimate separate proof account/thread. It was not mutated in this completion run. It may be hidden from the tester inbox without renaming, merging, or deleting that legitimate account/thread.
 
+## Chat Thread Hide Final Hardening Audit
+
+Verdict: Closed for source/backend hardening and existing v64 installed proof; the new friendly active-call UI copy is source-fixed and requires a future Google Play internal v65+ installed flow if product wants installed proof of that exact copy.
+
+Delete from my inbox is a per-user hide, not a hard delete. The other participant's copy is not deleted. Message and call history are preserved. Hidden direct threads must not create duplicate direct threads. New message activity must reappear a hidden thread. Profile/Search -> Chi'lly Chat must reopen the existing direct thread. Do not hide identity bugs by deleting rows.
+
+Edge-case audit results:
+
+- Active call hide result: fixed. Migration `20260629140032_guard_active_chat_thread_hide.sql` updates `hide_chat_thread_from_inbox(text)` so active-call threads with `active_communication_room_id` cannot be hidden. The app source also shows `Call active in this thread` with `Finish or leave the active call before removing this conversation from your inbox.` before attempting the hide.
+- Unread count result: source/schema reviewed. Message insert trigger updates `last_message_at`, clears unread for sender, and increments unread for other members. Because inbox visibility compares `last_message_at` to `hidden_at`, a newer unread message reappears the hidden thread and keeps unread state server-backed.
+- App restart persistence result: source/schema reviewed plus v64 proof. Hidden state is persisted in `chat_thread_members.hidden_at`, not local-only state; app restart does not clear it. The v64 proof used relaunch/deep-link recovery without logout or data reset.
+- Search/Profile reopen result: Closed. `getOrCreateDirectThread()` and its RPC reuse the existing pair key, then clear only the caller's `hidden_at` through `unhide_chat_thread_for_me(text)`.
+- New message reappear result: Closed on v64 installed proof. R5 sent newer activity into the hidden thread and R3 saw the same thread reappear with the new preview.
+- Other participant copy result: Closed on v64 installed proof. R3 hiding did not remove R5's copy.
+- Message/call history result: Closed. The hide RPC updates only `chat_thread_members.hidden_at`; it does not delete shared `chat_threads`, `chat_messages`, `chat_call_events`, or `chat_call_invites`.
+- Attachment history result: source reviewed. Attachments remain linked to preserved `chat_messages`; hide/unhide does not delete storage objects or attachment metadata.
+- Call history result: source reviewed and v64 visually checked. Recent call rows remain preserved in the reopened thread; active-call hide is now blocked instead of silently hiding receiver-visible call state.
+- Block/restrict/account-status result: source/schema reviewed. `can_access_chat_thread`, `get_or_create_direct_chat_thread`, membership account-access triggers, and chat message abuse/account guards continue to enforce account restriction and block checks.
+- UI copy/action result: production-clean. The label remains `Delete from my inbox`, destructive action requires confirmation, cancel remains available, errors are friendly, and raw backend/RPC/provider errors are not shown.
+
+Backend live status: `supabase db push --dry-run` showed only `20260629140032_guard_active_chat_thread_hide.sql`, `supabase db push` applied it, and a follow-up dry-run reported the remote database is up to date.
+
 ## Regression Notes
 
 - Direct-thread messaging UX remains message-first: `MESSAGE THREAD`, `Chat stays primary`, composer, and compact recent-call rows were visible.

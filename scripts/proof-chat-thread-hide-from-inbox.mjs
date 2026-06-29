@@ -23,6 +23,7 @@ const forbidMatch = (label, content, pattern, reason) => {
 };
 
 const migration = read("supabase/migrations/20260629063526_chat_thread_hide_from_inbox.sql");
+const activeCallGuardMigration = read("supabase/migrations/20260629140032_guard_active_chat_thread_hide.sql");
 const types = read("supabase/database.types.ts");
 const chatLib = read("_lib/chat.ts");
 const inbox = read("app/chat/index.tsx");
@@ -45,6 +46,12 @@ const packageJson = read("package.json");
 ].forEach((needle) => requireText("migration", migration, needle));
 
 [
+  "active_communication_room_id",
+  "active_call_in_progress",
+  "refuses active-call threads",
+].forEach((needle) => requireText("active-call hide guard migration", activeCallGuardMigration, needle));
+
+[
   "hidden_at: string | null",
   "hidden_at?: string | null",
 ].forEach((needle) => requireText("database types", types, needle));
@@ -59,6 +66,8 @@ const packageJson = read("package.json");
   "unhide_chat_thread_for_me",
   "getOrCreateDirectThread",
   "await unhideChatThreadForMe",
+  "active_call_in_progress",
+  "Finish or leave the active call before removing this conversation from your inbox.",
 ].forEach((needle) => requireText("chat helper", chatLib, needle));
 
 [
@@ -66,6 +75,8 @@ const packageJson = read("package.json");
   "This removes the conversation from your inbox. It does not delete it for the other person.",
   "hideChatThreadFromInbox",
   "Couldn't remove this conversation right now. Please try again.",
+  "Call active in this thread",
+  "Finish or leave the active call before removing this conversation from your inbox.",
   "Long-press a thread for profile, call, and inbox actions.",
   "setThreads((current) => current.filter((item) => item.threadId !== thread.threadId))",
 ].forEach((needle) => requireText("chat inbox", inbox, needle));
@@ -110,6 +121,7 @@ const packageJson = read("package.json");
   ["chat helper", chatLib],
   ["chat inbox", inbox],
   ["migration", migration],
+  ["active-call hide guard migration", activeCallGuardMigration],
 ].forEach(([label, content]) => {
   forbidMatch(label, content, /delete\s+from\s+public\."?chat_threads/i, "hard-deleting chat threads");
   forbidMatch(label, content, /delete\s+from\s+public\."?chat_messages/i, "hard-deleting chat messages");
@@ -130,4 +142,4 @@ if (failures.length) {
 }
 
 console.log("Chat thread hide-from-inbox proof passed.");
-console.log("- per-user hidden_at state, inbox filtering, existing-thread reopen, UI confirmation, docs, and safety boundaries are present.");
+console.log("- per-user hidden_at state, active-call hide guard, inbox filtering, existing-thread reopen, UI confirmation, docs, and safety boundaries are present.");
