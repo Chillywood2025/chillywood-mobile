@@ -11,17 +11,20 @@ Current lane doc:
 - `docs/release/GOOGLE_SIGNED_V64_CHAT_THREAD_HIDE_PROOF.md`
 
 Google-signed v64 Chi’lly Chat delete/hide conversation proof:
-- Status: Partial.
+- Status: Closed.
 - EAS Build `c3fd4029-48b4-49ad-a1a4-7a33fbfbad84` / EAS Submit `cbcaae0e-650e-4c5d-a3c7-9b5ab819a8c1` delivered commit `5c21c3b4282fa45a2f62106deba68d944b6024e4` to Google Play internal testing as versionCode `64`, versionName `1.0.0`.
 - `R5CR120QCBF` installed from Google Play with package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `64`, and lastUpdateTime `2026-06-29 02:32:57`.
+- `R3CXA0DS5JV` was recovered, updated only through Google Play internal testing, and read back package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `64`, versionName `1.0.0`, and lastUpdateTime `2026-06-29 08:20:56`.
 - Actual-user R5 proof passed for long-press action sheet, Delete from my inbox, confirmation copy, per-user hide, preserved signed-in state, Search → Chi’lly Chat reopen/unhide of the same existing thread, preserved message history, composer, Voice Call, Video Call, and duplicate prevention.
+- R3/R5 completion proof passed: R3 hid the `user230455` direct thread only from its own inbox, R5 retained the same thread and message/call history, R5 sent a new proof message in that existing thread, and the hidden thread reappeared on R3 with the same thread id and new message preview.
 - Delete from my inbox is a per-user hide, not a hard delete.
 - The other participant’s copy is not deleted.
 - Message and call history are preserved.
 - Hidden direct threads must not create duplicate direct threads.
 - Profile/Search → Chi’lly Chat must reopen the existing direct thread.
+- New message reappear is Closed only if a hidden thread reappears after newer message activity.
 - Proof Normal / @user230456 is a legitimate separate proof account/thread and may be hidden from the tester inbox without renaming or merging.
-- `R3CXA0DS5JV` was not visible to ADB during this proof window, so other-participant copy proof and new-message reappear proof remain Pending/Partial.
+- Proof Normal / @user230456 was not mutated in the completion run.
 - Source fixed is not installed-app proof.
 - Google Play internal install is not enough without actual user flow proof.
 - `installerPackageName` must be `com.android.vending`.
