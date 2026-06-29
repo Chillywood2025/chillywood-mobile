@@ -4,6 +4,8 @@ Verdict: Partial.
 
 The source polish is present in commit `a38e5ac5587591fab2ed4a9308c8dd90d46005a0`, and Google Play internal versionCode `65` was built and submitted from that commit. `R5CR120QCBF` updated from Google Play internal testing and proved the Home Settings icon-only requirement on the installed app. The full installed UI closeout remains Partial because `R5CR120QCBF` became ADB unauthorized before Explore/Live/Saved and direct-thread captures were completed, and `R3CXA0DS5JV` was not visible to ADB during this proof window.
 
+Follow-up source note: `docs/release/HEADER_CONTROL_CONSISTENCY_CLEANUP.md` records the later source fix that makes Explore, Live, and Saved mirror Home's header layout by placing the icon-only Settings gear beside the tab label on the left and Profile alone on the right. That source follow-up still needs future installed proof.
+
 Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. `installerPackageName` must be `com.android.vending`. Sideloaded APK proof is not accepted.
 
 ## Build And Submit

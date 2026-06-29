@@ -10,6 +10,21 @@ Current lane doc:
 - `docs/release/PARTY_ROOM_LIVE_STAGE_ROUTE_SEMANTICS.md`
 - `docs/release/GOOGLE_SIGNED_V64_CHAT_THREAD_HIDE_PROOF.md`
 - `docs/release/GOOGLE_SIGNED_V65_HOME_SETTINGS_CHAT_UI_PROOF.md`
+- `docs/release/HEADER_CONTROL_CONSISTENCY_CLEANUP.md`
+
+Header control consistency cleanup:
+- Status: source-Closed.
+- Home is the canonical header-control reference.
+- Explore, Live, and Saved now use the shared `MainTabTopBar` with the Home layout: compact icon-only Settings gear on the left beside the tab label, accessibility label `Settings`, no visible Settings word, and compact Profile avatar/icon alone on the right.
+- Settings and Profile controls now share the Home visual system for shape, size, border/background treatment, padding, alignment, edge spacing, and safe-area placement.
+- The prior Explore-style top-right Settings/Profile cluster is removed.
+- `guard:navigation-terminology-policy` now protects the shared top-bar label group so future tabs cannot drift back to the wrong layout.
+- The large `MESSAGE THREAD` / `Chat stays primary` direct-thread card remains removed from source.
+- Direct thread remains message-first with composer, Voice Call, Video Call, history, and compact recent-call rows intact.
+- Source fixed is not installed-app proof.
+- No auth/RLS/chat/account-status permission weakening happened.
+- No provider/live-money mutation happened.
+- `liveMoneyEnabled` remains OFF.
 
 Home Settings + Direct Thread UI cleanup:
 - Status: Partial for Google-signed v65 installed proof.

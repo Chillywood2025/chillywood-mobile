@@ -129,6 +129,9 @@ assertIncludes(liveTab, 'surface="live"', "Live top Profile/Settings entry");
 assertIncludes(libraryTab, 'surface="library"', "Library top Profile/Settings entry");
 assertIncludes(mainTabTopBar, 'testID={`main-tab-${surface}-profile-entry`}', "shared top Profile entry");
 assertIncludes(mainTabTopBar, 'testID={`main-tab-${surface}-settings-action`}', "shared top Settings entry");
+assertIncludes(mainTabTopBar, "style={styles.labelGroup}", "shared top Settings aligns with tab label like Home");
+assertIncludes(mainTabTopBar, "<Text style={styles.kicker}>{label}</Text>", "shared top tab label stays with Settings icon");
+assertIncludes(mainTabTopBar, "flexShrink: 1", "shared top label group avoids header overlap");
 ["Top Picks", "Favorites", "Latest Public Uploads", "Platforms You Follow"].forEach((needle) => {
   assertNotIncludes(home, needle, "Home redundant bottom-tab section cleanup");
 });

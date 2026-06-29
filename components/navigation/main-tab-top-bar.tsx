@@ -73,8 +73,7 @@ export function MainTabTopBar({ surface, label, style }: MainTabTopBarProps) {
 
   return (
     <View testID={`main-tab-${surface}-top-bar`} style={[styles.row, style]}>
-      <Text style={styles.kicker}>{label}</Text>
-      <View style={styles.actions}>
+      <View style={styles.labelGroup}>
         <TouchableOpacity
           testID={`main-tab-${surface}-settings-action`}
           style={styles.settingsButton}
@@ -84,8 +83,11 @@ export function MainTabTopBar({ surface, label, style }: MainTabTopBarProps) {
           accessibilityRole="button"
           accessibilityLabel="Settings"
         >
-          <MaterialIcons name="settings" size={17} color="#F4F7FC" />
+          <MaterialIcons name="settings" size={18} color="#F4F7FC" />
         </TouchableOpacity>
+        <Text style={styles.kicker}>{label}</Text>
+      </View>
+      <View style={styles.actions}>
         <TouchableOpacity
           testID={`main-tab-${surface}-profile-entry`}
           style={[styles.avatarButton, !profile?.id && styles.avatarButtonDisabled]}
@@ -119,8 +121,14 @@ const styles = StyleSheet.create({
   kicker: {
     color: "#8D98AE",
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "800",
     letterSpacing: 0,
+  },
+  labelGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 1,
   },
   actions: {
     flexDirection: "row",
