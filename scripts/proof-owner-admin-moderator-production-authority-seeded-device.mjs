@@ -679,11 +679,11 @@ const moneyOff = {
     "liveMoneyEnabled: false",
   ]) ? pass("Runtime feature flags keep public purchase, creator-money, payouts, Stripe, and live money off.") : fail("Runtime feature money flags are not all off."),
   moneyDefaults: hasAll(sources.moneyFlags, [
-    'digital_sales_enabled: "off"',
-    'tips_enabled: "off"',
+    'digital_sales_enabled: "sandbox_only"',
+    'tips_enabled: "sandbox_only"',
     'payouts_enabled: "off"',
     'live_money_enabled: "off"',
-  ]) ? pass("Money feature defaults remain off.") : fail("Money feature defaults are not all off."),
+  ]) ? pass("Creator setup defaults are sandbox/not-payable while payout/live-money defaults remain off.") : fail("Money feature defaults are not aligned with setup-safe policy."),
   providerRefunds: docs.money.includes("Provider refunds remain manual/external")
     ? pass("Provider refunds remain manual/external.")
     : fail("Provider refund manual/external marker missing."),

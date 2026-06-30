@@ -194,18 +194,18 @@ const repoChecks = [
     detail: "Expected local product IDs appear in app/config/proof sources.",
   },
   {
-    id: "all_activation_switches_off",
+    id: "production_activation_off_setup_sandbox",
     ok: has("_lib/moneyFeatureFlags.ts", "live_money_enabled: \"off\"")
       && has("_lib/moneyFeatureFlags.ts", "payouts_enabled: \"off\"")
-      && has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"off\"")
-      && has("_lib/moneyFeatureFlags.ts", "tips_enabled: \"off\"")
-      && has("_lib/moneyFeatureFlags.ts", "watch_party_tickets_enabled: \"off\"")
-      && has("_lib/moneyFeatureFlags.ts", "paid_content_enabled: \"off\"")
+      && has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"sandbox_only\"")
+      && has("_lib/moneyFeatureFlags.ts", "tips_enabled: \"sandbox_only\"")
+      && has("_lib/moneyFeatureFlags.ts", "watch_party_tickets_enabled: \"sandbox_only\"")
+      && has("_lib/moneyFeatureFlags.ts", "paid_content_enabled: \"sandbox_only\"")
       && has("_lib/featureFlags.ts", "premiumPurchaseEnabled: false")
       && has("_lib/featureFlags.ts", "liveMoneyEnabled: false")
       && has("_lib/featureFlags.ts", "payoutsEnabled: false")
       && has("_lib/featureFlags.ts", "cashoutEnabled: false"),
-    detail: "Live money, payouts, cash-out, Premium purchase, and creator-money switches remain off.",
+    detail: "Creator setup switches are sandbox/not-payable while live money, payouts, cash-out, and Premium purchase remain off.",
   },
   {
     id: "provider_refunds_manual_external",
@@ -217,7 +217,7 @@ const repoChecks = [
     id: "provider_verification_doc_consistent",
     ok: has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "Seven-flow provider verification:")
       && has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "Provider verification used browser dashboard evidence")
-      && has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "All activation switches remain OFF")
+      && has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "Production activation switches remain OFF while setup switches are sandbox_only")
       && has("docs/SEVEN_FLOW_PROVIDER_VERIFICATION.md", "Production provider products are verified only where dashboard/API evidence exists"),
     detail: "Provider verification doc keeps readiness honest and activation off.",
   },
@@ -301,12 +301,12 @@ const switchOffStateReadback = {
   payouts: has("_lib/moneyFeatureFlags.ts", "payouts_enabled: \"off\"") && has("_lib/featureFlags.ts", "payoutsEnabled: false") ? "OFF" : "Blocked",
   cashout: has("_lib/featureFlags.ts", "cashoutEnabled: false") ? "OFF" : "Blocked",
   premiumPurchase: has("_lib/featureFlags.ts", "premiumPurchaseEnabled: false") ? "OFF" : "Blocked",
-  tips: has("_lib/moneyFeatureFlags.ts", "tips_enabled: \"off\"") ? "OFF" : "Blocked",
-  paidVideo: has("_lib/moneyFeatureFlags.ts", "paid_content_enabled: \"off\"") ? "OFF" : "Blocked",
-  watchPartyTicket: has("_lib/moneyFeatureFlags.ts", "watch_party_tickets_enabled: \"off\"") ? "OFF" : "Blocked",
-  channelSubscription: has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"off\"") ? "OFF" : "Blocked",
-  vip: has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"off\"") ? "OFF" : "Blocked",
-  eventPass: has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"off\"") ? "OFF" : "Blocked",
+  tips: has("_lib/moneyFeatureFlags.ts", "tips_enabled: \"sandbox_only\"") ? "SANDBOX_ONLY" : "Blocked",
+  paidVideo: has("_lib/moneyFeatureFlags.ts", "paid_content_enabled: \"sandbox_only\"") ? "SANDBOX_ONLY" : "Blocked",
+  watchPartyTicket: has("_lib/moneyFeatureFlags.ts", "watch_party_tickets_enabled: \"sandbox_only\"") ? "SANDBOX_ONLY" : "Blocked",
+  channelSubscription: has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"sandbox_only\"") ? "SANDBOX_ONLY" : "Blocked",
+  vip: has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"sandbox_only\"") ? "SANDBOX_ONLY" : "Blocked",
+  eventPass: has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"sandbox_only\"") ? "SANDBOX_ONLY" : "Blocked",
   providerRefunds: repoChecks.find((check) => check.id === "provider_refunds_manual_external")?.ok ? "manual/external" : "Blocked",
 };
 
@@ -423,9 +423,13 @@ const summary = {
   providerProductsVerifiedWithoutSwitchesOn: providerVerificationMatrix.some((row) => row.status === "Verified"),
   providerReadyFlows: providerVerificationMatrix.filter((row) => row.status === "Verified").map((row) => row.flow),
   providerBlockedFlows: providerVerificationMatrix.filter((row) => row.status !== "Verified").map((row) => row.flow),
-  allActivationSwitchesOff: Object.entries(switchOffStateReadback).every(([key, value]) => key === "providerRefunds" ? value === "manual/external" : value === "OFF"),
+  productionActivationOffSetupSandbox: Object.entries(switchOffStateReadback).every(([key, value]) => (
+    key === "providerRefunds" ? value === "manual/external"
+      : ["tips", "paidVideo", "watchPartyTicket", "channelSubscription", "vip", "eventPass"].includes(key) ? value === "SANDBOX_ONLY"
+        : value === "OFF"
+  )),
   premiumReadyForOwnerActivation: providerVerificationMatrix.find((row) => row.flow === "Premium")?.status === "Verified",
-  creatorMoneyFlowsStillOff: true,
+  creatorSetupFlowsSandboxOnly: true,
   payoutsStillOff: switchOffStateReadback.payouts === "OFF",
   refundsStillManualExternal: switchOffStateReadback.providerRefunds === "manual/external",
   repoChecks: repoChecks.map((check) => ({ id: check.id, status: pass(check.ok), detail: check.detail })),

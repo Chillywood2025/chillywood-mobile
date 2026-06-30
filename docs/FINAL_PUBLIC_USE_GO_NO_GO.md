@@ -68,6 +68,8 @@ Date: 2026-06-24
 
 Verdict: Conditional Go.
 
+June 30, 2026 creator monetization setup and cashout readiness activation: creator monetization setup is usable in sandbox/not-payable mode. Creator setup does not mean live money is active. Creators can access cashout readiness, but real cashout is not live. Cashout readiness does not execute payouts. No real payout, transfer, withdrawal, or payable balance is created. `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF for production money movement. Saved creator configs are sandbox/not-payable. Production sales require owner/provider activation. Production cashout requires Stripe/live provider approval, tax/KYC readiness, fraud/support/legal review, and owner approval. Premium remains the app-wide subscription flow. Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are creator monetization flows. Do not show proved/readiness boxes instead of usable setup controls. No auth/RLS/money permission weakening happened. No provider/live-money mutation happened.
+
 June 29, 2026 Party Room / Live Stage route semantics verification: Party Room and Live Stage are separate product routes. Party Room normal watch-party flow must not route to Live Stage. Player → Watch-Party Live → Party Waiting Room → Party Room remains intact. Home → Live Watch-Party → Live Waiting Room → Live Room → Live Stage remains intact. Live Stage remains /watch-party/live-stage/[partyId]. Party Room remains /watch-party/[partyId]. Legacy /communication/* remains compatibility-only. The ambiguous Party Room Go Live handoff introduced during validation cleanup was removed. No auth/RLS/chat/account-status permission weakening happened. No provider/live-money mutation happened. liveMoneyEnabled remains OFF.
 
 June 29, 2026 validation blocker cleanup: brand-spelling-policy is now clean. route-contracts guard is now clean. supabase db push --dry-run is now clean. Root causes were generated legal-site brand anchors with `chi-llywood`, proof-script redaction regex literals with a contiguous lowercase brand token, stale Live Stage route guard expectations, stale paid Watch-Party ticket callback scope, and Supabase migration drift. Local direct-chat migration filenames were aligned to remote-applied versions, six older local hardening migrations were applied after `supabase db push --dry-run --include-all`, and ordinary `supabase db push --dry-run` reports the remote database is up to date. No database reset, data drop, migration squash, production Play submission, provider/live-money mutation, Premium change, RLS weakening, auth weakening, chat/account-status permission weakening, logout, uninstall, reinstall, or clear-data happened. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. No service-role chat/social proof was counted. liveMoneyEnabled remains OFF.
@@ -162,15 +164,15 @@ Seven-flow money classification:
 - Seven-flow production switchboard: Partial.
 - Seven-flow provider verification: Partial.
 - Provider verification used browser dashboard evidence.
-- All activation switches remain OFF.
+- Production activation switches remain OFF while setup switches are sandbox_only.
 - Premium-first launch candidate: Pending owner activation/provider final check.
 - Premium-first activation proof: Partial.
 - Premium monthly: Verified at $9.99/month.
 - Premium annual: Blocked at $99.99/year.
 - Premium annual: Provider-blocked pending Google Play support/base-plan resolution.
 - Premium public activation remains OFF.
-- Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval.
-- Creator-money flows remain OFF by default.
+- Creator-money setup flows: Usable in sandbox/not-payable mode / production activation requires owner/provider approval.
+- Creator-money setup flows are sandbox/not-payable by default.
 - Real-money activation: Off by default unless owner explicitly enables each flow.
 - Creator payouts: Off unless separate payout lane enables them.
 - Creator payouts remain OFF.

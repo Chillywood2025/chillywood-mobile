@@ -167,14 +167,14 @@ const repoChecks = [
     detail: "Every flow switch name exists in the switchboard catalog.",
   },
   {
-    id: "creator_defaults_off",
-    ok: has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"off\"")
-      && has("_lib/moneyFeatureFlags.ts", "tips_enabled: \"off\"")
-      && has("_lib/moneyFeatureFlags.ts", "watch_party_tickets_enabled: \"off\"")
-      && has("_lib/moneyFeatureFlags.ts", "paid_content_enabled: \"off\"")
+    id: "creator_setup_defaults_sandbox",
+    ok: has("_lib/moneyFeatureFlags.ts", "digital_sales_enabled: \"sandbox_only\"")
+      && has("_lib/moneyFeatureFlags.ts", "tips_enabled: \"sandbox_only\"")
+      && has("_lib/moneyFeatureFlags.ts", "watch_party_tickets_enabled: \"sandbox_only\"")
+      && has("_lib/moneyFeatureFlags.ts", "paid_content_enabled: \"sandbox_only\"")
       && has("_lib/featureFlags.ts", "paidContentCheckoutEnabled: false")
       && has("_lib/featureFlags.ts", "tipsEnabled: false"),
-    detail: "Creator-money switches default off.",
+    detail: "Creator setup switches default to sandbox/not-payable mode while runtime purchase execution remains off.",
   },
   {
     id: "live_money_and_payouts_off",
@@ -205,10 +205,10 @@ const repoChecks = [
   {
     id: "production_activation_not_claimed",
     ok: has("docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md", "Provider verification used browser dashboard evidence")
-      && has("docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md", "All activation switches remain OFF")
+      && has("docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md", "Production activation switches remain OFF while setup switches are sandbox_only")
       && has("docs/SEVEN_FLOW_PRODUCTION_PREP_CHECKLIST.md", "owner decision")
       && has("docs/FINAL_PUBLIC_USE_GO_NO_GO.md", "Premium-first launch candidate: Pending owner activation/provider final check")
-      && has("docs/FINAL_PUBLIC_USE_GO_NO_GO.md", "Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval"),
+      && has("docs/FINAL_PUBLIC_USE_GO_NO_GO.md", "Creator-money setup flows: Usable in sandbox/not-payable mode / production activation requires owner/provider approval"),
     detail: "Docs keep production activation blocked pending owner/provider approval.",
   },
   {
@@ -351,7 +351,7 @@ const proofOutput = {
   liveMoneyActivated: false,
   payoutsActivated: false,
   payableBalancesCreated: false,
-  creatorMoneyDefaultsOff: pass(repoChecks.find((check) => check.id === "creator_defaults_off")?.ok),
+  creatorSetupDefaultsSandbox: pass(repoChecks.find((check) => check.id === "creator_setup_defaults_sandbox")?.ok),
   emergencyStopProvedByDefaults: pass(repoChecks.find((check) => check.id === "live_money_and_payouts_off")?.ok),
   providerProductionReadiness: "Configured dashboard products verified; activation remains pending owner decision.",
   ownerActivationRequired: true,
@@ -443,7 +443,7 @@ const summary = {
   flowCount: flows.length,
   creatorFlowCount: creatorFlows.length,
   allFlowsPreparedBehindSwitches: pass(repoChecks.find((check) => check.id === "switchboard_catalog_present")?.ok),
-  creatorMoneyFlowsStillOff: pass(repoChecks.find((check) => check.id === "creator_defaults_off")?.ok),
+  creatorSetupFlowsSandbox: pass(repoChecks.find((check) => check.id === "creator_setup_defaults_sandbox")?.ok),
   emergencyStopCanBlockPurchases: pass(repoChecks.find((check) => check.id === "live_money_and_payouts_off")?.ok),
   productionProviderMappings: "Configured dashboard products verified; activation remains pending owner decision.",
   ownerActivationDecisionsRequired: true,

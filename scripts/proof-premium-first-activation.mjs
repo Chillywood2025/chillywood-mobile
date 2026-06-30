@@ -97,15 +97,15 @@ const checks = [
     detail: "Premium purchase shell remains closed by default.",
   },
   {
-    id: "creator_money_off_by_default",
+    id: "creator_setup_sandbox_money_off",
     ok: runtimeFlagsText.includes("tipsEnabled: false")
       && runtimeFlagsText.includes("paidContentCheckoutEnabled: false")
       && runtimeFlagsText.includes("liveMoneyEnabled: false")
-      && moneyFlagsText.includes('tips_enabled: "off"')
-      && moneyFlagsText.includes('paid_content_enabled: "off"')
-      && moneyFlagsText.includes('watch_party_tickets_enabled: "off"')
-      && moneyFlagsText.includes('digital_sales_enabled: "off"'),
-    detail: "Creator-money defaults remain off.",
+      && moneyFlagsText.includes('tips_enabled: "sandbox_only"')
+      && moneyFlagsText.includes('paid_content_enabled: "sandbox_only"')
+      && moneyFlagsText.includes('watch_party_tickets_enabled: "sandbox_only"')
+      && moneyFlagsText.includes('digital_sales_enabled: "sandbox_only"'),
+    detail: "Creator setup defaults are sandbox/not-payable while runtime purchase execution remains off.",
   },
   {
     id: "live_money_payouts_stripe_off",
@@ -400,7 +400,7 @@ const summary = {
     dryRun: true,
     noRealCustomerPurchase: true,
     premiumPublicActivationOff: true,
-    creatorMoneySwitchesOff: true,
+    creatorSetupSandboxMoneyOff: true,
     liveMoneyOff: true,
     payoutsOff: true,
     stripeOff: true,

@@ -44,6 +44,7 @@ import {
   createCreatorPayoutOnboardingLink,
   createEmptyCreatorPayoutDashboardReadModel,
   createOrReuseCreatorPayoutProviderAccount,
+  previewCreatorPayoutPreproductionWorkflow,
   readCreatorPayoutDashboardSummary,
   resolveCreatorPayoutReadiness,
   syncCreatorPayoutProviderStatus,
@@ -1904,10 +1905,10 @@ export function ChannelStudioScreen() {
       setCreatorTipSettings(nextSettings);
       setTipSettingsNotice(
         nextSettings.status === "active"
-          ? "Tips are active. Fans can tip you from your channel."
+          ? "Tips setup is saved in sandbox/not-payable mode. Production tips are not live."
           : tipsEnabled
-            ? "Tips are saved, but payout provider setup still needs attention."
-            : "Tips are paused. Fans cannot tip you right now.",
+            ? "Tips setup is saved, but production tips still need provider and owner approval."
+            : "Tips setup is paused. Production tips are not live.",
       );
       await refreshCreatorTips();
     } catch {
@@ -2309,6 +2310,29 @@ export function ChannelStudioScreen() {
       setPayoutSetupBusy(null);
     }
   }, [payoutSetupBusy, refreshCreatorPayouts, refreshCreatorTips, user?.id]);
+
+  const handleReviewCashoutReadiness = useCallback(() => {
+    const runtimeFlags = creatorMonetizationSummary?.settings ?? DEFAULT_CREATOR_MONETIZATION_RUNTIME_FLAGS;
+    const preview = previewCreatorPayoutPreproductionWorkflow(
+      creatorPayoutSummary,
+      { amountCents: 10000, payoutType: "scheduled" },
+      runtimeFlags,
+    );
+    const blockers = preview.blockedReasons.slice(0, 4).join(" ");
+    const nextSteps = preview.approvalSteps.slice(0, 2).join(" ");
+    setPayoutSetupNotice(
+      `Cashout readiness reviewed. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
+    );
+    setExpandedMonetizationSections((current) => new Set([...current, "payouts", "providers", "tax_legal"]));
+    trackEvent("payout_readiness_reviewed", {
+      creator_id: user?.id ?? null,
+      live_money_enabled: runtimeFlags.liveMoneyEnabled,
+      payout_enabled: runtimeFlags.payoutsEnabled,
+      production_execution_allowed: preview.productionExecutionAllowed,
+      route_name: "channel-studio",
+      source_surface: "money_center",
+    });
+  }, [creatorMonetizationSummary?.settings, creatorPayoutSummary, user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -7485,11 +7509,14 @@ export function ChannelStudioScreen() {
         ? "default"
         : status === "Blocked" ? "warning" : "muted"
     );
+    const creatorSetupModeActive = isMoneyFeatureSandboxOrOn(moneyFlag("creator_monetization_enabled").state)
+      && liveMoneyFeatureFlag.state !== "on";
     const monetizationActive = moneyCenterLiveActive;
     const moneyCenterStatus = moneyCenterFeatureFlag.state === "locked" ? "Blocked"
       : moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "maintenance" ? "Disabled"
         : monetizationActive ? "Active"
-          : "Not active";
+          : creatorSetupModeActive ? "Setup mode"
+            : "Not active";
     const topStatus = moneyCenterStatus;
     const tipsFlag = moneyFlag("tips_enabled");
     const watchPartyTicketsFlag = moneyFlag("watch_party_tickets_enabled");
@@ -7512,6 +7539,8 @@ export function ChannelStudioScreen() {
         ? "Sandbox ready"
         : "Setup needed";
     const canStartStripeSetup = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state) && payoutsFlag.state === "on";
+    const canReviewCashoutReadiness = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)
+      || moneyFlag("creator_balance_visible").state === "on";
     const paidTipTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "paid");
     const tipGrossCents = paidTipTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const tipPendingTransactions = creatorTipTransactions.filter((transaction) => transaction.status === "pending" || transaction.status === "checkout_started");
@@ -7528,7 +7557,8 @@ export function ChannelStudioScreen() {
     const tipFeatureStatus: MonetizationFeatureStatus = (() => {
       if (tipsFlag.state === "locked") return "Blocked";
       if (!creatorTipSettings) return "Not set up";
-      if (creatorTipSettings.status === "active") return "Active";
+      if (creatorTipSettings.tipsEnabled) return "Setup mode";
+      if (creatorTipSettings.status === "active") return "Setup mode";
       if (creatorTipSettings.status === "paused") return "Paused";
       if (creatorTipSettings.status === "blocked") return "Blocked";
       return "Needs attention";
@@ -7539,15 +7569,15 @@ export function ChannelStudioScreen() {
         label: "Tips",
         value: tipFeatureStatus,
         body: creatorTipSettings?.tipsEnabled
-          ? "Tips are saved as pure contributions. They do not unlock content, badges, room access, VIP, or perks."
-          : "Turn on Tips after payout provider setup is ready.",
-        tone: tipFeatureStatus === "Active" ? "default" : "unavailable",
+          ? "Tips setup is saved in sandbox/not-payable mode. They do not unlock content, badges, room access, VIP, or perks."
+          : "Set up Tips in sandbox/not-payable mode. Production tips still require provider and owner approval.",
+        tone: creatorTipSettings?.tipsEnabled ? "default" : "unavailable",
       },
       {
-        label: "Provider",
-        value: tipProviderReady ? "Ready" : "Setup needed",
-        body: "Connect payouts before fans can send tips. Test mode stays separate from live money.",
-        tone: tipProviderReady ? "default" : "unavailable",
+        label: "Payable state",
+        value: "Not payable",
+        body: "Payout readiness can be reviewed, but no tip creates a payable balance while live money and payouts are off.",
+        tone: "unavailable",
       },
       {
         label: "Tip total",
@@ -7565,9 +7595,9 @@ export function ChannelStudioScreen() {
     const payoutCards: readonly SummaryMetricCard[] = [
       {
         label: "Payout setup",
-        value: payoutsStatus,
-        body: payoutsFlag.state === "off" ? "Payouts are unavailable." : getCreatorFacingPayoutSetupBody(creatorPayoutSummary),
-        tone: sectionTone(payoutsStatus) === "default" && creatorPayoutSummary.providerReady ? "default" : "unavailable",
+        value: canReviewCashoutReadiness ? "Readiness" : payoutsStatus,
+        body: "Creators can review cashout readiness in setup mode. Production payouts remain off.",
+        tone: canReviewCashoutReadiness ? "default" : "unavailable",
       },
       {
         label: "Stripe setup",
@@ -7584,18 +7614,18 @@ export function ChannelStudioScreen() {
       {
         label: "Payout release",
         value: payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? getCreatorReadinessLabel(payoutReleaseReadiness, "Setup needed") : "Disabled",
-        body: `${payoutsFlag.state === "off" || liveMoneyFeatureFlag.state !== "on" ? "Payouts are unavailable." : summarizeProviderReadiness(payoutReleaseReadiness, "No withdrawal, transfer, cash-out, or payout release action is available.")} No withdrawal, transfer, cash-out, or payout release action is available.`,
+        body: `${payoutsFlag.state === "off" || liveMoneyFeatureFlag.state !== "on" ? "Payouts are unavailable for production movement." : summarizeProviderReadiness(payoutReleaseReadiness, "No withdrawal, transfer, cash-out, or payout release action is available.")} No withdrawal, transfer, cash-out, or payout release action is available.`,
         tone: "unavailable",
       },
       {
         label: "Scheduled payout",
-        value: creatorPayoutReadiness.canRequestScheduledPayout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "Ready for review" : "Setup needed",
-        body: `Scheduled payout fee is ${formatMonetizationCurrency(creatorPayoutReadiness.scheduledPayoutFeeCents, "usd")}. Requests stay locked until all checks are ready.`,
+        value: creatorPayoutReadiness.canRequestScheduledPayout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "Ready for review" : "Not live",
+        body: `Scheduled payout fee is ${formatMonetizationCurrency(creatorPayoutReadiness.scheduledPayoutFeeCents, "usd")} when a future payout rollout is approved. Requests stay locked until all checks are ready.`,
         tone: creatorPayoutReadiness.canRequestScheduledPayout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "default" : "unavailable",
       },
       {
         label: "Instant cash-out",
-        value: creatorPayoutReadiness.canRequestInstantCashout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "Ready for review" : "Setup needed",
+        value: creatorPayoutReadiness.canRequestInstantCashout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "Ready for review" : "Not live",
         body: `Optional instant cash-out is ${creatorPayoutReadiness.instantCashoutFeeBps / 100}% with no default cap when a future payout rollout is approved.`,
         tone: creatorPayoutReadiness.canRequestInstantCashout && payoutsFlag.state === "on" && liveMoneyFeatureFlag.state === "on" ? "default" : "unavailable",
       },
@@ -7647,7 +7677,7 @@ export function ChannelStudioScreen() {
       },
       {
         label: "Tips rail",
-        value: providerStatusLabel(tipsProviderReadiness, tipFeatureStatus === "Active" ? "Test ready" : "Setup needed"),
+        value: providerStatusLabel(tipsProviderReadiness, tipFeatureStatus === "Setup mode" ? "Setup mode" : "Setup needed"),
         body: summarizeProviderReadiness(tipsProviderReadiness, "Android tester tips use Google Play / RevenueCat sandbox. Stripe is reserved for physical merch and payout readiness."),
         tone: getProviderReadinessTone(tipsProviderReadiness),
       },
@@ -7735,14 +7765,14 @@ export function ChannelStudioScreen() {
     const providerEvents = creatorMoneyAuditEvents.filter((event) => event.category === "provider_readiness" || event.category === "webhooks");
     const featureStatusByKey: Record<MonetizationFeatureKey, MonetizationFeatureStatus> = {
       tips: tipFeatureStatus,
-      paid_videos: paidContentFlag.state === "locked" ? "Blocked" : creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Active" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : paidContentFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
-      paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : watchPartyTicketsFlag.state === "sandbox_only" ? "Needs attention" : "Not set up",
-      channel_subscriptions: digitalSalesStatus === "Blocked" ? "Blocked" : creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
-      vip_passes: digitalSalesStatus === "Blocked" ? "Blocked" : creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
-      paid_events: digitalSalesStatus === "Blocked" ? "Blocked" : creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Active" : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up",
+      paid_videos: paidContentFlag.state === "locked" ? "Blocked" : creatorPaidVideoOffers.some((offer) => offer.isPaid && offer.status === "sandbox") ? "Setup mode" : paidContentFlag.state === "on" && monetizationActive ? "Active" : paidContentFlag.state === "maintenance" ? "Paused" : "Not set up",
+      paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? "Blocked" : creatorPaidWatchPartyOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Setup mode" : watchPartyTicketsFlag.state === "on" && monetizationActive ? "Active" : watchPartyTicketsFlag.state === "maintenance" ? "Paused" : "Not set up",
+      channel_subscriptions: digitalSalesStatus === "Blocked" ? "Blocked" : creatorChannelSubscriptionOffers.some((offer) => offer.status === "sandbox") ? "Setup mode" : digitalSalesStatus === "Disabled" ? "Not set up" : "Not set up",
+      vip_passes: digitalSalesStatus === "Blocked" ? "Blocked" : creatorVipPassOffers.some((offer) => offer.status === "sandbox") ? "Setup mode" : digitalSalesStatus === "Disabled" ? "Not set up" : "Not set up",
+      paid_events: digitalSalesStatus === "Blocked" ? "Blocked" : creatorPaidEventOffers.some((offer) => offer.status === "sandbox" || offer.status === "sold_out") ? "Setup mode" : digitalSalesStatus === "Disabled" ? "Not set up" : "Not set up",
     };
     const featureBlockedReasonByKey: Partial<Record<MonetizationFeatureKey, string>> = {
-      tips: tipsFlag.state === "locked" ? tipsFlag.displaySummary : creatorTipSettings?.status === "setup_incomplete" ? "Connect payouts before fans can send tips." : undefined,
+      tips: tipsFlag.state === "locked" ? tipsFlag.displaySummary : undefined,
       paid_videos: paidContentFlag.state === "locked" ? paidContentFlag.displaySummary : undefined,
       paid_watch_parties: watchPartyTicketsFlag.state === "locked" ? watchPartyTicketsFlag.displaySummary : undefined,
       channel_subscriptions: digitalSalesStatus === "Blocked" ? "Payments are unavailable right now." : undefined,
@@ -7750,7 +7780,7 @@ export function ChannelStudioScreen() {
       paid_events: digitalSalesStatus === "Blocked" ? "Payments are unavailable right now." : undefined,
     };
     const featureActionForStatus = (status: MonetizationFeatureStatus): MonetizationFeatureAction => {
-      if (status === "Active") return "Manage";
+      if (status === "Active" || status === "Setup mode") return "Manage";
       if (status === "Paused") return "Resume";
       if (status === "Blocked" || status === "Needs attention") return "Fix issue";
       return "Set up";
@@ -7806,13 +7836,10 @@ export function ChannelStudioScreen() {
       }
 
       if (feature.key === "tips") {
-        const needsPayoutSetup = !tipProviderReady;
         setMoneyManageFocus(
           "tips",
-          needsPayoutSetup ? ["ways_to_earn", "payouts"] : ["ways_to_earn"],
-          needsPayoutSetup
-            ? "Tips need payout setup. Review Connect payouts and Enable Tips below."
-            : "Tips setup is focused below. Use Enable Tips, Pause Tips, or Refresh status.",
+          ["ways_to_earn"],
+          "Tips setup is focused below. Use Enable Tips or Pause Tips. Cashout readiness stays separate and not payable.",
         );
         return;
       }
@@ -8146,35 +8173,20 @@ export function ChannelStudioScreen() {
                     <Text style={styles.eventSecondaryButtonText}>Pause Tips</Text>
                   </TouchableOpacity>
                 )}
-                {!tipProviderReady ? (
-                  <TouchableOpacity
-                    style={[styles.eventSecondaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
-                    activeOpacity={0.88}
-                    disabled={payoutSetupBusy !== null}
-                    onPress={handleStartPayoutProviderSetup}
-                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-                    accessibilityRole="button"
-                    accessibilityLabel="Connect payouts"
-                    testID="money-manager-tips-connect-payouts-button"
-                  >
-                    <Text style={styles.eventSecondaryButtonText}>Connect payouts</Text>
-                  </TouchableOpacity>
-                ) : null}
                 <TouchableOpacity
-                  style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
+                  style={styles.eventSecondaryButton}
                   activeOpacity={0.88}
-                  disabled={payoutSetupBusy !== null}
-                  onPress={handleRefreshPayoutProviderStatus}
+                  onPress={handleReviewCashoutReadiness}
                   hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
                   accessibilityRole="button"
-                  accessibilityLabel="Refresh payout status"
-                  testID="money-manager-tips-refresh-payouts-button"
+                  accessibilityLabel="Review cashout readiness"
+                  testID="money-manager-tips-review-cashout-button"
                 >
-                  <Text style={styles.eventSecondaryButtonText}>Refresh payout status</Text>
+                  <Text style={styles.eventSecondaryButtonText}>Review cashout readiness</Text>
                 </TouchableOpacity>
               </View>
               {!tipProviderReady ? (
-                <Text style={styles.noticeText}>Connect payouts before fans can send tips. Tips remain contribution-only and unlock nothing.</Text>
+                <Text style={styles.noticeText}>Cashout readiness stays separate from Tips setup. Tips remain contribution-only, not payable yet, and unlock nothing.</Text>
               ) : null}
               {tipSettingsNotice ? <Text style={styles.noticeText}>{tipSettingsNotice}</Text> : null}
             </>
@@ -8435,7 +8447,7 @@ export function ChannelStudioScreen() {
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>{managerTitleByTarget[activeMoneyManageTarget]}</Text>
               <Text style={styles.panelSubtitle}>
-                {moneyManageNotice ?? "Manage this creator monetization flow without changing provider or payout behavior."}
+                {moneyManageNotice ?? "Manage this creator setup flow in sandbox/not-payable mode without changing provider or payout behavior."}
               </Text>
             </View>
             <MoneyScopeInfoButton scope={managerScopeByTarget[activeMoneyManageTarget]} compact />
@@ -8445,7 +8457,7 @@ export function ChannelStudioScreen() {
       );
     };
     const offerRows: readonly SummaryMetricCard[] = [
-      { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Sales and revenue appear only after verified provider-backed rows exist.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
+      { label: "Paid video unlocks", value: creatorPaidVideoOffers.length ? `${creatorPaidVideoOffers.length} configured` : paidContentStatus, body: paidVideoPaidTransactions.length ? `${paidVideoPaidTransactions.length} verified sandbox unlock${paidVideoPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidVideoGrossCents, "usd")}.` : "Offer type: paid_video. Setup mode uses approved sandbox tiers and valid source ids only.", tone: creatorPaidVideoOffers.length ? "default" : sectionTone(paidContentStatus) === "default" ? "default" : "unavailable" },
       { label: "Paid Watch-Party Seat Passes", value: creatorPaidWatchPartyOffers.length ? `${creatorPaidWatchPartyOffers.length} configured` : watchPartyTicketsStatus, body: paidWatchPartyPaidTransactions.length ? `${paidWatchPartyPaidTransactions.length} verified sandbox Seat Pass purchase${paidWatchPartyPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(paidWatchPartyGrossCents, "usd")}. Purchases happen before Party Waiting Room and route to Party Room.` : "Offer type: paid_watch_party. Purchases must happen before Party Waiting Room and route to Party Room.", tone: creatorPaidWatchPartyOffers.length ? "default" : "unavailable" },
       { label: "Channel subscriptions", value: creatorChannelSubscriptionOffers.length ? `${creatorChannelSubscriptionOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: channelSubscriptionPaidTransactions.length ? `${channelSubscriptionPaidTransactions.length} verified sandbox subscription transaction${channelSubscriptionPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(channelSubscriptionGrossCents, "usd")}. Channel subscriptions unlock only this creator's subscriber area.` : "Offer type: channel_subscription. Separate from Chi'llywood Premium, VIP, paid videos, Watch-Party Seat Passes, and paid events.", tone: creatorChannelSubscriptionOffers.length ? "default" : "unavailable" },
       { label: "VIP passes", value: creatorVipPassOffers.length ? `${creatorVipPassOffers.length} configured` : digitalSalesStatus === "Sandbox ready" ? "Needs attention" : "Not set up", body: vipPaidTransactions.length ? `${vipPaidTransactions.length} verified sandbox VIP purchase${vipPaidTransactions.length === 1 ? "" : "s"} totaling ${formatMonetizationCurrency(vipGrossCents, "usd")}. VIP unlocks only this creator channel VIP area.` : "Offer type: vip_pass. VIP stays separate from Chi'llywood Premium, paid videos, Watch-Party Seat Passes, paid events, channel subscriptions, and Tips.", tone: creatorVipPassOffers.length ? "default" : "unavailable" },
@@ -8692,17 +8704,17 @@ export function ChannelStudioScreen() {
           <View style={styles.panelHeader}>
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>Money Center</Text>
-              <Text style={styles.panelSubtitle}>Creator dashboard for earnings readiness, offers, transactions, and payouts.</Text>
+              <Text style={styles.panelSubtitle}>Creator dashboard for setup mode, cashout readiness, offers, transactions, and payouts.</Text>
             </View>
             {renderStudioStatusPill(`Sandbox ${sandboxSetupStatus}`, sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially Ready" ? "warning" : "muted")}
           </View>
           <Text style={styles.permissionCopy}>
-            Test mode: no real charges, no creator earnings, no withdrawals.
+            Setup mode: sandbox/test, not payable yet, no real payouts, no cashout, no withdrawals.
           </Text>
           <View style={styles.summaryGrid}>
             {[
               { label: "Available balance", value: "Not payable" },
-              { label: "Ways to Earn", value: `${monetizationFeatureCards.filter((card) => card.status === "Active").length} active` },
+              { label: "Ways to Earn", value: `${monetizationFeatureCards.filter((card) => card.status === "Setup mode" || card.status === "Active").length} setup` },
               { label: "Live Money", value: "Off" },
               { label: "Payouts", value: "Off" },
             ].map((item) => (
@@ -8742,11 +8754,17 @@ export function ChannelStudioScreen() {
           {renderMonetizationAccordion({
             id: "ways_to_earn",
             title: "Ways to Earn",
-            summary: "The six creator monetization flows in one setup view.",
-            status: monetizationActive ? "Active" : "Needs attention",
-            statusTone: monetizationActive ? "default" : "muted",
+            summary: "The six creator monetization setup flows in one actionable view.",
+            status: monetizationActive ? "Active" : creatorSetupModeActive ? "Setup mode" : "Needs attention",
+            statusTone: monetizationActive || creatorSetupModeActive ? "default" : "muted",
             children: (
               <>
+                <View style={styles.sandboxSafetyBanner}>
+                  <Text style={styles.sandboxSafetyTitle}>Creator setup mode</Text>
+                  <Text style={styles.sandboxSafetyBody}>
+                    Creator monetization setup is usable in sandbox/not-payable mode. Production sales require owner/provider activation.
+                  </Text>
+                </View>
                 <View style={styles.eventEmptyCard}>
                   <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
                   <Text style={styles.eventEmptyBody}>
@@ -8757,6 +8775,39 @@ export function ChannelStudioScreen() {
                 <View style={styles.summaryGrid}>
                   {monetizationFeatureCards.map(renderFeatureCard)}
                 </View>
+                <View style={styles.eventActionRow}>
+                  <TouchableOpacity
+                    style={[styles.eventPrimaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
+                    activeOpacity={0.88}
+                    disabled={sandboxSetupBusy}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    onPress={handleSetupSandboxTesterExperience}
+                    testID="money-center-creator-setup-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Set up creator monetization"
+                  >
+                    {sandboxSetupBusy ? (
+                      <View style={styles.eventPrimaryButtonBusyRow}>
+                        <ActivityIndicator color="#fff" />
+                        <Text style={styles.eventPrimaryButtonText}>Setting up</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.eventPrimaryButtonText}>Set up creator monetization</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.eventSecondaryButton}
+                    activeOpacity={0.88}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    onPress={handleReviewCashoutReadiness}
+                    testID="money-center-cashout-readiness-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Review cashout readiness"
+                  >
+                    <Text style={styles.eventSecondaryButtonText}>Review cashout readiness</Text>
+                  </TouchableOpacity>
+                </View>
+                {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
               </>
             ),
           })}
@@ -9004,13 +9055,33 @@ export function ChannelStudioScreen() {
 
           {renderMonetizationAccordion({
             id: "payouts",
-            title: "Payouts",
-            summary: "Setup status, KYC/tax readiness, and unavailable payout actions.",
-            status: payoutsStatus,
-            statusTone: sectionTone(payoutsStatus),
+            title: "Cashout / Payout readiness",
+            summary: "Cashout readiness, KYC/tax status, and unavailable payout actions.",
+            status: canReviewCashoutReadiness ? "Readiness" : payoutsStatus,
+            statusTone: canReviewCashoutReadiness ? "default" : sectionTone(payoutsStatus),
             children: (
               <>
                 {renderSummaryMetricCards(payoutCards)}
+                <View style={styles.eventEmptyCard}>
+                  <Text style={styles.eventEmptyTitle}>Cashout not live yet.</Text>
+                  <Text style={styles.eventEmptyBody}>
+                    Creators can review payout setup and blockers here. No real payout will be sent, no payable balance is created, and cashout requires approval before live money movement.
+                  </Text>
+                  <MoneyScopeInfoButton scope="payout_readiness" label="What does payout setup mean?" />
+                </View>
+                <View style={styles.eventActionRow}>
+                  <TouchableOpacity
+                    style={styles.eventPrimaryButton}
+                    activeOpacity={0.88}
+                    onPress={handleReviewCashoutReadiness}
+                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel="Review cashout readiness"
+                    testID="money-payout-review-readiness-button"
+                  >
+                    <Text style={styles.eventPrimaryButtonText}>Review cashout readiness</Text>
+                  </TouchableOpacity>
+                </View>
                 {canStartStripeSetup && (creatorPayoutSummary.setupActionLabel || creatorPayoutSummary.canRefreshProviderStatus) ? (
                   <View style={styles.eventActionRow}>
                     {creatorPayoutSummary.setupActionLabel ? (
@@ -9047,11 +9118,7 @@ export function ChannelStudioScreen() {
                   </View>
                 ) : null}
                 {payoutSetupNotice ? <Text style={styles.noticeText}>{payoutSetupNotice}</Text> : null}
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Payouts are locked.</Text>
-                  <Text style={styles.eventEmptyBody}>Stripe Connect is for creator payouts only. It is not used to charge Android users for digital access.</Text>
-                  <MoneyScopeInfoButton scope="payout_readiness" label="What does payout setup mean?" />
-                </View>
+                <Text style={styles.noticeText}>Payouts and cashout remain OFF for production money movement.</Text>
                 {renderCreatorMoneyEventRows(
                   payoutEvents,
                   "No payout activity yet",
@@ -9103,8 +9170,8 @@ export function ChannelStudioScreen() {
 
           {renderMonetizationAccordion({
             id: "testing_proof",
-            title: "Testing & Proof",
-            summary: "Sandbox tester setup, checklist, and proof-only status for internal QA.",
+            title: "Sandbox QA",
+            summary: "Advanced tester setup, checklist, and proof-only status for internal QA.",
             status: sandboxSetupStatus,
             statusTone: sandboxSetupStatus === "Ready" ? "default" : sandboxSetupStatus === "Partially Ready" ? "warning" : "muted",
             children: (

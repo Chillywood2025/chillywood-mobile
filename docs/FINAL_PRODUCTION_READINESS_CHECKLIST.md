@@ -1,5 +1,13 @@
 # Final Production Readiness Checklist
 
+## Creator Monetization Setup And Cashout Readiness Activation
+
+Source/backend status: Closed for setup/readiness mode. Installed-app status: Pending if Google Play internal proof is requested for this specific UI lane.
+
+Creator monetization setup is usable in sandbox/not-payable mode. Creator setup does not mean live money is active. Creators can access cashout readiness, but real cashout is not live. Cashout readiness does not execute payouts. No real payout, transfer, withdrawal, or payable balance is created. `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF for production money movement. Saved creator configs are sandbox/not-payable. Production sales require owner/provider activation. Production cashout requires Stripe/live provider approval, tax/KYC readiness, fraud/support/legal review, and owner approval.
+
+Premium remains the app-wide subscription flow. Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are creator monetization flows. The Money Center now exposes setup actions and cashout-readiness review instead of stale proved/readiness boxes that leave creators unable to configure their flows. No auth/RLS/money permission weakening happened. No provider/live-money mutation happened.
+
 ## Header profile avatar flicker fix
 
 Source status: fixed. Installed-app status: Pending if Google Play internal v67+ proof is required.

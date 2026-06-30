@@ -8,6 +8,7 @@ export type MonetizationFeatureKey =
 
 export type MonetizationFeatureStatus =
   | "Not set up"
+  | "Setup mode"
   | "Active"
   | "Paused"
   | "Needs attention"

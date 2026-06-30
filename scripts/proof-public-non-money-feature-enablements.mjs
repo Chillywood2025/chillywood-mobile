@@ -118,9 +118,9 @@ const admin = read("app/admin.tsx");
 ].forEach((needle) => requireText("runtime monetization defaults", featureFlags, needle));
 
 [
-  'digital_sales_enabled: "off"',
-  'tips_enabled: "off"',
-  'paid_content_enabled: "off"',
+  'digital_sales_enabled: "sandbox_only"',
+  'tips_enabled: "sandbox_only"',
+  'paid_content_enabled: "sandbox_only"',
   'merch_enabled: "off"',
   'payouts_enabled: "off"',
   'live_money_enabled: "off"',

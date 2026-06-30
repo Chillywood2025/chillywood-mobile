@@ -144,11 +144,11 @@ const moderatorDoc = read("docs/admin/MODERATOR_ROLE_SCOPE_AND_SUPPORT_DUTIES.md
 
 [
   'live_money_enabled: "off"',
-  'tips_enabled: "off"',
-  'paid_content_enabled: "off"',
+  'tips_enabled: "sandbox_only"',
+  'paid_content_enabled: "sandbox_only"',
   'merch_enabled: "off"',
   'payouts_enabled: "off"',
-  'digital_sales_enabled: "off"',
+  'digital_sales_enabled: "sandbox_only"',
 ].forEach((needle) => requireText("money feature defaults", moneyFlags, needle));
 
 [

@@ -3,6 +3,7 @@
 # Chi'lly Chat Google-Signed v60 Direct Chat + Call Follow-Up
 
 Current lane doc:
+- `docs/release/CREATOR_MONETIZATION_SETUP_CASHOUT_READINESS.md`
 - `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md`
 - `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md`
 - `docs/release/CHILLY_CHAT_END_TO_END_CALL_INITIATION_PROOF.md`
@@ -13,6 +14,24 @@ Current lane doc:
 - `docs/release/HEADER_CONTROL_CONSISTENCY_CLEANUP.md`
 - `docs/release/GOOGLE_SIGNED_V66_HEADER_CHAT_UI_PROOF.md`
 - `docs/release/HEADER_PROFILE_AVATAR_FLICKER_FIX.md`
+
+Creator monetization setup and cashout readiness activation:
+- Status: source/backend-Closed pending any later installed-app proof request.
+- Creator monetization setup is usable in sandbox/not-payable mode.
+- Creator setup does not mean live money is active.
+- Creators can access cashout readiness, but real cashout is not live.
+- Cashout readiness does not execute payouts.
+- No real payout, transfer, withdrawal, or payable balance is created.
+- `liveMoneyEnabled` remains OFF.
+- Payouts and cashout remain OFF for production money movement.
+- Saved creator configs are sandbox/not-payable.
+- Production sales require owner/provider activation.
+- Production cashout requires Stripe/live provider approval, tax/KYC readiness, fraud/support/legal review, and owner approval.
+- Premium remains the app-wide subscription flow.
+- Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are creator monetization flows.
+- Do not show proved/readiness boxes instead of usable setup controls.
+- No auth/RLS/money permission weakening happened.
+- No provider/live-money mutation happened.
 
 Header profile avatar flicker fix:
 - Status: source-Closed.
@@ -1042,15 +1061,15 @@ Status:
   - Creator-money tax/legal/compliance plan: Partial
   - Creator-money product creation: Partial
   - Provider verification used browser dashboard evidence
-  - All activation switches remain OFF
+  - Production activation switches remain OFF while setup switches are sandbox_only
   - Premium-first launch candidate: Pending owner activation/provider final check
   - Premium-first activation proof: Partial
   - Premium monthly: Verified at $9.99/month
   - Premium annual: Blocked at $99.99/year
   - Premium annual: Provider-blocked pending Google Play support/base-plan resolution
   - Premium public activation remains OFF
-  - Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval
-  - Creator-money flows remain OFF by default
+  - Creator-money setup flows: Usable in sandbox/not-payable mode / production activation requires owner/provider approval
+  - Creator-money setup flows are sandbox/not-payable by default
   - Real-money activation: Off by default unless owner explicitly enables each flow
   - Creator payouts: Off unless separate payout lane enables them
   - Creator payouts remain OFF

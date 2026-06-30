@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+June 30, 2026 setup/readiness activation update: creator monetization setup is usable in sandbox/not-payable mode, but production sales are not live. Production activation switches remain OFF while setup switches are sandbox_only. Cashout readiness is review-only and does not execute payouts. `live_money_enabled` remains OFF, `payouts_enabled` remains OFF, and production `cashoutEnabled` remains false.
+
 Verdict: Partial.
 
 This lane verifies provider dashboard readiness only. It does not activate purchases in the app, turn on live money, enable creator-money flows, enable payouts, create payable balances, execute provider refunds, complete real customer purchases, change pricing, or change app behavior.
@@ -28,7 +30,7 @@ Purchase-option IDs use Google Play-valid hyphenated values.
 
 Codex must not guess tax/legal/compliance fields.
 
-All activation switches remain OFF.
+Production activation switches remain OFF while setup switches are sandbox_only.
 
 Premium-first launch remains pending owner activation and provider final check.
 
@@ -36,7 +38,7 @@ Creator-money activation remains a separate future lane.
 
 Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Google Play support packet: Submitted through Google Play Console Help on 2026-06-25 at 12:25 CDT; case ID pending. No provider products/base plans were changed.
 
-Creator-money flows remain OFF by default.
+Creator-money setup flows are sandbox/not-payable by default.
 
 Creator payouts remain OFF.
 
@@ -124,15 +126,15 @@ RevenueCat dashboard evidence also confirms Premium does not map to creator prod
 | Creator payouts | OFF | `payouts_enabled: "off"` and runtime `payoutsEnabled: false` | Verified locally |
 | Cash-out/withdrawal | OFF | runtime `cashoutEnabled: false`; no payout lane enabled | Verified locally |
 | Premium purchase | OFF | `premiumPurchaseEnabled: false` and Premium purchase shell hold | Verified locally |
-| Tips | OFF | `tips_enabled: "off"` and runtime `tipsEnabled: false` | Verified locally |
-| Paid Video | OFF | `paid_content_enabled: "off"` and runtime paid checkout off | Verified locally |
-| Watch-Party Ticket | OFF | `watch_party_tickets_enabled: "off"` | Verified locally |
-| Channel Subscription | OFF | `digital_sales_enabled: "off"` | Verified locally |
-| VIP | OFF | `digital_sales_enabled: "off"` | Verified locally |
-| Event Pass | OFF | `digital_sales_enabled: "off"` | Verified locally |
+| Tips | Sandbox setup / production off | `tips_enabled: "sandbox_only"` and runtime `tipsEnabled: false` | Verified locally |
+| Paid Video | Sandbox setup / production off | `paid_content_enabled: "sandbox_only"` and runtime paid checkout off | Verified locally |
+| Watch-Party Ticket | Sandbox setup / production off | `watch_party_tickets_enabled: "sandbox_only"` | Verified locally |
+| Channel Subscription | Sandbox setup / production off | `digital_sales_enabled: "sandbox_only"` | Verified locally |
+| VIP | Sandbox setup / production off | `digital_sales_enabled: "sandbox_only"` | Verified locally |
+| Event Pass | Sandbox setup / production off | `digital_sales_enabled: "sandbox_only"` | Verified locally |
 | Provider refunds | Manual/external | final launch operations runbook and refund foundation | Verified locally |
 
-Direct purchase intents remain blocked while switches are OFF through the money switchboard, backend switch guard, sandbox tester requirement, provider availability checks, and Premium purchase shell hold. This lane did not turn any switch ON.
+Direct production purchase intents remain blocked while live-money and runtime purchase switches are OFF through the money switchboard, backend switch guard, sandbox tester requirement, provider availability checks, and Premium purchase shell hold. This lane did not turn production money ON.
 
 ## Premium-First Provider Readiness
 

@@ -124,13 +124,13 @@ export const MONEY_FEATURE_FLAG_KEYS: readonly MoneyFeatureFlagKey[] = [
 
 export const MONEY_FEATURE_FLAG_DEFAULT_STATES: Record<MoneyFeatureFlagKey, MoneyFeatureFlagState> = {
   money_center_visible: "on",
-  digital_sales_enabled: "off",
-  tips_enabled: "off",
-  watch_party_tickets_enabled: "off",
-  watch_party_seats_enabled: "off",
-  live_watch_party_access_enabled: "off",
-  live_watch_party_seats_enabled: "off",
-  paid_content_enabled: "off",
+  digital_sales_enabled: "sandbox_only",
+  tips_enabled: "sandbox_only",
+  watch_party_tickets_enabled: "sandbox_only",
+  watch_party_seats_enabled: "sandbox_only",
+  live_watch_party_access_enabled: "sandbox_only",
+  live_watch_party_seats_enabled: "sandbox_only",
+  paid_content_enabled: "sandbox_only",
   merch_enabled: "off",
   creator_balance_visible: "on",
   payouts_enabled: "off",
@@ -216,7 +216,7 @@ export const getMoneyFeatureStateLabel = (state: MoneyFeatureFlagState) => {
 
 export const getMoneyFeaturePublicSummary = (state: MoneyFeatureFlagState) => {
   if (state === "on") return "Available only when provider checks also pass.";
-  if (state === "sandbox_only") return "Sandbox checks can be reviewed, but live money is not active.";
+  if (state === "sandbox_only") return "Setup mode is available in sandbox/not-payable mode. Live money is not active.";
   if (state === "maintenance") return "Temporarily unavailable.";
   if (state === "locked") return "This money feature is unavailable.";
   return "Turned off by owner.";

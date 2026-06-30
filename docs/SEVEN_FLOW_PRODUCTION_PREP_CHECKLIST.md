@@ -2,6 +2,8 @@
 
 Date: 2026-06-25
 
+June 30, 2026 setup/readiness activation update: creator monetization setup is usable in sandbox/not-payable mode for Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass. Creator setup does not mean live money is active. Production activation switches remain OFF while setup switches are sandbox_only. Cashout readiness is available as a review flow only; it does not execute payouts, transfers, withdrawals, cash-out, or payable balances. `live_money_enabled` remains OFF, `payouts_enabled` remains OFF, production `cashoutEnabled` remains false, and production sales require owner/provider activation.
+
 Public non-money feature enablement update: `docs/PUBLIC_NON_MONEY_FEATURE_ENABLEMENT_SWITCHBOARD.md` closes safe public app-system enablement while keeping public purchase, creator-money, `live_money_enabled`, payouts, Stripe/merch, provider refunds, Premium annual, and Creator Channel Subscription unavailable unless a separate owner-approved lane changes that.
 
 Money admin authority update: this prep checklist does not activate money. Dual approval is required for future payout activation and future `live_money_enabled`; emergency money kill switch is First Owner/Owner-controlled and audited; no Google Play, RevenueCat, Stripe, payout, purchase, refund, or product mutation happened.
@@ -46,13 +48,13 @@ Premium-first launch candidate: Pending owner activation/provider final check.
 
 Premium-first activation proof: Partial. Premium monthly: Verified at `$9.99/month`. Premium annual: Blocked at `$99.99/year`. Premium annual: Provider-blocked pending Google Play support/base-plan resolution. Google Play `premium_subscription` has active monthly base plan `monthly`, United States, `USD 9.99`; RevenueCat offering `premium` has package `$rc_monthly` mapped to `premium_subscription:monthly` and entitlement `premium`. The annual Google Play base-plan attempt reached approved values (`annual`, Yearly, United States only, `USD 99.99`) but Google Play kept `Base plan ID` invalid and returned `Your changes couldn't be saved`; no saved annual base plan and no RevenueCat `premium_subscription:annual` / `$rc_annual` mapping exists. No Premium purchase sheet was opened, no purchase was completed, and Premium public activation remains OFF. Premium launch still requires licensed/internal purchase proof and owner approval.
 
-Creator-money flows: Prepared behind switches / OFF by default / activation requires owner/provider approval.
+Creator-money setup flows: Usable in sandbox/not-payable mode / production activation requires owner/provider approval.
 
 Creator-money activation remains a separate future lane.
 
 Channel Subscription remains provider-blocked until Google Play base plan issue is resolved. Creator Channel Subscription: Provider-blocked pending Google Play support/base-plan resolution. Google Play support packet: Submitted through Google Play Console Help on 2026-06-25 at 12:25 CDT; case ID pending. No provider products/base plans were changed.
 
-Provider verification used browser dashboard evidence. All activation switches remain OFF; production provider products are verified only where dashboard/API evidence exists.
+Provider verification used browser dashboard evidence. Production activation switches remain OFF while setup switches are sandbox_only; production provider products are verified only where dashboard/API evidence exists.
 
 Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise.
 
@@ -71,12 +73,12 @@ Do not activate creator-money until production-labeled IDs are verified, mapped,
 | Flow | Switch | Default state | Production activation status |
 | --- | --- | --- | --- |
 | Premium | `premiumEnabled`; purchase shell `premiumPurchaseEnabled=false` | Entitlement read-only; purchase off | Pending owner activation/provider final check |
-| Tips | `tipsEnabled` / `tips_enabled` | Off | Off; blocked pending owner/provider approval |
-| Paid Video | `paidVideoEnabled` / `paid_content_enabled` | Off | Off; blocked pending owner/provider approval |
-| Watch-Party Ticket | `watchPartyTicketEnabled` / `watch_party_tickets_enabled` | Off | Off; blocked pending owner/provider approval |
-| Channel Subscription | `channelSubscriptionEnabled` / `digital_sales_enabled` | Off | Off; blocked pending owner/provider approval |
-| VIP | `vipEnabled` / `digital_sales_enabled` | Off | Off; blocked pending owner/provider approval |
-| Event Pass | `eventPassEnabled` / `digital_sales_enabled` | Off | Off; blocked pending owner/provider approval |
+| Tips | `tipsEnabled` / `tips_enabled` | Sandbox/not-payable setup | Production off; blocked pending owner/provider approval |
+| Paid Video | `paidVideoEnabled` / `paid_content_enabled` | Sandbox/not-payable setup | Production off; blocked pending owner/provider approval |
+| Watch-Party Ticket | `watchPartyTicketEnabled` / `watch_party_tickets_enabled` | Sandbox/not-payable setup | Production off; blocked pending owner/provider approval |
+| Channel Subscription | `channelSubscriptionEnabled` / `digital_sales_enabled` | Sandbox/not-payable setup | Production off; blocked pending owner/provider approval |
+| VIP | `vipEnabled` / `digital_sales_enabled` | Sandbox/not-payable setup | Production off; blocked pending owner/provider approval |
+| Event Pass | `eventPassEnabled` / `digital_sales_enabled` | Sandbox/not-payable setup | Production off; blocked pending owner/provider approval |
 
 ## Flow-By-Flow Readiness Matrix
 

@@ -325,10 +325,10 @@ const repoConfigMatrix = products.map((product) => ({
 
 const switchOffStateProof = {
   liveMoney: moneyFlagsText.includes('live_money_enabled: "off"') && runtimeFlagsText.includes("liveMoneyEnabled: false") ? "OFF" : "Blocked",
-  tips: moneyFlagsText.includes('tips_enabled: "off"') && runtimeFlagsText.includes("tipsEnabled: false") ? "OFF" : "Blocked",
-  paidContent: moneyFlagsText.includes('paid_content_enabled: "off"') && runtimeFlagsText.includes("paidContentCheckoutEnabled: false") ? "OFF" : "Blocked",
-  watchPartyTickets: moneyFlagsText.includes('watch_party_tickets_enabled: "off"') ? "OFF" : "Blocked",
-  digitalSales: moneyFlagsText.includes('digital_sales_enabled: "off"') ? "OFF" : "Blocked",
+  tips: moneyFlagsText.includes('tips_enabled: "sandbox_only"') && runtimeFlagsText.includes("tipsEnabled: false") ? "SANDBOX_ONLY" : "Blocked",
+  paidContent: moneyFlagsText.includes('paid_content_enabled: "sandbox_only"') && runtimeFlagsText.includes("paidContentCheckoutEnabled: false") ? "SANDBOX_ONLY" : "Blocked",
+  watchPartyTickets: moneyFlagsText.includes('watch_party_tickets_enabled: "sandbox_only"') ? "SANDBOX_ONLY" : "Blocked",
+  digitalSales: moneyFlagsText.includes('digital_sales_enabled: "sandbox_only"') ? "SANDBOX_ONLY" : "Blocked",
   premiumPurchase: runtimeFlagsText.includes("premiumPurchaseEnabled: false") ? "OFF" : "Blocked",
   payouts: moneyFlagsText.includes('payouts_enabled: "off"') && runtimeFlagsText.includes("payoutsEnabled: false") ? "OFF" : "Blocked",
   cashout: runtimeFlagsText.includes("cashoutEnabled: false") ? "OFF" : "Blocked",
@@ -545,9 +545,13 @@ const checks = [
     detail: "Production IDs are documented with five draft one-time provider records and the channel base-plan blocker, without falsely marking activation-ready.",
   },
   {
-    id: "creator_money_switches_off",
-    ok: Object.entries(switchOffStateProof).every(([key, value]) => key === "refunds" ? value === "manual/external" : value === "OFF"),
-    detail: "Creator-money, live money, Premium purchase, payouts, and cash-out switches remain off.",
+    id: "creator_setup_sandbox_money_off",
+    ok: Object.entries(switchOffStateProof).every(([key, value]) => (
+      key === "refunds" ? value === "manual/external"
+        : ["tips", "paidContent", "watchPartyTickets", "digitalSales"].includes(key) ? value === "SANDBOX_ONLY"
+          : value === "OFF"
+    )),
+    detail: "Creator setup switches are sandbox/not-payable while live money, Premium purchase, payouts, and cash-out remain off.",
   },
   {
     id: "premium_unchanged",
@@ -668,7 +672,7 @@ const summary = {
   channelSubscriptionBasePlanSave: "Blocked: Google Play marks the Base plan ID field invalid before Save on both stale and fresh forms; prior submitted save error remains \"Your changes couldn't be saved\".",
   channelSubscriptionBasePlanInvestigation: channelSubscriptionInvestigationMatrix,
   premiumUnchanged: checks.find((check) => check.id === "premium_unchanged")?.ok === true,
-  creatorMoneySwitchesOff: checks.find((check) => check.id === "creator_money_switches_off")?.ok === true,
+  creatorSetupSandboxMoneyOff: checks.find((check) => check.id === "creator_setup_sandbox_money_off")?.ok === true,
   payoutsOff: switchOffStateProof.payouts === "OFF",
   stripePayoutsOff: true,
   stripeMerchCheckoutOff: true,

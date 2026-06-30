@@ -6,6 +6,8 @@ Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
 Consolidated current closeout audit: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md`.
 
+June 30, 2026 creator monetization setup and cashout readiness activation: creator monetization setup is usable in sandbox/not-payable mode. Creator setup does not mean live money is active. Creators can access cashout readiness, but real cashout is not live. Cashout readiness does not execute payouts. No real payout, transfer, withdrawal, or payable balance is created. `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF for production money movement. Saved creator configs are sandbox/not-payable. Production sales require owner/provider activation. Production cashout requires Stripe/live provider approval, tax/KYC readiness, fraud/support/legal review, and owner approval. Premium remains the app-wide subscription flow. Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are creator monetization flows. Do not show proved/readiness boxes instead of usable setup controls. No auth/RLS/money permission weakening happened. No provider/live-money mutation happened.
+
 June 25, 2026 seven-flow production switchboard update: `docs/SEVEN_FLOW_PRODUCTION_SWITCHBOARD.md`, `_lib/sevenFlowSwitchboard.ts`, and `scripts/proof-seven-flow-production-switchboard.mjs` define the production-readiness switchboard for Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass. Seven-flow app-side proof remains Closed. Seven-flow production switchboard is Partial: explicit switches, defaults, rollback, support/refund/dispute policy, creator expectation controls, and dry-run proof artifacts exist, but production activation remains blocked pending owner decision and provider production product approval/mapping. Real-money activation is off by default unless the owner explicitly enables each flow later. Creator payouts remain off unless a separate payout lane enables them. Provider refunds remain manual/external unless a separate provider-refund lane enables automation. This update does not enable live money, payouts, payable balances, withdrawals, cash-out, transfers, provider refunds, Premium product changes, Premium gate weakening, RLS weakening, LiveKit authority changes, or production buy buttons.
 
 June 25, 2026 creator-money production provider product cleanup: `docs/CREATOR_MONEY_PRODUCTION_PROVIDER_PRODUCTS.md` records the owner decision to create clean production-labeled provider product IDs before any creator-money launch. The intended IDs are `cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_channel_subscription_monthly_499` with base plan `monthly`, `cw_vip_pass_499`, and `cw_event_pass_099`. The owner approved the recommended starting prices, Google Play-valid hyphenated purchase-option IDs, and United States only first. Google Play now has five one-time production-labeled Draft records (`cw_creator_tip_099`, `cw_paid_content_access_099`, `cw_watch_party_ticket_099`, `cw_vip_pass_499`, `cw_event_pass_099`) and RevenueCat imported those five as Draft consumables with no entitlement attachment and no Premium mapping. Google Play also has the channel subscription product record `cw_channel_subscription_monthly_499` / `Creator Channel Subscription`, but it has `0` active base plans and the required `monthly` base plan remains missing because Google Play marks the `Base plan ID` field invalid before Save on stale and clean Add base plan forms. Channel Subscription base plan: Blocked. Channel Subscription RevenueCat import/mapping remains blocked until the matching Google Play base plan exists. Sandbox-labeled IDs remain sandbox/test-only unless owner explicitly approves otherwise. Approved starting prices are launch defaults, not the only future prices. Future custom pricing requires provider-backed price tiers/products/base plans/offers, and unsupported custom amounts fail closed. No creator-money product maps to Premium. Creator-money activation remains off, Premium remains unchanged, payouts remain off, and provider refunds remain manual/external. Stripe payout and merch prep is documented separately in `docs/STRIPE_PAYOUTS_AND_MERCH_PREP.md`; Stripe payouts remain OFF, Stripe merch checkout remains OFF, and Stripe is not used for Android digital creator-money purchases in this lane.
@@ -105,10 +107,13 @@ Required switch defaults:
 | Switch | Default |
 | --- | --- |
 | `money_center_visible` | `on` |
-| `digital_sales_enabled` | `off` |
-| `tips_enabled` | `off` |
-| `watch_party_seats_enabled` | `off` |
-| `paid_content_enabled` | `off` |
+| `digital_sales_enabled` | `sandbox_only` |
+| `tips_enabled` | `sandbox_only` |
+| `watch_party_tickets_enabled` | `sandbox_only` |
+| `watch_party_seats_enabled` | `sandbox_only` |
+| `live_watch_party_access_enabled` | `sandbox_only` |
+| `live_watch_party_seats_enabled` | `sandbox_only` |
+| `paid_content_enabled` | `sandbox_only` |
 | `merch_enabled` | `off` |
 | `creator_balance_visible` | `on` |
 | `payouts_enabled` | `off` |
@@ -124,7 +129,7 @@ Rules:
 - `off` shows disabled/setup copy to creators.
 - `locked` and owner-only reasons are visible only in Owner/Admin controls.
 - `maintenance` shows temporary unavailability.
-- `sandbox_only` allows provider test proof and readiness review but no production money.
+- `sandbox_only` allows creator setup, provider test proof, and readiness review but no production money.
 - `on` still requires provider readiness and, for live-money actions, `live_money_enabled=on`.
 - `live_money_enabled` stays off unless a later explicit launch lane documents provider proof, legal/accounting approval, rollback proof, and owner approval.
 - High-risk switches require confirmation and a reason: `live_money_enabled`, `payouts_enabled`, `digital_sales_enabled`, `tips_enabled`, `watch_party_seats_enabled`, `paid_content_enabled`, `stripe_connect_enabled`, `revenuecat_google_play_enabled`, and `provider_webhooks_enabled`.

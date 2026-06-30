@@ -208,7 +208,7 @@ assertIncludes(watchPartyEntry, "tester-watch-party-ticket-button", "tester Watc
 assertIncludes(watchPartyRoom, "watch-party-ticket-purchase-button", "Watch-Party room ticket purchase selector");
 assertIncludes(eventRoute, "event-pass-purchase-button", "event pass purchase selector");
 assertIncludes(vipRoute, "vip-area-get-vip-button", "VIP route purchase selector");
-assertIncludes(admin, "No checkout success, payout release, fake purchase, fake order, fake tip, or live money action", "Admin money safety copy");
+assertIncludes(admin, "No checkout success, payout release, simulated purchase, simulated order, simulated tip, or live money action", "Admin money safety copy");
 assertIncludes(admin, "1.5% with no default cap", "Admin cash-out fee copy");
 
 assertNotIncludes(read("CURRENT_STATE.md"), "$7.99", "CURRENT_STATE stale Premium price");

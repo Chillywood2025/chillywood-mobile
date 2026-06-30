@@ -2,6 +2,8 @@
 
 Date: June 5, 2026
 
+June 30, 2026 activation update: creator monetization setup is usable in sandbox/not-payable mode. Creator setup does not mean live money is active. Creators can access cashout readiness, but real cashout is not live. Cashout readiness does not execute payouts. No real payout, transfer, withdrawal, or payable balance is created. `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF for production money movement. Saved creator configs are sandbox/not-payable. Production sales require owner/provider activation. Production cashout requires Stripe/live provider approval, tax/KYC readiness, fraud/support/legal review, and owner approval. Premium remains the app-wide subscription flow. Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are creator monetization flows. Do not show proved/readiness boxes instead of usable setup controls. No auth/RLS/money permission weakening happened. No provider/live-money mutation happened.
+
 This lane completes the creator monetization setup proof that began with `/creator-monetization-setup`. The result is not production monetization. It is a sandbox/internal-test setup matrix over already-proved payment rails.
 
 Follow-up QA: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` records the focused Android viewer-gate/Admin QA pass. It captured setup, approved tiers, internal sandbox launcher, physical merch, payout readiness read-only, direct paid-content route blocker, and correct non-admin Admin denial, then rechecked remote counts. Contextual route-backed viewer gate screenshots and Owner/Admin drilldown screenshots remain visual QA blockers, not backend/provider blockers.
@@ -9,9 +11,12 @@ Follow-up QA: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` records the fo
 ## Scope
 
 - Creators/internal testers can save sandbox setup rows for every approved monetization type.
+- Creators can use Money Center setup controls for Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass.
+- Creators can review cashout readiness, but real cashout is not live.
 - Android digital goods use Google Play / RevenueCat only.
 - Physical merch uses Stripe sandbox only.
 - Payout readiness remains read-only.
+- Cashout readiness does not execute payouts.
 - Production live money, payouts, cash-out, withdrawal, transfer, payable balances, arbitrary Android prices, Stripe Android digital checkout, fake sales, fake balances, LiveKit publish grants, host/speaker/mod/admin authority, route ownership changes, and safety bypass remain absent.
 
 ## Completion Matrix
