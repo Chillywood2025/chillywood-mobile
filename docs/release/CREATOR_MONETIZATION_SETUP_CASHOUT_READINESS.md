@@ -10,6 +10,18 @@ Source route/button wiring is fixed. Money Center is the single creator monetiza
 
 Cashout readiness is reachable, but real cashout is not live. Payout provider setup actions remain safe readiness/test actions only while production money movement is off. Premium remains the app-wide subscription flow. Source fixed is not installed-app proof.
 
+## Creator -> Viewer Source Wiring Proof
+
+Creator and viewer source wiring pairs are proved for each creator monetization flow. The source proof checks the creator-side setup entry, setup/edit action, approved sandbox tier, source selection/source UUID path, save helper/RPC wiring, saved config readback, and sandbox/not-payable copy. It also checks the matching viewer route/gate, locked state, exact source-scoped purchase/readback path where safe, and separation from unrelated unlocks.
+
+- Paid Video: creator setup is reachable from Money Center and creator video edit/upload paths; viewer gate is `/player/[id]`; access readback is scoped to the exact video.
+- Tips: creator setup is reachable from Money Center; viewer support action opens the creator-surface tip CTA / tip sheet; tips unlock no content, Premium, badge, room, event, LiveKit authority, or payout.
+- Watch-Party Ticket: creator setup is reachable from Money Center for a valid Party Room / Watch-Party source; viewer gate is `/watch-party/[partyId]`; it routes to Party Waiting Room / Party Room and not Live Stage.
+- Channel Subscription: creator setup is reachable from Money Center; viewer route is `/channel-subscription/[creatorId]`; it does not route to `/subscribe` because Premium remains the app-wide subscription flow.
+- VIP: creator setup is reachable from Money Center; viewer route is `/vip-pass/[creatorId]`; VIP remains creator-specific and does not unlock Premium or other creators.
+- Event Pass: creator setup is reachable from Money Center for a valid event/source; viewer route is `/event/[eventId]`; migration `20260630091500_paid_event_pass_terminal_event_status_guard.sql` denies ended, expired, canceled, removed, unsafe, and blocked event states.
+- Cashout/Payout: creator readiness UI is reachable in Money Center; there is no viewer-side purchase flow and no real payout, transfer, withdrawal, or payable balance.
+
 ## Root Cause
 
 Creator-money proof and readiness rows existed, but the creator-facing Money Center could still feel like a stale proof dashboard: key setup switches defaulted closed, cashout readiness was tied too closely to payout enablement, Tips setup surfaced payout-provider actions instead of letting creators configure setup safely, and some creator setup entry points still needed explicit route/button wiring into the real Money Center Offers and Cashout readiness areas.

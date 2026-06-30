@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
+const fileExists = (relativePath) => existsSync(path.join(root, relativePath));
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
 
 const checks = [];
 const add = (name, passed, detail) => checks.push({ name, passed, detail });
 const includes = (source, needle) => source.includes(needle);
 const excludes = (source, needle) => !source.includes(needle);
+const includesAll = (source, needles) => needles.every((needle) => includes(source, needle));
+const excludesAll = (source, needles) => needles.every((needle) => excludes(source, needle));
 
 const channelSettings = read("app/channel-settings.tsx");
 const creatorSetupRoute = read("app/creator-monetization-setup.tsx");
@@ -19,8 +22,39 @@ const payoutsRoute = read("app/payouts.tsx");
 const routeTargets = read("_lib/creatorMonetizationRouteTargets.ts");
 const creatorSetup = read("_lib/creatorMonetizationSetup.ts");
 const creatorPayouts = read("_lib/creatorPayouts.ts");
+const creatorTips = read("_lib/creatorTips.ts");
+const creatorPaidVideos = read("_lib/creatorPaidVideos.ts");
+const creatorVideos = read("_lib/creatorVideos.ts");
+const paidWatchPartyTickets = read("_lib/paidWatchPartyTickets.ts");
+const channelSubscriptions = read("_lib/channelSubscriptions.ts");
+const creatorVipPasses = read("_lib/creatorVipPasses.ts");
+const paidCreatorEvents = read("_lib/paidCreatorEvents.ts");
 const featureFlags = read("_lib/featureFlags.ts");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
+const playerRoute = read("app/player/[id].tsx");
+const platformRoute = read("app/channel/[userId].tsx");
+const tipSheet = read("components/monetization/tip-sheet.tsx");
+const watchPartyRoute = read("app/watch-party/[partyId].tsx");
+const channelSubscriptionRoute = read("app/channel-subscription/[creatorId].tsx");
+const vipRoute = read("app/vip-pass/[creatorId].tsx");
+const eventRoute = read("app/event/[eventId].tsx");
+const paidEventStatusGuardMigration = read("supabase/migrations/20260630091500_paid_event_pass_terminal_event_status_guard.sql");
+
+const routeFiles = [
+  "app/channel-settings.tsx",
+  "app/creator-monetization-setup.tsx",
+  "app/monetize.tsx",
+  "app/revenue.tsx",
+  "app/payouts.tsx",
+  "app/player/[id].tsx",
+  "app/watch-party/[partyId].tsx",
+  "app/channel-subscription/[creatorId].tsx",
+  "app/vip-pass/[creatorId].tsx",
+  "app/event/[eventId].tsx",
+];
+for (const relativePath of routeFiles) {
+  add(`route/source file exists: ${relativePath}`, fileExists(relativePath), relativePath);
+}
 
 const requiredRoutes = [
   ["creator setup compatibility", creatorSetupRoute, "/channel-studio?tab=monetization&focus=offers"],
@@ -29,11 +63,12 @@ const requiredRoutes = [
   ["payouts compatibility", payoutsRoute, "/channel-studio?tab=monetization&focus=payouts"],
 ];
 for (const [name, source, needle] of requiredRoutes) {
-  add(name, includes(source, needle), `${needle}`);
+  add(name, includes(source, needle), needle);
 }
 
 [
   ["Money Center tab focus", "normalizeMonetizationSectionId"],
+  ["Offers focus accepted", 'normalized === "offers"'],
   ["Payout route focus", "focus=payouts"],
   ["Dynamic feature CTA test IDs", "testID={`money-feature-${feature.key}-cta`}"],
   ["Ways to Earn section", "title: \"Ways to Earn\""],
@@ -47,7 +82,19 @@ for (const [name, source, needle] of requiredRoutes) {
   ["Cashout readiness summary", "readCreatorPayoutDashboardSummary"],
   ["Safe Stripe setup action", "handleStartPayoutProviderSetup"],
   ["Safe Stripe status sync", "handleRefreshPayoutProviderStatus"],
+  ["Sandbox/not-payable setup copy", "sandbox/not-payable"],
+  ["Production not live copy", "Production sales require owner/provider activation"],
 ].forEach(([name, needle]) => add(name, includes(channelSettings, needle), needle));
+
+const addCreatorSetupChecks = (flow) => {
+  add(`${flow.name} feature catalog key`, includes(channelSettings, flow.featureKey), flow.featureKey);
+  add(`${flow.name} Money Center setup action`, includes(channelSettings, flow.manager), flow.manager);
+  add(`${flow.name} approved sandbox tier`, includes(creatorSetup, flow.productKey) && includes(channelSettings, flow.productKey), flow.productKey);
+  add(`${flow.name} source type save`, includes(channelSettings, flow.sourceType), flow.sourceType);
+  add(`${flow.name} saved config readback path`, includes(channelSettings, "creatorSandboxConfigs") && includes(channelSettings, "money-saved-sandbox-config-readback"), "saved sandbox config readback");
+  add(`${flow.name} sandbox/not-payable copy`, includes(channelSettings, "sandbox/not-payable") && includes(channelSettings, "No real payout"), "sandbox/not-payable and no payout copy");
+  add(`${flow.name} viewer route target`, includes(routeTargets, flow.viewerRoute), flow.viewerRoute);
+};
 
 const flowChecks = [
   {
@@ -57,6 +104,20 @@ const flowChecks = [
     productKey: "paid_content_access_sandbox_099",
     sourceType: 'sourceType: "paid_content"',
     viewerRoute: 'viewerTarget: "/player/[id]"',
+    viewerChecks: [
+      ["viewer route reads creator video access state", creatorVideos, "resolveCreatorContentAccess"],
+      ["viewer route locks unpaid state", playerRoute, "creatorVideoPaidContentLocked"],
+      ["viewer route renders lock card", playerRoute, "paid-video-lock-card"],
+      ["viewer route has sandbox purchase/status action", playerRoute, "tester-paid-video-unlock-button"],
+      ["viewer route uses paid-video purchase helper", playerRoute, "purchasePaidVideoAccess"],
+      ["viewer purchase helper resolves exact video", creatorPaidVideos, "resolvePaidVideoAccess(input.videoId)"],
+      ["viewer purchase helper creates exact source intent", creatorPaidVideos, 'p_source_id: input.videoId'],
+      ["viewer purchase helper binds paid content source type", creatorPaidVideos, 'p_source_type: "paid_content"'],
+      ["viewer purchase helper prevents wrong creator binding", creatorPaidVideos, "access.creatorId !== input.creatorId"],
+      ["viewer success/readback rechecks exact video", creatorPaidVideos, "waitForPaidVideoAccess(input.videoId)"],
+      ["viewer success receipt exists", playerRoute, "paid-video-purchase-success-receipt"],
+      ["viewer copy keeps unrelated unlocks separate", playerRoute, "other creator videos stay separate"],
+    ],
   },
   {
     name: "Tips",
@@ -65,6 +126,20 @@ const flowChecks = [
     productKey: "creator_tip_sandbox_099",
     sourceType: 'sourceType: "creator_tip"',
     viewerRoute: 'viewerTarget: "tip_sheet"',
+    viewerChecks: [
+      ["viewer creator surface reads tip status", platformRoute, "readCreatorTipPublicStatus"],
+      ["viewer creator surface opens tip sheet", platformRoute, "setTipSheetVisible(true)"],
+      ["viewer tip CTA exists", platformRoute, "platform-support-tip-button"],
+      ["viewer sandbox tip CTA exists", platformRoute, "tester-tip-creator-button"],
+      ["viewer tip sheet route exists", tipSheet, "testID=\"tip-sheet\""],
+      ["viewer tip sheet confirm action exists", tipSheet, "tip-confirm-button"],
+      ["viewer purchase helper is wired", tipSheet, "purchaseCreatorTipWithGooglePlay"],
+      ["viewer helper creates creator-tip intent", creatorTips, 'p_product_key: CREATOR_TIP_SANDBOX_PRODUCT_KEY'],
+      ["viewer helper scopes tip to creator id", creatorTips, "p_source_id: creatorId"],
+      ["viewer helper binds creator-tip source type", creatorTips, 'p_source_type: "creator_tip"'],
+      ["viewer copy says tips unlock nothing", tipSheet, "Tips do not unlock videos, events, rooms, VIP, subscriptions, badges, public rewards, or merchandise."],
+      ["viewer success/readback is not payable", creatorTips, "no_live_payout: true"],
+    ],
   },
   {
     name: "Watch-Party Ticket",
@@ -73,6 +148,19 @@ const flowChecks = [
     productKey: "watch_party_live_ticket_sandbox_099",
     sourceType: 'sourceType: "watch_party_live"',
     viewerRoute: 'viewerTarget: "/watch-party/[partyId]"',
+    viewerChecks: [
+      ["viewer route resolves Party Room ticket access", watchPartyRoute, "resolvePaidWatchPartyTicketAccess(snapshot.room.partyId)"],
+      ["viewer route renders ticket lock card", watchPartyRoute, "watch-party-ticket-lock-card"],
+      ["viewer route has ticket purchase action", watchPartyRoute, "watch-party-ticket-purchase-button"],
+      ["viewer route uses ticket purchase helper", watchPartyRoute, "purchasePaidWatchPartyTicket"],
+      ["viewer purchase helper resolves exact party", paidWatchPartyTickets, "resolvePaidWatchPartyTicketAccess(input.partyId)"],
+      ["viewer success/readback rechecks exact party", paidWatchPartyTickets, "waitForPaidWatchPartyTicketAccess(input.partyId)"],
+      ["viewer purchase helper uses offer id while readback stays party scoped", paidWatchPartyTickets, "createPaidWatchPartyTicketPurchaseIntent(access.offer.id)"],
+      ["viewer route target is Party Room", routeTargets, 'viewerTarget: "/watch-party/[partyId]"'],
+      ["viewer route target is not Live Stage", routeTargets, 'viewerTarget: "/watch-party/live-stage/[partyId]"', false],
+      ["viewer copy keeps LiveKit authority separate", paidWatchPartyTickets, 'room_type: "party_room"'],
+      ["viewer success receipt exists", watchPartyRoute, "watch-party-ticket-success-receipt"],
+    ],
   },
   {
     name: "Channel Subscription",
@@ -81,6 +169,19 @@ const flowChecks = [
     productKey: "channel_subscription_sandbox_monthly_499",
     sourceType: 'sourceType: "channel_subscription"',
     viewerRoute: 'viewerTarget: "/channel-subscription/[creatorId]"',
+    viewerChecks: [
+      ["viewer route exists", channelSubscriptionRoute, "screen-channel-subscription"],
+      ["viewer route resolves creator subscription access", channelSubscriptionRoute, "resolveChannelSubscriptionAccess(creatorId)"],
+      ["viewer route renders locked/unpaid state", channelSubscriptionRoute, "subscriber-area-access-denied-state"],
+      ["viewer route has subscribe/status action", channelSubscriptionRoute, "subscriber-area-subscribe-button"],
+      ["viewer route uses subscription purchase helper", channelSubscriptionRoute, "purchaseChannelSubscription"],
+      ["viewer purchase helper resolves exact creator", channelSubscriptions, "resolveChannelSubscriptionAccess(input.creatorId)"],
+      ["viewer success/readback rechecks exact creator", channelSubscriptions, "waitForChannelSubscriptionAccess(input.creatorId)"],
+      ["viewer purchase helper creates offer-scoped intent", channelSubscriptions, "createChannelSubscriptionPurchaseIntent(access.offer.id)"],
+      ["viewer route is creator subscription, not Premium", routeTargets, 'viewerTarget: "/channel-subscription/[creatorId]"'],
+      ["viewer route target does not point to Premium subscribe", routeTargets, 'platformSubscription: {\n    ownerTarget', true],
+      ["viewer copy keeps Premium separate", channelSubscriptionRoute, "does not include Chi'llywood Premium"],
+    ],
   },
   {
     name: "VIP",
@@ -89,6 +190,19 @@ const flowChecks = [
     productKey: "vip_pass_sandbox_499",
     sourceType: 'sourceType: "vip_pass"',
     viewerRoute: 'viewerTarget: "/vip-pass/[creatorId]"',
+    viewerChecks: [
+      ["viewer route exists", vipRoute, "screen-vip-pass"],
+      ["viewer route resolves creator VIP access", vipRoute, "resolveCreatorVipPassAccess(creatorId)"],
+      ["viewer route renders locked/unpaid state", vipRoute, "vip-area-access-denied-state"],
+      ["viewer route has VIP/status action", vipRoute, "vip-area-get-vip-button"],
+      ["viewer route uses VIP purchase helper", vipRoute, "purchaseCreatorVipPass"],
+      ["viewer purchase helper resolves exact creator", creatorVipPasses, "resolveCreatorVipPassAccess(input.creatorId)"],
+      ["viewer success/readback rechecks exact creator", creatorVipPasses, "waitForCreatorVipPassAccess(input.creatorId)"],
+      ["viewer purchase helper creates offer-scoped intent", creatorVipPasses, "createCreatorVipPassPurchaseIntent(access.offer.id)"],
+      ["viewer route target is VIP", routeTargets, 'viewerTarget: "/vip-pass/[creatorId]"'],
+      ["viewer copy keeps Premium separate", vipRoute, "VIP does not unlock Chi'llywood Premium"],
+      ["viewer copy keeps other creators separate", vipRoute, "other creators stay separate"],
+    ],
   },
   {
     name: "Event Pass",
@@ -97,16 +211,49 @@ const flowChecks = [
     productKey: "event_pass_sandbox_099",
     sourceType: 'sourceType: "event"',
     viewerRoute: 'viewerTarget: "/event/[eventId]"',
+    viewerChecks: [
+      ["viewer route exists", eventRoute, "screen-event"],
+      ["viewer route resolves paid event access", eventRoute, "resolvePaidCreatorEventPassAccess(eventId)"],
+      ["viewer route renders lock card", eventRoute, "event-pass-lock-card"],
+      ["viewer route renders unavailable state", eventRoute, "event-pass-access-denied-state"],
+      ["viewer route has event pass purchase action", eventRoute, "event-pass-purchase-button"],
+      ["viewer route uses event pass purchase helper", eventRoute, "purchasePaidCreatorEventPass"],
+      ["viewer purchase helper resolves exact event", paidCreatorEvents, "resolvePaidCreatorEventPassAccess(input.creatorEventId)"],
+      ["viewer purchase helper uses offer id for purchase intent", paidCreatorEvents, "createPaidCreatorEventPassPurchaseIntent(access.offer.id)"],
+      ["viewer success/readback rechecks exact event", paidCreatorEvents, "waitForPaidCreatorEventPassAccess(input.creatorEventId)"],
+      ["viewer route target is event", routeTargets, 'viewerTarget: "/event/[eventId]"'],
+      ["viewer copy keeps unrelated unlocks separate", eventRoute, "other events, LiveKit host controls, or payout authority"],
+      ["viewer terminal status guard migration exists", paidEventStatusGuardMigration, "ended', 'expired', 'canceled', 'removed', 'unsafe', 'blocked"],
+      ["viewer terminal status guard protects resolver", paidEventStatusGuardMigration, 'resolve_paid_creator_event_pass_access'],
+      ["viewer terminal status guard protects purchase intent", paidEventStatusGuardMigration, 'create_paid_creator_event_pass_purchase_intent'],
+    ],
   },
 ];
 
 for (const flow of flowChecks) {
-  add(`${flow.name} feature catalog key`, includes(channelSettings, flow.featureKey), flow.featureKey);
-  add(`${flow.name} manager action`, includes(channelSettings, flow.manager), flow.manager);
-  add(`${flow.name} approved product tier`, includes(creatorSetup, flow.productKey) && includes(channelSettings, flow.productKey), flow.productKey);
-  add(`${flow.name} source type save`, includes(channelSettings, flow.sourceType), flow.sourceType);
-  add(`${flow.name} viewer route`, includes(routeTargets, flow.viewerRoute), flow.viewerRoute);
+  addCreatorSetupChecks(flow);
+  for (const [name, source, needle, expected = true] of flow.viewerChecks) {
+    add(`${flow.name} ${name}`, expected ? includes(source, needle) : excludes(source, needle), needle);
+  }
 }
+
+[
+  ["Cashout readiness Money Center button", "money-center-cashout-readiness-button"],
+  ["Cashout readiness payout section button", "money-payout-review-readiness-button"],
+  ["Cashout readiness is reachable", "handleReviewCashoutReadiness"],
+  ["Cashout readiness uses payout summary", "readCreatorPayoutDashboardSummary"],
+  ["Cashout readiness uses resolver", "resolveCreatorPayoutReadiness"],
+  ["Cashout readiness preview does not execute", "previewCreatorPayoutPreproductionWorkflow"],
+  ["Cashout readiness says no real payout", "No real payout will be sent"],
+  ["Cashout readiness says no payable balance", "no payable balance is created"],
+  ["Cashout readiness says production movement off", "Payouts and cashout remain OFF for production money movement"],
+].forEach(([name, needle]) => add(name, includes(channelSettings, needle), needle));
+
+[
+  ["Cashout has no viewer route target", "cashout"],
+  ["Payout has no viewer route target", "payout"],
+  ["Withdraw has no viewer route target", "withdraw"],
+].forEach(([name, needle]) => add(name, excludes(routeTargets, needle), needle));
 
 [
   ["Premium route remains separate", 'viewerTarget: "/subscribe"'],
@@ -134,13 +281,28 @@ for (const flow of flowChecks) {
   ["Production payout execution blocked", "productionExecutionAllowed: false"],
 ].forEach(([name, needle]) => add(name, includes(`${creatorSetup}\n${creatorPayouts}`, needle), needle));
 
-[
-  ["No live money enabled", "liveMoneyEnabled: true"],
-  ["No payouts enabled", "payoutsEnabled: true"],
-  ["No production cashout enabled", "cashoutEnabled: true"],
-  ["No production money default on", 'live_money_enabled: "on"'],
-  ["No payout default on", 'payouts_enabled: "on"'],
-].forEach(([name, needle]) => add(name, excludes(`${featureFlags}\n${moneyFlags}`, needle), needle));
+const unsafeLiveMoneyNeedles = [
+  "liveMoneyEnabled: true",
+  "payoutsEnabled: true",
+  "cashoutEnabled: true",
+  'live_money_enabled: "on"',
+  'payouts_enabled: "on"',
+];
+unsafeLiveMoneyNeedles.forEach((needle) => {
+  add(`unsafe money default absent: ${needle}`, excludes(`${featureFlags}\n${moneyFlags}`, needle), needle);
+});
+
+const forbiddenViewerUnlockMixes = [
+  [creatorTips, ["paid_video_unlock: true", "vip_unlock: true", "subscription_unlock: true", "payoutCreated: true"]],
+  [creatorPaidVideos, ["premium_unlock: true", "tips_path: true", "payoutCreated: true"]],
+  [paidWatchPartyTickets, ["grants_host_authority: true", "room_media_controls: true", "payoutCreated: true"]],
+  [channelSubscriptions, ["premium_unlock: true", "vip_unlock: true", "payoutCreated: true"]],
+  [creatorVipPasses, ["premium_unlock: true", "subscription_unlock: true", "payoutCreated: true"]],
+  [paidCreatorEvents, ["premium_unlock: true", "vip_unlock: true", "subscription_unlock: true", "grants_host_authority: true"]],
+];
+for (const [source, needles] of forbiddenViewerUnlockMixes) {
+  add(`forbidden unrelated viewer unlocks absent (${needles[0]})`, excludesAll(source, needles), needles.join(", "));
+}
 
 const failed = checks.filter((check) => !check.passed);
 const result = {

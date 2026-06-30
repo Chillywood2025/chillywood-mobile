@@ -262,9 +262,9 @@ export async function resolvePaidCreatorEventPassAccess(creatorEventId: string):
   return normalizeAccess(data);
 }
 
-export async function createPaidCreatorEventPassPurchaseIntent(eventId: string) {
+export async function createPaidCreatorEventPassPurchaseIntent(offerId: string) {
   const { data, error } = await rpcClient.rpc("create_paid_creator_event_pass_purchase_intent", {
-    p_event_id: eventId,
+    p_event_id: offerId,
   });
   if (error) throw new Error("Event pass checkout is not available right now.");
   const row = data && typeof data === "object" && !Array.isArray(data)

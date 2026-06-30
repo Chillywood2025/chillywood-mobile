@@ -16,11 +16,19 @@ Current lane doc:
 - `docs/release/HEADER_PROFILE_AVATAR_FLICKER_FIX.md`
 
 Creator monetization setup and cashout readiness activation:
-- Status: source/backend-Closed pending any later installed-app proof request.
+- Status: source/backend-Closed for creator and viewer source wiring; installed-app proof remains Pending if requested.
 - Source route/button wiring is fixed.
 - Money Center is the single creator monetization home.
 - `/creator-monetization-setup` is compatibility-only and lands in Money Center Offers setup.
 - Each creator monetization flow has a real setup action, not stale proof copy.
+- Creator and viewer source wiring pairs are proved for each creator monetization flow.
+- Paid Video creator setup maps to `/player/[id]`.
+- Tips creator setup maps to the creator-surface tip CTA / tip sheet.
+- Watch-Party Ticket creator setup maps to `/watch-party/[partyId]` and not Live Stage.
+- Channel Subscription creator setup maps to `/channel-subscription/[creatorId]` and not `/subscribe`.
+- VIP creator setup maps to `/vip-pass/[creatorId]` and stays creator-specific.
+- Event Pass creator setup maps to `/event/[eventId]`; terminal/unsafe event states are denied by `20260630091500_paid_event_pass_terminal_event_status_guard.sql`.
+- Cashout/Payout has no viewer-side purchase flow.
 - Cashout readiness is reachable, but real cashout is not live.
 - Creator monetization setup is usable in sandbox/not-payable mode.
 - Creator setup does not mean live money is active.
