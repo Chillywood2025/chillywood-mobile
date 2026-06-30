@@ -12,6 +12,8 @@ Android/Expo push dispatch is source-prepared only after a real notification rec
 
 `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF. No real payout, transfer, withdrawal, payable balance, or provider mutation was created by notifications. No auth/RLS/money permission weakening happened. No provider/live-money mutation happened. Source fixed is not installed-app proof.
 
+Last two notification commits were audited together. Creator-money notification records and room-safe bell/call behavior are source/backend aligned. Remote migration status verified. Changed Edge functions deployed or verified unchanged; `revenuecat-webhook` is ACTIVE version 18. Installed-app proof remains pending. Source/backend readiness is not installed-app proof. Google Play internal build is still required for visible device closure.
+
 ## Creator Tips V68 Installed Blocker Source Fix
 
 Source status: fixed. Installed-app status: Pending for a later Google Play internal build.
@@ -408,3 +410,5 @@ Play internal/closed testing remains the approved tester path. Sideload is not a
 Source-closed on June 30, 2026; installed-app proof remains pending until a future Google Play internal build. Notification bell is icon-only. Bell badge is backed by real notification unread summary. Normal app surfaces show the bell next to existing header actions. Room/live surfaces use room-safe notification tray/banner behavior.
 
 Incoming Chi'lly Chat calls do not auto-answer. Incoming calls do not auto-leave or hijack room mic/camera. Leave room and answer requires explicit user action. Hosts receive an extra confirmation before leaving a hosted live room. Chat remains conversation-only. Money Center remains creator business home. Notifications guide users to routes; they do not grant access. Destination routes re-check access. liveMoneyEnabled remains OFF. Payouts and cashout remain OFF.
+
+Last two notification commits were audited together. Creator-money notification records and room-safe bell/call behavior are source/backend aligned. Remote migration status verified. Changed Edge functions deployed or verified unchanged; `revenuecat-webhook` is ACTIVE version 18. Installed-app proof remains pending. Source/backend readiness is not installed-app proof. Google Play internal build is still required for visible device closure.

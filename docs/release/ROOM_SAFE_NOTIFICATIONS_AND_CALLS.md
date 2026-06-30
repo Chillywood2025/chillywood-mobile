@@ -31,6 +31,16 @@ This lane does not turn Chat into the notification center. This lane does not tu
 
 Remote migration `20260630130624_creator_money_notifications_activity.sql` was applied through `supabase db push` during this lane so creator-money notification preference columns, notification type checks, and the creator-money notification index are live. A follow-up `supabase db push --dry-run` reported the remote database is up to date.
 
+## Source / Backend Audit Update
+
+Last two notification commits were audited together: `2b125b469995038ea74253393222d10e4428b73d` and `4a549324bf9173f5718c881c5d43827658e7a4ac`. Creator-money notification records and room-safe bell/call behavior are source/backend aligned.
+
+Remote migration status verified: `20260630130624_creator_money_notifications_activity.sql` is applied remotely, and `supabase db push --dry-run` reports the remote database is up to date.
+
+Changed Edge functions deployed or verified unchanged: only `revenuecat-webhook` changed across the audited commits. It was deployed and verified as ACTIVE version 18. `notification-dispatch` and `notification-device-tokens` were unchanged and were not redeployed.
+
+Installed-app proof remains pending. Source/backend readiness is not installed-app proof. Google Play internal build is still required for visible device closure.
+
 ## Files Changed
 
 - `_lib/notifications.ts`

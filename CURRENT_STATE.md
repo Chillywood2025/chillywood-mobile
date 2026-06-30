@@ -1003,6 +1003,8 @@ Incoming Chi'lly Chat calls do not auto-answer. Incoming calls do not auto-leave
 Source proof is closed through `npm run proof:notification-icon-surface-wiring`, `npm run proof:room-safe-notification-and-call-behavior`, and `npm run guard:notification-room-call-policy`. Installed-app proof remains pending until a future Google Play internal build is installed and exercised.
 
 Remote migration `20260630130624_creator_money_notifications_activity.sql` is applied, and `supabase db push --dry-run` reports the remote database is up to date.
+
+June 30, 2026 audit update: Last two notification commits were audited together: `2b125b469995038ea74253393222d10e4428b73d` and `4a549324bf9173f5718c881c5d43827658e7a4ac`. Creator-money notification records and room-safe bell/call behavior are source/backend aligned. Remote migration status verified. Changed Edge functions deployed or verified unchanged: only `revenuecat-webhook` changed, and it is deployed as ACTIVE version 18. Source/backend readiness is not installed-app proof. Google Play internal build is still required for visible device closure.
 # Current State
 
 ## Profile and Platform Visibility Foundation

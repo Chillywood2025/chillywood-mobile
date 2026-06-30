@@ -35,6 +35,16 @@ Notifications are deduped through `notification_event_dedupes`. Buyer and creato
 
 Notification context includes source type, source id, flow, product key, ledger/provider references, sandbox/not-payable flags, no-access-grant metadata, no-payout metadata, Premium separation, and LiveKit authority false.
 
+## Source / Backend Audit Update
+
+Last two notification commits were audited together: `2b125b469995038ea74253393222d10e4428b73d` and `4a549324bf9173f5718c881c5d43827658e7a4ac`. Creator-money notification records and room-safe bell/call behavior are source/backend aligned.
+
+Remote migration status verified: `20260630130624_creator_money_notifications_activity.sql` is applied remotely, and `supabase db push --dry-run` reports the remote database is up to date.
+
+Changed Edge functions deployed or verified unchanged: only `revenuecat-webhook` changed across the audited commits. It was deployed and verified as ACTIVE version 18. `notification-dispatch` and `notification-device-tokens` were unchanged and were not redeployed.
+
+Installed-app proof remains pending. Source/backend readiness is not installed-app proof. Google Play internal build is still required for visible device closure.
+
 ## Buyer Notification Result
 
 - Paid Video: `Video unlocked`, opens `/player/[id]`.
@@ -120,8 +130,8 @@ Validation passed:
 
 Supabase validation passed:
 
-- `supabase migration list` showed the new local source migration `20260630130624_creator_money_notifications_activity.sql` pending on remote.
-- `supabase db push --dry-run` completed successfully and would apply only `20260630130624_creator_money_notifications_activity.sql`.
+- `supabase migration list` now shows `20260630130624_creator_money_notifications_activity.sql` applied remotely.
+- `supabase db push --dry-run` reports the remote database is up to date.
 
 ## Installed-App Proof
 
