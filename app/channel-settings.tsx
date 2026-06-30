@@ -1396,6 +1396,7 @@ export function ChannelStudioScreen() {
   const studioScrollYRef = useRef(0);
   const monetizationStackOffsetRef = useRef(0);
   const monetizationSectionOffsetsRef = useRef<Partial<Record<MonetizationSectionId, number>>>({});
+  const moneyManagerOffsetRef = useRef<number | null>(null);
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
   const [selectedClipVideoFile, setSelectedClipVideoFile] = useState<CreatorVideoFile | null>(null);
   const [selectedClipCoverFile, setSelectedClipCoverFile] = useState<CreatorVideoFile | null>(null);
@@ -1505,6 +1506,31 @@ export function ChannelStudioScreen() {
       setTimeout(scrollToSection, 120);
       setTimeout(scrollToSection, 320);
       setTimeout(scrollToSection, 650);
+    });
+  }, []);
+  const focusActiveMoneyManagerPanel = useCallback(() => {
+    const startingScrollY = studioScrollYRef.current;
+
+    requestAnimationFrame(() => {
+      const scrollToManager = () => {
+        const managerOffset = moneyManagerOffsetRef.current;
+        const waysOffset = monetizationSectionOffsetsRef.current.ways_to_earn;
+        const fallbackOffset = typeof waysOffset === "number"
+          ? monetizationStackOffsetRef.current + waysOffset + 2600
+          : startingScrollY + 1800;
+        const targetOffset = typeof managerOffset === "number"
+          ? monetizationStackOffsetRef.current + managerOffset
+          : fallbackOffset;
+
+        studioScrollRef.current?.scrollTo({
+          y: Math.max(0, targetOffset - 24),
+          animated: true,
+        });
+      };
+
+      setTimeout(scrollToManager, 160);
+      setTimeout(scrollToManager, 360);
+      setTimeout(scrollToManager, 720);
     });
   }, []);
   const toggleClipSection = (id: ClipStudioSectionId) => {
@@ -8008,6 +8034,7 @@ export function ChannelStudioScreen() {
       setActiveMoneyManageTarget(target);
       setMoneyManageNotice(notice);
       setExpandedMonetizationSections((current) => new Set([...current, ...sections]));
+      focusActiveMoneyManagerPanel();
       router.setParams({
         tab: "monetization",
         focus: sections[0] ?? "ways_to_earn",
@@ -8677,7 +8704,13 @@ export function ChannelStudioScreen() {
       };
 
       return (
-        <View style={[styles.panel, styles.moneyFocusedCard]} testID={`money-manager-${activeMoneyManageTarget}`}>
+        <View
+          style={[styles.panel, styles.moneyFocusedCard]}
+          testID={`money-manager-${activeMoneyManageTarget}`}
+          onLayout={(event) => {
+            moneyManagerOffsetRef.current = event.nativeEvent.layout.y;
+          }}
+        >
           <View style={styles.panelHeader}>
             <View style={styles.panelHeaderCopy}>
               <Text style={styles.panelTitle}>{managerTitleByTarget[activeMoneyManageTarget]}</Text>
