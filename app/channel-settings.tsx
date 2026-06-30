@@ -1393,6 +1393,7 @@ export function ChannelStudioScreen() {
   const sourceVideoEventPrefillRef = useRef<string | null>(null);
   const spotlightRouteAppliedRef = useRef<string | null>(null);
   const studioScrollRef = useRef<ScrollView | null>(null);
+  const monetizationStackOffsetRef = useRef(0);
   const monetizationSectionOffsetsRef = useRef<Partial<Record<MonetizationSectionId, number>>>({});
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
   const [selectedClipVideoFile, setSelectedClipVideoFile] = useState<CreatorVideoFile | null>(null);
@@ -1493,13 +1494,20 @@ export function ChannelStudioScreen() {
     });
 
     requestAnimationFrame(() => {
-      setTimeout(() => {
+      const scrollToSection = () => {
         const sectionOffset = monetizationSectionOffsetsRef.current[id];
+        const targetOffset = typeof sectionOffset === "number"
+          ? monetizationStackOffsetRef.current + sectionOffset
+          : 2600;
         studioScrollRef.current?.scrollTo({
-          y: Math.max(0, (sectionOffset ?? 2600) - 24),
+          y: Math.max(0, targetOffset - 24),
           animated: true,
         });
-      }, 80);
+      };
+
+      setTimeout(scrollToSection, 120);
+      setTimeout(scrollToSection, 320);
+      setTimeout(scrollToSection, 650);
     });
   }, [router]);
   const toggleClipSection = (id: ClipStudioSectionId) => {
@@ -5817,7 +5825,13 @@ export function ChannelStudioScreen() {
           </View>
         </View>
 
-        <View style={styles.studioAccordionStack}>
+        <View
+          style={styles.studioAccordionStack}
+          testID="money-center-monetization-section-stack"
+          onLayout={(event) => {
+            monetizationStackOffsetRef.current = event.nativeEvent.layout.y;
+          }}
+        >
           {renderClipAccordion({
             id: "media",
             title: "Video",

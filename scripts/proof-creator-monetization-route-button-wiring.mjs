@@ -73,6 +73,8 @@ for (const [name, source, needle] of requiredRoutes) {
   ["Dynamic feature CTA test IDs", "testID={`money-feature-${feature.key}-cta`}"],
   ["Money Center open Ways to Earn CTA", "money-center-open-ways-to-earn-button"],
   ["Money Center open Ways to Earn scroll focus", "focusMonetizationSection(\"ways_to_earn\")"],
+  ["Money Center monetization stack anchor", "money-center-monetization-section-stack"],
+  ["Money Center absolute section offset", "monetizationStackOffsetRef.current + sectionOffset"],
   ["Money Center section focus anchors", "money-section-${id}"],
   ["Money Center focused section scrolls into view", "studioScrollRef.current?.scrollTo"],
   ["Ways to Earn section", "title: \"Ways to Earn\""],
