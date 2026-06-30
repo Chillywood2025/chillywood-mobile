@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -191,6 +191,9 @@ export default function PublicChannelScreen() {
   const [followBusy, setFollowBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
+  const openTipSheet = useCallback(() => {
+    setTipSheetVisible(true);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -867,8 +870,9 @@ export default function PublicChannelScreen() {
           {canRenderTip ? (
             <AppActionButton
               label={sandboxTesterActive ? "Sandbox Tip" : "Tip"}
-              onPress={() => setTipSheetVisible(true)}
+              onPress={openTipSheet}
               style={styles.actionButtonWide}
+              testID={sandboxTesterActive ? "platform-sandbox-tip-button" : "platform-tip-button"}
               variant="success"
             />
           ) : null}
@@ -1183,7 +1187,7 @@ export default function PublicChannelScreen() {
         body: "Sandbox only. No real money moves.",
         button: "Test tip",
         testID: "tester-tip-creator-button",
-        onPress: () => setTipSheetVisible(true),
+        onPress: openTipSheet,
         available: tipStatus?.canTip === true || sandboxTesterActive,
       },
       {
@@ -1569,7 +1573,7 @@ export default function PublicChannelScreen() {
         button: sandboxTesterActive ? "Test tip" : "Tip",
         testID: sandboxTesterActive ? "tester-tip-creator-button" : "platform-support-tip-button",
         available: tipStatus?.canTip === true || sandboxTesterActive,
-        onPress: () => setTipSheetVisible(true),
+        onPress: openTipSheet,
       },
       {
         title: "Subscribe",
@@ -1671,12 +1675,13 @@ export default function PublicChannelScreen() {
               {(subscriptionNotice && item.title === "Subscribe") || (vipNotice && item.title === "VIP") ? (
                 <Text style={styles.offerMeta}>{item.title === "Subscribe" ? subscriptionNotice : vipNotice}</Text>
               ) : null}
-              <View testID={item.testID} collapsable={false}>
+              <View collapsable={false}>
                 <TouchableOpacity
                   style={[styles.supportButton, item.busy && styles.actionButtonDisabled]}
                   activeOpacity={0.86}
                   disabled={!!item.busy}
                   onPress={item.onPress}
+                  testID={item.testID}
                   accessibilityRole="button"
                   accessibilityLabel={item.button}
                 >

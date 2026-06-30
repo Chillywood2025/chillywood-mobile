@@ -1868,14 +1868,37 @@ export function ChannelStudioScreen() {
     return config;
   }, [refreshCreatorSandboxConfigs]);
 
+  const saveCreatorTipSandboxSetupConfig = useCallback(async (setupSurface: string) => {
+    if (!user?.id) {
+      throw new Error("Enter a real creator source before saving.");
+    }
+
+    return saveCreatorSetupConfig({
+      displayName: "Creator tip",
+      metadata: {
+        google_play_revenuecat_only: true,
+        no_access_grant: true,
+        setup_surface: setupSurface,
+        tip_setup_mode: "sandbox_not_payable",
+      },
+      productKey: "creator_tip_sandbox_099",
+      sourceId: String(user.id),
+      sourceType: "creator_tip",
+    });
+  }, [saveCreatorSetupConfig, user?.id]);
+
   const formatCreatorSetupError = (error: unknown, fallback: string) => {
     const message = error instanceof Error ? error.message : "";
     if (
       message === "Enter a real source UUID before saving."
+      || message === "Enter a real creator source before saving."
       || message === "Choose an approved sandbox product tier."
       || message === "Source type does not match the selected product tier."
     ) {
       return message;
+    }
+    if (/rpc.*blocked|setup rpc.*blocked|permission denied|row-level security|violates row-level security/i.test(message)) {
+      return "Tip settings could not be saved because the setup RPC was blocked.";
     }
     if (/internal sandbox monetization setup/i.test(message)) {
       return "This account is not approved for internal sandbox monetization setup.";
@@ -1958,42 +1981,48 @@ export function ChannelStudioScreen() {
 
     try {
       const current = creatorTipSettings;
-      const nextSettings = await saveMyCreatorTipSettings({
+      const tipSettingsInput = {
         currency: current?.currency ?? "usd",
         defaultAmountCents: current?.defaultAmountCents ?? 300,
         maxAmountCents: current?.maxAmountCents ?? 50000,
         minAmountCents: current?.minAmountCents ?? 100,
         suggestedAmountsCents: current?.suggestedAmountsCents?.length ? current.suggestedAmountsCents : [100, 300, 500, 1000],
         tipsEnabled,
-      });
-      if (tipsEnabled && user?.id) {
-        await saveCreatorSetupConfig({
-          displayName: "Creator tip",
-          metadata: {
-            google_play_revenuecat_only: true,
-            no_access_grant: true,
-            setup_surface: "money_center_tips_manager",
-          },
-          productKey: "creator_tip_sandbox_099",
-          sourceId: String(user.id),
-          sourceType: "creator_tip",
-        });
+      };
+
+      if (tipsEnabled) {
+        await saveCreatorTipSandboxSetupConfig("money_center_tips_manager");
+
+        let nextSettings: CreatorTipSettings | null = null;
+        let publicStatusSyncError: unknown = null;
+        try {
+          nextSettings = await saveMyCreatorTipSettings(tipSettingsInput);
+          setCreatorTipSettings(nextSettings);
+        } catch (error) {
+          publicStatusSyncError = error;
+        }
+
+        await refreshCreatorTips();
+        setTipSettingsNotice(
+          publicStatusSyncError
+            ? "Tips setup is saved in sandbox/not-payable mode. Tip setup is sandbox/not-payable. Live tips require owner/provider activation."
+            : nextSettings?.status === "active"
+              ? "Tips setup is saved in sandbox/not-payable mode. Production tips are not live."
+              : "Tips setup is saved in sandbox/not-payable mode. Tip setup is sandbox/not-payable. Live tips require owner/provider activation.",
+        );
+        return;
       }
+
+      const nextSettings = await saveMyCreatorTipSettings(tipSettingsInput);
       setCreatorTipSettings(nextSettings);
-      setTipSettingsNotice(
-        nextSettings.status === "active"
-          ? "Tips setup is saved in sandbox/not-payable mode. Production tips are not live."
-          : tipsEnabled
-            ? "Tips setup is saved, but production tips still need provider and owner approval."
-            : "Tips setup is paused. Production tips are not live.",
-      );
+      setTipSettingsNotice("Tips setup is paused. Production tips are not live.");
       await refreshCreatorTips();
     } catch (error) {
       setTipSettingsNotice(formatCreatorSetupError(error, "Tip settings could not be saved. Try again later."));
     } finally {
       setTipSettingsBusy(false);
     }
-  }, [creatorTipSettings, refreshCreatorTips, saveCreatorSetupConfig, tipSettingsBusy, user?.id]);
+  }, [creatorTipSettings, refreshCreatorTips, saveCreatorTipSandboxSetupConfig, tipSettingsBusy]);
 
   const handleSaveChannelSubscription = useCallback(async (enabled: boolean) => {
     if (channelSubscriptionSaving) return;
@@ -2118,6 +2147,7 @@ export function ChannelStudioScreen() {
 
     try {
       const currentTipSettings = creatorTipSettings;
+      await saveCreatorTipSandboxSetupConfig("money_center_sandbox_tester_experience");
       await saveMyCreatorTipSettings({
         currency: currentTipSettings?.currency ?? "usd",
         defaultAmountCents: currentTipSettings?.defaultAmountCents ?? 300,
@@ -2127,19 +2157,7 @@ export function ChannelStudioScreen() {
           ? currentTipSettings.suggestedAmountsCents
           : [100, 300, 500, 1000],
         tipsEnabled: true,
-      });
-      await saveCreatorSandboxMonetizationConfig({
-        displayName: "Creator tip",
-        metadata: {
-          google_play_revenuecat_only: true,
-          no_access_grant: true,
-          no_live_payout: true,
-          setup_surface: "money_center_sandbox_tester_experience",
-        },
-        productKey: "creator_tip_sandbox_099",
-        sourceId: String(user.id),
-        sourceType: "creator_tip",
-      });
+      }).catch(() => null);
       completed.push("Tips");
     } catch {
       blockers.push("Google Play sandbox tip setup still needs attention.");
@@ -2330,6 +2348,7 @@ export function ChannelStudioScreen() {
     creatorTipSettings,
     creatorVideos,
     refreshSandboxTesterExperience,
+    saveCreatorTipSandboxSetupConfig,
     sandboxSetupBusy,
     user?.id,
   ]);
@@ -7676,10 +7695,16 @@ export function ChannelStudioScreen() {
     const vipGrossCents = vipPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
     const channelSubscriptionPaidTransactions = creatorChannelSubscriptionTransactions.filter((transaction) => transaction.status === "paid" || transaction.status === "renewal_paid");
     const channelSubscriptionGrossCents = channelSubscriptionPaidTransactions.reduce((total, transaction) => total + transaction.amountCents, 0);
+    const creatorTipSandboxConfig = creatorSandboxConfigs.find((config) => (
+      config.sourceType === "creator_tip"
+      && config.productKey === "creator_tip_sandbox_099"
+      && config.status !== "revoked"
+    )) ?? null;
+    const tipSetupSaved = !!creatorTipSandboxConfig || creatorTipSettings?.tipsEnabled === true;
     const tipFeatureStatus: MonetizationFeatureStatus = (() => {
       if (tipsFlag.state === "locked") return "Blocked";
+      if (tipSetupSaved) return "Setup mode";
       if (!creatorTipSettings) return "Not set up";
-      if (creatorTipSettings.tipsEnabled) return "Setup mode";
       if (creatorTipSettings.status === "active") return "Setup mode";
       if (creatorTipSettings.status === "paused") return "Paused";
       if (creatorTipSettings.status === "blocked") return "Blocked";
@@ -7690,10 +7715,10 @@ export function ChannelStudioScreen() {
       {
         label: "Tips",
         value: tipFeatureStatus,
-        body: creatorTipSettings?.tipsEnabled
+        body: tipSetupSaved
           ? "Tips setup is saved in sandbox/not-payable mode. They do not unlock content, badges, room access, VIP, or perks."
           : "Set up Tips in sandbox/not-payable mode. Production tips still require provider and owner approval.",
-        tone: creatorTipSettings?.tipsEnabled ? "default" : "unavailable",
+        tone: tipSetupSaved ? "default" : "unavailable",
       },
       {
         label: "Payable state",
@@ -8064,14 +8089,14 @@ export function ChannelStudioScreen() {
       {
         key: "tips",
         title: "Tips",
-        configured: creatorTipSettings?.tipsEnabled === true,
-        blocker: creatorTipSettings?.tipsEnabled === true ? undefined : "Tips are not enabled yet.",
-        description: creatorTipSettings?.tipsEnabled === true
+        configured: tipSetupSaved,
+        blocker: tipSetupSaved ? undefined : "Tips are not enabled yet.",
+        description: tipSetupSaved
           ? "Testers can send a sandbox tip. No money moves."
           : "Run setup to turn on the sandbox tip flow.",
         scopeKey: "creator_tip",
-        statusLabel: creatorTipSettings?.tipsEnabled === true ? "Ready" : "Needs setup",
-        actionLabel: creatorTipSettings?.tipsEnabled === true ? "Preview tip flow" : undefined,
+        statusLabel: tipSetupSaved ? "Ready" : "Needs setup",
+        actionLabel: tipSetupSaved ? "Preview tip flow" : undefined,
         onPress: previewCreatorPlatform,
         testID: "money-sandbox-tips-card",
       },
@@ -8278,7 +8303,7 @@ export function ChannelStudioScreen() {
             <>
               {renderSummaryMetricCards(tipSetupCards)}
               <View style={styles.eventActionRow}>
-                {creatorTipSettings?.status !== "active" ? (
+                {!tipSetupSaved ? (
                   <TouchableOpacity
                     style={[styles.eventPrimaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
                     activeOpacity={0.88}
@@ -8303,13 +8328,13 @@ export function ChannelStudioScreen() {
                     style={[styles.eventSecondaryButton, tipSettingsBusy && styles.eventPrimaryButtonDisabled]}
                     activeOpacity={0.88}
                     disabled={tipSettingsBusy}
-                    onPress={() => handleSaveTipSettings(false)}
+                    onPress={() => handleSaveTipSettings(true)}
                     hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
                     accessibilityRole="button"
-                    accessibilityLabel="Pause Tips"
-                    testID="money-manager-tips-pause-button"
+                    accessibilityLabel="Refresh Tips setup"
+                    testID="money-manager-tips-refresh-button"
                   >
-                    <Text style={styles.eventSecondaryButtonText}>Pause Tips</Text>
+                    <Text style={styles.eventSecondaryButtonText}>Refresh Tips setup</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity

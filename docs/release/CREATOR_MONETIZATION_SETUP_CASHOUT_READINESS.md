@@ -10,6 +10,14 @@ Source route/button wiring is fixed. Money Center is the single creator monetiza
 
 Cashout readiness is reachable, but real cashout is not live. Payout provider setup actions remain safe readiness/test actions only while production money movement is off. Premium remains the app-wide subscription flow. Source fixed is not installed-app proof.
 
+## Tips v68 Installed Blocker Source Fix
+
+v68 installed proof was Partial because Tips failed. Creator-side Tips Manager save showed `Tip settings could not be saved. Try again later.`, and the viewer-side Platform Sandbox Tip CTA did not open the tip sheet.
+
+Tips creator setup save is now source-fixed. The Money Center Tips Manager saves `creator_tip_sandbox_099` through the sandbox/not-payable creator config path before best-effort public tip-status sync, and saved config readback drives the Tips setup state. Sandbox Tip CTA opens the tip sheet through the shared opener, and the test hook is attached to the actual tappable element.
+
+Tips remain sandbox/not-payable. Tips do not unlock content, Premium, VIP, subscription, room, event, LiveKit authority, payout, cashout, or payable balance. `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF. Source fixed is not installed-app proof.
+
 ## Creator -> Viewer Source Wiring Proof
 
 Creator and viewer source wiring pairs are proved for each creator monetization flow. The source proof checks the creator-side setup entry, setup/edit action, approved sandbox tier, source selection/source UUID path, save helper/RPC wiring, saved config readback, and sandbox/not-payable copy. It also checks the matching viewer route/gate, locked state, exact source-scoped purchase/readback path where safe, and separation from unrelated unlocks.

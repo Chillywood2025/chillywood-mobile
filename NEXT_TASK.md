@@ -14,6 +14,26 @@ Current lane doc:
 - `docs/release/HEADER_CONTROL_CONSISTENCY_CLEANUP.md`
 - `docs/release/GOOGLE_SIGNED_V66_HEADER_CHAT_UI_PROOF.md`
 - `docs/release/HEADER_PROFILE_AVATAR_FLICKER_FIX.md`
+- `docs/release/GOOGLE_SIGNED_V68_CREATOR_MONETIZATION_E2E_PROOF.md`
+
+Creator Tips v68 installed blocker source fix:
+- Status: source-fixed; installed-app proof remains Pending for a later Google Play internal build.
+- v68 installed proof was Partial because Tips failed.
+- Creator-side Tips Manager save showed `Tip settings could not be saved. Try again later.`
+- Viewer-side Platform showed Sandbox Tip CTA, but tapping it did not open the tip sheet.
+- Tips creator setup save is now source-fixed.
+- Money Center saves the `creator_tip_sandbox_099` sandbox/not-payable config before legacy public tip-status sync.
+- Legacy public tip-status sync is non-blocking for sandbox setup state.
+- Saved Tips config readback drives the Money Center Tips setup state.
+- Sandbox Tip CTA opens the tip sheet.
+- The Sandbox Tip CTA test hook is attached to the actual tappable element.
+- Tips remain sandbox/not-payable.
+- Tips do not unlock content, Premium, VIP, subscription, room, event, LiveKit authority, payout, cashout, or payable balance.
+- `liveMoneyEnabled` remains OFF.
+- Payouts and cashout remain OFF.
+- Source fixed is not installed-app proof.
+- No auth/RLS/money permission weakening happened.
+- No provider/live-money mutation happened.
 
 Creator monetization setup and cashout readiness activation:
 - Status: source/backend-Closed for creator and viewer source wiring; installed-app proof remains Pending if requested.

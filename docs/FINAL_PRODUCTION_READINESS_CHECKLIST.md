@@ -1,5 +1,13 @@
 # Final Production Readiness Checklist
 
+## Creator Tips V68 Installed Blocker Source Fix
+
+Source status: fixed. Installed-app status: Pending for a later Google Play internal build.
+
+v68 installed proof was Partial because Tips failed. Creator-side Tips Manager save showed `Tip settings could not be saved. Try again later.`, and the viewer-side Platform Sandbox Tip CTA did not open the tip sheet. Tips creator setup save is now source-fixed: the Money Center Tips Manager saves `creator_tip_sandbox_099` through the sandbox/not-payable creator config path before best-effort public tip-status sync, then uses saved config readback for setup state. Sandbox Tip CTA opens the tip sheet and the test hook is attached to the actual tappable element.
+
+Tips remain sandbox/not-payable. Tips do not unlock content, Premium, VIP, subscription, room, event, LiveKit authority, payout, cashout, or payable balance. `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF. Source fixed is not installed-app proof. No auth/RLS/money permission weakening happened. No provider/live-money mutation happened.
+
 ## Creator Monetization Setup And Cashout Readiness Activation
 
 Source/backend status: Closed for setup/readiness mode. Installed-app status: Pending if Google Play internal proof is requested for this specific UI lane.
