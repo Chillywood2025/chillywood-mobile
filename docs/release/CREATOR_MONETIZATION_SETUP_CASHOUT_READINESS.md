@@ -4,9 +4,15 @@ Date: 2026-06-30
 
 Verdict: Closed for source/backend setup readiness. Installed-app proof remains Pending if the owner requires Google Play internal proof for this specific UI lane.
 
+## Source Route/Button Wiring
+
+Source route/button wiring is fixed. Money Center is the single creator monetization home. `/creator-monetization-setup` is compatibility-only and lands in Money Center Offers setup. `/monetize`, `/revenue`, and `/payouts` compatibility routes land in the correct Money Center focus areas. Each creator monetization flow has a real setup action, not stale proof copy. Paid Video, Tips, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass setup actions are wired to source-specific setup/save paths, the shared sandbox config helper, or the correct source setup surface. Saved config readback is wired in Money Center.
+
+Cashout readiness is reachable, but real cashout is not live. Payout provider setup actions remain safe readiness/test actions only while production money movement is off. Premium remains the app-wide subscription flow. Source fixed is not installed-app proof.
+
 ## Root Cause
 
-Creator-money proof and readiness rows existed, but the creator-facing Money Center could still feel like a stale proof dashboard: key setup switches defaulted closed, cashout readiness was tied too closely to payout enablement, and Tips setup surfaced payout-provider actions instead of letting creators configure setup safely.
+Creator-money proof and readiness rows existed, but the creator-facing Money Center could still feel like a stale proof dashboard: key setup switches defaulted closed, cashout readiness was tied too closely to payout enablement, Tips setup surfaced payout-provider actions instead of letting creators configure setup safely, and some creator setup entry points still needed explicit route/button wiring into the real Money Center Offers and Cashout readiness areas.
 
 ## Switch Changes
 

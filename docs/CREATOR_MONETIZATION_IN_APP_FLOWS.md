@@ -4,6 +4,8 @@ Date: June 5, 2026
 
 June 30, 2026 activation update: creator monetization setup is usable in sandbox/not-payable mode. Creator setup does not mean live money is active. Creators can access cashout readiness, but real cashout is not live. Cashout readiness does not execute payouts. No real payout, transfer, withdrawal, or payable balance is created. `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF for production money movement. Saved creator configs are sandbox/not-payable. Production sales require owner/provider activation. Production cashout requires Stripe/live provider approval, tax/KYC readiness, fraud/support/legal review, and owner approval. Premium remains the app-wide subscription flow. Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are creator monetization flows. Do not show proved/readiness boxes instead of usable setup controls. No auth/RLS/money permission weakening happened. No provider/live-money mutation happened.
 
+June 30, 2026 source wiring update: Source route/button wiring is fixed. Money Center is the single creator monetization home. `/creator-monetization-setup` is compatibility-only and lands in Money Center Offers setup. Each creator monetization flow has a real setup action, not stale proof copy. Cashout readiness is reachable, but real cashout is not live. Saved config readback is wired in Money Center. Source fixed is not installed-app proof.
+
 Completion update: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` now closes the setup-flow matrix. `/creator-monetization-setup` saved sandbox/not-payable configs for paid content, Watch-Party Live ticket, Live Watch-Party access pass, Live Watch-Party seat pass, creator tip, event pass, and physical merch readiness against proved source fixtures. Remote readback shows processed sandbox provider events and consumed intents for every Android digital product, sandbox/not-payable ledger rows for every digital product, access grants where appropriate, Stripe merch sandbox launch/readiness, payout readiness read-only, and zero production/payout/payable/publish/host-power config rows.
 
 Viewer/Admin QA update: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures the Play-installed Android setup/tier/internal-sandbox/merch/payout-readiness screens and correct Admin denial for the non-admin tester session. Fresh contextual viewer-gate and Owner/Admin drilldown screenshots remain visual QA blockers until a route-backed safe fixture set and active Owner/Admin session are available; backend/provider proof remains complete.
@@ -12,7 +14,7 @@ This lane adds creator-facing setup flows on top of the already-proved sandbox p
 
 ## What Changed
 
-- Added `/creator-monetization-setup`.
+- Kept `/creator-monetization-setup` as a compatibility route that lands in Money Center Offers setup.
 - Added `creator_monetization_configs` via migration `20260605000610_creator_monetization_in_app_setup_flows.sql`.
 - Added server-side access binding via `20260605002000_bound_creator_monetization_setup_access.sql`, so the save RPC requires owner/operator or active beta/internal tester access.
 - Added creator/admin RPCs:
@@ -20,7 +22,7 @@ This lane adds creator-facing setup flows on top of the already-proved sandbox p
   - `list_my_creator_sandbox_monetization_configs`
   - `admin_list_creator_sandbox_monetization_configs`
 - Added `_lib/creatorMonetizationSetup.ts` for approved tier definitions, config save/read helpers, and sandbox launch helpers.
-- Linked Platform Studio Money Center sections to the setup route.
+- Linked Platform Studio Money Center sections, compatibility routes, and source-specific setup buttons to the Money Center setup/readiness areas.
 
 ## Approved Sandbox Tiers
 

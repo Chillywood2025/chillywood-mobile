@@ -115,7 +115,14 @@ assertIncludes(channelSettings, "Offer type: paid_event", "paid event offer row"
 assertIncludes(channelSettings, "Offer type: merch", "merch offer row");
 assertIncludes(channelSettings, "moneyTransactionFilter", "single filtered transactions list");
 assertIncludes(creatorMonetizationSetupRoute, "focus=offers", "creator setup compatibility redirect");
+assertIncludes(monetizeRoute, "focus=offers", "monetize compatibility redirect");
 assertIncludes(channelSettings, "Sandbox ready", "sandbox-ready digital sales copy");
+assertIncludes(channelSettings, "listMyCreatorSandboxMonetizationConfigs", "creator sandbox config readback wiring");
+assertIncludes(channelSettings, "saveCreatorSetupConfig", "shared creator setup save wrapper");
+assertIncludes(channelSettings, "money-saved-sandbox-config-readback", "saved sandbox config visible readback");
+assertIncludes(channelSettings, "money-manager-watch-party-save-config-button", "Watch-Party setup save config action");
+assertIncludes(channelSettings, "watchPartySetupSavingId", "Watch-Party setup save busy state");
+assertIncludes(channelSettings, "canStartStripeSetup = isMoneyFeatureSandboxOrOn(stripeConnectFlag.state)", "safe payout setup readiness visibility");
 assertIncludes(channelSettings, "No verified tips yet.", "no fake earnings copy");
 assertIncludes(channelSettings, "It does not charge Android users for digital goods.", "Android digital Stripe block");
 assertIncludes(channelSettings, "Stripe Connect is payout setup only.", "Stripe Connect payout boundary");
@@ -230,7 +237,7 @@ assertIncludes(moneyKillSwitchMigration, "('live_money_enabled', 'off'", "live m
   assertIncludes(moneyKillSwitchMigration, `'${key}'`, `Money kill switch key ${key}`);
 });
 
-assertIncludes(monetizeRoute, "focus=overview", "old monetize route maps to Money Center overview");
+assertIncludes(monetizeRoute, "focus=offers", "old monetize route maps to Money Center Offers setup");
 assertIncludes(revenueRoute, "focus=balance", "old revenue route maps to Money Center balance");
 assertIncludes(payoutsRoute, "focus=payouts", "old payouts route maps to Money Center payouts");
 assertIncludes(channelSettings, "normalized === \"monetize\" || normalized === \"payouts\" || normalized === \"revenue\"", "old tab params normalize to Monetization");

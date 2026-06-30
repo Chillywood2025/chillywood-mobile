@@ -49,6 +49,7 @@ import {
   savePaidWatchPartyOffer,
   type PaidWatchPartyTicketAccess,
 } from "../../_lib/paidWatchPartyTickets";
+import { saveCreatorSandboxMonetizationConfig } from "../../_lib/creatorMonetizationSetup";
 import { InternalInviteSheet } from "../../components/chat/internal-invite-sheet";
 import { useSession } from "../../_lib/session";
 import {
@@ -882,6 +883,17 @@ export default function WatchPartyIndexScreen() {
         seatLimit: Number.isFinite(seatLimit) && seatLimit > 0 ? seatLimit : null,
         status: "sandbox",
       });
+      await saveCreatorSandboxMonetizationConfig({
+        displayName: "Sandbox Watch-Party Seat Pass",
+        metadata: {
+          party_id: offer.partyId,
+          setup_surface: "watch_party_waiting_room",
+          viewer_route: "/watch-party/[partyId]",
+        },
+        productKey: "watch_party_live_ticket_sandbox_099",
+        sourceId: offer.id,
+        sourceType: "watch_party_live",
+      });
       setPaidTicketGate(null);
       setPaidTicketNotice(
         `Seat Passes are sandbox/test only at ${formatPaidWatchPartyTicketPrice(offer.priceCents, offer.currency)} and not payable. Live money is not active.`,
@@ -893,8 +905,21 @@ export default function WatchPartyIndexScreen() {
         room_type: "party_room",
         source_surface: "party_waiting_room",
       });
-    } catch {
-      setPaidTicketNotice("Paid Seat Pass setup is not available for this room yet.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (
+        message === "Enter a real source UUID before saving."
+        || message === "Choose an approved sandbox product tier."
+        || message === "Source type does not match the selected product tier."
+      ) {
+        setPaidTicketNotice(message);
+      } else if (/internal sandbox monetization setup/i.test(message)) {
+        setPaidTicketNotice("This account is not approved for internal sandbox monetization setup.");
+      } else if (/product|provider|revenuecat|google play/i.test(message)) {
+        setPaidTicketNotice("Sandbox product is not available on this build/account.");
+      } else {
+        setPaidTicketNotice("Paid Seat Pass setup is not available for this room yet.");
+      }
     } finally {
       setPaidTicketBusy(false);
     }

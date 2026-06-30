@@ -17,6 +17,11 @@ Current lane doc:
 
 Creator monetization setup and cashout readiness activation:
 - Status: source/backend-Closed pending any later installed-app proof request.
+- Source route/button wiring is fixed.
+- Money Center is the single creator monetization home.
+- `/creator-monetization-setup` is compatibility-only and lands in Money Center Offers setup.
+- Each creator monetization flow has a real setup action, not stale proof copy.
+- Cashout readiness is reachable, but real cashout is not live.
 - Creator monetization setup is usable in sandbox/not-payable mode.
 - Creator setup does not mean live money is active.
 - Creators can access cashout readiness, but real cashout is not live.
@@ -30,6 +35,7 @@ Creator monetization setup and cashout readiness activation:
 - Premium remains the app-wide subscription flow.
 - Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are creator monetization flows.
 - Do not show proved/readiness boxes instead of usable setup controls.
+- Source fixed is not installed-app proof.
 - No auth/RLS/money permission weakening happened.
 - No provider/live-money mutation happened.
 
