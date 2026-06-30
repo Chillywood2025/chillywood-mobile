@@ -1488,18 +1488,14 @@ export function ChannelStudioScreen() {
   const focusMonetizationSection = useCallback((id: MonetizationSectionId) => {
     setActiveStudioTab("monetization");
     setExpandedMonetizationSections((current) => new Set([...current, id]));
+    const startingScrollY = studioScrollYRef.current;
 
     requestAnimationFrame(() => {
       const scrollToSection = () => {
         const sectionOffset = monetizationSectionOffsetsRef.current[id];
-        const measuredTargetOffset = typeof sectionOffset === "number"
+        const targetOffset = typeof sectionOffset === "number"
           ? monetizationStackOffsetRef.current + sectionOffset
-          : 2600;
-        const targetOffset = Math.max(
-          measuredTargetOffset,
-          studioScrollYRef.current + 920,
-          id === "ways_to_earn" ? 3600 : 0,
-        );
+          : Math.max(startingScrollY + 920, id === "ways_to_earn" ? 3600 : 2600);
         studioScrollRef.current?.scrollTo({
           y: Math.max(0, targetOffset - 24),
           animated: true,
