@@ -146,6 +146,7 @@ import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { ParticipantDetailSheet } from "../../components/room/participant-detail-sheet";
 import { RoomParticipantTile } from "../../components/room/participant-tile";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
+import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { useChannelFollowAction } from "../../hooks/use-channel-follow-action";
 import { ProtectedSessionNote, getProtectedSessionCopy } from "../../components/prototype/protected-session-note";
 import { SocialAttachmentActionSheet } from "../../components/social/social-attachment-action-sheet";
@@ -3469,6 +3470,7 @@ export default function WatchPartyRoomScreen() {
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.kicker}>Chi'llywood · Watch Party</Text>
+          <NotificationBellButton surface="watch-party-room" roomSafe />
           {/* Connection badge */}
           <View style={[styles.connBadge, { borderColor: connColor[connState] + "44" }]}>
             <View style={[styles.connDot, { backgroundColor: connColor[connState] }]} />

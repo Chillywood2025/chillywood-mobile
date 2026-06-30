@@ -65,6 +65,7 @@ import { AppEmptyState, AppSection } from "../../components/ui/app-surface";
 import { StableImage } from "../../components/ui/StableImage";
 import { AppText } from "../../components/ui/typography";
 import { setMainTabHeaderProfileSnapshot } from "../../components/navigation/main-tab-profile-cache";
+import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 
 type TitleRow = Omit<
   Pick<
@@ -1001,6 +1002,7 @@ export default function HomeScreen() {
               <Text style={styles.utilityKicker}>HOME</Text>
             </View>
             <View style={styles.utilityActions}>
+              <NotificationBellButton surface="main-tab-home" />
               <TouchableOpacity
                 testID="main-tab-home-profile-entry"
                 style={[styles.profileAvatarButton, !currentChannel?.id && styles.profileAvatarButtonDisabled]}

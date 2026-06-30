@@ -993,6 +993,16 @@ Device proof on `R5CR120QCBF` used the Play-installed app (`installerPackageName
 ## Shared Player Fullscreen Rails Exact Component Fix
 
 June 6, 2026 Shared Player fullscreen rails follow-up corrects the final right-rail participant bubble mismatch. The right rail now reuses the same portrait shared-player `renderWatchPartyBubbleGridSurface` / `LiveKitStageMediaSurface` path so LiveKit camera/avatar bubbles match portrait instead of falling back through the non-LiveKit participant panel. The fullscreen left rail remains the existing room comments renderer with compact rail-specific presentation, and the center video/player sizing and playback path are unchanged. Fullscreen right rail does not show `Shared Player` or `Shared playback stays here if the room drops back from live camera.` Proof target: `/tmp/chillywood-shared-player-fullscreen-bubble-reuse-proof-20260605/`.
+
+## Room-Safe Notifications And Calls
+
+June 30, 2026 source integration adds an icon-only notification bell across normal headers and room-safe notification tray/banner behavior for Watch-Party and Live Stage surfaces. Notification bell is icon-only. Bell badge is backed by real notification unread summary. Normal app surfaces show the bell next to existing header actions. Room/live surfaces use room-safe notification tray/banner behavior.
+
+Incoming Chi'lly Chat calls do not auto-answer. Incoming calls do not auto-leave or hijack room mic/camera. Leave room and answer requires explicit user action. Hosts receive an extra confirmation before leaving a hosted live room. Chat remains conversation-only. Money Center remains creator business home. Notifications guide users to routes; they do not grant access. Destination routes re-check access. liveMoneyEnabled remains OFF. Payouts and cashout remain OFF.
+
+Source proof is closed through `npm run proof:notification-icon-surface-wiring`, `npm run proof:room-safe-notification-and-call-behavior`, and `npm run guard:notification-room-call-policy`. Installed-app proof remains pending until a future Google Play internal build is installed and exercised.
+
+Remote migration `20260630130624_creator_money_notifications_activity.sql` is applied, and `supabase db push --dry-run` reports the remote database is up to date.
 # Current State
 
 ## Profile and Platform Visibility Foundation

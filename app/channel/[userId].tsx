@@ -70,6 +70,7 @@ import { MoneyScopeInfoButton, type MoneyScopeKey } from "../../components/monet
 import { TipSheet } from "../../components/monetization/tip-sheet";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../../components/creator-media/CreatorContentActionSheet";
 import { AppActionButton, AppEmptyState, AppSection, AppStatusPill } from "../../components/ui/app-surface";
+import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 
 type ChannelLoadState = "loading" | "ready" | "not_found" | "blocked" | "locked";
 
@@ -769,13 +770,16 @@ export default function PublicChannelScreen() {
         <Text style={styles.navButtonText}>←</Text>
       </TouchableOpacity>
       <Text style={styles.navTitle}>Platform</Text>
-      {showOwnerControls ? (
-        <TouchableOpacity style={styles.navStudioButton} activeOpacity={0.86} onPress={() => openStudio()}>
-          <Text style={styles.navStudioText}>Platform Studio</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.navSpacer} />
-      )}
+      <View style={styles.navActions}>
+        <NotificationBellButton surface="platform-channel" />
+        {showOwnerControls ? (
+          <TouchableOpacity style={styles.navStudioButton} activeOpacity={0.86} onPress={() => openStudio()}>
+            <Text style={styles.navStudioText}>Platform Studio</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.navSpacer} />
+        )}
+      </View>
     </View>
   );
 
@@ -1882,6 +1886,11 @@ const styles = StyleSheet.create({
     color: "#F8FAFF",
     fontSize: 15,
     fontWeight: "900",
+  },
+  navActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   navStudioButton: {
     minWidth: 72,

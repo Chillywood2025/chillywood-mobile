@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ActivityIndicator, Image, ImageBackground, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, Vibration, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -406,6 +406,7 @@ function SettingsRow({ title, subtitle, value, onPress, tone = "default", childr
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ section?: string }>();
   const insets = useSafeAreaInsets();
   const { isLoading, isSignedIn, user } = useSession();
   const [signingOut, setSigningOut] = useState(false);
@@ -469,6 +470,13 @@ export default function SettingsScreen() {
   const activeProfileBackgroundUrl = isProfileMediaActive(myProfile?.profileBackgroundMediaStatus)
     ? myProfile?.profileBackgroundUrl
     : undefined;
+
+  useEffect(() => {
+    const section = String(params.section ?? "").trim().toLowerCase();
+    if (section === "notifications" || section === "activity") {
+      setExpandedSections((current) => ({ ...current, notifications: true }));
+    }
+  }, [params.section]);
 
   useEffect(() => {
     if (isLoading || isSignedIn) return;

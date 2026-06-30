@@ -122,6 +122,7 @@ import { AccessSheet, type AccessSheetReason } from "../../../components/monetiz
 import { MoneyScopeInfoButton } from "../../../components/monetization/MoneyScopeInfoButton";
 import { RouteBackedMonetizationProofCard } from "../../../components/monetization/route-backed-monetization-proof-card";
 import { ParticipantDetailSheet } from "../../../components/room/participant-detail-sheet";
+import { NotificationBellButton } from "../../../components/notifications/notification-bell-button";
 import { RoomReactionPicker, pushRecentReaction } from "../../../components/room/reaction-picker";
 import { getProtectedSessionCopy } from "../../../components/prototype/protected-session-note";
 import { ReportSheet } from "../../../components/safety/report-sheet";
@@ -3737,6 +3738,7 @@ export default function WatchPartyLiveStageScreen({
           ) : null}
         </View>
         <View style={styles.stageTopChromeActions}>
+          <NotificationBellButton surface="live-stage" roomSafe />
           <TouchableOpacity
             style={[styles.stageTopMenuButton, controlsLocked && styles.stageTopMenuButtonActive]}
             activeOpacity={0.84}

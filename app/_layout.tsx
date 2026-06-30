@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -26,6 +26,7 @@ import { bootstrapMonetizationFoundation } from "../_lib/monetization";
 import {
   readLatestRingingChillyChatCallInviteForCallee,
   subscribeToIncomingChillyChatCallInvites,
+  updateChillyChatCallInviteStatus,
   type ChillyChatCallInvite,
 } from "../_lib/chillyChatCalls";
 import { getChatThread } from "../_lib/chat";
@@ -33,8 +34,10 @@ import {
   configureNotificationRuntime,
   readNotificationPreferences,
   refreshAndroidPushRegistrationIfGranted,
+  subscribeToForegroundActivityNotifications,
   subscribeToForegroundNotificationAlerts,
   subscribeToNotificationResponses,
+  type ForegroundActivityNotification,
   type ForegroundNotificationAlert,
 } from "../_lib/notifications";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
@@ -409,7 +412,27 @@ const buildIncomingCallPath = (invite: ChillyChatCallInvite) => {
   return `/chat/${invite.threadId}?${params.toString()}`;
 };
 
-const buildIncomingCallAlertFromInvite = async (invite: ChillyChatCallInvite): Promise<ForegroundNotificationAlert> => {
+type IncomingCallAlert = ForegroundNotificationAlert & {
+  invite?: ChillyChatCallInvite | null;
+};
+
+const ROOM_SAFE_CALL_PATH_PREFIXES = [
+  "/watch-party",
+  "/watch-party/",
+  "/watch-party/live-stage",
+  "/communication",
+  "/communication/",
+] as const;
+
+const isRoomSafeIncomingCallPath = (pathname: string) => (
+  ROOM_SAFE_CALL_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix))
+);
+
+const isHostedLiveSurfacePath = (pathname: string) => (
+  pathname === "/watch-party/live-stage" || pathname.startsWith("/watch-party/live-stage/")
+);
+
+const buildIncomingCallAlertFromInvite = async (invite: ChillyChatCallInvite): Promise<IncomingCallAlert> => {
   const callLabel = invite.callType === "voice" ? "voice" : "video";
   const thread = await getChatThread(invite.threadId).catch(() => null);
   const callerName = String(thread?.otherMember?.displayName ?? "").trim();
@@ -417,6 +440,7 @@ const buildIncomingCallAlertFromInvite = async (invite: ChillyChatCallInvite): P
     body: callerName
       ? `${callerName} is calling you on Chi'lly Chat.`
       : `Incoming Chi'lly Chat ${callLabel} call.`,
+    invite,
     inviteId: invite.id,
     path: buildIncomingCallPath(invite),
     title: `Incoming Chi'lly Chat ${callLabel} call`,
@@ -426,12 +450,13 @@ const buildIncomingCallAlertFromInvite = async (invite: ChillyChatCallInvite): P
 
 function IncomingCallNotificationBridge() {
   const router = useRouter();
+  const pathname = usePathname();
   const { isSignedIn, user } = useSession();
-  const [alert, setAlert] = useState<ForegroundNotificationAlert | null>(null);
+  const [alert, setAlert] = useState<IncomingCallAlert | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestInviteAlertIdRef = useRef("");
 
-  const showAlert = (nextAlert: ForegroundNotificationAlert) => {
+  const showAlert = (nextAlert: IncomingCallAlert) => {
     if (nextAlert.inviteId && latestInviteAlertIdRef.current === nextAlert.inviteId) {
       return;
     }
@@ -497,22 +522,53 @@ function IncomingCallNotificationBridge() {
 
   if (!alert) return null;
 
-  const openCall = () => {
+  const roomSafeCall = isRoomSafeIncomingCallPath(pathname);
+
+  const clearAlert = () => {
     if (dismissTimeoutRef.current) {
       clearTimeout(dismissTimeoutRef.current);
       dismissTimeoutRef.current = null;
     }
-    const path = alert.path;
     setAlert(null);
+  };
+
+  const openCall = () => {
+    const path = alert.path;
+    clearAlert();
     router.push(path as Parameters<typeof router.push>[0]);
   };
 
-  const dismiss = () => {
-    if (dismissTimeoutRef.current) {
-      clearTimeout(dismissTimeoutRef.current);
-      dismissTimeoutRef.current = null;
+  const decline = async () => {
+    const invite = alert.invite ?? null;
+    const actorUserId = String(user?.id ?? "").trim();
+    clearAlert();
+    if (invite && actorUserId) {
+      await updateChillyChatCallInviteStatus({
+        actorUserId,
+        invite,
+        status: "declined",
+      }).catch(() => null);
     }
-    setAlert(null);
+  };
+
+  const replyInChat = () => {
+    const threadId = String(alert.invite?.threadId ?? "").trim();
+    clearAlert();
+    router.push((threadId ? `/chat/${threadId}` : "/chat") as Parameters<typeof router.push>[0]);
+  };
+
+  const leaveRoomAndAnswer = () => {
+    const hostWarning = isHostedLiveSurfacePath(pathname);
+    Alert.alert(
+      "Leave room and answer?",
+      hostWarning
+        ? "Answering will leave or pause your current room media session. You are hosting. Leaving may end or disrupt the room."
+        : "Answering will leave or pause your current room media session. Returning will re-check your room access.",
+      [
+        { text: "Stay", style: "cancel" },
+        { text: "Leave room and answer", style: "destructive", onPress: openCall },
+      ],
+    );
   };
 
   return (
@@ -523,28 +579,105 @@ function IncomingCallNotificationBridge() {
       accessibilityLabel="Incoming Chi'lly Chat call overlay"
     >
       <View style={styles.incomingCallCard}>
-        <TouchableOpacity
-          activeOpacity={0.86}
-          onPress={openCall}
+        <View
           style={styles.incomingCallOpenAction}
-          testID="app-wide-incoming-call-banner"
-          accessibilityLabel="Open incoming Chi'lly Chat call"
+          testID={roomSafeCall ? "room-safe-incoming-call-banner" : "app-wide-incoming-call-banner"}
+          accessibilityLabel={roomSafeCall ? "Room-safe incoming Chi'lly Chat call" : "Incoming Chi'lly Chat call"}
         >
           <Text style={styles.incomingCallEyebrow}>Chi'lly Chat</Text>
-          <Text style={styles.incomingCallTitle}>{alert.title}</Text>
-          <Text style={styles.incomingCallBody}>{alert.body}</Text>
-          <Text style={styles.incomingCallActionText}>Tap to answer</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          activeOpacity={0.82}
-          onPress={dismiss}
-          style={styles.incomingCallDismiss}
-          testID="app-wide-incoming-call-dismiss"
-          accessibilityLabel="Dismiss incoming Chi'lly Chat call alert"
-        >
-          <Text style={styles.incomingCallDismissText}>Dismiss</Text>
-        </TouchableOpacity>
+          <Text style={styles.incomingCallTitle}>
+            {roomSafeCall ? "Incoming Chi'lly Chat call" : alert.title}
+          </Text>
+          <Text style={styles.incomingCallBody}>
+            {roomSafeCall
+              ? "Answering will leave or pause your current room media session."
+              : alert.body}
+          </Text>
+        </View>
+        <View style={styles.incomingCallActions}>
+          <TouchableOpacity
+            activeOpacity={0.82}
+            onPress={() => {
+              void decline();
+            }}
+            style={[styles.incomingCallButton, styles.incomingCallSecondaryButton]}
+            testID={roomSafeCall ? "room-safe-incoming-call-decline" : "app-wide-incoming-call-decline"}
+            accessibilityLabel="Decline incoming Chi'lly Chat call"
+          >
+            <Text style={styles.incomingCallSecondaryText}>Decline</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.82}
+            onPress={replyInChat}
+            style={[styles.incomingCallButton, styles.incomingCallSecondaryButton]}
+            testID={roomSafeCall ? "room-safe-incoming-call-reply-chat" : "app-wide-incoming-call-reply-chat"}
+            accessibilityLabel="Reply in Chi'lly Chat"
+          >
+            <Text style={styles.incomingCallSecondaryText}>Reply in Chat</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.86}
+            onPress={roomSafeCall ? leaveRoomAndAnswer : openCall}
+            style={[styles.incomingCallButton, styles.incomingCallPrimaryButton]}
+            testID={roomSafeCall ? "room-safe-incoming-call-leave-answer" : "app-wide-incoming-call-answer"}
+            accessibilityLabel={roomSafeCall ? "Leave room and answer Chi'lly Chat call" : "Answer Chi'lly Chat call"}
+          >
+            <Text style={styles.incomingCallPrimaryText}>
+              {roomSafeCall ? "Leave room and answer" : "Answer"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
+    </View>
+  );
+}
+
+function RoomSafeActivityNotificationBridge() {
+  const pathname = usePathname();
+  const [alert, setAlert] = useState<ForegroundActivityNotification | null>(null);
+  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const roomSafeSurface = isRoomSafeIncomingCallPath(pathname);
+
+  useEffect(() => {
+    const subscription = subscribeToForegroundActivityNotifications((nextAlert) => {
+      if (!isRoomSafeIncomingCallPath(pathname)) return;
+      setAlert(nextAlert);
+      if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = setTimeout(() => {
+        setAlert(null);
+        dismissTimeoutRef.current = null;
+      }, 6500);
+    });
+
+    return () => {
+      subscription.remove();
+      if (dismissTimeoutRef.current) clearTimeout(dismissTimeoutRef.current);
+    };
+  }, [pathname]);
+
+  if (!roomSafeSurface || !alert) return null;
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={styles.roomSafeActivityToastOverlay}
+      testID="room-safe-notification-toast"
+      accessibilityLabel={alert.title}
+    >
+      <TouchableOpacity
+        activeOpacity={0.84}
+        style={styles.roomSafeActivityToast}
+        onPress={() => setAlert(null)}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss room-safe notification"
+      >
+        <Text style={styles.roomSafeActivityToastTitle}>{alert.title}</Text>
+        <Text style={styles.roomSafeActivityToastBody} numberOfLines={2}>
+          {alert.category === "creator_money_sale"
+            ? "New creator activity"
+            : alert.body}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -668,6 +801,7 @@ function RootNavigator() {
   return (
     <>
       <RouteAnalyticsBridge />
+      <RoomSafeActivityNotificationBridge />
       <IncomingCallNotificationBridge />
       <InterstitialAdController />
       <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false }}>
@@ -966,21 +1100,71 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 18,
   },
-  incomingCallActionText: {
-    color: "#A9F6D2",
+  incomingCallActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  incomingCallButton: {
+    minHeight: 34,
+    borderRadius: 17,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  incomingCallSecondaryButton: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  incomingCallPrimaryButton: {
+    flexGrow: 1,
+    backgroundColor: "#A9F6D2",
+  },
+  incomingCallSecondaryText: {
+    color: "#D7E4EA",
     fontSize: 12,
     fontWeight: "900",
-    marginTop: 4,
   },
-  incomingCallDismiss: {
-    alignSelf: "flex-end",
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  incomingCallDismissText: {
-    color: "#B7C1CC",
+  incomingCallPrimaryText: {
+    color: "#071014",
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "900",
+  },
+  roomSafeActivityToastOverlay: {
+    position: "absolute",
+    top: 84,
+    left: 14,
+    right: 14,
+    zIndex: 35,
+    alignItems: "center",
+  },
+  roomSafeActivityToast: {
+    maxWidth: 360,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(7,12,18,0.92)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 7,
+  },
+  roomSafeActivityToastTitle: {
+    color: "#F4F7FC",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  roomSafeActivityToastBody: {
+    color: "#AAB4C8",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: 2,
   },
 });

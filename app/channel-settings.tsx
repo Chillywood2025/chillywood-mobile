@@ -279,6 +279,7 @@ import { normalizeUserProfile, readUserProfile, saveUserProfile, updateMyPlatfor
 import { CreatorVideoCard } from "../components/creator-media/creator-video-card";
 import { CreatorContentActionSheet, type CreatorContentActionSheetVisibilityAction } from "../components/creator-media/CreatorContentActionSheet";
 import { MoneyScopeInfoButton, type MoneyScopeKey } from "../components/monetization/MoneyScopeInfoButton";
+import { NotificationBellButton } from "../components/notifications/notification-bell-button";
 import { BetaAccessScreen } from "../components/system/beta-access-screen";
 import { AppActionButton, AppEmptyState, AppStickyActionBar } from "../components/ui/app-surface";
 
@@ -9827,7 +9828,7 @@ export function ChannelStudioScreen() {
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.kicker}>{appDisplayName.toUpperCase()} · PLATFORM STUDIO</Text>
-          <View style={{ width: 18 }} />
+          <NotificationBellButton surface="channel-studio" />
         </View>
 
         {renderStudioHeader()}
@@ -10495,6 +10496,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
   backArrow: {
     color: "#fff",
@@ -10502,10 +10504,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   kicker: {
+    flex: 1,
     color: "#AAB3C7",
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.1,
+    textAlign: "center",
   },
   heroCard: {
     borderRadius: 18,

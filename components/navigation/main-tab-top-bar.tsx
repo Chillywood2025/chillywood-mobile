@@ -22,6 +22,7 @@ import {
   getMainTabHeaderProfileSnapshot,
   setMainTabHeaderProfileSnapshot,
 } from "./main-tab-profile-cache";
+import { NotificationBellButton } from "../notifications/notification-bell-button";
 
 type MainTabTopBarProps = {
   surface: "home" | "explore" | "live" | "library";
@@ -124,6 +125,7 @@ export function MainTabTopBar({ surface, label, style }: MainTabTopBarProps) {
         <Text style={styles.kicker}>{label}</Text>
       </View>
       <View style={styles.actions}>
+        <NotificationBellButton surface={`main-tab-${surface}`} />
         <TouchableOpacity
           testID={`main-tab-${surface}-profile-entry`}
           style={[styles.avatarButton, !profile?.id && styles.avatarButtonDisabled]}

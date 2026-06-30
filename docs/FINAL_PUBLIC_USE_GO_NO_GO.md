@@ -378,3 +378,9 @@ Tester-visible monetization UX is separate from live money settlement. Premium m
 Visible-surface active wiring tester delivery: Closed. Commit 7138dd2 was pushed to origin/main before delivery. EAS Update group `d7aac53c-65bb-4bf7-ae69-04bfea248e0a` and Android update `019f0533-920e-7fca-8f45-74b1f538040a` were published to branch `production` for runtime `1.0.0`.
 
 Play internal/closed testing remains the approved tester path. Sideload is not an approved tester delivery path. No APK sideload was used. No app uninstall/reinstall/clear-data happened unless explicitly owner-approved. Testers must verify visible controls in the installed tester build. No Play production submission happened. No provider mutation happened. liveMoneyEnabled remains OFF. Payouts, cashout, Stripe Connect production, payable balances, withdrawals, transfers, provider refunds, and automatic refunds remain OFF. Premium annual remains provider-blocked. Creator Channel Subscription remains provider-blocked.
+
+## Room-Safe Notifications And Calls
+
+Source-closed on June 30, 2026; installed-app proof remains pending until a future Google Play internal build. Notification bell is icon-only. Bell badge is backed by real notification unread summary. Normal app surfaces show the bell next to existing header actions. Room/live surfaces use room-safe notification tray/banner behavior.
+
+Incoming Chi'lly Chat calls do not auto-answer. Incoming calls do not auto-leave or hijack room mic/camera. Leave room and answer requires explicit user action. Hosts receive an extra confirmation before leaving a hosted live room. Chat remains conversation-only. Money Center remains creator business home. Notifications guide users to routes; they do not grant access. Destination routes re-check access. liveMoneyEnabled remains OFF. Payouts and cashout remain OFF.

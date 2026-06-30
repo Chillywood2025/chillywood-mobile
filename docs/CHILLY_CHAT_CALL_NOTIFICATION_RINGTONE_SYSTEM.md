@@ -187,3 +187,11 @@ Required before production claim:
 - Two-user device proof is required to prove recipient incoming sheet, accept/decline, and missed-card behavior.
 - BrowserStack proof remains pending.
 - Dynamic downloaded sounds are intentionally not promised for Android background push notifications in V1.
+
+## Room-Safe Incoming Call Behavior
+
+June 30, 2026 source integration adds room-safe foreground handling for incoming Chi'lly Chat voice/video calls. Incoming Chi'lly Chat calls do not auto-answer. Incoming calls do not auto-leave or hijack room mic/camera. Leave room and answer requires explicit user action. Hosts receive an extra confirmation before leaving a hosted live room.
+
+Inside Watch-Party and Live Stage surfaces, the foreground call banner offers Decline, Reply in Chat, and Leave room and answer. Decline uses the existing call-invite decline path. Reply in Chat opens the relevant thread or Chat inbox without answering. Leave room and answer routes into the chat call path only after explicit user action and relies on room unmount/route ownership to release the existing room session rather than starting a competing RTC session.
+
+Notification bell is icon-only. Bell badge is backed by real notification unread summary. Room/live surfaces use room-safe notification tray/banner behavior. Chat remains conversation-only. Notifications guide users to routes; they do not grant access. Destination routes re-check access. liveMoneyEnabled remains OFF. Payouts and cashout remain OFF.

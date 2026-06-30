@@ -2969,3 +2969,11 @@ Do not hide or delete stale rows just to pass proof. Do not falsely merge separa
 Artifact: `/tmp/app-stale-chat-identity-readback-20260629-010030/`.
 
 Safety: no logout, uninstall, reinstall, or clear-data happened. No auth/RLS/chat/account-status permission weakening happened. No service-role chat/social proof was counted as actual-user proof. No provider/live-money mutation happened. `liveMoneyEnabled` remains OFF.
+
+## Room-Safe Notifications And Calls
+
+Status: Source-closed / installed proof pending.
+
+The notification bell/tray and Chi'lly Chat room-call interruption lane is source-closed. Next proof, if requested, is a Google Play internal installed build that verifies the icon-only bell on Home, Explore, Live, Saved, Platform, and Platform Studio; room-safe tray/badge on Watch-Party Waiting Room, Party Room, and Live Stage; and incoming Chi'lly Chat call handling while inside a room.
+
+Required truth for that next proof: Notification bell is icon-only. Bell badge is backed by real notification unread summary. Normal app surfaces show the bell next to existing header actions. Room/live surfaces use room-safe notification tray/banner behavior. Incoming Chi'lly Chat calls do not auto-answer. Incoming calls do not auto-leave or hijack room mic/camera. Leave room and answer requires explicit user action. Hosts receive an extra confirmation before leaving a hosted live room. Chat remains conversation-only. Money Center remains creator business home. Notifications guide users to routes; they do not grant access. Destination routes re-check access. liveMoneyEnabled remains OFF. Payouts and cashout remain OFF.

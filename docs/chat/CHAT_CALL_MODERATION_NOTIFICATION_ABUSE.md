@@ -96,3 +96,11 @@ Chat/call moderation and notification abuse controls are production-ready for cu
 - Partial: none for the focused `chat_thread` reporting and chat-message hide/remove/restore follow-ups in this lane.
 
 This lane does not activate money/provider/payout systems and does not change staff hierarchy.
+
+## Room-Safe Notification And Call Interruption Policy
+
+June 30, 2026 source integration adds a room-safe foreground path for Chi'lly Chat call interruption. Incoming Chi'lly Chat calls do not auto-answer. Incoming calls do not auto-leave or hijack room mic/camera. Leave room and answer requires explicit user action. Hosts receive an extra confirmation before leaving a hosted live room. Decline updates the existing call invite status where available, and Reply in Chat opens the direct thread without answering the call.
+
+Notification bell is icon-only. Bell badge is backed by real notification unread summary. Normal app surfaces show the bell next to existing header actions. Room/live surfaces use room-safe notification tray/banner behavior. Chat remains conversation-only and is not the creator-money notification ledger. Money Center remains creator business home. Notifications guide users to routes; they do not grant access. Destination routes re-check access.
+
+No call recording is introduced. No private message body, call content, raw push token, LiveKit token, provider secret, tax data, banking data, or private provider data is exposed by the notification/tray path. liveMoneyEnabled remains OFF. Payouts and cashout remain OFF.

@@ -381,3 +381,13 @@ Later-phase notification/reminder ideas may include:
 - richer moderation/admin alert routing
 
 These remain later until canonical data truth and helper ownership exist.
+
+## 12. Room-Safe Notification And Call Integration
+
+June 30, 2026 source integration adds a real notification bell/tray pattern without changing the doctrine boundaries above. Notification bell is icon-only. Bell badge is backed by real notification unread summary. Normal app surfaces show the bell next to existing header actions. Room/live surfaces use room-safe notification tray/banner behavior.
+
+Room/live surfaces do not use the full normal app header. Watch-Party Waiting Room, Party Room, and Live Stage use a small room-safe tray affordance. Opening the tray does not leave, mute, unmute, disconnect, or permanently cover critical room controls. Non-urgent creator-money and activity notifications update the bell badge and may show a quiet room-safe toast only when safe.
+
+Incoming Chi'lly Chat calls are priority interruptors, but they do not auto-answer. Incoming calls do not auto-leave or hijack room mic/camera. Leave room and answer requires explicit user action. Hosts receive an extra confirmation before leaving a hosted live room. Decline uses the existing call-invite decline path. Reply in Chat opens Chi'lly Chat without answering.
+
+Chat remains conversation-only. Money Center remains creator business home. Notifications guide users to routes; they do not grant access. Destination routes re-check access. liveMoneyEnabled remains OFF. Payouts and cashout remain OFF.

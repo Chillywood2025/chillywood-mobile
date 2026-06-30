@@ -70,6 +70,7 @@ import { AccessSheet, type AccessSheetReason } from "../../components/monetizati
 import { MoneyScopeInfoButton } from "../../components/monetization/MoneyScopeInfoButton";
 import { BetaAccessScreen } from "../../components/system/beta-access-screen";
 import { RoomCodeInviteCard } from "../../components/room/room-code-invite-card";
+import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { PLAYER_WATCH_PARTY_SOURCE } from "../../_lib/watch-party/room-shared";
 import WatchPartyLiveStageScreen from "./live-stage/[partyId]";
 import { AppText } from "../../components/ui/typography";
@@ -1639,7 +1640,12 @@ export default function WatchPartyIndexScreen() {
           keyboardDismissMode="none"
         >
         {/* ── Header ─────────────────────────────────────────────────── */}
-        <AppText scale="caption" style={styles.kicker}>{branding.appDisplayName.toUpperCase()}</AppText>
+        <View style={styles.headerRow}>
+          <View style={styles.headerCopy}>
+            <AppText scale="caption" style={styles.kicker}>{branding.appDisplayName.toUpperCase()}</AppText>
+          </View>
+          <NotificationBellButton surface="watch-party-waiting-room" roomSafe />
+        </View>
         <AppText scale="body" style={styles.tagline}>{waitingRoomTagline}</AppText>
 
         {/* ── Presence / identity ─────────────────────────────────────── */}
@@ -2021,6 +2027,8 @@ const styles = StyleSheet.create({
   content: { paddingTop: 58, paddingHorizontal: 18, paddingBottom: 48, gap: 14 },
 
   // Header
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  headerCopy: { flex: 1 },
   kicker: { color: "#555", fontSize: 10, fontWeight: "900", letterSpacing: 1.8 },
   headline: { color: "#fff", fontSize: 38, fontWeight: "900", marginTop: 4, lineHeight: 42 },
   tagline: { color: "#8A8A8A", fontSize: 14, lineHeight: 20 },

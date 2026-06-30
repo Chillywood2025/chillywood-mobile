@@ -75,6 +75,21 @@ export const CREATOR_MONEY_SELLER_NOTIFICATION_TYPES: readonly CreatorMoneySelle
   "tip_received",
 ] as const;
 
+export const NOTIFICATION_PRIORITY_ORDER = [
+  "safety_moderation_emergency",
+  "incoming_chilly_chat_voice_video_call",
+  "active_room_session_notice",
+  "event_or_watch_party_starts_soon",
+  "creator_money_access_ready_or_sale_support",
+  "chat_message",
+  "general_activity",
+] as const;
+
+export const INTERRUPTIVE_NOTIFICATION_PRIORITIES = [
+  "safety_moderation_emergency",
+  "incoming_chilly_chat_voice_video_call",
+] as const;
+
 export type DiscoveryActivityTriggerKey =
   | "followed_creator_went_live"
   | "chilly_circle_friend_went_live"
@@ -994,6 +1009,14 @@ export type ForegroundNotificationAlert = {
   triggerType: string;
 };
 
+export type ForegroundActivityNotification = {
+  body: string;
+  category: string;
+  notificationType: string;
+  path: string;
+  title: string;
+};
+
 const NOTIFICATION_INSTALL_ID_STORAGE_KEY = "chillywood.notification.install_id.v1";
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
@@ -1455,6 +1478,33 @@ export function subscribeToForegroundNotificationAlerts(onAlert: (alert: Foregro
       path,
       title: normalizeText(content.title) || "Incoming Chi'lly Chat call",
       triggerType: triggerType || "chilly_chat_call",
+    });
+  });
+}
+
+export function subscribeToForegroundActivityNotifications(onAlert: (alert: ForegroundActivityNotification) => void) {
+  return Notifications.addNotificationReceivedListener((notification) => {
+    const content = notification.request.content;
+    const data = content.data as Record<string, unknown>;
+    const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
+    if (!path) return;
+
+    const triggerType = normalizeText(data.triggerType || data.notificationType || data.category).toLowerCase();
+    const isIncomingChillyChatCall = triggerType === "chilly_chat_call" || data.openCall === true;
+    if (isIncomingChillyChatCall) return;
+
+    const category = normalizeText(data.category).toLowerCase();
+    const notificationType = normalizeText(data.notificationType || data.type || triggerType).toLowerCase();
+    const isCreatorMoneyActivity = category === "creator_money_sale" || category === "creator_money_purchase";
+    const isTimeSensitiveActivity = notificationType === "event_starts_soon" || notificationType === "watch_party_starts_soon";
+    if (!isCreatorMoneyActivity && !isTimeSensitiveActivity) return;
+
+    onAlert({
+      body: normalizeText(content.body) || "Open Activity when you are ready.",
+      category,
+      notificationType,
+      path,
+      title: category === "creator_money_sale" ? "New creator activity" : normalizeText(content.title) || "Activity",
     });
   });
 }
