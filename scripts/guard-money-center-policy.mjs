@@ -94,6 +94,10 @@ assertIncludes(channelSettings, "Premium is separate from creator purchases.", "
 assertIncludes(channelSettings, "Fans do not buy Chi'llywood Premium", "creator purchase separation copy");
 assertIncludes(channelSettings, "Creator setup mode", "creator setup mode banner");
 assertIncludes(channelSettings, "Creator monetization setup is usable in sandbox/not-payable mode.", "creator setup usable copy");
+assertIncludes(channelSettings, "money-center-open-ways-to-earn-button", "Money Center open Ways to Earn action");
+assertIncludes(channelSettings, "focusMonetizationSection(\"ways_to_earn\")", "Money Center open Ways to Earn scroll/focus action");
+assertIncludes(channelSettings, "money-section-${id}", "Money Center section focus anchors");
+assertIncludes(channelSettings, "studioScrollRef.current?.scrollTo", "Money Center focused section scrolling");
 assertIncludes(channelSettings, "money-center-creator-setup-button", "Money Center creator setup action");
 assertIncludes(channelSettings, "money-center-cashout-readiness-button", "Money Center cashout readiness action");
 assertIncludes(channelSettings, "Available balance", "overview available balance");

@@ -1392,6 +1392,8 @@ export function ChannelStudioScreen() {
   const brandProfileSaveInFlightRef = useRef(false);
   const sourceVideoEventPrefillRef = useRef<string | null>(null);
   const spotlightRouteAppliedRef = useRef<string | null>(null);
+  const studioScrollRef = useRef<ScrollView | null>(null);
+  const monetizationSectionOffsetsRef = useRef<Partial<Record<MonetizationSectionId, number>>>({});
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
   const [selectedClipVideoFile, setSelectedClipVideoFile] = useState<CreatorVideoFile | null>(null);
   const [selectedClipCoverFile, setSelectedClipCoverFile] = useState<CreatorVideoFile | null>(null);
@@ -1481,6 +1483,25 @@ export function ChannelStudioScreen() {
       return next;
     });
   };
+  const focusMonetizationSection = useCallback((id: MonetizationSectionId) => {
+    setActiveStudioTab("monetization");
+    setExpandedMonetizationSections((current) => new Set([...current, id]));
+    router.setParams({
+      tab: "monetization",
+      focus: id,
+      manage: "",
+    });
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const sectionOffset = monetizationSectionOffsetsRef.current[id];
+        studioScrollRef.current?.scrollTo({
+          y: Math.max(0, (sectionOffset ?? 2600) - 24),
+          animated: true,
+        });
+      }, 80);
+    });
+  }, [router]);
   const toggleClipSection = (id: ClipStudioSectionId) => {
     setExpandedClipSections((current) => {
       const next = new Set(current);
@@ -6395,7 +6416,13 @@ export function ChannelStudioScreen() {
   }) => {
     const expanded = expandedMonetizationSections.has(id);
     return (
-      <View style={styles.studioAccordionCard}>
+      <View
+        style={styles.studioAccordionCard}
+        testID={`money-section-${id}`}
+        onLayout={(event) => {
+          monetizationSectionOffsetsRef.current[id] = event.nativeEvent.layout.y;
+        }}
+      >
         <TouchableOpacity
           style={styles.studioAccordionHeader}
           activeOpacity={0.86}
@@ -8932,12 +8959,11 @@ export function ChannelStudioScreen() {
             <TouchableOpacity
               style={styles.eventPrimaryButton}
               activeOpacity={0.88}
-              onPress={() => {
-                setExpandedMonetizationSections((current) => new Set([...current, "ways_to_earn"]));
-              }}
+              onPress={() => focusMonetizationSection("ways_to_earn")}
               hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
               accessibilityRole="button"
               accessibilityLabel="Open Ways to Earn"
+              testID="money-center-open-ways-to-earn-button"
             >
               <Text style={styles.eventPrimaryButtonText}>Open Ways to Earn</Text>
             </TouchableOpacity>
@@ -9822,7 +9848,7 @@ export function ChannelStudioScreen() {
     <ImageBackground source={SKYLINE_SOURCE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay} />
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView ref={studioScrollRef} style={styles.scroll} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>
