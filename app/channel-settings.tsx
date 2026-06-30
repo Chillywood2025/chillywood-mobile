@@ -1393,6 +1393,7 @@ export function ChannelStudioScreen() {
   const sourceVideoEventPrefillRef = useRef<string | null>(null);
   const spotlightRouteAppliedRef = useRef<string | null>(null);
   const studioScrollRef = useRef<ScrollView | null>(null);
+  const studioScrollYRef = useRef(0);
   const monetizationStackOffsetRef = useRef(0);
   const monetizationSectionOffsetsRef = useRef<Partial<Record<MonetizationSectionId, number>>>({});
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
@@ -1487,18 +1488,18 @@ export function ChannelStudioScreen() {
   const focusMonetizationSection = useCallback((id: MonetizationSectionId) => {
     setActiveStudioTab("monetization");
     setExpandedMonetizationSections((current) => new Set([...current, id]));
-    router.setParams({
-      tab: "monetization",
-      focus: id,
-      manage: "",
-    });
 
     requestAnimationFrame(() => {
       const scrollToSection = () => {
         const sectionOffset = monetizationSectionOffsetsRef.current[id];
-        const targetOffset = typeof sectionOffset === "number"
+        const measuredTargetOffset = typeof sectionOffset === "number"
           ? monetizationStackOffsetRef.current + sectionOffset
           : 2600;
+        const targetOffset = Math.max(
+          measuredTargetOffset,
+          studioScrollYRef.current + 920,
+          id === "ways_to_earn" ? 3600 : 0,
+        );
         studioScrollRef.current?.scrollTo({
           y: Math.max(0, targetOffset - 24),
           animated: true,
@@ -1509,7 +1510,7 @@ export function ChannelStudioScreen() {
       setTimeout(scrollToSection, 320);
       setTimeout(scrollToSection, 650);
     });
-  }, [router]);
+  }, []);
   const toggleClipSection = (id: ClipStudioSectionId) => {
     setExpandedClipSections((current) => {
       const next = new Set(current);
@@ -5825,13 +5826,7 @@ export function ChannelStudioScreen() {
           </View>
         </View>
 
-        <View
-          style={styles.studioAccordionStack}
-          testID="money-center-monetization-section-stack"
-          onLayout={(event) => {
-            monetizationStackOffsetRef.current = event.nativeEvent.layout.y;
-          }}
-        >
+        <View style={styles.studioAccordionStack}>
           {renderClipAccordion({
             id: "media",
             title: "Video",
@@ -8994,7 +8989,13 @@ export function ChannelStudioScreen() {
           </View>
         </View>
 
-        <View style={styles.studioAccordionStack}>
+        <View
+          style={styles.studioAccordionStack}
+          testID="money-center-monetization-section-stack"
+          onLayout={(event) => {
+            monetizationStackOffsetRef.current = event.nativeEvent.layout.y;
+          }}
+        >
           {renderMonetizationAccordion({
             id: "ways_to_earn",
             title: "Ways to Earn",
@@ -9862,7 +9863,15 @@ export function ChannelStudioScreen() {
     <ImageBackground source={SKYLINE_SOURCE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay} />
 
-      <ScrollView ref={studioScrollRef} style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={studioScrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        scrollEventThrottle={16}
+        onScroll={(event) => {
+          studioScrollYRef.current = event.nativeEvent.contentOffset.y;
+        }}
+      >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backArrow}>←</Text>

@@ -98,6 +98,8 @@ assertIncludes(channelSettings, "money-center-open-ways-to-earn-button", "Money 
 assertIncludes(channelSettings, "focusMonetizationSection(\"ways_to_earn\")", "Money Center open Ways to Earn scroll/focus action");
 assertIncludes(channelSettings, "money-center-monetization-section-stack", "Money Center monetization section stack anchor");
 assertIncludes(channelSettings, "monetizationStackOffsetRef.current + sectionOffset", "Money Center absolute section offset");
+assertIncludes(channelSettings, "studioScrollYRef.current + 920", "Money Center section focus moves forward from current scroll");
+assertIncludes(channelSettings, "id === \"ways_to_earn\" ? 3600 : 0", "Money Center Ways to Earn minimum focus target");
 assertIncludes(channelSettings, "money-section-${id}", "Money Center section focus anchors");
 assertIncludes(channelSettings, "studioScrollRef.current?.scrollTo", "Money Center focused section scrolling");
 assertIncludes(channelSettings, "money-center-creator-setup-button", "Money Center creator setup action");
