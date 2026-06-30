@@ -37,7 +37,43 @@ export type NotificationCategory =
   | "moderation_notice"
   | "payment_access_confirmation"
   | "chilly_chat_call"
-  | "chilly_chat_missed_call";
+  | "chilly_chat_missed_call"
+  | "creator_money_purchase"
+  | "creator_money_sale";
+
+export type CreatorMoneyBuyerNotificationType =
+  | "paid_video_unlocked"
+  | "watch_party_ticket_ready"
+  | "channel_subscription_active"
+  | "vip_access_active"
+  | "event_pass_active"
+  | "tip_sent_receipt";
+
+export type CreatorMoneySellerNotificationType =
+  | "paid_video_sold"
+  | "watch_party_ticket_sold"
+  | "channel_subscription_started"
+  | "vip_pass_sold"
+  | "event_pass_sold"
+  | "tip_received";
+
+export const CREATOR_MONEY_BUYER_NOTIFICATION_TYPES: readonly CreatorMoneyBuyerNotificationType[] = [
+  "paid_video_unlocked",
+  "watch_party_ticket_ready",
+  "channel_subscription_active",
+  "vip_access_active",
+  "event_pass_active",
+  "tip_sent_receipt",
+] as const;
+
+export const CREATOR_MONEY_SELLER_NOTIFICATION_TYPES: readonly CreatorMoneySellerNotificationType[] = [
+  "paid_video_sold",
+  "watch_party_ticket_sold",
+  "channel_subscription_started",
+  "vip_pass_sold",
+  "event_pass_sold",
+  "tip_received",
+] as const;
 
 export type DiscoveryActivityTriggerKey =
   | "followed_creator_went_live"
@@ -106,11 +142,17 @@ export type NotificationTargetRoute =
   | "/profile/[userId]"
   | "/channel/[userId]"
   | "/channel-settings"
+  | "/channel-studio"
+  | "/settings"
   | "/chat"
   | "/chat/[threadId]"
+  | "/subscribe"
   | "/watch-party"
   | "/watch-party/[partyId]"
   | "/watch-party/live-stage/[partyId]"
+  | "/channel-subscription/[creatorId]"
+  | "/vip-pass/[creatorId]"
+  | "/event/[eventId]"
   | "/spectate/[itemId]"
   | "/title/[id]"
   | "/player/[id]"
@@ -237,6 +279,8 @@ const normalizeNotificationCategory = (value: unknown): NotificationCategory => 
     || normalized === "payment_access_confirmation"
     || normalized === "chilly_chat_call"
     || normalized === "chilly_chat_missed_call"
+    || normalized === "creator_money_purchase"
+    || normalized === "creator_money_sale"
   ) {
     return normalized;
   }
@@ -249,11 +293,17 @@ const normalizeTargetRoute = (value: unknown): NotificationTargetRoute | "unknow
     normalized === "/profile/[userId]"
     || normalized === "/channel/[userId]"
     || normalized === "/channel-settings"
+    || normalized === "/channel-studio"
+    || normalized === "/settings"
     || normalized === "/chat"
     || normalized === "/chat/[threadId]"
+    || normalized === "/subscribe"
     || normalized === "/watch-party"
     || normalized === "/watch-party/[partyId]"
     || normalized === "/watch-party/live-stage/[partyId]"
+    || normalized === "/channel-subscription/[creatorId]"
+    || normalized === "/vip-pass/[creatorId]"
+    || normalized === "/event/[eventId]"
     || normalized === "/spectate/[itemId]"
     || normalized === "/title/[id]"
     || normalized === "/player/[id]"
@@ -908,6 +958,8 @@ export type NotificationPreferenceSettings = {
   eventStartsSoonEnabled: boolean;
   publicUploadEnabled: boolean;
   replayLaterEnabled: boolean;
+  creatorMoneyPurchasesEnabled: boolean;
+  creatorMoneySalesEnabled: boolean;
   chillyChatCallsEnabled: boolean;
   chillyChatCallSoundKey: ChillyChatRingtoneKey;
   chillyChatCallVibrateEnabled: boolean;
@@ -953,6 +1005,8 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceSettings = {
   chillyChatCallSoundKey: "chilly_ring",
   chillyChatCallVibrateEnabled: true,
   chillyChatCallsEnabled: true,
+  creatorMoneyPurchasesEnabled: true,
+  creatorMoneySalesEnabled: true,
   publicUploadEnabled: true,
   pushEnabled: true,
   replayLaterEnabled: true,
@@ -984,6 +1038,8 @@ const parsePreferenceRow = (row: NotificationPreferenceRow | null): Notification
     chillyChatCallSoundKey: normalizeChillyChatRingtoneKey(row.chilly_chat_call_sound_key),
     chillyChatCallVibrateEnabled: row.chilly_chat_call_vibrate_enabled !== false,
     chillyChatCallsEnabled: row.chilly_chat_calls_enabled !== false,
+    creatorMoneyPurchasesEnabled: row.creator_money_purchases_enabled !== false,
+    creatorMoneySalesEnabled: row.creator_money_sales_enabled !== false,
     eventStartsSoonEnabled: row.event_starts_soon_enabled !== false,
     followedCreatorLiveEnabled: row.followed_creator_live_enabled !== false,
     inAppEnabled: row.in_app_enabled !== false,
@@ -1022,6 +1078,12 @@ const buildPreferenceUpdate = (patch: NotificationPreferencePatch): Notification
   }
   if (typeof patch.replayLaterEnabled === "boolean") {
     update.replay_later_enabled = patch.replayLaterEnabled;
+  }
+  if (typeof patch.creatorMoneyPurchasesEnabled === "boolean") {
+    update.creator_money_purchases_enabled = patch.creatorMoneyPurchasesEnabled;
+  }
+  if (typeof patch.creatorMoneySalesEnabled === "boolean") {
+    update.creator_money_sales_enabled = patch.creatorMoneySalesEnabled;
   }
   if (typeof patch.pushEnabled === "boolean") {
     update.push_enabled = patch.pushEnabled;
@@ -1350,17 +1412,23 @@ const normalizeNotificationPath = (value: unknown) => {
     path === "/chat"
     || path === "/settings"
     || path === "/subscribe"
+    || path.startsWith("/channel-studio")
     || path.startsWith("/spectate/")
     || path.startsWith("/channel/")
+    || path.startsWith("/channel-subscription/")
     || path.startsWith("/profile/")
     || path.startsWith("/player/")
     || path.startsWith("/watch-party/")
+    || path.startsWith("/vip-pass/")
+    || path.startsWith("/event/")
     || path.startsWith("/chat/")
   ) {
     return path;
   }
   return null;
 };
+
+export const resolveNotificationPath = (value: unknown) => normalizeNotificationPath(value);
 
 export function subscribeToNotificationResponses(onPath: (path: string) => void) {
   return Notifications.addNotificationResponseReceivedListener((response) => {

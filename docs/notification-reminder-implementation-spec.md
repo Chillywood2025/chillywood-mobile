@@ -5,6 +5,16 @@ This document defines Chi'llywood's notifications / reminders chapter.
 
 It is implementation doctrine, not UI code.
 
+## June 30, 2026 Creator-Money Notifications / Activity Update
+
+Creator-money notifications are backed by real notification records. Notifications guide users to routes; they do not grant access. Destination routes re-check access/grant/status before showing unlocked video, room, subscription, VIP, event, or purchase-success state.
+
+Buyer and creator notifications are separate. Buyer notifications route to the exact purchased source: Paid Video opens `/player/[id]`, Watch-Party Ticket opens `/watch-party/[partyId]`, Channel Subscription opens `/channel-subscription/[creatorId]`, VIP opens `/vip-pass/[creatorId]`, Event Pass opens `/event/[eventId]`, and Tips route to creator support receipt context without unlocking anything. Creator sale/support notifications route to `/channel-studio?tab=monetization&focus=transactions`.
+
+Money Center remains the creator business home. Chat remains conversation-only and is not the creator-money notification ledger. Tips do not unlock anything. Premium remains the app-wide subscription flow.
+
+`liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF. No real payout, transfer, withdrawal, payable balance, or provider mutation was created by notifications. Push is Android/Expo only where proven; iOS/APNs remains later unless separately implemented. Source fixed is not installed-app proof.
+
 It exists to:
 - preserve the current route and owner doctrine while Chi'llywood adds honest notification and reminder truth
 - define what notification-adjacent truth already exists in the repo today
@@ -58,6 +68,7 @@ Do not create route proliferation in this chapter.
 ### 3.1 Current Doctrine Already Supports
 Current repo doctrine already supports:
 - D9 canonical notification/activity records in `notifications`
+- creator-money buyer and creator notification records for Paid Video, Tips, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass
 - notification categories for followed creator live, Circle friend live, event starts soon, public upload, and replay later
 - notification preferences in `notification_preferences`
 - Android device token registration/revocation through `notification-device-tokens`
@@ -71,7 +82,7 @@ Current repo doctrine already supports:
 - creator reminder-ready control and summary cues on `/channel-studio` / `/channel-settings` compatibility
 - Chi'lly Chat unread/read truth via `chat_thread_members.last_read_at` and `unread_count`
 - moderation/admin source truth through safety reports and platform-role access
-- monetization/access action outcomes as local runtime feedback
+- monetization/access action outcomes as local runtime feedback plus source-backed creator-money notification records when verified backend money events exist
 
 ### 3.2 Current Doctrine Does Not Yet Support
 Current repo doctrine does not yet support:

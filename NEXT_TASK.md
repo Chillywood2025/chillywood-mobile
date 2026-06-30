@@ -3,6 +3,7 @@
 # Chi'lly Chat Google-Signed v60 Direct Chat + Call Follow-Up
 
 Current lane doc:
+- `docs/release/CREATOR_MONEY_NOTIFICATIONS_ACTIVITY_PROOF.md`
 - `docs/release/CREATOR_MONETIZATION_SETUP_CASHOUT_READINESS.md`
 - `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md`
 - `docs/release/CHILLY_CHAT_GOOGLE_PLAY_INTERNAL_CALL_CLOSURE.md`
@@ -15,6 +16,26 @@ Current lane doc:
 - `docs/release/GOOGLE_SIGNED_V66_HEADER_CHAT_UI_PROOF.md`
 - `docs/release/HEADER_PROFILE_AVATAR_FLICKER_FIX.md`
 - `docs/release/GOOGLE_SIGNED_V68_CREATOR_MONETIZATION_E2E_PROOF.md`
+
+Creator-money notifications/activity:
+- Status: source-Closed; installed-app proof remains Pending.
+- Creator-money notifications are backed by real notification records.
+- Notifications guide users to routes; they do not grant access.
+- Destination routes re-check access/grant/status.
+- Buyer and creator notifications are separate.
+- Money Center remains the creator business home.
+- Chat remains conversation-only and is not the creator-money notification ledger.
+- Buyer-side notification records are wired for Paid Video, Watch-Party Ticket, Channel Subscription, VIP, Event Pass, and Tips.
+- Creator-side notification records are wired for Paid Video sold, Seat Pass sold, Channel Subscription started, VIP pass sold, Event Pass sold, and Tip received.
+- Tips do not unlock anything.
+- Premium remains the app-wide subscription flow.
+- Android/Expo push dispatch is source-prepared behind notification records, preferences, Android token eligibility, and dedupe checks; installed push proof remains Pending.
+- Push is Android/Expo only where proven; iOS/APNs remains later unless separately implemented.
+- `liveMoneyEnabled` remains OFF.
+- Payouts and cashout remain OFF.
+- No real payout, transfer, withdrawal, payable balance, or provider mutation was created by notifications.
+- No auth/RLS/money permission weakening happened.
+- Source fixed is not installed-app proof.
 
 Creator Tips v68 installed blocker source fix:
 - Status: source-fixed; installed-app proof remains Pending for a later Google Play internal build.

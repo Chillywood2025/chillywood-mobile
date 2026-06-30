@@ -17,6 +17,8 @@ import {
 const FUNCTION_NAME = "revenuecat-webhook";
 const PREMIUM_ENTITLEMENT_KEY = "premium";
 const PREMIUM_PRODUCT_ID = "premium_subscription";
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+const ANDROID_NOTIFICATION_CHANNEL_ID = "default";
 
 type RevenueCatEvent = Record<string, unknown>;
 type EntitlementWriteResult = {
@@ -58,6 +60,44 @@ type DynamicMoneyAccessResult = {
   duplicateProviderEvent: boolean;
   duplicateAccessGrant: boolean;
   duplicateLedgerEvent: boolean;
+};
+type MoneyNotificationType =
+  | "paid_video_unlocked"
+  | "watch_party_ticket_ready"
+  | "channel_subscription_active"
+  | "vip_access_active"
+  | "event_pass_active"
+  | "tip_sent_receipt"
+  | "paid_video_sold"
+  | "watch_party_ticket_sold"
+  | "channel_subscription_started"
+  | "vip_pass_sold"
+  | "event_pass_sold"
+  | "tip_received";
+type CreatorMoneyNotificationPlan = {
+  body: string;
+  category: "creator_money_purchase" | "creator_money_sale";
+  notificationType: MoneyNotificationType;
+  priority: number;
+  recipientUserId: string;
+  title: string;
+};
+type CreatorMoneyNotificationTarget = {
+  deepLink: string;
+  entityId: string;
+  route: string;
+};
+type NotificationPreference = {
+  creator_money_purchases_enabled?: boolean;
+  creator_money_sales_enabled?: boolean;
+  in_app_enabled?: boolean;
+  push_enabled?: boolean;
+  user_id?: string;
+};
+type PushToken = {
+  id: string;
+  provider: string;
+  token: string;
 };
 
 const ACTIVE_EVENT_TYPES = new Set([
@@ -414,6 +454,552 @@ const accessGrantTypeForProductType = (productType: string) => {
   if (productType === "channel_subscription") return "channel_subscription";
   if (productType === "vip_pass") return "vip_pass";
   return null;
+};
+
+const isCreatorMoneyNotificationProduct = (productType: string) => (
+  productType === "paid_content_access"
+  || productType === "watch_party_live_ticket"
+  || productType === "event_pass"
+  || productType === "channel_subscription"
+  || productType === "vip_pass"
+  || productType === "creator_tip"
+);
+
+const safeObject = (value: unknown): Record<string, unknown> => (
+  isRecord(value) ? value : {}
+);
+
+const readMoneyNotificationPreference = async (
+  adminClient: SupabaseClientLike,
+  userId: string,
+): Promise<NotificationPreference | null> => {
+  if (!userId) return null;
+  const { data } = await adminClient
+    .from("notification_preferences")
+    .select("user_id,in_app_enabled,push_enabled,creator_money_purchases_enabled,creator_money_sales_enabled")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return (data ?? null) as NotificationPreference | null;
+};
+
+const readAndroidPushTokens = async (adminClient: SupabaseClientLike, userId: string): Promise<PushToken[]> => {
+  const { data } = await adminClient
+    .from("user_push_tokens")
+    .select("id,provider,token")
+    .eq("user_id", userId)
+    .eq("platform", "android")
+    .eq("enabled", true)
+    .is("revoked_at", null)
+    .order("last_seen_at", { ascending: false })
+    .limit(5);
+  return (data ?? []) as PushToken[];
+};
+
+const insertMoneyNotificationDeliveryAttempt = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    notificationId: string | null;
+    provider: string;
+    providerMessageId?: string | null;
+    pushTokenId?: string | null;
+    recipientUserId: string;
+    status: "attempted" | "sent" | "failed" | "skipped";
+  },
+) => {
+  await adminClient.from("notification_delivery_attempts").insert({
+    error_code: input.errorCode ?? null,
+    error_message: input.errorMessage ? sanitizeErrorMessage(input.errorMessage) : null,
+    notification_id: input.notificationId,
+    provider: input.provider,
+    provider_message_id: input.providerMessageId ?? null,
+    push_token_id: input.pushTokenId ?? null,
+    recipient_user_id: input.recipientUserId,
+    status: input.status,
+  });
+};
+
+const sendCreatorMoneyExpoPush = async (message: Record<string, unknown>) => {
+  const response = await fetch(EXPO_PUSH_URL, {
+    body: JSON.stringify(message),
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const body = await response.json().catch(() => ({}));
+  return { body, ok: response.ok, status: response.status };
+};
+
+const notificationRoutePath = (deepLink: string) => deepLink.replace(/^chillywoodmobile:\/\//u, "/");
+
+const isAudienceBlocked = async (
+  adminClient: SupabaseClientLike,
+  creatorId: string | null,
+  buyerId: string,
+) => {
+  if (!creatorId || !buyerId) return false;
+  const { data } = await adminClient
+    .from("channel_audience_blocks")
+    .select("blocked_user_id")
+    .eq("channel_user_id", creatorId)
+    .eq("blocked_user_id", buyerId)
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+};
+
+const resolveWatchPartyNotificationTarget = async (
+  adminClient: SupabaseClientLike,
+  sourceId: string | null,
+  metadata: Record<string, unknown>,
+): Promise<CreatorMoneyNotificationTarget | null> => {
+  const metadataPartyId = toText(metadata.party_id);
+  if (metadataPartyId) {
+    return {
+      deepLink: `chillywoodmobile://watch-party/${metadataPartyId}`,
+      entityId: metadataPartyId,
+      route: "/watch-party/[partyId]",
+    };
+  }
+  if (!sourceId) return null;
+  const { data } = await adminClient
+    .from("paid_watch_party_offers")
+    .select("party_id")
+    .eq("id", sourceId)
+    .maybeSingle();
+  const partyId = toText(data?.party_id) || sourceId;
+  return {
+    deepLink: `chillywoodmobile://watch-party/${partyId}`,
+    entityId: partyId,
+    route: "/watch-party/[partyId]",
+  };
+};
+
+const resolveCreatorMoneyNotificationTarget = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    creatorId: string | null;
+    metadata: Record<string, unknown>;
+    productType: string;
+    sourceId: string | null;
+  },
+): Promise<CreatorMoneyNotificationTarget | null> => {
+  const sourceId = toText(input.sourceId) || null;
+  if (input.productType === "paid_content_access" && sourceId) {
+    return { deepLink: `chillywoodmobile://player/${sourceId}`, entityId: sourceId, route: "/player/[id]" };
+  }
+  if (input.productType === "watch_party_live_ticket") {
+    return resolveWatchPartyNotificationTarget(adminClient, sourceId, input.metadata);
+  }
+  if (input.productType === "channel_subscription" && input.creatorId) {
+    return {
+      deepLink: `chillywoodmobile://channel-subscription/${input.creatorId}`,
+      entityId: input.creatorId,
+      route: "/channel-subscription/[creatorId]",
+    };
+  }
+  if (input.productType === "vip_pass" && input.creatorId) {
+    return {
+      deepLink: `chillywoodmobile://vip-pass/${input.creatorId}`,
+      entityId: input.creatorId,
+      route: "/vip-pass/[creatorId]",
+    };
+  }
+  if (input.productType === "event_pass" && sourceId) {
+    return { deepLink: `chillywoodmobile://event/${sourceId}`, entityId: sourceId, route: "/event/[eventId]" };
+  }
+  if (input.productType === "creator_tip" && input.creatorId) {
+    return { deepLink: `chillywoodmobile://channel/${input.creatorId}`, entityId: input.creatorId, route: "/channel/[userId]" };
+  }
+  return null;
+};
+
+const buyerNotificationPlanForProduct = (
+  productType: string,
+  buyerUserId: string,
+): CreatorMoneyNotificationPlan | null => {
+  if (productType === "paid_content_access") {
+    return {
+      body: "You can now watch this creator video.",
+      category: "creator_money_purchase",
+      notificationType: "paid_video_unlocked",
+      priority: 4,
+      recipientUserId: buyerUserId,
+      title: "Video unlocked",
+    };
+  }
+  if (productType === "watch_party_live_ticket") {
+    return {
+      body: "Your Watch-Party Seat Pass is ready.",
+      category: "creator_money_purchase",
+      notificationType: "watch_party_ticket_ready",
+      priority: 4,
+      recipientUserId: buyerUserId,
+      title: "Seat Pass ready",
+    };
+  }
+  if (productType === "channel_subscription") {
+    return {
+      body: "You’re subscribed to this creator Platform.",
+      category: "creator_money_purchase",
+      notificationType: "channel_subscription_active",
+      priority: 4,
+      recipientUserId: buyerUserId,
+      title: "Subscription active",
+    };
+  }
+  if (productType === "vip_pass") {
+    return {
+      body: "You now have VIP access for this creator.",
+      category: "creator_money_purchase",
+      notificationType: "vip_access_active",
+      priority: 4,
+      recipientUserId: buyerUserId,
+      title: "VIP access active",
+    };
+  }
+  if (productType === "event_pass") {
+    return {
+      body: "Your Event Pass is ready.",
+      category: "creator_money_purchase",
+      notificationType: "event_pass_active",
+      priority: 4,
+      recipientUserId: buyerUserId,
+      title: "Event Pass active",
+    };
+  }
+  if (productType === "creator_tip") {
+    return {
+      body: "Your creator support tip was recorded. Tips do not unlock anything.",
+      category: "creator_money_purchase",
+      notificationType: "tip_sent_receipt",
+      priority: 5,
+      recipientUserId: buyerUserId,
+      title: "Tip sent",
+    };
+  }
+  return null;
+};
+
+const creatorNotificationPlanForProduct = (
+  productType: string,
+  creatorUserId: string | null,
+): CreatorMoneyNotificationPlan | null => {
+  if (!creatorUserId) return null;
+  const sandboxSuffix = " Sandbox/not-payable; no payout was created.";
+  if (productType === "paid_content_access") {
+    return {
+      body: `A viewer unlocked one of your videos.${sandboxSuffix}`,
+      category: "creator_money_sale",
+      notificationType: "paid_video_sold",
+      priority: 4,
+      recipientUserId: creatorUserId,
+      title: "Paid video unlocked",
+    };
+  }
+  if (productType === "watch_party_live_ticket") {
+    return {
+      body: `A viewer got a Watch-Party Seat Pass.${sandboxSuffix}`,
+      category: "creator_money_sale",
+      notificationType: "watch_party_ticket_sold",
+      priority: 4,
+      recipientUserId: creatorUserId,
+      title: "Seat Pass sold",
+    };
+  }
+  if (productType === "channel_subscription") {
+    return {
+      body: `A viewer subscribed to your creator Platform.${sandboxSuffix}`,
+      category: "creator_money_sale",
+      notificationType: "channel_subscription_started",
+      priority: 4,
+      recipientUserId: creatorUserId,
+      title: "New subscriber",
+    };
+  }
+  if (productType === "vip_pass") {
+    return {
+      body: `A viewer got VIP access.${sandboxSuffix}`,
+      category: "creator_money_sale",
+      notificationType: "vip_pass_sold",
+      priority: 4,
+      recipientUserId: creatorUserId,
+      title: "New VIP member",
+    };
+  }
+  if (productType === "event_pass") {
+    return {
+      body: `A viewer got access to your event.${sandboxSuffix}`,
+      category: "creator_money_sale",
+      notificationType: "event_pass_sold",
+      priority: 4,
+      recipientUserId: creatorUserId,
+      title: "Event Pass sold",
+    };
+  }
+  if (productType === "creator_tip") {
+    return {
+      body: `A viewer sent creator support.${sandboxSuffix}`,
+      category: "creator_money_sale",
+      notificationType: "tip_received",
+      priority: 5,
+      recipientUserId: creatorUserId,
+      title: "Tip received",
+    };
+  }
+  return null;
+};
+
+const dispatchCreatorMoneyPushIfEligible = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    notificationId: string | null;
+    plan: CreatorMoneyNotificationPlan;
+    preference: NotificationPreference | null;
+    target: CreatorMoneyNotificationTarget;
+  },
+) => {
+  const prefEnabled = input.plan.category === "creator_money_sale"
+    ? input.preference?.creator_money_sales_enabled !== false
+    : input.preference?.creator_money_purchases_enabled !== false;
+  const pushAllowed = input.preference?.push_enabled !== false && prefEnabled;
+  if (!pushAllowed) {
+    await insertMoneyNotificationDeliveryAttempt(adminClient, {
+      errorCode: "preference_disabled",
+      notificationId: input.notificationId,
+      provider: "none",
+      recipientUserId: input.plan.recipientUserId,
+      status: "skipped",
+    });
+    return;
+  }
+
+  const tokens = await readAndroidPushTokens(adminClient, input.plan.recipientUserId);
+  if (!tokens.length) {
+    await insertMoneyNotificationDeliveryAttempt(adminClient, {
+      errorCode: "no_enabled_android_token",
+      notificationId: input.notificationId,
+      provider: "expo",
+      recipientUserId: input.plan.recipientUserId,
+      status: "skipped",
+    });
+    return;
+  }
+
+  let sentCount = 0;
+  for (const token of tokens) {
+    const pushResult = await sendCreatorMoneyExpoPush({
+      body: input.plan.body,
+      channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+      data: {
+        category: input.plan.category,
+        deepLink: input.target.deepLink,
+        notificationId: input.notificationId,
+        notificationType: input.plan.notificationType,
+        path: notificationRoutePath(input.target.deepLink),
+        triggerType: input.plan.notificationType,
+      },
+      priority: "high",
+      sound: "default",
+      title: input.plan.title,
+      to: token.token,
+    });
+    const body = safeObject(pushResult.body);
+    const ticketRaw = Array.isArray(body.data) ? body.data[0] : body.data;
+    const ticket = safeObject(ticketRaw);
+    const status = toText(ticket.status || (pushResult.ok ? "sent" : "failed"));
+    const sent = pushResult.ok && (status === "ok" || status === "sent");
+    const details = safeObject(ticket.details);
+    const errorCode = toText(details.error || ticket.message) || null;
+    const providerMessageId = toText(ticket.id) || null;
+    if (sent) sentCount += 1;
+    await insertMoneyNotificationDeliveryAttempt(adminClient, {
+      errorCode,
+      errorMessage: sent ? null : toText(ticket.message) || `Expo push returned ${pushResult.status}`,
+      notificationId: input.notificationId,
+      provider: token.provider,
+      providerMessageId,
+      pushTokenId: token.id,
+      recipientUserId: input.plan.recipientUserId,
+      status: sent ? "sent" : "failed",
+    });
+    if (errorCode === "DeviceNotRegistered") {
+      await adminClient
+        .from("user_push_tokens")
+        .update({
+          enabled: false,
+          revoked_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", token.id);
+    }
+  }
+
+  if (input.notificationId) {
+    await adminClient
+      .from("notifications")
+      .update({
+        delivered_at: sentCount > 0 ? new Date().toISOString() : null,
+        status: sentCount > 0 ? "sent" : "pending",
+      })
+      .eq("id", input.notificationId);
+  }
+};
+
+const createCreatorMoneyNotification = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    actorUserId: string;
+    dedupeEventId: string;
+    ledgerEventId: string;
+    plan: CreatorMoneyNotificationPlan;
+    productKey: string;
+    sourceId: string | null;
+    sourceType: string | null;
+    target: CreatorMoneyNotificationTarget;
+  },
+) => {
+  const preference = await readMoneyNotificationPreference(adminClient, input.plan.recipientUserId);
+  const prefEnabled = input.plan.category === "creator_money_sale"
+    ? preference?.creator_money_sales_enabled !== false
+    : preference?.creator_money_purchases_enabled !== false;
+  const inAppAllowed = preference?.in_app_enabled !== false && prefEnabled;
+  const timingKey = input.dedupeEventId || input.ledgerEventId;
+  const dedupeKey = [
+    "creator_money",
+    input.plan.notificationType,
+    input.plan.recipientUserId,
+    input.sourceType || "unknown",
+    input.sourceId || "unknown",
+    timingKey,
+  ].join(":");
+
+  const { error: dedupeError } = await adminClient.from("notification_event_dedupes").insert({
+    dedupe_key: dedupeKey,
+    recipient_user_id: input.plan.recipientUserId,
+    source_id: input.sourceId,
+    source_type: input.sourceType || "creator_money",
+    timing_key: timingKey,
+    trigger_type: input.plan.notificationType,
+  });
+  if (dedupeError) return;
+
+  let notificationId: string | null = null;
+  if (inAppAllowed) {
+    const { data, error } = await adminClient
+      .from("notifications")
+      .insert({
+        actor_user_id: input.actorUserId || null,
+        body: input.plan.body,
+        category: input.plan.category,
+        deep_link: input.target.deepLink,
+        eligibility_reason: "verified_provider_ledger_event",
+        notification_type: input.plan.notificationType,
+        priority: input.plan.priority,
+        source_id: input.sourceId,
+        source_type: input.sourceType || "creator_money",
+        status: "pending",
+        target_context: {
+          flow: input.plan.notificationType,
+          product_key: input.productKey,
+          ledger_event_id: input.ledgerEventId,
+          provider_event_id: input.dedupeEventId,
+          sandbox_only: true,
+          not_payable: true,
+          no_access_grant_from_notification: true,
+          no_payout_from_notification: true,
+          premium_unlock: false,
+          livekit_authority: false,
+        },
+        target_entity_id: input.target.entityId,
+        target_route: input.target.route,
+        title: input.plan.title,
+        user_id: input.plan.recipientUserId,
+      })
+      .select("id")
+      .maybeSingle();
+    if (error || !data?.id) {
+      await adminClient.from("notification_event_dedupes").delete().eq("dedupe_key", dedupeKey);
+      return;
+    }
+    notificationId = data.id;
+    await adminClient.from("notification_event_dedupes").update({ notification_id: notificationId }).eq("dedupe_key", dedupeKey);
+  }
+
+  await dispatchCreatorMoneyPushIfEligible(adminClient, {
+    notificationId,
+    plan: input.plan,
+    preference,
+    target: input.target,
+  });
+};
+
+const createCreatorMoneyNotifications = async (
+  adminClient: SupabaseClientLike,
+  input: {
+    buyerUserId: string;
+    creatorId: string | null;
+    eventType: string;
+    ledgerEventId: string | null;
+    metadata: Record<string, unknown>;
+    productKey: string;
+    productType: string;
+    providerEventId: string | null;
+    sourceId: string | null;
+    sourceType: string | null;
+  },
+) => {
+  // Creator-money notifications guide buyers and creators to route destinations only.
+  // They never grant access, create payable balances, or execute payouts.
+  if (!ACTIVE_EVENT_TYPES.has(input.eventType)) return;
+  if (!input.ledgerEventId || !input.providerEventId) return;
+  if (!isCreatorMoneyNotificationProduct(input.productType)) return;
+  if (await isAudienceBlocked(adminClient, input.creatorId, input.buyerUserId)) return;
+
+  const buyerTarget = await resolveCreatorMoneyNotificationTarget(adminClient, {
+    creatorId: input.creatorId,
+    metadata: input.metadata,
+    productType: input.productType,
+    sourceId: input.sourceId,
+  });
+  if (!buyerTarget) return;
+
+  const buyerPlan = buyerNotificationPlanForProduct(input.productType, input.buyerUserId);
+  if (buyerPlan) {
+    await createCreatorMoneyNotification(adminClient, {
+      actorUserId: input.creatorId || input.buyerUserId,
+      dedupeEventId: input.providerEventId,
+      ledgerEventId: input.ledgerEventId,
+      plan: buyerPlan,
+      productKey: input.productKey,
+      sourceId: input.sourceId,
+      sourceType: input.sourceType,
+      target: buyerTarget,
+    });
+  }
+
+  const creatorPlan = input.creatorId === input.buyerUserId
+    ? null
+    : creatorNotificationPlanForProduct(input.productType, input.creatorId);
+  if (creatorPlan) {
+    await createCreatorMoneyNotification(adminClient, {
+      actorUserId: input.buyerUserId,
+      dedupeEventId: input.providerEventId,
+      ledgerEventId: input.ledgerEventId,
+      plan: creatorPlan,
+      productKey: input.productKey,
+      sourceId: input.sourceId,
+      sourceType: input.sourceType,
+      target: {
+        deepLink: "chillywoodmobile://channel-studio?tab=monetization&focus=transactions",
+        entityId: input.creatorId || input.buyerUserId,
+        route: "/channel-studio",
+      },
+    });
+  }
 };
 
 const syncChannelSubscriptionLifecycle = async (
@@ -994,7 +1580,7 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
   const nowIso = new Date().toISOString();
   const { data: intent, error: intentError } = await adminClient
     .from("money_purchase_intents")
-    .select("id, product_id, product_type, source_type, source_id, creator_id, platform_id, status, expires_at")
+    .select("id, product_id, product_type, source_type, source_id, creator_id, platform_id, status, expires_at, metadata")
     .eq("user_id", input.userId)
     .eq("product_id", product.id)
     .eq("provider_product_id", product.provider_product_id)
@@ -1136,6 +1722,19 @@ const mirrorRevenueCatDynamicMoneyAccess = async (
     })
     .eq("id", providerEvent.id);
   if (providerUpdateError) throw new Error(`Dynamic provider event finalize failed: ${providerUpdateError.message}`);
+
+  await createCreatorMoneyNotifications(adminClient, {
+    buyerUserId: input.userId,
+    creatorId: toText(intent.creator_id) || null,
+    eventType: input.eventType,
+    ledgerEventId,
+    metadata: safeObject(intent.metadata),
+    productKey: toText(product.product_key),
+    productType: toText(product.product_type),
+    providerEventId: providerEvent.id,
+    sourceId: toText(intent.source_id) || null,
+    sourceType: toText(intent.source_type) || null,
+  });
 
   return {
     status: "processed",

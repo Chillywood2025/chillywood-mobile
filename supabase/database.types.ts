@@ -6090,6 +6090,8 @@ export type Database = {
           chilly_chat_calls_enabled: boolean
           circle_friend_live_enabled: boolean
           created_at: string
+          creator_money_purchases_enabled: boolean
+          creator_money_sales_enabled: boolean
           event_starts_soon_enabled: boolean
           followed_creator_live_enabled: boolean
           in_app_enabled: boolean
@@ -6106,6 +6108,8 @@ export type Database = {
           chilly_chat_calls_enabled?: boolean
           circle_friend_live_enabled?: boolean
           created_at?: string
+          creator_money_purchases_enabled?: boolean
+          creator_money_sales_enabled?: boolean
           event_starts_soon_enabled?: boolean
           followed_creator_live_enabled?: boolean
           in_app_enabled?: boolean
@@ -6122,6 +6126,8 @@ export type Database = {
           chilly_chat_calls_enabled?: boolean
           circle_friend_live_enabled?: boolean
           created_at?: string
+          creator_money_purchases_enabled?: boolean
+          creator_money_sales_enabled?: boolean
           event_starts_soon_enabled?: boolean
           followed_creator_live_enabled?: boolean
           in_app_enabled?: boolean

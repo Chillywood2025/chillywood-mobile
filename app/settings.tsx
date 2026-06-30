@@ -20,10 +20,15 @@ import {
 } from "../_lib/monetization";
 import {
   readNotificationPreferences,
+  readNotificationList,
   readPushPermissionState,
   requestAndroidPushPermissionAndRegister,
+  dismissNotification,
+  markNotificationRead,
+  resolveNotificationPath,
   revokeCurrentPushInstall,
   updateNotificationPreferences,
+  type NotificationRecord,
   type NotificationPreferencePatch,
   type NotificationPreferenceSettings,
   type PushRegistrationState,
@@ -156,7 +161,17 @@ const NOTIFICATION_GROUPS: {
       {
         key: "inAppEnabled",
         label: "In-app activity",
-        description: "Keep recent activity visible in your Profile Feed.",
+        description: "Keep recent activity visible in Notifications / Activity.",
+      },
+      {
+        key: "creatorMoneyPurchasesEnabled",
+        label: "Creator purchase receipts",
+        description: "Show buyer-side receipts for creator videos, passes, tickets, subscriptions, VIP, events, and tips.",
+      },
+      {
+        key: "creatorMoneySalesEnabled",
+        label: "Creator sale alerts",
+        description: "Show creator-side sale and support alerts that route to Money Center transactions.",
       },
     ],
   },
@@ -418,8 +433,10 @@ export default function SettingsScreen() {
     fitMode: ProfileAppearanceFitMode;
   } | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferenceSettings | null>(null);
+  const [notificationActivity, setNotificationActivity] = useState<NotificationRecord[]>([]);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
+  const [notificationActivityBusyId, setNotificationActivityBusyId] = useState<string | null>(null);
   const [pushRegistration, setPushRegistration] = useState<PushRegistrationState | null>(null);
   const ringtonePreviewSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const [canOpenAdminDashboard, setCanOpenAdminDashboard] = useState(false);
@@ -614,11 +631,13 @@ export default function SettingsScreen() {
     if (!isSignedIn) return;
     setNotificationLoading(true);
     try {
-      const [preferences, permissionState] = await Promise.all([
+      const [preferences, permissionState, activity] = await Promise.all([
         readNotificationPreferences(),
         readPushPermissionState(),
+        readNotificationList(undefined, 20),
       ]);
       setNotificationPreferences(preferences);
+      setNotificationActivity(activity.filter((notification) => !notification.isDismissed));
       setPushRegistration((current) => current ?? {
         message: permissionState === "granted"
           ? "Notifications are allowed on this Android device. Register this device to receive push alerts."
@@ -677,6 +696,48 @@ export default function SettingsScreen() {
       setNotificationSavingKey(null);
     }
   }, [notificationSavingKey]);
+
+  const onPressNotificationActivity = useCallback(async (notification: NotificationRecord) => {
+    if (notificationActivityBusyId) return;
+
+    const path = resolveNotificationPath(notification.deepLink);
+    setNotificationActivityBusyId(notification.id);
+    try {
+      await markNotificationRead(notification.id);
+      setNotificationActivity((current) => current.map((item) => (
+        item.id === notification.id
+          ? { ...item, isRead: true, readAt: item.readAt ?? new Date().toISOString(), status: "read" }
+          : item
+      )));
+      if (path) {
+        router.push(path as Parameters<typeof router.push>[0]);
+      } else {
+        Alert.alert("Notifications", "This notification cannot open a screen in this build.");
+      }
+    } catch {
+      Alert.alert("Notifications", "Unable to open this notification right now.");
+    } finally {
+      setNotificationActivityBusyId(null);
+    }
+  }, [notificationActivityBusyId, router]);
+
+  const onDismissNotificationActivity = useCallback(async (notification: NotificationRecord) => {
+    if (notificationActivityBusyId) return;
+
+    setNotificationActivityBusyId(notification.id);
+    try {
+      const result = await dismissNotification(notification.id);
+      if (result.status === "completed" || result.status === "noop") {
+        setNotificationActivity((current) => current.filter((item) => item.id !== notification.id));
+      } else {
+        Alert.alert("Notifications", result.message);
+      }
+    } catch {
+      Alert.alert("Notifications", "Unable to dismiss this notification right now.");
+    } finally {
+      setNotificationActivityBusyId(null);
+    }
+  }, [notificationActivityBusyId]);
 
   const onSelectChillyChatRingtone = useCallback(async (key: ChillyChatRingtoneKey) => {
     if (!notificationPreferences || notificationSavingKey) return;
@@ -1344,6 +1405,68 @@ export default function SettingsScreen() {
     );
   }, [notificationPreferences, notificationSavingKey, onToggleNotificationPreference]);
 
+  const renderNotificationActivityRow = useCallback((notification: NotificationRecord) => {
+    const createdAt = new Date(notification.createdAt);
+    const createdLabel = Number.isNaN(createdAt.getTime())
+      ? "Recent"
+      : createdAt.toLocaleString(undefined, {
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        month: "short",
+      });
+    const busy = notificationActivityBusyId === notification.id;
+    const routeReady = !!resolveNotificationPath(notification.deepLink);
+    const meta = [
+      notification.isRead ? "Read" : "Unread",
+      notification.category === "creator_money_purchase"
+        ? "Creator purchase"
+        : notification.category === "creator_money_sale"
+          ? "Creator sale"
+          : "Activity",
+      createdLabel,
+    ].join(" • ");
+
+    return (
+      <View key={notification.id} style={styles.activityRow}>
+        <TouchableOpacity
+          style={styles.activityMain}
+          activeOpacity={0.86}
+          accessibilityRole="button"
+          accessibilityLabel={`Open notification: ${notification.title}`}
+          disabled={busy || !routeReady}
+          onPress={() => {
+            void onPressNotificationActivity(notification);
+          }}
+          testID={`notification-activity-row-${notification.notificationType}`}
+        >
+          <Text style={[styles.activityTitle, !notification.isRead && styles.activityTitleUnread]}>
+            {notification.title}
+          </Text>
+          {notification.body ? <Text style={styles.activityBody}>{notification.body}</Text> : null}
+          <Text style={styles.activityMeta}>
+            {routeReady ? meta : `${meta} • Route unavailable`}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.activityDismissButton}
+          activeOpacity={0.86}
+          accessibilityRole="button"
+          accessibilityLabel={`Dismiss notification: ${notification.title}`}
+          disabled={busy}
+          onPress={() => {
+            void onDismissNotificationActivity(notification);
+          }}
+          testID={`notification-activity-dismiss-${notification.notificationType}`}
+        >
+          {busy
+            ? <ActivityIndicator color="#EAF0FF" size="small" />
+            : <Text style={styles.activityDismissText}>Dismiss</Text>}
+        </TouchableOpacity>
+      </View>
+    );
+  }, [notificationActivityBusyId, onDismissNotificationActivity, onPressNotificationActivity]);
+
   const renderLegalPolicyRow = useCallback((slug: string) => {
     const policy = legalPolicyBySlug.get(slug);
     if (!policy) return null;
@@ -1873,6 +1996,29 @@ export default function SettingsScreen() {
             >
               <Text style={styles.utilityButtonText}>Refresh</Text>
             </TouchableOpacity>
+          </View>
+        </SettingsRow>
+        <SettingsRow
+          title="Notifications / Activity"
+          subtitle="Creator-money receipts, creator sale alerts, event reminders, and system alerts backed by real notification records."
+          value={`${notificationActivity.filter((notification) => !notification.isRead).length} unread`}
+        >
+          <View style={styles.preferenceList} testID="settings-notification-activity-list">
+            {notificationLoading ? (
+              <View style={styles.activityEmptyState}>
+                <ActivityIndicator color="#DC143C" size="small" />
+                <Text style={styles.activityBody}>Loading activity...</Text>
+              </View>
+            ) : notificationActivity.length ? (
+              notificationActivity.map(renderNotificationActivityRow)
+            ) : (
+              <View style={styles.activityEmptyState}>
+                <Text style={styles.activityTitle}>No activity yet</Text>
+                <Text style={styles.activityBody}>
+                  Creator-money notifications are backed by real notification records. Chat stays conversation-only.
+                </Text>
+              </View>
+            )}
           </View>
         </SettingsRow>
         {NOTIFICATION_GROUPS.map((group) => (
@@ -2535,6 +2681,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
+  activityTitleUnread: {
+    color: "#FFE4EA",
+  },
   activityBody: {
     color: "#C4CEE2",
     fontSize: 12,
@@ -2561,6 +2710,16 @@ const styles = StyleSheet.create({
     color: "#EAF0FF",
     fontSize: 11,
     fontWeight: "900",
+  },
+  activityEmptyState: {
+    minHeight: 82,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    justifyContent: "center",
+    padding: 14,
+    gap: 6,
   },
   summaryCard: {
     borderRadius: 16,
