@@ -70,8 +70,31 @@ assertIncludes(channelSettings, "handleManageMoneyFeature", "Money Center featur
 assertIncludes(channelSettings, "renderActiveMoneyManagerPanel", "Money Center renders dedicated active manager panel");
 assertIncludes(channelSettings, "activeMoneyManageTarget", "Money Center focused manage target state");
 assertIncludes(channelSettings, "moneyManageNotice", "Money Center visible manage notice");
-assertIncludes(channelSettings, "testID={`money-feature-${feature.key}-cta`}", "Money Center feature CTA test ids");
-assertIncludes(channelSettings, "testID={`money-manager-${activeMoneyManageTarget}`}", "Money Center manager panel test id");
+[
+  "money-feature-tips-cta",
+  "money-feature-paid_video-cta",
+  "money-feature-watch_party_ticket-cta",
+  "money-feature-channel_subscription-cta",
+  "money-feature-vip-cta",
+  "money-feature-event_pass-cta",
+].forEach((testID) => {
+  assertIncludes(channelSettings, testID, `Money Center actual tappable feature CTA ${testID}`);
+});
+assertIncludes(channelSettings, "activeMoneyCenterFocusSection", "Money Center deterministic focus state");
+assertIncludes(channelSettings, "focusMoneyCenterSection", "Money Center deterministic focus handler");
+assertIncludes(channelSettings, "renderActiveMoneyCenterFocusContent", "Money Center focused content renderer");
+assertIncludes(channelSettings, "money-center-focus-tabs", "Money Center local focus tabs");
+assertIncludes(channelSettings, "money-center-ways-to-earn-focused-panel", "Money Center visible Ways to Earn focused panel");
+assertIncludes(channelSettings, 'renderWaysToEarnContent("money-center-ways-to-earn-accordion-panel", "-accordion")', "Money Center secondary Ways to Earn copy uses suffixed test ids");
+assertIncludes(channelSettings, "money-manager-sheet", "Money Center manager bottom sheet");
+assertIncludes(channelSettings, "money-manager-close-button", "Money Center manager close action");
+assertIncludes(channelSettings, "money-manager-tips", "Tips manager panel test id");
+assertIncludes(channelSettings, "money-manager-paid_video", "Paid Video manager panel test id");
+assertIncludes(channelSettings, "money-manager-watch_party_ticket", "Watch-Party Ticket manager panel test id");
+assertIncludes(channelSettings, "money-manager-channel_subscription", "Channel Subscription manager panel test id");
+assertIncludes(channelSettings, "money-manager-vip", "VIP manager panel test id");
+assertIncludes(channelSettings, "money-manager-event_pass", "Event Pass manager panel test id");
+assertIncludes(channelSettings, "money-manager-cashout-readiness", "Cashout readiness focused panel test id");
 assertIncludes(channelSettings, "money-manager-tips-review-cashout-button", "Tips manager cashout readiness action");
 assertIncludes(channelSettings, "money-manager-paid-videos-open-content-button", "Paid Videos manager content action");
 assertIncludes(channelSettings, "money-manager-watch-party-create-target-button", "Watch-Party Seat Pass manager target action");
@@ -95,14 +118,14 @@ assertIncludes(channelSettings, "Fans do not buy Chi'llywood Premium", "creator 
 assertIncludes(channelSettings, "Creator setup mode", "creator setup mode banner");
 assertIncludes(channelSettings, "Creator monetization setup is usable in sandbox/not-payable mode.", "creator setup usable copy");
 assertIncludes(channelSettings, "money-center-open-ways-to-earn-button", "Money Center open Ways to Earn action");
-assertIncludes(channelSettings, "focusMonetizationSection(\"ways_to_earn\")", "Money Center open Ways to Earn scroll/focus action");
+assertIncludes(channelSettings, "onPress={openWaysToEarn}", "Money Center open Ways to Earn human-tap action");
 assertIncludes(channelSettings, "money-center-monetization-section-stack", "Money Center monetization section stack anchor");
-assertIncludes(channelSettings, "monetizationStackOffsetRef.current + sectionOffset", "Money Center absolute section offset");
-assertIncludes(channelSettings, "const startingScrollY = studioScrollYRef.current", "Money Center section focus captures stable scroll start");
-assertIncludes(channelSettings, "startingScrollY + 920", "Money Center fallback focus moves forward from captured scroll");
-assertIncludes(channelSettings, "id === \"ways_to_earn\" ? 3600 : 2600", "Money Center Ways to Earn minimum fallback target");
 assertIncludes(channelSettings, "money-section-${id}", "Money Center section focus anchors");
-assertIncludes(channelSettings, "studioScrollRef.current?.scrollTo", "Money Center focused section scrolling");
+assertNotIncludes(channelSettings, "monetizationStackOffsetRef.current + sectionOffset", "Money Center must not depend on absolute section offsets");
+assertNotIncludes(channelSettings, "startingScrollY + 920", "Money Center must not depend on forward scroll guesses");
+assertNotIncludes(channelSettings, "id === \"ways_to_earn\" ? 3600 : 2600", "Money Center must not depend on hardcoded Ways to Earn offsets");
+assertNotIncludes(channelSettings, "studioScrollRef.current?.scrollTo", "Money Center focus must not require imperative scrollTo");
+assertNotIncludes(channelSettings, "focusActiveMoneyManagerPanel", "Money Center manager focus must not use timed scroll retries");
 assertIncludes(channelSettings, "money-center-creator-setup-button", "Money Center creator setup action");
 assertIncludes(channelSettings, "money-center-cashout-readiness-button", "Money Center cashout readiness action");
 assertIncludes(channelSettings, "Available balance", "overview available balance");

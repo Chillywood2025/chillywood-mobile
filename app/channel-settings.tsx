@@ -10,6 +10,7 @@ import {
   ImageBackground,
   Linking,
   Modal,
+  Platform,
   ScrollView,
   Share,
   StyleSheet,
@@ -18,6 +19,18 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+type WebPortalCreator = (children: React.ReactNode, container: Element | DocumentFragment) => React.ReactNode;
+
+const getWebPortalCreator = (): WebPortalCreator | null => {
+  if (Platform.OS !== "web") return null;
+  try {
+    const reactDom = require("react-dom") as { createPortal?: WebPortalCreator };
+    return typeof reactDom.createPortal === "function" ? reactDom.createPortal : null;
+  } catch {
+    return null;
+  }
+};
 
 import {
   resolveChannelAccess,
@@ -362,6 +375,7 @@ type MonetizationSectionId =
   | "tax_legal"
   | "providers"
   | "testing_proof";
+type MoneyCenterFocusSection = "overview" | "ways_to_earn" | "transactions" | "payouts";
 type MoneyTransactionFilter = "all" | "tips" | "videos" | "rooms" | "subscriptions" | "vip" | "events" | "merch";
 type BrandStudioSectionId = "hero" | "background" | "brandKit" | "theme" | "scenePresets" | "preview" | "defaults";
 type ClipStudioSectionId = "media" | "cover" | "title" | "templates" | "format" | "brand" | "save" | "advanced";
@@ -1172,6 +1186,19 @@ const createInitialMonetizationSections = (tab: unknown, focus: unknown) => {
   return sections;
 };
 
+const createInitialMoneyCenterFocusSection = (
+  tab: unknown,
+  focus: unknown,
+  manage: unknown,
+): MoneyCenterFocusSection => {
+  if (normalizeMoneyManageTarget(manage)) return "ways_to_earn";
+  const routedSection = normalizeMonetizationSectionId(tab) ?? normalizeMonetizationSectionId(focus);
+  if (routedSection === "transactions") return "transactions";
+  if (routedSection === "payouts") return "payouts";
+  if (routedSection === "ways_to_earn" || routedSection === "offers") return "ways_to_earn";
+  return "overview";
+};
+
 const getCreatorVideoCreatedTimestamp = (video: CreatorVideo) => {
   const timestamp = Date.parse(video.createdAt || video.updatedAt);
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -1278,6 +1305,9 @@ export function ChannelStudioScreen() {
   );
   const [expandedMonetizationSections, setExpandedMonetizationSections] = useState<ReadonlySet<MonetizationSectionId>>(
     () => createInitialMonetizationSections(routeParams.tab, routeParams.focus),
+  );
+  const [activeMoneyCenterFocusSection, setActiveMoneyCenterFocusSection] = useState<MoneyCenterFocusSection>(
+    () => createInitialMoneyCenterFocusSection(routeParams.tab, routeParams.focus, routeParams.manage),
   );
   const [activeMoneyManageTarget, setActiveMoneyManageTarget] = useState<MonetizationFeatureKey | null>(
     () => createInitialMoneyManageTarget(routeParams.manage),
@@ -1392,11 +1422,6 @@ export function ChannelStudioScreen() {
   const brandProfileSaveInFlightRef = useRef(false);
   const sourceVideoEventPrefillRef = useRef<string | null>(null);
   const spotlightRouteAppliedRef = useRef<string | null>(null);
-  const studioScrollRef = useRef<ScrollView | null>(null);
-  const studioScrollYRef = useRef(0);
-  const monetizationStackOffsetRef = useRef(0);
-  const monetizationSectionOffsetsRef = useRef<Partial<Record<MonetizationSectionId, number>>>({});
-  const moneyManagerOffsetRef = useRef<number | null>(null);
   const [clipEditor, setClipEditor] = useState<ClipStudioEditorState>(createEmptyClipStudioEditorState);
   const [selectedClipVideoFile, setSelectedClipVideoFile] = useState<CreatorVideoFile | null>(null);
   const [selectedClipCoverFile, setSelectedClipCoverFile] = useState<CreatorVideoFile | null>(null);
@@ -1486,52 +1511,10 @@ export function ChannelStudioScreen() {
       return next;
     });
   };
-  const focusMonetizationSection = useCallback((id: MonetizationSectionId) => {
+  const focusMoneyCenterSection = useCallback((id: MoneyCenterFocusSection) => {
     setActiveStudioTab("monetization");
     setExpandedMonetizationSections((current) => new Set([...current, id]));
-    const startingScrollY = studioScrollYRef.current;
-
-    requestAnimationFrame(() => {
-      const scrollToSection = () => {
-        const sectionOffset = monetizationSectionOffsetsRef.current[id];
-        const targetOffset = typeof sectionOffset === "number"
-          ? monetizationStackOffsetRef.current + sectionOffset
-          : Math.max(startingScrollY + 920, id === "ways_to_earn" ? 3600 : 2600);
-        studioScrollRef.current?.scrollTo({
-          y: Math.max(0, targetOffset - 24),
-          animated: true,
-        });
-      };
-
-      setTimeout(scrollToSection, 120);
-      setTimeout(scrollToSection, 320);
-      setTimeout(scrollToSection, 650);
-    });
-  }, []);
-  const focusActiveMoneyManagerPanel = useCallback(() => {
-    const startingScrollY = studioScrollYRef.current;
-
-    requestAnimationFrame(() => {
-      const scrollToManager = () => {
-        const managerOffset = moneyManagerOffsetRef.current;
-        const waysOffset = monetizationSectionOffsetsRef.current.ways_to_earn;
-        const fallbackOffset = typeof waysOffset === "number"
-          ? monetizationStackOffsetRef.current + waysOffset + 2600
-          : startingScrollY + 1800;
-        const targetOffset = typeof managerOffset === "number"
-          ? monetizationStackOffsetRef.current + managerOffset
-          : fallbackOffset;
-
-        studioScrollRef.current?.scrollTo({
-          y: Math.max(0, targetOffset - 24),
-          animated: true,
-        });
-      };
-
-      setTimeout(scrollToManager, 160);
-      setTimeout(scrollToManager, 360);
-      setTimeout(scrollToManager, 720);
-    });
+    setActiveMoneyCenterFocusSection(id);
   }, []);
   const toggleClipSection = (id: ClipStudioSectionId) => {
     setExpandedClipSections((current) => {
@@ -1554,10 +1537,16 @@ export function ChannelStudioScreen() {
       ?? normalizeMonetizationSectionId(routeParams.focus);
     if (nextTab === "monetization" && monetizationSection) {
       setExpandedMonetizationSections((current) => new Set([...current, monetizationSection]));
+      if (monetizationSection === "transactions") setActiveMoneyCenterFocusSection("transactions");
+      else if (monetizationSection === "payouts") setActiveMoneyCenterFocusSection("payouts");
+      else if (monetizationSection === "ways_to_earn" || monetizationSection === "offers") {
+        setActiveMoneyCenterFocusSection("ways_to_earn");
+      }
     }
     const manageTarget = normalizeMoneyManageTarget(routeParams.manage);
     if (nextTab === "monetization" && manageTarget) {
       setActiveMoneyManageTarget(manageTarget);
+      setActiveMoneyCenterFocusSection("ways_to_earn");
       setExpandedMonetizationSections((current) => new Set([...current, "ways_to_earn"]));
     }
     if (routeAction === "upload") setContentStatusFilter("all");
@@ -2496,7 +2485,12 @@ export function ChannelStudioScreen() {
     setPayoutSetupNotice(
       `Cashout readiness reviewed. Cashout not live yet. No real payout will be sent. ${blockers} ${nextSteps}`,
     );
-    setExpandedMonetizationSections((current) => new Set([...current, "payouts", "providers", "tax_legal"]));
+    setActiveMoneyCenterFocusSection("payouts");
+    setExpandedMonetizationSections((current) => {
+      const next = new Set<MonetizationSectionId>([...current, "payouts", "providers", "tax_legal"]);
+      next.delete("ways_to_earn");
+      return next;
+    });
     trackEvent("payout_readiness_reviewed", {
       creator_id: user?.id ?? null,
       live_money_enabled: runtimeFlags.liveMoneyEnabled,
@@ -6446,13 +6440,11 @@ export function ChannelStudioScreen() {
     children: React.ReactNode;
   }) => {
     const expanded = expandedMonetizationSections.has(id);
+    const showBody = expanded && id !== activeMoneyCenterFocusSection;
     return (
       <View
         style={styles.studioAccordionCard}
         testID={`money-section-${id}`}
-        onLayout={(event) => {
-          monetizationSectionOffsetsRef.current[id] = event.nativeEvent.layout.y;
-        }}
       >
         <TouchableOpacity
           style={styles.studioAccordionHeader}
@@ -6471,7 +6463,7 @@ export function ChannelStudioScreen() {
             <Text style={styles.studioAccordionChevron}>{expanded ? "⌄" : "›"}</Text>
           </View>
         </TouchableOpacity>
-        {expanded ? <View style={styles.studioAccordionBody}>{children}</View> : null}
+        {showBody ? <View style={styles.studioAccordionBody}>{children}</View> : null}
       </View>
     );
   };
@@ -8033,8 +8025,8 @@ export function ChannelStudioScreen() {
     ) => {
       setActiveMoneyManageTarget(target);
       setMoneyManageNotice(notice);
+      setActiveMoneyCenterFocusSection("ways_to_earn");
       setExpandedMonetizationSections((current) => new Set([...current, ...sections]));
-      focusActiveMoneyManagerPanel();
       router.setParams({
         tab: "monetization",
         focus: sections[0] ?? "ways_to_earn",
@@ -8069,13 +8061,6 @@ export function ChannelStudioScreen() {
       }
 
       if (feature.key === "paid_videos") {
-        if (!latestPublicSandboxVideo) {
-          setActiveMoneyManageTarget("paid_videos");
-          setMoneyManageNotice("Publish a public creator video first, then return to Money Center to attach a paid-video offer.");
-          setVideoNotice("Publish a video before enabling paid unlocks.");
-          openStudioTab("content", { filter: "all", focus: "upload" });
-          return;
-        }
         setMoneyManageFocus(
           "paid_videos",
           ["ways_to_earn"],
@@ -8087,16 +8072,12 @@ export function ChannelStudioScreen() {
       }
 
       if (feature.key === "paid_watch_parties") {
-        if (!hasPaidWatchPartyOffer) {
-          setActiveMoneyManageTarget("paid_watch_parties");
-          setMoneyManageNotice("Create or link a Watch-Party target before a Seat Pass offer can be managed.");
-          router.push({ pathname: "/watch-party", params: { mode: "live", source: "money-center" } });
-          return;
-        }
         setMoneyManageFocus(
           "paid_watch_parties",
           ["ways_to_earn"],
-          "Watch-Party Seat Pass Manager is open below. Seat Pass access still routes through Party Waiting Room to Party Room.",
+          hasPaidWatchPartyOffer
+            ? "Watch-Party Seat Pass Manager is open below. Seat Pass access still routes through Party Waiting Room to Party Room."
+            : "Watch-Party Seat Pass Manager is open below. Create or link a Party Room target before enabling Seat Pass access.",
         );
         return;
       }
@@ -8123,13 +8104,6 @@ export function ChannelStudioScreen() {
         return;
       }
 
-      if (!creatorEvents.length) {
-        setActiveMoneyManageTarget("paid_events");
-        setMoneyManageNotice("Create a creator event first, then return to Money Center to attach an event pass.");
-        setEventNotice("Create an event before enabling paid event passes.");
-        openStudioTab("live", { focus: "events" });
-        return;
-      }
       setMoneyManageFocus(
         "paid_events",
         ["ways_to_earn"],
@@ -8143,6 +8117,7 @@ export function ChannelStudioScreen() {
       router.push({ pathname: "/channel/[userId]", params: { userId: String(user.id), preview: "public" } });
     };
     const openMoneyTransactions = () => {
+      setActiveMoneyCenterFocusSection("transactions");
       setExpandedMonetizationSections((current) => new Set([...current, "transactions"]));
     };
     const sandboxTesterOfferCards: SandboxTesterOfferCard[] = [
@@ -8306,7 +8281,15 @@ export function ChannelStudioScreen() {
       if (key === "vip_passes") return "vip_pass";
       return "event_pass";
     };
-    const renderFeatureCard = (feature: MonetizationFeatureCatalogItem) => (
+    const ctaTestIdByFeatureKey: Record<MonetizationFeatureKey, string> = {
+      tips: "money-feature-tips-cta",
+      paid_videos: "money-feature-paid_video-cta",
+      paid_watch_parties: "money-feature-watch_party_ticket-cta",
+      channel_subscriptions: "money-feature-channel_subscription-cta",
+      vip_passes: "money-feature-vip-cta",
+      paid_events: "money-feature-event_pass-cta",
+    };
+    const renderFeatureCard = (feature: MonetizationFeatureCatalogItem, testIdSuffix = "") => (
       <View
         key={feature.key}
         style={[
@@ -8315,7 +8298,7 @@ export function ChannelStudioScreen() {
           activeMoneyManageTarget === feature.key && styles.moneyFocusedCard,
           (feature.status === "Blocked" || feature.status === "Needs attention") && styles.summaryCardUnavailable,
         ]}
-        testID={`money-feature-card-${feature.key}`}
+        testID={`money-feature-card-${feature.key}${testIdSuffix}`}
       >
         <View style={styles.moneyFeatureHeaderRow}>
           <Text style={styles.summaryLabel}>{feature.title}</Text>
@@ -8331,7 +8314,7 @@ export function ChannelStudioScreen() {
           hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
           accessibilityRole="button"
           accessibilityLabel={`${feature.creatorActionLabel} ${feature.title}`}
-          testID={`money-feature-${feature.key}-cta`}
+          testID={`${ctaTestIdByFeatureKey[feature.key]}${testIdSuffix}`}
         >
           <Text style={styles.eventActionButtonText}>{feature.creatorActionLabel}</Text>
         </TouchableOpacity>
@@ -8355,6 +8338,14 @@ export function ChannelStudioScreen() {
         channel_subscriptions: "channel_subscription",
         vip_passes: "vip_pass",
         paid_events: "event_pass",
+      };
+      const managerTestIdByTarget: Record<MonetizationFeatureKey, string> = {
+        tips: "money-manager-tips",
+        paid_videos: "money-manager-paid_video",
+        paid_watch_parties: "money-manager-watch_party_ticket",
+        channel_subscriptions: "money-manager-channel_subscription",
+        vip_passes: "money-manager-vip",
+        paid_events: "money-manager-event_pass",
       };
 
       const renderManagerBody = () => {
@@ -8706,10 +8697,7 @@ export function ChannelStudioScreen() {
       return (
         <View
           style={[styles.panel, styles.moneyFocusedCard]}
-          testID={`money-manager-${activeMoneyManageTarget}`}
-          onLayout={(event) => {
-            moneyManagerOffsetRef.current = event.nativeEvent.layout.y;
-          }}
+          testID={managerTestIdByTarget[activeMoneyManageTarget]}
         >
           <View style={styles.panelHeader}>
             <View style={styles.panelHeaderCopy}>
@@ -8718,7 +8706,22 @@ export function ChannelStudioScreen() {
                 {moneyManageNotice ?? "Manage this creator setup flow in sandbox/not-payable mode without changing provider or payout behavior."}
               </Text>
             </View>
-            <MoneyScopeInfoButton scope={managerScopeByTarget[activeMoneyManageTarget]} compact />
+            <View style={styles.scopeInfoHeaderRow}>
+              <MoneyScopeInfoButton scope={managerScopeByTarget[activeMoneyManageTarget]} compact />
+              <TouchableOpacity
+                style={styles.closeBtn}
+                activeOpacity={0.86}
+                onPress={() => {
+                  setActiveMoneyManageTarget(null);
+                  setMoneyManageNotice(null);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Close manager"
+                testID="money-manager-close-button"
+              >
+                <Text style={styles.closeText}>Close</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           {renderManagerBody()}
         </View>
@@ -8920,6 +8923,238 @@ export function ChannelStudioScreen() {
       );
     };
 
+    const moneyCenterFocusTabs: readonly { id: MoneyCenterFocusSection; label: string }[] = [
+      { id: "overview", label: "Overview" },
+      { id: "ways_to_earn", label: "Ways to Earn" },
+      { id: "transactions", label: "Transactions" },
+      { id: "payouts", label: "Cashout" },
+    ];
+    const renderMoneyCenterFocusTabs = () => (
+      <View style={styles.filterRow} testID="money-center-focus-tabs">
+        {moneyCenterFocusTabs.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            style={[styles.filterChip, activeMoneyCenterFocusSection === item.id && styles.filterChipActive]}
+            activeOpacity={0.86}
+            onPress={() => focusMoneyCenterSection(item.id)}
+            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeMoneyCenterFocusSection === item.id }}
+            accessibilityLabel={`Open ${item.label}`}
+            testID={`money-center-focus-${item.id}-button`}
+          >
+            <Text style={[styles.filterChipText, activeMoneyCenterFocusSection === item.id && styles.filterChipTextActive]}>
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+    const openWaysToEarn = () => {
+      setActiveMoneyManageTarget(null);
+      setMoneyManageNotice(null);
+      focusMoneyCenterSection("ways_to_earn");
+      router.setParams({
+        tab: "monetization",
+        focus: "ways_to_earn",
+      });
+    };
+    const renderMoneyCenterOverviewContent = () => (
+      <View testID="money-center-overview-panel">
+        <View style={styles.summaryGrid}>
+          {[
+            { label: "Available balance", value: "Not payable" },
+            { label: "Ways to Earn", value: `${monetizationFeatureCards.filter((card) => card.status === "Setup mode" || card.status === "Active").length} setup` },
+            { label: "Live Money", value: "Off" },
+            { label: "Payouts", value: "Off" },
+          ].map((item) => (
+            <View key={item.label} style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>{item.label}</Text>
+              <Text style={styles.summaryValue}>{item.value}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.eventActionRow}>
+          <TouchableOpacity
+            style={styles.eventPrimaryButton}
+            activeOpacity={0.88}
+            onPress={openWaysToEarn}
+            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityLabel="Open Ways to Earn"
+            testID="money-center-open-ways-to-earn-button"
+          >
+            <Text style={styles.eventPrimaryButtonText}>Open Ways to Earn</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.eventSecondaryButton}
+            activeOpacity={0.88}
+            onPress={() => router.push("/subscribe" as Parameters<typeof router.push>[0])}
+            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityLabel="Manage Premium"
+          >
+            <Text style={styles.eventSecondaryButtonText}>Manage Premium</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+    const renderWaysToEarnContent = (testID = "money-center-ways-to-earn-focused-panel", testIdSuffix = "") => (
+      <View testID={testID}>
+        <View style={styles.sandboxSafetyBanner}>
+          <Text style={styles.sandboxSafetyTitle}>Creator setup mode</Text>
+          <Text style={styles.sandboxSafetyBody}>
+            Creator monetization setup is usable in sandbox/not-payable mode. Production sales require owner/provider activation.
+          </Text>
+        </View>
+        <View style={styles.eventEmptyCard}>
+          <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
+          <Text style={styles.eventEmptyBody}>
+            {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, get a Seat Pass, subscribe to a creator, get VIP, or buy an event pass."}
+          </Text>
+          <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
+        </View>
+        <View style={styles.summaryGrid}>
+          {monetizationFeatureCards.map((feature) => renderFeatureCard(feature, testIdSuffix))}
+        </View>
+        <View style={styles.eventActionRow}>
+          <TouchableOpacity
+            style={[styles.eventPrimaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
+            activeOpacity={0.88}
+            disabled={sandboxSetupBusy}
+            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+            onPress={handleSetupSandboxTesterExperience}
+            testID="money-center-creator-setup-button"
+            accessibilityRole="button"
+            accessibilityLabel="Set up creator monetization"
+          >
+            {sandboxSetupBusy ? (
+              <View style={styles.eventPrimaryButtonBusyRow}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.eventPrimaryButtonText}>Setting up</Text>
+              </View>
+            ) : (
+              <Text style={styles.eventPrimaryButtonText}>Set up creator monetization</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.eventSecondaryButton}
+            activeOpacity={0.88}
+            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+            onPress={handleReviewCashoutReadiness}
+            testID={`money-center-cashout-readiness-button${testIdSuffix}`}
+            accessibilityRole="button"
+            accessibilityLabel="Review cashout readiness"
+          >
+            <Text style={styles.eventSecondaryButtonText}>Review cashout readiness</Text>
+          </TouchableOpacity>
+        </View>
+        {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
+      </View>
+    );
+    const renderMoneyTransactionsContent = (testID = "money-center-transactions-panel") => (
+      <View testID={testID}>
+        <View style={styles.filterRow}>
+          {transactionFilters.map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              style={[styles.filterChip, moneyTransactionFilter === filter.id && styles.filterChipActive]}
+              activeOpacity={0.86}
+              onPress={() => setMoneyTransactionFilter(filter.id)}
+            >
+              <Text style={[styles.filterChipText, moneyTransactionFilter === filter.id && styles.filterChipTextActive]}>{filter.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {renderTipTransactionRows()}
+        {renderPaidVideoTransactionRows()}
+        {renderPaidWatchPartyTransactionRows()}
+        {renderChannelSubscriptionTransactionRows()}
+        {renderVipTransactionRows()}
+        {renderPaidEventTransactionRows()}
+        {renderCreatorMoneyEventRows(
+          filteredTransactionEvents,
+          "No transactions yet",
+          "Tips, video unlocks, Seat Passes, subscriptions, VIP purchases, event passes, merch, refunds, failed payments, and chargebacks will appear here when supported.",
+          8,
+        )}
+      </View>
+    );
+    const renderPayoutReadinessContent = (testID = "money-manager-cashout-readiness") => (
+      <View testID={testID}>
+        {renderSummaryMetricCards(payoutCards)}
+        <View style={styles.eventEmptyCard}>
+          <Text style={styles.eventEmptyTitle}>Cashout not live yet.</Text>
+          <Text style={styles.eventEmptyBody}>
+            Creators can review payout setup and blockers here. No real payout will be sent, no payable balance is created, and cashout requires approval before live money movement.
+          </Text>
+          <MoneyScopeInfoButton scope="payout_readiness" label="What does payout setup mean?" />
+        </View>
+        <View style={styles.eventActionRow}>
+          <TouchableOpacity
+            style={styles.eventPrimaryButton}
+            activeOpacity={0.88}
+            onPress={handleReviewCashoutReadiness}
+            hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityLabel="Review cashout readiness"
+            testID="money-payout-review-readiness-button"
+          >
+            <Text style={styles.eventPrimaryButtonText}>Review cashout readiness</Text>
+          </TouchableOpacity>
+        </View>
+        {canStartStripeSetup && (creatorPayoutSummary.setupActionLabel || creatorPayoutSummary.canRefreshProviderStatus) ? (
+          <View style={styles.eventActionRow}>
+            {creatorPayoutSummary.setupActionLabel ? (
+              <TouchableOpacity
+                style={[styles.eventPrimaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
+                activeOpacity={0.88}
+                disabled={payoutSetupBusy !== null}
+                onPress={handleStartPayoutProviderSetup}
+              >
+                {payoutSetupBusy === "setup" ? (
+                  <View style={styles.eventPrimaryButtonBusyRow}>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.eventPrimaryButtonText}>Opening setup</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel}</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
+            {creatorPayoutSummary.canRefreshProviderStatus ? (
+              <TouchableOpacity
+                style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
+                activeOpacity={0.88}
+                disabled={payoutSetupBusy !== null}
+                onPress={handleRefreshPayoutProviderStatus}
+              >
+                {payoutSetupBusy === "sync" ? (
+                  <ActivityIndicator color="#3F2D20" />
+                ) : (
+                  <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+        {payoutSetupNotice ? <Text style={styles.noticeText}>{payoutSetupNotice}</Text> : null}
+        <Text style={styles.noticeText}>Payouts and cashout remain OFF for production money movement.</Text>
+        {renderCreatorMoneyEventRows(
+          payoutEvents,
+          "No payout activity yet",
+          "Payout setup and requests are not withdrawable while payout and live-money switches are off.",
+          4,
+        )}
+      </View>
+    );
+    const renderActiveMoneyCenterFocusContent = () => {
+      if (activeMoneyCenterFocusSection === "ways_to_earn") return renderWaysToEarnContent();
+      if (activeMoneyCenterFocusSection === "transactions") return renderMoneyTransactionsContent();
+      if (activeMoneyCenterFocusSection === "payouts") return renderPayoutReadinessContent();
+      return renderMoneyCenterOverviewContent();
+    };
+
     if (moneyCenterFeatureFlag.state === "off" || moneyCenterFeatureFlag.state === "locked" || moneyCenterFeatureFlag.state === "maintenance") {
       const unavailableStatus = moneyCenterFeatureFlag.state === "locked" ? "Blocked" : "Disabled";
       return (
@@ -8967,6 +9202,34 @@ export function ChannelStudioScreen() {
       );
     }
 
+    const moneyManagerSheet = activeMoneyManageTarget !== null ? (
+      <View
+        style={styles.assetManagerSheetOverlay}
+        testID="money-manager-sheet"
+        accessibilityLabel="Money Center manager"
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={() => {
+            setActiveMoneyManageTarget(null);
+            setMoneyManageNotice(null);
+          }}
+        />
+        <View style={styles.assetManagerSheet}>
+          <View style={styles.assetManagerSheetHandle} />
+          <ScrollView
+            style={styles.assetManagerSheetScroll}
+            contentContainerStyle={styles.assetManagerSheetBody}
+            showsVerticalScrollIndicator={false}
+          >
+            {renderActiveMoneyManagerPanel()}
+          </ScrollView>
+        </View>
+      </View>
+    ) : null;
+    const moneyManagerPortalTarget = Platform.OS === "web" && typeof document !== "undefined" ? document.body : null;
+
     return (
       <>
         <View style={styles.panel}>
@@ -8980,50 +9243,13 @@ export function ChannelStudioScreen() {
           <Text style={styles.permissionCopy}>
             Setup mode: sandbox/test, not payable yet, no real payouts, no cashout, no withdrawals.
           </Text>
-          <View style={styles.summaryGrid}>
-            {[
-              { label: "Available balance", value: "Not payable" },
-              { label: "Ways to Earn", value: `${monetizationFeatureCards.filter((card) => card.status === "Setup mode" || card.status === "Active").length} setup` },
-              { label: "Live Money", value: "Off" },
-              { label: "Payouts", value: "Off" },
-            ].map((item) => (
-              <View key={item.label} style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>{item.label}</Text>
-                <Text style={styles.summaryValue}>{item.value}</Text>
-              </View>
-            ))}
-          </View>
-          <View style={styles.eventActionRow}>
-            <TouchableOpacity
-              style={styles.eventPrimaryButton}
-              activeOpacity={0.88}
-              onPress={() => focusMonetizationSection("ways_to_earn")}
-              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-              accessibilityRole="button"
-              accessibilityLabel="Open Ways to Earn"
-              testID="money-center-open-ways-to-earn-button"
-            >
-              <Text style={styles.eventPrimaryButtonText}>Open Ways to Earn</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.eventSecondaryButton}
-              activeOpacity={0.88}
-              onPress={() => router.push("/subscribe" as Parameters<typeof router.push>[0])}
-              hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-              accessibilityRole="button"
-              accessibilityLabel="Manage Premium"
-            >
-              <Text style={styles.eventSecondaryButtonText}>Manage Premium</Text>
-            </TouchableOpacity>
-          </View>
+          {renderMoneyCenterFocusTabs()}
+          {renderActiveMoneyCenterFocusContent()}
         </View>
 
         <View
           style={styles.studioAccordionStack}
           testID="money-center-monetization-section-stack"
-          onLayout={(event) => {
-            monetizationStackOffsetRef.current = event.nativeEvent.layout.y;
-          }}
         >
           {renderMonetizationAccordion({
             id: "ways_to_earn",
@@ -9031,62 +9257,8 @@ export function ChannelStudioScreen() {
             summary: "The six creator monetization setup flows in one actionable view.",
             status: monetizationActive ? "Active" : creatorSetupModeActive ? "Setup mode" : "Needs attention",
             statusTone: monetizationActive || creatorSetupModeActive ? "default" : "muted",
-            children: (
-              <>
-                <View style={styles.sandboxSafetyBanner}>
-                  <Text style={styles.sandboxSafetyTitle}>Creator setup mode</Text>
-                  <Text style={styles.sandboxSafetyBody}>
-                    Creator monetization setup is usable in sandbox/not-payable mode. Production sales require owner/provider activation.
-                  </Text>
-                </View>
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Premium is separate from creator purchases.</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    {"Fans do not buy Chi'llywood Premium when they tip, unlock a video, get a Seat Pass, subscribe to a creator, get VIP, or buy an event pass."}
-                  </Text>
-                  <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
-                </View>
-                <View style={styles.summaryGrid}>
-                  {monetizationFeatureCards.map(renderFeatureCard)}
-                </View>
-                <View style={styles.eventActionRow}>
-                  <TouchableOpacity
-                    style={[styles.eventPrimaryButton, sandboxSetupBusy && styles.eventPrimaryButtonDisabled]}
-                    activeOpacity={0.88}
-                    disabled={sandboxSetupBusy}
-                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-                    onPress={handleSetupSandboxTesterExperience}
-                    testID="money-center-creator-setup-button"
-                    accessibilityRole="button"
-                    accessibilityLabel="Set up creator monetization"
-                  >
-                    {sandboxSetupBusy ? (
-                      <View style={styles.eventPrimaryButtonBusyRow}>
-                        <ActivityIndicator color="#fff" />
-                        <Text style={styles.eventPrimaryButtonText}>Setting up</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.eventPrimaryButtonText}>Set up creator monetization</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.eventSecondaryButton}
-                    activeOpacity={0.88}
-                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-                    onPress={handleReviewCashoutReadiness}
-                    testID="money-center-cashout-readiness-button"
-                    accessibilityRole="button"
-                    accessibilityLabel="Review cashout readiness"
-                  >
-                    <Text style={styles.eventSecondaryButtonText}>Review cashout readiness</Text>
-                  </TouchableOpacity>
-                </View>
-                {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
-              </>
-            ),
+            children: renderWaysToEarnContent("money-center-ways-to-earn-accordion-panel", "-accordion"),
           })}
-
-          {renderActiveMoneyManagerPanel()}
 
           {renderMonetizationAccordion({
             id: "overview",
@@ -9317,34 +9489,7 @@ export function ChannelStudioScreen() {
             summary: "One filtered transaction history for creator money activity.",
             status: creatorMoneyAuditEvents.length ? "Available" : "Empty",
             statusTone: creatorMoneyAuditEvents.length ? "default" : "muted",
-            children: (
-              <>
-                <View style={styles.filterRow}>
-                  {transactionFilters.map((filter) => (
-                    <TouchableOpacity
-                      key={filter.id}
-                      style={[styles.filterChip, moneyTransactionFilter === filter.id && styles.filterChipActive]}
-                      activeOpacity={0.86}
-                      onPress={() => setMoneyTransactionFilter(filter.id)}
-                    >
-                      <Text style={[styles.filterChipText, moneyTransactionFilter === filter.id && styles.filterChipTextActive]}>{filter.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {renderTipTransactionRows()}
-                {renderPaidVideoTransactionRows()}
-                {renderPaidWatchPartyTransactionRows()}
-                {renderChannelSubscriptionTransactionRows()}
-                {renderVipTransactionRows()}
-                {renderPaidEventTransactionRows()}
-                {renderCreatorMoneyEventRows(
-                  filteredTransactionEvents,
-                  "No transactions yet",
-                  "Tips, video unlocks, Seat Passes, subscriptions, VIP purchases, event passes, merch, refunds, failed payments, and chargebacks will appear here when supported.",
-                  8,
-                )}
-              </>
-            ),
+            children: renderMoneyTransactionsContent("money-center-transactions-accordion-panel"),
           })}
 
           {renderMonetizationAccordion({
@@ -9353,74 +9498,7 @@ export function ChannelStudioScreen() {
             summary: "Cashout readiness, KYC/tax status, and unavailable payout actions.",
             status: canReviewCashoutReadiness ? "Readiness" : payoutsStatus,
             statusTone: canReviewCashoutReadiness ? "default" : sectionTone(payoutsStatus),
-            children: (
-              <>
-                {renderSummaryMetricCards(payoutCards)}
-                <View style={styles.eventEmptyCard}>
-                  <Text style={styles.eventEmptyTitle}>Cashout not live yet.</Text>
-                  <Text style={styles.eventEmptyBody}>
-                    Creators can review payout setup and blockers here. No real payout will be sent, no payable balance is created, and cashout requires approval before live money movement.
-                  </Text>
-                  <MoneyScopeInfoButton scope="payout_readiness" label="What does payout setup mean?" />
-                </View>
-                <View style={styles.eventActionRow}>
-                  <TouchableOpacity
-                    style={styles.eventPrimaryButton}
-                    activeOpacity={0.88}
-                    onPress={handleReviewCashoutReadiness}
-                    hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-                    accessibilityRole="button"
-                    accessibilityLabel="Review cashout readiness"
-                    testID="money-payout-review-readiness-button"
-                  >
-                    <Text style={styles.eventPrimaryButtonText}>Review cashout readiness</Text>
-                  </TouchableOpacity>
-                </View>
-                {canStartStripeSetup && (creatorPayoutSummary.setupActionLabel || creatorPayoutSummary.canRefreshProviderStatus) ? (
-                  <View style={styles.eventActionRow}>
-                    {creatorPayoutSummary.setupActionLabel ? (
-                      <TouchableOpacity
-                        style={[styles.eventPrimaryButton, payoutSetupBusy === "setup" && styles.eventPrimaryButtonDisabled]}
-                        activeOpacity={0.88}
-                        disabled={payoutSetupBusy !== null}
-                        onPress={handleStartPayoutProviderSetup}
-                      >
-                        {payoutSetupBusy === "setup" ? (
-                          <View style={styles.eventPrimaryButtonBusyRow}>
-                            <ActivityIndicator color="#fff" />
-                            <Text style={styles.eventPrimaryButtonText}>Opening setup</Text>
-                          </View>
-                        ) : (
-                          <Text style={styles.eventPrimaryButtonText}>{creatorPayoutSummary.setupActionLabel}</Text>
-                        )}
-                      </TouchableOpacity>
-                    ) : null}
-                    {creatorPayoutSummary.canRefreshProviderStatus ? (
-                      <TouchableOpacity
-                        style={[styles.eventSecondaryButton, payoutSetupBusy === "sync" && styles.eventPrimaryButtonDisabled]}
-                        activeOpacity={0.88}
-                        disabled={payoutSetupBusy !== null}
-                        onPress={handleRefreshPayoutProviderStatus}
-                      >
-                        {payoutSetupBusy === "sync" ? (
-                          <ActivityIndicator color="#3F2D20" />
-                        ) : (
-                          <Text style={styles.eventSecondaryButtonText}>Refresh status</Text>
-                        )}
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ) : null}
-                {payoutSetupNotice ? <Text style={styles.noticeText}>{payoutSetupNotice}</Text> : null}
-                <Text style={styles.noticeText}>Payouts and cashout remain OFF for production money movement.</Text>
-                {renderCreatorMoneyEventRows(
-                  payoutEvents,
-                  "No payout activity yet",
-                  "Payout setup and requests are not withdrawable while payout and live-money switches are off.",
-                  4,
-                )}
-              </>
-            ),
+            children: renderPayoutReadinessContent("money-manager-cashout-readiness-accordion"),
           })}
 
           {renderMonetizationAccordion({
@@ -9628,6 +9706,21 @@ export function ChannelStudioScreen() {
             ),
           })}
         </View>
+        {Platform.OS === "web" ? (
+          moneyManagerPortalTarget && moneyManagerSheet ? getWebPortalCreator()?.(moneyManagerSheet, moneyManagerPortalTarget) ?? moneyManagerSheet : null
+        ) : (
+          <Modal
+            visible={activeMoneyManageTarget !== null}
+            transparent
+            animationType="slide"
+            onRequestClose={() => {
+              setActiveMoneyManageTarget(null);
+              setMoneyManageNotice(null);
+            }}
+          >
+            {moneyManagerSheet}
+          </Modal>
+        )}
       </>
     );
   };
@@ -9893,13 +9986,8 @@ export function ChannelStudioScreen() {
       <View style={styles.overlay} />
 
       <ScrollView
-        ref={studioScrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        scrollEventThrottle={16}
-        onScroll={(event) => {
-          studioScrollYRef.current = event.nativeEvent.contentOffset.y;
-        }}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
@@ -10390,9 +10478,9 @@ export function ChannelStudioScreen() {
           </>
         ) : null}
       </ScrollView>
-    </ImageBackground>
-    <CreatorContentActionSheet
-      visible={selectedContentActionVideo !== null}
+	    </ImageBackground>
+	    <CreatorContentActionSheet
+	      visible={selectedContentActionVideo !== null}
       video={selectedContentActionVideo}
       busy={videoSaving || brandSaving}
       isFeatured={!!selectedContentActionVideo && activeBrandProfile?.spotlightVideoId === selectedContentActionVideo.id}
@@ -10414,10 +10502,10 @@ export function ChannelStudioScreen() {
       onShare={(video) => {
         void onShareContentActionVideo(video);
       }}
-      onDelete={onDeleteVideo}
-    />
-    <Modal
-      visible={uploadSourceTarget !== null}
+	      onDelete={onDeleteVideo}
+	    />
+	    <Modal
+	      visible={uploadSourceTarget !== null}
       animationType="fade"
       transparent
       onRequestClose={() => setUploadSourceTarget(null)}
@@ -10857,12 +10945,22 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   assetManagerSheetOverlay: {
+    ...(Platform.OS === "web" ? { position: "fixed" as "absolute" } : null),
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     flex: 1,
+    minHeight: "100%",
+    height: "100%",
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.54)",
+    zIndex: 1000,
   },
   assetManagerSheet: {
+    ...(Platform.OS === "web" ? { height: "86%" as "86%" } : null),
     maxHeight: "86%",
+    overflow: "hidden",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
