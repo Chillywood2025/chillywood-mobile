@@ -19,11 +19,11 @@ Inspected surfaces include:
 
 ## Executive Verdict
 
-June 20 closeout update: Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass have reliable Android app-side proof; Watch-Party Ticket exact-target purchase/readback and VIP provider ownership reset plus fresh first-purchase proof are closed. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
+June 20 closeout update: Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass have reliable Android app-side proof; Watch-Party Seat Pass exact-target purchase/readback and VIP provider ownership reset plus fresh first-purchase proof are closed. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
 
 The seven money flows are **partially ready visually**.
 
-The strongest part is product safety and scope clarity. The UI repeatedly explains that Premium, tips, paid videos, Watch-Party tickets, subscriptions, VIP, and paid events are separate. The app also has stable route and flow test IDs, clear sandbox language, locked/unlocked states, and creator Money Center foundations.
+The strongest part is product safety and scope clarity. The UI repeatedly explains that Premium, tips, paid videos, Watch-Party Seat Passes, subscriptions, VIP, and paid events are separate. The app also has stable route and flow test IDs, clear sandbox language, locked/unlocked states, and creator Money Center foundations.
 
 The weaker part is public-facing premium polish. Several flows still feel like safe QA/proof screens rather than a finished creator-economy experience. They are understandable, but not consistently adaptive, branded, rewarding, or emotionally satisfying after purchase. Creator tools are broad and useful, but the business dashboard can feel dense and operational instead of modern, high-signal, and creator-first.
 
@@ -42,7 +42,7 @@ This visual verdict does not reopen app-code proof. Sandbox proof does not enabl
 | Premium subscription | Viewer sees a dark branded Premium screen with status, restore/manage options, app-wide Premium separation, and purchase-unavailable states. Value is clear but static. | Creator sees Premium as a gate for creator tools and Studio access, not as creator revenue. | Functional and well-scoped. Strong safety copy. Uses route-level selectors and status cards. | Medium. Branded, but more utility than premium. | Low-medium. Handles active, unavailable, restore, and sandbox states, but not personalized. | Benefit hierarchy is plain. Unlock moment is not memorable. Premium vs creator products is mostly text, not visual. | Add a compact cinematic Premium hero, three benefit pillars, clear current-state card, active-member receipt, and visual "Premium is app-wide" comparison strip. | Must-have |
 | Creator tips | Viewer gets a bottom sheet with creator identity, amount chips, custom amount, note, contribution-only copy, and success notice. | Creator can enable/manage tip settings and see tip transactions in Money Center. | Clear and safe. Amount selection is practical. | Medium. Sheet is clean but not emotionally strong. | Medium. Suggested/custom amounts adapt, but no creator-branded context or support narrative. | Feels like a payment form. Thank-you state is text-only. Too much sandbox/proof tone leaks into public feel. | Add creator-branded support card, selected amount emphasis, optional "why support" copy, warm success receipt, and "tip unlocks nothing" as trust copy below the CTA. | Must-have |
 | Paid creator videos | Viewer sees paid lock messaging in Player, exact scope copy, unlock CTA, and player-ready selector after access. | Creator can mark/manage paid videos and see paid video offers/transactions. | Functional. Good scope copy. Locked player state exists. | Medium-low. Floating card works, but it looks like a technical overlay. | Medium. Responds to locked/unlocked/busy states. | Missing paid video storefront feel: thumbnail, title, preview metadata, price card, creator context, and post-unlock celebration. | Use a paid video lock overlay with thumbnail, creator avatar, exact video title, price, access scope chip, and smooth transition into playback after unlock. | Must-have |
-| Paid Watch-Party rooms | Viewer gets a room ticket gate, price, ticket-only scope, and room re-entry path after access. | Creator can manage a Watch-Party ticket target and sees ticket offers/transactions. | Functional and safety-heavy. It protects LiveKit/host authority. | Medium-low. Gate is clear but basic. | Medium. Handles room locked, ticket unavailable, purchase required, and room access. | Ticket should feel like an event/room pass. Current gate reads like an error card. | Add room access card with live/upcoming/locked status chips, ticket badge, room name, host identity, seat/capacity if available, and "enter room" reward state. | Must-have |
+| Paid Watch-Party rooms | Viewer gets a room Seat Pass gate, price, Seat Pass-only scope, and room re-entry path after access. | Creator can manage a Watch-Party Seat Pass target and sees ticket offers/transactions. | Functional and safety-heavy. It protects LiveKit/host authority. | Medium-low. Gate is clear but basic. | Medium. Handles room locked, ticket unavailable, purchase required, and room access. | Ticket should feel like an event/room pass. Current gate reads like an error card. | Add room access card with live/upcoming/locked status chips, ticket badge, room name, host identity, seat/capacity if available, and "enter room" reward state. | Must-have |
 | Channel subscriptions | Viewer can subscribe/open Subscriber Area and sees clear includes/does-not-include copy. | Creator can enable/manage subscription, view offer, and see subscriber signals/transactions. | Clear, scoped, and safe. Subscriber Area exists. | Medium. Good separation, sparse member experience. | Medium. Owner/viewer/subscribed/unavailable states exist. | Subscriber Area empty state can feel unrewarding. Offer card is generic. | Add creator-branded membership card, subscriber badge, active benefits panel, member-only empty state that promises upcoming drops without faking content, and renewal/restore state clarity. | Must-have |
 | VIP passes | Viewer can buy/open VIP Area and sees clear VIP-only scope. | Creator can enable/manage VIP and see VIP signals/transactions. | Functional and separated from Premium/subscription. | Low-medium. VIP does not visually feel VIP yet. | Medium. Owner/viewer/VIP/unavailable states exist. | VIP lacks distinct identity, badge, visual status, and premium reward. | Add VIP pass visual identity, active VIP badge, high-contrast VIP Area header, creator-specific perk cards, and "VIP does not include..." trust strip. | Must-have |
 | Paid creator events | Viewer sees event title, type, time, price, pass status, capacity, locked/access/denied states. | Creator can create/manage events and paid event offers, and see pass counts. | Functional. Event pass route is simple and direct. | Medium-low. It is understandable but not event-like. | Medium. Handles locked, granted, unavailable, sold-out copy. | Missing event poster/hero, countdown, schedule framing, ticket receipt, and return-visit state. | Add paid event poster card, countdown/status chip, pass card after purchase, capacity/proof row, and clear expired/canceled/refunded states. | Must-have |
@@ -121,10 +121,10 @@ Show a small "Unlocked" chip on the video card/player and skip the paywall. Rest
 ### 4. Paid Watch-Party Rooms
 
 Discovery:
-Viewer sees ticketed room from Platform support, room link, live/upcoming room list, or creator event/programming area.
+Viewer sees paid room from Platform support, room link, live/upcoming room list, or creator event/programming area.
 
 Locked state:
-Gate should feel like a ticketed room pass, not an error. Show room title/host, live/upcoming/ended/locked chip, seat/capacity when available, price, and exact scope.
+Gate should feel like a paid room pass, not an error. Show room title/host, live/upcoming/ended/locked chip, seat/capacity when available, price, and exact scope.
 
 Value explanation:
 Explain: this ticket unlocks this Watch-Party room target only. It does not grant LiveKit publish, host, moderator, Premium, VIP, subscription, paid videos, events, or other rooms.
@@ -196,7 +196,7 @@ Locked state:
 Event pass gate should show poster/hero, event title/type, date/time, countdown, status, price, capacity/pass count when available, and pass-only scope.
 
 Value explanation:
-Explain the pass unlocks this event only. It does not include Premium, VIP, subscription, paid videos, Watch-Party tickets, other events, host authority, or payout authority.
+Explain the pass unlocks this event only. It does not include Premium, VIP, subscription, paid videos, Watch-Party Seat Passes, other events, host authority, or payout authority.
 
 Action:
 Primary CTA: get event pass. Disabled states: sold out, canceled, ended, unavailable, provider unavailable.
@@ -278,7 +278,7 @@ Setup:
 Creator links a ticket offer to one Party Room target.
 
 Preview:
-Creator previews ticket gate, room status, seat/capacity, and "no LiveKit authority" copy.
+Creator previews Seat Pass gate, room status, seat/capacity, and "no LiveKit authority" copy.
 
 Publish/enable:
 Ticket becomes visible only for the linked room target.
@@ -350,7 +350,7 @@ Earnings/status:
 Event pass activity is scoped to one event and should not show as broad membership.
 
 Admin or payout readiness:
-Readback confirms the event pass does not unlock VIP, subscription, paid videos, room tickets, Premium, LiveKit authority, or payouts.
+Readback confirms the event pass does not unlock VIP, subscription, paid videos, room Seat Passs, Premium, LiveKit authority, or payouts.
 
 ## High-Tech UI Upgrade List
 
@@ -383,7 +383,7 @@ Build or standardize these reusable UI patterns:
 
 - `CreatorIdentityHeader`
   - Creator avatar, Platform name, verified/official state if available, and optional brand hero treatment.
-  - Used for tips, paid videos, Watch-Party tickets, subscriptions, VIP, and paid events.
+  - Used for tips, paid videos, Watch-Party Seat Passes, subscriptions, VIP, and paid events.
 
 - `MoneyUnavailableState`
   - Explains provider unavailable, product unavailable, missing offer, blocked user, expired access, canceled event, sold out, or unsupported device without raw provider errors.
@@ -417,8 +417,8 @@ Goal: make every viewer-facing paywall feel premium, creator-branded, and easy t
    - Add thumbnail/creator context, price, and exact one-video-only scope.
    - Add smoother success-to-player transition.
 
-4. Watch-Party Tickets
-   - Replace error-card feeling with a ticketed room pass presentation.
+4. Watch-Party Seat Passes
+   - Replace error-card feeling with a paid room pass presentation.
    - Keep `watch-party-ticket-lock-card`, `watch-party-ticket-purchase-button`, `watch-party-ticket-success-receipt`, and room entry selectors.
    - Add room status chips and "no host/media authority" trust copy.
 
@@ -515,7 +515,7 @@ Acceptance for Phase 3:
 | `components/monetization/access-sheet.tsx` | Existing Premium/Party Pass safety and restore behavior | Standardize into shared money offer/status/success components | Access resolution and entitlement decisions |
 | `app/channel/[userId].tsx` | Platform hero, support section, owner/viewer mode selectors | Convert Support this Platform into polished money shelf with creator-branded offer cards | Platform visibility gates, owner self-purchase rules |
 | `app/player/[id].tsx` | Paid video lock logic, player-ready selector, Watch-Party shared player behavior | Improve paid video lock overlay and unlocked transition | Playback authority, shared player controls, LiveKit |
-| `app/watch-party/[partyId].tsx` | Ticket gate logic, waiting-room/Party Room path, LiveKit authority protections | Make ticket gate feel like a room pass with status chips | Watch-Party shared player, host/publish authority |
+| `app/watch-party/[partyId].tsx` | Seat Pass gate logic, waiting-room/Party Room path, LiveKit authority protections | Make Seat Pass gate feel like a room pass with status chips | Watch-Party shared player, host/publish authority |
 | `app/event/[eventId].tsx` | Event pass access states and route selector | Add event ticket layout, countdown, ticket receipt, sold-out/canceled/ended clarity | Event access grant logic |
 | `app/channel-subscription/[creatorId].tsx` | Includes/does-not-include, subscriber badge, access gate | Add creator membership card, better empty member area, return-visit active state | Subscription access logic |
 | `app/vip-pass/[creatorId].tsx` | VIP active badge, includes/does-not-include, access gate | Add VIP pass identity, distinct VIP styling, premium empty state | VIP access logic |
@@ -576,7 +576,7 @@ Attached-device pass condition:
 - Public-ready Premium screen.
 - Public-ready Tip sheet.
 - Paid video lock overlay polish.
-- Watch-Party ticket gate polish.
+- Watch-Party Seat Pass gate polish.
 - Subscription and VIP active/empty-state polish.
 - Paid event ticket/pass polish.
 - Creator Money Center command-center pass.
@@ -742,12 +742,12 @@ Run these on attached Android devices using test IDs or visible text. Do not use
 
 ### Paid Watch-Party Rooms
 
-- `watch-party-ticket-lock-card` feels like a room ticket, not an error.
+- `watch-party-ticket-lock-card` feels like a room Seat Pass, not an error.
 - Room title/target, price, and access scope are visible.
 - CTA `watch-party-ticket-purchase-button` is visually primary.
 - Success receipt and `watch-party-ticket-enter-target-button` are clear.
 - Entry reaches `screen-watch-party-waiting-room` or `screen-party-room` when allowed.
-- UI never implies ticket grants LiveKit publish, host, moderator, or room authority.
+- UI never implies Seat Pass grants LiveKit publish, host, moderator, or room authority.
 - Creator Money Center shows room target, seats sold, and no-payout/readiness state.
 
 ### Channel Subscriptions

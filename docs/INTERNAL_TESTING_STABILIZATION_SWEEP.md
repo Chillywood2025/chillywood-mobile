@@ -77,7 +77,7 @@ June 10 follow-up: live-room idle/back/overlay stabilization is tracked separate
 
 1. Signed-in Premium-gated Platform Studio showed a primary action labeled `Sign In to Continue`. The tester was already signed in, so the action was confusing and looked like an auth regression. It now shows `Manage Premium` for the Platform Studio Premium gate and routes to `/subscribe`.
 
-2. Route-backed monetization fixture routes for Watch-Party Live ticket, Live Watch-Party access pass, and Live Watch-Party seat pass could render `Room not found` / `Live room unavailable` without the existing sandbox proof card when the backing room fixture was unavailable. The backend proof config existed, but the unavailable branches did not render it. Those branches now show the same route-backed proof card as the access-denial branches, preserving no-production/no-payout/no-publish/no-host-authority copy.
+2. Route-backed monetization fixture routes for Watch-Party Live Seat Pass, Live Watch-Party access pass, and Live Watch-Party seat pass could render `Room not found` / `Live room unavailable` without the existing sandbox proof card when the backing room fixture was unavailable. The backend proof config existed, but the unavailable branches did not render it. Those branches now show the same route-backed proof card as the access-denial branches, preserving no-production/no-payout/no-publish/no-host-authority copy.
 
 3. Library returned `Library could not fully refresh` with a Retry action in the sampled signed-in session. This is not patched in this lane because it is a graceful data/load state rather than a proven broken button or crash.
 

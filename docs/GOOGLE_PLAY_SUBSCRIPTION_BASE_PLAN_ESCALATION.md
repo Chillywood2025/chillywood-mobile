@@ -111,7 +111,7 @@ No private dashboard screenshots, provider account private identifiers, provider
 - Recreating `premium_subscription` was not attempted because the active monthly production Premium product is tied to that subscription.
 - Recreating `cw_channel_subscription_monthly_499` was not attempted because replacement product IDs require owner approval and would need a separate provider setup lane.
 - Archive/delete paths were not attempted.
-- Google Play support contact was submitted through the official Play Console support ticket flow on 2026-06-25 at 12:25 CDT. Case ID was still pending in the Console immediately after submission.
+- Google Play support contact was submitted through the official Play Console support Seat Pass flow on 2026-06-25 at 12:25 CDT. Case ID was still pending in the Console immediately after submission.
 - RevenueCat import was not attempted for absent Google Play base plans.
 
 Possible future replacement IDs to consider only after owner approval and Google Play guidance:

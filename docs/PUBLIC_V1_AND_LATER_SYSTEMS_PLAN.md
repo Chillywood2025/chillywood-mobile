@@ -758,7 +758,7 @@ Later:
 - premium creator tools
 - subscriber rooms
 - VIP features
-- ticketed rooms
+- paid rooms
 
 ## SECTION 4 - Moderation / Safety System
 

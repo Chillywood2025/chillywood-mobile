@@ -16,7 +16,7 @@ Recommendation: proceed toward BrowserStack prep after local validation. The onl
 | #2 Live tab choices | Closed | `app/(tabs)/live.tsx` presents `Live Watch-Party`, `Enter Watch-Party Code`, and `Browse Titles` with existing navigation. |
 | #3 Live Stage ownership | Audited | Live Stage remains `/watch-party/live-stage/[partyId]`; Party Room remains `/watch-party/[partyId]`. |
 | #4 stale proof instructions | Closed | `NEXT_TASK.md` marks historical room codes as history only and says to use a current active room or create a fresh paid room/offer. |
-| #5 paid ticket truth | Closed | Paid Watch-Party ticket copy stays sandbox/test, not payable, room-specific, and separate from Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, Tips, and Live Stage. |
+| #5 paid ticket truth | Closed | Paid Watch-Party Seat Pass copy stays sandbox/test, not payable, room-specific, and separate from Premium, Paid Videos, Paid Events, VIP, Channel Subscriptions, Tips, and Live Stage. |
 | #6 Platform Studio wrapper | Closed | `/channel-studio` is preferred; `/channel-settings` remains compatibility backed by the same `ChannelStudioScreen`. |
 | #7 route contract guard | Closed | `npm run guard:route-contracts` is wired to `scripts/guard-route-contracts.mjs`. |
 
@@ -34,7 +34,7 @@ Recommendation: proceed toward BrowserStack prep after local validation. The onl
 | Tax & Legal | Creator/owner readiness only. | No tax/KYC or payout approval is faked. |
 | Provider Status | Creator/owner sanitized readiness. | Provider readiness can be inspected; it does not activate live money. |
 | Creator video upload/edit | Creator/owner. | Paid Video setup remains separate from Tips/Premium and uses RevenueCat/Google Play sandbox path. |
-| Paid Watch-Party ticket setup | Creator/host proof path. | Sandbox-only ticket setup remains usable and proof-truthful. Purchases route Party Waiting Room -> Party Room. |
+| Paid Watch-Party Seat Pass setup | Creator/host proof path. | Sandbox-only ticket setup remains usable and proof-truthful. Purchases route Party Waiting Room -> Party Room. |
 | Paid Event setup | Creator/owner. | Sandbox-only event pass setup remains separate from VIP, subscriptions, rooms, videos, Tips, and Premium. |
 | Channel Subscription setup | Creator/owner. | Sandbox subscription setup remains separate from Premium/VIP/other creator purchases and uses effective access for user-facing state. |
 | VIP Pass setup | Creator/owner. | Sandbox VIP setup remains creator-specific and does not grant Premium, subscriptions, paid videos, rooms, events, or LiveKit authority. |
@@ -68,7 +68,7 @@ Admin-only controls remain scoped to `/admin` and backend-role protected surface
 | `/vip-pass/[creatorId]` | Creator can view/manage context | Creator owner path | VIP/non-VIP fan | No | Blocked/sign-in as needed | Premium does not unlock | No | Product is sandbox-only | Active VIP pass controls route | route guard plus access helper | Refund/revoke deferred |
 | `/watch-party` | Host entry | Host entry | Join by code/content-first entry | No | Sign-in/Premium/runtime gates where required | Existing room policy | No | Paid tickets are sandbox-only | No source points to Browse Titles; code lookup preserved | `guard:route-contracts` | None found |
 | `/watch-party/[partyId]` | Host/member | Host/member | Ticket/member fan | No | Fails closed | Existing room policy | No | Paid tickets are sandbox-only | Party Room direct links are gated before camera/mic/membership/presence | `guard:route-contracts`, old-room guard | None found |
-| `/watch-party/live-stage/[partyId]` | Live host/member | Live host/member | Live participant | No | Fails closed | Existing live/Premium/runtime policy | No | Not a paid room-ticket target | Live Waiting Room/Live Stage only | `guard:route-contracts`, LiveKit guard | Existing raw live-stage proof logs are outside this task scope |
+| `/watch-party/live-stage/[partyId]` | Live host/member | Live host/member | Live participant | No | Fails closed | Existing live/Premium/runtime policy | No | Not a paid room Seat Pass target | Live Waiting Room/Live Stage only | `guard:route-contracts`, LiveKit guard | Existing raw live-stage proof logs are outside this task scope |
 | `/player/[id]` | Viewer/owner where entitled | Creator content owner where allowed | Viewer | No | Entitlement/source gated | Premium separate from creator buys | No | Paid video is sandbox-only | Player/Title handoff goes to `/watch-party` first | route guard | None found |
 | `/title/[id]` | Viewer | Creator where relevant | Viewer | No | Public/entitlement gated | Premium separate | No | No | Title handoff goes to `/watch-party` first | route guard | None found |
 | `/tip-status` | No | Tip status/receipt as applicable | Tip fan as applicable | No | Route policy applies | No | No | Tips test/sandbox only | Tips create no access/perk | money guards | None found |

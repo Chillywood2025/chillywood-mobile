@@ -20,7 +20,7 @@ June 14 BrowserStack readiness package is prepared under `qa/browserstack/`. It 
 
 Android remains the active proof lane. iOS BrowserStack is a planned/deferred future lane only and requires later Apple signing, App Store Connect, App Store IAP, and RevenueCat Apple product proof before it can run.
 
-June 20 money closeout: Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are closed for Android app-side proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof. Sandbox proof does not enable live money or payouts.
+June 20 money closeout: Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass are closed for Android app-side proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof. Sandbox proof does not enable live money or payouts.
 
 June 20 integration/proof closeout update: forgot/reset password routing, positive Admin/Owner access, selected non-LiveKit closeout, Chi'lly Chat non-media messaging/call-route proof, Profile/Platform visibility gates, seven-flow money app-side proof, and Live Stage media/authority proof are closed. Watch-Party shared Player camera/mic remote-render proof is still deferred until a stable second session or BrowserStack. BrowserStack/App Live final regression, fresh creator upload-to-playback proof, attachment-heavy comments proof, and external launch governance/provider/legal readiness remain pending. Audit folder: `/tmp/chillywood-production-integration-confusion-audit-20260620-185544`.
 
@@ -40,7 +40,7 @@ June 20 integration/proof closeout update: forgot/reset password routing, positi
 
 - [ ] Premium gate smoke on Play/internal runtime.
 - [ ] Premium remains platform subscription only.
-- [ ] Premium does not unlock creator paid videos, room tickets, events, subscriptions, or VIP.
+- [ ] Premium does not unlock creator paid videos, room Seat Passs, events, subscriptions, or VIP.
 - [ ] Creator purchases do not unlock Premium.
 - [ ] Premium purchase shell status matches current approved policy.
 
@@ -116,7 +116,7 @@ June 20 integration/proof closeout update: forgot/reset password routing, positi
 - [ ] Latest internal track versionCode recorded.
 - [ ] License testers confirmed.
 - [ ] Paid Video product available.
-- [ ] Watch-Party ticket product available.
+- [ ] Watch-Party Seat Pass product available.
 - [ ] Event pass product available.
 - [ ] Channel Subscription product/base plan available.
 - [ ] VIP product available.

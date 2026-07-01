@@ -83,7 +83,7 @@
       "secret_source": "LOCAL_SECURE_HANDOFF_UNPAID_VIDEO_FAN"
     },
     "paid_room_fan": {
-      "purpose": "Paid Watch-Party ticket positive access smoke.",
+      "purpose": "Paid Watch-Party Seat Pass positive access smoke.",
       "required_account_state": "Fan with active room ticket for current fixture if reusing existing proof.",
       "required_entitlements": [],
       "required_purchases_or_access_grants": ["active_paid_watch_party_ticket_for_fixture_room"],

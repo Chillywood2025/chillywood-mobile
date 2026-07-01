@@ -248,7 +248,7 @@ The following truth is still missing or incomplete:
 - canonical tab/block/shelf access truth
 - formal event access truth for scheduled live/watch-party events
 - real one-time purchase truth for content or event unlocks
-- explicit ticketed-event truth
+- explicit paid-event truth
 - explicit invite-only entitlement truth beyond locked join policy and membership rules
 
 ### 6.3 Current Doctrine Vs Missing Truth
@@ -391,7 +391,7 @@ Current doctrine already supports:
 
 ### 11.2 Later-Phase Ideas
 Later-phase ideas are allowed only after backing truth exists:
-- ticketed event access
+- paid event access
 - one-time content purchase beyond current placeholder target definitions
 - explicit invite-only entitlement flows
 - bundle/coupon logic

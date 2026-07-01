@@ -103,10 +103,10 @@ const paidTicketPurchaseScope = assertScopedIncludes(
   "const onBuyPaidTicketAndJoin = useCallback(async () => {",
   "}, [isSignedIn, navigateToPreviewRoom, paidWatchPartyCheckoutAvailable, preparedRoom, preview, router]);",
   "navigateToPreviewRoom(targetPreview);",
-  "Paid Watch-Party ticket buyer post-purchase path",
+  "Paid Watch-Party Seat Pass buyer post-purchase path",
 );
-assertNotIncludes(paidTicketPurchaseScope, "/watch-party/live-stage", "Paid Watch-Party ticket buyer path");
-assertNotIncludes(paidTicketPurchaseScope, "setEmbeddedLiveStageEntry", "Paid Watch-Party ticket buyer path");
+assertNotIncludes(paidTicketPurchaseScope, "/watch-party/live-stage", "Paid Watch-Party Seat Pass buyer path");
+assertNotIncludes(paidTicketPurchaseScope, "setEmbeddedLiveStageEntry", "Paid Watch-Party Seat Pass buyer path");
 
 assertIncludes(player, "PLAYER_WATCH_PARTY_SOURCE", "Player content-first Watch-Party handoff source");
 assertIncludes(player, 'pathname: "/watch-party"', "Player to Watch-Party Waiting Room handoff");

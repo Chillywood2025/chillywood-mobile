@@ -55,7 +55,7 @@ Cards route correctly, tabs route correctly, back and close controls work, sheet
 
 ## Monetization / Test Flow Wiring Summary
 
-Premium monthly purchase flow is reachable where Play internal/licensed tester/provider setup supports it. Restore purchases is reachable. Paid creator video, tips, Watch-Party ticket, VIP, paid event, and creator pricing surfaces are tester-visible as purchase/status/readiness flows where backed. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. Payout/cashout/Stripe production controls open readiness/status/escalation flows. Refund controls remain manual/external support/review flows and do not execute provider refunds.
+Premium monthly purchase flow is reachable where Play internal/licensed tester/provider setup supports it. Restore purchases is reachable. Paid creator video, tips, Watch-Party Seat Pass, VIP, paid event, and creator pricing surfaces are tester-visible as purchase/status/readiness flows where backed. Premium annual opens an active provider-blocked status/resolution flow. Creator Channel Subscription opens an active provider-blocked status/resolution flow. Payout/cashout/Stripe production controls open readiness/status/escalation flows. Refund controls remain manual/external support/review flows and do not execute provider refunds.
 
 ## Provider-Blocked Active Resolution Summary
 

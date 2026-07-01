@@ -70,7 +70,7 @@ Screenshots remain local proof artifacts and are not committed.
 | Platform Studio gates | Passed by Android denial capture before temporary proof role and `guard:platform-brand-studio-policy`; setup/operator access is not Premium entitlement. |
 | Player/free content | Passed by `npm run typecheck`, content rights guard, and no Player code changes in this lane. Normal playback behavior was not redesigned. |
 | Paid content | Passed by money-access guard and prior sandbox proof; valid grants allow access only when content policy allows, while private/draft/deleted/admin_removed/malware/blocked states still deny. |
-| Watch-Party Live | Passed by Watch-Party LiveKit and old-room guards; ticket grants entry/viewing only and does not grant mic/camera/publish or host authority. |
+| Watch-Party Live | Passed by Watch-Party LiveKit and old-room guards; Seat Pass grants entry/viewing only and does not grant mic/camera/publish or host authority. |
 | Live Watch-Party / Live Stage | Passed by Live Stage contract and approved-seat guards; access pass is viewer/listener only, seat pass is eligibility only, and host approval remains required. |
 | Event pass | Passed by event-pass proof docs and money-access guard; event pass allows viewing/entry only and canceled/ended/removed/disabled events still deny. |
 | Spectator / child-room | Passed by spectator child-room guard; paid/event access does not expose full LiveKit publish or private provider/storage paths. |

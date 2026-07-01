@@ -8011,7 +8011,7 @@ export function ChannelStudioScreen() {
       sandboxConfigsBySourceType.get(sourceType)?.length ?? 0;
     const formatCreatorSetupSourceLabel = (sourceType: CreatorMonetizationSetupSourceType) => {
       if (sourceType === "paid_content") return "Paid Video";
-      if (sourceType === "watch_party_live") return "Watch-Party Ticket";
+      if (sourceType === "watch_party_live") return "Watch-Party Seat Pass";
       if (sourceType === "channel_subscription") return "Channel Subscription";
       if (sourceType === "vip_pass") return "VIP";
       if (sourceType === "event") return "Event Pass";
@@ -8167,7 +8167,7 @@ export function ChannelStudioScreen() {
         configured: hasPaidWatchPartyOffer,
         blocker: hasPaidWatchPartyOffer
           ? undefined
-          : "Create a Party Room before testers can buy a ticket.",
+          : "Create a Party Room before testers can get a Seat Pass.",
         description: hasPaidWatchPartyOffer
           ? "Testers can get a sandbox Seat Pass before Party Waiting Room or Party Room entry."
           : "Watch-Party Seat Pass needs a Party Room target.",
@@ -8486,9 +8486,9 @@ export function ChannelStudioScreen() {
                 sourceId: offer.id,
                 sourceType: "watch_party_live",
               });
-              setMoneyManageNotice("Watch-Party Ticket setup is saved in sandbox/not-payable mode. Viewer flow stays on Party Waiting Room and Party Room.");
+              setMoneyManageNotice("Watch-Party Seat Pass setup is saved in sandbox/not-payable mode. Viewer flow stays on Party Waiting Room and Party Room.");
             } catch (error) {
-              setMoneyManageNotice(formatCreatorSetupError(error, "Watch-Party Ticket setup could not be saved right now."));
+              setMoneyManageNotice(formatCreatorSetupError(error, "Watch-Party Seat Pass setup could not be saved right now."));
             } finally {
               setWatchPartySetupSavingId(null);
             }

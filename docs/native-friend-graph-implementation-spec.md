@@ -174,7 +174,7 @@ Those options are later-phase and not current truth.
 - followers are one-way creator/channel audience relationships
 - following a channel must not silently create friendship
 - following can happen from Profile, public Platform, creator-video Player, shared creator-video Player, Party Room participant sheets, and Live Stage participant sheets when a real creator/user id is available
-- a Follow action means “show me more from this creator Platform”; it does not mean personal closeness, private Profile access, Chi'lly Chat permission, room access, Premium, paid ticket access, subscriber access, VIP, or host/speaker authority
+- a Follow action means “show me more from this creator Platform”; it does not mean personal closeness, private Profile access, Chi'lly Chat permission, room access, Premium, paid Seat Pass access, subscriber access, VIP, or host/speaker authority
 - Chi'lly Circle remains the personal connection layer; public profiles can be added instantly, while private and Chi'lly Circle-only profiles receive an incoming request for approval
 
 ### 7.2 Friends vs Subscribers

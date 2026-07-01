@@ -177,7 +177,7 @@ assertIncludes(channelSettings, "Test mode - no payouts", "Money Center compact 
 assertIncludes(channelSettings, "No real charges. No creator earnings. No withdrawals.", "Money Center compact no-money copy");
 assertIncludes(channelSettings, "timed_out", "Money Center setup timeout lifecycle");
 assertIncludes(channelSettings, "Setup timed out", "Money Center setup timeout notice");
-assertIncludes(channelSettings, "Create a Party Room before testers can buy a ticket", "Money Center Watch-Party missing next action copy");
+assertIncludes(channelSettings, "Create a Party Room before testers can get a Seat Pass", "Money Center Watch-Party missing next action copy");
 assertNotIncludes(channelSettings, "Sandbox testing is complete", "Money Center misleading sandbox complete copy");
 assertIncludes(channelSettings, "Monetization", "Platform Studio Monetization tab");
 assertIncludes(channelSettings, "Paid Video", "Platform Studio paid video copy");
@@ -197,15 +197,15 @@ assertIncludes(publicChannel, "Test Creator Purchases", "public tester sandbox p
 assertIncludes(publicChannel, "Sandbox only. No real money moves.", "public tester sandbox no-money copy");
 assertIncludes(publicChannel, "No money moved. No payout created.", "public tester sandbox receipt copy");
 assertIncludes(publicChannel, "Checkout pending", "public platform checkout disabled copy");
-assertIncludes(publicChannel, "tester-watch-party-ticket-button", "public tester Watch-Party ticket selector");
+assertIncludes(publicChannel, "tester-watch-party-ticket-button", "public tester Watch-Party Seat Pass selector");
 assertIncludes(publicChannel, "tester-channel-subscribe-button", "tester subscription CTA selector");
 assertIncludes(publicChannel, "tester-vip-pass-button", "tester VIP CTA selector");
 assertIncludes(player, "creatorVideoPaidContentLocked", "Player paid creator-content lock");
 assertIncludes(player, "It does not include Premium", "Player paid-content doctrine copy");
 assertIncludes(player, "tester-paid-video-unlock-button", "tester paid video selector");
 assertIncludes(read("components/monetization/tip-sheet.tsx"), "tip-confirm-button", "tip sheet confirm selector");
-assertIncludes(watchPartyEntry, "tester-watch-party-ticket-button", "tester Watch-Party entry ticket selector");
-assertIncludes(watchPartyRoom, "watch-party-ticket-purchase-button", "Watch-Party room ticket purchase selector");
+assertIncludes(watchPartyEntry, "tester-watch-party-ticket-button", "tester Watch-Party entry Seat Pass selector");
+assertIncludes(watchPartyRoom, "watch-party-ticket-purchase-button", "Watch-Party room Seat Pass purchase selector");
 assertIncludes(eventRoute, "event-pass-purchase-button", "event pass purchase selector");
 assertIncludes(vipRoute, "vip-area-get-vip-button", "VIP route purchase selector");
 assertIncludes(admin, "No checkout success, payout release, simulated purchase, simulated order, simulated tip, or live money action", "Admin money safety copy");

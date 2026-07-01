@@ -6,7 +6,7 @@ Verdict: Closed for source/backend setup readiness. Installed-app proof remains 
 
 ## Source Route/Button Wiring
 
-Source route/button wiring is fixed. Money Center is the single creator monetization home. `/creator-monetization-setup` is compatibility-only and lands in Money Center Offers setup. `/monetize`, `/revenue`, and `/payouts` compatibility routes land in the correct Money Center focus areas. Each creator monetization flow has a real setup action, not stale proof copy. Paid Video, Tips, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass setup actions are wired to source-specific setup/save paths, the shared sandbox config helper, or the correct source setup surface. Saved config readback is wired in Money Center.
+Source route/button wiring is fixed. Money Center is the single creator monetization home. `/creator-monetization-setup` is compatibility-only and lands in Money Center Offers setup. `/monetize`, `/revenue`, and `/payouts` compatibility routes land in the correct Money Center focus areas. Each creator monetization flow has a real setup action, not stale proof copy. Paid Video, Tips, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass setup actions are wired to source-specific setup/save paths, the shared sandbox config helper, or the correct source setup surface. Saved config readback is wired in Money Center.
 
 Cashout readiness is reachable, but real cashout is not live. Payout provider setup actions remain safe readiness/test actions only while production money movement is off. Premium remains the app-wide subscription flow. Source fixed is not installed-app proof.
 
@@ -24,7 +24,7 @@ Creator and viewer source wiring pairs are proved for each creator monetization 
 
 - Paid Video: creator setup is reachable from Money Center and creator video edit/upload paths; viewer gate is `/player/[id]`; access readback is scoped to the exact video.
 - Tips: creator setup is reachable from Money Center; viewer support action opens the creator-surface tip CTA / tip sheet; tips unlock no content, Premium, badge, room, event, LiveKit authority, or payout.
-- Watch-Party Ticket: creator setup is reachable from Money Center for a valid Party Room / Watch-Party source; viewer gate is `/watch-party/[partyId]`; it routes to Party Waiting Room / Party Room and not Live Stage.
+- Watch-Party Seat Pass: creator setup is reachable from Money Center for a valid Party Room / Watch-Party source; viewer gate is `/watch-party/[partyId]`; it routes to Party Waiting Room / Party Room and not Live Stage.
 - Channel Subscription: creator setup is reachable from Money Center; viewer route is `/channel-subscription/[creatorId]`; it does not route to `/subscribe` because Premium remains the app-wide subscription flow.
 - VIP: creator setup is reachable from Money Center; viewer route is `/vip-pass/[creatorId]`; VIP remains creator-specific and does not unlock Premium or other creators.
 - Event Pass: creator setup is reachable from Money Center for a valid event/source; viewer route is `/event/[eventId]`; migration `20260630091500_paid_event_pass_terminal_event_status_guard.sql` denies ended, expired, canceled, removed, unsafe, and blocked event states.
@@ -60,12 +60,12 @@ Money Center exposes actionable setup controls for:
 
 - Tips
 - Paid Video
-- Watch-Party Ticket
+- Watch-Party Seat Pass
 - Channel Subscription
 - VIP
 - Event Pass
 
-Premium remains the app-wide subscription flow. Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are creator monetization flows.
+Premium remains the app-wide subscription flow. Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass are creator monetization flows.
 
 ## Cashout Readiness Result
 

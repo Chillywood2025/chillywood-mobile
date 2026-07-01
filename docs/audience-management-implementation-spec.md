@@ -76,7 +76,7 @@ Current repo doctrine does not yet support:
 - rich public audience modules beyond backed public-safe counts
 - VIP, moderator, or co-host audience-role truth
 - richer audience segmentation, notes, tags, or CRM behavior
-- event-linked audience workflows or premium/ticketed audience handling
+- event-linked audience workflows or premium/paid audience handling
 
 ## 4. Canonical Audience Buckets And Meanings
 

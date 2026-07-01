@@ -10,8 +10,8 @@ These fixtures are synthetic BrowserStack/E2E data only. They must not be used a
 | Primary viewer/tester | `bs_e2e_viewer_01@chillywood.test` | Clean non-owner sandbox tester for BrowserStack monetization flows. | Owner mode, private, subscriber-only, VIP, Premium, paid access unless separately granted by a test. |
 | Follower-only viewer | `bs_e2e_viewer_02@chillywood.test` | Follow state only. | Private access, subscriber-only access, VIP, Premium, paid video, ticket, event. |
 | Circle member viewer | `bs_e2e_viewer_03@chillywood.test` | Chi'lly Circle/private access. | Subscriber-only access, VIP, Premium, paid video, ticket, event. |
-| Subscriber viewer | `bs_e2e_viewer_04@chillywood.test` | Active creator Platform Subscription state. | VIP, Premium, paid video, Watch-Party ticket, event pass. |
-| VIP viewer | `bs_e2e_viewer_05@chillywood.test` | Active creator VIP state. | Subscription, Premium, paid video, Watch-Party ticket, event pass. |
+| Subscriber viewer | `bs_e2e_viewer_04@chillywood.test` | Active creator Platform Subscription state. | VIP, Premium, paid video, Watch-Party Seat Pass, event pass. |
+| VIP viewer | `bs_e2e_viewer_05@chillywood.test` | Active creator VIP state. | Subscription, Premium, paid video, Watch-Party Seat Pass, event pass. |
 | Blocked viewer | `bs_e2e_viewer_06@chillywood.test` | Block precedence over follower/Circle/subscriber/VIP-looking rows. | Profile, Platform, subscription, VIP, Premium, paid access where block rules apply. |
 | Public/non-related viewer | `bs_e2e_viewer_07@chillywood.test` | Public-only/locked state. | Follow, Circle, subscriber, VIP, Premium, paid access. |
 | Backup viewer 1 | `bs_e2e_viewer_08@chillywood.test` | Clean spare account. | All gated states until deliberately assigned. |

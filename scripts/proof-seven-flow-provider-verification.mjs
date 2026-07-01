@@ -75,7 +75,7 @@ const flows = [
   },
   {
     key: "watch_party_ticket",
-    flow: "Watch-Party Ticket",
+    flow: "Watch-Party Seat Pass",
     expectedProductId: "cw_watch_party_live_ticket_sandbox_099",
     productType: "one_time_consumable",
     basePlanId: null,

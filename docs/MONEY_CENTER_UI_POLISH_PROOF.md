@@ -52,7 +52,7 @@ The Creator Money Center now presents a compact launch-readiness summary before 
 The overview also shows product readiness cards for:
 
 - Paid Content
-- Watch-Party Tickets
+- Watch-Party Seat Passes
 - Live Access
 - Seats
 - Tips

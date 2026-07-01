@@ -22,7 +22,7 @@ Play/internal runtime only.
 4. Confirm creator purchase surfaces do not become unlocked by Premium absence/presence.
 5. Log in as `premium_creator` or Premium test user.
 6. Confirm Premium-gated surface opens where expected.
-7. Confirm Premium does not unlock Paid Videos, Paid Watch-Party tickets, Paid Events, Channel Subscriptions, or VIP.
+7. Confirm Premium does not unlock Paid Videos, Paid Watch-Party Seat Passes, Paid Events, Channel Subscriptions, or VIP.
 8. Confirm creator purchases do not unlock Premium.
 
 ## Expected Result

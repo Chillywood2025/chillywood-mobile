@@ -255,7 +255,7 @@ const creatorMoneyOffStateMatrix = [
     evidence: "paidContentCheckoutEnabled=false; paid_content_enabled=off; live_money_enabled=off; Draft consumable has no Premium attachment.",
   },
   {
-    flow: "Watch-Party Ticket",
+    flow: "Watch-Party Seat Pass",
     switchState: "OFF",
     evidence: "watch_party_tickets_enabled=off; live_money_enabled=off; Draft consumable has no Premium attachment.",
   },

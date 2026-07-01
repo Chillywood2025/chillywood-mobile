@@ -18,7 +18,7 @@ Device/app:
 - EAS Update group `a60dda7c-00ef-405e-a608-0a6d087e82cf`
 - Android update `019e9640-2474-7c87-ba50-6fd7c9c4e373`
 
-Stabilization follow-up: `docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md` rechecked the route-backed fixtures after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc` / Android update `019e980c-fca8-78db-b44e-6551a6d4d0f4`. Watch-Party ticket, Live access pass, and Live seat pass unavailable branches now render the same sanitized sandbox proof card as their access-denial branches when the route-backed proof config exists. The fix is visual only and does not change provider events, purchase intents, access grants, ledger rows, room ownership, LiveKit authority, or money state.
+Stabilization follow-up: `docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md` rechecked the route-backed fixtures after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc` / Android update `019e980c-fca8-78db-b44e-6551a6d4d0f4`. Watch-Party Seat Pass, Live access pass, and Live seat pass unavailable branches now render the same sanitized sandbox proof card as their access-denial branches when the route-backed proof config exists. The fix is visual only and does not change provider events, purchase intents, access grants, ledger rows, room ownership, LiveKit authority, or money state.
 
 ## Route Fixtures
 
@@ -27,7 +27,7 @@ Safe sandbox route-backed fixtures were created only to expose visual gates. The
 | Surface | Route-backed source id |
 | --- | --- |
 | Paid content | `9b2f4e7d-2e8e-4d2f-93ef-40b06d317015` |
-| Watch-Party Live ticket | `9b2f4e7d-2e8e-4d2f-93ef-40b06d317016` |
+| Watch-Party Live Seat Pass | `9b2f4e7d-2e8e-4d2f-93ef-40b06d317016` |
 | Live Watch-Party access pass | `9b2f4e7d-2e8e-4d2f-93ef-40b06d317017` |
 | Live Watch-Party seat pass | `9b2f4e7d-2e8e-4d2f-93ef-40b06d317018` |
 | Event pass | `9b2f4e7d-2e8e-4d2f-93ef-40b06d317019` |
@@ -39,7 +39,7 @@ The app-side proof helper reads only sanitized `creator_monetization_configs` ro
 | Gate | Screenshot | Result |
 | --- | --- | --- |
 | Paid content | `10_viewer_gate_paid_content_final.png` | Player route shows the paid-content sandbox proof card with `cw_paid_content_access_sandbox_099`, `$0.99 sandbox/test`, Google Play / RevenueCat sandbox rail, `Sandbox only`, `Not payable`, production money off, payouts off, no cash-out, and no publish/host/admin authority. |
-| Watch-Party Live ticket | `11_viewer_gate_watch_party_ticket_route_backed.png` | Watch-Party route shows the ticket sandbox proof card with `cw_watch_party_live_ticket_sandbox_099`, not-payable copy, and no publish/host/admin authority. The existing full-room Premium outer gate remains active and unchanged. |
+| Watch-Party Live Seat Pass | `11_viewer_gate_watch_party_ticket_route_backed.png` | Watch-Party route shows the Seat Pass sandbox proof card with `cw_watch_party_live_ticket_sandbox_099`, not-payable copy, and no publish/host/admin authority. The existing full-room Premium outer gate remains active and unchanged. |
 | Live access pass | `12_viewer_gate_live_access_pass_route_backed.png` | Live Stage route shows the access-pass sandbox proof card with `cw_live_watch_party_access_sandbox_099`, not-payable copy, entry/viewing-only posture, and no publish/host/admin authority. The existing full-room Premium outer gate remains active and unchanged. |
 | Live seat pass | `13_viewer_gate_live_seat_pass_route_backed.png` | Live Stage route shows the seat-pass sandbox proof card with `cw_live_watch_party_seat_sandbox_099`, not-payable copy, host approval required, and no publish/host/admin authority. The existing full-room Premium outer gate remains active and unchanged. |
 | Event pass | `14_viewer_gate_event_pass.png` | Event route shows the event-pass sandbox proof card with `cw_event_pass_sandbox_099`, not-payable copy, entry/viewing-only posture, and no publish/host/admin authority. |
@@ -71,15 +71,15 @@ Final sanitized readback:
 - `payouts_enabled=false`
 - `cashout_enabled=false`
 - creator monetization configs: `18`
-- config rows by type: creator tip `1`, event pass `4`, live access pass `3`, live seat pass `3`, physical merch `1`, paid content `3`, Watch-Party ticket `3`
+- config rows by type: creator tip `1`, event pass `4`, live access pass `3`, live seat pass `3`, physical merch `1`, paid content `3`, Watch-Party Seat Pass `3`
 - production-enabled configs: `0`
 - payout-enabled configs: `0`
 - publish-enabled configs: `0`
 - host-power configs: `0`
 - payable setup configs: `0`
-- processed Google Play / RevenueCat sandbox provider events: creator tip `1`, event pass `1`, live access pass `1`, live seat pass `1`, paid content `2`, Watch-Party ticket `1`
+- processed Google Play / RevenueCat sandbox provider events: creator tip `1`, event pass `1`, live access pass `1`, live seat pass `1`, paid content `2`, Watch-Party Seat Pass `1`
 - purchase intents: consumed rows exist for every Android digital product; paid content also has one expired and one pending proof row; creator tip has one failed proof row
-- access grants: event pass `1`, live access `1`, live seat `1`, paid content `2`, Watch-Party ticket `1` revoked from earlier admin-revoke proof
+- access grants: event pass `1`, live access `1`, live seat `1`, paid content `2`, Watch-Party Seat Pass `1` revoked from earlier admin-revoke proof
 - money-access ledger rows: total `8`; payable/paid rows `0`
 - merch products `2`, merch orders `4`, merch order items `4`, Stripe merch events `1`, merch access grants `0`
 - payout accounts `2`, onboarding sessions `2`, payout requests `0`, provider payout-enabled accounts `0`

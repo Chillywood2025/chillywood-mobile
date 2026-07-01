@@ -121,7 +121,7 @@ Map the first six managed users to the purchase-proof viewer slots:
 
 - Tip: `CHILLYWOOD_E2E_VIEWER_EMAIL`
 - Paid Video: `CHILLYWOOD_E2E_VIEWER_02_EMAIL`
-- Watch-Party Ticket: `CHILLYWOOD_E2E_VIEWER_03_EMAIL`
+- Watch-Party Seat Pass: `CHILLYWOOD_E2E_VIEWER_03_EMAIL`
 - Event Pass: `CHILLYWOOD_E2E_VIEWER_04_EMAIL`
 - Platform Subscription: `CHILLYWOOD_E2E_VIEWER_05_EMAIL`
 - VIP: `CHILLYWOOD_E2E_VIEWER_06_EMAIL`

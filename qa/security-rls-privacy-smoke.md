@@ -11,7 +11,7 @@ Run these checks with dedicated E2E accounts only. Service-role credentials may 
 - Circle member unlocks private only.
 - Subscriber and VIP are scoped to one creator.
 - Paid video access is scoped to one video.
-- Watch-Party ticket access is scoped to one room/party target.
+- Watch-Party Seat Pass access is scoped to one room/party target.
 - Event pass access is scoped to one event.
 - No service-role key or BrowserStack access key appears in app code.
 - Logs do not print passwords, service-role keys, provider secrets, or raw auth tokens.

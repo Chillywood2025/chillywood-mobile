@@ -18,7 +18,7 @@ Browser dashboard evidence was read from Google Play Console for package `com.ch
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Tips | `cw_creator_tip_099` | `tip-099` | One-time product / Buy purchase option | Draft | `USD 0.99` | United States available; new countries/regions not available | Creator Tip | Send optional support to a creator. Tips do not unlock content. | None visible; not active |
 | Paid Video | `cw_paid_content_access_099` | `paid-video-099` | One-time product / Buy purchase option | Draft | `USD 0.99` | United States available; new countries/regions not available | Paid Video Access | Unlock access to one paid creator video. | None visible; not active |
-| Watch-Party Ticket | `cw_watch_party_ticket_099` | `ticket-099` | One-time product / Buy purchase option | Draft | `USD 0.99` | United States available; new countries/regions not available | Watch-Party Ticket | Unlock access to one ticketed Watch-Party room. | None visible; not active |
+| Watch-Party Seat Pass | `cw_watch_party_ticket_099` | `ticket-099` | One-time product / Buy purchase option | Draft | `USD 0.99` | United States available; new countries/regions not available | Watch-Party Seat Pass | Unlock access to one paid Watch-Party room. | None visible; not active |
 | VIP | `cw_vip_pass_499` | `vip-499` | One-time product / Buy purchase option | Draft | `USD 4.99` | United States available; new countries/regions not available | Creator VIP Pass | Unlock creator-specific VIP access. | None visible; not active |
 | Event Pass | `cw_event_pass_099` | `event-099` | One-time product / Buy purchase option | Draft | `USD 0.99` | United States available; new countries/regions not available | Creator Event Pass | Unlock access to one paid creator event. | None visible; not active |
 
@@ -32,7 +32,7 @@ Browser dashboard evidence was read from the RevenueCat Product Catalog for the 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Tips | `cw_creator_tip_099` | Draft | Consumable | None; `Attach` is shown | None visible | Yes, not attached to `premium` | Verified |
 | Paid Video | `cw_paid_content_access_099` | Draft | Consumable | None; `Attach` is shown | None visible | Yes, not attached to `premium` | Verified |
-| Watch-Party Ticket | `cw_watch_party_ticket_099` | Draft | Consumable | None; `Attach` is shown | None visible | Yes, not attached to `premium` | Verified |
+| Watch-Party Seat Pass | `cw_watch_party_ticket_099` | Draft | Consumable | None; `Attach` is shown | None visible | Yes, not attached to `premium` | Verified |
 | VIP | `cw_vip_pass_499` | Draft | Consumable | None; `Attach` is shown | None visible | Yes, not attached to `premium` | Verified |
 | Event Pass | `cw_event_pass_099` | Draft | Consumable | None; `Attach` is shown | None visible | Yes, not attached to `premium` | Verified |
 
@@ -42,7 +42,7 @@ RevenueCat Premium separation was preserved: Premium remains represented by `pre
 
 | Control | State | Evidence |
 | --- | --- | --- |
-| Creator-money switches | OFF | Switchboard/proof docs keep Tips, Paid Video, Watch-Party Ticket, VIP, and Event Pass disabled by default. |
+| Creator-money switches | OFF | Switchboard/proof docs keep Tips, Paid Video, Watch-Party Seat Pass, VIP, and Event Pass disabled by default. |
 | `live_money_enabled` | OFF | Money switchboard and proof scripts keep global live-money activation off. |
 | Premium public activation | OFF | Premium purchase shell remains closed by default; this lane did not touch Premium setup. |
 | Payouts/payable balances/withdrawals/cash-out/transfers | OFF | Money Center policy and proof scripts keep payout movement off. |

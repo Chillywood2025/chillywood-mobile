@@ -42,7 +42,7 @@ The product row already existed remotely as a sandbox Android digital product wi
   - Creator profile event cards link to `/event/[eventId]`.
   - `/event/[eventId]` is now a real paid-event gate, not only a visual proof page.
   - Fan CTA is `Buy Event Pass`.
-  - Money Center Offers and Transactions read Paid Event rows separately from Tips, Paid Videos, Paid Watch-Party tickets, and Premium.
+  - Money Center Offers and Transactions read Paid Event rows separately from Tips, Paid Videos, Paid Watch-Party Seat Passes, and Premium.
 
 ## Gate Truth
 
@@ -63,7 +63,7 @@ Paid Events V1 does not route Watch-Party rooms, does not route to Live Stage, a
 - Clients cannot directly increase `passes_sold`.
 - Verified provider events are required before active passes are created.
 - Pass metadata is constrained to avoid secrets, raw provider payloads, LiveKit publish authority, host controls, or admin power.
-- Sandbox rows are not payable and do not create payout, cash-out, withdrawal, transfer, Premium, Tips, Paid Video, Watch-Party ticket, VIP, subscription, or LiveKit authority.
+- Sandbox rows are not payable and do not create payout, cash-out, withdrawal, transfer, Premium, Tips, Paid Video, Watch-Party Seat Pass, VIP, subscription, or LiveKit authority.
 
 ## Remote Apply Status
 

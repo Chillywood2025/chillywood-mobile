@@ -126,6 +126,6 @@ Strict mode is allowed to confirm only when every safety check passes:
 
 Stop with `HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION` when the sheet is not reached, test wording is not exposed, the tester/product is not visible, or App Live/manual interaction is needed. Fail closed with `FAIL_CLOSED_UNSAFE_PURCHASE_SHEET`, `FAIL_CLOSED_UNKNOWN_PURCHASE_ACCOUNT`, or `FAIL_CLOSED_REAL_PAYMENT_RISK` when the sheet appears unsafe, the account/product is wrong, live money/payable/payout state is detected, or any unrelated unlock appears.
 
-After any sandbox purchase confirmation, the pass condition is the app success/access selector plus backend readback proving scoped access only, no Premium or unrelated creator product unlock, no payout authority, no LiveKit host/publish authority for Watch-Party Ticket, no live money, and no payable ledger activity. Fake purchase completion is forbidden.
+After any sandbox purchase confirmation, the pass condition is the app success/access selector plus backend readback proving scoped access only, no Premium or unrelated creator product unlock, no payout authority, no LiveKit host/publish authority for Watch-Party Seat Pass, no live money, and no payable ledger activity. Fake purchase completion is forbidden.
 
 If a previous sandbox ownership state blocks rerun, classify `PROVIDER_OWNERSHIP_REUSE_BLOCKER`. Use a reset/revoke script only for dedicated E2E users and sandbox-only grants, and do not delete proof evidence or production data.

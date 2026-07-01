@@ -6,7 +6,7 @@ Last updated: June 20, 2026
 
 This plan is the final public-v1 launch-readiness QA pass after creator monetization sandbox closeout. It does not add product features, enable live money, enable payouts, change LiveKit authority, change Watch-Party routing, or mix Premium with creator purchases.
 
-Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass are closed for Android app-side proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
+Seven-flow money proof: CLOSED / app-side proof complete. Premium, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass are closed for Android app-side proof. Do not reopen the money lane unless a new regression appears. Remaining future work is provider/test-account maintenance and live-production rollout governance, not app-code proof.
 
 Latest launch-blocker audit: `docs/PUBLIC_V1_FINAL_REGRESSION_AUDIT_20260616.md`.
 
@@ -14,7 +14,7 @@ Canonical monetization closeout truth: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEO
 
 Launch-candidate polish record: `docs/LAUNCH_CANDIDATE_POLISH_PASS.md`. That pass made small copy/logging clarity fixes only; it did not run BrowserStack, enable live money, add features, or change route/payment authority.
 
-Route-contract preflight: `npm run guard:route-contracts` is the local static check for core route doctrine before BrowserStack. It verifies Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid room-ticket buyers staying out of Live Stage, preferred Platform Studio route vs compatibility wrapper, canonical Chi'lly Chat routes, and Premium separation from creator purchases. It does not replace device/browser proof.
+Route-contract preflight: `npm run guard:route-contracts` is the local static check for core route doctrine before BrowserStack. It verifies Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid room Seat Pass buyers staying out of Live Stage, preferred Platform Studio route vs compatibility wrapper, canonical Chi'lly Chat routes, and Premium separation from creator purchases. It does not replace device/browser proof.
 
 BrowserStack preparation package: `qa/browserstack/` now contains the whole-app final regression coverage map, persona template, env placeholder file, runbook, and flow contracts. BrowserStack is prepared, not run; no sessions were started, no app was uploaded, and no BrowserStack minutes were spent. Final execution still requires Play/internal runtime, not Expo Dev Launcher.
 
@@ -110,7 +110,7 @@ Protected route doctrine:
 - Party Waiting Room routes to Party Room at `/watch-party/[partyId]`.
 - Live Waiting Room routes to Live Stage at `/watch-party/live-stage/[partyId]`.
 - Player/Title handoff into Watch-Party Live remains content-first through the waiting-room route.
-- Paid Watch-Party ticket buyers do not route to Live Stage.
+- Paid Watch-Party Seat Pass buyers do not route to Live Stage.
 - `/channel-studio` is the preferred Platform Studio route and `/channel-settings` remains compatibility.
 - Chi'lly Chat canonical routes remain `/chat` and `/chat/[threadId]`.
 - Premium route/gates remain separate from creator purchases.
@@ -156,7 +156,7 @@ Credentials must live only in ignored local env files, local keychain, or anothe
 | `paid_video_fan_test` | Paid Video purchased access | Internal/staging only |
 | `unpaid_video_fan_test` | Paid Video denial | Internal/staging only |
 | `watch_party_host_test` | Watch-Party room host and paid-ticket offer setup | Internal/staging only |
-| `watch_party_paid_fan_test` | Paid room-ticket purchase and entry | Internal/staging only |
+| `watch_party_paid_fan_test` | Paid room Seat Pass purchase and entry | Internal/staging only |
 | `watch_party_unpaid_fan_test` | Paid room denial and direct-link denial | Internal/staging only |
 | `event_creator_test` | Paid Event setup | Internal/staging only |
 | `event_paid_fan_test` | Paid Event access | Internal/staging only |
@@ -262,7 +262,7 @@ Do not change route ownership or reroute to Live Stage.
 | --- | --- |
 | Tips | Creator can enable Tips; sandbox tip proof/readback is current; no perk/access unlock; transaction remains sandbox/not-payable. |
 | Paid Videos | Unpaid locked; paid fan access; second unpaid blocked; Money Center readback; refund/revoke deferred if tooling unavailable. |
-| Paid Watch-Party Seats | Unpaid ticket gate; Buy Room Ticket; paid fan entry; direct-link blocked; seat limit held; Money Center readback or screenshot gap documented. |
+| Paid Watch-Party Seats | Unpaid Seat Pass gate; Buy Room Ticket; paid fan entry; direct-link blocked; seat limit held; Money Center readback or screenshot gap documented. |
 | Paid Events | Unpaid event gate; paid access; second unpaid denied; Money Center readback; capacity/refund gaps documented. |
 | Channel Subscriptions | Subscribed state; effective access fallback; non-subscriber denial; Money Center readback; lifecycle webhook delivery deferred. |
 | VIP Passes | Get VIP; VIP fan access; non-VIP denial; Money Center readback; refund/revoke deferred if no safe order id. |

@@ -86,7 +86,7 @@ assertNotIncludes(runner, "point:", "runner coordinate taps");
 
 assertIncludes(flowMap, "Tip pre:", "Tip pre/post gates");
 assertIncludes(flowMap, "Paid Video pre:", "Paid Video pre/post gates");
-assertIncludes(flowMap, "Watch-Party Ticket pre:", "Watch-Party Ticket pre/post gates");
+assertIncludes(flowMap, "Watch-Party Seat Pass pre:", "Watch-Party Seat Pass pre/post gates");
 assertIncludes(flowMap, "Event Pass pre:", "Event Pass pre/post gates");
 assertIncludes(flowMap, "Platform Subscription pre:", "Platform Subscription pre/post gates");
 assertIncludes(flowMap, "VIP pre:", "VIP pre/post gates");

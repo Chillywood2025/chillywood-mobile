@@ -31,7 +31,7 @@ Play/internal runtime only.
 12. Confirm the follow action does not add the participant to Chi'lly Circle and does not change room role, camera/mic seat, Premium, ticket, or subscriber access.
 13. Confirm comments panel and bottom controls are stable.
 14. Confirm expired/invalid room fails closed.
-15. For paid room fixture, confirm unpaid direct Party Room link shows ticket gate before camera/mic/membership/presence.
+15. For paid room fixture, confirm unpaid direct Party Room link shows Seat Pass gate before camera/mic/membership/presence.
 
 ## Expected Result
 Watch-Party Live stays content-first and routes Party Waiting Room -> Party Room.
@@ -45,7 +45,7 @@ Watch-Party Live stays content-first and routes Party Waiting Room -> Party Room
 - Participant detail sheet Follow action.
 - Comments/player controls.
 - Expired-room fail-closed.
-- Paid ticket gate if tested.
+- Paid Seat Pass gate if tested.
 
 ## Logs To Capture
 - Sanitized watch-party branch logs only.
@@ -68,7 +68,7 @@ Watch-Party Live stays content-first and routes Party Waiting Room -> Party Room
 Two devices/sessions for full proof.
 
 ## Google Play Purchase Required
-No for smoke; yes only if rerunning paid ticket purchase.
+No for smoke; yes only if rerunning paid Seat Pass purchase.
 
 ## Local Before BrowserStack
 Partially. Full two-user proof remains deferred.

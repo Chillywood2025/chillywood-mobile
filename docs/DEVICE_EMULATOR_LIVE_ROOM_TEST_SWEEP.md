@@ -65,7 +65,7 @@ Physical-device proof:
 
 - `physical-watch-party-index.png/xml`: Watch-Party Live route opened and correctly showed Premium-required entry plus internal tester sandbox copy. No production money, payout, cash-out, withdrawal, transfer, or payable balance language appeared.
 - `physical-live-stage-index.png/xml`: Live Stage unavailable route opened with a safe unavailable state and an `Open Party Room` recovery action.
-- `physical-ticket-fixture.png/xml`: route-backed Watch-Party ticket sandbox gate showed entry/viewing-only copy, provider product `cw_watch_party_live_ticket_sandbox_099`, sandbox/not-payable labels, `canPublish=false`, `hostPower=false`, production disabled, and payout disabled.
+- `physical-ticket-fixture.png/xml`: route-backed Watch-Party Seat Pass sandbox gate showed entry/viewing-only copy, provider product `cw_watch_party_live_ticket_sandbox_099`, sandbox/not-payable labels, `canPublish=false`, `hostPower=false`, production disabled, and payout disabled.
 - `physical-live-access-fixture.png/xml`: route-backed Live access pass gate showed entry/viewing-only copy, provider product `cw_live_watch_party_access_sandbox_099`, no publish/host/admin/mod authority, and all money switches off.
 - `physical-live-seat-fixture.png/xml`: route-backed Live seat pass gate showed seat eligibility only, host approval required, provider product `cw_live_watch_party_seat_sandbox_099`, `canPublish=false`, `hostPower=false`, production disabled, and payout disabled.
 - `physical-background-before.png` and `physical-background-after.png/xml`: app recovered to the gated Watch-Party route after background/foreground.
@@ -86,14 +86,14 @@ Emulator proof:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Watch-Party Live waiting room | Physical internal tester | Emulator intended | Host/viewer can reach waiting room | Physical route reached Premium-required entry; emulator session unavailable | Blocked | `physical-watch-party-index.png` | `physical-filtered-logcat.txt` | No app bug; missing Premium host plus emulator instability | None | Need Premium host account and stable second app session |
 | 2 | Watch-Party Live room entry | Physical internal tester | Emulator intended | Host opens room, viewer joins | Not reachable because physical session stopped at Premium gate and emulator install/session blocked | Blocked | `physical-watch-party-index.png` | Filtered log | No | None | Needs two authenticated eligible accounts |
-| 3 | Watch-Party Live viewer-only state | Physical route-backed fixture | Emulator intended | Viewer is viewer/listener unless approved | Route-backed ticket gate proved ticket is entry/viewing only and `canPublish=false`; no joined participant state | Partial | `physical-ticket-fixture.png` | XML proof | No | None | Needs real joined viewer in room |
+| 3 | Watch-Party Live viewer-only state | Physical route-backed fixture | Emulator intended | Viewer is viewer/listener unless approved | Route-backed Seat Pass gate proved ticket is entry/viewing only and `canPublish=false`; no joined participant state | Partial | `physical-ticket-fixture.png` | XML proof | No | None | Needs real joined viewer in room |
 | 4 | Watch-Party Live speaker request | Not reachable | Not reachable | Viewer can request if backed, no publish before approval | Not reachable | Blocked | None | None | No | None | Needs live room entry |
 | 5 | Watch-Party Live host approval/denial | Not reachable | Not reachable | Host approval controls speaker authority | Not reachable | Blocked | None | None | No | None | Needs live room entry and host session |
-| 6 | Watch-Party Live mic/camera button states | Not reachable | Not reachable | Disabled until approved | Not reachable in joined room; route-backed ticket gate proves no publish authority from ticket | Partial | `physical-ticket-fixture.png` | XML proof | No | None | Needs joined room controls |
+| 6 | Watch-Party Live mic/camera button states | Not reachable | Not reachable | Disabled until approved | Not reachable in joined room; route-backed Seat Pass gate proves no publish authority from ticket | Partial | `physical-ticket-fixture.png` | XML proof | No | None | Needs joined room controls |
 | 7 | Watch-Party Live composer/message send | Not reachable | Not reachable | Composer works or fails gracefully | Not reachable | Blocked | None | None | No | None | Needs live room entry |
 | 8 | Watch-Party Live attachment button | Not reachable | Not reachable | Attachment button works or fails gracefully | Not reachable | Blocked | None | None | No | None | Needs live room entry |
 | 9 | Watch-Party Live leave/rejoin | Not reachable | Not reachable | Viewer leaves and rejoins cleanly | Not reachable | Blocked | None | None | No | None | Needs live room entry |
-| 10 | Watch-Party old/stale/ended denial | Physical route proof | Emulator not needed | Denial readable, old-room handling unchanged | Live Stage unavailable and Watch-Party not-found ticket proof rendered readable route-owned states | Pass for route states | `physical-live-stage-index.png`, `physical-ticket-fixture.png` | XML proof | No | None | Specific ended/stale fixture still needs a real room |
+| 10 | Watch-Party old/stale/ended denial | Physical route proof | Emulator not needed | Denial readable, old-room handling unchanged | Live Stage unavailable and Watch-Party not-found Seat Pass proof rendered readable route-owned states | Pass for route states | `physical-live-stage-index.png`, `physical-ticket-fixture.png` | XML proof | No | None | Specific ended/stale fixture still needs a real room |
 | 11 | Live Watch-Party waiting room | Physical route proof | Emulator intended | Waiting route available | Physical Live Stage route reached unavailable state; no joined session | Partial | `physical-live-stage-index.png` | XML proof | No | None | Needs valid live room fixture |
 | 12 | Live Watch-Party / Live Stage entry | Physical route proof | Emulator intended | Host/viewer enter Live Stage | Not reachable; unavailable route rendered safely | Blocked | `physical-live-stage-index.png` | XML proof | No | None | Needs valid live room and second session |
 | 13 | Live Stage viewer/listener state | Physical route-backed fixture | Emulator intended | Viewer/listener until approved | Access/seat fixtures prove no host/speaker/admin/mod/publish authority from access or seat pass; no joined tile proof | Partial | `physical-live-access-fixture.png`, `physical-live-seat-fixture.png` | XML proof | No | None | Needs joined live room |
@@ -137,7 +137,7 @@ No code fix was made because there was no proven app bug in LiveKit, route owner
 Observed or preserved:
 
 - Ticket/access/seat route-backed gates show sandbox/not-payable copy.
-- Ticket grants entry/viewing only in copy and proof readout.
+- Seat Pass grants entry/viewing only in copy and proof readout.
 - Access pass grants entry/viewing only in copy and proof readout.
 - Seat pass grants eligibility only and says host approval is still required.
 - `canPublish=false` is visible on ticket/access/seat proof cards.

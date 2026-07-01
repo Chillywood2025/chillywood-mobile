@@ -17,7 +17,7 @@ Codex must not blindly bypass guards, use coordinate taps, fake purchase complet
 
 BrowserStack purchase automation has three explicit modes:
 
-1. Default mode refuses Tip, Paid Video, Watch-Party Ticket, Event Pass, Platform Subscription, and VIP purchase flows through the `purchase_flow_requested` guard.
+1. Default mode refuses Tip, Paid Video, Watch-Party Seat Pass, Event Pass, Platform Subscription, and VIP purchase flows through the `purchase_flow_requested` guard.
 2. Manual-assisted mode uses `--manual-assisted-purchase`, may navigate to the purchase checkpoint, and stops with `HUMAN_REQUIRED_GOOGLE_PLAY_CONFIRMATION`.
 3. Strict sandbox auto-confirm mode uses `--auto-confirm-sandbox-purchase`, is never enabled by default, and may confirm only after the runner proves the BrowserStack device is on Android, the app package is `com.chillywood.mobile`, the flow uses no coordinate taps, backend fixtures are sandbox/not_payable/no_payout, live money and payout authority are off, production purchase intents are zero, payable ledger events are zero, and the visible Google Play sheet clearly shows test/sandbox wording plus the expected tester account and product when those fields are exposed.
 

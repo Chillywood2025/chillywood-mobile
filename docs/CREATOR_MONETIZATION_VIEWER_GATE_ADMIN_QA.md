@@ -6,7 +6,7 @@ This QA lane verifies the completed creator monetization setup system on the Pla
 
 Supersession note: this doc records the first focused QA pass and the blockers it found. The contextual viewer-gate and Owner/Admin drilldown blockers are now closed by `docs/ROUTE_BACKED_MONETIZATION_VISUAL_PROOF.md`, with proof at `/tmp/chillywood-route-backed-monetization-visual-proof-20260605/`.
 
-Stabilization follow-up: `docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md` rechecked the route-backed viewer fixtures after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc`. Watch-Party ticket, Live access, and Live seat unavailable branches now show their sandbox proof cards when the sanitized setup config exists. This does not change backend/provider proof, purchase intents, access grants, ledger rows, Owner/Admin authority, or money state.
+Stabilization follow-up: `docs/INTERNAL_TESTING_STABILIZATION_SWEEP.md` rechecked the route-backed viewer fixtures after EAS Update group `4cd86764-44c4-4a93-bd0b-274473b36cdc`. Watch-Party Seat Pass, Live access, and Live seat unavailable branches now show their sandbox proof cards when the sanitized setup config exists. This does not change backend/provider proof, purchase intents, access grants, ledger rows, Owner/Admin authority, or money state.
 
 ## Scope
 
@@ -31,10 +31,10 @@ No new EAS Update was needed for this QA pass. The prior relevant update remains
 ## Screenshot Proof
 
 - `01-creator-setup-top.png`: creator setup route active; internal tester sandbox setup mode active; live money off; payouts off; cash-out, withdrawal, transfer, Stripe Android digital checkout absent; arbitrary Android prices blocked.
-- `02-creator-setup-product-tiers.png`: approved product tiers visible for paid content, Watch-Party Live ticket, Live access pass, and Live seat pass; copy states sandbox-only/no arbitrary Android price and no publish authority from access products.
+- `02-creator-setup-product-tiers.png`: approved product tiers visible for paid content, Watch-Party Live Seat Pass, Live access pass, and Live seat pass; copy states sandbox-only/no arbitrary Android price and no publish authority from access products.
 - `03-creator-setup-completion-rows.png`: creator tip, event pass, physical merch readiness, and completion rows visible; payout/cash-out and digital merch access remain absent.
 - `04-internal-sandbox-route-top.png`: internal sandbox purchase route active with Sandbox Purchase Testing, Internal test mode, No real charge, Not payable, production money off, and payouts off.
-- `05-internal-sandbox-digital-products-a.png`: internal tester sandbox launcher shows Watch-Party Live ticket, Live access pass, Live seat pass, paid content, creator tip, and event pass with Google Play / RevenueCat sandbox product IDs.
+- `05-internal-sandbox-digital-products-a.png`: internal tester sandbox launcher shows Watch-Party Live Seat Pass, Live access pass, Live seat pass, paid content, creator tip, and event pass with Google Play / RevenueCat sandbox product IDs.
 - `06-internal-sandbox-digital-products-b.png`: physical merch Stripe sandbox checkout and payout readiness read-only surfaces visible; payout execution, cash-out, withdrawal, transfer, and payable balance are absent.
 - `07-internal-sandbox-merch-payout.png`: repeated merch/readiness lower route proof after scroll.
 - `08-paid-content-player-route.png`: direct player route for the saved paid-content proof source returns `Title unavailable`; this proves the saved setup source is not a currently route-backed playable Player fixture for contextual gate capture.
@@ -59,14 +59,14 @@ Creator monetization configs:
 
 - one sandbox/not-payable setup row exists for each `paid_content_access`, `watch_party_live_ticket`, `live_watch_party_access_pass`, `live_watch_party_seat_pass`, `creator_tip`, `event_pass`, and `merch_physical_good`.
 - every setup row has `production_enabled=false`, `payout_enabled=false`, `payable_state=not_payable`, `grants_livekit_publish=false`, and `grants_host_authority=false`.
-- live access, live seat, and Watch-Party ticket configs require host approval where expected.
+- live access, live seat, and Watch-Party Seat Pass configs require host approval where expected.
 
 Google Play / RevenueCat:
 
-- processed sandbox provider events: creator tip `1`, event pass `1`, live access pass `1`, live seat pass `1`, paid content access `2`, Watch-Party Live ticket `1`.
-- purchase intents: creator tip consumed `1` and failed `1`; event pass consumed `1`; live access consumed `1`; live seat consumed `1`; paid content consumed `1` and pending `1`; Watch-Party ticket consumed `1`.
-- access grants: event pass sandbox-only `1`; live access sandbox-only `1`; live seat sandbox-only `1`; paid content sandbox-only `1`; Watch-Party ticket revoked `1`; creator tip intentionally has no access grant.
-- money ledger: sandbox/not-payable purchase rows exist for all six digital products; Watch-Party ticket also has one sandbox reversed admin-revoke row.
+- processed sandbox provider events: creator tip `1`, event pass `1`, live access pass `1`, live seat pass `1`, paid content access `2`, Watch-Party Live Seat Pass `1`.
+- purchase intents: creator tip consumed `1` and failed `1`; event pass consumed `1`; live access consumed `1`; live seat consumed `1`; paid content consumed `1` and pending `1`; Watch-Party Seat Pass consumed `1`.
+- access grants: event pass sandbox-only `1`; live access sandbox-only `1`; live seat sandbox-only `1`; paid content sandbox-only `1`; Watch-Party Seat Pass revoked `1`; creator tip intentionally has no access grant.
+- money ledger: sandbox/not-payable purchase rows exist for all six digital products; Watch-Party Seat Pass also has one sandbox reversed admin-revoke row.
 
 Global safety:
 

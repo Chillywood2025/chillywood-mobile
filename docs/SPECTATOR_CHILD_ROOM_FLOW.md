@@ -72,7 +72,7 @@ The client shows honest disabled copy, but the Edge Function is the authority. I
 - signed-in viewer
 - source exists
 - source is either public discovery/public visibility/clean moderation/public-safe rights, or a Circle spectator row readable by the owner/host/channel or active Chi'lly Circle member
-- source is not Premium-only, ticketed, subscription-only, private, deleted, blocked for the viewer, or ended without replay permission
+- source is not Premium-only, paid, subscription-only, private, deleted, blocked for the viewer, or ended without replay permission
 - creator/source flags allow spectator view and the requested child-room type
 - runtime controls allow the requested room type
 - Premium gate policy remains aligned with the current Premium proof-hold helper
@@ -91,7 +91,7 @@ The migration adds source-level flags on `discovery_feed_items`:
 - `allow_public_share`
 - `allow_replay_watch_party`
 
-Defaults are conservative: public-free, public-safe, spectator-playback-enabled rows may be backfilled on; private, protected, Premium-only, ticketed, subscriber-only, blocked, reported/restricted, and non-playback rows stay non-reusable.
+Defaults are conservative: public-free, public-safe, spectator-playback-enabled rows may be backfilled on; private, protected, Premium-only, paid, subscriber-only, blocked, reported/restricted, and non-playback rows stay non-reusable.
 
 ## Audit
 The Edge Function writes:

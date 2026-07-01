@@ -51,7 +51,7 @@ The prepared BrowserStack package lives in `qa/browserstack/`:
 - `runbook.md`: approval-gated execution order.
 - `flows/00-runtime-install.contract.md` through `flows/14-final-smoke.contract.md`: flow contracts for runtime, auth, Home/Explore/Library, Profile/Platform, Brand Studio, Chi'lly Chat, Watch-Party Live, Live Watch-Party/Live Stage, Player/Paid Video, Money Center, Premium, Settings/Legal, direct-link denials, Admin/Owner, and final smoke.
 
-Route-contract preflight before BrowserStack: run `npm run guard:route-contracts` with the standard local guards. This static check protects Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid Watch-Party ticket buyers staying out of Live Stage, `/channel-studio` preferred Platform Studio route vs `/channel-settings` compatibility, canonical Chi'lly Chat `/chat` and `/chat/[threadId]`, and Premium separation from creator purchases. BrowserStack still needs runtime route smoke on Play/internal.
+Route-contract preflight before BrowserStack: run `npm run guard:route-contracts` with the standard local guards. This static check protects Party Waiting Room -> Party Room, Live Waiting Room -> Live Stage, Player/Title content-first Watch-Party Live handoff, paid Watch-Party Seat Pass buyers staying out of Live Stage, `/channel-studio` preferred Platform Studio route vs `/channel-settings` compatibility, canonical Chi'lly Chat `/chat` and `/chat/[threadId]`, and Premium separation from creator purchases. BrowserStack still needs runtime route smoke on Play/internal.
 
 ## Device Matrix
 
@@ -199,7 +199,7 @@ Each creator-money flow should be smoke-tested against existing sandbox proof or
 
 - Tips: contribution only, no unlock/perk.
 - Paid Videos: paid fan plays, unpaid/direct link locked.
-- Paid Watch-Party Seats: ticket gate, paid room entry, direct-link denial, Party Waiting Room -> Party Room only.
+- Paid Watch-Party Seats: Seat Pass gate, paid room entry, direct-link denial, Party Waiting Room -> Party Room only.
 - Paid Events: paid event access, unpaid denial.
 - Channel Subscriptions: active/effective access, non-subscriber denial, expired access does not unlock.
 - VIP Passes: VIP access, non-VIP denial.

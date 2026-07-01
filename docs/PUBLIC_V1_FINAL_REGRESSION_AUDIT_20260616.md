@@ -22,7 +22,7 @@ This audit runs after Sandbox Money Tester Experience reached `6/6` Play-install
 | Player | Ready for next regression proof | Player smoke and Paid Video playable-source proof passed; broader BrowserStack route/player regression still required. |
 | Watch-Party Live | Needs manual proof | Static route doctrine is guarded; full two-user participant rail/join/leave proof still needs second device/session or BrowserStack. |
 | Live Watch-Party / Live Stage | Needs manual proof | Route doctrine is guarded; runtime Live Stage route smoke and optional participant proof still need final regression. |
-| Party Waiting Room / Party Room | Needs manual proof | Invalid direct-link fail-closed and sandbox ticket gate proof passed; full two-user room behavior remains unproved in final regression. |
+| Party Waiting Room / Party Room | Needs manual proof | Invalid direct-link fail-closed and sandbox Seat Pass gate proof passed; full two-user room behavior remains unproved in final regression. |
 | Chi'lly Chat | Needs manual proof | Inbox/thread contracts are prepared; two-user message, voice decline, and video accept/end still need second session or BrowserStack. |
 | Profile / Channel / Platform | Ready for next regression proof | Public viewer state and Brand public-viewer readback passed; BrowserStack should rerun own/public profile and wrong-user denial. |
 | Brand Studio | Ready for next regression proof | Closeout and public viewer proof passed; BrowserStack should rerun upload/save/draft/public preview/public render contract. |

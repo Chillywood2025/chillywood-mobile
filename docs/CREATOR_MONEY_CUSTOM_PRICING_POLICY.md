@@ -49,7 +49,7 @@ Creator-money tax/legal/compliance plan: Partial. `docs/CREATOR_MONEY_TAX_LEGAL_
 | --- | --- | --- | --- | --- | --- |
 | Tips | `cw_creator_tip_099`, `$0.99`, United States only first | Additional tip products or approved provider-backed price tiers | Yes | Yes | Prepared / blocked until provider products exist |
 | Paid Video | `cw_paid_content_access_099`, `$0.99`, United States only first | Creator selects from approved paid-video price tiers mapped to provider products | Yes | Yes | Prepared / blocked until provider products exist |
-| Watch-Party Ticket | `cw_watch_party_ticket_099`, `$0.99`, United States only first | Creator selects from approved ticket price tiers mapped to provider products | Yes | Yes | Prepared / blocked until provider products exist |
+| Watch-Party Seat Pass | `cw_watch_party_ticket_099`, `$0.99`, United States only first | Creator selects from approved ticket price tiers mapped to provider products | Yes | Yes | Prepared / blocked until provider products exist |
 | Channel Subscription | `cw_channel_subscription_monthly_499`, base plan `monthly`, `$4.99/month`, United States only first | Approved subscription products, base plans, or offers only | Yes | Yes | Prepared / blocked until provider products exist |
 | VIP | `cw_vip_pass_499`, `$4.99`, United States only first | Approved VIP price tiers mapped to provider products | Yes | Yes | Prepared / blocked until provider products exist |
 | Event Pass | `cw_event_pass_099`, `$0.99`, United States only first | Approved event pass price tiers mapped to provider products | Yes | Yes | Prepared / blocked until provider products exist |

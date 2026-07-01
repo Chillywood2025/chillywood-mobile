@@ -136,7 +136,7 @@ v44 purchase proof:
 - Google Play Billing sheet opened for `Watch-Party Seat Pass sandbox` / `$0.99` / test card.
 - Purchase intent `60cac129-dbc3-43c3-9300-4d654ce12f8a` moved to `consumed`.
 - Provider event id recorded on the transaction: `f3016f01-2514-40d7-b29d-103d3ced6fc2`.
-- Creator room-ticket transaction `fff398a9-59f6-452a-81f7-1c8e7ad04e50` was created as `paid`, `environment=sandbox`, `payout_status=not_payable`.
+- Creator room Seat Pass transaction `fff398a9-59f6-452a-81f7-1c8e7ad04e50` was created as `paid`, `environment=sandbox`, `payout_status=not_payable`.
 - Active ticket `a2108d63-8b84-4dd1-8f60-ef485ce5efdc` was created for the paid fan.
 - Offer moved to `sold_out`, `seats_sold=1`, `seat_limit=1`.
 - Resolver for the paid fan returned `allowed=true`, `reason=ticket_confirmed`.

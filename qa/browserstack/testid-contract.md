@@ -60,7 +60,7 @@ Stable selectors are the contract for BrowserStack, Maestro, App Live, and local
 - `paid-video-player-ready`
 - `owner-paid-video-manage-price-button`
 
-## Watch-Party Ticket
+## Watch-Party Seat Pass
 
 - `tester-watch-party-ticket-button` on Platform sandbox tester entry
 - `watch-party-ticket-lock-card`

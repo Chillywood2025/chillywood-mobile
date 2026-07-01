@@ -59,6 +59,24 @@ assertIncludes(revenuecatWebhook, "notifications guide buyers and creators", "no
 assertNotIncludes(revenuecatWebhook, "payout_request", "notifications must not create payout requests");
 assertNotIncludes(settings, "Money notification Chat", "Chat must not become money notification center");
 
+const staleSeatPassNotificationCopy = [
+  ["Watch-Party", "Ticket"].join(" "),
+  ["Watch", "Party", "Ticket"].join(" "),
+  ["watch-party", "ticket"].join(" "),
+  ["ticket", "sold"].join(" "),
+  ["ticket", "ready"].join(" "),
+  ["ticket", "manager"].join(" "),
+];
+[
+  ["_lib/notifications.ts", notifications],
+  ["supabase/functions/revenuecat-webhook/index.ts", revenuecatWebhook],
+  ["app/settings.tsx", settings],
+].forEach(([fileLabel, source]) => {
+  staleSeatPassNotificationCopy.forEach((needle) => {
+    assertNotIncludes(source, needle, `visible Seat Pass notification copy in ${fileLabel}`);
+  });
+});
+
 if (process.exitCode) process.exit();
 
 console.log("Notification money policy guard passed.");

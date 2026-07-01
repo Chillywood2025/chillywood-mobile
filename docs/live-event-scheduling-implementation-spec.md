@@ -192,7 +192,7 @@ Do not fake countdown or reminder systems before the underlying event truth exis
 This chapter must:
 - define the event truth that future event access can resolve against
 - avoid implementing event access before that truth exists
-- keep one-time purchase, ticketed access, and formal invite entitlements explicitly unsupported unless later stages prove them honestly
+- keep one-time purchase, paid access, and formal invite entitlements explicitly unsupported unless later stages prove them honestly
 
 ## 9. Current Missing Truth That This Chapter Must Build
 - canonical scheduled-event data model
@@ -283,7 +283,7 @@ Adopt public event truth into `/profile/[userId]` and related current public sur
 Only after the canonical event model exists should the access chapter extend into real event access through `resolveEventAccess(...)`.
 
 This later phase must not:
-- fake ticketed access
+- fake paid access
 - fake one-time purchase access
 - mix event access with content access casually
 
@@ -308,7 +308,7 @@ This later phase must not:
 
 ### 13.2 Later Phase / Do Not Fake Yet
 - event access implementation
-- ticketed event access
+- paid event access
 - one-time event purchase
 - formal invite-only event entitlements
 - reminder delivery infrastructure

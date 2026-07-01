@@ -45,7 +45,7 @@ After every manual or strict sandbox purchase confirmation, save screenshots/vid
 - [ ] Expected: unlock one video only; playable source opens
 - [ ] Pass/fail notes:
 
-## Watch-Party Ticket
+## Watch-Party Seat Pass
 
 - [ ] Account: sandbox tester viewer
 - [ ] Route: creator Platform or Party Room

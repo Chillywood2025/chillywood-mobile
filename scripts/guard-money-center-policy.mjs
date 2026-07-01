@@ -90,7 +90,7 @@ assertIncludes(channelSettings, "money-manager-sheet", "Money Center manager bot
 assertIncludes(channelSettings, "money-manager-close-button", "Money Center manager close action");
 assertIncludes(channelSettings, "money-manager-tips", "Tips manager panel test id");
 assertIncludes(channelSettings, "money-manager-paid_video", "Paid Video manager panel test id");
-assertIncludes(channelSettings, "money-manager-watch_party_ticket", "Watch-Party Ticket manager panel test id");
+assertIncludes(channelSettings, "money-manager-watch_party_ticket", "Watch-Party Seat Pass manager panel test id");
 assertIncludes(channelSettings, "money-manager-channel_subscription", "Channel Subscription manager panel test id");
 assertIncludes(channelSettings, "money-manager-vip", "VIP manager panel test id");
 assertIncludes(channelSettings, "money-manager-event_pass", "Event Pass manager panel test id");
@@ -110,6 +110,23 @@ assertIncludes(monetizationRouteTargets, "manage: \"channel_subscriptions\"", "C
 assertIncludes(monetizationRouteTargets, "manage: \"vip_passes\"", "VIP Passes route target manage key");
 assertIncludes(monetizationRouteTargets, "manage: \"paid_events\"", "Paid Events route target manage key");
 assertNotIncludes(channelSettings, "feature.manageTarget === \"tips\" || feature.manageTarget === \"ways_to_earn\"", "feature card manage CTA must not only expand accordions");
+const staleSeatPassCopy = [
+  [["Watch-Party", "Ticket"].join(" "), "visible Watch-Party Seat Pass copy"],
+  [["Watch", "Party", "Ticket"].join(" "), "visible Watch-Party Seat Pass copy"],
+  [["watch-party", "ticket"].join(" "), "visible Watch-Party Seat Pass copy"],
+  [["ticket", "sold"].join(" "), "visible Seat Pass sold copy"],
+  [["ticket", "ready"].join(" "), "visible Seat Pass ready copy"],
+  [["ticket", "manager"].join(" "), "visible Seat Pass manager copy"],
+];
+[
+  ["_lib/sevenFlowSwitchboard.ts", read("_lib/sevenFlowSwitchboard.ts")],
+  ["_lib/creatorMonetizationFeatures.ts", monetizationFeatureCatalog],
+  ["app/channel-settings.tsx", channelSettings],
+].forEach(([fileLabel, source]) => {
+  staleSeatPassCopy.forEach(([needle, label]) => {
+    assertNotIncludes(source, needle, `${label} in ${fileLabel}`);
+  });
+});
 if (channelSettings.indexOf("title: \"Ways to Earn\"") > channelSettings.indexOf("Sandbox Tester Experience")) {
   fail("Ways to Earn must appear before Sandbox Tester Experience in creator-facing Money Center source order");
 }

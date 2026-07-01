@@ -67,7 +67,7 @@ const files = {
   [files.player, "paid-video-player-ready", "paid video ready selector"],
   [files.watchParty, "screen-party-room", "Party Room screen selector"],
   [files.watchParty, "watch-party-ticket-lock-card", "ticket lock selector"],
-  [files.watchParty, "watch-party-ticket-purchase-button", "ticket purchase selector"],
+  [files.watchParty, "watch-party-ticket-purchase-button", "Seat Pass purchase selector"],
   [files.event, "screen-event", "Event screen selector"],
   [files.event, "event-pass-lock-card", "event pass lock selector"],
   [files.event, "event-pass-purchase-button", "event pass purchase selector"],

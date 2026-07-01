@@ -119,4 +119,4 @@ BrowserStack is intentionally deferred until final full regression after all cre
 
 ## Next Monetization Recommendation
 
-After Tips V1 internal proof, the next safest creator monetization candidate is paid videos because the app already has creator price rows, access resolver logic, and locked player state. Do not build paid Watch-Party seats next until room ticket creation, waiting-room gate, Party Room recheck, refunds, and admin review are designed together.
+After Tips V1 internal proof, the next safest creator monetization candidate is paid videos because the app already has creator price rows, access resolver logic, and locked player state. Do not build paid Watch-Party seats next until room Seat Pass creation, waiting-room gate, Party Room recheck, refunds, and admin review are designed together.

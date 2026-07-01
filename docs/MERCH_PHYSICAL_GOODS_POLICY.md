@@ -10,7 +10,7 @@ Physical merch is separate from Android digital goods.
 - Physical merch must have `is_physical_good=true`.
 - Physical merch must have `creates_digital_access=false`.
 - Merch orders must keep `digital_access_grant_id=null`.
-- Merch does not unlock Premium, paid content, Watch-Party tickets, Live access passes, Live seat passes, creator tips, event passes, LiveKit publish permission, host power, speaker authority, moderator/admin power, or payout access.
+- Merch does not unlock Premium, paid content, Watch-Party Seat Passes, Live access passes, Live seat passes, creator tips, event passes, LiveKit publish permission, host power, speaker authority, moderator/admin power, or payout access.
 - Merch checkout must not be used as an Android digital goods workaround.
 
 ## Sandbox State

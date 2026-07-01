@@ -73,7 +73,7 @@ The lane added unique indexes for access grants and ledger rows by provider even
 
 ## Revoke
 
-Real provider refund/revoke tooling was not triggered in this lane. Instead, an honest admin revoke proof revoked sandbox Watch-Party ticket grant `f782b2be-9561-4b15-b591-f5e28465064c`.
+Real provider refund/revoke tooling was not triggered in this lane. Instead, an honest admin revoke proof revoked sandbox Watch-Party Seat Pass grant `f782b2be-9561-4b15-b591-f5e28465064c`.
 
 Result:
 

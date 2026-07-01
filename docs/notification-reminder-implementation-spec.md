@@ -9,7 +9,7 @@ It is implementation doctrine, not UI code.
 
 Creator-money notifications are backed by real notification records. Notifications guide users to routes; they do not grant access. Destination routes re-check access/grant/status before showing unlocked video, room, subscription, VIP, event, or purchase-success state.
 
-Buyer and creator notifications are separate. Buyer notifications route to the exact purchased source: Paid Video opens `/player/[id]`, Watch-Party Ticket opens `/watch-party/[partyId]`, Channel Subscription opens `/channel-subscription/[creatorId]`, VIP opens `/vip-pass/[creatorId]`, Event Pass opens `/event/[eventId]`, and Tips route to creator support receipt context without unlocking anything. Creator sale/support notifications route to `/channel-studio?tab=monetization&focus=transactions`.
+Buyer and creator notifications are separate. Buyer notifications route to the exact purchased source: Paid Video opens `/player/[id]`, Watch-Party Seat Pass opens `/watch-party/[partyId]`, Channel Subscription opens `/channel-subscription/[creatorId]`, VIP opens `/vip-pass/[creatorId]`, Event Pass opens `/event/[eventId]`, and Tips route to creator support receipt context without unlocking anything. Creator sale/support notifications route to `/channel-studio?tab=monetization&focus=transactions`.
 
 Money Center remains the creator business home. Chat remains conversation-only and is not the creator-money notification ledger. Tips do not unlock anything. Premium remains the app-wide subscription flow.
 
@@ -68,7 +68,7 @@ Do not create route proliferation in this chapter.
 ### 3.1 Current Doctrine Already Supports
 Current repo doctrine already supports:
 - D9 canonical notification/activity records in `notifications`
-- creator-money buyer and creator notification records for Paid Video, Tips, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass
+- creator-money buyer and creator notification records for Paid Video, Tips, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass
 - notification categories for followed creator live, Circle friend live, event starts soon, public upload, and replay later
 - notification preferences in `notification_preferences`
 - Android device token registration/revocation through `notification-device-tokens`
@@ -377,7 +377,7 @@ Later-phase notification/reminder ideas may include:
 - grouped notification inbox surfaces
 - digesting / batching
 - creator marketing notifications
-- ticketed/premium event reminder targeting
+- paid/premium event reminder targeting
 - richer moderation/admin alert routing
 
 These remain later until canonical data truth and helper ownership exist.

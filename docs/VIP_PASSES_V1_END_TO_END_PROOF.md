@@ -16,7 +16,7 @@ VIP V1 does not unlock:
 
 - Chi'llywood Premium
 - Paid Videos
-- Paid Watch-Party tickets
+- Paid Watch-Party Seat Passes
 - Paid Events
 - Channel Subscriptions
 - Tips
@@ -100,7 +100,7 @@ Fan:
 - `/vip-pass/[creatorId]` VIP-only gate.
 - CTA: `Get VIP`.
 
-Copy states that VIP is creator-specific and does not include Premium, paid videos, Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.
+Copy states that VIP is creator-specific and does not include Premium, paid videos, Watch-Party Seat Passes, paid events, channel subscriptions, LiveKit authority, room permissions, or other creators' channels.
 
 ## Proof Checklist
 
@@ -156,11 +156,11 @@ Passed:
    - access grant status: `sandbox_only`
 11. VIP fan access passed:
    - `/vip-pass/ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5` showed `VIP` / `VIP is active for this creator channel only`.
-   - copy confirmed VIP does not unlock Premium, paid videos, Watch-Party tickets, paid events, channel subscriptions, LiveKit authority, room permissions, payouts, or other creators' channels.
+   - copy confirmed VIP does not unlock Premium, paid videos, Watch-Party Seat Passes, paid events, channel subscriptions, LiveKit authority, room permissions, payouts, or other creators' channels.
 12. Separation readback passed for the proof window:
    - Tips created: `0`
    - Paid Video grants created: `0`
-   - Paid Watch-Party tickets created: `0`
+   - Paid Watch-Party Seat Passes created: `0`
    - Paid Event passes created: `0`
    - Channel Subscription rows created: `0`
    - Premium/user entitlement rows created or updated by the VIP purchase: `0`
@@ -172,7 +172,7 @@ Passed:
 14. Creator Money Center readback passed:
    - a short-lived `test_grant` Premium entitlement was added only to open the existing Platform Studio gate for creator readback, then revoked after capture.
    - Money Center > Transactions > VIP showed `$4.99 VIP pass`, `Paid`, `VIP Pass · 6/13/2026, 9:46:06 AM · Sandbox`, and `Payout status: not_payable`.
-   - Money Center copy kept VIP separate from Premium, Tips, Paid Videos, Watch-Party tickets, Paid Events, Channel Subscriptions, LiveKit authority, and room permissions.
+   - Money Center copy kept VIP separate from Premium, Tips, Paid Videos, Watch-Party Seat Passes, Paid Events, Channel Subscriptions, LiveKit authority, and room permissions.
 
 Proof files:
 

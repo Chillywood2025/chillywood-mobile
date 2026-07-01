@@ -113,7 +113,7 @@ Admin System:
 
 Monetization Later:
 
-- Account-tier Premium, creator/channel subscribers, paid media, payouts, and ticketed access are distinct systems.
+- Account-tier Premium, creator/channel subscribers, paid media, payouts, and paid access are distinct systems.
 - Subscriber/VIP/private paid access for creator media is post-v1 and compliance-sensitive.
 - Creator payouts stay separate from RevenueCat/app-store billing.
 

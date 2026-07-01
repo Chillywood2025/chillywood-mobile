@@ -46,7 +46,7 @@ Proof setup:
 - The focused Ways to Earn panel is rendered directly in the Money Center focused area.
 - The secondary accordion copy uses suffixed testIDs so primary proof selectors are unique.
 - Focused accordion bodies are suppressed while the same section is already open in the focused panel, preventing duplicate actionable controls.
-- Paid Video, Watch-Party Ticket, and Event Pass CTAs now open their Money Center manager first, even when setup prerequisites are missing; their managers show the next setup action instead of navigating away.
+- Paid Video, Watch-Party Seat Pass, and Event Pass CTAs now open their Money Center manager first, even when setup prerequisites are missing; their managers show the next setup action instead of navigating away.
 - Web local proof uses a portal-backed manager overlay so the manager sheet is not trapped by the scroll container.
 - Long manager content is clipped inside the sheet and scrolls internally instead of rendering offscreen.
 - Cashout readiness collapses Ways to Earn when switching to payout focus so the payout panel is the single visible cashout action surface.

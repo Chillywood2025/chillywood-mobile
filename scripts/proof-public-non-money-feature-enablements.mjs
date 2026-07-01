@@ -95,7 +95,7 @@ const admin = read("app/admin.tsx");
   "| Premium annual |",
   "| Creator tips |",
   "| Paid creator video |",
-  "| Paid Watch-Party ticket |",
+  "| Paid Watch-Party Seat Pass |",
   "| Channel Subscription |",
   "| VIP |",
   "| Paid event |",

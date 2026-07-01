@@ -32,7 +32,7 @@ const DEMO_MEMBERS = [
   { key: "cinema-regular", displayName: "Demo Cinema Regular", username: "democircle15", role: "viewer", tagline: "QA-only regular viewer profile." },
   { key: "community-host", displayName: "Demo Community Host", username: "democircle16", role: "creator", tagline: "QA-only community host profile." },
   { key: "creator-supporter", displayName: "Demo Creator Supporter", username: "democircle17", role: "viewer", tagline: "QA-only supporter identity. No tip or VIP grant." },
-  { key: "room-regular", displayName: "Demo Room Regular", username: "democircle18", role: "viewer", tagline: "QA-only room regular. No room ticket." },
+  { key: "room-regular", displayName: "Demo Room Regular", username: "democircle18", role: "viewer", tagline: "QA-only room regular. No room Seat Pass." },
 ];
 
 function loadEnv() {

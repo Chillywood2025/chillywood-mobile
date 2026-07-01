@@ -77,7 +77,7 @@ const flows = [
     remainingBlocker: "Production product, owner activation, and content/support readiness.",
   },
   {
-    flow: "Watch-Party Ticket",
+    flow: "Watch-Party Seat Pass",
     switchName: "watchPartyTicketEnabled",
     defaultState: "off",
     providerProductId: "cw_watch_party_live_ticket_sandbox_099",
@@ -87,7 +87,7 @@ const flows = [
     revenueCatStatus: "Sandbox proved; production product/package pending provider verification.",
     entitlementAccessMapping: "watch_party_live_ticket grant for one Party Room / Watch-Party target.",
     routeSurface: "/watch-party/[partyId].",
-    accessCreated: "Same-room ticket access only.",
+    accessCreated: "Same-room Seat Pass access only.",
     accessNotCreated: "No Premium, other room, Live Stage route, LiveKit publish, host, speaker, moderator, paid video, VIP, subscription, event pass, payout, or payable balance.",
     revokeBehavior: "Exact room grant/revoke readback blocks that room only.",
     refundSupportBehavior: "Manual/provider review for ended, failed, no-show, or platform fault.",
@@ -148,7 +148,7 @@ const flows = [
     entitlementAccessMapping: "event_pass grant/pass for one creator event.",
     routeSurface: "/event/[eventId], Public Platform event cards, Money Center.",
     accessCreated: "Pass for one event only.",
-    accessNotCreated: "No Premium, VIP, subscription, paid video, room ticket, other event, LiveKit authority, payout, or payable balance.",
+    accessNotCreated: "No Premium, VIP, subscription, paid video, room Seat Pass, other event, LiveKit authority, payout, or payable balance.",
     revokeBehavior: "Exact event pass revoke/cancel/expiration blocks that event only.",
     refundSupportBehavior: "Manual/provider review for canceled, rescheduled, ended, or unavailable event.",
     rollbackSwitch: "digital_sales_enabled=off and live_money_enabled=off.",
@@ -307,7 +307,7 @@ const premiumFirstLaunchChecklist = [
 ];
 
 const creatorMoneyFutureActivationChecklist = [
-  "Recommended order: Tips, Paid Video, Event Pass / Watch-Party Ticket, Channel Subscription, VIP.",
+  "Recommended order: Tips, Paid Video, Event Pass / Watch-Party Seat Pass, Channel Subscription, VIP.",
   "Owner approves each flow separately.",
   "Production provider product and RevenueCat mapping are verified per flow.",
   "Creator eligibility and provider availability gates are confirmed.",

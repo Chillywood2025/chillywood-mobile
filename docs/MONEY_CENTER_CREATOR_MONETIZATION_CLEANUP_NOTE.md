@@ -55,14 +55,14 @@ Closeout audit: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md` now consol
 ## Paid Watch-Party Seats V1 Follow-Up
 - Paid Watch-Party Seats / Room Tickets V1 is implemented, Supabase-applied, and Play/internal sandbox-proven for purchase, active ticket creation, paid fan entry, unpaid direct-link gate, normal sold-out denial, seat-limit, and Money Center RPC readback.
 - Provider path is RevenueCat / Google Play dynamic sandbox product `watch_party_live_ticket_sandbox_099` / `cw_watch_party_live_ticket_sandbox_099`; Stripe Tips is not used.
-- Money Center remains the consolidated readout: Paid Watch-Party offers appear in Offers and verified room-ticket rows appear in Transactions.
-- Party Waiting Room checks paid-ticket access before routing to Party Room.
+- Money Center remains the consolidated readout: Paid Watch-Party offers appear in Offers and verified room Seat Pass rows appear in Transactions.
+- Party Waiting Room checks paid-Seat Pass access before routing to Party Room.
 - Party Room blocks unpaid paid-room direct links before camera/mic permission startup after the v45 proof build.
-- Paid Watch-Party tickets unlock only the linked Party Waiting Room and Party Room. They do not include Premium, Tips, Paid Videos, VIP, Channel Subscriptions, Paid Events, Live Stage, payout access, or LiveKit authority.
+- Paid Watch-Party Seat Passes unlock only the linked Party Waiting Room and Party Room. They do not include Premium, Tips, Paid Videos, VIP, Channel Subscriptions, Paid Events, Live Stage, payout access, or LiveKit authority.
 - Historical room fixtures `XWAKVC`, `X75JHC`, `N3CXJD`, `ZT5MWV`, and `WNFUUF` were time-bound proof fixtures. Treat them as history only; use a current active room only if still active, otherwise create a fresh paid room and offer for proof.
-- v44 Play/internal proof passed real Google Play sandbox ticket purchase on room `ZT5MWV` / offer `143fdf4e-e235-4f98-81a4-e22194a8550a`: transaction `fff398a9-59f6-452a-81f7-1c8e7ad04e50`, active ticket `a2108d63-8b84-4dd1-8f60-ef485ce5efdc`, seat limit `1`, seats sold `1`, paid fan Party Room entry, and normal second-unpaid denial as sold out.
+- v44 Play/internal proof passed real Google Play sandbox Seat Pass purchase on room `ZT5MWV` / offer `143fdf4e-e235-4f98-81a4-e22194a8550a`: transaction `fff398a9-59f6-452a-81f7-1c8e7ad04e50`, active ticket `a2108d63-8b84-4dd1-8f60-ef485ce5efdc`, seat limit `1`, seats sold `1`, paid fan Party Room entry, and normal second-unpaid denial as sold out.
 - v45 Play/internal proof passed the direct-link fix and a fresh sandbox purchase on room `WNFUUF` / offer `ba02fbe7-97a7-4871-86f3-9ca62a141d76`: transaction `912a9d0a-3621-4070-826d-be2035856e47`, active ticket `8c2906da-8d02-43b2-afb9-9a7ba514fba2`, provider event `f768e840-3208-4251-ac84-95358987eb8b`, seat limit `1`, seats sold `1`, unpaid direct-link gate before permissions, and paid fan Party Room entry.
-- Money Center RPC readback passed for the paid room-ticket transaction as sandbox/not-payable and separate from Tips/Paid Videos/Premium; visual Money Center screenshot remains pending.
+- Money Center RPC readback passed for the paid room Seat Pass transaction as sandbox/not-payable and separate from Tips/Paid Videos/Premium; visual Money Center screenshot remains pending.
 - Remaining proof gaps: capture visual Money Center readback and provider refund/revoke if safe tooling allows.
 
 ## Paid Events V1 Follow-Up
@@ -84,7 +84,7 @@ Closeout audit: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md` now consol
 - Google Play product `channel_subscription_sandbox_monthly_499` has active monthly base plan `monthly`; RevenueCat product `channel_subscription_sandbox_monthly_499:monthly` is published and attached to entitlement `creator_channel_subscription`.
 - Money Center remains the consolidated setup/readout: creators can enable/pause one sandbox monthly Channel Subscription offer in Ways to Earn, offers appear in Offers, and verified subscription rows appear in Transactions.
 - Fan surface is the creator channel header/card with `Subscribe`; subscriber-only proof route is `/channel-subscription/[creatorId]`.
-- Channel Subscriptions unlock only subscriber state for that creator channel. They do not include Chi'llywood Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payout access, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators.
+- Channel Subscriptions unlock only subscriber state for that creator channel. They do not include Chi'llywood Premium, VIP, Paid Videos, Paid Watch-Party Seat Passes, Paid Events, Tips, LiveKit authority, payout access, cash-out, withdrawal, transfer, platform-wide badge/status, or other creators.
 - Remote migrations `20260612224536_channel_subscriptions_v1_sandbox.sql`, `20260613091417_channel_subscription_lifecycle_handling.sql`, and `20260613092100_channel_subscription_cancel_pending_unique.sql` are applied and `revenuecat-webhook` is redeployed.
 - Uncommitted v48 build `da86b3e9-145f-45a4-9f84-d713d906dc98` is abandoned for official proof because it points to old commit `9b2ae8e78958c3c38c08c7b3397104d2d35e1a0f`.
 - Official v49 build `67995a33-6b4c-4e0a-afa2-02f95cff47c1` installed on `R5CR120QCBF` with `installer=com.android.vending` and versionCode `49`; it proved creator setup, fan `Subscribe` CTA, and unsubscribed direct-route gate.
@@ -111,12 +111,12 @@ Closeout audit: `docs/CREATOR_MONETIZATION_SANDBOX_CLOSEOUT_AUDIT.md` now consol
 - The follow-up migration fixes the VIP metadata safe-key constraint so `livekit_authority=false` can be stored as an explicit negative marker while secrets, tokens, authorization, publish markers, host controls, admin power, and other LiveKit metadata remain blocked.
 - Money Center remains the setup/readout home: creators can enable/pause VIP Pass in Ways to Earn, offers appear in Offers, and verified VIP purchases appear in Transactions after provider proof.
 - Fan surface is the creator channel VIP card and `/vip-pass/[creatorId]` with `Get VIP` copy.
-- VIP unlocks only creator-specific VIP status/area for that creator. It does not include Chi'llywood Premium, Paid Videos, Paid Watch-Party tickets, Paid Events, Channel Subscriptions, Tips, LiveKit authority, room permissions, speaker/host privileges, payout access, platform-wide status, or other creators' channels.
+- VIP unlocks only creator-specific VIP status/area for that creator. It does not include Chi'llywood Premium, Paid Videos, Paid Watch-Party Seat Passes, Paid Events, Channel Subscriptions, Tips, LiveKit authority, room permissions, speaker/host privileges, payout access, platform-wide status, or other creators' channels.
 - Play/internal v52 build `96a2542d-1687-4de1-8ab5-1ec22e6660fd` / submission `9cae0461-801a-4bec-b0e8-148565a5ee41` installed from Google Play on `R5CR120QCBF` with installer `com.android.vending`.
 - Creator setup passed after the DB-only validator fix, with Money Center showing `Manage VIP Pass` / `Pause VIP Pass` and a persisted sandbox offer.
 - Non-owner fan gate passed: `/vip-pass/[creatorId]` showed `VIP ACCESS REQUIRED`, separation copy, and `Get VIP` without showing the VIP-only area.
 - Sandbox purchase passed on v52: provider event `1e81db62-4b17-45b1-8369-004302d41108` created VIP transaction `829f230f-7734-4fad-a88b-bd674c1daa8e`, active VIP pass `b19d3a26-1431-4033-bf70-5f3e5311e719`, and sandbox access grant `3b051689-7879-4e39-9712-efab1d1d783c`.
 - Authenticated second non-VIP denial passed with zero active VIP pass/grant rows.
 - Money Center Transactions visually showed the VIP row as `$4.99 VIP pass`, `Paid`, `Sandbox`, and `Payout status: not_payable`.
-- The VIP purchase did not create Tips, Paid Video grants, Paid Watch-Party tickets, Paid Event passes, Channel Subscription rows, Premium/user entitlement updates, LiveKit authority, or room permissions.
+- The VIP purchase did not create Tips, Paid Video grants, Paid Watch-Party Seat Passes, Paid Event passes, Channel Subscription rows, Premium/user entitlement updates, LiveKit authority, or room permissions.
 - Remaining proof gap: provider refund/revoke is deferred until a safe Google Play order id/tooling path exists; direct client active-VIP write-denial is optional hardening proof.

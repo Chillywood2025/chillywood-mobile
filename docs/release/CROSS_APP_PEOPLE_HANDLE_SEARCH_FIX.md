@@ -6,7 +6,7 @@ Current verdict: Partial.
 
 brand-spelling-policy is now clean. route-contracts guard is now clean. supabase db push --dry-run is now clean.
 
-This cleanup fixed pre-existing validation noise outside the product proof lane: generated legal-site brand anchors, local proof-script redaction regex source, Live Stage route guard drift, paid Watch-Party ticket callback scope drift, direct-chat migration timestamp drift, and six older local hardening migrations not yet applied remotely. No database reset, data drop, migration squash, production Play submission, provider/live-money mutation, Premium change, RLS weakening, auth weakening, chat/account-status permission weakening, logout, uninstall, reinstall, or clear-data happened. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. No service-role chat/social proof was counted. liveMoneyEnabled remains OFF.
+This cleanup fixed pre-existing validation noise outside the product proof lane: generated legal-site brand anchors, local proof-script redaction regex source, Live Stage route guard drift, paid Watch-Party Seat Pass callback scope drift, direct-chat migration timestamp drift, and six older local hardening migrations not yet applied remotely. No database reset, data drop, migration squash, production Play submission, provider/live-money mutation, Premium change, RLS weakening, auth weakening, chat/account-status permission weakening, logout, uninstall, reinstall, or clear-data happened. Source fixed is not installed-app proof. Google Play internal install is not enough without actual user flow proof. No service-role chat/social proof was counted. liveMoneyEnabled remains OFF.
 
 ## Chi’lly Chat delete/hide conversation
 

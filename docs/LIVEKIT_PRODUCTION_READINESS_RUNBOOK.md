@@ -426,9 +426,9 @@ D7F activation closeout:
 3. Remote migrations `202605120001` and `202605120002` are applied, and `spectator-playback` is deployed. The function must keep `verify_jwt=false` because public state/playlist reads are allowed only after internal eligibility checks; admin publish/sync/disable still require owner/operator bearer auth.
 4. Keep S3 access key and secret values server-side only. Do not put them in app config, mobile code, docs, screenshots, logs, or artifacts.
 5. Preserve the May 12 D7E proof as delivery-only truth. Do not rerun D7E unless storage, LiveKit Egress, or delivery domain config changes.
-6. Use admin/server publish or sync only for a `room_broadcast_sessions` row with an approved real HLS playlist, `d7f_public_safe_approved`, public-free access, rights-safe status, non-ticketed state, and no Premium full-room requirement.
+6. Use admin/server publish or sync only for a `room_broadcast_sessions` row with an approved real HLS playlist, `d7f_public_safe_approved`, public-free access, rights-safe status, non-paid state, and no Premium full-room requirement.
 7. Ensure D7F reads only backed public-safe HLS state and never mints full LiveKit participant tokens for spectators.
-8. Keep protected, title-rights-blocked, private, invite-only, ticketed, and Premium full-room flows blocked unless separately backed.
+8. Keep protected, title-rights-blocked, private, invite-only, paid, and Premium full-room flows blocked unless separately backed.
 9. May 12 D7F runtime proof passed: a fresh Android-published HLS object backed a temporary eligible public-safe row, state returned `available`, controlled playlist proxy returned `200` with `#EXTM3U`, controlled segment proxy returned `200` with `video/mp2t`, blocked states returned safe unavailable/forbidden-style states, temporary proof rows/access were cleaned up, and post-revoke operator proof returned `403 operator_required`.
 10. Keep app/public users on controlled `spectator-playback` URLs; do not show or log raw Hetzner HLS URLs.
 11. Keep `PUBLIC_HLS_BASE_URL` unset unless a future server-only lane explicitly needs it. The current D7F path does not require app clients to know that base.

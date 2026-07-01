@@ -17,7 +17,7 @@ Passed:
 - Signed provider event reached the deployed `revenuecat-webhook` path and was processed.
 - Server created an active channel subscription row, sandbox access grant, and paid/not-payable transaction.
 - Subscribed fan saw `SUBSCRIBED` and could access `/channel-subscription/[creatorId]`.
-- Subscription copy remained separate from Premium, VIP, Paid Videos, Paid Watch-Party tickets, Paid Events, Tips, LiveKit authority, payouts, and other creators' channels.
+- Subscription copy remained separate from Premium, VIP, Paid Videos, Paid Watch-Party Seat Passes, Paid Events, Tips, LiveKit authority, payouts, and other creators' channels.
 
 Follow-up proof passed:
 
@@ -88,7 +88,7 @@ It does not unlock:
 - Chi'llywood Premium
 - VIP
 - Paid Videos
-- Paid Watch-Party tickets
+- Paid Watch-Party Seat Passes
 - Paid Events
 - Tips
 - Live Stage access
@@ -185,7 +185,7 @@ App result:
 - Google Play sandbox subscription sheet opened for `$4.99/5 min`.
 - Google Play showed test subscription copy and did not charge real money.
 - After purchase, `/channel-subscription/[creatorId]` showed `SUBSCRIBED`.
-- The subscriber-only copy explicitly stated the subscription is for this creator channel only and does not unlock Premium, VIP, paid videos, paid Watch-Party tickets, paid events, LiveKit authority, payouts, or other creators' channels.
+- The subscriber-only copy explicitly stated the subscription is for this creator channel only and does not unlock Premium, VIP, paid videos, paid Watch-Party Seat Passes, paid events, LiveKit authority, payouts, or other creators' channels.
 
 ## Follow-Up Proof
 
@@ -202,7 +202,7 @@ Authenticated non-subscriber denial passed.
 
 - A signed-in app session without an active subscription opened `/channel-subscription/c2afa6cc-52f2-4714-b972-89863582d05a`.
 - The route showed `SUBSCRIBER ACCESS REQUIRED`, `Channel subscription`, and `Subscribe`.
-- The route copy kept Premium, VIP, paid videos, Watch-Party tickets, Paid Events, and other creator purchases separate.
+- The route copy kept Premium, VIP, paid videos, Watch-Party Seat Passes, Paid Events, and other creator purchases separate.
 - Supabase readback showed zero active subscription rows and zero active channel-subscription access grants for users other than subscriber `ee44e7aa-a9f7-40d0-baa6-45697f2b1cc5`.
 - Screenshot/XML: `/tmp/chillywood-channel-subscription-proof-v51-followup/01_current_user_subscriber_route.png` and `.xml`.
 
@@ -239,7 +239,7 @@ Implemented and deployed on June 13, 2026:
 - `EXPIRATION` marks the subscription expired, deactivates the channel-subscription access grant, updates `channel_subscribers`, and makes the subscriber-only route block after refresh.
 - `BILLING_ISSUE` moves the subscription to `grace_period` while an unexpired period exists, otherwise to `paused`, and keeps access only when the period remains valid.
 - `UNCANCELLATION` and `PRODUCT_CHANGE` restore/update active subscription state when provider entitlement remains active.
-- `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED` mark subscription/access inactive according to provider state and keep Money Center readback separate from Premium, Tips, Paid Videos, Paid Watch-Party tickets, Paid Events, and VIP.
+- `REFUND`, `REVOCATION`, and `SUBSCRIPTION_PAUSED` mark subscription/access inactive according to provider state and keep Money Center readback separate from Premium, Tips, Paid Videos, Paid Watch-Party Seat Passes, Paid Events, and VIP.
 - `cancel_pending` is allowed by the active-subscription resolver only until the provider period expires. Premium and VIP do not bypass the creator channel subscription gate.
 
 ## Prior Blockers Closed
@@ -264,7 +264,7 @@ Provider lifecycle proof:
 Effective access/readback safety:
 
 - Passed by code path and current-state readback: `app/channel/[userId].tsx` and `app/channel-subscription/[creatorId].tsx` both use `resolveChannelSubscriptionAccess`, backed by `resolve_creator_channel_subscription_access`.
-- That resolver only returns subscriber access when the subscription is in an active access state, has not expired, and is not revoked/expired. Premium, VIP, paid videos, paid Watch-Party tickets, Paid Events, and Tips do not satisfy the gate.
+- That resolver only returns subscriber access when the subscription is in an active access state, has not expired, and is not revoked/expired. Premium, VIP, paid videos, paid Watch-Party Seat Passes, Paid Events, and Tips do not satisfy the gate.
 - Money Center transaction rows now show expired provider periods as expired effective access and avoid claiming stale subscription rows are current active subscriber access.
 - Read-only Supabase proof after the Google Play refund attempt: subscription `436f2acc-ec46-4977-ba51-958452ea2f2e` still has raw `status=active`, but `current_period_end=2026-06-13 08:21:40.039+00`; access grant `1a5492fe-c135-435e-878c-5e21a7638322` has `status=sandbox_only` and `expires_at=2026-06-13 08:21:40.039+00`. The computed readback returned `subscription_effective_active=false` and `grant_effective_active=false`.
 

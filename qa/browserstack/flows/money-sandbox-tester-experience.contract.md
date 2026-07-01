@@ -42,7 +42,7 @@ Target: Android Play-installed internal tester build.
 7. Confirm the four-step checklist appears: Configure offers, Grant tester, Test flows, Revoke tester.
 8. Confirm the setup button exits `Setting up` into Ready, Partially Ready, Failed, or Timed out.
 9. Confirm each card shows Ready, Needs setup, or Blocked plus `Sandbox only · No payouts`.
-10. If Watch-Party Ticket is missing, confirm `Create a Party Room before testers can buy a ticket` and `money-sandbox-create-party-room-target-button`.
+10. If Watch-Party Seat Pass is missing, confirm `Create a Party Room before testers can buy a ticket` and `money-sandbox-create-party-room-target-button`.
 11. Confirm live payouts/cash-out/withdrawals remain unavailable.
 
 ## Tester Proof
@@ -54,7 +54,7 @@ Target: Android Play-installed internal tester build.
 5. Confirm sandbox offers appear only for tester-visible flows.
 6. Tap `tester-tip-creator-button`, confirm `tip-sheet`, then tap `tip-confirm-button`; confirm Google Play / RevenueCat sandbox tip starts and success says no money moved/no payout created.
 7. Open the public safe paid video and tap `tester-paid-video-unlock-button`.
-8. Open the Watch-Party ticket gate from `tester-watch-party-ticket-button` and tap `watch-party-ticket-purchase-button`, or confirm the public tester surface says the creator needs a Party Room target.
+8. Open the Watch-Party Seat Pass gate from `tester-watch-party-ticket-button` and tap `watch-party-ticket-purchase-button`, or confirm the public tester surface says the creator needs a Party Room target.
 9. Open the event pass route from `tester-event-pass-button` and tap `event-pass-purchase-button`.
 10. Tap `tester-channel-subscribe-button`; on Subscriber Area use `subscriber-area-subscribe-button` if purchase is still required, then confirm receipt-style copy says no money moved/no payout created.
 11. Tap `tester-vip-pass-button`; on VIP Area use `vip-area-get-vip-button` if purchase is still required, then confirm receipt-style copy says no money moved/no payout created.
@@ -78,7 +78,7 @@ Passed on Play-installed Android `R5CR120QCBF`:
 
 Fixture notes:
 
-- Watch-Party Ticket fixture room `W3JJHH` must be refreshed immediately before proof because active room freshness is intentionally limited.
+- Watch-Party Seat Pass fixture room `W3JJHH` must be refreshed immediately before proof because active room freshness is intentionally limited.
 - Paid Video proof uses playable fixture video `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`.
 - Do not use coordinate taps for these controls; selector taps were sufficient after the route fixes.
 
@@ -92,7 +92,7 @@ Passed on Play-installed Android `R5CR120QCBF`:
 
 - `tester-vip-pass-button`: first-time Google Play sandbox VIP purchase completed; app landed on VIP Area; backend readback showed creator-specific VIP only, not Premium, not payable, and no payout/LiveKit authority.
 - `tester-paid-video-unlock-button`: Google Play sandbox paid-video purchase completed; Player opened playable media for fixture `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`.
-- `tester-watch-party-ticket-button`: Google Play sandbox ticket purchase completed for offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` / room `W3JJHH`; app reached the room permission path. Camera/mic prompts were denied, so room media join and LiveKit publish authority are not claimed by this proof.
+- `tester-watch-party-ticket-button`: Google Play sandbox Seat Pass purchase completed for offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` / room `W3JJHH`; app reached the room permission path. Camera/mic prompts were denied, so room media join and LiveKit publish authority are not claimed by this proof.
 - `tester-event-pass-button`: Google Play sandbox event pass purchase completed for event `a9167135-d3cc-4349-bf8a-46dfd9068806`; app showed `Event pass confirmed`.
 - Revoke/security: resolver returned false, direct stale purchase intent returned `sandbox_monetization_tester_required`, and fresh restart hid sandbox CTAs.
 

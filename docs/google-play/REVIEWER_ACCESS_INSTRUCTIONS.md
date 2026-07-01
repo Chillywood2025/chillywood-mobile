@@ -45,10 +45,10 @@ Disabled/setup-only features:
 - Payouts are off.
 - Tips are off.
 - Paid creator content checkout/access is off.
-- Watch-Party tickets/seats are off unless a real Google Play/RevenueCat entitlement path is separately provided.
+- Watch-Party Seat Passes/seats are off unless a real Google Play/RevenueCat entitlement path is separately provided.
 - Ads are not active in the current app build unless the owner changes the release configuration later.
 - RevenueCat/Google provider proof is sandbox/test-only. Production Premium is not broadly live unless the owner confirms the uploaded build's public key, provider approval posture, Play licensed tester/product readiness, and an intentionally opened Premium purchase shell for the submitted test window.
-- Stripe Connect, where visible, is payout readiness/setup only. Stripe must not be used for Android in-app digital goods, Premium, paid creator content, Watch-Party tickets/seats, or any digital access unlock.
+- Stripe Connect, where visible, is payout readiness/setup only. Stripe must not be used for Android in-app digital goods, Premium, paid creator content, Watch-Party Seat Passes/seats, or any digital access unlock.
 - iOS is deferred.
 
 Support/legal:

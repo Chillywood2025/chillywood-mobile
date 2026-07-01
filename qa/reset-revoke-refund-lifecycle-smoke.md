@@ -15,7 +15,7 @@ This lane proves scoped cleanup. Provider refund lifecycle remains manual-assist
 - Creator subscription revoke: subscriber loses subscription-only access only.
 - VIP revoke: VIP loses VIP access only.
 - Paid video access revoke: viewer loses only that video access.
-- Ticket access revoke: viewer loses only that room/ticket access.
+- Seat Pass access revoke: viewer loses only that room/Seat Pass access.
 - Event pass revoke: viewer loses only that event access.
 
 ## Provider Lifecycle

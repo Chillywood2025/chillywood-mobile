@@ -4,7 +4,7 @@ Updated: June 4, 2026
 
 This document explains the bounded purchase mode for approved internal testers and the Owner/Admin controls around it. It does not activate production money.
 
-Creator setup flow addendum: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes `/creator-monetization-setup` for approved creators/internal testers. The screen saves real source UUIDs to approved sandbox tiers for paid content, Watch-Party tickets, Live access passes, Live seat passes, event passes, tips, and physical merch. It still uses the same internal tester gate, keeps public/default purchase surfaces closed, and cannot create payout execution, payable balances, production purchases, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin authority, fake sales, or safety bypass.
+Creator setup flow addendum: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes `/creator-monetization-setup` for approved creators/internal testers. The screen saves real source UUIDs to approved sandbox tiers for paid content, Watch-Party Seat Passes, Live access passes, Live seat passes, event passes, tips, and physical merch. It still uses the same internal tester gate, keeps public/default purchase surfaces closed, and cannot create payout execution, payable balances, production purchases, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin authority, fake sales, or safety bypass.
 
 Viewer/Admin QA addendum: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` confirms the internal tester route remains visible only as a sandbox/not-payable tester tool and that payout readiness is read-only. The same pass captured correct Admin denial for the non-admin tester account; Owner/Admin drilldown screenshots require an active Owner/Admin session.
 
@@ -105,7 +105,7 @@ Approved internal tester:
 The sandbox purchase launcher can start already-proved RevenueCat / Google Play sandbox products:
 
 - creator tip
-- Watch-Party Live ticket
+- Watch-Party Live Seat Pass
 - Live Watch-Party access pass
 - Live Watch-Party seat pass
 - paid content access

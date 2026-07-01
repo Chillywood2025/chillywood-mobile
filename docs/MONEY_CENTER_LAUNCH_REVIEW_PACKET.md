@@ -8,7 +8,7 @@ Canonical final truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
 Production policy operations readiness addendum: `docs/PRODUCTION_MONEY_POLICY_OPERATIONS_READINESS.md` and `docs/PRODUCTION_MONEY_READINESS_INDEX.md` prepare legal, tax, fraud/risk, support, refund/return, merch fulfillment, payout operations, and Owner/Admin approval-gate material for a future explicit production activation lane. These docs are drafts/readiness artifacts only. They do not activate production money, production merch checkout, payout execution, cash-out, withdrawal, transfer, payable balances, or Stripe Android digital checkout.
 
-Creator setup flow addendum: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes the creator-facing setup map. Approved creators/internal testers can configure sandbox paid content, Watch-Party tickets, Live access passes, Live seat passes, event passes, tips, and physical merch from in-app approved tiers only. Play-installed proof saved every setup row, and remote readback proves provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, merch readiness, and payout readiness read-only. These setup records do not activate public production purchases, payout execution, cash-out, withdrawal, transfer, payable balances, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin power, or safety bypass.
+Creator setup flow addendum: `docs/CREATOR_MONETIZATION_SETUP_COMPLETION_MATRIX.md` completes the creator-facing setup map. Approved creators/internal testers can configure sandbox paid content, Watch-Party Seat Passes, Live access passes, Live seat passes, event passes, tips, and physical merch from in-app approved tiers only. Play-installed proof saved every setup row, and remote readback proves provider events, consumed intents, access grants where appropriate, sandbox/not-payable ledger rows, merch readiness, and payout readiness read-only. These setup records do not activate public production purchases, payout execution, cash-out, withdrawal, transfer, payable balances, Stripe Android digital checkout, LiveKit publish, host/speaker/mod/admin power, or safety bypass.
 
 Viewer/Admin QA addendum: `docs/CREATOR_MONETIZATION_VIEWER_GATE_ADMIN_QA.md` captures the current Play-installed setup/tier/internal-sandbox/merch/payout-readiness screens and correct Admin denial for the non-admin tester. Sanitized remote readback proves the same drilldown data and safe counts, but fresh contextual viewer-gate screenshots and Owner/Admin UI drilldowns still require route-backed safe fixtures plus an active Owner/Admin app session.
 
@@ -29,7 +29,7 @@ Latest Stripe Connect payout-readiness proof: `docs/STRIPE_CONNECT_SANDBOX_PAYOU
 - Stripe Android digital checkout: absent.
 - Sandbox and setup ledger rows: not payable.
 - Creator balance: no verified payable earnings yet.
-- Premium, creator tips, Watch-Party Live tickets, Live Watch-Party access passes, Live Watch-Party seat passes, paid content access, and event passes have real Google Play / RevenueCat sandbox proof.
+- Premium, creator tips, Watch-Party Live Seat Passes, Live Watch-Party access passes, Live Watch-Party seat passes, paid content access, and event passes have real Google Play / RevenueCat sandbox proof.
 - Merch is physical goods separate; sandbox Stripe readiness is physical-only and does not create Android digital access.
 - Stripe Connect payout readiness is sandbox-only; onboarding may show pending KYC/verification but payouts are not active.
 - Payment creates access records only. Access records do not grant LiveKit publish permission, host power, speaker authority, moderator/admin power, payout access, or safety bypass.
@@ -40,7 +40,7 @@ Latest Stripe Connect payout-readiness proof: `docs/STRIPE_CONNECT_SANDBOX_PAYOU
 | --- | --- | --- | --- | --- | --- | --- |
 | Premium | Google Play / RevenueCat | Proved | `user_entitlements` remains strict source | Sandbox/setup not payable | Premium gates still win | Purchase shell closed by default |
 | Creator tip | Google Play / RevenueCat | Proved | None, correctly ledger-only | Sandbox only / Not payable | No room/content/Premium access | Not production-active |
-| Watch-Party Live ticket | Google Play / RevenueCat | Proved | `watch_party_live_ticket` | Sandbox only / Not payable | Viewer/listener only, `canPublish:false`, host approval wins | Not production-active |
+| Watch-Party Live Seat Pass | Google Play / RevenueCat | Proved | `watch_party_live_ticket` | Sandbox only / Not payable | Viewer/listener only, `canPublish:false`, host approval wins | Not production-active |
 | Live Watch-Party access pass | Google Play / RevenueCat | Proved | `live_watch_party_access_pass` | Sandbox only / Not payable | Viewer/listener only, no host/speaker/mod/admin | Not production-active |
 | Live Watch-Party seat pass | Google Play / RevenueCat | Proved | `live_watch_party_seat_pass` | Sandbox only / Not payable | Seat eligibility only, host approval required | Not production-active |
 | Paid content access | Google Play / RevenueCat | Proved | `paid_content_access` | Sandbox only / Not payable | Content safety/private/draft/deleted/malware states still win | Not production-active |
@@ -88,7 +88,7 @@ Remote-applied money migrations include:
 ## Failure Paths
 
 - Duplicate/idempotency: proved by remote readback and unique DB protections; duplicate provider/grant/ledger/payable rows were 0.
-- Admin revoke: proved on a sandbox Watch-Party ticket grant; resolver access became denied and the ledger row stayed sandbox/reversed, not payable.
+- Admin revoke: proved on a sandbox Watch-Party Seat Pass grant; resolver access became denied and the ledger row stayed sandbox/reversed, not payable.
 - Failed/expired intent: proved with a clearly labeled non-sale expired intent fixture; no provider event, grant, ledger, or payable money was created.
 - Real provider refund/revoke: remaining provider-tooling gap.
 - Real delayed-payment pending: remaining Google Play device/provider support gap.

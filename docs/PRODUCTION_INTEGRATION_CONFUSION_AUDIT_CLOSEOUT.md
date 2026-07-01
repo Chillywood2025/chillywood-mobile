@@ -15,7 +15,7 @@ Do not reopen these closed lanes without a new current regression:
 - Selected non-LiveKit closeout except explicitly documented noncanonical/out-of-scope items.
 - Chi'lly Chat non-media messaging and call-route proof.
 - Profile/Platform visibility gates and owner/viewer route behavior.
-- Seven-flow money app-side proof: Premium, Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass.
+- Seven-flow money app-side proof: Premium, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass.
 - Live Stage route/membership/authority and media proof.
 
 ## Deferred / Pending Proof

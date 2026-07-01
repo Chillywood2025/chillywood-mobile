@@ -6,7 +6,7 @@ Verdict: Source-Closed; installed-app proof Pending.
 
 ## Scope
 
-This lane integrates creator-money notifications and activity for the six creator monetization flows: Paid Video, Tips, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass.
+This lane integrates creator-money notifications and activity for the six creator monetization flows: Paid Video, Tips, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass.
 
 Creator-money notifications are backed by real notification records. Notifications guide users to routes; they do not grant access. Destination routes re-check access/grant/status. Buyer and creator notifications are separate. Money Center remains the creator business home. Chat remains conversation-only and is not the creator-money notification ledger.
 
@@ -48,7 +48,7 @@ Installed-app proof remains pending. Source/backend readiness is not installed-a
 ## Buyer Notification Result
 
 - Paid Video: `Video unlocked`, opens `/player/[id]`.
-- Watch-Party Ticket: `Seat Pass ready`, opens `/watch-party/[partyId]` and never Live Stage.
+- Watch-Party Seat Pass: `Seat Pass ready`, opens `/watch-party/[partyId]` and never Live Stage.
 - Channel Subscription: `Subscription active`, opens `/channel-subscription/[creatorId]`.
 - VIP: `VIP access active`, opens `/vip-pass/[creatorId]`.
 - Event Pass: `Event Pass active`, opens `/event/[eventId]`.
@@ -59,7 +59,7 @@ Each destination route remains responsible for access/grant/status re-checks.
 ## Creator Notification Result
 
 - Paid Video: `Paid video unlocked`, opens Money Center Transactions.
-- Watch-Party Ticket: `Seat Pass sold`, opens Money Center Transactions.
+- Watch-Party Seat Pass: `Seat Pass sold`, opens Money Center Transactions.
 - Channel Subscription: `New subscriber`, opens Money Center Transactions.
 - VIP: `New VIP member`, opens Money Center Transactions.
 - Event Pass: `Event Pass sold`, opens Money Center Transactions.
@@ -97,7 +97,7 @@ Android/Expo push dispatch is prepared behind real notification records, notific
 
 Notifications do not grant access. Notifications do not create payouts, transfers, withdrawals, payable balances, refunds, Premium entitlements, LiveKit authority, room host/speaker/moderator/admin authority, or creator cashout.
 
-Premium remains the app-wide subscription flow. Creator Channel Subscription remains creator-specific and does not route to `/subscribe`. Watch-Party Ticket routes to Party Waiting Room / Party Room, not Live Stage.
+Premium remains the app-wide subscription flow. Creator Channel Subscription remains creator-specific and does not route to `/subscribe`. Watch-Party Seat Pass routes to Party Waiting Room / Party Room, not Live Stage.
 
 ## Validation
 

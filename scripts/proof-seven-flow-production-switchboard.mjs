@@ -77,11 +77,11 @@ const flows = [
     rollback: "Set paid_content_enabled off; stop new unlocks; preserve existing access unless revoke/refund policy requires removal.",
   },
   {
-    label: "Watch-Party Ticket",
+    label: "Watch-Party Seat Pass",
     switchName: "watchPartyTicketEnabled",
     switchProof: "_lib/sevenFlowSwitchboard.ts",
     defaultState: "off",
-    offBehavior: "Ticket CTA unavailable; direct purchase intent blocked; no provider sheet opens.",
+    offBehavior: "Seat Pass CTA unavailable; direct purchase intent blocked; no provider sheet opens.",
     sandboxBehavior: "Sandbox ticket grant is exact Party Room target only; no LiveKit authority.",
     productionReadiness: "Blocked until production product mapping/provider approval and owner activation.",
     productId: "cw_watch_party_live_ticket_sandbox_099",

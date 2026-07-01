@@ -25,7 +25,7 @@ Chi'llywood has proved the sandbox rails for Android digital goods, Stripe physi
 
 ## Rail Separation
 
-Digital goods include Premium, creator tips, Watch-Party Live tickets, Live Watch-Party access passes, Live Watch-Party seat passes, paid content access, and event passes. On Android these remain Google Play and RevenueCat products. Physical goods are separate and use Stripe for merch checkout only. Payout readiness uses Stripe Connect to show onboarding, KYC, tax, and provider status without payout execution. These rails should not be blended in copy, routing, Admin controls, or support responses. A merch order cannot create digital access. A digital purchase cannot create payout rights. A payout readiness state cannot create a balance or transfer.
+Digital goods include Premium, creator tips, Watch-Party Live Seat Passes, Live Watch-Party access passes, Live Watch-Party seat passes, paid content access, and event passes. On Android these remain Google Play and RevenueCat products. Physical goods are separate and use Stripe for merch checkout only. Payout readiness uses Stripe Connect to show onboarding, KYC, tax, and provider status without payout execution. These rails should not be blended in copy, routing, Admin controls, or support responses. A merch order cannot create digital access. A digital purchase cannot create payout rights. A payout readiness state cannot create a balance or transfer.
 
 ## Future Activation Evidence
 

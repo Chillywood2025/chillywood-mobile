@@ -96,11 +96,11 @@ Codex may proceed only when the field value is already owner-approved, visible a
 | --- | --- | --- |
 | Tips product ID | `cw_creator_tip_099` | Only for Google Play one-time product creation; no activation. |
 | Paid Video product ID | `cw_paid_content_access_099` | Only for Google Play one-time product creation; no activation. |
-| Watch-Party Ticket product ID | `cw_watch_party_ticket_099` | Only for Google Play one-time product creation; no activation. |
+| Watch-Party Seat Pass product ID | `cw_watch_party_ticket_099` | Only for Google Play one-time product creation; no activation. |
 | Channel Subscription product ID | `cw_channel_subscription_monthly_499` | Already created as product record; base plan missing. |
 | VIP product ID | `cw_vip_pass_499` | Only for Google Play one-time product creation; no activation. |
 | Event Pass product ID | `cw_event_pass_099` | Only for Google Play one-time product creation; no activation. |
-| Display names | `Creator Tip`, `Paid Video Access`, `Watch-Party Ticket`, `Creator Channel Subscription`, `Creator VIP Pass`, `Creator Event Pass` | Public names are owner-approved; do not add `sandbox`, `test`, or `proof`. |
+| Display names | `Creator Tip`, `Paid Video Access`, `Watch-Party Seat Pass`, `Creator Channel Subscription`, `Creator VIP Pass`, `Creator Event Pass` | Public names are owner-approved; do not add `sandbox`, `test`, or `proof`. |
 | Short descriptions | Owner-approved text in flow sections below | Public descriptions are owner-approved; do not add payout or Premium claims. |
 | Starting prices | `$0.99`, `$4.99`, `$4.99/month` | Launch defaults only; future custom pricing must be provider-backed/fail-closed. |
 | One-time purchase-option IDs | Owner-approved IDs `tip-099`, `paid-video-099`, `ticket-099`, `vip-499`, and `event-099` were accepted in Google Play Draft setup | No further action unless owner changes product IDs or activation timing. |
@@ -199,7 +199,7 @@ Import only after Google Play product exists. Current architecture may use direc
 
 Provider refunds remain manual/external. No instant refund promise. Support path covers access never worked, content removed before meaningful use, DMCA/removal, or platform fault. Revokes are exact-target. Creator sees not-payable / payouts off. Viewer sees this-video-only copy when available and safe unavailable copy while OFF.
 
-### Watch-Party Ticket
+### Watch-Party Seat Pass
 
 #### Product Classification
 
@@ -207,7 +207,7 @@ Provider refunds remain manual/external. No instant refund promise. Support path
 - One-time or subscription: one-time product.
 - Repeat-purchasable: no for same ticket target unless owner creates a separate provider-backed ticket/offer.
 - Scope: exact in-app Watch-Party room/ticket target.
-- Unlocks content/access: yes, one ticketed room only.
+- Unlocks content/access: yes, one paid room only.
 - Creates payout/payable balance now: no.
 - Provider rail: Google Play / RevenueCat.
 - Stripe separation: Stripe is not used because this is an Android digital in-app access ticket, not physical/external ticketing.
@@ -218,8 +218,8 @@ Provider refunds remain manual/external. No instant refund promise. Support path
 | --- | --- | --- | --- | --- |
 | Product ID | `cw_watch_party_ticket_099` | Yes | No | Immutable. |
 | Product type | One-time product | Yes | No | Owner-approved. |
-| Product name | `Watch-Party Ticket` | Yes | No | Public. |
-| Short description | `Unlock access to one ticketed Watch-Party room.` | Yes | No | Public. |
+| Product name | `Watch-Party Seat Pass` | Yes | No | Public. |
+| Short description | `Unlock access to one paid Watch-Party room.` | Yes | No | Public. |
 | Icon/graphic | Existing shared app/product icon | Yes if accepted | No for existing icon; yes for new asset | Public. |
 | Purchase option | Exact-access one-time product | Stop before final save until owner approves exact provider `Purchase option ID` and any provider-specific choice | Yes for final provider-specific option | Must not grant LiveKit authority. |
 | Consumable vs non-consumable | Use existing app architecture; stop if explicit provider choice is uncertain | No if uncertain | Yes if explicit | Exact room grant remains backend source. |
@@ -276,7 +276,7 @@ Provider refunds remain manual/external. Support path covers room ended/failed/n
 
 #### Recommended Compliance Stance
 
-Classify as a recurring digital subscription to one creator's subscriber area. It must clearly disclose `$4.99/month`, monthly billing frequency, cancellation/manage path, and creator-specific scope. It does not unlock Premium, other creators, VIP, paid videos, room tickets, event passes, payout rights, or payable creator balances. Owner must approve any grace period, renewal mode, base-plan setting, tax category, or offer setting not already standardized by Google Play defaults.
+Classify as a recurring digital subscription to one creator's subscriber area. It must clearly disclose `$4.99/month`, monthly billing frequency, cancellation/manage path, and creator-specific scope. It does not unlock Premium, other creators, VIP, paid videos, room Seat Passs, event passes, payout rights, or payable creator balances. Owner must approve any grace period, renewal mode, base-plan setting, tax category, or offer setting not already standardized by Google Play defaults.
 
 #### RevenueCat Compliance Mapping
 
@@ -378,7 +378,7 @@ Provider refunds remain manual/external. Support path covers canceled, reschedul
 | --- | --- | --- | --- | --- | --- | --- |
 | Tips | Imported as RevenueCat Draft consumable | No entitlement required unless owner chooses package for presentation | Required later before activation | Required later before activation | Yes, receipt/support readback only | Product ID, package if used, no entitlement, no Premium. |
 | Paid Video | Imported as RevenueCat Draft consumable | No entitlement required; backend exact grant remains access source | Required later before activation | Required later before activation | Yes | Product ID, exact target grant path, no Premium. |
-| Watch-Party Ticket | Imported as RevenueCat Draft consumable | No entitlement required; backend exact room grant remains access source | Required later before activation | Required later before activation | Yes | Product ID, no LiveKit authority, no Premium. |
+| Watch-Party Seat Pass | Imported as RevenueCat Draft consumable | No entitlement required; backend exact room grant remains access source | Required later before activation | Required later before activation | Yes | Product ID, no LiveKit authority, no Premium. |
 | Channel Subscription | Blocked until Google Play base plan exists | Map only to `creator_channel_subscription`; package/offering only if architecture requires | Required | Required | Yes, if entitlement/readback remains creator-specific | Product/base plan ID `cw_channel_subscription_monthly_499:monthly`, entitlement safe. |
 | VIP | Imported as RevenueCat Draft consumable | No entitlement required unless owner chooses package for presentation | Required later before activation | Required later before activation | Yes | Product ID, exact creator access, no Premium. |
 | Event Pass | Imported as RevenueCat Draft consumable | No entitlement required; backend exact event grant remains access source | Required later before activation | Required later before activation | Yes | Product ID, exact event access, no Premium. |
@@ -389,7 +389,7 @@ Provider refunds remain manual/external. Support path covers canceled, reschedul
 | --- | --- | --- | --- | --- | --- | --- |
 | Tips | Accidental/duplicate/unauthorized/platform-fault support | Manual/external provider review only | Provider/store dispute handled externally | No access revoke; receipt/readback only | Payouts not live; not payable | Tip disabled/unavailable; tips unlock nothing. |
 | Paid Video | Missing access, content unavailable, DMCA/removal, platform fault | Manual/external provider review only | Support verifies video id, intent, provider event, grant | Exact video revoke/lock only | Sales not payable | Paywall disabled/unavailable. |
-| Watch-Party Ticket | Room ended/failed/no-show/platform fault | Manual/external provider review only | Support verifies room id, offer, ticket/grant | Exact room revoke/lock only | Ticket rows not payable | Ticket disabled/unavailable; no provider sheet. |
+| Watch-Party Seat Pass | Room ended/failed/no-show/platform fault | Manual/external provider review only | Support verifies room id, offer, ticket/grant | Exact room revoke/lock only | Seat Pass rows not payable | Ticket disabled/unavailable; no provider sheet. |
 | Channel Subscription | Missing entitlement, cancellation/expiration, creator inactivity | Manual/external provider review only | Support verifies provider period, subscription row, effective access | Exact creator subscription lifecycle/revoke | Subscription rows not payable | Subscribe disabled/unavailable. |
 | VIP | Missing VIP, unavailable perks, misrepresentation, platform fault | Manual/external provider review only | Support verifies creator id, provider event, VIP pass/grant | Exact creator VIP revoke only | VIP sales not payable | VIP disabled/unavailable. |
 | Event Pass | Canceled/rescheduled/ended/unavailable/platform fault | Manual/external provider review only | Support verifies event id, pass/grant, provider event | Exact event revoke/expiration only | Event pass rows not payable | Event pass disabled/unavailable. |
@@ -409,10 +409,10 @@ Stripe is reserved for future creator payouts and physical merch. No Android dig
 
 ## Owner Action List
 
-1. If the owner wants product-specific Age rating assigned, choose the product age/content rating for each one-time product, or approve one shared rating for Tips, Paid Video, Watch-Party Ticket, VIP, and Event Pass. Browser execution showed this field did not block moving to pricing when left unselected.
+1. If the owner wants product-specific Age rating assigned, choose the product age/content rating for each one-time product, or approve one shared rating for Tips, Paid Video, Watch-Party Seat Pass, VIP, and Event Pass. Browser execution showed this field did not block moving to pricing when left unselected.
 2. Confirm that `Digital app sales` is the correct Google Play product tax category for all six digital creator-money products, and confirm whether the existing `Service` policy setting on the subscription is correct.
 3. Keep the Google Play Draft purchase options inactive until owner activation/proof. The approved IDs are `tip-099`, `paid-video-099`, `ticket-099`, `vip-499`, and `event-099`.
-4. Confirm whether Paid Video, Watch-Party Ticket, Event Pass, and VIP should be consumed after backend exact-target grant or treated as non-consumable/owned access in Google Play/RevenueCat where provider setup asks explicitly.
+4. Confirm whether Paid Video, Watch-Party Seat Pass, Event Pass, and VIP should be consumed after backend exact-target grant or treated as non-consumable/owned access in Google Play/RevenueCat where provider setup asks explicitly.
 5. Keep exact United States-only country/region scoping before any product/base plan save.
 6. Create the five Google Play one-time products only after valid purchase-option IDs are approved.
 7. Resolve the Google Play Base plan ID validation blocker for `cw_channel_subscription_monthly_499`; do not retry Save until the provider form accepts the approved `monthly` value or the owner approves a replacement base-plan ID/provider action.

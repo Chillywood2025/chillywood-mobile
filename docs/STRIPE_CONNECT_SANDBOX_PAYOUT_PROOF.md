@@ -8,7 +8,7 @@ Canonical final money truth: `docs/MONETIZATION_STACK_FINAL_TRUTH.md`.
 
 ## Scope
 
-Stripe Connect is used only for creator payout readiness. It is not an Android digital-goods rail and does not replace Google Play / RevenueCat for Premium, paid content, Watch-Party tickets, Live access, seats, tips, or event passes.
+Stripe Connect is used only for creator payout readiness. It is not an Android digital-goods rail and does not replace Google Play / RevenueCat for Premium, paid content, Watch-Party Seat Passes, Live access, seats, tips, or event passes.
 
 ## Runtime Proof
 

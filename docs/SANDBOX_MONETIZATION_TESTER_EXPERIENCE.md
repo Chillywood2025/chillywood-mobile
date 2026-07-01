@@ -11,11 +11,11 @@ Owner Money Center includes `Sandbox Tester Experience`.
 - The owner surface now uses product states instead of backend diagnostics: `Sandbox Testing`, `Live Money: Off`, `Payouts: Off`, `Flow readiness`, and `Next step`.
 - A compact safety banner says `Test mode - no payouts` with `No real charges. No creator earnings. No withdrawals.`
 - The owner checklist is four steps: configure offers, grant tester, test flows, revoke tester.
-- `Set up sandbox offers` creates or updates test-only offers for Tips, Paid Video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass.
+- `Set up sandbox offers` creates or updates test-only offers for Tips, Paid Video, Watch-Party Seat Pass, Event Pass, Channel Subscription, and VIP Pass.
 - `Refresh status` reloads offer status, tester status, and transaction/readback rows.
 - Setup has deterministic states: idle, setting up, complete, partial, failed, and timed out. The button cannot spin forever.
 - Setup is idempotent and keeps rows sandbox-only, not payable, production off, and payout off.
-- Watch-Party tickets require an existing valid creator-owned Party Room target; setup reports a blocker instead of creating invalid rows.
+- Watch-Party Seat Passes require an existing valid creator-owned Party Room target; setup reports a blocker instead of creating invalid rows.
 - Paid Video requires an existing public/safe creator video; setup reports a blocker instead of faking a video.
 
 Owner cards use these launch-facing meanings:
@@ -25,14 +25,14 @@ Owner cards use these launch-facing meanings:
 - `Blocked`: a required creator asset is missing, such as a Party Room target or public video.
 - `Tester visible`: configured sandbox offer is available to active sandbox testers.
 
-The Watch-Party Ticket missing state must say `Create a Party Room before testers can buy a ticket` and provide a `Create Party Room target` action. Provider/debug detail belongs behind Advanced provider details, not the primary creator UX.
+The Watch-Party Seat Pass missing state must say `Create a Party Room before testers can buy a ticket` and provide a `Create Party Room target` action. Provider/debug detail belongs behind Advanced provider details, not the primary creator UX.
 
 ## Tester Surface
 
 Active non-owner sandbox testers see creator purchase tests inside the public Platform `Support this Platform` section. Owner mode uses `Creator Offers` instead and must not show owner self-purchase CTAs.
 
 - Subtitle/copy: `Sandbox only. No real money moves.`
-- Tester actions cover Tip creator, Paid video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass when those flows are configured and available.
+- Tester actions cover Tip creator, Paid video, Watch-Party Seat Pass, Event Pass, Channel Subscription, and VIP Pass when those flows are configured and available.
 - Missing flows show an unavailable state with the exact creator action, not a broken purchase button.
 - Channel Subscription copy says it is a creator Platform subscription test and not Chi'llywood Premium.
 - VIP copy says it is creator-specific and does not unlock Premium or other creators.
@@ -67,7 +67,7 @@ Scripts require local `SUPABASE_SERVICE_ROLE_KEY` and never print the key.
 | --- | --- | --- | --- |
 | Tips | Sandbox tip sheet | Google Play / RevenueCat | No |
 | Paid Video | Sandbox unlock CTA | Google Play / RevenueCat | No |
-| Watch-Party Ticket | Sandbox ticket CTA | Google Play / RevenueCat | No |
+| Watch-Party Seat Pass | Sandbox Seat Pass CTA | Google Play / RevenueCat | No |
 | Event Pass | Sandbox event pass CTA | Google Play / RevenueCat | No |
 | Channel Subscription | Sandbox creator-channel subscription CTA | Google Play / RevenueCat | No |
 | VIP Pass | Sandbox creator-specific VIP CTA | Google Play / RevenueCat | No |
@@ -81,7 +81,7 @@ Route separation remains part of the proof contract:
 - VIP is creator-specific VIP only.
 - Tips are contribution-only and unlock no access.
 - Paid Video unlocks one video only.
-- Watch-Party Ticket unlocks one Party Room / Watch-Party target only.
+- Watch-Party Seat Pass unlocks one Party Room / Watch-Party target only.
 - Event Pass unlocks one event only.
 
 ## Safety
@@ -94,7 +94,7 @@ Route separation remains part of the proof contract:
 - Tips do not unlock content, badges, rooms, subscriptions, VIP, events, or other perks.
 - VIP is creator-specific and does not unlock Premium or other creators.
 - Channel subscription is creator-channel-specific and is not Chi'llywood Premium.
-- Paid video, event pass, and Watch-Party ticket access remain bound to their own safe target.
+- Paid video, event pass, and Watch-Party Seat Pass access remain bound to their own safe target.
 
 ## Production Proof: June 16, 2026
 
@@ -111,7 +111,7 @@ Production-safe readback used proof accounts only:
 
 Result:
 
-- Owner setup produced all six sandbox configs: Tips, Paid Video, Watch-Party Ticket, Event Pass, Channel Subscription, and VIP Pass.
+- Owner setup produced all six sandbox configs: Tips, Paid Video, Watch-Party Seat Pass, Event Pass, Channel Subscription, and VIP Pass.
 - The tester resolver returned active while the tester row was active.
 - The tester could start six sandbox purchase intents, all `environment=sandbox`, `status=pending`, and not payable.
 - Config readback showed `environment=sandbox`, `payable_state=not_payable`, `production_enabled=false`, `payout_enabled=false`, and no LiveKit publish/host authority.
@@ -168,7 +168,7 @@ Result:
 
 - Tips: passed through Google Play sandbox and showed `Sandbox tip complete. No money moved. No payout created.`
 - Paid Video: passed after replacing the dead proof video with playable fixture `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`; Player opened a playable 9:56 video after unlock.
-- Watch-Party Ticket: passed after adding the public tester CTA, routing it to `/watch-party/[partyId]`, and fixing the ticket-owned route hook-order crash. Ticket offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` targets room `W3JJHH`.
+- Watch-Party Seat Pass: passed after adding the public tester CTA, routing it to `/watch-party/[partyId]`, and fixing the ticket-owned route hook-order crash. Ticket offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` targets room `W3JJHH`.
 - Event Pass: passed with event `a9167135-d3cc-4349-bf8a-46dfd9068806`; Google Play sandbox completed and the event screen showed `Event pass confirmed`.
 - Channel Subscription: passed through Google Play sandbox and showed creator-channel subscription only, not Premium.
 - VIP: CTA is wired and reaches Google Play. The June 16 first-time blocker was later closed in the June 20 provider ownership reset proof below.
@@ -205,7 +205,7 @@ Device: `R5CR120QCBF` / `SM-N986U1`, Play-installed `com.chillywood.mobile`, ins
 Result:
 
 - Paid Video passed with selector `tester-paid-video-unlock-button`. Google Play sandbox purchase completed for `paid_content_access_sandbox_099`, backend readback stayed sandbox/not-payable/no-payout, and Player opened playable 9:56 media for fixture video `f8ef0e22-14f0-4ff7-a838-f133f11a1d20`.
-- Watch-Party Ticket passed with selector `tester-watch-party-ticket-button`. Offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` targets room `W3JJHH`; Google Play sandbox purchase completed, ticket access was granted, and the app reached the room permission path. Camera/mic permissions were denied, so no LiveKit media join or room publish authority is claimed from this proof.
+- Watch-Party Seat Pass passed with selector `tester-watch-party-ticket-button`. Offer `290bf6f9-67ec-4073-8b88-32a1b167bb9e` targets room `W3JJHH`; Google Play sandbox purchase completed, Seat Pass access was granted, and the app reached the room permission path. Camera/mic permissions were denied, so no LiveKit media join or room publish authority is claimed from this proof.
 - Event Pass passed with selector `tester-event-pass-button`. Event `a9167135-d3cc-4349-bf8a-46dfd9068806` showed scheduled pass copy, Google Play sandbox purchase completed, and the app showed `Event pass confirmed`.
 - Regression readback kept Tips, Channel Subscription, and VIP in sandbox/not-payable/no-payout states from accepted proofs.
 - Revoke passed again: resolver returned false, direct stale purchase intent returned `sandbox_monetization_tester_required`, and fresh app restart hid sandbox CTAs.
@@ -221,7 +221,7 @@ Closed flows:
 1. Premium
 2. Tips
 3. Paid Video
-4. Watch-Party Ticket
+4. Watch-Party Seat Pass
 5. Channel Subscription
 6. VIP
 7. Event Pass
@@ -238,7 +238,7 @@ Proof folders:
 Result:
 
 - App-side proof used a Play-installed Android app with installer `com.android.vending`.
-- Watch-Party Ticket purchase/readback closed: a real Google Play sandbox purchase completed, the purchase intent was consumed, exact-target Party Room access was granted, same-target entry worked, and no Premium/global unlock, other-room unlock, LiveKit/host/speaker/moderator authority, payout, live-money, or payable balance was created.
+- Watch-Party Seat Pass purchase/readback closed: a real Google Play sandbox purchase completed, the purchase intent was consumed, exact-target Party Room access was granted, same-target entry worked, and no Premium/global unlock, other-room unlock, LiveKit/host/speaker/moderator authority, payout, live-money, or payable balance was created.
 - VIP first-purchase proof closed: the exact Google Play sandbox VIP order was refunded/reset with entitlement removed, `You already own this item` cleared, a fresh Google Play sandbox VIP purchase completed, backend readback created creator-specific VIP access only, Premium stayed expired/ungranted, and no other creator VIP grant was created.
 - Provider ownership caveat is closed.
 

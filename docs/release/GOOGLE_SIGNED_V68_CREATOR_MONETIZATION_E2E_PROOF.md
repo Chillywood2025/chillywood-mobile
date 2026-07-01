@@ -12,7 +12,7 @@ No logout, uninstall, reinstall, or clear-data happened. No auth/RLS/money permi
 
 ## Passing Results
 
-Installed v68 passed Money Center entry, `/creator-monetization-setup` compatibility route, Paid Video viewer gate, Watch-Party Ticket viewer gate, Channel Subscription viewer gate, VIP viewer gate, Event Pass creator/viewer, Cashout/Payout readiness, Premium separation, `liveMoneyEnabled` OFF, payouts OFF, cashout OFF, and no provider/live-money mutation.
+Installed v68 passed Money Center entry, `/creator-monetization-setup` compatibility route, Paid Video viewer gate, Watch-Party Seat Pass viewer gate, Channel Subscription viewer gate, VIP viewer gate, Event Pass creator/viewer, Cashout/Payout readiness, Premium separation, `liveMoneyEnabled` OFF, payouts OFF, cashout OFF, and no provider/live-money mutation.
 
 Money Center remains the single creator monetization home. `/creator-monetization-setup` is compatibility-only and lands in Money Center Offers setup. Cashout readiness is reachable, but real cashout is not live. Premium remains the app-wide subscription flow.
 

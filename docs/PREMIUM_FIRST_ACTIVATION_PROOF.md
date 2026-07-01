@@ -68,7 +68,7 @@ Shared blocker note: `docs/GOOGLE_PLAY_SUBSCRIPTION_BASE_PLAN_ESCALATION.md` doc
 | --- | --- | --- | --- | --- |
 | Tips | Google Play Draft `cw_creator_tip_099`; RevenueCat Draft consumable. | `tipsEnabled=false`; `tips_enabled=off`; `live_money_enabled=off`. | Not attached to `premium`. | OFF |
 | Paid Video | Google Play Draft `cw_paid_content_access_099`; RevenueCat Draft consumable. | `paidContentCheckoutEnabled=false`; `paid_content_enabled=off`; `live_money_enabled=off`. | Not attached to `premium`. | OFF |
-| Watch-Party Ticket | Google Play Draft `cw_watch_party_ticket_099`; RevenueCat Draft consumable. | `watch_party_tickets_enabled=off`; `live_money_enabled=off`. | Not attached to `premium`. | OFF |
+| Watch-Party Seat Pass | Google Play Draft `cw_watch_party_ticket_099`; RevenueCat Draft consumable. | `watch_party_tickets_enabled=off`; `live_money_enabled=off`. | Not attached to `premium`. | OFF |
 | Channel Subscription | Google Play product `cw_channel_subscription_monthly_499` exists; monthly base plan missing. | `channelSubscriptionEnabled=false`; `digital_sales_enabled=off`; `live_money_enabled=off`. | Separate entitlement `creator_channel_subscription`; no Premium mapping. | OFF / provider-blocked |
 | VIP | Google Play Draft `cw_vip_pass_499`; RevenueCat Draft consumable. | `vipEnabled=false`; `digital_sales_enabled=off`; `live_money_enabled=off`. | Not attached to `premium`. | OFF |
 | Event Pass | Google Play Draft `cw_event_pass_099`; RevenueCat Draft consumable. | `eventPassEnabled=false`; `digital_sales_enabled=off`; `live_money_enabled=off`. | Not attached to `premium`. | OFF |

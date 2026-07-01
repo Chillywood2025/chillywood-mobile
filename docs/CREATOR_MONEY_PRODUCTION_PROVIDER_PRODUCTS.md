@@ -62,7 +62,7 @@ No private dashboard screenshots, provider secrets, customer data, account ident
 | --- | --- | --- | --- | --- | --- | --- |
 | Tips | `cw_creator_tip_sandbox_099` | `cw_creator_tip_099` | One-time product / consumable-style support; `$0.99`, United States only first | Created as Draft with `tip-099` | Imported as Draft consumable; no entitlement | OFF |
 | Paid Video | `cw_paid_content_access_sandbox_099` | `cw_paid_content_access_099` | One-time product / consumable-style exact-access grant; `$0.99`, United States only first | Created as Draft with `paid-video-099` | Imported as Draft consumable; no entitlement | OFF |
-| Watch-Party Ticket | `cw_watch_party_live_ticket_sandbox_099` | `cw_watch_party_ticket_099` | One-time product; `$0.99`, United States only first | Created as Draft with `ticket-099` | Imported as Draft consumable; no entitlement | OFF |
+| Watch-Party Seat Pass | `cw_watch_party_live_ticket_sandbox_099` | `cw_watch_party_ticket_099` | One-time product; `$0.99`, United States only first | Created as Draft with `ticket-099` | Imported as Draft consumable; no entitlement | OFF |
 | Channel Subscription | `channel_subscription_sandbox_monthly_499:monthly` | `cw_channel_subscription_monthly_499` + base plan `monthly` | Subscription; `$4.99/month`, United States only first | Product record exists; Base plan ID field invalid before Save on stale and clean forms | Blocked until Google Play base plan exists | OFF |
 | VIP | `cw_vip_pass_sandbox_499` | `cw_vip_pass_499` | One-time product / consumable-style exact creator grant; `$4.99`, United States only first | Created as Draft with `vip-499` | Imported as Draft consumable; no entitlement | OFF |
 | Event Pass | `cw_event_pass_sandbox_099` | `cw_event_pass_099` | One-time product; `$0.99`, United States only first | Created as Draft with `event-099` | Imported as Draft consumable; no entitlement | OFF |
@@ -85,7 +85,7 @@ Stripe was not used for Android digital products. Stripe payout and merch prep r
 | --- | --- | --- | --- | --- |
 | Tips | `cw_creator_tip_099` | `tip-099` | Valid: accepted in Google Play Draft setup. | Created as Draft |
 | Paid Video | `cw_paid_content_access_099` | `paid-video-099` | Valid: accepted in Google Play Draft setup. | Created as Draft |
-| Watch-Party Ticket | `cw_watch_party_ticket_099` | `ticket-099` | Valid: accepted in Google Play Draft setup. | Created as Draft |
+| Watch-Party Seat Pass | `cw_watch_party_ticket_099` | `ticket-099` | Valid: accepted in Google Play Draft setup. | Created as Draft |
 | VIP | `cw_vip_pass_499` | `vip-499` | Valid: accepted in Google Play Draft setup. | Created as Draft |
 | Event Pass | `cw_event_pass_099` | `event-099` | Valid: accepted in Google Play Draft setup. | Created as Draft |
 
@@ -147,16 +147,16 @@ Owner action: keep these Draft purchase options inactive until owner activation 
 - Activation status: OFF.
 - Owner action needed: keep Draft/off, verify no Premium entitlement remains attached, then approve a separate exact-video activation smoke before any switch changes.
 
-### Watch-Party Ticket
+### Watch-Party Seat Pass
 
 - Old sandbox-labeled product ID: `cw_watch_party_live_ticket_sandbox_099`.
 - New production product ID: `cw_watch_party_ticket_099`.
 - Intended type: one-time product.
-- Display name: `Watch-Party Ticket`.
-- Short description: `Unlock access to one ticketed Watch-Party room.`
+- Display name: `Watch-Party Seat Pass`.
+- Short description: `Unlock access to one paid Watch-Party room.`
 - Starting price: `$0.99`.
 - Region: United States only first.
-- RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-room ticket/grant remains access source.
+- RevenueCat mapping requirement: import Google Play product; no Premium entitlement; backend exact-room Seat Pass/grant remains access source.
 - App switch: `watchPartyTicketEnabled`; backend `watch_party_tickets_enabled`.
 - Access created: exact room/ticket target only.
 - Access not created: Premium, other rooms, LiveKit publish/host/mod, VIP, subscription, payout.
@@ -218,7 +218,7 @@ Owner action: keep these Draft purchase options inactive until owner activation 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Tips | `cw_creator_tip_099` | One-time product | `Creator Tip` | Not applicable | `$0.99` | United States only first | Created as Draft with `tip-099`; not activated | Later owner activation/proof; keep app switch OFF. |
 | Paid Video | `cw_paid_content_access_099` | One-time product | `Paid Video Access` | Not applicable | `$0.99` | United States only first | Created as Draft with `paid-video-099`; not activated | Later owner activation/proof; keep app switch OFF. |
-| Watch-Party Ticket | `cw_watch_party_ticket_099` | One-time product | `Watch-Party Ticket` | Not applicable | `$0.99` | United States only first | Created as Draft with `ticket-099`; not activated | Later owner activation/proof; keep app switch OFF. |
+| Watch-Party Seat Pass | `cw_watch_party_ticket_099` | One-time product | `Watch-Party Seat Pass` | Not applicable | `$0.99` | United States only first | Created as Draft with `ticket-099`; not activated | Later owner activation/proof; keep app switch OFF. |
 | Channel Subscription | `cw_channel_subscription_monthly_499` | Subscription | `Creator Channel Subscription` | `monthly` missing | `$4.99/month` | United States only first | Product record exists; Base plan ID field invalid before Save on stale and clean forms | Resolve Google Play provider UI/state validation blocker; do not activate public purchase flow until owner proof. |
 | VIP | `cw_vip_pass_499` | One-time product | `Creator VIP Pass` | Not applicable | `$4.99` | United States only first | Created as Draft with `vip-499`; not activated | Later owner activation/proof; keep app switch OFF. |
 | Event Pass | `cw_event_pass_099` | One-time product | `Creator Event Pass` | Not applicable | `$0.99` | United States only first | Created as Draft with `event-099`; not activated | Later owner activation/proof; keep app switch OFF. |
@@ -229,7 +229,7 @@ Owner action: keep these Draft purchase options inactive until owner activation 
 | --- | --- | --- | --- | --- | --- |
 | Tips | `cw_creator_tip_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Imported as Draft consumable; no entitlement attached | Later owner activation/proof; verify no Premium entitlement remains attached. |
 | Paid Video | `cw_paid_content_access_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Imported as Draft consumable; no entitlement attached | Later owner activation/proof; verify no Premium entitlement remains attached. |
-| Watch-Party Ticket | `cw_watch_party_ticket_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Imported as Draft consumable; no entitlement attached | Later owner activation/proof; verify no Premium entitlement remains attached. |
+| Watch-Party Seat Pass | `cw_watch_party_ticket_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Imported as Draft consumable; no entitlement attached | Later owner activation/proof; verify no Premium entitlement remains attached. |
 | Channel Subscription | `cw_channel_subscription_monthly_499:monthly` | `creator_channel_subscription` | Not applicable for current direct product fallback unless owner requires package | Blocked until Google Play base plan exists | Import after Google Play subscription/base plan exists; attach only to creator-channel entitlement; do not attach to Premium. |
 | VIP | `cw_vip_pass_499` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Imported as Draft consumable; no entitlement attached | Later owner activation/proof; verify no Premium entitlement remains attached. |
 | Event Pass | `cw_event_pass_099` | Not applicable | Not applicable for current direct product flow unless owner chooses package | Imported as Draft consumable; no entitlement attached | Later owner activation/proof; verify no Premium entitlement remains attached. |
@@ -240,7 +240,7 @@ Owner action: keep these Draft purchase options inactive until owner activation 
 | --- | --- | --- | --- | --- |
 | Tips | Yes | Yes | Sandbox ID remains current proof config | OFF |
 | Paid Video | Yes | Yes | Sandbox ID remains current proof config | OFF |
-| Watch-Party Ticket | Yes | Yes | Sandbox ID remains current proof config | OFF |
+| Watch-Party Seat Pass | Yes | Yes | Sandbox ID remains current proof config | OFF |
 | Channel Subscription | Yes | Yes | Sandbox ID/base plan remains current proof config | OFF |
 | VIP | Yes | Yes | Sandbox ID remains current proof config | OFF |
 | Event Pass | Yes | Yes | Sandbox ID remains current proof config | OFF |
@@ -251,7 +251,7 @@ Owner action: keep these Draft purchase options inactive until owner activation 
 | --- | --- | --- | --- | --- | --- |
 | Tips | `cw_creator_tip_099`, `$0.99`, United States only first | Additional tip price products or approved provider-backed price tiers | Yes | Yes | Documented / draft provider product exists |
 | Paid Video | `cw_paid_content_access_099`, `$0.99`, United States only first | Creator selects from approved paid-video price tiers mapped to provider products | Yes | Yes | Documented / draft provider product exists |
-| Watch-Party Ticket | `cw_watch_party_ticket_099`, `$0.99`, United States only first | Creator selects from approved ticket price tiers mapped to provider products | Yes | Yes | Documented / draft provider product exists |
+| Watch-Party Seat Pass | `cw_watch_party_ticket_099`, `$0.99`, United States only first | Creator selects from approved ticket price tiers mapped to provider products | Yes | Yes | Documented / draft provider product exists |
 | Channel Subscription | `cw_channel_subscription_monthly_499`, base plan `monthly`, `$4.99/month`, United States only first | Approved subscription products, base plans, or offers only | Yes | Yes | Documented / base plan blocked |
 | VIP | `cw_vip_pass_499`, `$4.99`, United States only first | Approved VIP price tiers mapped to provider products | Yes | Yes | Documented / draft provider product exists |
 | Event Pass | `cw_event_pass_099`, `$0.99`, United States only first | Approved event pass price tiers mapped to provider products | Yes | Yes | Documented / draft provider product exists |

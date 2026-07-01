@@ -12,7 +12,7 @@ Stripe payouts remain OFF.
 
 Stripe merch checkout remains OFF.
 
-Stripe is not used for Android digital creator-money purchases in this lane. Android digital purchases for Tips, Paid Video, Watch-Party Ticket, Channel Subscription, VIP, and Event Pass remain Google Play / RevenueCat products only.
+Stripe is not used for Android digital creator-money purchases in this lane. Android digital purchases for Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass remain Google Play / RevenueCat products only.
 
 United States only first applies to the owner-approved Google Play / RevenueCat launch defaults for Android digital creator-money products. It does not activate Stripe payouts, Stripe Connect, or merch checkout.
 

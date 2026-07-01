@@ -12,7 +12,7 @@ Play/internal runtime only.
 
 ## Preconditions
 - Account has required live/Premium/runtime access where policy requires it.
-- No paid Watch-Party ticket flow is used for Live Stage.
+- No paid Watch-Party Seat Pass flow is used for Live Stage.
 
 ## Steps
 1. Open Live tab.
@@ -25,7 +25,7 @@ Play/internal runtime only.
 8. Open a non-self participant detail sheet and confirm `Follow` / `Following` updates the participant's creator Platform follow state when available.
 9. Confirm the follow action does not add the participant to Chi'lly Circle and does not change host/speaker authority, room access, Premium, paid ticket, subscriber, or VIP access.
 10. Confirm Party Waiting Room does not open Live Stage.
-11. Confirm paid Watch-Party ticket buyer path does not open Live Stage.
+11. Confirm paid Watch-Party Seat Pass buyer path does not open Live Stage.
 
 ## Expected Result
 Live Stage is owned by `/watch-party/live-stage/[partyId]`; Party Room remains `/watch-party/[partyId]`.
