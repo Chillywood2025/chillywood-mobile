@@ -102,6 +102,15 @@ assertIncludes(channelSettings, "money-manager-watch-party-create-target-button"
 assertIncludes(channelSettings, "money-manager-channel-subscription-enable-button", "Channel Subscription manager action");
 assertIncludes(channelSettings, "money-manager-vip-pass-enable-button", "VIP Pass manager action");
 assertIncludes(channelSettings, "money-manager-paid-events-open-live-button", "Event Pass manager event action");
+assertIncludes(channelSettings, "formatWatchPartySeatPassDisplayTitle", "Watch-Party Seat Pass stale title normalizer");
+assertIncludes(channelSettings, "title: formatWatchPartySeatPassDisplayTitle(existingWatchPartyOffer.title)", "Watch-Party setup save normalized title");
+assertIncludes(channelSettings, "formatWatchPartySeatPassDisplayTitle(transaction.roomTitle)", "Watch-Party transaction room title normalization");
+assertIncludes(channelSettings, "formatWatchPartySeatPassDisplayTitle(config.displayName)", "saved Watch-Party setup config title normalization");
+assertIncludes(channelSettings, "accessibilityLabel={`Save setup config for ${displayTitle}`}", "Watch-Party setup accessibility title normalization");
+const watchPartyOfferTitleNormalizationCount = (channelSettings.match(/formatWatchPartySeatPassDisplayTitle\(offer\.title\)/g) ?? []).length;
+if (watchPartyOfferTitleNormalizationCount < 2) {
+  fail("Watch-Party offer titles must be normalized in both manager and Offers readback rows");
+}
 assertIncludes(channelSettings, "id: \"testing_proof\"", "Money Center collapsed testing/proof section");
 assertIncludes(channelSettings, "title: \"Sandbox QA\"", "Money Center advanced testing label");
 assertIncludes(monetizationRouteTargets, "manage: \"tips\"", "Tips route target manage key");

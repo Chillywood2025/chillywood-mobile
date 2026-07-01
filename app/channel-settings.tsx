@@ -1167,6 +1167,17 @@ const normalizeMoneyManageTarget = (value: unknown): MonetizationFeatureKey | nu
   return null;
 };
 
+const formatWatchPartySeatPassDisplayTitle = (value?: string | null) => {
+  const title = typeof value === "string" ? value.trim() : "";
+  const displayTitle = title.length ? title : "Sandbox Watch-Party Seat Pass";
+  return displayTitle
+    .replace(/\bWatch-Party\s+Ticket\b/gi, "Watch-Party Seat Pass")
+    .replace(/\bWatch Party\s+Ticket\b/gi, "Watch-Party Seat Pass")
+    .replace(/\bParty\s+Ticket\b/gi, "Party Seat Pass")
+    .replace(/\bRoom\s+Ticket\b/gi, "Room Seat Pass")
+    .replace(/\bTicket\b/gi, "Seat Pass");
+};
+
 const createInitialMonetizationSections = (tab: unknown, focus: unknown) => {
   const sections = new Set<MonetizationSectionId>(["overview", "ways_to_earn"]);
   const routedSection = normalizeMonetizationSectionId(tab) ?? normalizeMonetizationSectionId(focus);
@@ -2236,7 +2247,7 @@ export function ChannelStudioScreen() {
           priceCents: 99,
           seatLimit: existingWatchPartyOffer.seatLimit ?? 25,
           status: "sandbox",
-          title: existingWatchPartyOffer.title || "Sandbox Watch-Party Seat Pass",
+          title: formatWatchPartySeatPassDisplayTitle(existingWatchPartyOffer.title),
         });
         await saveCreatorSandboxMonetizationConfig({
           displayName: "Sandbox Watch-Party Seat Pass",
@@ -8485,33 +8496,36 @@ export function ChannelStudioScreen() {
             <>
               {hasPaidWatchPartyOffer ? (
                 <View style={styles.eventList}>
-                  {creatorPaidWatchPartyOffers.map((offer) => (
-                    <View key={offer.id} style={styles.eventEmptyCard}>
-                      <View style={styles.eventCardHeader}>
-                        <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
-                        {renderStudioStatusPill(offer.status === "sandbox" ? "Seat Pass ready" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
-                      </View>
-                      <Text style={styles.eventEmptyBody}>
-                        {formatMonetizationCurrency(offer.priceCents, offer.currency)} · Party Room {offer.partyId ?? "not linked"} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} seats sold.
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.eventSecondaryButton, watchPartySetupSavingId === offer.id && styles.eventPrimaryButtonDisabled]}
-                        activeOpacity={0.86}
-                        disabled={watchPartySetupSavingId !== null}
-                        onPress={() => {
-                          void handleSaveWatchPartySetupConfig(offer);
-                        }}
-                        hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Save setup config for ${offer.title}`}
-                        testID="money-manager-watch-party-save-config-button"
-                      >
-                        <Text style={styles.eventSecondaryButtonText}>
-                          {watchPartySetupSavingId === offer.id ? "Saving setup" : "Save setup config"}
+                  {creatorPaidWatchPartyOffers.map((offer) => {
+                    const displayTitle = formatWatchPartySeatPassDisplayTitle(offer.title);
+                    return (
+                      <View key={offer.id} style={styles.eventEmptyCard}>
+                        <View style={styles.eventCardHeader}>
+                          <Text style={styles.eventEmptyTitle}>{displayTitle}</Text>
+                          {renderStudioStatusPill(offer.status === "sandbox" ? "Seat Pass ready" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                        </View>
+                        <Text style={styles.eventEmptyBody}>
+                          {formatMonetizationCurrency(offer.priceCents, offer.currency)} · Party Room {offer.partyId ?? "not linked"} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} seats sold.
                         </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
+                        <TouchableOpacity
+                          style={[styles.eventSecondaryButton, watchPartySetupSavingId === offer.id && styles.eventPrimaryButtonDisabled]}
+                          activeOpacity={0.86}
+                          disabled={watchPartySetupSavingId !== null}
+                          onPress={() => {
+                            void handleSaveWatchPartySetupConfig(offer);
+                          }}
+                          hitSlop={LAUNCH_CRITICAL_HIT_SLOP}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Save setup config for ${displayTitle}`}
+                          testID="money-manager-watch-party-save-config-button"
+                        >
+                          <Text style={styles.eventSecondaryButtonText}>
+                            {watchPartySetupSavingId === offer.id ? "Saving setup" : "Save setup config"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
                 </View>
               ) : (
                 <View style={styles.eventEmptyCard}>
@@ -8825,7 +8839,7 @@ export function ChannelStudioScreen() {
                 {renderStudioStatusPill(transaction.status === "paid" ? "Paid" : transaction.status, transaction.status === "paid" ? "default" : transaction.status === "failed" || transaction.status === "refunded" || transaction.status === "revoked" ? "warning" : "muted")}
               </View>
               <Text style={styles.eventEmptyBody}>
-                {transaction.roomTitle} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
+                {formatWatchPartySeatPassDisplayTitle(transaction.roomTitle)} · {transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Date unavailable"} · {transaction.environment === "sandbox" ? "Sandbox" : transaction.environment}
               </Text>
               <Text style={styles.eventEmptyBody}>
                 Paid Watch-Party Seat Passes unlock only this Party Waiting Room and Party Room. Premium, Tips, Paid Videos, VIP, subscriptions, events, and Live Stage stay separate. Payout status: {transaction.payoutStatus}.
@@ -9281,7 +9295,11 @@ export function ChannelStudioScreen() {
                     {creatorSandboxConfigs.slice(0, 8).map((config) => (
                       <View key={config.id} style={styles.eventEmptyCard}>
                         <View style={styles.eventCardHeader}>
-                          <Text style={styles.eventEmptyTitle}>{config.displayName || formatCreatorSetupSourceLabel(config.sourceType)}</Text>
+                          <Text style={styles.eventEmptyTitle}>
+                            {config.sourceType === "watch_party_live"
+                              ? formatWatchPartySeatPassDisplayTitle(config.displayName)
+                              : config.displayName || formatCreatorSetupSourceLabel(config.sourceType)}
+                          </Text>
                           {renderStudioStatusPill("Sandbox / not payable", "default")}
                         </View>
                         <Text style={styles.eventEmptyBody}>
@@ -9329,26 +9347,29 @@ export function ChannelStudioScreen() {
                 ) : null}
                 {creatorPaidWatchPartyOffers.length ? (
                   <View style={styles.eventList}>
-                    {creatorPaidWatchPartyOffers.map((offer) => (
-                      <View
-                        key={offer.id}
-                        style={[styles.eventEmptyCard, activeMoneyManageTarget === "paid_watch_parties" && styles.moneyFocusedCard]}
-                      >
-                        <View style={styles.eventCardHeader}>
-                          <Text style={styles.eventEmptyTitle}>{offer.title}</Text>
-                          <View style={styles.scopeInfoHeaderRow}>
-                            <MoneyScopeInfoButton scope="watch_party_ticket" compact />
-                            {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                    {creatorPaidWatchPartyOffers.map((offer) => {
+                      const displayTitle = formatWatchPartySeatPassDisplayTitle(offer.title);
+                      return (
+                        <View
+                          key={offer.id}
+                          style={[styles.eventEmptyCard, activeMoneyManageTarget === "paid_watch_parties" && styles.moneyFocusedCard]}
+                        >
+                          <View style={styles.eventCardHeader}>
+                            <Text style={styles.eventEmptyTitle}>{displayTitle}</Text>
+                            <View style={styles.scopeInfoHeaderRow}>
+                              <MoneyScopeInfoButton scope="watch_party_ticket" compact />
+                              {renderStudioStatusPill(offer.status === "sandbox" ? "Sandbox" : offer.status, offer.status === "sandbox" || offer.status === "sold_out" ? "default" : "muted")}
+                            </View>
                           </View>
+                          <Text style={styles.eventEmptyBody}>
+                            paid_watch_party · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} seats sold · Party Room {offer.partyId ?? "not linked"}
+                          </Text>
+                          <Text style={styles.eventEmptyBody}>
+                            Purchases happen before Party Waiting Room and route to Party Room, not Live Stage. Sandbox rows are not payable.
+                          </Text>
                         </View>
-                        <Text style={styles.eventEmptyBody}>
-                          paid_watch_party · {formatMonetizationCurrency(offer.priceCents, offer.currency)} · {offer.seatsSold}{offer.seatLimit ? ` / ${offer.seatLimit}` : ""} seats sold · Party Room {offer.partyId ?? "not linked"}
-                        </Text>
-                        <Text style={styles.eventEmptyBody}>
-                          Purchases happen before Party Waiting Room and route to Party Room, not Live Stage. Sandbox rows are not payable.
-                        </Text>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 ) : null}
                 {creatorChannelSubscriptionOffers.length ? (
