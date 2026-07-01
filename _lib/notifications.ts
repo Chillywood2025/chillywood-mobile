@@ -1431,6 +1431,99 @@ export async function configureNotificationRuntime() {
   }
 }
 
+const buildUnsupportedPushRegistration = (message: string): PushRegistrationState => ({
+  message,
+  permissionState: "unsupported",
+  provider: "expo",
+  status: "unsupported",
+  tokenFingerprint: null,
+});
+
+export async function readCurrentPushRegistration(): Promise<PushRegistrationState> {
+  if (Platform.OS === "web" || !Device.isDevice) {
+    return buildUnsupportedPushRegistration("Push notifications require a physical mobile device.");
+  }
+
+  if (Platform.OS !== "android") {
+    return buildUnsupportedPushRegistration("Android notifications are production-ready now. iOS/APNs remains later.");
+  }
+
+  await configureNotificationRuntime();
+  const permissionState = await readPushPermissionState();
+
+  if (permissionState === "denied") {
+    return {
+      message: "Device push notifications are off in Android settings. In-app Activity is tied to your account and still works in the app.",
+      permissionState,
+      provider: "expo",
+      status: "denied",
+      tokenFingerprint: null,
+    };
+  }
+
+  if (permissionState === "error") {
+    return {
+      message: "Unable to verify Android notification permission. In-app Activity is tied to your account and still works in the app.",
+      permissionState,
+      provider: "expo",
+      status: "error",
+      tokenFingerprint: null,
+    };
+  }
+
+  if (permissionState !== "granted") {
+    return {
+      message: "Device push registration is not set up yet. In-app Activity is tied to your account and still works in the app.",
+      permissionState,
+      provider: "expo",
+      status: "not_registered",
+      tokenFingerprint: null,
+    };
+  }
+
+  const installId = await getNotificationInstallId();
+  const { data, error } = await supabase.functions.invoke("notification-device-tokens", {
+    body: {
+      action: "status",
+      installId,
+      platform: Platform.OS,
+      provider: "expo",
+    },
+  });
+
+  if (error) {
+    return {
+      message: "Unable to verify this device push registration. In-app Activity is tied to your account and still works in the app.",
+      permissionState,
+      provider: "expo",
+      status: "error",
+      tokenFingerprint: null,
+    };
+  }
+
+  const payload = data as { registered?: unknown; status?: unknown; tokenFingerprint?: unknown } | null;
+  const tokenFingerprint = normalizeText(payload?.tokenFingerprint) || null;
+  const isRegistered = payload?.registered === true || normalizeText(payload?.status) === "registered";
+
+  if (isRegistered) {
+    return {
+      message: "This Android device is registered for Chi'llywood push alerts. In-app Activity is tied to your account and still works in the app.",
+      permissionState,
+      provider: "expo",
+      status: "registered",
+      tokenFingerprint,
+    };
+  }
+
+  return {
+    message: "Notifications are allowed on this Android device, but this install is not registered for phone push alerts. In-app Activity is tied to your account and still works in the app.",
+    permissionState,
+    provider: "expo",
+    status: "not_registered",
+    tokenFingerprint: null,
+  };
+}
+
 async function registerPushTokenWithBackend(input: {
   permissionStatus: PushPermissionState;
   token: string;

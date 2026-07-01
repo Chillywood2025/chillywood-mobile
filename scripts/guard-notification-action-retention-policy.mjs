@@ -17,6 +17,7 @@ const packageJson = read("package.json");
 const notifications = read("_lib/notifications.ts");
 const settings = read("app/settings.tsx");
 const bell = read("components/notifications/notification-bell-button.tsx");
+const deviceTokens = read("supabase/functions/notification-device-tokens/index.ts");
 const revenuecatWebhook = read("supabase/functions/revenuecat-webhook/index.ts");
 const chatIndex = read("app/chat/index.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
@@ -81,6 +82,14 @@ assertIncludes(notifications, "dismissed_at: new Date().toISOString(), status: \
 assertIncludes(settings, "backed by real notification records", "Activity must read real records");
 assertIncludes(bell, "No fake counts or records are shown.", "bell tray must not fake records");
 assertIncludes(settings, "Chat stays conversation-only", "Chat separation copy");
+assertIncludes(notifications, "export async function readCurrentPushRegistration", "Settings must have backend push status readback helper");
+assertIncludes(settings, "readCurrentPushRegistration()", "Settings refresh must read backend push registration");
+assertIncludes(settings, "Device push registration controls phone push alerts. In-app Activity is tied to your account and still works in the app.", "Settings must separate push registration from in-app Activity");
+assertIncludes(settings, "nextRegistration = await readCurrentPushRegistration()", "Register Device must verify persisted backend status");
+assertIncludes(deviceTokens, ".eq(\"user_id\", auth.user.id)", "device token status must scope to current user");
+assertIncludes(deviceTokens, ".eq(\"install_id\", installId)", "device token status must scope to current install");
+assertIncludes(deviceTokens, "tokenFingerprint", "device token status must expose fingerprint only");
+assertNotIncludes(deviceTokens, "token: token", "device token status must not return raw push token");
 assertNotIncludes(chatIndex, "creator_money_sale", "Chat must not become creator-money notification ledger");
 assertNotIncludes(chatIndex, "creator_money_purchase", "Chat must not become creator-money notification ledger");
 

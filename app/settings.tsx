@@ -21,7 +21,7 @@ import {
 import {
   readNotificationPreferences,
   readNotificationActivityList,
-  readPushPermissionState,
+  readCurrentPushRegistration,
   requestAndroidPushPermissionAndRegister,
   dismissNotification,
   markNotificationRead,
@@ -639,24 +639,14 @@ export default function SettingsScreen() {
     if (!isSignedIn) return;
     setNotificationLoading(true);
     try {
-      const [preferences, permissionState, activity] = await Promise.all([
+      const [preferences, registration, activity] = await Promise.all([
         readNotificationPreferences(),
-        readPushPermissionState(),
+        readCurrentPushRegistration(),
         readNotificationActivityList(undefined, 20, 30),
       ]);
       setNotificationPreferences(preferences);
       setNotificationActivity(activity.filter((notification) => !notification.isDismissed));
-      setPushRegistration((current) => current ?? {
-        message: permissionState === "granted"
-          ? "Notifications are allowed on this Android device. Register this device to receive push alerts."
-          : permissionState === "denied"
-            ? "Notifications are off for this device. You can still use Chi'llywood normally."
-            : "Register this Android device when you want live, upload, event, and replay alerts.",
-        permissionState,
-        provider: "expo",
-        status: permissionState === "denied" ? "denied" : "not_registered",
-        tokenFingerprint: null,
-      });
+      setPushRegistration(registration);
     } finally {
       setNotificationLoading(false);
     }
@@ -695,11 +685,13 @@ export default function SettingsScreen() {
     setNotificationSavingKey("push-register");
     try {
       const result = await requestAndroidPushPermissionAndRegister();
-      setPushRegistration(result);
+      let nextRegistration = result;
       if (result.status === "registered") {
         const updated = await updateNotificationPreferences({ pushEnabled: true });
         setNotificationPreferences(updated);
+        nextRegistration = await readCurrentPushRegistration();
       }
+      setPushRegistration(nextRegistration);
     } finally {
       setNotificationSavingKey(null);
     }
@@ -821,8 +813,15 @@ export default function SettingsScreen() {
   const pushStatusLabel = useMemo(() => {
     if (pushRegistration?.status === "registered") return "Registered";
     if (pushRegistration?.permissionState === "denied") return "Off";
+    if (pushRegistration?.status === "error") return "Unable to verify";
+    if (pushRegistration?.status === "blocked") return "Unavailable";
+    if (pushRegistration?.status === "unsupported") return "Unsupported";
     return "Not registered";
   }, [pushRegistration?.permissionState, pushRegistration?.status]);
+  const showRegisterPushButton = !pushRegistration
+    || pushRegistration.status === "not_registered"
+    || pushRegistration.status === "denied"
+    || pushRegistration.status === "error";
 
   const profileVisibilityLabel = profileVisibilityLoading ? "Loading" : getAccessVisibilityLabel(profileVisibility);
   const accountDeletionScheduled = accountDeletionStatus?.scheduled === true;
@@ -2000,19 +1999,24 @@ export default function SettingsScreen() {
           {pushRegistration?.tokenFingerprint ? (
             <Text style={styles.metaText}>Device fingerprint {pushRegistration.tokenFingerprint}</Text>
           ) : null}
+          <Text style={styles.metaText}>
+            Device push registration controls phone push alerts. In-app Activity is tied to your account and still works in the app.
+          </Text>
           <View style={styles.utilityRow}>
-            <TouchableOpacity
-              style={[styles.utilityButton, notificationSavingKey === "push-register" && styles.utilityButtonDisabled]}
-              activeOpacity={0.86}
-              disabled={notificationSavingKey === "push-register"}
-              onPress={() => {
-                void onPressRegisterPush();
-              }}
-            >
-              {notificationSavingKey === "push-register"
-                ? <ActivityIndicator color="#E5ECF8" size="small" />
-                : <Text style={styles.utilityButtonText}>Register Device</Text>}
-            </TouchableOpacity>
+            {showRegisterPushButton ? (
+              <TouchableOpacity
+                style={[styles.utilityButton, notificationSavingKey === "push-register" && styles.utilityButtonDisabled]}
+                activeOpacity={0.86}
+                disabled={notificationSavingKey === "push-register"}
+                onPress={() => {
+                  void onPressRegisterPush();
+                }}
+              >
+                {notificationSavingKey === "push-register"
+                  ? <ActivityIndicator color="#E5ECF8" size="small" />
+                  : <Text style={styles.utilityButtonText}>Register Device</Text>}
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
               style={styles.utilityButton}
               activeOpacity={0.86}

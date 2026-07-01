@@ -154,36 +154,43 @@ Deno.serve(async (req) => {
     if (payload.error) return payload.error;
     const body = payload.value ?? {};
     const action = normalizeAction(body.action);
+    const provider = normalizeProvider(body.provider);
+    const platform = normalizePlatform(body.platform);
+    const installId = toText(body.installId) || null;
 
     const supabaseUrl = readRequiredEnv("SUPABASE_URL");
     const serviceRoleKey = readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
     if (action === "status") {
-      const { data: tokens } = await adminClient
+      if (!installId) return jsonResponse(400, { error: "missing_install_id" });
+
+      const { data: token, error } = await adminClient
         .from("user_push_tokens")
         .select("id,platform,provider,token_fingerprint,enabled,last_seen_at,revoked_at")
         .eq("user_id", auth.user.id)
+        .eq("platform", platform)
+        .eq("provider", provider)
+        .eq("install_id", installId)
+        .eq("enabled", true)
+        .is("revoked_at", null)
         .order("last_seen_at", { ascending: false })
-        .limit(10);
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return jsonResponse(500, { error: "status_failed", message: sanitizeErrorMessage(error) });
 
       return jsonResponse(200, {
-        status: "ok",
-        tokens: (tokens ?? []).map((token) => ({
-          enabled: !!token.enabled,
-          fingerprint: token.token_fingerprint,
-          lastSeenAt: token.last_seen_at,
-          platform: token.platform,
-          provider: token.provider,
-          revokedAt: token.revoked_at,
-        })),
+        lastSeenAt: token?.last_seen_at ?? null,
+        platform,
+        provider,
+        registered: !!token,
+        status: token ? "registered" : "not_registered",
+        tokenFingerprint: token?.token_fingerprint ?? null,
       });
     }
 
-    const provider = normalizeProvider(body.provider);
-    const platform = normalizePlatform(body.platform);
     const rawToken = toText(body.token);
-    const installId = toText(body.installId) || null;
     const permissionStatus = toText(body.permissionStatus) || "unknown";
 
     if (action === "revoke") {
