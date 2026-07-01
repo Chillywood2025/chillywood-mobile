@@ -2,7 +2,7 @@
 
 Date: 2026-07-01
 
-Verdict: Blocked for final installed closure. Source fixes were made and published by OTA. `R5CR120QCBF` produced update-state evidence that the OTA was available, downloaded, marked pending, and handled by an Expo Updates reset on the Google Play-installed v76 app, but the fixed installed UI flows were not rerun to closure and `R3CXA0DS5JV` was not visible over ADB during the final closure attempt.
+Verdict: Blocked for final installed closure. Source fixes were made and published by OTA. The follow-up device recovery pass recovered `R3CXA0DS5JV` and verified both physical phones remain Google Play-installed v76, but `R5CR120QCBF` did not prove the published OTA loaded after repeated safe checks. Since the current owner/creator proof account is on R5 and the remaining proof requires both phones for in-room call actions, the fixed installed UI flows were not counted Closed.
 
 ## Executive Summary
 
@@ -10,7 +10,42 @@ This was a narrow continuation of the remaining v76 notification/room/call proof
 
 The source fix commit is `05446c8832004336bb42ee6d21f29fb5b1ed8cf4`. It fixes the creator notification Premium-gate race and the stale actionable Android call notification cleanup path after Decline / Reply in Chat / open-call actions. The fix was published to the production EAS Update channel for Android runtime `1.0.0`.
 
-Installed closure remains blocked because final proof requires the fixed Play-installed app to rerun the creator route, room trays, and stale-call-notification cleanup flows, and requires both physical phones for the in-room call banner actions.
+Installed closure remains blocked because final proof requires the fixed Play-installed app to rerun the creator route, room trays, and stale-call-notification cleanup flows, and requires both physical phones for the in-room call banner actions. R3 is no longer the current blocker; the current blocker is that R5 has not proved the `39609392-ad93-4bcb-86c0-b8b639daf393` OTA active.
+
+## Two-Device Recovery Follow-Up
+
+Date: 2026-07-01
+
+Proof artifacts:
+
+- `/tmp/google-play-internal-v76-two-device-final-closure-20260701-165920/`
+
+Recovery result:
+
+- `R3CXA0DS5JV` appeared in `adb devices` as authorized.
+- `R5CR120QCBF` remained visible and authorized.
+- Both devices remained Google Play-installed v76:
+  - `R3CXA0DS5JV`: `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`, lastUpdateTime `2026-07-01 00:53:55`.
+  - `R5CR120QCBF`: `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`, lastUpdateTime `2026-07-01 00:55:59`.
+
+OTA result:
+
+- Expected group: `39609392-ad93-4bcb-86c0-b8b639daf393`
+- Expected Android update: `019f1f9f-b6e3-786c-b16f-97ab49d851ea`
+- Expected runtime: `1.0.0`
+- `R3CXA0DS5JV`: proved the expected OTA bundle/update/group signals after safe launch.
+- `R5CR120QCBF`: did not prove the expected OTA loaded after repeated safe launch/update checks; the latest safe summary showed `CheckCompleteUnavailable` and did not show the expected update id, update group, or bundle signal.
+
+Installed proof classification:
+
+- Creator notification route result: Blocked, not rerun as Closed because the current owner/creator proof session is on R5 and R5 has not proved the fixed OTA active.
+- Waiting Room tray result: Blocked, not rerun as Closed in this follow-up.
+- Live Stage tray result: Blocked, not rerun as Closed in this follow-up.
+- Reply in Chat result: Blocked, not rerun as Closed because two-device proof requires both phones on the fixed code path.
+- Leave room and answer result: Blocked, not rerun as Closed because two-device proof requires both phones on the fixed code path.
+- Decline stale-notification cleanup result: Blocked, not rerun as Closed because stale Android notification cleanup must be proved on the fixed installed app.
+
+Validation passed under `/tmp/google-play-internal-v76-two-device-final-closure-20260701-165920/validation/`.
 
 ## Repo / Origin Alignment
 

@@ -2,9 +2,22 @@
 
 Date: 2026-07-01
 
-Verdict: Partial overall. Installed Money Center manager visibility remains Closed on Google Play v76 plus OTA and was not reopened. The remaining-proof closure pass additionally Closed current-account buyer notification routes, current-account missed-call and event-starts-soon fixture routes, actual Android Chi'lly Chat call push delivery, Party Room room-safe tray behavior, and Party Room incoming Chi'lly Chat call banner/Decline behavior on Google-signed v76. Creator notification rows remain Partial because the current creator/owner account hit the Premium gate before Money Center Transactions. Waiting Room and Live Stage tray proof, Reply in Chat / Leave room and answer banner action proof, and full stale-call cleanup after decline remain Partial.
+Verdict: Partial overall. Installed Money Center manager visibility remains Closed on Google Play v76 plus OTA and was not reopened. The latest two-device recovery follow-up recovered `R3CXA0DS5JV` and verified both phones are still Google Play-installed v76, but final installed closure is Blocked because `R5CR120QCBF` did not prove the published `39609392-ad93-4bcb-86c0-b8b639daf393` OTA loaded after repeated safe checks. The remaining-proof closure pass additionally Closed current-account buyer notification routes, current-account missed-call and event-starts-soon fixture routes, actual Android Chi'lly Chat call push delivery, Party Room room-safe tray behavior, and Party Room incoming Chi'lly Chat call banner/Decline behavior on Google-signed v76. Creator notification rows remain Partial/Blocked for installed closure because the current creator/owner account is on R5 and the fixed creator-route OTA is not proved active there. Waiting Room and Live Stage tray proof, Reply in Chat / Leave room and answer banner action proof, and full stale-call cleanup after decline remain Partial.
 
 Final closure follow-up source fixes were published by EAS Update group `39609392-ad93-4bcb-86c0-b8b639daf393` / Android update `019f1f9f-b6e3-786c-b16f-97ab49d851ea`. `R5CR120QCBF` produced update-state evidence that the OTA was available, downloaded, marked pending, and reset-handled on the Google Play-installed v76 app. This is not final installed UI flow closure because the fixed creator route and stale-call-notification cleanup flows were not rerun, and `R3CXA0DS5JV` was not visible over ADB for two-device proof.
+
+Two-device recovery follow-up artifacts:
+
+- `/tmp/google-play-internal-v76-two-device-final-closure-20260701-165920/`
+
+Recovery result:
+
+- `R3CXA0DS5JV` recovered and appeared in `adb devices` as authorized.
+- `R5CR120QCBF` remained visible and authorized.
+- Both phones read back Google Play-installed v76 with package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`.
+- R3 proved the expected OTA update id, update group, and bundle signal after safe launch.
+- R5 did not prove the expected OTA loaded after repeated safe launch/update checks; the latest safe summary showed `CheckCompleteUnavailable` and did not show the expected update id, update group, or bundle signal.
+- Because final closure requires fixed code active on the current owner/creator R5 session and two-device in-room call proof, no remaining installed proof item was counted Closed from this follow-up.
 
 ## Scope
 

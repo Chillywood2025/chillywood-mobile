@@ -7,6 +7,12 @@ Current lane doc:
 - Artifact folder: `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/`
 
 Current truth:
+- Two-device recovery follow-up artifact folder: `/tmp/google-play-internal-v76-two-device-final-closure-20260701-165920/`.
+- `R3CXA0DS5JV` is recovered and visible over ADB again. `R5CR120QCBF` is also visible. Both remain Google Play-installed v76 (`package=com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`) with no sideload, `adb install`, logout, uninstall, reinstall, or clear data.
+- Published OTA remains group `39609392-ad93-4bcb-86c0-b8b639daf393`, Android update `019f1f9f-b6e3-786c-b16f-97ab49d851ea`, runtime `1.0.0`, source fix commit `05446c8832004336bb42ee6d21f29fb5b1ed8cf4`.
+- R3 proved the expected OTA bundle/update/group signals after safe launch. R5 did not prove that OTA loaded after repeated safe launch/update checks; the latest R5 safe summary showed `CheckCompleteUnavailable` and did not show the expected update id, group, or bundle hash.
+- Do not claim final installed closure from this state. The current owner/creator proof account is on R5, so the creator notification route fix cannot be counted installed-Closed until R5 loads the fixed OTA or an owner-approved delivery path includes it. Continue only with safe OTA uptake checks or owner-approved delivery; do not rebuild automatically.
+- Once both phones prove the fixed OTA or later approved code is active, rerun only the remaining sections: creator notification rows -> Money Center Transactions, Waiting Room tray, Live Stage tray, Reply in Chat, Leave room and answer, and stale actionable call notification cleanup after Decline.
 - Final v76 notification/room/call closure follow-up doc: `docs/release/GOOGLE_SIGNED_V76_FINAL_NOTIFICATION_ROOM_CALL_CLOSURE.md`.
 - Final closure artifact folder: `/tmp/google-play-internal-v76-final-notification-room-call-closure-20260701-163510/`.
 - Source fix commit `05446c8832004336bb42ee6d21f29fb5b1ed8cf4` is pushed and aligned with `origin/main`. It fixes the creator notification Premium-gate race and stale actionable Android Chi'lly Chat call notification cleanup.
