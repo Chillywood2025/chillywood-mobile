@@ -2,13 +2,13 @@
 
 ## Google Play Proof Fixture Readiness
 
-Status: Partial. Local packet `/tmp/google-play-proof-fixture-packet-20260630-232419/` contains the private fixture packet and redacted summaries.
+Status: Ready to Build for installed UI Activity/routing proof. Route/account packet `/tmp/google-play-proof-fixture-packet-20260630-232419/` contains the private fixture packet and redacted summaries. Notification-record packet `/tmp/google-play-notification-record-fixtures-20260630-233355/` contains the seeded-row summary, private row ids, validation logs, and push-readiness note.
 
-Repo/source/backend validation is clean at `3edd372654a5d4cc24e5da41649e1ef99996801a`. Both physical devices are visible/authorized and currently have Google Play-installed v74 from `com.android.vending`. Ignored local proof-account config authenticates the owner/operator creator, viewer, premium, and two-device call accounts; no credentials are committed here.
+Repo/source/backend validation is clean at `98ec176ed4f9f24aaff9e7127d877301670d0998`. Both physical devices were already visible/authorized and currently have Google Play-installed v74 from `com.android.vending`. Ignored local proof-account config authenticates the owner/operator creator, viewer, premium, and two-device call accounts; no credentials are committed here.
 
 The owner/operator creator account has authenticated Money Center access and six sandbox/not-payable creator configs. Exact route fixtures are privately recorded in the packet, and route/backend resolver checks are ready for Channel, Channel Studio, Paid Video, Watch-Party Seat Pass, Event Pass, Channel Subscription, VIP, Tips, Chat, and Settings. Watch-Party Seat Pass remains the visible wording and routes to the Party Room path, not Live Stage.
 
-Remaining build blocker: target-account creator-money notification records are not present for the six buyer/seller money buckets. Call notifications exist, but buyer/seller creator-money Activity rows need a safe sandbox flow or existing seed path before installed proof. Do not start the next Play internal proof build until this is closed or explicitly accepted as fixture-limited.
+Fourteen sandbox/proof/not-payable notification rows are ready for installed Activity/routing/retention proof: six buyer creator-money rows, six creator sale/support rows, one missed Chi'lly Chat call row, and one event-starts-soon row. The seeded notification rows are UI fixtures only; they are not counted as proof that purchases generated notifications. They do not grant access, create payouts/cashout/payable balances, mutate providers, or prove push delivery. Push dispatch fixture is ready, but Android token registration and actual push delivery remain pending installed Google Play proof.
 
 No EAS build, Play build, sideload, adb install, clear data, logout, live money, payout, cashout, provider mutation, auth/RLS weakening, or fake production records happened.
 
