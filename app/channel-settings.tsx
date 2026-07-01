@@ -9007,7 +9007,16 @@ export function ChannelStudioScreen() {
           <MoneyScopeInfoButton scope="premium" label="What does Premium unlock?" />
         </View>
         <View style={styles.summaryGrid}>
-          {monetizationFeatureCards.map((feature) => renderFeatureCard(feature, testIdSuffix))}
+          {monetizationFeatureCards.map((feature) => (
+            <React.Fragment key={`money-feature-with-manager-${feature.key}${testIdSuffix}`}>
+              {renderFeatureCard(feature, testIdSuffix)}
+              {includeManagerPanel && activeMoneyManageTarget === feature.key ? (
+                <View style={styles.moneyFeatureManagerInline}>
+                  {renderActiveMoneyManagerPanel()}
+                </View>
+              ) : null}
+            </React.Fragment>
+          ))}
         </View>
         <View style={styles.eventActionRow}>
           <TouchableOpacity
@@ -9042,7 +9051,6 @@ export function ChannelStudioScreen() {
           </TouchableOpacity>
         </View>
         {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
-        {includeManagerPanel ? renderActiveMoneyManagerPanel() : null}
       </View>
     );
     const renderMoneyTransactionsContent = (testID = "money-center-transactions-panel") => (
@@ -12113,6 +12121,10 @@ const styles = StyleSheet.create({
   moneyFocusedCard: {
     borderColor: "rgba(220,20,60,0.52)",
     backgroundColor: "rgba(220,20,60,0.12)",
+  },
+  moneyFeatureManagerInline: {
+    flexBasis: "100%",
+    width: "100%",
   },
   moneyManageNoticeCard: {
     borderRadius: 14,

@@ -86,7 +86,8 @@ assertIncludes(channelSettings, "renderActiveMoneyCenterFocusContent", "Money Ce
 assertIncludes(channelSettings, "money-center-focus-tabs", "Money Center local focus tabs");
 assertIncludes(channelSettings, "money-center-ways-to-earn-focused-panel", "Money Center visible Ways to Earn focused panel");
 assertIncludes(channelSettings, 'renderWaysToEarnContent("money-center-ways-to-earn-accordion-panel", "-accordion", false)', "Money Center secondary Ways to Earn copy uses suffixed test ids and suppresses duplicate manager");
-assertIncludes(channelSettings, "includeManagerPanel ? renderActiveMoneyManagerPanel() : null", "Money Center manager renders inline in focused Ways to Earn panel");
+assertIncludes(channelSettings, "activeMoneyManageTarget === feature.key ?", "Money Center manager renders inline after selected feature card");
+assertIncludes(channelSettings, "moneyFeatureManagerInline", "Money Center inline manager occupies full feature grid width");
 assertIncludes(channelSettings, "money-manager-close-button", "Money Center manager close action");
 assertIncludes(channelSettings, "money-manager-tips", "Tips manager panel test id");
 assertIncludes(channelSettings, "money-manager-paid_video", "Paid Video manager panel test id");
