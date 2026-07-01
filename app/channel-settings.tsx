@@ -9959,7 +9959,7 @@ export function ChannelStudioScreen() {
     </View>
   );
 
-  if (authLoading || betaLoading) {
+  if (authLoading || betaLoading || (canUseChannelSettings && loading)) {
     return (
       <BetaAccessScreen
         title="Loading Platform Studio"

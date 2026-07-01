@@ -47,8 +47,13 @@ assertIncludes(settings, "Chat stays conversation-only", "Settings Activity must
   "You are hosting. Leaving may end or disrupt the room.",
   "updateChillyChatCallInviteStatus",
   "status: \"declined\"",
+  "dismissPresentedChillyChatCallNotifications",
   "RoomSafeActivityNotificationBridge",
 ].forEach((needle) => assertIncludes(layout, needle, "room-safe incoming call policy"));
+
+assertIncludes(notifications, "dismissPresentedChillyChatCallNotifications", "handled call notifications must be dismissible by invite/path");
+assertIncludes(notifications, "Notifications.getPresentedNotificationsAsync", "handled call notifications must inspect presented Android notifications");
+assertIncludes(notifications, "Notifications.dismissNotificationAsync", "handled call notifications must dismiss only matching call notifications");
 
 assertNotIncludes(layout, "autoAnswer", "incoming calls must not auto-answer");
 assertNotIncludes(layout, "answerAutomatically", "incoming calls must not auto-answer");

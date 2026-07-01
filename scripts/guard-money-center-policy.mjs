@@ -148,6 +148,7 @@ assertIncludes(channelSettings, "getCachedMonetizationSnapshot", "Channel Studio
 assertIncludes(channelSettings, "subscribeToMonetizationSnapshot", "Channel Studio premium gate must observe Premium screen sandbox purchase updates");
 assertIncludes(channelSettings, "readMonetizationSnapshot({ forceRefresh: true, userId: String(user.id) })", "Channel Studio premium gate must refresh RevenueCat/Google Play snapshot for current user");
 assertIncludes(channelSettings, "premiumEntitlement?.isActive === true || premiumSnapshotActive || hasOwnerOperatorStudioAccess", "Channel Studio premium gate must not rely only on backend entitlement rows after sandbox Subscribe");
+assertIncludes(channelSettings, "authLoading || betaLoading || (canUseChannelSettings && loading)", "Channel Studio premium gate must wait for role/Premium readback");
 assertIncludes(channelSettings, "money-center-open-ways-to-earn-button", "Money Center open Ways to Earn action");
 assertIncludes(channelSettings, "onPress={openWaysToEarn}", "Money Center open Ways to Earn human-tap action");
 assertIncludes(channelSettings, "money-center-monetization-section-stack", "Money Center monetization section stack anchor");

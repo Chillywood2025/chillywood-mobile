@@ -1766,6 +1766,45 @@ export function subscribeToNotificationResponses(onPath: (path: string) => void)
   });
 }
 
+export async function dismissPresentedChillyChatCallNotifications(input: {
+  callInviteId?: string | null;
+  path?: string | null;
+  threadId?: string | null;
+}): Promise<number> {
+  if (Platform.OS === "web") return 0;
+
+  const targetInviteId = normalizeText(input.callInviteId);
+  const targetPath = normalizeNotificationPath(input.path);
+  const targetThreadId = normalizeText(input.threadId);
+
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    let dismissed = 0;
+
+    await Promise.all(presented.map(async (notification) => {
+      const data = notification.request.content.data as Record<string, unknown>;
+      const triggerType = normalizeText(data.triggerType || data.notificationType || data.category).toLowerCase();
+      const openCall = data.openCall === true || normalizeText(data.openCall) === "1" || normalizeText(data.openCall).toLowerCase() === "true";
+      const callInviteId = normalizeText(data.callInviteId);
+      const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
+      const isChillyChatCall = triggerType === "chilly_chat_call" || openCall;
+      if (!isChillyChatCall) return;
+
+      const matchesInvite = !!targetInviteId && callInviteId === targetInviteId;
+      const matchesPath = !!targetPath && path === targetPath;
+      const matchesThread = !!targetThreadId && !!path && path.startsWith(`/chat/${targetThreadId}`);
+      if (!matchesInvite && !matchesPath && !matchesThread) return;
+
+      await Notifications.dismissNotificationAsync(notification.request.identifier);
+      dismissed += 1;
+    }));
+
+    return dismissed;
+  } catch {
+    return 0;
+  }
+}
+
 export function subscribeToForegroundNotificationAlerts(onAlert: (alert: ForegroundNotificationAlert) => void) {
   return Notifications.addNotificationReceivedListener((notification) => {
     const content = notification.request.content;

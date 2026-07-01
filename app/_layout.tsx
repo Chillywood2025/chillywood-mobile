@@ -32,6 +32,7 @@ import {
 import { getChatThread } from "../_lib/chat";
 import {
   configureNotificationRuntime,
+  dismissPresentedChillyChatCallNotifications,
   readNotificationPreferences,
   refreshAndroidPushRegistrationIfGranted,
   subscribeToForegroundActivityNotifications,
@@ -534,6 +535,11 @@ function IncomingCallNotificationBridge() {
 
   const openCall = () => {
     const path = alert.path;
+    void dismissPresentedChillyChatCallNotifications({
+      callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
+      path,
+      threadId: alert.invite?.threadId ?? null,
+    });
     clearAlert();
     router.push(path as Parameters<typeof router.push>[0]);
   };
@@ -541,6 +547,11 @@ function IncomingCallNotificationBridge() {
   const decline = async () => {
     const invite = alert.invite ?? null;
     const actorUserId = String(user?.id ?? "").trim();
+    await dismissPresentedChillyChatCallNotifications({
+      callInviteId: invite?.id ?? alert.inviteId ?? null,
+      path: alert.path,
+      threadId: invite?.threadId ?? null,
+    });
     clearAlert();
     if (invite && actorUserId) {
       await updateChillyChatCallInviteStatus({
@@ -553,6 +564,11 @@ function IncomingCallNotificationBridge() {
 
   const replyInChat = () => {
     const threadId = String(alert.invite?.threadId ?? "").trim();
+    void dismissPresentedChillyChatCallNotifications({
+      callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
+      path: alert.path,
+      threadId,
+    });
     clearAlert();
     router.push((threadId ? `/chat/${threadId}` : "/chat") as Parameters<typeof router.push>[0]);
   };
