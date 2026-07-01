@@ -12,6 +12,14 @@ Creator-money notifications are backed by real notification records. Notificatio
 
 Premium remains the app-wide subscription flow. Tips do not unlock anything. `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF. No real payout, transfer, withdrawal, payable balance, or provider mutation was created by notifications. Push is Android/Expo only where proven; iOS/APNs remains later unless separately implemented.
 
+## Local UI Proof Follow-Up
+
+June 30 local-source proof is recorded in `docs/release/LOCAL_EMULATOR_NOTIFICATIONS_MONEY_CENTER_PROOF.md`.
+
+Local web proved Settings -> Notifications / Activity reads real records, Important / Action Needed rows remain visible after read, dismiss hides rows, a missed Chi'lly Chat call notification opens Chat without auto-answer, and the bell tray opens from normal surfaces with real unread state. Recent Activity content was fixture-limited in the local account because available rows were dominated by Important / Action Needed call rows.
+
+This local proof is not installed-app proof. Android push/device behavior and Google-signed visible device closure remain pending for a future Play internal build.
+
 ## Data Model
 
 Migration `20260630130624_creator_money_notifications_activity.sql` extends existing notification infrastructure instead of creating a new notification-only route family.

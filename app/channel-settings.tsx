@@ -20,18 +20,6 @@ import {
   View,
 } from "react-native";
 
-type WebPortalCreator = (children: React.ReactNode, container: Element | DocumentFragment) => React.ReactNode;
-
-const getWebPortalCreator = (): WebPortalCreator | null => {
-  if (Platform.OS !== "web") return null;
-  try {
-    const reactDom = require("react-dom") as { createPortal?: WebPortalCreator };
-    return typeof reactDom.createPortal === "function" ? reactDom.createPortal : null;
-  } catch {
-    return null;
-  }
-};
-
 import {
   resolveChannelAccess,
   type ChannelAccessResolution,
@@ -8999,7 +8987,11 @@ export function ChannelStudioScreen() {
         </View>
       </View>
     );
-    const renderWaysToEarnContent = (testID = "money-center-ways-to-earn-focused-panel", testIdSuffix = "") => (
+    const renderWaysToEarnContent = (
+      testID = "money-center-ways-to-earn-focused-panel",
+      testIdSuffix = "",
+      includeManagerPanel = true,
+    ) => (
       <View testID={testID}>
         <View style={styles.sandboxSafetyBanner}>
           <Text style={styles.sandboxSafetyTitle}>Creator setup mode</Text>
@@ -9050,6 +9042,7 @@ export function ChannelStudioScreen() {
           </TouchableOpacity>
         </View>
         {sandboxSetupNotice ? <Text style={styles.noticeText}>{sandboxSetupNotice}</Text> : null}
+        {includeManagerPanel ? renderActiveMoneyManagerPanel() : null}
       </View>
     );
     const renderMoneyTransactionsContent = (testID = "money-center-transactions-panel") => (
@@ -9202,34 +9195,6 @@ export function ChannelStudioScreen() {
       );
     }
 
-    const moneyManagerSheet = activeMoneyManageTarget !== null ? (
-      <View
-        style={styles.assetManagerSheetOverlay}
-        testID="money-manager-sheet"
-        accessibilityLabel="Money Center manager"
-      >
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={() => {
-            setActiveMoneyManageTarget(null);
-            setMoneyManageNotice(null);
-          }}
-        />
-        <View style={styles.assetManagerSheet}>
-          <View style={styles.assetManagerSheetHandle} />
-          <ScrollView
-            style={styles.assetManagerSheetScroll}
-            contentContainerStyle={styles.assetManagerSheetBody}
-            showsVerticalScrollIndicator={false}
-          >
-            {renderActiveMoneyManagerPanel()}
-          </ScrollView>
-        </View>
-      </View>
-    ) : null;
-    const moneyManagerPortalTarget = Platform.OS === "web" && typeof document !== "undefined" ? document.body : null;
-
     return (
       <>
         <View style={styles.panel}>
@@ -9257,7 +9222,7 @@ export function ChannelStudioScreen() {
             summary: "The six creator monetization setup flows in one actionable view.",
             status: monetizationActive ? "Active" : creatorSetupModeActive ? "Setup mode" : "Needs attention",
             statusTone: monetizationActive || creatorSetupModeActive ? "default" : "muted",
-            children: renderWaysToEarnContent("money-center-ways-to-earn-accordion-panel", "-accordion"),
+            children: renderWaysToEarnContent("money-center-ways-to-earn-accordion-panel", "-accordion", false),
           })}
 
           {renderMonetizationAccordion({
@@ -9706,21 +9671,6 @@ export function ChannelStudioScreen() {
             ),
           })}
         </View>
-        {Platform.OS === "web" ? (
-          moneyManagerPortalTarget && moneyManagerSheet ? getWebPortalCreator()?.(moneyManagerSheet, moneyManagerPortalTarget) ?? moneyManagerSheet : null
-        ) : (
-          <Modal
-            visible={activeMoneyManageTarget !== null}
-            transparent
-            animationType="slide"
-            onRequestClose={() => {
-              setActiveMoneyManageTarget(null);
-              setMoneyManageNotice(null);
-            }}
-          >
-            {moneyManagerSheet}
-          </Modal>
-        )}
       </>
     );
   };

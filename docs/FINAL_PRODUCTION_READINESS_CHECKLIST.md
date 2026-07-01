@@ -1,5 +1,15 @@
 # Final Production Readiness Checklist
 
+## Local-Source Notifications / Money Center Proof
+
+Local-source status: Partial/mostly-Closed for local web. Installed-app status: Pending for a later Google Play internal build.
+
+Android emulator/dev-client proof remained blocked because the available emulator app did not request Metro/local source, so local web fallback was used before any Play build. Money Center human-tap proof passed for Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout / Payout readiness. Settings Activity and bell tray read real records; Home, Explore, Live, Saved, and Platform Studio show the icon-only bell with real unread count; Watch-Party Waiting Room shows a room-safe bell and no full normal header.
+
+Source-specific player/watch-party/event content proof remains fixture-limited without safe ids. Actual room tray-open behavior, LiveKit camera/mic preservation, Android push/device behavior, and two-device incoming Chi'lly Chat call behavior remain physical/Play proof items. Source/local proof is not installed-app proof.
+
+No EAS build, Play build, sideload, physical-device adb install, physical-device clear data, physical-device logout, live money, payout, cashout, provider mutation, auth/RLS weakening, or Premium bypass happened.
+
 ## Important Notifications / Activity Retention
 
 Source status: fixed. Installed-app status: Pending for a later Google Play internal build.

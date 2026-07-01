@@ -6,6 +6,12 @@ This lane stopped the Google Play/EAS build loop and proved Money Center "Open W
 
 No EAS build, Google Play internal build, Play submission, sideload, adb install, logout of existing physical devices, clear data, or reinstall was run in this lane.
 
+## June 30 Local-Web Follow-Up
+
+Follow-up local proof is recorded in `docs/release/LOCAL_EMULATOR_NOTIFICATIONS_MONEY_CENTER_PROOF.md`.
+
+The current fix is deterministic state-driven UI, not pixel-offset guessing and not a timed scroll loop. Pressing `Open Ways to Earn` switches to the monetization focus, renders the focused Ways to Earn panel, and renders the selected manager inline inside that focused panel. This keeps the feature CTAs tappable by human touch after one manager opens.
+
 ## Current Commit
 
 - Base remote before local fix: `300a6312b42c9259cd49a69267198d7d589eaf6e`
@@ -47,9 +53,10 @@ Proof setup:
 - The secondary accordion copy uses suffixed testIDs so primary proof selectors are unique.
 - Focused accordion bodies are suppressed while the same section is already open in the focused panel, preventing duplicate actionable controls.
 - Paid Video, Watch-Party Seat Pass, and Event Pass CTAs now open their Money Center manager first, even when setup prerequisites are missing; their managers show the next setup action instead of navigating away.
-- Web local proof uses a portal-backed manager overlay so the manager sheet is not trapped by the scroll container.
-- Long manager content is clipped inside the sheet and scrolls internally instead of rendering offscreen.
+- The selected manager now renders inline in the focused Ways to Earn panel instead of as a portal/modal sheet that can sit over the feature cards and make later human taps unreliable.
 - Cashout readiness collapses Ways to Earn when switching to payout focus so the payout panel is the single visible cashout action surface.
+- Local web now blocks ignored `.env*.local` proof files from Metro resolution so local credential/fixture files are not parsed or bundled as source.
+- `StableImage` now safely resolves image source keys in the local web runtime instead of sending Home to App Recovery.
 
 ## TestID UI Proof
 

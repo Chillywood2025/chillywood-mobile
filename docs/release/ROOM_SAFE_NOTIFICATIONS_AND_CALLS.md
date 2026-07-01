@@ -12,6 +12,14 @@ This lane adds notification icon placement, in-app notification tray behavior, a
 
 This lane does not turn Chat into the notification center. This lane does not turn notifications into chat messages. This lane does not fake notification records, unread counts, or push delivery.
 
+## Local UI Proof Follow-Up
+
+June 30 local-source proof is recorded in `docs/release/LOCAL_EMULATOR_NOTIFICATIONS_MONEY_CENTER_PROOF.md`.
+
+Local web proved the Watch-Party Waiting Room renders a room-safe notification bell and does not intrude with the full normal tab header. The local account hit the Premium Watch-Party gate before real room entry, and placeholder Party Room / Live Stage ids rendered safe unavailable states, so real room tray-open behavior, LiveKit mute/camera preservation, and two-device incoming-call behavior remain physical-device-required.
+
+This local proof is not installed-app proof.
+
 ## Source Result
 
 - Notification bell is icon-only.

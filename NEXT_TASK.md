@@ -3,6 +3,7 @@
 # Chi'lly Chat Google-Signed v60 Direct Chat + Call Follow-Up
 
 Current lane doc:
+- `docs/release/LOCAL_EMULATOR_NOTIFICATIONS_MONEY_CENTER_PROOF.md`
 - `docs/release/CREATOR_MONEY_NOTIFICATIONS_ACTIVITY_PROOF.md`
 - `docs/release/CREATOR_MONETIZATION_SETUP_CASHOUT_READINESS.md`
 - `docs/release/GOOGLE_SIGNED_V60_DIRECT_CHAT_CALL_PROOF.md`
@@ -16,6 +17,17 @@ Current lane doc:
 - `docs/release/GOOGLE_SIGNED_V66_HEADER_CHAT_UI_PROOF.md`
 - `docs/release/HEADER_PROFILE_AVATAR_FLICKER_FIX.md`
 - `docs/release/GOOGLE_SIGNED_V68_CREATOR_MONETIZATION_E2E_PROOF.md`
+
+Local-source notifications / Money Center proof:
+- Status: Partial/mostly-Closed for local web; installed-app proof remains Pending.
+- Android emulator/dev-client proof remained blocked because the available emulator app did not request Metro/local source.
+- Local web fallback loaded current source and reached Money Center through a legitimate E2E owner/operator account.
+- Money Center human-tap proof passed for Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout / Payout readiness.
+- Settings Activity and the bell tray read real notification records.
+- Home, Explore, Live, Saved, and Platform Studio show the icon-only bell with real unread count.
+- Watch-Party Waiting Room shows a room-safe bell and no full normal header.
+- Actual room tray-open behavior, LiveKit camera/mic preservation, Android push/device behavior, and two-device incoming Chi'lly Chat call behavior still require physical/Play proof.
+- No EAS build, Play build, sideload, physical-device adb install, physical-device clear data, physical-device logout, live money, payout, cashout, provider mutation, auth/RLS weakening, or Premium bypass happened.
 
 Important Notifications / Activity retention:
 - Status: source-Closed; installed-app proof remains Pending.

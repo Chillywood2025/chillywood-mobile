@@ -21,9 +21,18 @@ type StableImageProps = Omit<ImageProps, "source"> & {
   source?: ImageSourcePropType | null;
 };
 
+type ResolveAssetSource = typeof Image.resolveAssetSource;
+
 const getSourceKey = (source?: ImageSourcePropType | null) => {
   if (!source) return "missing";
-  const resolved = Image.resolveAssetSource(source);
+  const imageWithDefault = Image as unknown as { default?: { resolveAssetSource?: ResolveAssetSource } };
+  const resolveAssetSource =
+    typeof Image.resolveAssetSource === "function"
+      ? Image.resolveAssetSource
+      : typeof imageWithDefault.default?.resolveAssetSource === "function"
+        ? imageWithDefault.default.resolveAssetSource
+        : null;
+  const resolved = resolveAssetSource?.(source);
   return resolved?.uri || String(resolved?.width ?? "") + "x" + String(resolved?.height ?? "");
 };
 
