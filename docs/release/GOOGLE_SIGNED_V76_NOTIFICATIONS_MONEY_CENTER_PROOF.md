@@ -2,7 +2,7 @@
 
 Date: 2026-07-01
 
-Verdict: Partial overall. Installed Money Center manager visibility is Closed on Google Play v76 plus OTA. The physical completion pass Closed Settings Activity read/dismiss behavior for the visible installed call row, Home/Explore/Live/Saved/Platform Studio bell tray shell behavior, visible call-notification-to-Chat routing without auto-answer, and Android push registration on `R3CXA0DS5JV`. Buyer/creator seeded money route rows, the prepared missed-call fixture, the prepared event-reminder fixture, room/live tray inside active rooms, incoming Chi'lly Chat call while inside a room, and actual push delivery remain Partial.
+Verdict: Partial overall. Installed Money Center manager visibility is Closed on Google Play v76 plus OTA. The physical completion pass Closed Settings Activity read/dismiss behavior for the visible installed call row, Home/Explore/Live/Saved/Platform Studio bell tray shell behavior, visible call-notification-to-Chat routing without auto-answer, Android push registration, and Android push registration persistence on both `R5CR120QCBF` and `R3CXA0DS5JV`. Buyer/creator seeded money route rows, the prepared missed-call fixture, the prepared event-reminder fixture, room/live tray inside active rooms, incoming Chi'lly Chat call while inside a room, and actual push delivery remain Partial.
 
 ## Scope
 
@@ -21,17 +21,23 @@ Final source alignment for the physical completion pass:
 - Follow-up OTA source commits included:
   - `47ccdd25ffce11fd6ec3abb0e2a0d8c43ca1dfa9` (`Fix Money Center Seat Pass display title`)
   - `0bb2ba928e05773567b5d3868fbcc502334f7730` (`Fix Platform Studio premium snapshot access`)
+  - `f26f1236957edb635a3e0ed632295d4a31dbd638` (`Fix push registration status persistence`)
+  - `2dfaa9219a25a74e27c0357b22e1497642a1dbcd` (`Fix push registration refresh action`)
 - Latest prior documentation commit before this completion pass: `785fb77e1b91f549f094f31a0e8ac79df3b7d14e`
 
 ## Build Or OTA Decision
 
 The already-created Google Play internal build included `e4f88365d33dcf0655597041800985131c045e40`, so no rebuild was needed for the original installed-manager fix.
 
-Two JavaScript/runtime-compatible follow-ups were delivered by EAS Update to the existing Google-signed Play binary runtime `1.0.0`:
+JavaScript/runtime-compatible follow-ups were delivered by EAS Update to the existing Google-signed Play binary runtime `1.0.0`:
 
 - Seat Pass wording OTA group: `d05105c3-fa72-46e0-80de-e3b8364f550f`
 - Platform Studio premium snapshot OTA group: `1c4834a5-439d-4e86-93b0-1eb0de8d8aac`
 - Android update id for the latest OTA: `019f1def-e5bc-70fc-baca-790cdde0ab98`
+- Push registration persistence OTA group: `190e756f-4666-4af0-90e6-1092d4f6b065`
+- Android update id for the push-registration OTA: `019f1efa-3a2c-74d3-8672-47b8efc7928e`
+- Push registration Refresh-button OTA group: `84dd1be6-08e9-4405-b2bc-e564a99a0512`
+- Android update id for the Refresh-button OTA: `019f1f0a-755b-75c8-9bda-c4f2e8fdd1cc`
 
 ## Device Binary / OTA Proof
 
@@ -185,12 +191,27 @@ Partial. Source/script proof passed for room-safe notification and call behavior
 Partial overall.
 
 - Android push registration Closed on `R3CXA0DS5JV`: Settings -> Notifications changed from `Not registered` to `Registered`, and the app displayed a backend-safe device fingerprint.
+- Android push registration persistence Closed on Google Play v76 plus OTA commit `f26f1236957edb635a3e0ed632295d4a31dbd638`.
+- Root cause: Settings refreshed Android permission and local component state, but did not read the existing backend token registration for the current signed-in user/install. `Register Device` could temporarily set local state to `Registered`, then remount/reopen reset the UI to `Not registered`.
+- Source fix: Settings now reads `readCurrentPushRegistration()` on load/refresh, `Register Device` writes the token and immediately reads backend status back, and the `notification-device-tokens` Edge Function `status` action is scoped to current signed-in user, install id, platform, and provider.
+- Settings copy now separates the two concepts: device push registration controls phone push alerts, while in-app Activity is tied to the account and still works in the app.
+- `R5CR120QCBF`: package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`; after force-stop/relaunch, opening Settings showed `Push Registered`, expanding Notifications showed `Device push status` / `Registered`, `Register Device` was not shown, and returning to Settings still showed `Registered`.
+- `R3CXA0DS5JV`: package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`; opening Settings showed `Push Registered`, and expanding Notifications showed `Device push status` / `Registered`.
+- In-app Notifications / Activity remained visible independently of device push registration. Captured Settings XML showed `Notifications / Activity` and Important/Activity rows while the push status panel explained account-level Activity remains available in app.
+- The Edge Function returns only a backend-safe token fingerprint. No raw Expo token is shown in Settings, proof docs, or text/XML/log artifacts.
+- Owner correction: the installed Refresh button itself was not counted as Closed, because the prior installed UI could appear to do nothing. Source commit `2dfaa9219a25a74e27c0357b22e1497642a1dbcd` gives the Device push Refresh control its own `push-refresh` busy state and dedicated backend status readback handler. That OTA was published, but both physical devices logged `No update available` during the refresh-action proof, so installed Refresh-button proof remains Partial until a device loads that OTA or a later Google Play build includes it.
 - Actual push dispatch/delivery remains Partial. No actual push was delivered to a device in this completion pass, so push delivery is not claimed.
 
 Artifacts:
 
 - `R3CXA0DS5JV-settings-push-before-register.png`
 - `R3CXA0DS5JV-settings-push-after-register.png`
+- `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/R5CR120QCBF-settings-reopen-after-refresh.png`
+- `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/R5CR120QCBF-after-refresh-registered.xml`
+- `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/R3CXA0DS5JV-notifications-expanded-push-status-clean.png`
+- `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/R3CXA0DS5JV-after-refresh-registered.xml`
+- `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/ota-and-edge-deploy-summary.json`
+- `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/refresh-action-proof-20260701-135711/refresh-action-ota-summary.json`
 
 ## Seat Pass Wording Result
 
@@ -213,7 +234,15 @@ No auth/RLS/money permission weakening happened. No provider/live-money mutation
 
 ## Validation Results
 
-All required validation commands passed. Latest completion logs are under:
+All required validation commands passed. Latest push registration persistence / Refresh-action source-fix logs are under:
+
+- `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/validation-20260701-140203-refresh-action/`
+
+Earlier push registration persistence logs are under:
+
+- `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/validation-20260701-134904/`
+
+Earlier physical notification completion logs are under:
 
 - `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/physical-notification-completion-20260701-090520/validation-20260701-091457/`
 

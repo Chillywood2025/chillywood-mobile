@@ -7,18 +7,20 @@ Current lane doc:
 - Artifact folder: `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/`
 
 Current truth:
-- Repo/origin aligned at `0bb2ba928e05773567b5d3868fbcc502334f7730`.
+- Repo/origin aligned at `2dfaa9219a25a74e27c0357b22e1497642a1dbcd` before the final push-registration persistence documentation update.
 - Google Play internal v76 includes `e4f88365d33dcf0655597041800985131c045e40`.
 - Both physical phones read back Google Play install: package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`.
-- Latest OTA loaded on runtime `1.0.0`: group `1c4834a5-439d-4e86-93b0-1eb0de8d8aac`, Android update `019f1def-e5bc-70fc-baca-790cdde0ab98`, commit `0bb2ba928e05773567b5d3868fbcc502334f7730`.
+- Runtime-compatible OTAs published/proved on runtime `1.0.0`: Platform Studio premium snapshot group `1c4834a5-439d-4e86-93b0-1eb0de8d8aac`, Android update `019f1def-e5bc-70fc-baca-790cdde0ab98`, commit `0bb2ba928e05773567b5d3868fbcc502334f7730`; push registration persistence group `190e756f-4666-4af0-90e6-1092d4f6b065`, Android update `019f1efa-3a2c-74d3-8672-47b8efc7928e`, commit `f26f1236957edb635a3e0ed632295d4a31dbd638`; push Refresh action group `84dd1be6-08e9-4405-b2bc-e564a99a0512`, Android update `019f1f0a-755b-75c8-9bda-c4f2e8fdd1cc`, commit `2dfaa9219a25a74e27c0357b22e1497642a1dbcd`.
 - Installed Money Center manager visibility is Closed: Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout readiness all showed visible manager/readiness panels.
 - Physical notification completion artifacts are under `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/physical-notification-completion-20260701-090520/`.
 - The completion pass Closed the visible installed call notification row in Settings Activity and tray: Important / Action Needed displayed, read state did not remove the row, tapping opened Chi'lly Chat without auto-answer or active call state, and dismiss hid the row.
 - The completion pass Closed normal bell/tray shell behavior on `R3CXA0DS5JV` for Platform Studio / Money Center, Home, Explore, Live, and Saved. Trays opened and showed the safe empty state after dismiss.
-- Android push registration is Closed on `R3CXA0DS5JV`; actual push delivery is not claimed.
+- Android push registration and registration persistence are Closed on both `R5CR120QCBF` and `R3CXA0DS5JV`: Settings reads backend status on load, `Register Device` reads back after writing, both devices show `Push Registered` / `Registered` after reopening/expanding Settings, and in-app Notifications / Activity remains account-level and visible independently of device push registration.
+- Owner correction: the installed Refresh button was not counted as Closed. Source commit `2dfaa9219a25a74e27c0357b22e1497642a1dbcd` fixes Refresh with a dedicated `push-refresh` busy state and backend readback handler, but both physical devices logged `No update available` during the refresh-action OTA proof. Installed Refresh-button proof remains Partial until the OTA is actually loaded or a later Play build includes it.
+- Push persistence artifacts are under `/tmp/google-play-internal-v76-push-registration-persistence-20260701-133921/`.
 - R5 completed Google Play sandbox Premium via Manage Premium -> Start Sandbox Premium Test -> Subscribe, then Platform Studio opened through the same installed session after the premium snapshot OTA.
 - Cashout remains not live and not payable; `liveMoneyEnabled` remains OFF; payouts/cashout remain OFF.
-- Required validation passed under `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/physical-notification-completion-20260701-090520/validation-20260701-091457/`.
+- Required validation for the earlier physical notification completion passed under `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/physical-notification-completion-20260701-090520/validation-20260701-091457/`; push persistence validation adds focused proof/guard coverage for backend readback, account/install scoping, and no raw-token exposure.
 
 Remaining Partial items:
 - Installed physical Tips creator setup save replay.
