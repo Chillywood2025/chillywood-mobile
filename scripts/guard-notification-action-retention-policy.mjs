@@ -86,6 +86,9 @@ assertIncludes(notifications, "export async function readCurrentPushRegistration
 assertIncludes(settings, "readCurrentPushRegistration()", "Settings refresh must read backend push registration");
 assertIncludes(settings, "Device push registration controls phone push alerts. In-app Activity is tied to your account and still works in the app.", "Settings must separate push registration from in-app Activity");
 assertIncludes(settings, "nextRegistration = await readCurrentPushRegistration()", "Register Device must verify persisted backend status");
+assertIncludes(settings, "onPressRefreshPushRegistration", "Device push Refresh must have a dedicated backend readback handler");
+assertIncludes(settings, "setNotificationSavingKey(\"push-refresh\")", "Device push Refresh must show a busy state");
+assertIncludes(settings, "void onPressRefreshPushRegistration();", "Device push Refresh button must call the dedicated readback handler");
 assertIncludes(deviceTokens, ".eq(\"user_id\", auth.user.id)", "device token status must scope to current user");
 assertIncludes(deviceTokens, ".eq(\"install_id\", installId)", "device token status must scope to current install");
 assertIncludes(deviceTokens, "tokenFingerprint", "device token status must expose fingerprint only");

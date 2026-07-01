@@ -697,6 +697,27 @@ export default function SettingsScreen() {
     }
   }, [notificationSavingKey]);
 
+  const onPressRefreshPushRegistration = useCallback(async () => {
+    if (notificationSavingKey) return;
+
+    setNotificationSavingKey("push-refresh");
+    try {
+      const nextRegistration = await readCurrentPushRegistration();
+      setPushRegistration(nextRegistration);
+    } catch (error) {
+      const message = getUserFacingErrorMessage(error, "Unable to verify this device push registration.");
+      setPushRegistration({
+        message: `${message} In-app Activity is tied to your account and still works in the app.`,
+        permissionState: "error",
+        provider: "expo",
+        status: "error",
+        tokenFingerprint: null,
+      });
+    } finally {
+      setNotificationSavingKey(null);
+    }
+  }, [notificationSavingKey]);
+
   const onPressNotificationActivity = useCallback(async (notification: NotificationRecord) => {
     if (notificationActivityBusyId) return;
 
@@ -2005,9 +2026,9 @@ export default function SettingsScreen() {
           <View style={styles.utilityRow}>
             {showRegisterPushButton ? (
               <TouchableOpacity
-                style={[styles.utilityButton, notificationSavingKey === "push-register" && styles.utilityButtonDisabled]}
+                style={[styles.utilityButton, !!notificationSavingKey && styles.utilityButtonDisabled]}
                 activeOpacity={0.86}
-                disabled={notificationSavingKey === "push-register"}
+                disabled={!!notificationSavingKey}
                 onPress={() => {
                   void onPressRegisterPush();
                 }}
@@ -2018,13 +2039,19 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             ) : null}
             <TouchableOpacity
-              style={styles.utilityButton}
+              style={[
+                styles.utilityButton,
+                (!!notificationSavingKey || notificationLoading) && styles.utilityButtonDisabled,
+              ]}
               activeOpacity={0.86}
+              disabled={!!notificationSavingKey || notificationLoading}
               onPress={() => {
-                void refreshNotifications();
+                void onPressRefreshPushRegistration();
               }}
             >
-              <Text style={styles.utilityButtonText}>Refresh</Text>
+              {notificationSavingKey === "push-refresh"
+                ? <ActivityIndicator color="#E5ECF8" size="small" />
+                : <Text style={styles.utilityButtonText}>Refresh</Text>}
             </TouchableOpacity>
           </View>
         </SettingsRow>
