@@ -58,7 +58,12 @@ import {
 } from "../../_lib/friendGraph";
 import { reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
-import { readNotificationPreferences, requestAndroidPushPermissionAndRegister, type NotificationPreferenceSettings } from "../../_lib/notifications";
+import {
+  dismissChillyChatCallNotificationRows,
+  readNotificationPreferences,
+  requestAndroidPushPermissionAndRegister,
+  type NotificationPreferenceSettings,
+} from "../../_lib/notifications";
 import { getOfficialPlatformAccount } from "../../_lib/officialAccounts";
 import {
   READ_RECEIPT_THROTTLE_MS,
@@ -808,6 +813,10 @@ export default function ChillyChatThreadScreen() {
       if (!acceptedInvite) {
         throw new Error("Unable to accept this Chi'lly Chat call right now.");
       }
+      await dismissChillyChatCallNotificationRows({
+        callInviteId: incomingCallInvite.id,
+        threadId,
+      }).catch(() => 0);
       setIncomingCallInvite(null);
       setCallPanelOpen(true);
       setCallDeliveryStatus("Incoming call accepted. Connecting both sides now.");
@@ -836,6 +845,10 @@ export default function ChillyChatThreadScreen() {
         invite: incomingCallInvite,
         status: "declined",
       });
+      await dismissChillyChatCallNotificationRows({
+        callInviteId: incomingCallInvite.id,
+        threadId,
+      }).catch(() => 0);
       await clearEndedChatThreadCall(threadId);
       setIncomingCallInvite(null);
       setCallPanelOpen(false);
@@ -932,6 +945,10 @@ export default function ChillyChatThreadScreen() {
           setCallDeliveryStatus("Incoming call could not be accepted. Ask the caller to start a new call.");
           return;
         }
+        await dismissChillyChatCallNotificationRows({
+          callInviteId: incomingCallInvite.id,
+          threadId,
+        }).catch(() => 0);
         setIncomingCallInvite(null);
       }
 

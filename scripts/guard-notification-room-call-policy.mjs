@@ -48,12 +48,17 @@ assertIncludes(settings, "Chat stays conversation-only", "Settings Activity must
   "updateChillyChatCallInviteStatus",
   "status: \"declined\"",
   "dismissPresentedChillyChatCallNotifications",
+  "dismissChillyChatCallNotificationRows",
   "RoomSafeActivityNotificationBridge",
 ].forEach((needle) => assertIncludes(layout, needle, "room-safe incoming call policy"));
 
 assertIncludes(notifications, "dismissPresentedChillyChatCallNotifications", "handled call notifications must be dismissible by invite/path");
 assertIncludes(notifications, "Notifications.getPresentedNotificationsAsync", "handled call notifications must inspect presented Android notifications");
 assertIncludes(notifications, "Notifications.dismissNotificationAsync", "handled call notifications must dismiss only matching call notifications");
+assertIncludes(notifications, "dismissChillyChatCallNotificationRows", "handled call notification rows must be dismissible by invite/thread");
+assertIncludes(notifications, ".eq(\"category\", \"chilly_chat_call\")", "call notification row cleanup must only target Chi'lly Chat calls");
+assertIncludes(notifications, ".eq(\"user_id\", viewerUserId)", "call notification row cleanup must be scoped to current user");
+assertIncludes(notifications, "status: \"dismissed\"", "call notification row cleanup must make rows non-actionable");
 
 assertNotIncludes(layout, "autoAnswer", "incoming calls must not auto-answer");
 assertNotIncludes(layout, "answerAutomatically", "incoming calls must not auto-answer");

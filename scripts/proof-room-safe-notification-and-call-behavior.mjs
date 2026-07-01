@@ -40,11 +40,19 @@ const notifications = read("_lib/notifications.ts");
   "Returning will re-check your room access.",
   "updateChillyChatCallInviteStatus",
   "status: \"declined\"",
+  "dismissChillyChatCallNotificationRows",
 ].forEach((needle) => add(`incoming call room-safe behavior includes ${needle}`, includes(layout, needle), needle));
 
 add("room-safe call action does not auto-answer", !includes(layout, "autoAnswer") && !includes(layout, "answerAutomatically"), "no auto answer code");
 add("room-safe call action does not auto-leave before explicit button", includes(layout, "onPress={roomSafeCall ? leaveRoomAndAnswer : openCall}"), "explicit leave button");
 add("Reply in Chat routes to chat without answering", includes(layout, "replyInChat") && includes(layout, "`/chat/${threadId}`"), "replyInChat route");
+add(
+  "declined/answered call rows are removed from in-app Activity",
+  includes(notifications, "dismissChillyChatCallNotificationRows")
+    && includes(notifications, ".eq(\"category\", \"chilly_chat_call\")")
+    && includes(notifications, "status: \"dismissed\""),
+  "active chilly_chat_call rows are dismissed for current user/thread",
+);
 
 [
   "RoomSafeActivityNotificationBridge",

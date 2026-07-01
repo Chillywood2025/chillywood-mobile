@@ -32,6 +32,7 @@ import {
 import { getChatThread } from "../_lib/chat";
 import {
   configureNotificationRuntime,
+  dismissChillyChatCallNotificationRows,
   dismissPresentedChillyChatCallNotifications,
   readNotificationPreferences,
   refreshAndroidPushRegistrationIfGranted,
@@ -540,6 +541,10 @@ function IncomingCallNotificationBridge() {
       path,
       threadId: alert.invite?.threadId ?? null,
     });
+    void dismissChillyChatCallNotificationRows({
+      callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
+      threadId: alert.invite?.threadId ?? null,
+    });
     clearAlert();
     router.push(path as Parameters<typeof router.push>[0]);
   };
@@ -552,6 +557,10 @@ function IncomingCallNotificationBridge() {
       path: alert.path,
       threadId: invite?.threadId ?? null,
     });
+    await dismissChillyChatCallNotificationRows({
+      callInviteId: invite?.id ?? alert.inviteId ?? null,
+      threadId: invite?.threadId ?? null,
+    }).catch(() => 0);
     clearAlert();
     if (invite && actorUserId) {
       await updateChillyChatCallInviteStatus({
@@ -567,6 +576,10 @@ function IncomingCallNotificationBridge() {
     void dismissPresentedChillyChatCallNotifications({
       callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       path: alert.path,
+      threadId,
+    });
+    void dismissChillyChatCallNotificationRows({
+      callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       threadId,
     });
     clearAlert();
