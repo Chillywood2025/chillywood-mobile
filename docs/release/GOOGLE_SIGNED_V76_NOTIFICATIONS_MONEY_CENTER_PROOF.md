@@ -4,6 +4,8 @@ Date: 2026-07-01
 
 Verdict: Partial overall. Installed Money Center manager visibility remains Closed on Google Play v76 plus OTA and was not reopened. The remaining-proof closure pass additionally Closed current-account buyer notification routes, current-account missed-call and event-starts-soon fixture routes, actual Android Chi'lly Chat call push delivery, Party Room room-safe tray behavior, and Party Room incoming Chi'lly Chat call banner/Decline behavior on Google-signed v76. Creator notification rows remain Partial because the current creator/owner account hit the Premium gate before Money Center Transactions. Waiting Room and Live Stage tray proof, Reply in Chat / Leave room and answer banner action proof, and full stale-call cleanup after decline remain Partial.
 
+Final closure follow-up source fixes were published by EAS Update group `39609392-ad93-4bcb-86c0-b8b639daf393` / Android update `019f1f9f-b6e3-786c-b16f-97ab49d851ea`. `R5CR120QCBF` produced update-state evidence that the OTA was available, downloaded, marked pending, and reset-handled on the Google Play-installed v76 app. This is not final installed UI flow closure because the fixed creator route and stale-call-notification cleanup flows were not rerun, and `R3CXA0DS5JV` was not visible over ADB for two-device proof.
+
 ## Scope
 
 This lane reran the Google Play internal installed proof after the Money Center installed manager visibility fix.
@@ -11,6 +13,52 @@ This lane reran the Google Play internal installed proof after the Money Center 
 No Play production submission, sideload, `adb install`, uninstall, reinstall, clear data, logout, live money enablement, payouts, cashout, provider mutation, auth/RLS weakening, or fake purchase-generation proof happened.
 
 Seeded notification rows are UI fixtures only. They are not counted as proof that purchases generated notifications. Push delivery is not claimed without an actual delivered push.
+
+## Final Notification / Room / Call Closure Attempt
+
+Date: 2026-07-01
+
+Detailed doc:
+
+- `docs/release/GOOGLE_SIGNED_V76_FINAL_NOTIFICATION_ROOM_CALL_CLOSURE.md`
+
+Proof artifacts:
+
+- `/tmp/google-play-internal-v76-final-notification-room-call-closure-20260701-163510/`
+
+Verdict: Blocked for final installed closure.
+
+Source fix commit `05446c8832004336bb42ee6d21f29fb5b1ed8cf4` is pushed and aligned with `origin/main`. The source fix:
+
+- prevents legitimate creator/owner/operator notification routes from showing the Premium gate before Channel Studio / Money Center access readback finishes;
+- dismisses matching presented Android Chi'lly Chat call notifications when a call is opened, declined, or answered through Reply in Chat.
+
+OTA publish:
+
+- branch/channel: `production`
+- runtimeVersion: `1.0.0`
+- platform: `android`
+- update group: `39609392-ad93-4bcb-86c0-b8b639daf393`
+- Android update id: `019f1f9f-b6e3-786c-b16f-97ab49d851ea`
+
+Installed proof status:
+
+- `R5CR120QCBF` remained Google Play-installed v76 with package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`.
+- The pulled R5 APK manifest confirms production channel and runtime `1.0.0`.
+- A redacted EAS Update endpoint probe returned the published Android production/runtime `1.0.0` update.
+- The first R5 launch after publish logged `CheckCompleteAvailable`, `Download`, `DownloadProgress 1.0`, `DownloadComplete` with `isUpdatePending=true`, and Expo Updates reset handling for Android update `019f1f9f-b6e3-786c-b16f-97ab49d851ea`.
+- Later R5 relaunches logged `CheckCompleteUnavailable` / `No update available`, which is consistent with the update no longer being offered after download/apply handling.
+- This is update-state proof, not final installed UI flow closure.
+- `R3CXA0DS5JV` was not visible over ADB during this attempt, so two-device proof could not continue.
+
+Open items remain:
+
+- creator notification rows must open Money Center Transactions on the installed fixed app;
+- Waiting Room tray and Live Stage tray need separate installed proof;
+- Reply in Chat and Leave room and answer need two-device installed proof;
+- stale actionable Android call notification cleanup after Decline needs installed proof.
+
+No Money Center refactor, Play build, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, live money, payout, cashout, provider mutation, auth/RLS weakening, fake push proof, or fake purchase-generation proof happened.
 
 ## Remaining Notification / Room / Push Closure Pass
 
