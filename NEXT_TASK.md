@@ -7,6 +7,11 @@ Current lane doc:
 - Artifact folder: `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/`
 
 Current truth:
+- Remaining Google-signed v76 notification/room/push closure artifact folder: `/tmp/google-play-internal-v76-remaining-notification-room-push-closure-20260701-154412/`.
+- Repo/origin aligned at `c6b23426b4b82d87e452bd7f90aea42a851a6d96` for the remaining-proof pass. Both proof phones stayed Google Play-installed v76 (`installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`) with no sideload, `adb install`, logout, uninstall, reinstall, or clear data.
+- Closed in the remaining-proof pass: current-account buyer notification routes for Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Tip receipt; current-account missed-call route to Chat without auto-answer/camera/mic; current-account event-starts-soon route to Event; actual delivered Android Chi'lly Chat call push; active Party Room room-safe tray open/close; incoming Chi'lly Chat call banner while receiver was inside Party Room with Decline preserving room state.
+- Still Partial after the remaining-proof pass: creator notification rows hit the Premium gate before Money Center Transactions on the current creator/owner account; Waiting Room and Live Stage tray were not separately reached; `Reply in Chat` and `Leave room and answer` were not separately exercised from the room-safe call banner; after Decline, the delivered Android call notification could still be tapped while the caller room remained active, although caller-side End Call cleared both devices to `No Active Call` and removed active Chi'llywood notification records.
+- Validation for this pass is clean under `/tmp/google-play-internal-v76-remaining-notification-room-push-closure-20260701-154412/validation/`.
 - Repo/origin aligned at `2dfaa9219a25a74e27c0357b22e1497642a1dbcd` before the final push-registration persistence documentation update.
 - Google Play internal v76 includes `e4f88365d33dcf0655597041800985131c045e40`.
 - Both physical phones read back Google Play install: package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`.

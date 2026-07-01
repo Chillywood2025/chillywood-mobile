@@ -2,7 +2,7 @@
 
 Date: 2026-07-01
 
-Verdict: Partial overall. Installed Money Center manager visibility is Closed on Google Play v76 plus OTA. The physical completion pass Closed Settings Activity read/dismiss behavior for the visible installed call row, Home/Explore/Live/Saved/Platform Studio bell tray shell behavior, visible call-notification-to-Chat routing without auto-answer, Android push registration, and Android push registration persistence on both `R5CR120QCBF` and `R3CXA0DS5JV`. Buyer/creator seeded money route rows, the prepared missed-call fixture, the prepared event-reminder fixture, room/live tray inside active rooms, incoming Chi'lly Chat call while inside a room, and actual push delivery remain Partial.
+Verdict: Partial overall. Installed Money Center manager visibility remains Closed on Google Play v76 plus OTA and was not reopened. The remaining-proof closure pass additionally Closed current-account buyer notification routes, current-account missed-call and event-starts-soon fixture routes, actual Android Chi'lly Chat call push delivery, Party Room room-safe tray behavior, and Party Room incoming Chi'lly Chat call banner/Decline behavior on Google-signed v76. Creator notification rows remain Partial because the current creator/owner account hit the Premium gate before Money Center Transactions. Waiting Room and Live Stage tray proof, Reply in Chat / Leave room and answer banner action proof, and full stale-call cleanup after decline remain Partial.
 
 ## Scope
 
@@ -11,6 +11,45 @@ This lane reran the Google Play internal installed proof after the Money Center 
 No Play production submission, sideload, `adb install`, uninstall, reinstall, clear data, logout, live money enablement, payouts, cashout, provider mutation, auth/RLS weakening, or fake purchase-generation proof happened.
 
 Seeded notification rows are UI fixtures only. They are not counted as proof that purchases generated notifications. Push delivery is not claimed without an actual delivered push.
+
+## Remaining Notification / Room / Push Closure Pass
+
+Date: 2026-07-01
+
+Proof artifacts:
+
+- `/tmp/google-play-internal-v76-remaining-notification-room-push-closure-20260701-154412/`
+
+Repo and device baseline:
+
+- `HEAD == origin/main == c6b23426b4b82d87e452bd7f90aea42a851a6d96`
+- Both attached proof phones remained Google Play-installed v76:
+  - `R5CR120QCBF`: package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`, lastUpdateTime `2026-07-01 00:55:59`
+  - `R3CXA0DS5JV`: package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`, lastUpdateTime `2026-07-01 00:53:55`
+- The release app is not debuggable, so local Expo Updates storage could not be read with `run-as`. Runtime-compatible OTA targeting remains documented through the prior Refresh proof. This pass did not create a new OTA or Play build.
+- No sideload, `adb install`, logout, uninstall, reinstall, clear data, Play production submission, live money, payout, cashout, provider mutation, auth/RLS weakening, or fake purchase-generation proof happened.
+
+Current-account fixture alignment:
+
+- Existing fixture packets did not fully target the no-logout installed sessions, so safe sandbox/proof/not-payable UI fixture rows were mirrored for the current viewer and creator/owner accounts.
+- The mirrored rows are UI/routing proof only. They do not grant access, prove purchase generation, create payouts/cashout/payable balances, mutate providers, or enable live money.
+- Committed docs and artifacts use redacted account labels only.
+
+Installed proof results:
+
+- Buyer rows: Closed on the current viewer account for Paid Video unlocked, Watch-Party Seat Pass ready, Channel Subscription active, VIP access active, Event Pass active, and Tip receipt. Routes opened the expected app surfaces or safe locked/rechecked states with no Not Found. Seat Pass wording remained visible and correct.
+- Creator rows: Partial. Rows appeared on the current creator/owner account, but tapping `Tip received` reached the app Premium gate before Money Center Transactions. The gate was not bypassed in this narrow lane.
+- Missed-call fixture route: Closed on the current viewer account. The row opened Chi'lly Chat and did not auto-answer, start camera, or start mic.
+- Event-starts-soon fixture route: Closed on the current viewer account. The row opened the event surface and did not Not Found.
+- Actual push delivery: Closed for a real Android Chi'lly Chat voice-call push delivered to `R3CXA0DS5JV` while the app was installed from Google Play. `dumpsys notification` captured a posted `com.chillywood.mobile` notification on channel `chilly_chat_calls_v2`; tapping the delivered notification opened the Chi'lly Chat call route.
+- Party Room room-safe tray: Closed for the active Party Room. The room-safe tray opened and closed without leaving the room.
+- Waiting Room and Live Stage tray: Partial. They were not separately reached in this pass.
+- Incoming Chi'lly Chat call while in room: Partial. The call was generated while `R3CXA0DS5JV` was inside Party Room. The room-safe incoming call banner appeared with `Decline`, `Reply in Chat`, and `Leave room and answer`; Decline kept the receiver in Party Room with no auto-answer, auto-room-leave, mic change, or camera change. `Reply in Chat` and `Leave room and answer` were not separately exercised from that banner.
+- Cleanup issue documented: after Decline, the previously delivered Android call notification could still be tapped while the caller's room remained active, and that joined the call. Ending the caller side cleared both devices to `No Active Call` and removed active Chi'llywood notification records. This stale actionable notification/declined-call cleanup needs a focused follow-up before full in-room call closure.
+
+Validation logs are under:
+
+- `/tmp/google-play-internal-v76-remaining-notification-room-push-closure-20260701-154412/validation/`
 
 ## Repo / Origin Alignment
 
@@ -144,7 +183,11 @@ Scripted proof passed that Important / Action Needed rows remain available and d
 
 Scripted notification-money route/policy validation passed. Seeded notification rows were not counted as purchase-generation proof.
 
-Physical buyer/creator route result: Partial. The prepared seeded buyer and creator money rows exist in the fixture packet, but they were not visible under the currently signed-in `R3CXA0DS5JV` account during the no-logout physical completion pass. No new records were seeded, and no purchase-generation claim was made.
+Physical buyer/creator route result after the remaining-proof closure pass:
+
+- Buyer rows are Closed on the current viewer account for Paid Video unlocked, Watch-Party Seat Pass ready, Channel Subscription active, VIP access active, Event Pass active, and Tip receipt. The rows opened expected routes or safe locked/rechecked states and did not Not Found. Notification rows did not grant access by themselves.
+- Creator rows remain Partial. The rows appeared on the current creator/owner account, but tapping a creator row reached the Premium gate before Money Center Transactions. The gate was not bypassed in this narrow lane, and no Premium/provider/live-money state was mutated.
+- Seeded and mirrored rows remain UI/routing fixtures only. They are not proof that purchases generated notifications.
 
 ## Missed Call / Event Reminder Result
 
@@ -153,8 +196,8 @@ Scripted room-safe notification/call behavior proof passed.
 Physical call/event result:
 
 - Closed for the visible installed incoming-call notification row routing to `/chat/[threadId]` without auto-answer, camera start, or active call state.
-- Partial for the prepared missed-call fixture specifically, because that fixture row was not visible under the active signed-in account during this no-logout pass.
-- Partial for the prepared event-starts-soon fixture, because the fixture row was not visible under the active signed-in account during this no-logout pass.
+- Closed for the current-account missed-call fixture route. It opened Chi'lly Chat and did not auto-answer, start camera, or start mic.
+- Closed for the current-account event-starts-soon fixture route. It opened the event surface and did not Not Found.
 
 ## Bell / Tray Result
 
@@ -184,7 +227,7 @@ Artifacts:
 
 ## Room / Live Tray Result
 
-Partial. Source/script proof passed for room-safe notification and call behavior, but room-safe tray behavior inside real Watch-Party Waiting Room, Party Room, and Live Stage was not newly generated on physical devices. No auto-answer, auto-room-leave, mic/camera hijack, or room mutation was performed.
+Partial. Source/script proof passed for room-safe notification and call behavior. Installed physical proof now closes the active Party Room tray: the room-safe tray opened and closed without leaving the room. Waiting Room and Live Stage were not separately reached in this pass, so those remain Partial.
 
 ## Push Registration / Dispatch Result
 
@@ -200,7 +243,8 @@ Partial overall.
 - In-app Notifications / Activity remained visible independently of device push registration. Captured Settings XML showed `Notifications / Activity` and Important/Activity rows while the push status panel explained account-level Activity remains available in app.
 - The Edge Function returns only a backend-safe token fingerprint. No raw Expo token is shown in Settings, proof docs, or text/XML/log artifacts.
 - Owner correction: the installed Refresh button itself was not counted as Closed, because the prior installed UI could appear to do nothing. Source commit `2dfaa9219a25a74e27c0357b22e1497642a1dbcd` gives the Device push Refresh control its own `push-refresh` busy state and dedicated backend status readback handler. That OTA was published, but both physical devices logged `No update available` during the refresh-action proof, so installed Refresh-button proof remains Partial until a device loads that OTA or a later Google Play build includes it.
-- Actual push dispatch/delivery remains Partial. No actual push was delivered to a device in this completion pass, so push delivery is not claimed.
+- Actual Android push delivery is now Closed for a real Chi'lly Chat voice-call push. `R3CXA0DS5JV` received a posted Android notification from `com.chillywood.mobile` on the Chi'lly Chat calls channel, and tapping the delivered notification opened the Chi'lly Chat call route. This is not proof that seeded notification rows generate pushes.
+- Stale push/action cleanup remains Partial: after receiver Decline, the previously delivered call notification stayed actionable while the caller's room was still active. Ending the caller side cleared both devices to `No Active Call` and removed active Chi'llywood notification records.
 
 Artifacts:
 
