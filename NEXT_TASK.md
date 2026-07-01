@@ -12,18 +12,23 @@ Current truth:
 - Both physical phones read back Google Play install: package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`.
 - Latest OTA loaded on runtime `1.0.0`: group `1c4834a5-439d-4e86-93b0-1eb0de8d8aac`, Android update `019f1def-e5bc-70fc-baca-790cdde0ab98`, commit `0bb2ba928e05773567b5d3868fbcc502334f7730`.
 - Installed Money Center manager visibility is Closed: Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout readiness all showed visible manager/readiness panels.
+- Physical notification completion artifacts are under `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/physical-notification-completion-20260701-090520/`.
+- The completion pass Closed the visible installed call notification row in Settings Activity and tray: Important / Action Needed displayed, read state did not remove the row, tapping opened Chi'lly Chat without auto-answer or active call state, and dismiss hid the row.
+- The completion pass Closed normal bell/tray shell behavior on `R3CXA0DS5JV` for Platform Studio / Money Center, Home, Explore, Live, and Saved. Trays opened and showed the safe empty state after dismiss.
+- Android push registration is Closed on `R3CXA0DS5JV`; actual push delivery is not claimed.
 - R5 completed Google Play sandbox Premium via Manage Premium -> Start Sandbox Premium Test -> Subscribe, then Platform Studio opened through the same installed session after the premium snapshot OTA.
 - Cashout remains not live and not payable; `liveMoneyEnabled` remains OFF; payouts/cashout remain OFF.
-- Required validation passed under `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/validation-20260701-085743/`.
+- Required validation passed under `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/physical-notification-completion-20260701-090520/validation-20260701-091457/`.
 
 Remaining Partial items:
 - Installed physical Tips creator setup save replay.
 - Installed physical viewer Sandbox Tip CTA -> Tip Sheet replay.
-- Installed physical notification Activity row routing/read/dismiss replay.
-- Installed physical bell/tray replay across all requested surfaces.
+- Buyer and creator seeded money notification route rows. They were not visible under the current no-logout signed-in `R3CXA0DS5JV` account during the completion pass.
+- Prepared missed-call fixture row. Only the visible incoming-call notification row was routed to Chat without auto-answer.
+- Prepared event-starts-soon fixture row. It was not visible under the current no-logout account during the completion pass.
 - Room-safe tray behavior in real Watch-Party Waiting Room, Party Room, and Live Stage.
 - Incoming Chi'lly Chat call while in room.
-- Android push token/actual push delivery only if safely generated; do not claim push without delivered push evidence.
+- Actual push delivery only if safely generated; do not claim push without delivered push evidence.
 
 Safety rules for the next pass:
 - Do not submit Play production.

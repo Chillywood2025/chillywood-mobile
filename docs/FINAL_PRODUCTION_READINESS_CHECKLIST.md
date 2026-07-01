@@ -18,7 +18,9 @@ Google Play internal v76 included commit `e4f88365d33dcf0655597041800985131c045e
 
 R5 completed the Google Play sandbox Premium path through Manage Premium -> Start Sandbox Premium Test -> Subscribe. After the premium snapshot OTA, Platform Studio opened from the same installed session and Money Center passed visible manager proof for Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout readiness. Cashout remains not live and not payable. `liveMoneyEnabled` remains OFF and payouts/cashout remain OFF.
 
-Remaining Partial items before full public closure: installed physical notification row routing/read-dismiss, viewer Tip Sheet replay, room/live tray behavior, incoming chat call-in-room behavior, Android push token/actual push delivery where claimed. Seeded notification rows are UI fixtures only and are not proof that purchases generated notifications. Actual push delivery is not claimed without delivered-push evidence.
+Physical notification completion artifacts are under `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/physical-notification-completion-20260701-090520/`. That pass Closed the visible installed call row in Settings Activity/tray, Chat routing without auto-answer, row dismiss behavior, normal bell/tray shell behavior on Platform Studio / Money Center, Home, Explore, Live, and Saved, and Android push registration on `R3CXA0DS5JV`.
+
+Remaining Partial items before full public closure: buyer/creator seeded money notification route rows, the prepared missed-call fixture, the prepared event-reminder fixture, viewer Tip Sheet replay, room/live tray behavior inside active rooms, incoming chat call-in-room behavior, and actual push delivery where claimed. Seeded notification rows are UI fixtures only and are not proof that purchases generated notifications. Actual push delivery is not claimed without delivered-push evidence.
 
 No Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, provider mutation, auth/RLS weakening, live money, payout, cashout, or fake purchase-generation proof happened.
 
