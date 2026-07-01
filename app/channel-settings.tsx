@@ -174,8 +174,11 @@ import {
 } from "../_lib/channelAudience";
 import { useSession } from "../_lib/session";
 import {
+  getCachedMonetizationSnapshot,
   readCreatorPermissions,
+  readMonetizationSnapshot,
   sanitizeCreatorRoomAccessRule,
+  subscribeToMonetizationSnapshot,
   type CreatorPermissionSet,
 } from "../_lib/monetization";
 import {
@@ -1334,6 +1337,9 @@ export function ChannelStudioScreen() {
   const [brandPreviewFailedAssetIds, setBrandPreviewFailedAssetIds] = useState<ReadonlySet<string>>(() => new Set());
   const [platformRoleMemberships, setPlatformRoleMemberships] = useState<PlatformRoleMembership[]>([]);
   const [premiumEntitlement, setPremiumEntitlement] = useState<PremiumEntitlementDecision | null>(null);
+  const [premiumSnapshotActive, setPremiumSnapshotActive] = useState(
+    () => getCachedMonetizationSnapshot().targets.premium_subscription.hasEntitlement,
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1448,7 +1454,8 @@ export function ChannelStudioScreen() {
     () => hasPlatformRoleMembership(platformRoleMemberships, ["owner", "operator"]),
     [platformRoleMemberships],
   );
-  const hasPremiumCreatorToolAccess = premiumEntitlement?.isActive === true || hasOwnerOperatorStudioAccess;
+  const hasPremiumCreatorToolAccess =
+    premiumEntitlement?.isActive === true || premiumSnapshotActive || hasOwnerOperatorStudioAccess;
   const revenueCatReadiness = useMemo(() => getRevenueCatProductionReadiness(), []);
   const creatorMoneyAuditEvents = useMemo(() => buildCreatorMoneyAuditEvents({
     summary: creatorMonetizationSummary,
@@ -1629,6 +1636,7 @@ export function ChannelStudioScreen() {
       setBrandDraft(null);
       setPlatformRoleMemberships([]);
       setPremiumEntitlement(null);
+      setPremiumSnapshotActive(false);
       setCreatorVideoClipEdits({});
       setAudienceMembers([]);
       setAudienceMembersLoading(false);
@@ -1739,6 +1747,7 @@ export function ChannelStudioScreen() {
         setBrandDraft(resolvedPlatformBranding?.profile ?? null);
         setPlatformRoleMemberships(resolvedPlatformRoleMemberships);
         setPremiumEntitlement(resolvedPremiumEntitlement);
+        setPremiumSnapshotActive(getCachedMonetizationSnapshot().targets.premium_subscription.hasEntitlement);
         setLoading(false);
       })
       .catch(() => {
@@ -1783,6 +1792,7 @@ export function ChannelStudioScreen() {
         setMoneyFeatureFlags(getMoneyFeatureFlagFallbackSummary());
         setPlatformRoleMemberships([]);
         setPremiumEntitlement(null);
+        setPremiumSnapshotActive(getCachedMonetizationSnapshot().targets.premium_subscription.hasEntitlement);
         setLoading(false);
       });
 
@@ -1790,6 +1800,36 @@ export function ChannelStudioScreen() {
       active = false;
     };
   }, [canUseChannelSettings, user?.email, user?.id]);
+
+  useEffect(() => {
+    const syncPremiumSnapshotAccess = () => {
+      setPremiumSnapshotActive(getCachedMonetizationSnapshot().targets.premium_subscription.hasEntitlement);
+    };
+    syncPremiumSnapshotAccess();
+    return subscribeToMonetizationSnapshot(syncPremiumSnapshotAccess);
+  }, []);
+
+  useEffect(() => {
+    if (!canUseChannelSettings || !user?.id) {
+      setPremiumSnapshotActive(false);
+      return;
+    }
+    let active = true;
+
+    readMonetizationSnapshot({ forceRefresh: true, userId: String(user.id) })
+      .then((snapshot) => {
+        if (!active) return;
+        setPremiumSnapshotActive(snapshot.targets.premium_subscription.hasEntitlement);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPremiumSnapshotActive(getCachedMonetizationSnapshot().targets.premium_subscription.hasEntitlement);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canUseChannelSettings, user?.id]);
 
   const refreshCreatorPayouts = useCallback(async () => {
     if (!user?.id) {
