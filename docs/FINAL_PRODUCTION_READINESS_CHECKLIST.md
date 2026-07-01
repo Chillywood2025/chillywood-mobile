@@ -10,6 +10,18 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Google-Signed V76 Notifications / Money Center Proof
+
+Status: Partial overall. Installed Money Center manager visibility is Closed in `docs/release/GOOGLE_SIGNED_V76_NOTIFICATIONS_MONEY_CENTER_PROOF.md`.
+
+Google Play internal v76 included commit `e4f88365d33dcf0655597041800985131c045e40` and both physical phones read back package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`. Runtime-compatible follow-ups were delivered by OTA on runtime `1.0.0`; latest OTA group is `1c4834a5-439d-4e86-93b0-1eb0de8d8aac`, Android update `019f1def-e5bc-70fc-baca-790cdde0ab98`, commit `0bb2ba928e05773567b5d3868fbcc502334f7730`.
+
+R5 completed the Google Play sandbox Premium path through Manage Premium -> Start Sandbox Premium Test -> Subscribe. After the premium snapshot OTA, Platform Studio opened from the same installed session and Money Center passed visible manager proof for Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout readiness. Cashout remains not live and not payable. `liveMoneyEnabled` remains OFF and payouts/cashout remain OFF.
+
+Remaining Partial items before full public closure: installed physical notification row routing/read-dismiss, viewer Tip Sheet replay, room/live tray behavior, incoming chat call-in-room behavior, Android push token/actual push delivery where claimed. Seeded notification rows are UI fixtures only and are not proof that purchases generated notifications. Actual push delivery is not claimed without delivered-push evidence.
+
+No Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, provider mutation, auth/RLS weakening, live money, payout, cashout, or fake purchase-generation proof happened.
+
 ## Google Play Proof Fixture Readiness
 
 Status: Ready to Build for installed UI Activity/routing proof. Route/account packet `/tmp/google-play-proof-fixture-packet-20260630-232419/` contains the private fixture packet and redacted summaries. Notification-record packet `/tmp/google-play-notification-record-fixtures-20260630-233355/` contains the seeded-row summary, private row ids, validation logs, and push-readiness note.

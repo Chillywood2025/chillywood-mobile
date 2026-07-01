@@ -1,5 +1,38 @@
 # NEXT TASK
 
+# Google-Signed v76 Notifications / Money Center Follow-Up
+
+Current lane doc:
+- `docs/release/GOOGLE_SIGNED_V76_NOTIFICATIONS_MONEY_CENTER_PROOF.md`
+- Artifact folder: `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/`
+
+Current truth:
+- Repo/origin aligned at `0bb2ba928e05773567b5d3868fbcc502334f7730`.
+- Google Play internal v76 includes `e4f88365d33dcf0655597041800985131c045e40`.
+- Both physical phones read back Google Play install: package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`.
+- Latest OTA loaded on runtime `1.0.0`: group `1c4834a5-439d-4e86-93b0-1eb0de8d8aac`, Android update `019f1def-e5bc-70fc-baca-790cdde0ab98`, commit `0bb2ba928e05773567b5d3868fbcc502334f7730`.
+- Installed Money Center manager visibility is Closed: Open Ways to Earn, Tips, Paid Video, Watch-Party Seat Pass, Channel Subscription, VIP, Event Pass, and Cashout readiness all showed visible manager/readiness panels.
+- R5 completed Google Play sandbox Premium via Manage Premium -> Start Sandbox Premium Test -> Subscribe, then Platform Studio opened through the same installed session after the premium snapshot OTA.
+- Cashout remains not live and not payable; `liveMoneyEnabled` remains OFF; payouts/cashout remain OFF.
+- Required validation passed under `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/validation-20260701-085743/`.
+
+Remaining Partial items:
+- Installed physical Tips creator setup save replay.
+- Installed physical viewer Sandbox Tip CTA -> Tip Sheet replay.
+- Installed physical notification Activity row routing/read/dismiss replay.
+- Installed physical bell/tray replay across all requested surfaces.
+- Room-safe tray behavior in real Watch-Party Waiting Room, Party Room, and Live Stage.
+- Incoming Chi'lly Chat call while in room.
+- Android push token/actual push delivery only if safely generated; do not claim push without delivered push evidence.
+
+Safety rules for the next pass:
+- Do not submit Play production.
+- Do not sideload or `adb install`.
+- Do not uninstall, reinstall, clear data, or logout unless explicitly approved.
+- Do not enable live money, payouts, cashout, payable balances, or provider production settings.
+- Do not count seeded notification rows as purchase-generation proof.
+- Do not claim actual push delivery unless an actual push is delivered and captured.
+
 # Chi'lly Chat Google-Signed v60 Direct Chat + Call Follow-Up
 
 Current lane doc:
