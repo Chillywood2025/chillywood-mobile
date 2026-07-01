@@ -40,6 +40,8 @@
 
 ## EAS Update Rollout
 
+OTA-first rule: For JavaScript-only UI, routing, copy, or helper fixes, prefer EAS Update / OTA proof before creating a new Google Play internal build. OTA proof is valid only when the installed app is Google-signed from Google Play and the proof records package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, binary `versionCode` / `versionName`, loaded EAS Update id/group, update commit hash, runtimeVersion compatibility, and UI proof executed after the update loaded. Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / RevenueCat native behavior, Android permission/manifest/plugin changes, push channel/native notification changes, or final binary closure. Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
+
 1. Run `npm run validate:runtime`.
 2. Publish the preview update:
    `npx eas-cli@latest update --channel preview --message "Chi'llywood preview OTA"`.

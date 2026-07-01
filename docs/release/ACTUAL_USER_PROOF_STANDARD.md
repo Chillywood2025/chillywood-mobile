@@ -12,13 +12,39 @@ If Robert or a normal tester cannot reproduce the behavior in the installed app 
 
 Compatibility wording for actual-user proof guards: Actual-user proof is Closed only when Robert or a normal tester can reproduce the behavior in the Google Play internal/closed testing app through the normal visible user path.
 
+## OTA-First Proof Rule
+
+For JavaScript-only UI, routing, copy, or helper fixes, prefer EAS Update / OTA proof before creating a new Google Play internal build.
+
+OTA proof is valid only when the installed app is Google-signed from Google Play and the report proves all of the following:
+
+- package `com.chillywood.mobile`;
+- `installerPackageName` is `com.android.vending`;
+- installed binary `versionCode` and `versionName`;
+- loaded EAS Update id and group;
+- update commit hash;
+- runtimeVersion compatibility between the installed binary and the update;
+- UI proof executed after the update loaded.
+
+Do not use OTA proof for native changes, runtimeVersion changes, Play Billing or RevenueCat native behavior, Android permission, manifest, or plugin changes, push channel or native notification changes, or final binary closure.
+
+Every final proof report must separate:
+
+- Play binary proof;
+- OTA update proof;
+- source proof;
+- native/build proof.
+
 ## Required Proof Labels
 
 Every proof must clearly say which kind of proof it is:
 
+- Play binary proof
+- OTA update proof
 - Actual-user installed-app proof
 - Two-client installed-app proof
 - One-device installed-app proof
+- Native/build proof
 - Diagnostic proof only
 - Backend readback only
 - Harness proof only

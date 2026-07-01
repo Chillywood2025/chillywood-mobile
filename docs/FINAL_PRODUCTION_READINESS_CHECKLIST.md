@@ -1,5 +1,15 @@
 # Final Production Readiness Checklist
 
+## OTA-First Proof Rule
+
+For JavaScript-only UI, routing, copy, or helper fixes, prefer EAS Update / OTA proof before creating a new Google Play internal build.
+
+OTA proof is valid only when the installed app is Google-signed from Google Play and the proof report records package `com.chillywood.mobile`, `installerPackageName=com.android.vending`, installed binary `versionCode` / `versionName`, loaded EAS Update id/group, update commit hash, runtimeVersion compatibility, and UI proof executed after the update loaded.
+
+Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / RevenueCat native behavior, Android permission/manifest/plugin changes, push channel/native notification changes, or final binary closure.
+
+Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
+
 ## Google Play Proof Fixture Readiness
 
 Status: Ready to Build for installed UI Activity/routing proof. Route/account packet `/tmp/google-play-proof-fixture-packet-20260630-232419/` contains the private fixture packet and redacted summaries. Notification-record packet `/tmp/google-play-notification-record-fixtures-20260630-233355/` contains the seeded-row summary, private row ids, validation logs, and push-readiness note.
