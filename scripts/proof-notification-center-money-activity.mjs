@@ -15,18 +15,23 @@ const notifications = read("_lib/notifications.ts");
 const migration = read("supabase/migrations/20260630130624_creator_money_notifications_activity.sql");
 
 [
-  "readNotificationList",
+  "readNotificationActivityList",
+  "readImportantNotificationList",
   "markNotificationRead",
   "dismissNotification",
   "resolveNotificationPath",
   "settings-notification-activity-list",
+  "settings-notification-important-section",
+  "settings-notification-recent-section",
   "notification-activity-row-",
   "notification-activity-dismiss-",
   "Creator purchase",
   "Creator sale",
+  "Important / Action Needed",
+  "Read state does not remove important notifications.",
   "Chat stays conversation-only",
 ].forEach((needle) => {
-  add(`Settings Activity contains ${needle}`, includes(settings, needle), needle);
+  add(`Settings Activity contains ${needle}`, includes(settings + notifications, needle), needle);
 });
 
 [
@@ -38,10 +43,11 @@ const migration = read("supabase/migrations/20260630130624_creator_money_notific
   add(`creator-money notification preference wired ${needle}`, includes(settings + notifications + migration, needle), needle);
 });
 
-add("read/dismiss state uses real notification rows", includes(notifications, "readNotificationList") && includes(notifications, "dismissNotification"), "notification record helpers");
+add("read/dismiss state uses real notification rows", includes(notifications, "readNotificationActivityList") && includes(notifications, "dismissNotification"), "notification record helpers");
 add("Activity deep-link opens through route resolver", includes(settings, "router.push(path as Parameters<typeof router.push>[0])"), "Activity router.push");
 add("Activity empty state is honest", includes(settings, "Creator-money notifications are backed by real notification records."), "real records empty state");
 add("Activity does not use Chat as money ledger", !includes(settings, "chat notification ledger"), "no Chat ledger copy");
+add("Activity reads important rows separately from recent limit", includes(notifications, "readImportantNotificationList(userId, importantLimit)") && includes(settings, "readNotificationActivityList(undefined, 20, 30)"), "important/recent split");
 
 const failed = checks.filter((check) => !check.passed);
 if (failed.length) {

@@ -23,7 +23,7 @@ const notifications = read("_lib/notifications.ts");
 
 [
   "readNotificationSummary",
-  "readNotificationList",
+  "readNotificationActivityList",
   "markNotificationRead",
   "dismissNotification",
   "resolveNotificationPath",
@@ -31,6 +31,8 @@ const notifications = read("_lib/notifications.ts");
   "accessibilityLabel={accessibilityLabel}",
   "unreadCount > 0",
   "notification-tray",
+  "notification-tray-important-section",
+  "notification-tray-recent-section",
   "No fake counts or records are shown.",
 ].forEach((needle) => add(`bell uses real notification tray behavior: ${needle}`, includes(bell, needle), needle));
 
@@ -48,7 +50,8 @@ add("Explore/Live/Saved shared topbar imports notification bell", includes(mainT
 add("Platform channel imports notification bell", includes(channel, "NotificationBellButton"), "channel header bell");
 add("Platform Studio imports notification bell", includes(channelStudio, "NotificationBellButton"), "studio header bell");
 add("Settings Activity opens from bell route param", includes(settings, "params.section") && includes(settings, "notifications: true"), "settings notification section auto-open");
-add("Settings Activity reads real notification records", includes(settings, "readNotificationList") && includes(settings, "settings-notification-activity-list"), "real Activity list");
+add("Settings Activity reads real notification records", includes(settings, "readNotificationActivityList") && includes(settings, "settings-notification-activity-list"), "real Activity list");
+add("Settings Activity separates important and recent records", includes(settings, "settings-notification-important-section") && includes(settings, "settings-notification-recent-section"), "important/recent Activity sections");
 add("notification path resolver supports Settings", includes(notifications, "resolveNotificationPath") && includes(notifications, 'path === "/settings"'), "settings route");
 
 const failed = checks.filter((check) => !check.passed);

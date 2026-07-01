@@ -20,7 +20,7 @@ import {
 } from "../_lib/monetization";
 import {
   readNotificationPreferences,
-  readNotificationList,
+  readNotificationActivityList,
   readPushPermissionState,
   requestAndroidPushPermissionAndRegister,
   dismissNotification,
@@ -642,7 +642,7 @@ export default function SettingsScreen() {
       const [preferences, permissionState, activity] = await Promise.all([
         readNotificationPreferences(),
         readPushPermissionState(),
-        readNotificationList(undefined, 20),
+        readNotificationActivityList(undefined, 20, 30),
       ]);
       setNotificationPreferences(preferences);
       setNotificationActivity(activity.filter((notification) => !notification.isDismissed));
@@ -1425,18 +1425,27 @@ export default function SettingsScreen() {
       });
     const busy = notificationActivityBusyId === notification.id;
     const routeReady = !!resolveNotificationPath(notification.deepLink);
+    const actionCopy = notification.isExpired
+      ? "Expired"
+      : notification.actionStatus === "handled"
+        ? "Handled"
+        : routeReady
+          ? notification.actionLabel
+          : "Route unavailable";
     const meta = [
       notification.isRead ? "Read" : "Unread",
+      notification.isImportant ? "Important" : null,
       notification.category === "creator_money_purchase"
         ? "Creator purchase"
         : notification.category === "creator_money_sale"
           ? "Creator sale"
           : "Activity",
+      actionCopy,
       createdLabel,
-    ].join(" • ");
+    ].filter(Boolean).join(" • ");
 
     return (
-      <View key={notification.id} style={styles.activityRow}>
+      <View key={notification.id} style={[styles.activityRow, notification.isImportant && styles.activityRowImportant]}>
         <TouchableOpacity
           style={styles.activityMain}
           activeOpacity={0.86}
@@ -1453,7 +1462,7 @@ export default function SettingsScreen() {
           </Text>
           {notification.body ? <Text style={styles.activityBody}>{notification.body}</Text> : null}
           <Text style={styles.activityMeta}>
-            {routeReady ? meta : `${meta} • Route unavailable`}
+            {meta}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -1474,6 +1483,15 @@ export default function SettingsScreen() {
       </View>
     );
   }, [notificationActivityBusyId, onDismissNotificationActivity, onPressNotificationActivity]);
+
+  const importantNotificationActivity = useMemo(
+    () => notificationActivity.filter((notification) => notification.isImportant),
+    [notificationActivity],
+  );
+  const recentNotificationActivity = useMemo(
+    () => notificationActivity.filter((notification) => !notification.isImportant),
+    [notificationActivity],
+  );
 
   const renderLegalPolicyRow = useCallback((slug: string) => {
     const policy = legalPolicyBySlug.get(slug);
@@ -2018,7 +2036,26 @@ export default function SettingsScreen() {
                 <Text style={styles.activityBody}>Loading activity...</Text>
               </View>
             ) : notificationActivity.length ? (
-              notificationActivity.map(renderNotificationActivityRow)
+              <>
+                {importantNotificationActivity.length ? (
+                  <View style={styles.activitySection} testID="settings-notification-important-section">
+                    <Text style={styles.activitySectionTitle}>Important / Action Needed</Text>
+                    <Text style={styles.activitySectionBody}>
+                      Important notifications remain easy to find until dismissed, handled, revoked, or expired. Read state does not remove important notifications. Dismiss hides notifications.
+                    </Text>
+                    {importantNotificationActivity.map(renderNotificationActivityRow)}
+                  </View>
+                ) : null}
+                {recentNotificationActivity.length ? (
+                  <View style={styles.activitySection} testID="settings-notification-recent-section">
+                    <Text style={styles.activitySectionTitle}>Recent Activity</Text>
+                    <Text style={styles.activitySectionBody}>
+                      Expired notifications are shown as expired/history rather than silently disappearing.
+                    </Text>
+                    {recentNotificationActivity.map(renderNotificationActivityRow)}
+                  </View>
+                ) : null}
+              </>
             ) : (
               <View style={styles.activityEmptyState}>
                 <Text style={styles.activityTitle}>No activity yet</Text>
@@ -2680,6 +2717,28 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.08)",
     paddingTop: 10,
     gap: 10,
+  },
+  activityRowImportant: {
+    borderTopColor: "rgba(220,20,60,0.34)",
+  },
+  activitySection: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12,
+    gap: 10,
+  },
+  activitySectionTitle: {
+    color: "#F4F7FC",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  activitySectionBody: {
+    color: "#AAB4C8",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
   },
   activityMain: {
     gap: 4,

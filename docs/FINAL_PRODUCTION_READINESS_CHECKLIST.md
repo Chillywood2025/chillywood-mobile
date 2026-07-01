@@ -1,5 +1,15 @@
 # Final Production Readiness Checklist
 
+## Important Notifications / Activity Retention
+
+Source status: fixed. Installed-app status: Pending for a later Google Play internal build.
+
+Important notifications remain easy to find until dismissed, handled, revoked, or expired. Read state does not remove important notifications. Dismiss hides notifications. Expired notifications are shown as expired/history rather than silently disappearing. Six creator-money flows are Important / Action Needed where actionable.
+
+Settings Activity and the bell tray read active important notifications separately from recent activity, so older actionable rows are not buried by the recent-feed cap. Chi’lly Chat calls remain call/chat-owned and do not turn Chat into a money notification ledger. Seat Pass visible wording is enforced.
+
+`liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF. No auth/RLS/money permission weakening happened. No provider/live-money mutation happened. Source fixed is not installed-app proof.
+
 ## Creator-Money Notifications / Activity
 
 Source status: fixed. Installed-app status: Pending for a later Google Play internal build.

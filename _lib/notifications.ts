@@ -191,12 +191,18 @@ export type NotificationRecord = {
   deepLink: string | null;
   status: string;
   target: NormalizedNotificationTarget;
+  actionGroup: NotificationActionGroup;
+  actionLabel: string;
+  actionStatus: NotificationLifecycleStatus;
   readAt: string | null;
   dismissedAt: string | null;
   createdAt: string;
   deliveredAt: string | null;
   isRead: boolean;
   isDismissed: boolean;
+  isImportant: boolean;
+  isActionable: boolean;
+  isExpired: boolean;
 };
 
 export type NotificationSummary = {
@@ -269,6 +275,55 @@ type NotificationPreferenceUpdate = TablesUpdate<"notification_preferences">;
 
 const CREATOR_EVENT_NOTIFICATION_SELECT =
   "id,host_user_id,event_title,event_type,status,starts_at,ends_at,linked_title_id,replay_policy,replay_available_at,replay_expires_at,reminder_ready,created_at,updated_at";
+
+export type NotificationActionGroup =
+  | "action_required"
+  | "access_ready"
+  | "creator_sale"
+  | "chat_call"
+  | "event_reminder"
+  | "general_activity"
+  | "history";
+
+export type NotificationLifecycleStatus =
+  | "active"
+  | "handled"
+  | "expired"
+  | "revoked"
+  | "dismissed";
+
+const IMPORTANT_NOTIFICATION_CATEGORIES: readonly NotificationCategory[] = [
+  "creator_money_purchase",
+  "creator_money_sale",
+  "chilly_chat_call",
+  "chilly_chat_missed_call",
+  "upcoming_event_reminder",
+  "moderation_notice",
+  "access_granted",
+  "payment_access_confirmation",
+] as const;
+
+const CREATOR_MONEY_BUYER_ACTION_LABELS: Record<string, string> = {
+  paid_video_unlocked: "Watch video",
+  watch_party_ticket_ready: "Enter room",
+  channel_subscription_active: "View subscription",
+  vip_access_active: "View VIP",
+  event_pass_active: "View event",
+  tip_sent_receipt: "View creator",
+};
+
+const CREATOR_MONEY_CREATOR_ACTION_LABELS: Record<string, string> = {
+  paid_video_sold: "View transaction",
+  watch_party_ticket_sold: "View transaction",
+  channel_subscription_started: "View transaction",
+  vip_pass_sold: "View transaction",
+  event_pass_sold: "View transaction",
+  tip_received: "View transaction",
+};
+
+const normalizeJsonRecord = (value: unknown): Record<string, unknown> => (
+  !!value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+);
 
 const normalizeText = (value: unknown) => String(value ?? "").trim();
 const isDefined = <T>(value: T | null): value is T => value !== null;
@@ -345,6 +400,106 @@ export const normalizeNotificationTarget = (input: {
   };
 };
 
+const readContextText = (context: Record<string, unknown>, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = normalizeText(context[key]);
+    if (value) return value;
+  }
+  return "";
+};
+
+const readContextTimestamp = (context: Record<string, unknown>, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = normalizeIsoTimestamp(context[key]);
+    if (value) return value;
+  }
+  return null;
+};
+
+const isTerminalNotificationStatus = (status: string) => (
+  status === "handled"
+  || status === "resolved"
+  || status === "answered"
+  || status === "declined"
+  || status === "missed_handled"
+);
+
+export function classifyNotificationAction(input: {
+  category: NotificationCategory;
+  notificationType: string;
+  status: string;
+  targetContext?: Json;
+  dismissedAt?: string | null;
+}): {
+  actionGroup: NotificationActionGroup;
+  actionLabel: string;
+  actionStatus: NotificationLifecycleStatus;
+  isImportant: boolean;
+  isActionable: boolean;
+  isExpired: boolean;
+} {
+  const context = normalizeJsonRecord(input.targetContext);
+  const notificationType = normalizeText(input.notificationType);
+  const normalizedStatus = normalizeText(input.status).toLowerCase();
+  const contextStatus = readContextText(context, "action_status", "actionStatus", "lifecycle_status", "lifecycleStatus", "status").toLowerCase();
+  const effectiveStatus = contextStatus || normalizedStatus;
+  const expiresAt = readContextTimestamp(context, "action_expires_at", "actionExpiresAt", "expires_at", "expiresAt", "ends_at", "endsAt");
+  const expiredByTime = !!expiresAt && Date.parse(expiresAt) <= Date.now();
+
+  let actionStatus: NotificationLifecycleStatus = "active";
+  if (input.dismissedAt || normalizedStatus === "dismissed" || contextStatus === "dismissed") {
+    actionStatus = "dismissed";
+  } else if (expiredByTime || effectiveStatus === "expired" || effectiveStatus === "canceled" || effectiveStatus === "cancelled") {
+    actionStatus = "expired";
+  } else if (effectiveStatus === "revoked" || effectiveStatus === "refunded" || effectiveStatus === "reversed") {
+    actionStatus = "revoked";
+  } else if (isTerminalNotificationStatus(effectiveStatus)) {
+    actionStatus = "handled";
+  }
+
+  let actionGroup: NotificationActionGroup = "general_activity";
+  let actionLabel = "Open";
+
+  if (input.category === "creator_money_purchase") {
+    actionGroup = "access_ready";
+    actionLabel = CREATOR_MONEY_BUYER_ACTION_LABELS[notificationType] ?? "View";
+  } else if (input.category === "creator_money_sale") {
+    actionGroup = "creator_sale";
+    actionLabel = CREATOR_MONEY_CREATOR_ACTION_LABELS[notificationType] ?? "View transaction";
+  } else if (input.category === "chilly_chat_call") {
+    actionGroup = "chat_call";
+    actionLabel = "Answer or reply";
+  } else if (input.category === "chilly_chat_missed_call") {
+    actionGroup = "chat_call";
+    actionLabel = "Open Chat";
+  } else if (input.category === "upcoming_event_reminder" || notificationType === "event_starts_soon" || notificationType === "watch_party_starts_soon") {
+    actionGroup = "event_reminder";
+    actionLabel = notificationType === "watch_party_starts_soon" ? "Enter room" : "Open event";
+  } else if (input.category === "moderation_notice") {
+    actionGroup = "action_required";
+    actionLabel = "Review notice";
+  } else if (input.category === "access_granted" || input.category === "payment_access_confirmation") {
+    actionGroup = "access_ready";
+    actionLabel = "Open";
+  }
+
+  const baseImportant = IMPORTANT_NOTIFICATION_CATEGORIES.includes(input.category)
+    || notificationType === "event_starts_soon"
+    || notificationType === "watch_party_starts_soon";
+  const isExpired = actionStatus === "expired" || actionStatus === "revoked";
+  const isActionable = baseImportant && actionStatus === "active";
+  const isImportant = baseImportant && actionStatus === "active";
+
+  return {
+    actionGroup: isExpired || actionStatus === "handled" ? "history" : actionGroup,
+    actionLabel,
+    actionStatus,
+    isImportant,
+    isActionable,
+    isExpired,
+  };
+}
+
 const parseNotificationRow = (row: NotificationRow | null): NotificationRecord | null => {
   if (!row) return null;
 
@@ -360,23 +515,38 @@ const parseNotificationRow = (row: NotificationRow | null): NotificationRecord |
   });
   const readAt = normalizeIsoTimestamp(row.read_at);
   const dismissedAt = normalizeIsoTimestamp(row.dismissed_at);
+  const notificationType = normalizeText(row.notification_type) || normalizeNotificationCategory(row.category);
+  const status = normalizeText(row.status) || "pending";
+  const action = classifyNotificationAction({
+    category: normalizeNotificationCategory(row.category),
+    notificationType,
+    status,
+    targetContext: row.target_context,
+    dismissedAt,
+  });
 
   return {
     id,
     userId,
     category: normalizeNotificationCategory(row.category),
-    notificationType: normalizeText(row.notification_type) || normalizeNotificationCategory(row.category),
+    notificationType,
     title,
     body: normalizeText(row.body) || null,
     deepLink: normalizeText(row.deep_link) || null,
-    status: normalizeText(row.status) || "pending",
+    status,
     target,
+    actionGroup: action.actionGroup,
+    actionLabel: action.actionLabel,
+    actionStatus: action.actionStatus,
     readAt,
     dismissedAt,
     createdAt: normalizeIsoTimestamp(row.created_at) ?? new Date().toISOString(),
     deliveredAt: normalizeIsoTimestamp(row.delivered_at),
     isRead: !!readAt,
     isDismissed: !!dismissedAt,
+    isImportant: action.isImportant,
+    isActionable: action.isActionable,
+    isExpired: action.isExpired,
   };
 };
 
@@ -589,6 +759,48 @@ export async function readNotificationList(
     .filter(isDefined);
 }
 
+export async function readImportantNotificationList(
+  userId?: string,
+  limit = 20,
+): Promise<NotificationRecord[]> {
+  const viewerUserId = await readSessionUserId(userId);
+  if (!viewerUserId) return [];
+
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 50);
+  const { data, error } = await supabase
+    .from(NOTIFICATIONS_TABLE)
+    .select("*")
+    .eq("user_id", viewerUserId)
+    .is("dismissed_at", null)
+    .in("category", [...IMPORTANT_NOTIFICATION_CATEGORIES])
+    .order("created_at", { ascending: false })
+    .limit(safeLimit)
+    .returns<NotificationRow[]>();
+
+  if (error || !data) return [];
+  return data
+    .map((row) => parseNotificationRow(row))
+    .filter(isDefined)
+    .filter((notification) => notification.isImportant);
+}
+
+export async function readNotificationActivityList(
+  userId?: string,
+  importantLimit = 20,
+  recentLimit = 30,
+): Promise<NotificationRecord[]> {
+  const [importantRows, recentRows] = await Promise.all([
+    readImportantNotificationList(userId, importantLimit),
+    readNotificationList(userId, recentLimit),
+  ]);
+  const seen = new Set<string>();
+  return [...importantRows, ...recentRows].filter((notification) => {
+    if (seen.has(notification.id)) return false;
+    seen.add(notification.id);
+    return true;
+  });
+}
+
 export async function readNotificationSummary(
   userId?: string,
 ): Promise<NotificationSummary> {
@@ -596,7 +808,7 @@ export async function readNotificationSummary(
 
   return {
     totalCount: notifications.length,
-    unreadCount: notifications.filter((notification) => !notification.isRead).length,
+    unreadCount: notifications.filter((notification) => !notification.isRead && !notification.isDismissed).length,
     undismissedCount: notifications.filter((notification) => !notification.isDismissed).length,
     latestCreatedAt: notifications[0]?.createdAt ?? null,
     categories: Array.from(new Set(notifications.map((notification) => notification.category))),

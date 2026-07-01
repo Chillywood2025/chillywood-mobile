@@ -17,7 +17,7 @@ import {
 import {
   dismissNotification,
   markNotificationRead,
-  readNotificationList,
+  readNotificationActivityList,
   readNotificationSummary,
   resolveNotificationPath,
   type NotificationRecord,
@@ -52,7 +52,7 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     try {
       const [nextSummary, nextNotifications] = await Promise.all([
         readNotificationSummary(),
-        readNotificationList(undefined, 20),
+        readNotificationActivityList(undefined, 12, 18),
       ]);
       setSummary(nextSummary);
       setNotifications(nextNotifications.filter((notification) => !notification.isDismissed));
@@ -130,6 +130,13 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   const renderRow = (notification: NotificationRecord) => {
     const busy = busyId === notification.id;
     const routeReady = !!resolveNotificationPath(notification.deepLink);
+    const actionCopy = notification.isExpired
+      ? "Expired"
+      : notification.actionStatus === "handled"
+        ? "Handled"
+        : routeReady
+          ? notification.actionLabel
+          : "No route in this build";
     return (
       <View
         key={notification.id}
@@ -151,7 +158,7 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
           </Text>
           {notification.body ? <Text style={styles.notificationBody}>{notification.body}</Text> : null}
           <Text style={styles.notificationMeta}>
-            {notification.isRead ? "Read" : "Unread"} · {routeReady ? "Tap to open" : "No route in this build"}
+            {notification.isRead ? "Read" : "Unread"} · {actionCopy}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -172,6 +179,9 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
       </View>
     );
   };
+
+  const importantNotifications = notifications.filter((notification) => notification.isImportant);
+  const recentNotifications = notifications.filter((notification) => !notification.isImportant);
 
   return (
     <>
@@ -233,7 +243,21 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
                   <Text style={styles.emptyStateText}>Loading real notification records...</Text>
                 </View>
               ) : notifications.length ? (
-                notifications.map(renderRow)
+                <>
+                  {importantNotifications.length ? (
+                    <View style={styles.traySection} testID={`${surface}-notification-tray-important-section`}>
+                      <Text style={styles.traySectionTitle}>Important / Action Needed</Text>
+                      <Text style={styles.traySectionBody}>These stay visible after read until handled, dismissed, revoked, or expired.</Text>
+                      {importantNotifications.map(renderRow)}
+                    </View>
+                  ) : null}
+                  {recentNotifications.length ? (
+                    <View style={styles.traySection} testID={`${surface}-notification-tray-recent-section`}>
+                      <Text style={styles.traySectionTitle}>Recent Activity</Text>
+                      {recentNotifications.map(renderRow)}
+                    </View>
+                  ) : null}
+                </>
               ) : (
                 <View style={styles.emptyState}>
                   <MaterialIcons name="notifications-none" size={22} color="#8D98AE" />
@@ -358,6 +382,25 @@ const styles = StyleSheet.create({
   trayListContent: {
     gap: 10,
     paddingBottom: 10,
+  },
+  traySection: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 10,
+    gap: 10,
+  },
+  traySectionTitle: {
+    color: "#F4F7FC",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  traySectionBody: {
+    color: "#AAB4C8",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "700",
   },
   notificationRow: {
     flexDirection: "row",

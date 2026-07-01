@@ -15,6 +15,14 @@ Money Center remains the creator business home. Chat remains conversation-only a
 
 `liveMoneyEnabled` remains OFF. Payouts and cashout remain OFF. No real payout, transfer, withdrawal, payable balance, or provider mutation was created by notifications. Push is Android/Expo only where proven; iOS/APNs remains later unless separately implemented. Source fixed is not installed-app proof.
 
+## June 30, 2026 Important / Action Needed Retention Update
+
+Important notifications remain easy to find until dismissed, handled, revoked, or expired. Read state does not remove important notifications. Dismiss hides notifications. Expired notifications are shown as expired/history rather than silently disappearing.
+
+Six creator-money flows are Important / Action Needed where actionable: Paid Video, Tips, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass. Buyer access/receipt records, creator sale/support records, Chi’lly Chat incoming/missed call records, event starts-soon reminders, backed access-granted/payment confirmations, and backed moderation notices are classified deterministically by `_lib/notifications.ts`.
+
+Settings → Notifications / Activity and the bell tray read active important notifications separately from recent activity so older actionable items are not buried behind a recent-feed cap. Important rows stay visible after mark-read, while dismiss removes them from active Activity. Chi’lly Chat calls remain call/chat-owned and do not turn Chat into a money notification ledger. Seat Pass visible wording is enforced; internal compatibility keys such as `watch_party_ticket_ready` may remain where required by migrations/provider/access logic.
+
 It exists to:
 - preserve the current route and owner doctrine while Chi'llywood adds honest notification and reminder truth
 - define what notification-adjacent truth already exists in the repo today

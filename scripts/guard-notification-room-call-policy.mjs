@@ -28,12 +28,12 @@ const chatIndex = read("app/chat/index.tsx");
 ].forEach((needle) => assertIncludes(packageJson, needle, "package notification room/call scripts"));
 
 assertIncludes(bell, "readNotificationSummary", "bell must use real unread summary");
-assertIncludes(bell, "readNotificationList", "bell tray must use real notification records");
+assertIncludes(bell, "readNotificationActivityList", "bell tray must use real notification records");
 assertIncludes(bell, "No fake counts or records are shown.", "bell empty state must be honest");
 assertIncludes(bell, "accessibilityLabel={accessibilityLabel}", "bell accessibility label must be dynamic");
 assertIncludes(bell, "roomSafe", "bell must support room-safe mode");
 
-assertIncludes(settings, "readNotificationList", "Settings Activity must read real records");
+assertIncludes(settings, "readNotificationActivityList", "Settings Activity must read real records");
 assertIncludes(settings, "markNotificationRead", "Settings Activity must mark read");
 assertIncludes(settings, "dismissNotification", "Settings Activity must dismiss");
 assertIncludes(settings, "Chat stays conversation-only", "Settings Activity must preserve Chat separation copy");

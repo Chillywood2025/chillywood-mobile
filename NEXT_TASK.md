@@ -17,6 +17,21 @@ Current lane doc:
 - `docs/release/HEADER_PROFILE_AVATAR_FLICKER_FIX.md`
 - `docs/release/GOOGLE_SIGNED_V68_CREATOR_MONETIZATION_E2E_PROOF.md`
 
+Important Notifications / Activity retention:
+- Status: source-Closed; installed-app proof remains Pending.
+- Important notifications remain easy to find until dismissed, handled, revoked, or expired.
+- Read state does not remove important notifications.
+- Dismiss hides notifications.
+- Expired notifications are shown as expired/history rather than silently disappearing.
+- Six creator-money flows are Important / Action Needed where actionable.
+- Chi’lly Chat calls remain call/chat-owned and do not turn Chat into a money notification ledger.
+- Seat Pass visible wording is enforced.
+- Settings Activity and the bell tray read active important notifications separately from recent activity.
+- `liveMoneyEnabled` remains OFF.
+- Payouts and cashout remain OFF.
+- No auth/RLS/money permission weakening happened.
+- No provider/live-money mutation happened.
+
 Creator-money notifications/activity:
 - Status: source-Closed; installed-app proof remains Pending.
 - Creator-money notifications are backed by real notification records.

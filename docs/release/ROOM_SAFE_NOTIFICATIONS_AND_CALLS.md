@@ -18,6 +18,11 @@ This lane does not turn Chat into the notification center. This lane does not tu
 - Bell badge is backed by real notification unread summary.
 - Normal app surfaces show the bell next to existing header actions.
 - Room/live surfaces use room-safe notification tray/banner behavior.
+- Important notifications remain easy to find until dismissed, handled, revoked, or expired.
+- Read state does not remove important notifications.
+- Dismiss hides notifications.
+- Expired notifications are shown as expired/history rather than silently disappearing.
+- Six creator-money flows are Important / Action Needed where actionable.
 - Incoming Chi'lly Chat calls do not auto-answer.
 - Incoming calls do not auto-leave or hijack room mic/camera.
 - Leave room and answer requires explicit user action.
@@ -65,6 +70,8 @@ Home, Explore, Live, Saved, Platform, and Platform Studio use the icon-only noti
 ## Room / Live Surface Result
 
 Watch-Party Waiting Room, Party Room, and Live Stage use a room-safe notification bell/tray. Opening the tray does not leave, mute, unmute, disconnect, or permanently cover room controls. Non-urgent foreground creator-money or start-soon activity is handled as a quiet room-safe toast where safe.
+
+The room-safe tray uses the same Important / Action Needed and Recent Activity split as Settings Activity. Chi’lly Chat calls remain call/chat-owned and do not turn Chat into a money notification ledger. Seat Pass visible wording is enforced.
 
 ## Incoming Call Result
 

@@ -87,7 +87,11 @@ Supported deep-link families include `chillywoodmobile://player/`, `watch-party/
 
 ## Notification Center / Activity
 
-Settings now exposes a real Notifications / Activity readback backed by `readNotificationList`. It shows unread state, marks records read before routing, supports dismiss, and opens normalized destination routes. Empty state is honest. Chat remains separate and is not used as the money notification ledger.
+Settings now exposes a real Notifications / Activity readback backed by `readNotificationActivityList`, which merges active important records from `readImportantNotificationList` with recent history. Important notifications remain easy to find until dismissed, handled, revoked, or expired. Read state does not remove important notifications. Dismiss hides notifications. Expired notifications are shown as expired/history rather than silently disappearing.
+
+Six creator-money flows are Important / Action Needed where actionable: Paid Video, Tips, Watch-Party Seat Pass, Channel Subscription, VIP, and Event Pass. Buyer access/receipt records and creator sale/support records remain separated. Chi’lly Chat calls remain call/chat-owned and do not turn Chat into a money notification ledger. Seat Pass visible wording is enforced.
+
+The bell tray uses the same split: Important / Action Needed above Recent Activity. Empty state is honest. Chat remains separate and is not used as the money notification ledger.
 
 ## Push Status
 
@@ -106,14 +110,18 @@ Source proof scripts added:
 - `npm run proof:creator-money-notification-routing`
 - `npm run proof:creator-money-notification-records`
 - `npm run proof:notification-center-money-activity`
+- `npm run proof:important-notification-accessibility`
 - `npm run guard:notification-money-policy`
+- `npm run guard:notification-action-retention-policy`
 
 Validation passed:
 
 - `npm run proof:creator-money-notification-routing`
 - `npm run proof:creator-money-notification-records`
 - `npm run proof:notification-center-money-activity`
+- `npm run proof:important-notification-accessibility`
 - `npm run guard:notification-money-policy`
+- `npm run guard:notification-action-retention-policy`
 - `npm run proof:creator-monetization-route-button-wiring`
 - `npm run guard:creator-monetization-policy`
 - `npm run guard:money-center-policy`
