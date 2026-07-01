@@ -3738,7 +3738,7 @@ export default function WatchPartyLiveStageScreen({
           ) : null}
         </View>
         <View style={styles.stageTopChromeActions}>
-          <NotificationBellButton surface="live-stage" roomSafe />
+          <NotificationBellButton surface="live-stage" roomSafe style={styles.stageTopNotificationBell} />
           <TouchableOpacity
             style={[styles.stageTopMenuButton, controlsLocked && styles.stageTopMenuButtonActive]}
             activeOpacity={0.84}
@@ -5471,8 +5471,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   stageTopChromeActions: {
+    position: "relative",
     alignItems: "flex-end",
     gap: 8,
+    zIndex: 34,
+    elevation: 34,
+  },
+  stageTopNotificationBell: {
+    zIndex: 35,
+    elevation: 35,
   },
   stageTopChromeCopy: {
     flex: 1,
