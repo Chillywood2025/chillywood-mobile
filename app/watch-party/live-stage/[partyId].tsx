@@ -5035,6 +5035,19 @@ export default function WatchPartyLiveStageScreen({
         ) : null}
       </View>
 
+      {!isLiveRoomSurface ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.stageNotificationPortal, { top: safeAreaInsets.top + 50 }]}
+        >
+          <NotificationBellButton
+            surface="live-stage"
+            roomSafe
+            style={styles.stagePortalNotificationBell}
+          />
+        </View>
+      ) : null}
+
       <ParticipantDetailSheet
         visible={!!selectedParticipant}
         participant={selectedParticipant}
@@ -5480,6 +5493,17 @@ const styles = StyleSheet.create({
   stageTopNotificationBell: {
     zIndex: 35,
     elevation: 35,
+  },
+  stageNotificationPortal: {
+    position: "absolute",
+    right: 14,
+    zIndex: 90,
+    elevation: 90,
+    alignItems: "flex-end",
+  },
+  stagePortalNotificationBell: {
+    zIndex: 91,
+    elevation: 91,
   },
   stageTopChromeCopy: {
     flex: 1,
