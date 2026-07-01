@@ -1,5 +1,17 @@
 # Final Production Readiness Checklist
 
+## Google Play Proof Fixture Readiness
+
+Status: Partial. Local packet `/tmp/google-play-proof-fixture-packet-20260630-232419/` contains the private fixture packet and redacted summaries.
+
+Repo/source/backend validation is clean at `3edd372654a5d4cc24e5da41649e1ef99996801a`. Both physical devices are visible/authorized and currently have Google Play-installed v74 from `com.android.vending`. Ignored local proof-account config authenticates the owner/operator creator, viewer, premium, and two-device call accounts; no credentials are committed here.
+
+The owner/operator creator account has authenticated Money Center access and six sandbox/not-payable creator configs. Exact route fixtures are privately recorded in the packet, and route/backend resolver checks are ready for Channel, Channel Studio, Paid Video, Watch-Party Seat Pass, Event Pass, Channel Subscription, VIP, Tips, Chat, and Settings. Watch-Party Seat Pass remains the visible wording and routes to the Party Room path, not Live Stage.
+
+Remaining build blocker: target-account creator-money notification records are not present for the six buyer/seller money buckets. Call notifications exist, but buyer/seller creator-money Activity rows need a safe sandbox flow or existing seed path before installed proof. Do not start the next Play internal proof build until this is closed or explicitly accepted as fixture-limited.
+
+No EAS build, Play build, sideload, adb install, clear data, logout, live money, payout, cashout, provider mutation, auth/RLS weakening, or fake production records happened.
+
 ## Local-Source Notifications / Money Center Proof
 
 Local-source status: Partial/mostly-Closed for local web. Installed-app status: Pending for a later Google Play internal build.

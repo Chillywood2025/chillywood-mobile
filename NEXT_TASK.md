@@ -18,6 +18,18 @@ Current lane doc:
 - `docs/release/HEADER_PROFILE_AVATAR_FLICKER_FIX.md`
 - `docs/release/GOOGLE_SIGNED_V68_CREATOR_MONETIZATION_E2E_PROOF.md`
 
+Google Play fixture readiness:
+- Status: Partial.
+- Local fixture packet: `/tmp/google-play-proof-fixture-packet-20260630-232419/`.
+- Repo/source/backend validation is clean at `3edd372654a5d4cc24e5da41649e1ef99996801a`.
+- Both physical devices are visible/authorized and currently have Google Play-installed v74 from `com.android.vending`.
+- Existing ignored proof-account config authenticates the owner/operator creator, viewer, premium, and two-device call accounts; no credentials are documented here.
+- Owner/operator creator has Money Center access and six sandbox/not-payable creator configs.
+- Exact route fixtures are recorded privately in the packet; public result: Channel, Channel Studio, Paid Video, Watch-Party Seat Pass, Event Pass, Channel Subscription, VIP, Tips, Chat, and Settings route/backend resolver checks are ready.
+- Watch-Party Seat Pass is the visible product wording and routes to the Party Room path, not Live Stage.
+- Remaining build blocker: target-account creator-money notification records are missing for the six buyer/seller money buckets. Call notifications exist, but creator-money Activity rows need a safe sandbox flow or existing seed path before installed proof.
+- Do not create a Play build until the notification record fixture plan is closed or explicitly accepted as fixture-limited.
+
 Local-source notifications / Money Center proof:
 - Status: Partial/mostly-Closed for local web; installed-app proof remains Pending.
 - Android emulator/dev-client proof remained blocked because the available emulator app did not request Metro/local source.
