@@ -73,7 +73,9 @@ assertIncludes(notifications, ".eq(\"user_id\", viewerUserId)", "call notificati
 assertIncludes(notifications, "staleData", "call notification row cleanup must remove older active incoming rows for the current user");
 assertIncludes(notifications, "status: \"dismissed\"", "call notification row cleanup must make rows non-actionable");
 assertIncludes(layout, "await clearEndedChatThreadCall(invite.threadId).catch(() => null);", "room-safe decline must clear active thread call state");
+assertIncludes(layout, "await dismissPresentedChillyChatCallNotifications({\n        callInviteId: invite.id,\n        path: alert.path,\n        threadId: invite.threadId,\n      }).catch(() => 0);", "room-safe decline must retry presented Android call notification cleanup after invite status update");
 assertIncludes(layout, "await dismissChillyChatCallNotificationRows({\n        callInviteId: invite.id,\n        threadId: invite.threadId,\n      }).catch(() => 0);", "room-safe decline must retry persisted call row cleanup after invite status update");
+assertIncludes(layout, "void dismissPresentedChillyChatCallNotifications(input);\n        void dismissChillyChatCallNotificationRows(input);", "delayed call cleanup must retry both presented Android notifications and persisted rows");
 assertIncludes(layout, "playChillyChatCallSound", "app-wide incoming call bridge must ring outside the same chat thread");
 assertIncludes(layout, "Vibration.vibrate", "app-wide incoming call bridge must vibrate outside the same chat thread");
 assertIncludes(layout, "alreadyOnSameThread", "app-wide ringing must avoid double-ringing when receiver is already inside that chat thread");

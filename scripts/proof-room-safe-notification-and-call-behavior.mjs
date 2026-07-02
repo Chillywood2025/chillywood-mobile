@@ -73,6 +73,12 @@ add(
   "active and stale chilly_chat_call rows are dismissed for the current user",
 );
 add(
+  "declined calls also clear presented Android call notifications after delayed delivery",
+  includes(layout, "void dismissPresentedChillyChatCallNotifications(input);\n        void dismissChillyChatCallNotificationRows(input);")
+    && includes(layout, "await dismissPresentedChillyChatCallNotifications({\n        callInviteId: invite.id,\n        path: alert.path,\n        threadId: invite.threadId,\n      }).catch(() => 0);"),
+  "presented Android incoming-call notifications are retried with row cleanup and after invite decline",
+);
+add(
   "stale call notification rows reconcile against real invite status",
   includes(notifications, "reconcileChillyChatCallNotificationRows")
     && includes(notifications, "CHAT_CALL_INVITES_TABLE")

@@ -603,6 +603,7 @@ function IncomingCallNotificationBridge() {
     void dismissChillyChatCallNotificationRows(input);
     [750, 1800, 5000].forEach((delayMs) => {
       setTimeout(() => {
+        void dismissPresentedChillyChatCallNotifications(input);
         void dismissChillyChatCallNotificationRows(input);
       }, delayMs);
     });
@@ -635,6 +636,11 @@ function IncomingCallNotificationBridge() {
         status: "declined",
       }).catch(() => null);
       await clearEndedChatThreadCall(invite.threadId).catch(() => null);
+      await dismissPresentedChillyChatCallNotifications({
+        callInviteId: invite.id,
+        path: alert.path,
+        threadId: invite.threadId,
+      }).catch(() => 0);
       await dismissChillyChatCallNotificationRows({
         callInviteId: invite.id,
         threadId: invite.threadId,
