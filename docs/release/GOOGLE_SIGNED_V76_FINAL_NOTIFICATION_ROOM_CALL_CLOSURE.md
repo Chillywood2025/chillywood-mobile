@@ -2,7 +2,9 @@
 
 Date: 2026-07-01
 
-Verdict: Blocked for final installed closure. Source fixes were made and published by OTA. The follow-up device recovery pass recovered `R3CXA0DS5JV` and verified both physical phones remain Google Play-installed v76, but `R5CR120QCBF` did not prove the published OTA loaded after repeated safe checks. Since the current owner/creator proof account is on R5 and the remaining proof requires both phones for in-room call actions, the fixed installed UI flows were not counted Closed.
+Latest update: Partial after July 2 installed follow-up. The earlier Blocked state was superseded by `docs/release/GOOGLE_SIGNED_V76_FINAL_ROOM_NOTIFICATION_PROFILE_BELL_CLOSURE.md`. Both phones were visible and Play-installed v76, the newer OTA group `827b6eed-02fd-43be-8b38-f561392ea9e2` / Android update `019f2331-8f3b-7d34-8abb-a665efbdc95d` delivered commit `e7681efc01fa6d85399079e92eccc0e3c452445c`, and installed proof closed Reply in Chat, Leave room and answer, and stale Android call notification cleanup after Decline. Full closure remains Partial because the full six-row creator transaction notification matrix was not visible/proved in the no-logout installed session.
+
+Prior verdict: Blocked for final installed closure. Source fixes were made and published by OTA. The follow-up device recovery pass recovered `R3CXA0DS5JV` and verified both physical phones remain Google Play-installed v76, but `R5CR120QCBF` did not prove the published OTA loaded after repeated safe checks. Since the current owner/creator proof account is on R5 and the remaining proof requires both phones for in-room call actions, the fixed installed UI flows were not counted Closed.
 
 ## Executive Summary
 

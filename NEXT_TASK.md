@@ -2,6 +2,15 @@
 
 # Google-Signed v76 Notifications / Money Center Follow-Up
 
+Current latest truth:
+- July 2, 2026 follow-up artifact folder: `/tmp/google-play-internal-v76-final-room-notification-profile-bell-closure-20260702-071900/`.
+- Both `R5CR120QCBF` and `R3CXA0DS5JV` are visible over ADB and remain Google Play-installed v76 (`package=com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`).
+- Latest OTA group `827b6eed-02fd-43be-8b38-f561392ea9e2`, Android update `019f2331-8f3b-7d34-8abb-a665efbdc95d`, runtime `1.0.0`, commit `e7681efc01fa6d85399079e92eccc0e3c452445c`, is the latest source/OTA used for installed proof.
+- Closed now: Profile bell top-right alignment, Studio bell non-regression, Waiting Room tray, Live Stage tray shell, Reply in Chat, Leave room and answer, and stale Android incoming-call notification cleanup after Decline. The final Decline proof shows `incoming_call_notifications=0` and `missed_call_notifications=0`; R3 caller returned to `No Active Call`.
+- Still Partial: full creator transaction notification route matrix. The installed no-logout session exposed `Tip received` and `Event Pass sold`; both opened Money Center Transactions after Google Play sandbox Premium. The other four creator row types were not visible/proved physically in this pass.
+- Do not reopen Money Center manager visibility. Do not rebuild unless a native/runtime change is required and owner approves. Do not claim all six creator notification rows Closed until all six visible rows are tapped on the installed app or safe current-account UI fixtures are mirrored and clearly documented as sandbox/proof/not-payable routing proof only.
+- R5 used Google Play sandbox Premium through Manage Premium -> Start Sandbox Premium Test -> Subscribe. This is sandbox/test entitlement only. `liveMoneyEnabled` remains OFF; payouts/cashout/payable balances/provider production settings remain OFF.
+
 Current lane doc:
 - `docs/release/GOOGLE_SIGNED_V76_NOTIFICATIONS_MONEY_CENTER_PROOF.md`
 - Artifact folder: `/tmp/google-play-internal-v76-notifications-money-center-proof-20260701-0805/`

@@ -2,7 +2,14 @@
 
 Date: 2026-07-01
 
-Verdict: Partial overall. Installed Money Center manager visibility remains Closed on Google Play v76 plus OTA and was not reopened. The latest two-device recovery follow-up recovered `R3CXA0DS5JV` and verified both phones are still Google Play-installed v76, but final installed closure is Blocked because `R5CR120QCBF` did not prove the published `39609392-ad93-4bcb-86c0-b8b639daf393` OTA loaded after repeated safe checks. The remaining-proof closure pass additionally Closed current-account buyer notification routes, current-account missed-call and event-starts-soon fixture routes, actual Android Chi'lly Chat call push delivery, Party Room room-safe tray behavior, and Party Room incoming Chi'lly Chat call banner/Decline behavior on Google-signed v76. Creator notification rows remain Partial/Blocked for installed closure because the current creator/owner account is on R5 and the fixed creator-route OTA is not proved active there. Waiting Room and Live Stage tray proof, Reply in Chat / Leave room and answer banner action proof, and full stale-call cleanup after decline remain Partial.
+Latest verdict: Partial overall. Installed Money Center manager visibility remains Closed on Google Play v76 plus OTA and was not reopened. The July 2 follow-up in `docs/release/GOOGLE_SIGNED_V76_FINAL_ROOM_NOTIFICATION_PROFILE_BELL_CLOSURE.md` proved both phones are Play-installed v76, loaded the latest JS-only call-notification cleanup OTA, and closed Profile bell alignment, Studio bell non-regression, Waiting Room tray, Live Stage tray shell, Reply in Chat, Leave room and answer, and stale Android call notification cleanup after Decline. Full closure remains Partial because only the currently visible creator transaction rows (`Tip received` and `Event Pass sold`) were physically tapped after Premium and routed to Money Center Transactions; the full six-row creator notification matrix was not visible/proved in this no-logout installed session.
+
+Latest proof artifacts:
+
+- `/tmp/google-play-internal-v76-final-room-notification-profile-bell-closure-20260702-071900/`
+- EAS Update group `827b6eed-02fd-43be-8b38-f561392ea9e2`, Android update `019f2331-8f3b-7d34-8abb-a665efbdc95d`, commit `e7681efc01fa6d85399079e92eccc0e3c452445c`, runtime `1.0.0`.
+
+Latest safety note: R5 used Google Play sandbox Premium through Manage Premium -> Start Sandbox Premium Test -> Subscribe only to reach the legitimate Platform Studio creator route. This did not enable live money, payouts, cashout, payable balances, provider production settings, or creator-money settlement.
 
 Final closure follow-up source fixes were published by EAS Update group `39609392-ad93-4bcb-86c0-b8b639daf393` / Android update `019f1f9f-b6e3-786c-b16f-97ab49d851ea`. `R5CR120QCBF` produced update-state evidence that the OTA was available, downloaded, marked pending, and reset-handled on the Google Play-installed v76 app. This is not final installed UI flow closure because the fixed creator route and stale-call-notification cleanup flows were not rerun, and `R3CXA0DS5JV` was not visible over ADB for two-device proof.
 
