@@ -65,26 +65,19 @@ assertNotIncludes(notifications, "read_at: new Date().toISOString(), dismissed_a
 assertIncludes(notifications, "dismissed_at: new Date().toISOString(), status: \"dismissed\"", "dismiss must be the hide action");
 
 [
-  "settings-notification-important-section",
-  "settings-notification-recent-section",
-  "Important / Action Needed",
-  "Read state does not remove important notifications.",
-  "Dismiss hides notifications.",
-  "Expired notifications are shown as expired/history rather than silently disappearing.",
-].forEach((needle) => assertIncludes(settings, needle, "Settings Activity retention UI"));
-
-[
   "notification-tray-important-section",
   "notification-tray-recent-section",
+  "Important / Action Needed",
   "These stay visible after read until handled, dismissed, revoked, or expired.",
+  "Open Notification Settings",
 ].forEach((needle) => assertIncludes(bell, needle, "bell tray retention UI"));
 
-assertIncludes(settings, "backed by real notification records", "Activity must read real records");
+assertNotIncludes(settings, "readNotificationActivityList", "Settings must not duplicate bell Activity records");
+assertNotIncludes(settings, "settings-notification-activity-list", "Settings must not render an Activity inbox");
 assertIncludes(bell, "No fake counts or records are shown.", "bell tray must not fake records");
-assertIncludes(settings, "Chat stays conversation-only", "Chat separation copy");
 assertIncludes(notifications, "export async function readCurrentPushRegistration", "Settings must have backend push status readback helper");
 assertIncludes(settings, "readCurrentPushRegistration()", "Settings refresh must read backend push registration");
-assertIncludes(settings, "Device push registration controls phone push alerts. In-app Activity is tied to your account and still works in the app.", "Settings must separate push registration from in-app Activity");
+assertIncludes(settings, "Device push registration controls phone push alerts. In-app Activity lives in the bell tray and still works in the app.", "Settings must separate push registration from in-app Activity");
 assertIncludes(settings, "nextRegistration = await readCurrentPushRegistration()", "Register Device must verify persisted backend status");
 assertIncludes(settings, "onPressRefreshPushRegistration", "Device push Refresh must have a dedicated backend readback handler");
 assertIncludes(settings, "setNotificationSavingKey(\"push-refresh\")", "Device push Refresh must show a busy state");

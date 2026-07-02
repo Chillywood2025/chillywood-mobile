@@ -11,6 +11,8 @@ Latest proof artifacts:
 
 Latest safety note: R5 used Google Play sandbox Premium through Manage Premium -> Start Sandbox Premium Test -> Subscribe only to reach the legitimate Platform Studio creator route. This did not enable live money, payouts, cashout, payable balances, provider production settings, or creator-money settlement.
 
+Settings/Bell Activity ownership correction: source fixed after owner direction. Settings no longer renders Notifications / Activity rows. The bell icon/tray is the notification Activity system for important/recent records, timestamps, read state, dismiss, and routing. Settings manages notification preferences, device push registration, Register Device, Refresh, and call sound only. This source correction requires OTA or a later Google Play internal build before installed-app proof can be counted.
+
 Final closure follow-up source fixes were published by EAS Update group `39609392-ad93-4bcb-86c0-b8b639daf393` / Android update `019f1f9f-b6e3-786c-b16f-97ab49d851ea`. `R5CR120QCBF` produced update-state evidence that the OTA was available, downloaded, marked pending, and reset-handled on the Google Play-installed v76 app. This is not final installed UI flow closure because the fixed creator route and stale-call-notification cleanup flows were not rerun, and `R3CXA0DS5JV` was not visible over ADB for two-device proof.
 
 Two-device recovery follow-up artifacts:

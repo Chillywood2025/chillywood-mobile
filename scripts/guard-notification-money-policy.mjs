@@ -21,6 +21,8 @@ const packageJson = read("package.json");
 const revenuecatWebhook = read("supabase/functions/revenuecat-webhook/index.ts");
 const settings = read("app/settings.tsx");
 const notifications = read("_lib/notifications.ts");
+const bell = read("components/notifications/notification-bell-button.tsx");
+const chatIndex = read("app/chat/index.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const routeTargets = read("_lib/creatorMonetizationRouteTargets.ts");
 
@@ -48,7 +50,9 @@ assertIncludes(packageJson, "proof:notification-center-money-activity", "activit
   "notification_delivery_attempts",
 ].forEach((needle) => assertIncludes(revenuecatWebhook, needle, "notification preference/push gate"));
 
-assertIncludes(settings, "Chat stays conversation-only", "Activity UI Chat separation copy");
+assertIncludes(bell, "Real notification records for creator money, events, system alerts, and supported activity.", "bell Activity notification copy");
+assertNotIncludes(chatIndex, "creator_money_sale", "Chat must not become money notification center");
+assertNotIncludes(chatIndex, "creator_money_purchase", "Chat must not become money notification center");
 assertIncludes(notifications, "resolveNotificationPath", "safe notification route resolver");
 assertIncludes(moneyFlags, "live_money_enabled: \"off\"", "live money remains off");
 assertIncludes(moneyFlags, "payouts_enabled: \"off\"", "payouts remain off");

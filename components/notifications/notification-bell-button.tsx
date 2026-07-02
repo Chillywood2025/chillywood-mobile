@@ -89,7 +89,7 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
     void refreshNotifications();
   };
 
-  const openFullActivity = () => {
+  const openNotificationSettings = () => {
     setTrayVisible(false);
     router.push({
       pathname: "/settings",
@@ -282,12 +282,12 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
             <TouchableOpacity
               style={styles.fullActivityButton}
               activeOpacity={0.86}
-              onPress={openFullActivity}
+              onPress={openNotificationSettings}
               accessibilityRole="button"
-              accessibilityLabel="Open full Notifications Activity settings"
+              accessibilityLabel="Open notification settings"
               testID={`${surface}-notification-tray-open-settings`}
             >
-              <Text style={styles.fullActivityButtonText}>Open Activity Settings</Text>
+              <Text style={styles.fullActivityButtonText}>Open Notification Settings</Text>
             </TouchableOpacity>
           </View>
         </View>

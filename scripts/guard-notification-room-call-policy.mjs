@@ -42,10 +42,11 @@ assertIncludes(bell, "roomSafe", "bell must support room-safe mode");
 assertIncludes(profile, 'NotificationBellButton surface="profile"', "Profile header must use the shared top-right notification bell");
 assertIncludes(profile, "headerBackButton", "Profile header must keep the back and bell controls balanced");
 
-assertIncludes(settings, "readNotificationActivityList", "Settings Activity must read real records");
-assertIncludes(settings, "markNotificationRead", "Settings Activity must mark read");
-assertIncludes(settings, "dismissNotification", "Settings Activity must dismiss");
-assertIncludes(settings, "Chat stays conversation-only", "Settings Activity must preserve Chat separation copy");
+assertNotIncludes(settings, "readNotificationActivityList", "Settings must not duplicate bell Activity records");
+assertNotIncludes(settings, "settings-notification-activity-list", "Settings must not render an Activity inbox");
+assertIncludes(settings, "Bell Activity", "Settings must point users to the bell tray for Activity");
+assertIncludes(bell, "markNotificationRead", "Bell Activity must mark read");
+assertIncludes(bell, "dismissNotification", "Bell Activity must dismiss");
 
 [
   "Incoming Chi'lly Chat call",

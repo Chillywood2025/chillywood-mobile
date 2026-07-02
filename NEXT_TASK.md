@@ -3,6 +3,7 @@
 # Google-Signed v76 Notifications / Money Center Follow-Up
 
 Current latest truth:
+- Source correction after owner direction: Settings no longer needs or renders Activity because the bell icon/tray is the notification system. Settings now manages notification preferences, device push registration, Register Device, Refresh, and call sound only; Bell Activity owns important/recent records, timestamps, read state, dismiss, and routing. Deliver by OTA before counting installed proof.
 - July 2, 2026 follow-up artifact folder: `/tmp/google-play-internal-v76-final-room-notification-profile-bell-closure-20260702-071900/`.
 - Both `R5CR120QCBF` and `R3CXA0DS5JV` are visible over ADB and remain Google Play-installed v76 (`package=com.chillywood.mobile`, `installerPackageName=com.android.vending`, versionCode `76`, versionName `1.0.0`).
 - Latest OTA group `827b6eed-02fd-43be-8b38-f561392ea9e2`, Android update `019f2331-8f3b-7d34-8abb-a665efbdc95d`, runtime `1.0.0`, commit `e7681efc01fa6d85399079e92eccc0e3c452445c`, is the latest source/OTA used for installed proof.

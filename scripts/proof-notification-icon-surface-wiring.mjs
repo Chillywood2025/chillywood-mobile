@@ -53,9 +53,9 @@ add("Platform channel imports notification bell", includes(channel, "Notificatio
 add("Platform Studio imports notification bell", includes(channelStudio, "NotificationBellButton"), "studio header bell");
 add("Profile imports notification bell", includes(profile, "NotificationBellButton"), "profile header bell");
 add("Profile bell uses top-right header slot", includes(profile, 'NotificationBellButton surface="profile"') && includes(profile, "headerBackButton") && includes(profile, "textAlign: \"center\""), "profile bell top-right alignment");
-add("Settings Activity opens from bell route param", includes(settings, "params.section") && includes(settings, "notifications: true"), "settings notification section auto-open");
-add("Settings Activity reads real notification records", includes(settings, "readNotificationActivityList") && includes(settings, "settings-notification-activity-list"), "real Activity list");
-add("Settings Activity separates important and recent records", includes(settings, "settings-notification-important-section") && includes(settings, "settings-notification-recent-section"), "important/recent Activity sections");
+add("Bell tray opens Settings notification controls", includes(bell, "Open Notification Settings") && includes(bell, "params: { section: \"notifications\" }"), "settings notification section route");
+add("Settings notifications are preferences only", includes(settings, "Bell Activity") && !includes(settings, "readNotificationActivityList") && !includes(settings, "settings-notification-activity-list"), "no duplicate Settings Activity list");
+add("Bell Activity separates important and recent records", includes(bell, "notification-tray-important-section") && includes(bell, "notification-tray-recent-section"), "important/recent Activity sections");
 add("notification path resolver supports Settings", includes(notifications, "resolveNotificationPath") && includes(notifications, 'path === "/settings"'), "settings route");
 
 const failed = checks.filter((check) => !check.passed);

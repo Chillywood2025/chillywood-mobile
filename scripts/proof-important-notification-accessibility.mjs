@@ -73,26 +73,21 @@ creatorTypes.forEach((type) => {
 ].forEach((needle) => add(`important category/type covered ${needle}`, includes(notifications, needle), needle));
 
 [
-  "readNotificationActivityList(undefined, 20, 30)",
-  "settings-notification-important-section",
-  "settings-notification-recent-section",
-  "Important / Action Needed",
-  "Read state does not remove important notifications.",
-  "Expired notifications are shown as expired/history rather than silently disappearing.",
-].forEach((needle) => add(`Settings Activity retention UI contains ${needle}`, includes(settings, needle), needle));
-
-[
   "readNotificationActivityList(undefined, 12, 18)",
   "notification-tray-important-section",
   "notification-tray-recent-section",
+  "Important / Action Needed",
   "These stay visible after read until handled, dismissed, revoked, or expired.",
+  "Open Notification Settings",
 ].forEach((needle) => add(`bell tray retention UI contains ${needle}`, includes(bell, needle), needle));
+
+add("Settings does not duplicate bell Activity records", !includes(settings, "readNotificationActivityList") && !includes(settings, "settings-notification-activity-list"), "no Settings Activity list");
 
 add("mark-read updates read_at without dismissal", includes(notifications, "const payload: NotificationUpdate = { read_at") && !includes(notifications, "read_at: new Date().toISOString(), dismissed_at"), "read payload");
 add("dismiss hides active rows", includes(notifications, "dismissed_at: new Date().toISOString(), status: \"dismissed\""), "dismiss payload");
 add("important rows are read separately from recent limit", includes(notifications, "readImportantNotificationList(userId, importantLimit)") && includes(notifications, "readNotificationList(userId, recentLimit)"), "split query helper");
-add("Activity does not fake notification records", includes(settings, "backed by real notification records") && includes(bell, "No fake counts or records are shown."), "real records copy");
-add("Chat remains separate from money notifications", includes(settings, "Chat stays conversation-only") && !includes(chatIndex, "creator_money_sale") && !includes(chatIndex, "creator_money_purchase"), "chat separation");
+add("Activity does not fake notification records", includes(bell, "No fake counts or records are shown."), "real records copy");
+add("Chat remains separate from money notifications", !includes(chatIndex, "creator_money_sale") && !includes(chatIndex, "creator_money_purchase"), "chat separation");
 
 [
   "Seat Pass ready",
