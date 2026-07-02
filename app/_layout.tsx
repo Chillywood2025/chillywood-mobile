@@ -597,13 +597,14 @@ function IncomingCallNotificationBridge() {
   const cleanupChillyChatCallNotifications = (input: {
     callInviteId?: string | null;
     path?: string | null;
+    presentedNotificationId?: string | null;
     threadId?: string | null;
   }) => {
-    void dismissPresentedChillyChatCallNotifications(input);
+    void dismissPresentedChillyChatCallNotifications({ ...input, dismissIncomingCallFallback: true });
     void dismissChillyChatCallNotificationRows(input);
     [750, 1800, 5000].forEach((delayMs) => {
       setTimeout(() => {
-        void dismissPresentedChillyChatCallNotifications(input);
+        void dismissPresentedChillyChatCallNotifications({ ...input, dismissIncomingCallFallback: true });
         void dismissChillyChatCallNotificationRows(input);
       }, delayMs);
     });
@@ -614,6 +615,7 @@ function IncomingCallNotificationBridge() {
     cleanupChillyChatCallNotifications({
       callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       path,
+      presentedNotificationId: alert.presentedNotificationId ?? null,
       threadId: alert.invite?.threadId ?? null,
     });
     clearAlert();
@@ -626,6 +628,7 @@ function IncomingCallNotificationBridge() {
     cleanupChillyChatCallNotifications({
       callInviteId: invite?.id ?? alert.inviteId ?? null,
       path: alert.path,
+      presentedNotificationId: alert.presentedNotificationId ?? null,
       threadId: invite?.threadId ?? null,
     });
     clearAlert();
@@ -638,7 +641,9 @@ function IncomingCallNotificationBridge() {
       await clearEndedChatThreadCall(invite.threadId).catch(() => null);
       await dismissPresentedChillyChatCallNotifications({
         callInviteId: invite.id,
+        dismissIncomingCallFallback: true,
         path: alert.path,
+        presentedNotificationId: alert.presentedNotificationId ?? null,
         threadId: invite.threadId,
       }).catch(() => 0);
       await dismissChillyChatCallNotificationRows({
@@ -653,6 +658,7 @@ function IncomingCallNotificationBridge() {
     cleanupChillyChatCallNotifications({
       callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       path: alert.path,
+      presentedNotificationId: alert.presentedNotificationId ?? null,
       threadId,
     });
     clearAlert();

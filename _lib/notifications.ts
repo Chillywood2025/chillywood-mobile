@@ -1392,6 +1392,7 @@ export type ForegroundNotificationAlert = {
   body: string;
   inviteId?: string;
   path: string;
+  presentedNotificationId?: string;
   title: string;
   triggerType: string;
 };
@@ -1943,32 +1944,48 @@ export function subscribeToNotificationResponses(onPath: (path: string) => void)
 
 export async function dismissPresentedChillyChatCallNotifications(input: {
   callInviteId?: string | null;
+  dismissIncomingCallFallback?: boolean;
   path?: string | null;
+  presentedNotificationId?: string | null;
   threadId?: string | null;
 }): Promise<number> {
   if (Platform.OS === "web") return 0;
 
   const targetInviteId = normalizeText(input.callInviteId);
+  const targetPresentedNotificationId = normalizeText(input.presentedNotificationId);
   const targetPath = normalizeNotificationPath(input.path);
   const targetThreadId = normalizeText(input.threadId);
+  const canUseIncomingTitleFallback = input.dismissIncomingCallFallback === true
+    && (!!targetInviteId || !!targetPath || !!targetThreadId || !!targetPresentedNotificationId);
 
   try {
-    const presented = await Notifications.getPresentedNotificationsAsync();
     let dismissed = 0;
+    if (targetPresentedNotificationId) {
+      await Notifications.dismissNotificationAsync(targetPresentedNotificationId).then(() => {
+        dismissed += 1;
+      }).catch(() => null);
+    }
+
+    const presented = await Notifications.getPresentedNotificationsAsync();
 
     await Promise.all(presented.map(async (notification) => {
+      const notificationIdentifier = normalizeText(notification.request.identifier);
       const data = notification.request.content.data as Record<string, unknown>;
+      const title = normalizeText(notification.request.content.title).toLowerCase();
       const triggerType = normalizeText(data.triggerType || data.notificationType || data.category).toLowerCase();
       const openCall = data.openCall === true || normalizeText(data.openCall) === "1" || normalizeText(data.openCall).toLowerCase() === "true";
       const callInviteId = normalizeText(data.callInviteId);
       const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
       const isChillyChatCall = triggerType === "chilly_chat_call" || openCall;
-      if (!isChillyChatCall) return;
+      const isIncomingChillyChatCallTitle = title.startsWith("incoming chi'lly chat") && title.includes("call");
+      const matchesPresentedIdentifier = !!targetPresentedNotificationId && notificationIdentifier === targetPresentedNotificationId;
+      if (!isChillyChatCall && !matchesPresentedIdentifier && !(canUseIncomingTitleFallback && isIncomingChillyChatCallTitle)) return;
 
       const matchesInvite = !!targetInviteId && callInviteId === targetInviteId;
       const matchesPath = !!targetPath && path === targetPath;
       const matchesThread = !!targetThreadId && !!path && path.startsWith(`/chat/${targetThreadId}`);
-      if (!matchesInvite && !matchesPath && !matchesThread) return;
+      const matchesIncomingFallback = canUseIncomingTitleFallback && isIncomingChillyChatCallTitle;
+      if (!matchesPresentedIdentifier && !matchesInvite && !matchesPath && !matchesThread && !matchesIncomingFallback) return;
 
       await Notifications.dismissNotificationAsync(notification.request.identifier);
       dismissed += 1;
@@ -1995,6 +2012,7 @@ export function subscribeToForegroundNotificationAlerts(onAlert: (alert: Foregro
       body: normalizeText(content.body) || "Tap to open the Chi'lly Chat call.",
       inviteId: normalizeText(data.callInviteId) || undefined,
       path,
+      presentedNotificationId: notification.request.identifier,
       title: normalizeText(content.title) || "Incoming Chi'lly Chat call",
       triggerType: triggerType || "chilly_chat_call",
     });
