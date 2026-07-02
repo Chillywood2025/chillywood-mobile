@@ -12,6 +12,7 @@ const includes = (source, needle) => source.includes(needle);
 
 const layout = read("app/_layout.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
+const chatLib = read("_lib/chat.ts");
 const watchPartyLobby = read("app/watch-party/index.tsx");
 const watchPartyRoom = read("app/watch-party/[partyId].tsx");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
@@ -86,6 +87,15 @@ add(
     && includes(communicationPanel, "statusLabelOverride")
     && includes(chillyChatCalls, "readChillyChatCallInvite"),
   "caller ringback must follow invite lifecycle and label the single-participant call as ringing",
+);
+add(
+  "inbox/thread reads clear stale active call state after terminal invite status",
+  includes(chatLib, "reconcileActiveChatThreadCallState")
+    && includes(chatLib, "shouldClearStaleActiveThreadCall")
+    && includes(chatLib, "CHAT_CALL_INVITES_TABLE")
+    && includes(chatLib, "inviteStatus === \"ringing\"")
+    && includes(chatLib, "activeCommunicationRoomId: undefined"),
+  "inbox live-call badges must not survive declined/missed/expired call invites",
 );
 add(
   "room-safe Decline clears active thread call state",

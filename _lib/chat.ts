@@ -131,6 +131,10 @@ type ChatThreadUpdate = TablesUpdate<"chat_threads">;
 type ChatThreadMemberInsert = TablesInsert<"chat_thread_members">;
 type ChatThreadMemberUpdate = TablesUpdate<"chat_thread_members">;
 type ChatMessageInsert = TablesInsert<"chat_messages">;
+type ChatCallInviteStatusRow = Pick<
+  Tables<"chat_call_invites">,
+  "id" | "thread_id" | "communication_room_id" | "status" | "created_at" | "expires_at"
+>;
 
 type DirectChatThreadOpenRepairRpc = PromiseLike<{
   data: { thread_id?: unknown }[] | null;
@@ -409,6 +413,51 @@ async function enrichChatThreadsWithUsernames(threads: ChatThreadSummary[]) {
   });
 }
 
+async function shouldClearStaleActiveThreadCall(thread: ChatThreadSummary): Promise<boolean> {
+  const threadId = toText(thread.threadId);
+  const roomId = toText(thread.activeCommunicationRoomId);
+  if (!threadId || !roomId || !thread.activeCallType) return false;
+
+  const { data } = await supabase
+    .from(CHAT_CALL_INVITES_TABLE)
+    .select("id,thread_id,communication_room_id,status,created_at,expires_at")
+    .eq("thread_id", threadId)
+    .eq("communication_room_id", roomId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .returns<ChatCallInviteStatusRow[]>();
+
+  const invite = data?.[0] ?? null;
+  if (invite) {
+    const inviteStatus = toText(invite.status).toLowerCase();
+    const expiresAt = Date.parse(toText(invite.expires_at));
+    const expired = Number.isFinite(expiresAt) && expiresAt <= Date.now();
+    if (inviteStatus === "ringing" && !expired) return false;
+    if (inviteStatus === "accepted" && !expired) {
+      const snapshot = await getCommunicationRoomSnapshot(roomId).catch(() => null);
+      return !(snapshot?.room && isCommunicationRoomActive(snapshot.room));
+    }
+    return true;
+  }
+
+  const snapshot = await getCommunicationRoomSnapshot(roomId).catch(() => null);
+  return !(snapshot?.room && isCommunicationRoomActive(snapshot.room));
+}
+
+async function reconcileActiveChatThreadCallState(threads: ChatThreadSummary[]): Promise<ChatThreadSummary[]> {
+  return Promise.all(threads.map(async (thread) => {
+    if (!thread.activeCommunicationRoomId || !thread.activeCallType) return thread;
+    const shouldClear = await shouldClearStaleActiveThreadCall(thread).catch(() => false);
+    if (!shouldClear) return thread;
+    await clearEndedChatThreadCall(thread.threadId).catch(() => null);
+    return {
+      ...thread,
+      activeCommunicationRoomId: undefined,
+      activeCallType: undefined,
+    };
+  }));
+}
+
 function escapeIlikeValue(value: string) {
   return value.replace(/[%(),]/g, "").trim();
 }
@@ -441,7 +490,7 @@ export async function listChatThreads(): Promise<ChatThreadSummary[]> {
     .map((row) => parseChatThread(row, currentUserId))
     .filter(isDefined)
     .filter((thread) => !isHiddenFromCurrentInbox(thread));
-  return enrichChatThreadsWithUsernames(threads);
+  return reconcileActiveChatThreadCallState(await enrichChatThreadsWithUsernames(threads));
 }
 
 export async function getChatThread(threadId: string): Promise<ChatThreadSummary | null> {
@@ -459,7 +508,8 @@ export async function getChatThread(threadId: string): Promise<ChatThreadSummary
   if (error || !data) return null;
   const thread = parseChatThread(data, currentUserId);
   if (!thread) return null;
-  return (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
+  const enriched = (await enrichChatThreadsWithUsernames([thread]))[0] ?? thread;
+  return (await reconcileActiveChatThreadCallState([enriched]))[0] ?? enriched;
 }
 
 export async function getChatThreadByActiveCommunicationRoomId(roomId: string): Promise<ChatThreadSummary | null> {

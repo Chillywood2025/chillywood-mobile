@@ -17,6 +17,7 @@ const packageJson = read("package.json");
 const bell = read("components/notifications/notification-bell-button.tsx");
 const layout = read("app/_layout.tsx");
 const chatThread = read("app/chat/[threadId].tsx");
+const chatLib = read("_lib/chat.ts");
 const settings = read("app/settings.tsx");
 const notifications = read("_lib/notifications.ts");
 const chillyChatCalls = read("_lib/chillyChatCalls.ts");
@@ -83,6 +84,10 @@ assertIncludes(chatThread, "Voice call ringing", "caller screen must show ringin
 assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing\" : null}", "call panel must label one-person outgoing calls as ringing");
 assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
+assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
+assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");
+assertIncludes(chatLib, "CHAT_CALL_INVITES_TABLE", "stale active call cleanup must read real call invites");
+assertIncludes(chatLib, "activeCommunicationRoomId: undefined", "stale active call cleanup must remove live-call badges from returned thread summaries");
 
 assertNotIncludes(layout, "autoAnswer", "incoming calls must not auto-answer");
 assertNotIncludes(layout, "answerAutomatically", "incoming calls must not auto-answer");
