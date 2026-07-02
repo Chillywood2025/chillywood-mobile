@@ -16,7 +16,11 @@ import {
   readPublicEventSummaries,
 } from "./liveEvents";
 import { supabase } from "./supabase";
-import { normalizeChillyChatRingtoneKey, type ChillyChatRingtoneKey } from "./chillyChatCalls";
+import {
+  CHAT_CALL_INVITES_TABLE,
+  normalizeChillyChatRingtoneKey,
+  type ChillyChatRingtoneKey,
+} from "./chillyChatCalls";
 import {
   CHILLY_CHAT_CALL_CHANNEL_ID,
   CHILLY_CHAT_DEFAULT_NOTIFICATION_SOUND,
@@ -265,6 +269,7 @@ export type PublicEventReminderSummary = {
 
 type NotificationRow = Tables<"notifications">;
 type NotificationUpdate = TablesUpdate<"notifications">;
+type CallInviteStatusRow = Pick<Tables<"chat_call_invites">, "id" | "status" | "expires_at">;
 type EventReminderRow = Tables<"event_reminders">;
 type EventReminderInsert = TablesInsert<"event_reminders">;
 type EventReminderUpdate = TablesUpdate<"event_reminders">;
@@ -468,7 +473,7 @@ export function classifyNotificationAction(input: {
     actionLabel = CREATOR_MONEY_CREATOR_ACTION_LABELS[notificationType] ?? "View transaction";
   } else if (input.category === "chilly_chat_call") {
     actionGroup = "chat_call";
-    actionLabel = "Answer or reply";
+    actionLabel = actionStatus === "active" ? "Answer or reply" : "Open Chat";
   } else if (input.category === "chilly_chat_missed_call") {
     actionGroup = "chat_call";
     actionLabel = "Open Chat";
@@ -498,6 +503,105 @@ export function classifyNotificationAction(input: {
     isActionable,
     isExpired,
   };
+}
+
+const CALL_NOTIFICATION_STALE_GRACE_MS = 60_000;
+
+const readCallInviteIdFromNotificationRow = (row: NotificationRow) => {
+  const context = normalizeJsonRecord(row.target_context);
+  return (
+    normalizeText(row.source_id)
+    || readContextText(context, "callInviteId", "call_invite_id", "inviteId")
+  );
+};
+
+const isActiveCallNotificationRow = (row: NotificationRow) => {
+  if (normalizeNotificationCategory(row.category) !== "chilly_chat_call") return false;
+  if (row.dismissed_at) return false;
+  const context = normalizeJsonRecord(row.target_context);
+  const status = normalizeText(row.status).toLowerCase();
+  const contextStatus = readContextText(context, "action_status", "actionStatus", "lifecycle_status", "lifecycleStatus", "status").toLowerCase();
+  const effectiveStatus = contextStatus || status;
+  if (status === "dismissed" || contextStatus === "dismissed") return false;
+  if (effectiveStatus === "expired" || effectiveStatus === "canceled" || effectiveStatus === "cancelled") return false;
+  if (effectiveStatus === "revoked" || isTerminalNotificationStatus(effectiveStatus)) return false;
+  return true;
+};
+
+async function reconcileChillyChatCallNotificationRows(
+  rows: NotificationRow[],
+  viewerUserId: string,
+): Promise<NotificationRow[]> {
+  const callRows = rows.filter(isActiveCallNotificationRow);
+  if (!callRows.length) return rows;
+
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const inviteIds = Array.from(new Set(callRows.map(readCallInviteIdFromNotificationRow).filter(Boolean)));
+  const inviteStatusById = new Map<string, CallInviteStatusRow>();
+
+  if (inviteIds.length) {
+    const { data } = await supabase
+      .from(CHAT_CALL_INVITES_TABLE)
+      .select("id,status,expires_at")
+      .in("id", inviteIds)
+      .returns<CallInviteStatusRow[]>();
+    (data ?? []).forEach((invite) => {
+      const inviteId = normalizeText(invite.id);
+      if (inviteId) inviteStatusById.set(inviteId, invite);
+    });
+  }
+
+  const staleIds = new Set<string>();
+  const nextRows = rows.map((row) => {
+    if (!isActiveCallNotificationRow(row)) return row;
+
+    const context = normalizeJsonRecord(row.target_context);
+    const inviteId = readCallInviteIdFromNotificationRow(row);
+    const invite = inviteId ? inviteStatusById.get(inviteId) : null;
+    const contextExpiresAt = readContextTimestamp(context, "action_expires_at", "actionExpiresAt", "expires_at", "expiresAt", "ends_at", "endsAt");
+    const rowCreatedAt = normalizeIsoTimestamp(row.created_at);
+    const inviteExpiresAt = normalizeIsoTimestamp(invite?.expires_at);
+    const inviteStatus = normalizeText(invite?.status).toLowerCase();
+    const contextExpired = !!contextExpiresAt && Date.parse(contextExpiresAt) <= nowMs;
+    const inviteExpired = !!inviteExpiresAt && Date.parse(inviteExpiresAt) <= nowMs;
+    const rowAgeMs = rowCreatedAt ? nowMs - Date.parse(rowCreatedAt) : CALL_NOTIFICATION_STALE_GRACE_MS + 1;
+    const missingInviteExpired = !invite && (contextExpired || rowAgeMs >= CALL_NOTIFICATION_STALE_GRACE_MS);
+    const inviteNoLongerRinging = !!invite && (inviteStatus !== "ringing" || inviteExpired);
+
+    if (!contextExpired && !missingInviteExpired && !inviteNoLongerRinging) return row;
+
+    const id = normalizeText(row.id);
+    if (id) staleIds.add(id);
+    return {
+      ...row,
+      read_at: row.read_at ?? nowIso,
+      status: "handled",
+      target_context: {
+        ...context,
+        action_status: inviteStatus === "declined" ? "declined" : inviteStatus === "missed" ? "missed_handled" : "handled",
+      } as Json,
+    } satisfies NotificationRow;
+  });
+
+  if (staleIds.size) {
+    try {
+      await supabase
+        .from(NOTIFICATIONS_TABLE)
+        .update({
+          read_at: nowIso,
+          status: "handled",
+        } satisfies NotificationUpdate)
+        .eq("user_id", viewerUserId)
+        .eq("category", "chilly_chat_call")
+        .is("dismissed_at", null)
+        .in("id", Array.from(staleIds));
+    } catch {
+      // Local reconciliation still prevents stale rows from rendering as actionable.
+    }
+  }
+
+  return nextRows;
 }
 
 const parseNotificationRow = (row: NotificationRow | null): NotificationRecord | null => {
@@ -754,7 +858,8 @@ export async function readNotificationList(
     .returns<NotificationRow[]>();
 
   if (error || !data) return [];
-  return data
+  const reconciledRows = await reconcileChillyChatCallNotificationRows(data, viewerUserId);
+  return reconciledRows
     .map((row) => parseNotificationRow(row))
     .filter(isDefined);
 }
@@ -778,7 +883,8 @@ export async function readImportantNotificationList(
     .returns<NotificationRow[]>();
 
   if (error || !data) return [];
-  return data
+  const reconciledRows = await reconcileChillyChatCallNotificationRows(data, viewerUserId);
+  return reconciledRows
     .map((row) => parseNotificationRow(row))
     .filter(isDefined)
     .filter((notification) => notification.isImportant);

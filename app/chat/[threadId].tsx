@@ -22,7 +22,9 @@ import { DEFAULT_APP_CONFIG, readAppConfig } from "../../_lib/appConfig";
 import {
   insertChillyChatCallEvent,
   listChillyChatCallEvents,
+  readChillyChatCallInvite,
   readLatestRingingChillyChatCallInvite,
+  subscribeToChillyChatCallInvite,
   updateChillyChatCallInviteStatus,
   type ChillyChatCallEvent,
   type ChillyChatCallInviteDelivery,
@@ -233,6 +235,7 @@ export default function ChillyChatThreadScreen() {
   const [callPanelOpen, setCallPanelOpen] = useState(false);
   const [callEvents, setCallEvents] = useState<ChillyChatCallEvent[]>([]);
   const [incomingCallInvite, setIncomingCallInvite] = useState<ChillyChatCallInvite | null>(null);
+  const [outgoingCallInvite, setOutgoingCallInvite] = useState<ChillyChatCallInvite | null>(null);
   const [callDeliveryStatus, setCallDeliveryStatus] = useState<string | null>(null);
   const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const [headerQuickActionsOpen, setHeaderQuickActionsOpen] = useState(false);
@@ -245,9 +248,21 @@ export default function ChillyChatThreadScreen() {
   const lastReadReceiptWriteAtRef = useRef(0);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
+  const outgoingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const outgoingRingbackSoundRef = useRef<ChillyChatPlayingSound | null>(null);
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
+
+  const stopOutgoingRingback = useCallback(() => {
+    Vibration.cancel();
+    void stopChillyChatCallSound(outgoingRingbackSoundRef.current);
+    outgoingRingbackSoundRef.current = null;
+    if (outgoingCallTimeoutRef.current) {
+      clearTimeout(outgoingCallTimeoutRef.current);
+      outgoingCallTimeoutRef.current = null;
+    }
+  }, []);
 
   const markThreadReadWithThrottle = useCallback(async () => {
     if (!threadId) return;
@@ -462,6 +477,111 @@ export default function ChillyChatThreadScreen() {
   });
 
   useEffect(() => {
+    stopOutgoingRingback();
+
+    if (
+      !outgoingCallInvite
+      || outgoingCallInvite.status !== "ringing"
+      || !currentUserId
+      || !callPanelOpen
+      || participantCount > 1
+    ) {
+      return () => stopOutgoingRingback();
+    }
+
+    const soundKey = callPreferences?.chillyChatCallSoundKey ?? "chilly_ring";
+    let soundActive = true;
+    if (callPreferences?.chillyChatCallVibrateEnabled !== false) {
+      Vibration.vibrate([0, 120, 950, 120], true);
+    }
+    void playChillyChatCallSound(soundKey, { loop: true, volume: 0.42 })
+      .then((sound) => {
+        if (!sound) return;
+        if (!soundActive) {
+          void stopChillyChatCallSound(sound);
+          return;
+        }
+        outgoingRingbackSoundRef.current = sound;
+      })
+      .catch(() => null);
+
+    const expiresAt = Date.parse(outgoingCallInvite.expiresAt);
+    const timeoutMs = Math.max(1000, Number.isFinite(expiresAt) ? expiresAt - Date.now() : 45_000);
+    outgoingCallTimeoutRef.current = setTimeout(() => {
+      void updateChillyChatCallInviteStatus({
+        actorUserId: currentUserId,
+        invite: outgoingCallInvite,
+        status: "missed",
+      }).finally(() => {
+        stopOutgoingRingback();
+        void leaveRoom({ endRoomIfHost: true }).catch(() => null);
+        void clearEndedChatThreadCall(threadId).finally(() => {
+          setOutgoingCallInvite(null);
+          setCallPanelOpen(false);
+          setCallDeliveryStatus("No answer. The call expired and active call state was cleared.");
+          void loadThreadState();
+        });
+      });
+    }, timeoutMs);
+
+    return () => {
+      soundActive = false;
+      stopOutgoingRingback();
+    };
+  }, [callPanelOpen, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, currentUserId, leaveRoom, loadThreadState, outgoingCallInvite, participantCount, stopOutgoingRingback, threadId]);
+
+  useEffect(() => {
+    if (!outgoingCallInvite?.id) return () => {};
+
+    let active = true;
+    const applyInviteState = async () => {
+      const invite = await readChillyChatCallInvite(outgoingCallInvite.id).catch(() => null);
+      if (!active || !invite) return;
+
+      setOutgoingCallInvite(invite);
+      if (invite.status === "accepted") {
+        stopOutgoingRingback();
+        setOutgoingCallInvite(null);
+        setCallDeliveryStatus("Receiver joined the call.");
+        return;
+      }
+
+      if (
+        invite.status === "declined"
+        || invite.status === "busy"
+        || invite.status === "missed"
+        || invite.status === "canceled"
+        || invite.status === "ended"
+      ) {
+        stopOutgoingRingback();
+        await leaveRoom({ endRoomIfHost: true }).catch(() => null);
+        await clearEndedChatThreadCall(threadId).catch(() => null);
+        if (!active) return;
+        setOutgoingCallInvite(null);
+        setCallPanelOpen(false);
+        setCallDeliveryStatus(
+          invite.status === "declined"
+            ? "The receiver declined. Active call state was cleared."
+            : invite.status === "missed"
+              ? "No answer. Active call state was cleared."
+              : "The call ended. Active call state was cleared.",
+        );
+        await loadThreadState();
+      }
+    };
+
+    void applyInviteState();
+    const unsubscribe = subscribeToChillyChatCallInvite(outgoingCallInvite.id, () => {
+      void applyInviteState();
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [leaveRoom, loadThreadState, outgoingCallInvite?.id, stopOutgoingRingback, threadId]);
+
+  useEffect(() => {
     Vibration.cancel();
     void stopChillyChatCallSound(incomingCallSoundRef.current);
     incomingCallSoundRef.current = null;
@@ -528,10 +648,18 @@ export default function ChillyChatThreadScreen() {
   const otherMemberDisplayName = officialAccount?.displayName ?? otherMember?.displayName ?? "Direct Thread";
   const otherMemberHandle = officialAccount?.handle ?? formatUsernameHandle(otherMember?.username);
   const otherMemberTagline = officialAccount?.tagline ?? otherMember?.tagline;
-  const callTitle = thread?.activeCallType === "video" ? "Video call active" : "Voice call active";
-  const callBody = thread?.activeCallType === "video"
-    ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
-    : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
+  const outgoingCallRinging = callPanelOpen
+    && !!outgoingCallInvite
+    && outgoingCallInvite.status === "ringing"
+    && participantCount < 2;
+  const callTitle = outgoingCallRinging
+    ? (thread?.activeCallType === "video" ? "Video call ringing" : "Voice call ringing")
+    : (thread?.activeCallType === "video" ? "Video call active" : "Voice call active");
+  const callBody = outgoingCallRinging
+    ? `${otherMemberDisplayName} is being notified. Keep this open while Chi'lly Chat rings their phone.`
+    : thread?.activeCallType === "video"
+      ? "Chi'lly Chat video stays inside this direct thread so both people can join without leaving the conversation."
+      : "Chi'lly Chat voice stays inside this direct thread so both people can join without leaving the conversation.";
   const callActionLabel = callBusy
     ? "Connecting..."
     : !activeCallRoomId
@@ -760,6 +888,7 @@ export default function ChillyChatThreadScreen() {
       void requestAndroidPushPermissionAndRegister();
       const result = await startChatThreadCall(threadId, mode);
       setThread(result.thread);
+      setOutgoingCallInvite(result.invite);
       setCallPanelOpen(true);
       setCallDeliveryStatus(getCallDeliveryMessage(result.delivery));
       logChatCall("handle_start_call_success", {
@@ -777,6 +906,7 @@ export default function ChillyChatThreadScreen() {
         mode,
       });
     } catch (callStartError) {
+      setOutgoingCallInvite(null);
       logChatCall("handle_start_call_failed", {
         threadId,
         mode,
@@ -975,9 +1105,18 @@ export default function ChillyChatThreadScreen() {
         roomId: activeCallRoomId,
       });
       await leaveRoom({ endRoomIfHost: isHost });
+      if (isHost && outgoingCallInvite?.status === "ringing" && currentUserId) {
+        await updateChillyChatCallInviteStatus({
+          actorUserId: currentUserId,
+          invite: outgoingCallInvite,
+          status: "canceled",
+        }).catch(() => null);
+      }
       if (isHost) {
         await clearEndedChatThreadCall(threadId);
       }
+      stopOutgoingRingback();
+      setOutgoingCallInvite(null);
       setCallPanelOpen(false);
       setCallDeliveryStatus(isHost
         ? "The call ended and the receiver-visible call state was cleared."
@@ -995,7 +1134,7 @@ export default function ChillyChatThreadScreen() {
         role: isHost ? "host" : "viewer",
       });
     }
-  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, thread?.activeCallType, threadId]);
+  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, stopOutgoingRingback, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";
@@ -1689,13 +1828,16 @@ export default function ChillyChatThreadScreen() {
             titleText={callTitle}
             bodyText={callBody}
             loadingText="Connecting Chi'lly Chat call…"
-            emptyStateText="Waiting for the other participant to join this Chi'lly Chat call."
+            emptyStateText={outgoingCallRinging
+              ? "Ringing. Waiting for the other participant to answer this Chi'lly Chat call."
+              : "Waiting for the other participant to join this Chi'lly Chat call."}
             roomCode={callRoom?.roomCode}
             participantCount={participantCount}
             isHost={!!callRoom?.hostUserId && callRoom.hostUserId === currentUserId}
             channelState={callChannelState}
             loading={callLoading}
             statusMessage={callError}
+            statusLabelOverride={outgoingCallRinging ? "Ringing" : null}
             participants={participants}
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}

@@ -20,6 +20,7 @@ type InRoomCommunicationPanelProps = {
   channelState: "idle" | "connecting" | "live" | "reconnecting" | "error";
   loading: boolean;
   statusMessage?: string | null;
+  statusLabelOverride?: string | null;
   participants: CommunicationParticipantView[];
   cameraEnabled: boolean;
   micEnabled: boolean;
@@ -51,6 +52,7 @@ export function InRoomCommunicationPanel({
   channelState,
   loading,
   statusMessage,
+  statusLabelOverride,
   participants,
   cameraEnabled,
   micEnabled,
@@ -137,7 +139,7 @@ export function InRoomCommunicationPanel({
           <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{isHost ? "Host" : "Participant"}</Text>
         </View>
         <View style={styles.metaPill}>
-          <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{getStatusLabel(channelState)}</Text>
+          <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.metaText}>{statusLabelOverride ?? getStatusLabel(channelState)}</Text>
         </View>
       </View>
 

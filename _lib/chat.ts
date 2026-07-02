@@ -13,6 +13,7 @@ import {
   CHAT_CALL_EVENTS_TABLE,
   CHAT_CALL_INVITES_TABLE,
   createChillyChatCallInvite,
+  type ChillyChatCallInvite,
   type ChillyChatCallInviteDelivery,
 } from "./chillyChatCalls";
 import {
@@ -930,6 +931,7 @@ export async function clearEndedChatThreadCall(threadId: string): Promise<void> 
 
 export async function startChatThreadCall(threadId: string, mode: ChatCallType): Promise<{
   delivery: ChillyChatCallInviteDelivery | null;
+  invite: ChillyChatCallInvite | null;
   thread: ChatThreadSummary;
   roomId: string;
   callType: ChatCallType;
@@ -962,6 +964,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       });
       return {
         delivery: null,
+        invite: null,
         thread,
         roomId: existingRoomId,
         callType: thread.activeCallType ?? mode,
@@ -1045,6 +1048,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
   }
 
   let delivery: ChillyChatCallInviteDelivery | null = null;
+  let createdInvite: ChillyChatCallInvite | null = null;
   try {
     const invite = await createChillyChatCallInvite({
       calleeUserId,
@@ -1053,6 +1057,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
       communicationRoomId: roomId,
       threadId: thread.threadId,
     });
+    createdInvite = invite.invite;
     delivery = invite.delivery;
     logChatCall("thread_call_invite_delivery", {
       currentUserId,
@@ -1097,6 +1102,7 @@ export async function startChatThreadCall(threadId: string, mode: ChatCallType):
 
   return {
     delivery,
+    invite: createdInvite,
     thread: updated,
     roomId,
     callType: mode,

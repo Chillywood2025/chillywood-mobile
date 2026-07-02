@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -29,6 +29,11 @@ import {
   updateChillyChatCallInviteStatus,
   type ChillyChatCallInvite,
 } from "../_lib/chillyChatCalls";
+import {
+  playChillyChatCallSound,
+  stopChillyChatCallSound,
+  type ChillyChatPlayingSound,
+} from "../_lib/chillyChatCallSoundAssets";
 import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
 import {
   configureNotificationRuntime,
@@ -41,6 +46,7 @@ import {
   subscribeToNotificationResponses,
   type ForegroundActivityNotification,
   type ForegroundNotificationAlert,
+  type NotificationPreferenceSettings,
 } from "../_lib/notifications";
 import { getSupportRoutePath, getRuntimeConfigIssueSummary, isRuntimeConfigValid } from "../_lib/runtimeConfig";
 import { RuntimeUpdateGate } from "../_lib/runtimeUpdates";
@@ -434,6 +440,11 @@ const isHostedLiveSurfacePath = (pathname: string) => (
   pathname === "/watch-party/live-stage" || pathname.startsWith("/watch-party/live-stage/")
 );
 
+const normalizeRoutePathOnly = (value?: string | null) => {
+  const normalized = String(value ?? "").trim().split("?")[0]?.replace(/\/+$/u, "") ?? "";
+  return normalized || "/";
+};
+
 const buildIncomingCallAlertFromInvite = async (invite: ChillyChatCallInvite): Promise<IncomingCallAlert> => {
   const callLabel = invite.callType === "voice" ? "voice" : "video";
   const thread = await getChatThread(invite.threadId).catch(() => null);
@@ -455,8 +466,16 @@ function IncomingCallNotificationBridge() {
   const pathname = usePathname();
   const { isSignedIn, user } = useSession();
   const [alert, setAlert] = useState<IncomingCallAlert | null>(null);
+  const [callPreferences, setCallPreferences] = useState<NotificationPreferenceSettings | null>(null);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const latestInviteAlertIdRef = useRef("");
+
+  const stopIncomingCallAttention = () => {
+    Vibration.cancel();
+    void stopChillyChatCallSound(incomingCallSoundRef.current);
+    incomingCallSoundRef.current = null;
+  };
 
   const showAlert = (nextAlert: IncomingCallAlert) => {
     if (nextAlert.inviteId && latestInviteAlertIdRef.current === nextAlert.inviteId) {
@@ -486,6 +505,7 @@ function IncomingCallNotificationBridge() {
     const currentUserId = String(user?.id ?? "").trim();
     if (!isSignedIn || !currentUserId) {
       latestInviteAlertIdRef.current = "";
+      setCallPreferences(null);
       setAlert(null);
       return () => {};
     }
@@ -494,6 +514,7 @@ function IncomingCallNotificationBridge() {
     const refreshIncomingInvite = async () => {
       const preferences = await readNotificationPreferences(currentUserId).catch(() => null);
       if (!active) return;
+      setCallPreferences(preferences);
       if (preferences?.chillyChatCallsEnabled === false || preferences?.inAppEnabled === false) {
         setAlert((current) => current?.triggerType === "chilly_chat_call_invite" ? null : current);
         return;
@@ -522,11 +543,50 @@ function IncomingCallNotificationBridge() {
     };
   }, [isSignedIn, user?.id]);
 
+  useEffect(() => {
+    stopIncomingCallAttention();
+    if (!alert) return () => stopIncomingCallAttention();
+
+    const currentPath = normalizeRoutePathOnly(pathname);
+    const alertPath = normalizeRoutePathOnly(alert.path);
+    const alreadyOnSameThread = currentPath.startsWith("/chat/") && alertPath && currentPath === alertPath;
+    if (
+      alreadyOnSameThread
+      || callPreferences?.chillyChatCallsEnabled === false
+      || callPreferences?.inAppEnabled === false
+    ) {
+      return () => stopIncomingCallAttention();
+    }
+
+    const vibrateEnabled = callPreferences?.chillyChatCallVibrateEnabled !== false;
+    const soundKey = callPreferences?.chillyChatCallSoundKey ?? "chilly_ring";
+    let soundActive = true;
+    if (vibrateEnabled) {
+      Vibration.vibrate(soundKey === "quiet_buzz" ? [0, 120, 80, 120] : [0, 380, 180, 380], true);
+    }
+    void playChillyChatCallSound(soundKey, { loop: true, volume: 0.78 })
+      .then((sound) => {
+        if (!sound) return;
+        if (!soundActive) {
+          void stopChillyChatCallSound(sound);
+          return;
+        }
+        incomingCallSoundRef.current = sound;
+      })
+      .catch(() => null);
+
+    return () => {
+      soundActive = false;
+      stopIncomingCallAttention();
+    };
+  }, [alert?.inviteId, alert?.path, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, callPreferences?.inAppEnabled, pathname]);
+
   if (!alert) return null;
 
   const roomSafeCall = isRoomSafeIncomingCallPath(pathname);
 
   const clearAlert = () => {
+    stopIncomingCallAttention();
     if (dismissTimeoutRef.current) {
       clearTimeout(dismissTimeoutRef.current);
       dismissTimeoutRef.current = null;

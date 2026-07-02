@@ -11,10 +11,13 @@ const add = (name, passed, detail) => checks.push({ name, passed, detail });
 const includes = (source, needle) => source.includes(needle);
 
 const layout = read("app/_layout.tsx");
+const chatThread = read("app/chat/[threadId].tsx");
 const watchPartyLobby = read("app/watch-party/index.tsx");
 const watchPartyRoom = read("app/watch-party/[partyId].tsx");
 const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const notifications = read("_lib/notifications.ts");
+const chillyChatCalls = read("_lib/chillyChatCalls.ts");
+const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 
 [
   "watch-party-waiting-room",
@@ -50,6 +53,14 @@ add("room-safe call action does not auto-answer", !includes(layout, "autoAnswer"
 add("room-safe call action does not auto-leave before explicit button", includes(layout, "onPress={roomSafeCall ? leaveRoomAndAnswer : openCall}"), "explicit leave button");
 add("Reply in Chat routes to chat without answering", includes(layout, "replyInChat") && includes(layout, "`/chat/${threadId}`"), "replyInChat route");
 add(
+  "app-wide incoming call banner rings/vibrates outside the same chat thread",
+  includes(layout, "playChillyChatCallSound")
+    && includes(layout, "Vibration.vibrate")
+    && includes(layout, "alreadyOnSameThread")
+    && includes(layout, "readNotificationPreferences"),
+  "global call bridge must ring/vibrate on non-thread app surfaces without double-ringing the same thread",
+);
+add(
   "declined/answered call rows are removed from in-app Activity",
   includes(notifications, "dismissChillyChatCallNotificationRows")
     && includes(notifications, ".eq(\"category\", \"chilly_chat_call\")")
@@ -57,6 +68,24 @@ add(
     && includes(notifications, "staleData")
     && includes(notifications, "status: \"dismissed\""),
   "active and stale chilly_chat_call rows are dismissed for the current user",
+);
+add(
+  "stale call notification rows reconcile against real invite status",
+  includes(notifications, "reconcileChillyChatCallNotificationRows")
+    && includes(notifications, "CHAT_CALL_INVITES_TABLE")
+    && includes(notifications, "status: \"handled\"")
+    && includes(notifications, "Answer or reply\" : \"Open Chat"),
+  "stale incoming-call rows must not stay active/actionable after decline or expiry",
+);
+add(
+  "caller sees real ringing/waiting state instead of stale one-person connected success",
+  includes(chatThread, "outgoingCallInvite")
+    && includes(chatThread, "subscribeToChillyChatCallInvite")
+    && includes(chatThread, "Voice call ringing")
+    && includes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing\" : null}")
+    && includes(communicationPanel, "statusLabelOverride")
+    && includes(chillyChatCalls, "readChillyChatCallInvite"),
+  "caller ringback must follow invite lifecycle and label the single-participant call as ringing",
 );
 add(
   "room-safe Decline clears active thread call state",

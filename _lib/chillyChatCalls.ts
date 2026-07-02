@@ -399,6 +399,21 @@ export async function readLatestRingingChillyChatCallInviteForCallee(calleeUserI
   return invite;
 }
 
+export async function readChillyChatCallInvite(inviteId: string): Promise<ChillyChatCallInvite | null> {
+  const normalizedInviteId = toText(inviteId);
+  if (!normalizedInviteId) return null;
+
+  const { data, error } = await supabase
+    .from(CHAT_CALL_INVITES_TABLE)
+    .select(CALL_INVITE_SELECT)
+    .eq("id", normalizedInviteId)
+    .returns<CallInviteRow>()
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return parseInvite(data);
+}
+
 export function subscribeToIncomingChillyChatCallInvites(
   calleeUserId: string,
   onChange: () => void,
@@ -415,6 +430,35 @@ export function subscribeToIncomingChillyChatCallInvites(
         schema: "public",
         table: CHAT_CALL_INVITES_TABLE,
         filter: `callee_user_id=eq.${normalizedCalleeUserId}`,
+      },
+      () => onChange(),
+    )
+    .subscribe();
+
+  return () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+  };
+}
+
+export function subscribeToChillyChatCallInvite(
+  inviteId: string,
+  onChange: () => void,
+) {
+  const normalizedInviteId = toText(inviteId);
+  if (!normalizedInviteId) return () => {};
+
+  let channel: RealtimeChannel | null = supabase
+    .channel(`chat-call-invite-${normalizedInviteId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: CHAT_CALL_INVITES_TABLE,
+        filter: `id=eq.${normalizedInviteId}`,
       },
       () => onChange(),
     )

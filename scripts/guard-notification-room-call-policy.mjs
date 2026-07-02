@@ -16,8 +16,11 @@ const assertNotIncludes = (source, needle, label) => assert(!source.includes(nee
 const packageJson = read("package.json");
 const bell = read("components/notifications/notification-bell-button.tsx");
 const layout = read("app/_layout.tsx");
+const chatThread = read("app/chat/[threadId].tsx");
 const settings = read("app/settings.tsx");
 const notifications = read("_lib/notifications.ts");
+const chillyChatCalls = read("_lib/chillyChatCalls.ts");
+const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const chatIndex = read("app/chat/index.tsx");
 
@@ -65,6 +68,21 @@ assertIncludes(notifications, "staleData", "call notification row cleanup must r
 assertIncludes(notifications, "status: \"dismissed\"", "call notification row cleanup must make rows non-actionable");
 assertIncludes(layout, "await clearEndedChatThreadCall(invite.threadId).catch(() => null);", "room-safe decline must clear active thread call state");
 assertIncludes(layout, "await dismissChillyChatCallNotificationRows({\n        callInviteId: invite.id,\n        threadId: invite.threadId,\n      }).catch(() => 0);", "room-safe decline must retry persisted call row cleanup after invite status update");
+assertIncludes(layout, "playChillyChatCallSound", "app-wide incoming call bridge must ring outside the same chat thread");
+assertIncludes(layout, "Vibration.vibrate", "app-wide incoming call bridge must vibrate outside the same chat thread");
+assertIncludes(layout, "alreadyOnSameThread", "app-wide ringing must avoid double-ringing when receiver is already inside that chat thread");
+assertIncludes(layout, "readNotificationPreferences", "app-wide call ringing must respect notification preferences");
+assertIncludes(notifications, "reconcileChillyChatCallNotificationRows", "notification reads must reconcile stale incoming-call rows against invite state");
+assertIncludes(notifications, "CHAT_CALL_INVITES_TABLE", "notification stale-call reconciliation must read real call invites");
+assertIncludes(notifications, "status: \"handled\"", "stale incoming-call rows must become non-actionable history");
+assertIncludes(notifications, "Answer or reply\" : \"Open Chat", "handled call rows must not keep active answer copy");
+assertIncludes(chillyChatCalls, "readChillyChatCallInvite", "caller must be able to read current invite status");
+assertIncludes(chillyChatCalls, "subscribeToChillyChatCallInvite", "caller must subscribe to invite lifecycle changes");
+assertIncludes(chatThread, "outgoingCallInvite", "caller screen must track outgoing invite state");
+assertIncludes(chatThread, "Voice call ringing", "caller screen must show ringing instead of stale one-person connected success");
+assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing\" : null}", "call panel must label one-person outgoing calls as ringing");
+assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
+assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 
 assertNotIncludes(layout, "autoAnswer", "incoming calls must not auto-answer");
 assertNotIncludes(layout, "answerAutomatically", "incoming calls must not auto-answer");
