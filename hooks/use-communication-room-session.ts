@@ -65,6 +65,9 @@ type PresenceStatePayload = {
 };
 
 const HEARTBEAT_INTERVAL_MILLIS = ROOM_HEARTBEAT_MS;
+const SNAPSHOT_WARMUP_INITIAL_DELAY_MILLIS = 750;
+const SNAPSHOT_WARMUP_INTERVAL_MILLIS = 1_500;
+const SNAPSHOT_WARMUP_MAX_ATTEMPTS = 8;
 const OFFER_RETRY_DELAY_MILLIS = 2_500;
 const OFFER_RETRY_MIN_INTERVAL_MILLIS = 2_000;
 const REALTIME_OPERATION_TIMEOUT_MILLIS = 3_000;
@@ -1631,6 +1634,51 @@ export function useCommunicationRoomSession({
 
     return () => clearInterval(interval);
   }, [channelState, enabled, identity, loading, refreshSnapshot, room]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    if (!room?.roomId || !identity?.userId || loading) return;
+
+    const localUserId = identity.userId;
+    const alreadyHasRemoteMember = getActiveCommunicationMemberships(membershipsRef.current)
+      .some((membership) => membership.userId !== localUserId);
+    if (alreadyHasRemoteMember) return;
+
+    let attempts = 0;
+    let inFlight = false;
+    let warmupInterval: ReturnType<typeof setInterval> | null = null;
+    let initialTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearWarmup = () => {
+      if (warmupInterval) clearInterval(warmupInterval);
+      if (initialTimer) clearTimeout(initialTimer);
+      warmupInterval = null;
+      initialTimer = null;
+    };
+
+    const refreshDuringWarmup = async () => {
+      if (inFlight) return;
+      attempts += 1;
+      inFlight = true;
+      const snapshot = await refreshSnapshot(room.roomId).catch(() => null);
+      inFlight = false;
+
+      const activeMemberships = getActiveCommunicationMemberships(snapshot?.memberships ?? membershipsRef.current);
+      const hasRemoteMember = activeMemberships.some((membership) => membership.userId !== localUserId);
+      if (hasRemoteMember || attempts >= SNAPSHOT_WARMUP_MAX_ATTEMPTS) {
+        clearWarmup();
+      }
+    };
+
+    initialTimer = setTimeout(() => {
+      void refreshDuringWarmup();
+    }, SNAPSHOT_WARMUP_INITIAL_DELAY_MILLIS);
+    warmupInterval = setInterval(() => {
+      void refreshDuringWarmup();
+    }, SNAPSHOT_WARMUP_INTERVAL_MILLIS);
+
+    return clearWarmup;
+  }, [enabled, identity?.userId, loading, refreshSnapshot, room?.roomId]);
 
   useEffect(() => {
     if (!enabled) return;
