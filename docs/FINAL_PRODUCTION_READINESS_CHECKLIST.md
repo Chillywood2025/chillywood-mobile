@@ -10,6 +10,18 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Google-Signed V76 UI Consistency Cleanup
+
+Status: Partial for full installed closure; source fixes and reachable R5 installed proof are Closed.
+
+Doc: `docs/release/GOOGLE_SIGNED_V76_UI_CONSISTENCY_CLEANUP.md`. Artifact folder: `/tmp/google-play-internal-v76-ui-consistency-cleanup-20260702-161301/`.
+
+Final source commit `9558545bc29ba6df8e636098ca6da616fda646df` was published by EAS Update production Android runtime `1.0.0`, group `bfc909ca-3956-4085-bd78-d4a003dbbbfe`, Android update `019f24bf-0dc8-7885-af09-45001b67bb50`.
+
+Google Play-installed v76 on `R5CR120QCBF` proved Chat percent-encoded text renders readable decoded spaces in both inbox preview and opened thread, Settings avoids full raw email as the primary account header identity, and Manage Premium sandbox copy hierarchy is cleaner while preserving sandbox/test-only and no-production-money/payout/cashout/payable-balance meaning. Camera/call label clarity is source-fixed and validation-passed, but full two-device installed voice/video camera-toggle proof remains open because `R3CXA0DS5JV` was not visible over ADB during this pass.
+
+No Play build, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, Money Center refactor, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure happened.
+
 ## Google-Signed V76 Notifications / Money Center Proof
 
 Status: Closed for the requested July 2 three-result installed proof lanes. Installed Money Center manager visibility remains Closed in `docs/release/GOOGLE_SIGNED_V76_NOTIFICATIONS_MONEY_CENTER_PROOF.md`.

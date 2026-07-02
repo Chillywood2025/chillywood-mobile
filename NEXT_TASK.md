@@ -1,5 +1,17 @@
 # NEXT TASK
 
+# V76 UI Consistency Cleanup Follow-Up
+
+Current latest truth:
+- V76 UI consistency cleanup is source-fixed and partially installed-proved in `docs/release/GOOGLE_SIGNED_V76_UI_CONSISTENCY_CLEANUP.md`.
+- Artifact folder: `/tmp/google-play-internal-v76-ui-consistency-cleanup-20260702-161301/`.
+- Final source commit: `9558545bc29ba6df8e636098ca6da616fda646df`.
+- Final OTA: production Android runtime `1.0.0`, group `bfc909ca-3956-4085-bd78-d4a003dbbbfe`, Android update `019f24bf-0dc8-7885-af09-45001b67bb50`.
+- Closed on Google Play-installed v76 + OTA on `R5CR120QCBF`: Chat percent-encoded text renders readable decoded spaces in inbox preview and opened thread; Settings header uses safe identity instead of full raw email; Manage Premium sandbox copy hierarchy is clearer while preserving sandbox/no-money safety.
+- Source-fixed and validation-passed but not installed-closed: two-device voice/video camera-toggle label proof. `R3CXA0DS5JV` was not visible over ADB during this pass, so full camera-toggle installed proof needs R3 recovered or another approved second Play-installed device.
+- Do not rebuild unless a native/runtime reason is proven and owner approves. Continue with OTA/installed proof only when the second phone is visible.
+- Safety stayed intact: no Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, Money Center refactor, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure.
+
 # Google-Signed v76 Notifications / Money Center Follow-Up
 
 Current latest truth:

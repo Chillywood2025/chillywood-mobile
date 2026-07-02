@@ -114,6 +114,21 @@ Bell Activity:
 - Surface/screen: Live / Platform Studio Premium copy. Issue: creator/business screens still contain dense sandbox and money-safety copy. Why it matters: safe but visually heavy; users may miss the primary action. Severity: Low. Blocks proof: No. Recommended next action: later copy hierarchy polish without changing money safety. Fixed in this pass: No.
 - Surface/screen: Video call camera toggle. Issue: one tap produced a transient `Camera connecting` state before a second tap recovered live video. Why it matters: if this sticks for a user it can look like the camera button is broken. Severity: Medium. Blocks proof: No in this pass because recovery and live video were proved. Recommended next action: monitor for stuck camera-connecting reports and add clearer off/connecting/live labels if repeated. Fixed in this pass: No.
 
+## UI Consistency Cleanup Follow-Up
+
+Follow-up doc:
+
+- `docs/release/GOOGLE_SIGNED_V76_UI_CONSISTENCY_CLEANUP.md`
+
+Follow-up source fixes were pushed through `9558545bc29ba6df8e636098ca6da616fda646df` and published by EAS Update production Android runtime `1.0.0`, group `bfc909ca-3956-4085-bd78-d4a003dbbbfe`, Android update `019f24bf-0dc8-7885-af09-45001b67bb50`.
+
+Follow-up result:
+
+- Chat thread and inbox preview percent-encoded text now render readable decoded spaces at the display layer. Existing installed proof row `v64%20reappear%20proof` rendered as `v64 reappear proof` in both the inbox preview and the opened thread on Google Play-installed v76 plus OTA.
+- Settings account header no longer exposed a full raw email as the primary identity in installed R5 proof; it showed the current handle instead.
+- Manage Premium sandbox copy hierarchy is cleaner while preserving sandbox/test-only and no-production-money/payout/cashout/payable-balance meaning.
+- Camera/call label clarity is source-fixed and validated. Full two-device installed camera-toggle proof remains open because `R3CXA0DS5JV` was not visible over ADB during the cleanup proof.
+
 ## Safety Confirmation
 
 No Money Center refactor, navigation refactor, room architecture refactor, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, provider mutation, live money, payout, cashout, auth/RLS weakening, fake purchase-generation proof, or raw-token exposure happened.
@@ -127,4 +142,3 @@ Seeded/mirrored notification rows are sandbox/proof/not-payable UI fixtures only
 Validation logs are stored under:
 
 - `/tmp/google-play-internal-v76-three-result-proof-and-ui-consistency-20260702-103354/validation/`
-
