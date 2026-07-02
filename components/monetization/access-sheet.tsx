@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -244,6 +245,17 @@ export function AccessSheet({
     });
     onClose();
   }, [analyticsPayload, onClose]);
+  const opensPremiumManagement = reason === "premium_required"
+    || gate?.monetization?.primaryTargetId === "premium_subscription"
+    || gate?.monetization?.purchaseTargetId === "premium_subscription";
+  const openPremiumManagement = useCallback((source: "primary" | "utility" | "fallback") => {
+    trackEvent("monetization_manage_premium_opened", {
+      ...analyticsPayload,
+      source,
+    });
+    onClose();
+    router.push("/subscribe" as Parameters<typeof router.push>[0]);
+  }, [analyticsPayload, onClose]);
 
   const statusToneStyle = statusTone === "success"
     ? styles.statusCardSuccess
@@ -279,6 +291,15 @@ export function AccessSheet({
     }
 
     if (sheetState?.primaryAction === "retry" || !gate) {
+      if (opensPremiumManagement && (
+        sandboxMode.enabled
+        || sheetState?.primaryLabel.toLowerCase().includes("premium")
+        || sheetState?.primaryLabel.toLowerCase().includes("status")
+      )) {
+        openPremiumManagement("primary");
+        return;
+      }
+
       setLoadingState(true);
       try {
         await loadSheetState();
@@ -338,8 +359,11 @@ export function AccessSheet({
     loadSheetState,
     onCloseTracked,
     onPurchaseResult,
+    openPremiumManagement,
+    opensPremiumManagement,
     resolvePurchaseMode,
     sandboxMode.enabled,
+    sheetState?.primaryLabel,
     sheetState?.primaryAction,
     sheetState?.primaryDisabled,
     user?.id,
@@ -397,6 +421,10 @@ export function AccessSheet({
     setStatusTone("neutral");
 
     try {
+      if (opensPremiumManagement || sandboxMode.enabled) {
+        openPremiumManagement("utility");
+        return;
+      }
       const opened = await openManageSubscriptionFlow();
       trackEvent("monetization_manage_subscription_opened", {
         ...analyticsPayload,
@@ -406,13 +434,12 @@ export function AccessSheet({
         setStatusTone("neutral");
         setStatusMessage("Subscription management opened.");
       } else {
-        setStatusTone("error");
-        setStatusMessage("Unable to open subscription management right now.");
+        openPremiumManagement("fallback");
       }
     } finally {
       setManageBusy(false);
     }
-  }, []);
+  }, [analyticsPayload, openPremiumManagement, opensPremiumManagement, sandboxMode.enabled]);
 
   return (
     <Modal
@@ -499,7 +526,7 @@ export function AccessSheet({
                   activeOpacity={0.86}
                   disabled={busy}
                 >
-                  {manageBusy ? <ActivityIndicator color="#E5ECF8" size="small" /> : <Text style={styles.utilityText}>Manage subscription</Text>}
+                  {manageBusy ? <ActivityIndicator color="#E5ECF8" size="small" /> : <Text style={styles.utilityText}>{opensPremiumManagement ? "Manage Premium" : "Manage subscription"}</Text>}
                 </TouchableOpacity>
               ) : null}
             </View>

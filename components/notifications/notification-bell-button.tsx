@@ -40,6 +40,18 @@ const EMPTY_SUMMARY: NotificationSummary = {
 
 const formatBadgeCount = (count: number) => (count > 99 ? "99+" : String(count));
 
+const formatNotificationTimestamp = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Time unavailable";
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
 export function NotificationBellButton({ surface, roomSafe = false, style }: NotificationBellButtonProps) {
   const [summary, setSummary] = useState<NotificationSummary>(EMPTY_SUMMARY);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
@@ -130,6 +142,7 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
   const renderRow = (notification: NotificationRecord) => {
     const busy = busyId === notification.id;
     const routeReady = !!resolveNotificationPath(notification.deepLink);
+    const createdLabel = formatNotificationTimestamp(notification.createdAt);
     const actionCopy = notification.isExpired
       ? "Expired"
       : notification.actionStatus === "handled"
@@ -151,14 +164,14 @@ export function NotificationBellButton({ surface, roomSafe = false, style }: Not
             void openNotification(notification);
           }}
           accessibilityRole="button"
-          accessibilityLabel={`Open notification: ${notification.title}`}
+          accessibilityLabel={`Open notification: ${notification.title}. ${createdLabel}`}
         >
           <Text style={[styles.notificationTitle, !notification.isRead && styles.notificationTitleUnread]}>
             {notification.title}
           </Text>
           {notification.body ? <Text style={styles.notificationBody}>{notification.body}</Text> : null}
           <Text style={styles.notificationMeta}>
-            {notification.isRead ? "Read" : "Unread"} · {actionCopy}
+            {createdLabel} · {notification.isRead ? "Read" : "Unread"} · {actionCopy}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity

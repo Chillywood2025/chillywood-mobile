@@ -22,6 +22,7 @@ type InRoomCommunicationPanelProps = {
   statusMessage?: string | null;
   statusLabelOverride?: string | null;
   participants: CommunicationParticipantView[];
+  callType?: "voice" | "video" | null;
   cameraEnabled: boolean;
   micEnabled: boolean;
   showControls?: boolean;
@@ -54,6 +55,7 @@ export function InRoomCommunicationPanel({
   statusMessage,
   statusLabelOverride,
   participants,
+  callType = null,
   cameraEnabled,
   micEnabled,
   showControls = true,
@@ -75,6 +77,7 @@ export function InRoomCommunicationPanel({
     logCallDebug("[CH_CALL]", "panel_render", {
       surfaceLabel,
       participantCount,
+      callType,
       channelState,
       loading,
       hasStatusMessage: !!statusMessage,
@@ -83,7 +86,7 @@ export function InRoomCommunicationPanel({
       presentation,
       deviceClass: responsiveLayout.deviceClass,
     });
-  }, [channelState, loading, participantCount, participants.length, presentation, responsiveLayout.deviceClass, showControls, statusMessage, surfaceLabel]);
+  }, [callType, channelState, loading, participantCount, participants.length, presentation, responsiveLayout.deviceClass, showControls, statusMessage, surfaceLabel]);
 
   const controlsVisible = showControls && !loading && !statusMessage;
   const resolvedTitle = titleText ?? `${surfaceLabel} Chi'lly Chat`;
@@ -163,6 +166,7 @@ export function InRoomCommunicationPanel({
         >
           <CommunicationParticipantGrid
             participants={participants}
+            callType={callType}
             presentation={isFullscreen ? "fullscreen" : "embedded"}
             responsiveLayout={responsiveLayout}
           />

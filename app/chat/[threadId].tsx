@@ -1839,6 +1839,7 @@ export default function ChillyChatThreadScreen() {
             statusMessage={callError}
             statusLabelOverride={outgoingCallRinging ? "Ringing" : null}
             participants={participants}
+            callType={thread?.activeCallType ?? null}
             cameraEnabled={cameraEnabled}
             micEnabled={micEnabled}
             showControls={!!activeCallRoomId && !callError && !callLoading}

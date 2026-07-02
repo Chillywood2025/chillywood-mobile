@@ -100,6 +100,22 @@ const describeStream = (stream: MediaStream | null | undefined) => ({
     : [],
 });
 
+const isRenderableVideoTrack = (track: any) => {
+  if (String(track?.kind ?? "") !== "video") return false;
+  if (track?.enabled === false) return false;
+  const readyState = String(track?.readyState ?? "").trim().toLowerCase();
+  return readyState !== "ended";
+};
+
+const hasRenderableVideoTrack = (stream: MediaStream | null | undefined) => (
+  typeof stream?.getVideoTracks === "function"
+  && stream.getVideoTracks().some((track) => isRenderableVideoTrack(track as any))
+);
+
+const getRenderableVideoStreamURL = (stream: MediaStream | null | undefined) => (
+  hasRenderableVideoTrack(stream) ? getCommunicationStreamURL(stream) : ""
+);
+
 const describePeerConnection = (peerConnection: any) => ({
   connectionState: String(peerConnection?.connectionState ?? ""),
   iceConnectionState: String(peerConnection?.iceConnectionState ?? ""),
@@ -315,6 +331,7 @@ export function useCommunicationRoomSession({
   const [micEnabled, setMicEnabled] = useState(initialMediaPreferences?.micEnabled ?? true);
   const [presenceParticipants, setPresenceParticipants] = useState<CommunicationParticipantPresence[]>([]);
   const [localStreamURL, setLocalStreamURL] = useState("");
+  const [localVideoStreamURL, setLocalVideoStreamURL] = useState("");
   const [remoteStreamsByUserId, setRemoteStreamsByUserId] = useState<Record<string, MediaStream>>({});
   const [connectionStateByUserId, setConnectionStateByUserId] = useState<Record<string, PeerConnectionState>>({});
 
@@ -479,6 +496,7 @@ export function useCommunicationRoomSession({
     stopCommunicationStream(localStreamRef.current);
     localStreamRef.current = null;
     setLocalStreamURL("");
+    setLocalVideoStreamURL("");
     auxiliaryStreamsRef.current.forEach((stream) => stopCommunicationStream(stream));
     auxiliaryStreamsRef.current = [];
     logChatRtc("session_media_cleanup_complete", {
@@ -691,6 +709,7 @@ export function useCommunicationRoomSession({
 
     localStreamRef.current = stream;
     setLocalStreamURL(getCommunicationStreamURL(stream));
+    setLocalVideoStreamURL(getRenderableVideoStreamURL(stream));
     logChatRtc("local_stream_success", {
       roomId,
       canUseCamera,
@@ -1727,9 +1746,13 @@ export function useCommunicationRoomSession({
     if (!localStreamRef.current) {
       localStreamRef.current = extraStream;
       setLocalStreamURL(getCommunicationStreamURL(extraStream));
+      if (kind === "video") setLocalVideoStreamURL(getRenderableVideoStreamURL(extraStream));
     } else {
       localStreamRef.current.addTrack(track);
       setLocalStreamURL(getCommunicationStreamURL(localStreamRef.current));
+      if (kind === "video") {
+        setLocalVideoStreamURL(getRenderableVideoStreamURL(extraStream) || getRenderableVideoStreamURL(localStreamRef.current));
+      }
       Object.values(peerConnectionsRef.current).forEach((peerConnection) => {
         const senders = typeof peerConnection.getSenders === "function" ? peerConnection.getSenders() : [];
         const alreadyAdded = senders.some((sender: any) => sender?.track?.id === track.id);
@@ -1754,8 +1777,17 @@ export function useCommunicationRoomSession({
         return;
       }
       track.enabled = true;
+      setLocalVideoStreamURL(
+        getRenderableVideoStreamURL(localStreamRef.current)
+        || auxiliaryStreamsRef.current.map(getRenderableVideoStreamURL).find(Boolean)
+        || "",
+      );
     } else {
       setCommunicationTrackEnabled(localStreamRef.current, "video", false);
+      auxiliaryStreamsRef.current.forEach((stream) => {
+        setCommunicationTrackEnabled(stream, "video", false);
+      });
+      setLocalVideoStreamURL("");
     }
 
     cameraEnabledRef.current = nextEnabled;
@@ -1808,16 +1840,16 @@ export function useCommunicationRoomSession({
       .filter((participant) => activeIds.has(participant.userId) || participant.userId === localUserId)
       .map((participant) => {
         const isSelf = participant.userId === localUserId;
-        const remoteStreamURL = isSelf
+        const remoteVideoStreamURL = isSelf
           ? ""
-          : getCommunicationStreamURL(remoteStreamsByUserId[participant.userId] ?? null) || "";
+          : getRenderableVideoStreamURL(remoteStreamsByUserId[participant.userId] ?? null) || "";
         return {
           ...participant,
           isSelf,
-          cameraOn: isSelf ? participant.cameraOn : participant.cameraOn || !!remoteStreamURL,
+          cameraOn: isSelf ? participant.cameraOn : participant.cameraOn,
           streamURL: isSelf
-            ? localStreamURL || undefined
-            : remoteStreamURL || undefined,
+            ? localVideoStreamURL || undefined
+            : remoteVideoStreamURL || undefined,
           connectionState: isSelf
             ? "connected"
             : (connectionStateByUserId[participant.userId] ?? "waiting"),
@@ -1848,12 +1880,12 @@ export function useCommunicationRoomSession({
         joinedAt: localJoinedAtRef.current,
         isHost: room?.hostUserId === identity.userId,
         isSelf: true,
-        streamURL: localStreamURL || undefined,
+        streamURL: localVideoStreamURL || undefined,
         connectionState: "connected",
       },
       ...merged,
     ];
-  }, [cameraEnabled, connectionStateByUserId, identity, localStreamURL, memberships, micEnabled, presenceParticipants, remoteStreamsByUserId, room?.hostUserId]);
+  }, [cameraEnabled, connectionStateByUserId, identity, localVideoStreamURL, memberships, micEnabled, presenceParticipants, remoteStreamsByUserId, room?.hostUserId]);
 
   useEffect(() => {
     if (!__DEV__) return;

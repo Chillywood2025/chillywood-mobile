@@ -8,6 +8,7 @@ const logCallDebug = (..._args: unknown[]) => {};
 
 type CommunicationParticipantGridProps = {
   participants: CommunicationParticipantView[];
+  callType?: "voice" | "video" | null;
   presentation?: "embedded" | "fullscreen";
   responsiveLayout?: ResponsiveLayout;
 };
@@ -27,9 +28,20 @@ const getInitials = (value: string) => {
   return normalized.slice(0, 2).toUpperCase();
 };
 
-const getConnectionLabel = (participant: CommunicationParticipantView) => {
-  if (participant.isSelf) return participant.micOn ? "You · live mic" : "You · muted";
-  if (participant.streamURL) return participant.micOn ? "Video connected" : "Video connected · muted";
+const getConnectionLabel = (
+  participant: CommunicationParticipantView,
+  options: { callType?: "voice" | "video" | null; hasVideoStream: boolean },
+) => {
+  if (participant.isSelf) {
+    if (options.hasVideoStream) return participant.micOn ? "You · live video" : "You · live video · muted";
+    if (participant.cameraOn) return participant.micOn ? "You · camera connecting" : "You · camera connecting · muted";
+    return participant.micOn ? "You · live mic" : "You · muted";
+  }
+  if (options.hasVideoStream) return participant.micOn ? "Video connected" : "Video connected · muted";
+  if (participant.cameraOn) return participant.micOn ? "Video connecting" : "Video connecting · muted";
+  if (options.callType === "video" && participant.connectionState === "connected") {
+    return participant.micOn ? "Connected · camera off" : "Connected · muted";
+  }
   if (participant.connectionState === "connected") return participant.micOn ? "Connected" : "Connected · muted";
   if (participant.connectionState === "failed") return "Connection failed";
   if (participant.connectionState === "disconnected") return "Disconnected";
@@ -39,6 +51,7 @@ const getConnectionLabel = (participant: CommunicationParticipantView) => {
 
 export function CommunicationParticipantGrid({
   participants,
+  callType = null,
   presentation = "embedded",
   responsiveLayout: providedResponsiveLayout,
 }: CommunicationParticipantGridProps) {
@@ -53,6 +66,7 @@ export function CommunicationParticipantGrid({
     if (!__DEV__) return;
     logCallDebug("[CH_CALL]", "participant_grid_render", {
       participantCount: participants.length,
+      callType,
       presentation,
       deviceClass: responsiveLayout.deviceClass,
       remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL).length,
@@ -66,7 +80,7 @@ export function CommunicationParticipantGrid({
         connectionState: participant.connectionState,
       })),
     });
-  }, [participants, presentation, responsiveLayout.deviceClass]);
+  }, [callType, participants, presentation, responsiveLayout.deviceClass]);
 
   return (
     <View
@@ -81,6 +95,7 @@ export function CommunicationParticipantGrid({
         const hasVideoStream = !!participant.streamURL;
         const showVideo = !!RTCView && hasVideoStream;
         const videoObjectFit = "cover";
+        const cameraPillLabel = hasVideoStream ? "Cam" : participant.cameraOn ? "Cam..." : "Cam Off";
         const tileWide = participants.length <= 1;
         const compactTile = participants.length > 2;
         const oddLastTile = isFullscreen && participants.length > 2 && !isLandscape && participants.length % 2 === 1 && index === participants.length - 1;
@@ -129,7 +144,7 @@ export function CommunicationParticipantGrid({
                   ) : (
                     <Text style={styles.avatarInitial}>{getInitials(participant.displayName)}</Text>
                   )}
-                  <Text style={styles.cameraLabel}>{hasVideoStream ? "Video connecting" : participant.cameraOn ? "Camera warming up" : "Camera off"}</Text>
+                  <Text style={styles.cameraLabel}>{participant.cameraOn ? "Camera connecting" : "Camera off"}</Text>
                 </View>
               )}
               <View style={styles.topRow}>
@@ -167,12 +182,12 @@ export function CommunicationParticipantGrid({
                     style={[styles.status, { fontSize: responsiveFontSize(11.5, responsiveLayout.fontScale, 0.9, 1.12) }]}
                     numberOfLines={1}
                   >
-                    {getConnectionLabel(participant)}
+                    {getConnectionLabel(participant, { callType, hasVideoStream })}
                   </Text>
                 </View>
                 <View style={styles.mediaPills}>
-                  <View style={[styles.mediaPill, (participant.cameraOn || hasVideoStream) ? styles.mediaPillOn : styles.mediaPillOff]}>
-                    <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.mediaPillText}>{(participant.cameraOn || hasVideoStream) ? "Cam" : "Cam Off"}</Text>
+                  <View style={[styles.mediaPill, hasVideoStream ? styles.mediaPillOn : styles.mediaPillOff]}>
+                    <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.mediaPillText}>{cameraPillLabel}</Text>
                   </View>
                   <View style={[styles.mediaPill, participant.micOn ? styles.mediaPillOn : styles.mediaPillOff]}>
                     <Text maxFontSizeMultiplier={textMaxFontSizeMultiplier} style={styles.mediaPillText}>{participant.micOn ? "Mic" : "Muted"}</Text>

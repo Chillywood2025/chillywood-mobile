@@ -1251,6 +1251,12 @@ export async function readMonetizationAccessSheetState(options: {
   const primaryTargetId = options.gate?.monetization?.primaryTargetId;
   const targetId = purchaseTargetId ?? primaryTargetId;
   const targetState = targetId ? snapshot.targets[targetId] : null;
+  const gateReason = String(options.gate?.reason ?? "").trim().toLowerCase();
+  const isPremiumBackedGate = gateReason === "premium_required"
+    || targetId === "premium_subscription"
+    || targetId === "premium_live_access"
+    || targetId === "premium_watch_party_access"
+    || targetId === "paid_title_access";
   const purchaseShellAvailable = isPremiumPurchaseShellAvailableForMode(purchaseMode);
   const offerings = snapshot.offeringsLoaded && purchaseShellAvailable ? await readRevenueCatOfferings() : null;
   const offer = targetId && targetState
@@ -1321,11 +1327,13 @@ export async function readMonetizationAccessSheetState(options: {
       snapshot,
       presentation,
       primaryAction: "retry",
-      primaryLabel: "Retry Offer Lookup",
+      primaryLabel: isPremiumBackedGate ? "Manage Premium" : "Retry Offer Lookup",
       primaryDisabled: false,
-      helperKicker: "OFFER STATUS",
-      helperBody: snapshot.issues[0]
-        ?? "This purchase path is not available in the current offer configuration yet.",
+      helperKicker: isPremiumBackedGate ? "PREMIUM STATUS" : "OFFER STATUS",
+      helperBody: isPremiumBackedGate
+        ? "Open Manage Premium to check status, restore, or start the approved sandbox Premium payment when it is available for this tester account."
+        : snapshot.issues[0]
+          ?? "This purchase path is not available in the current offer configuration yet.",
       helperTone: "warning",
       offer,
       canRestore: true,
