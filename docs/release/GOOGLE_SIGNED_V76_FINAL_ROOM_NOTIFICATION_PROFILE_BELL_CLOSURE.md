@@ -2,7 +2,9 @@
 
 Date: 2026-07-02
 
-Verdict: Partial. Google-signed v76 plus verified OTA now closes the Profile bell alignment, Waiting Room tray, Live Stage tray shell, Reply in Chat, Leave room and answer, and stale Android call notification cleanup after Decline. Full closure remains Partial because only the currently visible creator transaction rows were physically tapped after Premium; the full six-row creator notification matrix was not visible/proved in this no-logout installed session.
+Latest combined follow-up: the remaining full six-row creator transaction notification matrix is now Closed in `docs/release/GOOGLE_SIGNED_V76_THREE_RESULT_PROOF_AND_UI_CONSISTENCY.md`. Artifact folder: `/tmp/google-play-internal-v76-three-result-proof-and-ui-consistency-20260702-103354/`. All six sandbox/proof/not-payable creator rows were visible/tapped on the Google Play-installed v76 app and routed to Platform Studio Money Center Transactions with no Premium gate and no Not Found. These rows are UI/routing proof only, not purchase-generation proof, access grants, payout/cashout/payable-balance proof, provider mutation, or live-money proof.
+
+Original verdict for this doc: Partial at the time of capture. Google-signed v76 plus verified OTA closed the Profile bell alignment, Waiting Room tray, Live Stage tray shell, Reply in Chat, Leave room and answer, and stale Android call notification cleanup after Decline. The later combined follow-up above closed the previously missing six-row creator notification matrix.
 
 ## Executive Summary
 
