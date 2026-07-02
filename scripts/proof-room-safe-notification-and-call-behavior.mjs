@@ -41,6 +41,7 @@ const notifications = read("_lib/notifications.ts");
   "updateChillyChatCallInviteStatus",
   "status: \"declined\"",
   "dismissChillyChatCallNotificationRows",
+  "clearEndedChatThreadCall",
 ].forEach((needle) => add(`incoming call room-safe behavior includes ${needle}`, includes(layout, needle), needle));
 
 add("room-safe call action does not auto-answer", !includes(layout, "autoAnswer") && !includes(layout, "answerAutomatically"), "no auto answer code");
@@ -54,6 +55,11 @@ add(
     && includes(notifications, "staleData")
     && includes(notifications, "status: \"dismissed\""),
   "active and stale chilly_chat_call rows are dismissed for the current user",
+);
+add(
+  "room-safe Decline clears active thread call state",
+  includes(layout, "await clearEndedChatThreadCall(invite.threadId).catch(() => null);"),
+  "Decline must not leave a stale answerable active call room behind",
 );
 
 [

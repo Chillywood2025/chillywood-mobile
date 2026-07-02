@@ -29,7 +29,7 @@ import {
   updateChillyChatCallInviteStatus,
   type ChillyChatCallInvite,
 } from "../_lib/chillyChatCalls";
-import { getChatThread } from "../_lib/chat";
+import { clearEndedChatThreadCall, getChatThread } from "../_lib/chat";
 import {
   configureNotificationRuntime,
   dismissChillyChatCallNotificationRows,
@@ -568,6 +568,7 @@ function IncomingCallNotificationBridge() {
         invite,
         status: "declined",
       }).catch(() => null);
+      await clearEndedChatThreadCall(invite.threadId).catch(() => null);
     }
   };
 
