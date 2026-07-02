@@ -565,7 +565,7 @@ export function useCommunicationRoomSession({
   const applyParticipantsFromSources = useCallback(async (presenceByUserId?: Record<string, PresenceStatePayload>) => {
     const resolvedIdentity = identityRef.current;
     const resolvedRoom = roomRef.current;
-    if (!resolvedIdentity || !resolvedRoom) return;
+    if (!resolvedIdentity || !resolvedRoom) return [];
 
     const activeMemberships = getActiveCommunicationMemberships(membershipsRef.current);
     const allowedMemberships = activeMemberships.filter((membership) => normalizeRoomMembershipState(membership.membershipState) !== "removed");
@@ -610,6 +610,7 @@ export function useCommunicationRoomSession({
         micOn: participant.micOn,
       })),
     });
+    return nextParticipants;
   }, [roomId]);
 
   const refreshSnapshot = useCallback(async (targetRoomId?: string) => {
@@ -1133,21 +1134,8 @@ export function useCommunicationRoomSession({
       participantCount: Object.keys(mapped).length,
       participantIds: Object.keys(mapped),
     });
-    await applyParticipantsFromSources(mapped);
-    await syncPeerConnections(
-      [...Object.keys(mapped)].map((userId) => ({
-        userId,
-        displayName: String(mapped[userId]?.displayName ?? "Participant"),
-        avatarUrl: String(mapped[userId]?.avatarUrl ?? "").trim() || undefined,
-        cameraOn: !!mapped[userId]?.cameraOn,
-        micOn: !!mapped[userId]?.micOn,
-        joinedAt: String(mapped[userId]?.joinedAt ?? new Date().toISOString()),
-        isHost: !!mapped[userId]?.isHost,
-      })).filter((participant) =>
-        membershipsRef.current.some((membership) => membership.userId === participant.userId && normalizeRoomMembershipState(membership.membershipState) !== "removed")
-        || participant.userId === identityRef.current?.userId,
-      ),
-    );
+    const nextParticipants = await applyParticipantsFromSources(mapped);
+    await syncPeerConnections(nextParticipants);
   }, [applyParticipantsFromSources, roomId, syncPeerConnections]);
 
   const leaveRoom = useCallback(async (options?: { endRoomIfHost?: boolean }) => {
