@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { trackEvent } from "../_lib/analytics";
 import {
   getCachedMonetizationSnapshot,
-  INTERNAL_TESTER_SANDBOX_PURCHASE_COPY,
   INTERNAL_TESTER_SANDBOX_PURCHASE_MODE,
   isPremiumPurchaseShellAvailableForMode,
   openManageSubscriptionFlow,
@@ -26,6 +25,12 @@ import { MoneyScopeStrip, MoneySuccessReceipt } from "../components/monetization
 
 const FRIENDLY_UNAVAILABLE_MESSAGE =
   "Premium purchases are temporarily unavailable while setup is being finalized.";
+const PREMIUM_SANDBOX_SUMMARY =
+  "Google Play / RevenueCat sandbox only.";
+const PREMIUM_SANDBOX_SAFETY =
+  "No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.";
+const PREMIUM_SANDBOX_DASHBOARD_NOTE =
+  "Test purchases may appear only in Google Play and RevenueCat sandbox dashboards.";
 const CHILLYWOOD_BACKGROUND_SOURCE = require("../assets/images/chillywood-branded-background.png");
 
 const PREMIUM_UNLOCKS = [
@@ -234,7 +239,7 @@ export default function SubscribeScreen() {
   const purchaseStatusTone = purchaseReady || hasPremium ? "default" : "warning";
   const availabilitySummary = purchaseReady
     ? sandboxMode.enabled
-      ? "Approved tester mode can open a Google Play sandbox Premium purchase. No production money is active."
+      ? "Approved tester mode can open a Google Play / RevenueCat sandbox Premium purchase. No production money is active."
       : "A verified store subscription is ready for this account."
     : FRIENDLY_UNAVAILABLE_MESSAGE;
 
@@ -389,11 +394,11 @@ export default function SubscribeScreen() {
             <Text style={styles.cardKicker}>ACCOUNT STATUS</Text>
             {sandboxMode.enabled ? (
               <View style={styles.sandboxNotice}>
-                <Text style={styles.sandboxKicker}>INTERNAL TESTER SANDBOX MODE</Text>
-                <Text style={styles.sandboxTitle}>Sandbox Premium test is available for this account.</Text>
-                <Text style={styles.sandboxBody}>
-                  {INTERNAL_TESTER_SANDBOX_PURCHASE_COPY} Test purchases may appear in Google Play and RevenueCat sandbox dashboards.
-                </Text>
+                <Text style={styles.sandboxKicker}>SANDBOX TEST MODE</Text>
+                <Text style={styles.sandboxTitle}>Premium sandbox test path</Text>
+                <Text style={styles.sandboxBody}>{PREMIUM_SANDBOX_SUMMARY}</Text>
+                <Text style={styles.sandboxDetail}>{PREMIUM_SANDBOX_SAFETY}</Text>
+                <Text style={styles.sandboxDetail}>{PREMIUM_SANDBOX_DASHBOARD_NOTE}</Text>
               </View>
             ) : null}
             <View testID={hasPremium ? "premium-active-receipt" : undefined}>
@@ -639,6 +644,12 @@ const styles = StyleSheet.create({
     color: "#CFEADA",
     fontSize: 12.5,
     lineHeight: 18,
+    fontWeight: "700",
+  },
+  sandboxDetail: {
+    color: "#AFCBBC",
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: "700",
   },
   cardTitle: {
