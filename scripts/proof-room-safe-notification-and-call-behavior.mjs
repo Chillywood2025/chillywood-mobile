@@ -50,8 +50,10 @@ add(
   "declined/answered call rows are removed from in-app Activity",
   includes(notifications, "dismissChillyChatCallNotificationRows")
     && includes(notifications, ".eq(\"category\", \"chilly_chat_call\")")
+    && includes(notifications, ".eq(\"user_id\", viewerUserId)")
+    && includes(notifications, "staleData")
     && includes(notifications, "status: \"dismissed\""),
-  "active chilly_chat_call rows are dismissed for current user/thread",
+  "active and stale chilly_chat_call rows are dismissed for the current user",
 );
 
 [

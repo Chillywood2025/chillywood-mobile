@@ -981,7 +981,6 @@ export async function dismissChillyChatCallNotificationRows(input: {
 
   const callInviteId = normalizeText(input.callInviteId);
   const threadId = normalizeText(input.threadId);
-  if (!callInviteId && !threadId) return 0;
 
   const now = new Date().toISOString();
   let query = supabase
@@ -995,6 +994,8 @@ export async function dismissChillyChatCallNotificationRows(input: {
     .eq("category", "chilly_chat_call")
     .is("dismissed_at", null);
 
+  // Dismiss every active incoming-call row for this user. Older rows can be
+  // keyed by prior invite ids but still appear as answerable after Decline.
   if (callInviteId && threadId) {
     query = query.or(`source_id.eq.${callInviteId},target_entity_id.eq.${threadId}`);
   } else if (callInviteId) {
@@ -1003,12 +1004,40 @@ export async function dismissChillyChatCallNotificationRows(input: {
     query = query.eq("target_entity_id", threadId);
   }
 
+  if (!callInviteId && !threadId) {
+    query = supabase
+      .from(NOTIFICATIONS_TABLE)
+      .update({
+        dismissed_at: now,
+        read_at: now,
+        status: "dismissed",
+      } satisfies NotificationUpdate)
+      .eq("user_id", viewerUserId)
+      .eq("category", "chilly_chat_call")
+      .is("dismissed_at", null);
+  }
+
   const { data, error } = await query
     .select("id")
     .returns<Array<{ id: string }>>();
 
-  if (error || !data) return 0;
-  return data.length;
+  const matchedCount = error || !data ? 0 : data.length;
+  if (!callInviteId && !threadId) return matchedCount;
+
+  const { data: staleData, error: staleError } = await supabase
+    .from(NOTIFICATIONS_TABLE)
+    .update({
+      dismissed_at: now,
+      read_at: now,
+      status: "dismissed",
+    } satisfies NotificationUpdate)
+    .eq("user_id", viewerUserId)
+    .eq("category", "chilly_chat_call")
+    .is("dismissed_at", null)
+    .select("id")
+    .returns<Array<{ id: string }>>();
+
+  return matchedCount + (staleError || !staleData ? 0 : staleData.length);
 }
 
 export async function readEventReminderEnrollment(
