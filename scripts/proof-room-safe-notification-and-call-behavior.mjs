@@ -19,6 +19,8 @@ const liveStage = read("app/watch-party/live-stage/[partyId].tsx");
 const notifications = read("_lib/notifications.ts");
 const chillyChatCalls = read("_lib/chillyChatCalls.ts");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
+const clearEndedCallMatch = chatLib.match(/export async function clearEndedChatThreadCall[\s\S]*?\n}/);
+const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
 
 [
   "watch-party-waiting-room",
@@ -92,10 +94,17 @@ add(
   "inbox/thread reads clear stale active call state after terminal invite status",
   includes(chatLib, "reconcileActiveChatThreadCallState")
     && includes(chatLib, "shouldClearStaleActiveThreadCall")
+    && includes(chatLib, "hasCurrentChatThreadMembership")
     && includes(chatLib, "CHAT_CALL_INVITES_TABLE")
     && includes(chatLib, "inviteStatus === \"ringing\"")
     && includes(chatLib, "activeCommunicationRoomId: undefined"),
   "inbox live-call badges must not survive declined/missed/expired call invites",
+);
+add(
+  "stale active call clearing does not recurse through full thread readback",
+  includes(clearEndedCallBody, "hasCurrentChatThreadMembership")
+    && !includes(clearEndedCallBody, "getChatThread("),
+  "clearEndedChatThreadCall must not call getChatThread because thread readback also reconciles stale calls",
 );
 add(
   "room-safe Decline clears active thread call state",

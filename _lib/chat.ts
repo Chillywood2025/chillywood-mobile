@@ -275,6 +275,21 @@ async function getRequiredChatUserId() {
   return userId;
 }
 
+async function hasCurrentChatThreadMembership(threadId: string) {
+  const normalizedThreadId = toText(threadId);
+  if (!normalizedThreadId) return false;
+
+  const currentUserId = await getRequiredChatUserId();
+  const { data, error } = await supabase
+    .from(CHAT_THREAD_MEMBERS_TABLE)
+    .select("thread_id")
+    .eq("thread_id", normalizedThreadId)
+    .eq("user_id", currentUserId)
+    .maybeSingle();
+
+  return !error && Boolean(data);
+}
+
 function parseChatThreadMember(row: ChatThreadMemberRow): ChatThreadMember | null {
   const threadId = toText(row.thread_id);
   const userId = toText(row.user_id);
@@ -965,8 +980,8 @@ export async function markChatThreadRead(threadId: string): Promise<void> {
 export async function clearEndedChatThreadCall(threadId: string): Promise<void> {
   const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) return;
-  const thread = await getChatThread(normalizedThreadId);
-  if (!thread?.currentMember) return;
+  const isMember = await hasCurrentChatThreadMembership(normalizedThreadId).catch(() => false);
+  if (!isMember) return;
 
   const clearCallUpdate: ChatThreadUpdate = {
     active_communication_room_id: null,

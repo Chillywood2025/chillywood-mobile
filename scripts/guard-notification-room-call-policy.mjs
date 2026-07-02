@@ -24,6 +24,8 @@ const chillyChatCalls = read("_lib/chillyChatCalls.ts");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const chatIndex = read("app/chat/index.tsx");
+const clearEndedCallMatch = chatLib.match(/export async function clearEndedChatThreadCall[\s\S]*?\n}/);
+const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
 
 [
   "proof:notification-icon-surface-wiring",
@@ -86,8 +88,10 @@ assertIncludes(chatThread, "No answer. The call expired and active call state wa
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
 assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");
+assertIncludes(chatLib, "hasCurrentChatThreadMembership", "stale active call cleanup must verify membership without re-entering full thread readback");
 assertIncludes(chatLib, "CHAT_CALL_INVITES_TABLE", "stale active call cleanup must read real call invites");
 assertIncludes(chatLib, "activeCommunicationRoomId: undefined", "stale active call cleanup must remove live-call badges from returned thread summaries");
+assertNotIncludes(clearEndedCallBody, "getChatThread(", "clearEndedChatThreadCall must not recurse through getChatThread during stale-call reconciliation");
 
 assertNotIncludes(layout, "autoAnswer", "incoming calls must not auto-answer");
 assertNotIncludes(layout, "answerAutomatically", "incoming calls must not auto-answer");
