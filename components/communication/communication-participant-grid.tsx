@@ -63,6 +63,7 @@ export function CommunicationParticipantGrid({
   const isFullscreen = presentation === "fullscreen";
   const isLandscape = responsiveLayout.isLandscape;
   const textMaxFontSizeMultiplier = responsiveLayout.isCompactPhone ? 1.12 : 1.2;
+  const isVideoCall = callType === "video";
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -71,8 +72,8 @@ export function CommunicationParticipantGrid({
       callType,
       presentation,
       deviceClass: responsiveLayout.deviceClass,
-      remoteRenderableCount: participants.filter((participant) => !participant.isSelf && !!participant.streamURL).length,
-      fallbackCount: participants.filter((participant) => !(!!RTCView && !!participant.streamURL)).length,
+      remoteRenderableCount: isVideoCall ? participants.filter((participant) => !participant.isSelf && !!participant.streamURL).length : 0,
+      fallbackCount: participants.filter((participant) => !(!!RTCView && isVideoCall && !!participant.streamURL)).length,
       participants: participants.map((participant) => ({
         userId: participant.userId,
         isSelf: participant.isSelf,
@@ -82,7 +83,7 @@ export function CommunicationParticipantGrid({
         connectionState: participant.connectionState,
       })),
     });
-  }, [callType, participants, presentation, responsiveLayout.deviceClass]);
+  }, [callType, isVideoCall, participants, presentation, responsiveLayout.deviceClass]);
 
   return (
     <View
@@ -94,10 +95,12 @@ export function CommunicationParticipantGrid({
       ]}
     >
       {participants.map((participant, index) => {
-        const cameraRequested = participant.isSelf && typeof localCameraEnabled === "boolean"
-          ? localCameraEnabled
-          : participant.cameraOn;
-        const hasVideoStream = !!participant.streamURL && (!participant.isSelf || cameraRequested);
+        const cameraRequested = isVideoCall
+          ? participant.isSelf && typeof localCameraEnabled === "boolean"
+            ? localCameraEnabled
+            : participant.cameraOn
+          : false;
+        const hasVideoStream = isVideoCall && !!participant.streamURL && (!participant.isSelf || cameraRequested);
         const showVideo = !!RTCView && hasVideoStream;
         const videoObjectFit = "cover";
         const cameraPillLabel = hasVideoStream ? "Cam On" : cameraRequested ? "Starting" : "Cam Off";
