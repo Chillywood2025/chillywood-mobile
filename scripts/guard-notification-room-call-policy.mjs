@@ -49,6 +49,8 @@ assertIncludes(settings, "Chat stays conversation-only", "Settings Activity must
   "status: \"declined\"",
   "dismissPresentedChillyChatCallNotifications",
   "dismissChillyChatCallNotificationRows",
+  "cleanupChillyChatCallNotifications",
+  "[750, 1800, 5000]",
   "clearEndedChatThreadCall",
   "RoomSafeActivityNotificationBridge",
 ].forEach((needle) => assertIncludes(layout, needle, "room-safe incoming call policy"));
@@ -62,6 +64,7 @@ assertIncludes(notifications, ".eq(\"user_id\", viewerUserId)", "call notificati
 assertIncludes(notifications, "staleData", "call notification row cleanup must remove older active incoming rows for the current user");
 assertIncludes(notifications, "status: \"dismissed\"", "call notification row cleanup must make rows non-actionable");
 assertIncludes(layout, "await clearEndedChatThreadCall(invite.threadId).catch(() => null);", "room-safe decline must clear active thread call state");
+assertIncludes(layout, "await dismissChillyChatCallNotificationRows({\n        callInviteId: invite.id,\n        threadId: invite.threadId,\n      }).catch(() => 0);", "room-safe decline must retry persisted call row cleanup after invite status update");
 
 assertNotIncludes(layout, "autoAnswer", "incoming calls must not auto-answer");
 assertNotIncludes(layout, "answerAutomatically", "incoming calls must not auto-answer");

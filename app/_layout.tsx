@@ -534,15 +534,25 @@ function IncomingCallNotificationBridge() {
     setAlert(null);
   };
 
+  const cleanupChillyChatCallNotifications = (input: {
+    callInviteId?: string | null;
+    path?: string | null;
+    threadId?: string | null;
+  }) => {
+    void dismissPresentedChillyChatCallNotifications(input);
+    void dismissChillyChatCallNotificationRows(input);
+    [750, 1800, 5000].forEach((delayMs) => {
+      setTimeout(() => {
+        void dismissChillyChatCallNotificationRows(input);
+      }, delayMs);
+    });
+  };
+
   const openCall = () => {
     const path = alert.path;
-    void dismissPresentedChillyChatCallNotifications({
+    cleanupChillyChatCallNotifications({
       callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       path,
-      threadId: alert.invite?.threadId ?? null,
-    });
-    void dismissChillyChatCallNotificationRows({
-      callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       threadId: alert.invite?.threadId ?? null,
     });
     clearAlert();
@@ -552,15 +562,11 @@ function IncomingCallNotificationBridge() {
   const decline = async () => {
     const invite = alert.invite ?? null;
     const actorUserId = String(user?.id ?? "").trim();
-    await dismissPresentedChillyChatCallNotifications({
+    cleanupChillyChatCallNotifications({
       callInviteId: invite?.id ?? alert.inviteId ?? null,
       path: alert.path,
       threadId: invite?.threadId ?? null,
     });
-    await dismissChillyChatCallNotificationRows({
-      callInviteId: invite?.id ?? alert.inviteId ?? null,
-      threadId: invite?.threadId ?? null,
-    }).catch(() => 0);
     clearAlert();
     if (invite && actorUserId) {
       await updateChillyChatCallInviteStatus({
@@ -569,18 +575,18 @@ function IncomingCallNotificationBridge() {
         status: "declined",
       }).catch(() => null);
       await clearEndedChatThreadCall(invite.threadId).catch(() => null);
+      await dismissChillyChatCallNotificationRows({
+        callInviteId: invite.id,
+        threadId: invite.threadId,
+      }).catch(() => 0);
     }
   };
 
   const replyInChat = () => {
     const threadId = String(alert.invite?.threadId ?? "").trim();
-    void dismissPresentedChillyChatCallNotifications({
+    cleanupChillyChatCallNotifications({
       callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       path: alert.path,
-      threadId,
-    });
-    void dismissChillyChatCallNotificationRows({
-      callInviteId: alert.invite?.id ?? alert.inviteId ?? null,
       threadId,
     });
     clearAlert();

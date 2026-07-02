@@ -41,6 +41,8 @@ const notifications = read("_lib/notifications.ts");
   "updateChillyChatCallInviteStatus",
   "status: \"declined\"",
   "dismissChillyChatCallNotificationRows",
+  "cleanupChillyChatCallNotifications",
+  "[750, 1800, 5000]",
   "clearEndedChatThreadCall",
 ].forEach((needle) => add(`incoming call room-safe behavior includes ${needle}`, includes(layout, needle), needle));
 
@@ -60,6 +62,13 @@ add(
   "room-safe Decline clears active thread call state",
   includes(layout, "await clearEndedChatThreadCall(invite.threadId).catch(() => null);"),
   "Decline must not leave a stale answerable active call room behind",
+);
+add(
+  "room-safe Decline retries notification row cleanup after call invite updates",
+  includes(layout, "cleanupChillyChatCallNotifications")
+    && includes(layout, "[750, 1800, 5000]")
+    && includes(layout, "await dismissChillyChatCallNotificationRows({\n        callInviteId: invite.id,\n        threadId: invite.threadId,\n      }).catch(() => 0);"),
+  "Decline must catch delayed notification row creation and make incoming-call rows non-actionable",
 );
 
 [
