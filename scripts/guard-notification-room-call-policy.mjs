@@ -24,6 +24,7 @@ const chillyChatCalls = read("_lib/chillyChatCalls.ts");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const chatIndex = read("app/chat/index.tsx");
+const profile = read("app/profile/[userId].tsx");
 const clearEndedCallMatch = chatLib.match(/export async function clearEndedChatThreadCall[\s\S]*?\n}/);
 const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
 
@@ -38,6 +39,8 @@ assertIncludes(bell, "readNotificationActivityList", "bell tray must use real no
 assertIncludes(bell, "No fake counts or records are shown.", "bell empty state must be honest");
 assertIncludes(bell, "accessibilityLabel={accessibilityLabel}", "bell accessibility label must be dynamic");
 assertIncludes(bell, "roomSafe", "bell must support room-safe mode");
+assertIncludes(profile, 'NotificationBellButton surface="profile"', "Profile header must use the shared top-right notification bell");
+assertIncludes(profile, "headerBackButton", "Profile header must keep the back and bell controls balanced");
 
 assertIncludes(settings, "readNotificationActivityList", "Settings Activity must read real records");
 assertIncludes(settings, "markNotificationRead", "Settings Activity must mark read");

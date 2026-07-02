@@ -18,6 +18,7 @@ const mainTopBar = read("components/navigation/main-tab-top-bar.tsx");
 const home = read("app/(tabs)/index.tsx");
 const channel = read("app/channel/[userId].tsx");
 const channelStudio = read("app/channel-settings.tsx");
+const profile = read("app/profile/[userId].tsx");
 const settings = read("app/settings.tsx");
 const notifications = read("_lib/notifications.ts");
 
@@ -41,14 +42,17 @@ const notifications = read("_lib/notifications.ts");
   "main-tab-${surface}",
   "platform-channel",
   "channel-studio",
+  "profile",
 ].forEach((surface) => {
-  add(`normal surface bell wired for ${surface}`, includes(home + mainTopBar + channel + channelStudio, surface), surface);
+  add(`normal surface bell wired for ${surface}`, includes(home + mainTopBar + channel + channelStudio + profile, surface), surface);
 });
 
 add("Home imports notification bell", includes(home, "NotificationBellButton"), "Home header bell");
 add("Explore/Live/Saved shared topbar imports notification bell", includes(mainTopBar, "NotificationBellButton"), "shared tab header bell");
 add("Platform channel imports notification bell", includes(channel, "NotificationBellButton"), "channel header bell");
 add("Platform Studio imports notification bell", includes(channelStudio, "NotificationBellButton"), "studio header bell");
+add("Profile imports notification bell", includes(profile, "NotificationBellButton"), "profile header bell");
+add("Profile bell uses top-right header slot", includes(profile, 'NotificationBellButton surface="profile"') && includes(profile, "headerBackButton") && includes(profile, "textAlign: \"center\""), "profile bell top-right alignment");
 add("Settings Activity opens from bell route param", includes(settings, "params.section") && includes(settings, "notifications: true"), "settings notification section auto-open");
 add("Settings Activity reads real notification records", includes(settings, "readNotificationActivityList") && includes(settings, "settings-notification-activity-list"), "real Activity list");
 add("Settings Activity separates important and recent records", includes(settings, "settings-notification-important-section") && includes(settings, "settings-notification-recent-section"), "important/recent Activity sections");

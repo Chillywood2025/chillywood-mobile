@@ -148,6 +148,7 @@ import {
   ProfileImagePreviewSheet,
   ProfileMediaReviewSheet,
 } from "../../components/profile/profile-media-sheets";
+import { NotificationBellButton } from "../../components/notifications/notification-bell-button";
 import { getWritablePartyUserId } from "../../_lib/watchParty";
 import { ReportSheet } from "../../components/safety/report-sheet";
 import { AccessSheet } from "../../components/monetization/access-sheet";
@@ -3276,11 +3277,11 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+            <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8} style={styles.headerBackButton}>
               <Text style={styles.backArrow}>←</Text>
             </TouchableOpacity>
             <Text style={styles.kicker}>{"Chi'llywood · PROFILE"}</Text>
-            <View style={{ width: 18 }} />
+            <NotificationBellButton surface="profile" />
           </View>
           <View style={styles.sectionCard}>
             <AppText scale="caption" style={styles.sectionKicker}>PROFILE</AppText>
@@ -3924,11 +3925,11 @@ export default function ProfileScreen() {
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "none"}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8} style={styles.headerBackButton}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <Text style={styles.kicker}>{"Chi'llywood · PROFILE"}</Text>
-          <View style={{ width: 18 }} />
+          <NotificationBellButton surface="profile" />
         </View>
 
         <View style={styles.profileCard}>
@@ -4681,9 +4682,10 @@ const styles = StyleSheet.create({
   content: { paddingTop: 56, paddingBottom: 52, paddingHorizontal: 18, gap: 16 },
   contentKeyboardInset: { paddingBottom: 128 },
 
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  backArrow: { color: "#aaa", fontSize: 20, fontWeight: "700", paddingRight: 8 },
-  kicker: { color: "#555", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.2 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  headerBackButton: { width: 38, minHeight: 38, justifyContent: "center", alignItems: "flex-start" },
+  backArrow: { color: "#aaa", fontSize: 20, fontWeight: "700" },
+  kicker: { flex: 1, color: "#555", fontSize: 9.5, fontWeight: "800", letterSpacing: 1.2, textAlign: "center" },
 
   profileCard: {
     borderRadius: 22,
