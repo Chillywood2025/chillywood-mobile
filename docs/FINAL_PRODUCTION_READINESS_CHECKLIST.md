@@ -10,6 +10,18 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Google-Signed V76 Direct Chat Video Join Latency
+
+Status: Closed for the reported Android two-phone installed video-answer split/render delay.
+
+Doc: `docs/release/GOOGLE_SIGNED_V76_DIRECT_CHAT_VIDEO_JOIN_LATENCY_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v76-video-join-latency-proof-20260702-171458/`.
+
+Source commits `8c110ad4193bd9928355b72e6b7f8146c03a7286` and `9b6ab72d05a6b77d09a341945d47b9018f87e44d` were published by EAS Update on production Android runtime `1.0.0`; final group `10fc0b00-df0a-4fc8-9764-c27095a6d75d`, Android update `019f24f3-cb2f-7a52-baa2-0881849c32e5`.
+
+The first follow-up OTA was not counted Closed because the caller still showed `1 in call` at the +8 second installed capture. After the final OTA and two safe app restarts on both phones, R3 started a normal visible Direct Chat video call, R5 answered from the real incoming banner, and both Google Play-installed v76 phones showed `2 in call`, split layout, local video, and remote video by the +4 second capture. The +8 second capture remained stable, and End Call returned the caller thread to `No Active Call`.
+
+This closes the reported Android two-phone installed latency issue only. iOS/tablet/foldable, background push, and broader room-notification closure remain separate proof scopes. No Play build, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, Money Center refactor, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure happened.
+
 ## Google-Signed V76 UI Consistency Cleanup
 
 Status: Closed for the four UI/UX consistency cleanup issues on Google Play-installed v76 plus verified runtime-compatible OTA behavior.

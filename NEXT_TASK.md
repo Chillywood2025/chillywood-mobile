@@ -1,5 +1,17 @@
 # NEXT TASK
 
+# V76 Direct Chat Video Join Latency Follow-Up
+
+Current latest truth:
+- Direct Chi'lly Chat video-answer latency is Closed for the reported Android two-phone installed issue in `docs/release/GOOGLE_SIGNED_V76_DIRECT_CHAT_VIDEO_JOIN_LATENCY_PROOF.md`.
+- Artifact folder: `/tmp/google-play-internal-v76-video-join-latency-proof-20260702-171458/`.
+- Source commits: `8c110ad4193bd9928355b72e6b7f8146c03a7286` and `9b6ab72d05a6b77d09a341945d47b9018f87e44d`.
+- Final OTA: production Android runtime `1.0.0`, group `10fc0b00-df0a-4fc8-9764-c27095a6d75d`, Android update `019f24f3-cb2f-7a52-baa2-0881849c32e5`.
+- First OTA was not Closed because R3 caller still showed `1 in call` at the +8 second capture and only split by +15 seconds.
+- Final installed proof after two safe app restarts on both phones: R3 started a normal visible Direct Chat video call, R5 answered from the real incoming banner, and both Google Play-installed v76 phones showed `2 in call`, split layout, local video, and remote video by the +4 second capture; +8 second captures remained stable.
+- End Call returned R3 to `No Active Call`; R5 returned Home. No sideload, `adb install`, logout, uninstall, reinstall, clear data, Play build, Play production submission, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure happened.
+- This does not close iOS/tablet/foldable, background push, or broader room-notification matrices.
+
 # V76 UI Consistency Cleanup Follow-Up
 
 Current latest truth:

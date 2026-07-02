@@ -8,6 +8,7 @@ Proof artifacts:
 
 - `/tmp/google-play-internal-v76-ui-consistency-cleanup-20260702-161301/`
 - `/tmp/google-play-internal-v76-ui-consistency-cleanup-two-device-camera-proof-20260702-164050/`
+- `/tmp/google-play-internal-v76-video-join-latency-proof-20260702-171458/`
 
 ## Executive Summary
 
@@ -31,6 +32,8 @@ Start state:
   - `90f2f714a6367954ba465c8b38459b67174fdb08` - Premium sandbox copy hierarchy on Manage Premium.
   - `9558545bc29ba6df8e636098ca6da616fda646df` - Chat inbox preview decoding.
   - `83e93150937a633e8c844fbf4962ebe70b407cf9` - voice calls no longer infer video labels from non-video media streams.
+  - `8c110ad4193bd9928355b72e6b7f8146c03a7286` - Direct Chat video join peer sync uses the membership-aware participant list.
+  - `9b6ab72d05a6b77d09a341945d47b9018f87e44d` - Direct Chat video join runs bounded warm-up room snapshot refresh while waiting for remote membership.
 
 Tracked source tree was clean before proof except pre-existing untracked local artifact/temp folders.
 
@@ -59,6 +62,13 @@ Follow-up media-label OTA published to production Android runtime `1.0.0`:
 - Commit: `83e93150937a633e8c844fbf4962ebe70b407cf9`.
 
 Earlier intermediate OTA groups in the first cleanup pass were superseded by the cleanup OTA above. The media-label OTA is the final OTA used for the two-device voice/video proof.
+
+Direct Chat video-answer latency follow-up OTAs:
+
+- Group `62ace569-2a9a-4929-baaa-2095ab928085`, Android update `019f24e6-1600-7803-a745-aa5c39a3a6da`, runtime `1.0.0`, commit `8c110ad4193bd9928355b72e6b7f8146c03a7286`.
+- Group `10fc0b00-df0a-4fc8-9764-c27095a6d75d`, Android update `019f24f3-cb2f-7a52-baa2-0881849c32e5`, runtime `1.0.0`, commit `9b6ab72d05a6b77d09a341945d47b9018f87e44d`.
+
+Both apps were restarted twice after the final OTA before installed proof.
 
 No Play build, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, provider mutation, live money, payout, cashout, auth/RLS weakening, or secret exposure happened.
 
@@ -163,6 +173,30 @@ Artifact examples:
 - `video-call/R3CXA0DS5JV-after-r5-camera-on-toggle.xml`.
 - `video-call/R5CR120QCBF-after-video-end.xml`.
 - `video-call/R3CXA0DS5JV-after-video-end.xml`.
+
+## Video Join Latency Follow-Up
+
+Closed on source and installed two-device proof. Detailed doc: `docs/release/GOOGLE_SIGNED_V76_DIRECT_CHAT_VIDEO_JOIN_LATENCY_PROOF.md`.
+
+The reported issue was that after a receiver answered a Direct Chi'lly Chat video call, the caller could wait roughly 10 seconds before the screen split and caller-side remote video rendered. Installed proof reproduced the caller-side delay after the first follow-up OTA: R5 receiver reached `2 in call` quickly, but R3 caller still showed `1 in call` at the +8 second capture and only split by the +15 second capture.
+
+The final OTA fixed the caller delay by keeping peer sync tied to the membership-aware participant merge and by adding a bounded warm-up room snapshot refresh while waiting for remote membership after join.
+
+Installed proof after the final OTA:
+
+- R3 opened the normal visible direct thread with `user230455` and started `Video Call`.
+- R5 was elsewhere in the app, received the real incoming Chi'lly Chat video call banner, and tapped `Answer`.
+- R3 caller and R5 receiver both showed `2 in call`, split video layout, local video, and remote video by the +4 second capture.
+- The +8 second captures confirmed both phones remained split with renderable local/remote video.
+- End Call returned R3 to the thread with `No Active Call`, and R5 returned to Home rather than a phantom call state.
+
+Artifact examples:
+
+- `/tmp/google-play-internal-v76-video-join-latency-proof-20260702-171458/screens/R3-video-second-ota-answer-plus-4s.png`.
+- `/tmp/google-play-internal-v76-video-join-latency-proof-20260702-171458/screens/R5-video-second-ota-answer-plus-4s.png`.
+- `/tmp/google-play-internal-v76-video-join-latency-proof-20260702-171458/screens/R3-video-second-ota-answer-plus-8s.png`.
+- `/tmp/google-play-internal-v76-video-join-latency-proof-20260702-171458/screens/R5-video-second-ota-answer-plus-8s.png`.
+- `/tmp/google-play-internal-v76-video-join-latency-proof-20260702-171458/screens/R3-after-final-end.png`.
 
 ## Safety Confirmation
 
