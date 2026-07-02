@@ -112,7 +112,7 @@ Bell Activity:
 - Surface/screen: Chi'lly Chat thread. Issue: an older proof message visibly showed URL-encoded text (`%20`) instead of decoded spaces. Why it matters: users may read encoded text as broken chat content. Severity: Low. Blocks proof: No. Recommended next action: message rendering/backfill review. Fixed in this pass: No.
 - Surface/screen: Settings account header. Issue: the signed-in account header can expose a private email address as the primary account identifier. Why it matters: screenshots and public support contexts can reveal private data. Severity: Medium. Blocks proof: No. Recommended next action: privacy/display review for Settings account identity. Fixed in this pass: No.
 - Surface/screen: Live / Platform Studio Premium copy. Issue: creator/business screens still contain dense sandbox and money-safety copy. Why it matters: safe but visually heavy; users may miss the primary action. Severity: Low. Blocks proof: No. Recommended next action: later copy hierarchy polish without changing money safety. Fixed in this pass: No.
-- Surface/screen: Video call camera toggle. Issue: one tap produced a transient `Camera connecting` state before a second tap recovered live video. Why it matters: if this sticks for a user it can look like the camera button is broken. Severity: Medium. Blocks proof: No in this pass because recovery and live video were proved. Recommended next action: monitor for stuck camera-connecting reports and add clearer off/connecting/live labels if repeated. Fixed in this pass: No.
+- Surface/screen: Video call camera toggle. Issue: one tap produced a transient `Camera connecting` state before a second tap recovered live video. Why it matters: if this sticks for a user it can look like the camera button is broken. Severity: Medium. Blocks proof: No. Recommended next action: monitor for repeated media-track recovery reports. Fixed in follow-up: Yes, the cleanup follow-up added clearer labels and final two-device installed proof showed camera toggle recovery without a stuck connecting state.
 
 ## UI Consistency Cleanup Follow-Up
 
@@ -120,14 +120,14 @@ Follow-up doc:
 
 - `docs/release/GOOGLE_SIGNED_V76_UI_CONSISTENCY_CLEANUP.md`
 
-Follow-up source fixes were pushed through `9558545bc29ba6df8e636098ca6da616fda646df` and published by EAS Update production Android runtime `1.0.0`, group `bfc909ca-3956-4085-bd78-d4a003dbbbfe`, Android update `019f24bf-0dc8-7885-af09-45001b67bb50`.
+Follow-up source fixes were pushed through `9558545bc29ba6df8e636098ca6da616fda646df` and published by EAS Update production Android runtime `1.0.0`, group `bfc909ca-3956-4085-bd78-d4a003dbbbfe`, Android update `019f24bf-0dc8-7885-af09-45001b67bb50`. The final two-device media-label follow-up was pushed as `83e93150937a633e8c844fbf4962ebe70b407cf9` and published by EAS Update production Android runtime `1.0.0`, group `f361c068-40b9-460f-99eb-70ba0ec6ff73`, Android update `019f24ce-6808-7cd9-87d3-8e3ebd1bde05`.
 
 Follow-up result:
 
 - Chat thread and inbox preview percent-encoded text now render readable decoded spaces at the display layer. Existing installed proof row `v64%20reappear%20proof` rendered as `v64 reappear proof` in both the inbox preview and the opened thread on Google Play-installed v76 plus OTA.
 - Settings account header no longer exposed a full raw email as the primary identity in installed R5 proof; it showed the current handle instead.
 - Manage Premium sandbox copy hierarchy is cleaner while preserving sandbox/test-only and no-production-money/payout/cashout/payable-balance meaning.
-- Camera/call label clarity is source-fixed and validated. Full two-device installed camera-toggle proof remains open because `R3CXA0DS5JV` was not visible over ADB during the cleanup proof.
+- Camera/call label clarity is source-fixed, OTA-delivered, and two-device installed-proved on `R5CR120QCBF` and `R3CXA0DS5JV`: voice calls no longer show fake `Video connected`, video calls show local/remote renderable video on both phones, Camera Off -> On recovers to `Video connected` / `Cam On`, and End Call clears both phones to `No Active Call`. Artifact folder: `/tmp/google-play-internal-v76-ui-consistency-cleanup-two-device-camera-proof-20260702-164050/`.
 
 ## Safety Confirmation
 

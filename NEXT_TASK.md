@@ -3,14 +3,12 @@
 # V76 UI Consistency Cleanup Follow-Up
 
 Current latest truth:
-- V76 UI consistency cleanup is source-fixed and partially installed-proved in `docs/release/GOOGLE_SIGNED_V76_UI_CONSISTENCY_CLEANUP.md`.
-- Artifact folder: `/tmp/google-play-internal-v76-ui-consistency-cleanup-20260702-161301/`.
-- Final source commit: `9558545bc29ba6df8e636098ca6da616fda646df`.
-- Final OTA: production Android runtime `1.0.0`, group `bfc909ca-3956-4085-bd78-d4a003dbbbfe`, Android update `019f24bf-0dc8-7885-af09-45001b67bb50`.
-- Closed on Google Play-installed v76 + OTA on `R5CR120QCBF`: Chat percent-encoded text renders readable decoded spaces in inbox preview and opened thread; Settings header uses safe identity instead of full raw email; Manage Premium sandbox copy hierarchy is clearer while preserving sandbox/no-money safety.
-- Source-fixed and validation-passed but not installed-closed: two-device voice/video camera-toggle label proof. `R3CXA0DS5JV` was not visible over ADB during this pass, so full camera-toggle installed proof needs R3 recovered or another approved second Play-installed device.
-- Do not rebuild unless a native/runtime reason is proven and owner approves. Continue with OTA/installed proof only when the second phone is visible.
-- Safety stayed intact: no Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, Money Center refactor, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure.
+- V76 UI consistency cleanup is Closed in `docs/release/GOOGLE_SIGNED_V76_UI_CONSISTENCY_CLEANUP.md`.
+- Artifact folders: `/tmp/google-play-internal-v76-ui-consistency-cleanup-20260702-161301/` and `/tmp/google-play-internal-v76-ui-consistency-cleanup-two-device-camera-proof-20260702-164050/`.
+- Final source commit for the media-label closure: `83e93150937a633e8c844fbf4962ebe70b407cf9`.
+- Final OTA: production Android runtime `1.0.0`, group `f361c068-40b9-460f-99eb-70ba0ec6ff73`, Android update `019f24ce-6808-7cd9-87d3-8e3ebd1bde05`.
+- Closed on Google Play-installed v76 + OTA: Chat percent-encoded text renders readable decoded spaces in inbox preview and opened thread; Settings header uses safe identity instead of full raw email; Manage Premium sandbox copy hierarchy is clearer while preserving sandbox/no-money safety; voice calls no longer show fake `Video connected`; video calls show local/remote renderable video on both phones; Camera Off -> On recovers to `Video connected` / `Cam On`; End Call clears both phones to `No Active Call`.
+- No rebuild was needed. Safety stayed intact: no Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, Money Center refactor, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure.
 
 # Google-Signed v76 Notifications / Money Center Follow-Up
 

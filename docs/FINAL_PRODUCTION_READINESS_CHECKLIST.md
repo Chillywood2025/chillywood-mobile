@@ -12,13 +12,13 @@ Final reports must separate Play binary proof, OTA update proof, source proof, a
 
 ## Google-Signed V76 UI Consistency Cleanup
 
-Status: Partial for full installed closure; source fixes and reachable R5 installed proof are Closed.
+Status: Closed for the four UI/UX consistency cleanup issues on Google Play-installed v76 plus verified runtime-compatible OTA behavior.
 
-Doc: `docs/release/GOOGLE_SIGNED_V76_UI_CONSISTENCY_CLEANUP.md`. Artifact folder: `/tmp/google-play-internal-v76-ui-consistency-cleanup-20260702-161301/`.
+Doc: `docs/release/GOOGLE_SIGNED_V76_UI_CONSISTENCY_CLEANUP.md`. Artifact folders: `/tmp/google-play-internal-v76-ui-consistency-cleanup-20260702-161301/` and `/tmp/google-play-internal-v76-ui-consistency-cleanup-two-device-camera-proof-20260702-164050/`.
 
-Final source commit `9558545bc29ba6df8e636098ca6da616fda646df` was published by EAS Update production Android runtime `1.0.0`, group `bfc909ca-3956-4085-bd78-d4a003dbbbfe`, Android update `019f24bf-0dc8-7885-af09-45001b67bb50`.
+Final media-label source commit `83e93150937a633e8c844fbf4962ebe70b407cf9` was published by EAS Update production Android runtime `1.0.0`, group `f361c068-40b9-460f-99eb-70ba0ec6ff73`, Android update `019f24ce-6808-7cd9-87d3-8e3ebd1bde05`.
 
-Google Play-installed v76 on `R5CR120QCBF` proved Chat percent-encoded text renders readable decoded spaces in both inbox preview and opened thread, Settings avoids full raw email as the primary account header identity, and Manage Premium sandbox copy hierarchy is cleaner while preserving sandbox/test-only and no-production-money/payout/cashout/payable-balance meaning. Camera/call label clarity is source-fixed and validation-passed, but full two-device installed voice/video camera-toggle proof remains open because `R3CXA0DS5JV` was not visible over ADB during this pass.
+Google Play-installed v76 proved Chat percent-encoded text renders readable decoded spaces in both inbox preview and opened thread, Settings avoids full raw email as the primary account header identity, and Manage Premium sandbox copy hierarchy is cleaner while preserving sandbox/test-only and no-production-money/payout/cashout/payable-balance meaning. After `R3CXA0DS5JV` was recovered, two-device installed proof on `R5CR120QCBF` and `R3CXA0DS5JV` proved voice calls no longer show fake `Video connected`, video calls show local/remote renderable video on both phones, Camera Off -> On recovers to `Video connected` / `Cam On`, and End Call clears both phones to `No Active Call`.
 
 No Play build, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, Money Center refactor, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure happened.
 
