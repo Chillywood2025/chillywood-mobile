@@ -1331,7 +1331,7 @@ export async function readMonetizationAccessSheetState(options: {
       primaryDisabled: false,
       helperKicker: isPremiumBackedGate ? "PREMIUM STATUS" : "OFFER STATUS",
       helperBody: isPremiumBackedGate
-        ? "Open Manage Premium to check status, restore, or start the approved sandbox Premium payment when it is available for this tester account."
+        ? "Open Manage Premium to check status, restore, or start an approved sandbox Premium payment for this tester account."
         : snapshot.issues[0]
           ?? "This purchase path is not available in the current offer configuration yet.",
       helperTone: "warning",
@@ -1367,7 +1367,7 @@ export async function readMonetizationAccessSheetState(options: {
     primaryDisabled: false,
     helperKicker: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE ? "SANDBOX TEST" : "LIVE OFFER",
     helperBody: purchaseMode === INTERNAL_TESTER_SANDBOX_PURCHASE_MODE
-      ? "This approved tester path opens Google Play sandbox billing only. It is not production money and does not create payable balances."
+      ? "This approved tester path opens Google Play sandbox billing only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is created."
       : "This pricing is coming from the current configured offer for this build.",
     helperTone: "neutral",
     offer,

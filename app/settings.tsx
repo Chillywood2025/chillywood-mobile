@@ -51,6 +51,7 @@ import {
 } from "../_lib/accessVisibility";
 import { getRuntimeLegalConfig } from "../_lib/runtimeConfig";
 import { supabase } from "../_lib/supabase";
+import { maskEmailAddress } from "../_lib/displayText";
 import {
   checkUsernameAvailability,
   formatUsernameHandle,
@@ -128,6 +129,24 @@ const toSettingsTestId = (prefix: string, value: string) => {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return `${prefix}-${slug || "item"}`;
+};
+
+const formatSettingsAccountIdentity = ({
+  displayName,
+  username,
+  email,
+}: {
+  displayName?: string | null;
+  username?: string | null;
+  email?: string | null;
+}) => {
+  const resolvedDisplayName = String(displayName ?? "").trim();
+  if (resolvedDisplayName) return resolvedDisplayName;
+
+  const resolvedHandle = formatUsernameHandle(username);
+  if (resolvedHandle) return resolvedHandle;
+
+  return maskEmailAddress(email) || "Signed in";
 };
 
 const NOTIFICATION_GROUPS: {
@@ -1403,6 +1422,11 @@ export default function SettingsScreen() {
     ?? user?.email
     ?? "P",
   ).slice(0, 1).toUpperCase();
+  const settingsAccountIdentity = formatSettingsAccountIdentity({
+    displayName: myProfile?.displayName,
+    username: myProfile?.username,
+    email: user?.email,
+  });
 
   if (isLoading) {
     return (
@@ -1440,7 +1464,9 @@ export default function SettingsScreen() {
           <View style={styles.summaryCopy}>
             <Text style={styles.cardKicker}>CONTROL CENTER</Text>
             <Text style={styles.title}>Settings</Text>
-            <Text style={styles.body}>Signed in as {String(user?.email ?? "Unknown account")}.</Text>
+            <Text style={styles.body}>
+              {settingsAccountIdentity === "Signed in" ? "Signed in." : `Signed in as ${settingsAccountIdentity}.`}
+            </Text>
           </View>
           {monetizationLoading || notificationLoading ? <ActivityIndicator color="#DC143C" size="small" /> : null}
         </View>

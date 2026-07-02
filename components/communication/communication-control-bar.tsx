@@ -5,6 +5,7 @@ const logCallDebug = (..._args: unknown[]) => {};
 
 type CommunicationControlBarProps = {
   cameraEnabled: boolean;
+  cameraStatus?: "off" | "connecting" | "on";
   micEnabled: boolean;
   minimumTouchTarget?: number;
   onToggleCamera: () => void;
@@ -15,6 +16,7 @@ type CommunicationControlBarProps = {
 
 export function CommunicationControlBar({
   cameraEnabled,
+  cameraStatus,
   micEnabled,
   minimumTouchTarget = 48,
   onToggleCamera,
@@ -26,16 +28,28 @@ export function CommunicationControlBar({
     if (!__DEV__) return;
     logCallDebug("[CH_CALL]", "control_bar_render", {
       cameraEnabled,
+      cameraStatus,
       micEnabled,
       leaveLabel,
       minimumTouchTarget,
     });
-  }, [cameraEnabled, leaveLabel, micEnabled, minimumTouchTarget]);
+  }, [cameraEnabled, cameraStatus, leaveLabel, micEnabled, minimumTouchTarget]);
+
+  const resolvedCameraStatus = cameraStatus ?? (cameraEnabled ? "on" : "off");
+  const cameraLabel = resolvedCameraStatus === "connecting"
+    ? "Camera Connecting"
+    : resolvedCameraStatus === "on"
+      ? "Camera On"
+      : "Camera Off";
 
   return (
     <View style={styles.row}>
       <TouchableOpacity
-        style={[styles.control, { minHeight: minimumTouchTarget }, cameraEnabled ? styles.controlOn : styles.controlOff]}
+        style={[
+          styles.control,
+          { minHeight: minimumTouchTarget },
+          resolvedCameraStatus === "on" ? styles.controlOn : resolvedCameraStatus === "connecting" ? styles.controlPending : styles.controlOff,
+        ]}
         activeOpacity={0.86}
         onPress={() => {
           if (__DEV__) {
@@ -46,7 +60,7 @@ export function CommunicationControlBar({
           onToggleCamera();
         }}
       >
-        <Text style={styles.controlLabel}>{cameraEnabled ? "Camera On" : "Camera Off"}</Text>
+        <Text style={styles.controlLabel}>{cameraLabel}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.control, { minHeight: minimumTouchTarget }, micEnabled ? styles.controlOn : styles.controlOff]}
@@ -100,6 +114,10 @@ const styles = StyleSheet.create({
   controlOff: {
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(18,21,29,0.94)",
+  },
+  controlPending: {
+    borderColor: "rgba(255,211,107,0.28)",
+    backgroundColor: "rgba(72,53,19,0.92)",
   },
   controlLeave: {
     borderColor: "rgba(220,20,60,0.36)",

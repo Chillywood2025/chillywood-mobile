@@ -49,6 +49,7 @@ import {
   type ChatThreadSummary,
 } from "../../_lib/chat";
 import { getCommunicationRoomSnapshot } from "../../_lib/communication";
+import { decodeVisiblePercentEscapes } from "../../_lib/displayText";
 import {
   acceptChillyCircleRequest,
   cancelChillyCircleRequest,
@@ -673,6 +674,7 @@ export default function ChillyChatThreadScreen() {
   const renderedMessages = useMemo(
     () => messages.map((message) => ({
       ...message,
+      displayBody: decodeVisiblePercentEscapes(message.body),
       isMe: message.senderUserId === currentUserId,
       authorLabel: buildAuthor(thread?.members ?? [], message.senderUserId),
     })),
@@ -1665,7 +1667,7 @@ export default function ChillyChatThreadScreen() {
             <Text style={[styles.messageAuthor, message.isMe && styles.messageAuthorMe]}>
               {message.isMe ? "You" : message.authorLabel}
             </Text>
-            <LinkedText text={message.body} style={styles.messageBody} />
+            <LinkedText text={message.displayBody} style={styles.messageBody} />
             {message.attachments.length ? (
               <View style={styles.messageAttachmentStack}>
                 {message.attachments.map((attachment) => (

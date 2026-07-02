@@ -457,9 +457,10 @@ export function AccessSheet({
 
           {!deferredMonetization && sandboxMode.enabled ? (
             <View style={styles.sandboxCard}>
-              <MoneyStatusChip label="Internal tester sandbox mode" tone="warning" />
-              <Text style={styles.sandboxText}>
-                Google Play / RevenueCat sandbox test only. No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.
+              <MoneyStatusChip label="Sandbox test mode" tone="warning" />
+              <Text style={styles.sandboxText}>Google Play / RevenueCat sandbox test only.</Text>
+              <Text style={styles.sandboxDetailText}>
+                No production money, payout, cash-out, withdrawal, transfer, or payable balance is enabled.
               </Text>
             </View>
           ) : null}
@@ -651,6 +652,12 @@ const styles = StyleSheet.create({
     color: "#DDF7E8",
     fontSize: 12.5,
     lineHeight: 18,
+    fontWeight: "700",
+  },
+  sandboxDetailText: {
+    color: "#BFECD2",
+    fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: "700",
   },
   helperCardNeutral: {

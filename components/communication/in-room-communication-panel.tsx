@@ -91,6 +91,11 @@ export function InRoomCommunicationPanel({
   const controlsVisible = showControls && !loading && !statusMessage;
   const resolvedTitle = titleText ?? `${surfaceLabel} Chi'lly Chat`;
   const resolvedBody = bodyText ?? "Chi'lly Chat is Chi'llywood's native communication layer for direct threads, room-linked conversations, and live coordination.";
+  const selfParticipant = participants.find((participant) => participant.isSelf);
+  const localVideoRenderable = cameraEnabled && !!selfParticipant?.streamURL;
+  const cameraStatus = cameraEnabled
+    ? localVideoRenderable ? "on" : "connecting"
+    : "off";
 
   return (
     <View
@@ -169,6 +174,7 @@ export function InRoomCommunicationPanel({
             callType={callType}
             presentation={isFullscreen ? "fullscreen" : "embedded"}
             responsiveLayout={responsiveLayout}
+            localCameraEnabled={cameraEnabled}
           />
         </View>
       ) : (
@@ -191,6 +197,7 @@ export function InRoomCommunicationPanel({
         >
           <CommunicationControlBar
             cameraEnabled={cameraEnabled}
+            cameraStatus={cameraStatus}
             micEnabled={micEnabled}
             minimumTouchTarget={responsiveLayout.minimumTouchTarget}
             leaveLabel={isHost ? "End Call" : "Leave"}

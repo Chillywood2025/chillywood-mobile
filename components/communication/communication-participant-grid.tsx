@@ -11,6 +11,7 @@ type CommunicationParticipantGridProps = {
   callType?: "voice" | "video" | null;
   presentation?: "embedded" | "fullscreen";
   responsiveLayout?: ResponsiveLayout;
+  localCameraEnabled?: boolean;
 };
 
 type CommunicationRTCViewComponent = React.ComponentType<{
@@ -30,15 +31,15 @@ const getInitials = (value: string) => {
 
 const getConnectionLabel = (
   participant: CommunicationParticipantView,
-  options: { callType?: "voice" | "video" | null; hasVideoStream: boolean },
+  options: { callType?: "voice" | "video" | null; hasVideoStream: boolean; cameraRequested: boolean },
 ) => {
   if (participant.isSelf) {
     if (options.hasVideoStream) return participant.micOn ? "You · live video" : "You · live video · muted";
-    if (participant.cameraOn) return participant.micOn ? "You · camera connecting" : "You · camera connecting · muted";
+    if (options.cameraRequested) return participant.micOn ? "You · camera connecting" : "You · camera connecting · muted";
     return participant.micOn ? "You · live mic" : "You · muted";
   }
   if (options.hasVideoStream) return participant.micOn ? "Video connected" : "Video connected · muted";
-  if (participant.cameraOn) return participant.micOn ? "Video connecting" : "Video connecting · muted";
+  if (options.cameraRequested) return participant.micOn ? "Video connecting" : "Video connecting · muted";
   if (options.callType === "video" && participant.connectionState === "connected") {
     return participant.micOn ? "Connected · camera off" : "Connected · muted";
   }
@@ -54,6 +55,7 @@ export function CommunicationParticipantGrid({
   callType = null,
   presentation = "embedded",
   responsiveLayout: providedResponsiveLayout,
+  localCameraEnabled,
 }: CommunicationParticipantGridProps) {
   const RTCView = getCommunicationRTCModule()?.RTCView as CommunicationRTCViewComponent | undefined;
   const fallbackResponsiveLayout = useResponsiveLayout();
@@ -92,10 +94,13 @@ export function CommunicationParticipantGrid({
       ]}
     >
       {participants.map((participant, index) => {
-        const hasVideoStream = !!participant.streamURL;
+        const cameraRequested = participant.isSelf && typeof localCameraEnabled === "boolean"
+          ? localCameraEnabled
+          : participant.cameraOn;
+        const hasVideoStream = !!participant.streamURL && (!participant.isSelf || cameraRequested);
         const showVideo = !!RTCView && hasVideoStream;
         const videoObjectFit = "cover";
-        const cameraPillLabel = hasVideoStream ? "Cam" : participant.cameraOn ? "Cam..." : "Cam Off";
+        const cameraPillLabel = hasVideoStream ? "Cam On" : cameraRequested ? "Starting" : "Cam Off";
         const tileWide = participants.length <= 1;
         const compactTile = participants.length > 2;
         const oddLastTile = isFullscreen && participants.length > 2 && !isLandscape && participants.length % 2 === 1 && index === participants.length - 1;
@@ -144,7 +149,7 @@ export function CommunicationParticipantGrid({
                   ) : (
                     <Text style={styles.avatarInitial}>{getInitials(participant.displayName)}</Text>
                   )}
-                  <Text style={styles.cameraLabel}>{participant.cameraOn ? "Camera connecting" : "Camera off"}</Text>
+                  <Text style={styles.cameraLabel}>{cameraRequested ? "Camera Connecting" : "Camera Off"}</Text>
                 </View>
               )}
               <View style={styles.topRow}>
@@ -182,7 +187,7 @@ export function CommunicationParticipantGrid({
                     style={[styles.status, { fontSize: responsiveFontSize(11.5, responsiveLayout.fontScale, 0.9, 1.12) }]}
                     numberOfLines={1}
                   >
-                    {getConnectionLabel(participant, { callType, hasVideoStream })}
+                    {getConnectionLabel(participant, { callType, hasVideoStream, cameraRequested })}
                   </Text>
                 </View>
                 <View style={styles.mediaPills}>
