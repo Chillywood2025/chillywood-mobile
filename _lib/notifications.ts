@@ -1944,6 +1944,7 @@ export function subscribeToNotificationResponses(onPath: (path: string) => void)
 
 export async function dismissPresentedChillyChatCallNotifications(input: {
   callInviteId?: string | null;
+  dismissAllPresentedNotificationsFallback?: boolean;
   dismissIncomingCallFallback?: boolean;
   path?: string | null;
   presentedNotificationId?: string | null;
@@ -1957,6 +1958,8 @@ export async function dismissPresentedChillyChatCallNotifications(input: {
   const targetThreadId = normalizeText(input.threadId);
   const canUseIncomingTitleFallback = input.dismissIncomingCallFallback === true
     && (!!targetInviteId || !!targetPath || !!targetThreadId || !!targetPresentedNotificationId);
+  const canUsePresentedNotificationSweep = input.dismissAllPresentedNotificationsFallback === true
+    && canUseIncomingTitleFallback;
 
   try {
     let dismissed = 0;
@@ -1990,6 +1993,13 @@ export async function dismissPresentedChillyChatCallNotifications(input: {
       await Notifications.dismissNotificationAsync(notification.request.identifier);
       dismissed += 1;
     }));
+
+    // Remote Android call pushes can survive the synthetic identifier path; only sweep after an explicit call action.
+    if (dismissed === 0 && canUsePresentedNotificationSweep) {
+      await Notifications.dismissAllNotificationsAsync().then(() => {
+        dismissed += 1;
+      }).catch(() => null);
+    }
 
     return dismissed;
   } catch {

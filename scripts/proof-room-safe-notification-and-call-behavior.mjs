@@ -74,12 +74,15 @@ add(
 );
 add(
   "declined calls also clear presented Android call notifications after delayed delivery",
-  includes(layout, "void dismissPresentedChillyChatCallNotifications({ ...input, dismissIncomingCallFallback: true });\n        void dismissChillyChatCallNotificationRows(input);")
-    && includes(layout, "await dismissPresentedChillyChatCallNotifications({\n        callInviteId: invite.id,\n        dismissIncomingCallFallback: true,\n        path: alert.path,\n        presentedNotificationId: alert.presentedNotificationId ?? null,\n        threadId: invite.threadId,\n      }).catch(() => 0);")
+  includes(layout, "dismissAllPresentedNotificationsFallback: true,\n      dismissIncomingCallFallback: true,")
+    && includes(layout, "dismissAllPresentedNotificationsFallback: true,\n          dismissIncomingCallFallback: true,")
+    && includes(layout, "await dismissPresentedChillyChatCallNotifications({\n        callInviteId: invite.id,\n        dismissAllPresentedNotificationsFallback: true,\n        dismissIncomingCallFallback: true,\n        path: alert.path,\n        presentedNotificationId: alert.presentedNotificationId ?? null,\n        threadId: invite.threadId,\n      }).catch(() => 0);")
     && includes(notifications, "presentedNotificationId")
     && includes(notifications, "isIncomingChillyChatCallTitle")
-    && includes(notifications, "dismissIncomingCallFallback"),
-  "presented Android incoming-call notifications are retried by exact id and limited incoming-call fallback after invite decline",
+    && includes(notifications, "dismissIncomingCallFallback")
+    && includes(notifications, "dismissAllPresentedNotificationsFallback")
+    && includes(notifications, "Notifications.dismissAllNotificationsAsync"),
+  "presented Android incoming-call notifications are retried by exact id, limited incoming-call fallback, and explicit action cleanup after invite decline",
 );
 add(
   "stale call notification rows reconcile against real invite status",

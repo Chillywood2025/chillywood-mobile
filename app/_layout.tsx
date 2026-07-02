@@ -600,11 +600,19 @@ function IncomingCallNotificationBridge() {
     presentedNotificationId?: string | null;
     threadId?: string | null;
   }) => {
-    void dismissPresentedChillyChatCallNotifications({ ...input, dismissIncomingCallFallback: true });
+    void dismissPresentedChillyChatCallNotifications({
+      ...input,
+      dismissAllPresentedNotificationsFallback: true,
+      dismissIncomingCallFallback: true,
+    });
     void dismissChillyChatCallNotificationRows(input);
     [750, 1800, 5000].forEach((delayMs) => {
       setTimeout(() => {
-        void dismissPresentedChillyChatCallNotifications({ ...input, dismissIncomingCallFallback: true });
+        void dismissPresentedChillyChatCallNotifications({
+          ...input,
+          dismissAllPresentedNotificationsFallback: true,
+          dismissIncomingCallFallback: true,
+        });
         void dismissChillyChatCallNotificationRows(input);
       }, delayMs);
     });
@@ -641,6 +649,7 @@ function IncomingCallNotificationBridge() {
       await clearEndedChatThreadCall(invite.threadId).catch(() => null);
       await dismissPresentedChillyChatCallNotifications({
         callInviteId: invite.id,
+        dismissAllPresentedNotificationsFallback: true,
         dismissIncomingCallFallback: true,
         path: alert.path,
         presentedNotificationId: alert.presentedNotificationId ?? null,
