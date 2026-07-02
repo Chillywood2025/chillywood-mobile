@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { trackEvent } from "../../_lib/analytics";
+import { decodeVisiblePercentEscapes } from "../../_lib/displayText";
 import {
   getOrCreateDirectThread,
   hideChatThreadFromInbox,
@@ -57,7 +58,7 @@ function buildPreview(thread: ChatThreadSummary) {
   if (thread.activeCommunicationRoomId && thread.activeCallType) {
     return `${thread.activeCallType === "video" ? "Video" : "Voice"} call active`;
   }
-  return thread.lastMessagePreview ?? "Start the thread";
+  return thread.lastMessagePreview ? decodeVisiblePercentEscapes(thread.lastMessagePreview) : "Start the thread";
 }
 
 function formatThreadTime(value?: string) {
@@ -84,6 +85,7 @@ function matchesSearch(thread: ChatThreadSummary, rawQuery: string) {
     thread.otherMember?.username,
     thread.otherMember?.tagline,
     thread.lastMessagePreview,
+    thread.lastMessagePreview ? decodeVisiblePercentEscapes(thread.lastMessagePreview) : undefined,
     thread.activeCallType,
   ], rawQuery);
 }
