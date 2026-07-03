@@ -23,7 +23,6 @@ import {
 } from "./chillyChatCalls";
 import {
   CHILLY_CHAT_CALL_CHANNEL_ID,
-  CHILLY_CHAT_DEFAULT_NOTIFICATION_SOUND,
   CHILLY_CHAT_MESSAGE_CHANNEL_ID,
   CHILLY_CHAT_MISSED_CALL_CHANNEL_ID,
 } from "./chillyChatCallSoundAssets";
@@ -1596,7 +1595,6 @@ export async function configureNotificationRuntime() {
     await Notifications.setNotificationChannelAsync(CHILLY_CHAT_CALL_CHANNEL_ID, {
       importance: Notifications.AndroidImportance.MAX,
       name: "Chi'lly Chat calls",
-      sound: CHILLY_CHAT_DEFAULT_NOTIFICATION_SOUND,
       vibrationPattern: [0, 400, 180, 400],
     });
     await Notifications.setNotificationChannelAsync(CHILLY_CHAT_MISSED_CALL_CHANNEL_ID, {
@@ -1935,11 +1933,26 @@ const normalizeNotificationPath = (value: unknown) => {
 export const resolveNotificationPath = (value: unknown) => normalizeNotificationPath(value);
 
 export function subscribeToNotificationResponses(onPath: (path: string) => void) {
-  return Notifications.addNotificationResponseReceivedListener((response) => {
+  const handledResponseKeys = new Set<string>();
+  const handleResponse = (response: Notifications.NotificationResponse | null) => {
+    if (!response) return;
+    const requestIdentifier = normalizeText(response.notification.request.identifier);
+    const actionIdentifier = normalizeText(response.actionIdentifier);
+    const responseKey = `${requestIdentifier}:${actionIdentifier || "default"}`;
+    if (responseKey !== ":" && handledResponseKeys.has(responseKey)) return;
     const data = response.notification.request.content.data as Record<string, unknown>;
     const path = normalizeNotificationPath(data.path || data.url || data.deepLink);
-    if (path) onPath(path);
-  });
+    if (!path) return;
+    if (responseKey !== ":") handledResponseKeys.add(responseKey);
+    onPath(path);
+    Notifications.clearLastNotificationResponseAsync().catch(() => null);
+  };
+
+  Notifications.getLastNotificationResponseAsync()
+    .then(handleResponse)
+    .catch(() => null);
+
+  return Notifications.addNotificationResponseReceivedListener(handleResponse);
 }
 
 export async function dismissPresentedChillyChatCallNotifications(input: {

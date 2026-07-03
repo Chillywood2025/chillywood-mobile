@@ -25,20 +25,20 @@ const chatThread = read(chatThreadPath);
 const config = read(configPath);
 const packageJson = JSON.parse(read(packagePath));
 
-if (!dispatch.includes('const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v2"')) {
-  fail("incoming call pushes must use chilly_chat_calls_v2");
+if (!dispatch.includes('const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v3"')) {
+  fail("incoming call pushes must use chilly_chat_calls_v3");
 }
 
-if (!dispatch.includes('const CHAT_CALL_SOUND = "chilly_ring.wav"')) {
-  fail("incoming call pushes must use the bundled chilly_ring ringtone sound");
+if (!dispatch.includes('const CHAT_CALL_SOUND = "default"')) {
+  fail("incoming call pushes must request Android default sound on the fresh call channel");
 }
 
 if (!dispatch.includes('const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls"')) {
   fail("missed call pushes must use chilly_chat_missed_calls");
 }
 
-if (/\bchilly_chat_calls\b/.test(dispatch.replace(/chilly_chat_calls_v2/g, ""))) {
-  fail("new call push dispatcher must not use stale chilly_chat_calls channel");
+if (/\bchilly_chat_calls\b/.test(dispatch.replace(/chilly_chat_calls_v3/g, ""))) {
+  fail("new call push dispatcher must not use stale chilly_chat_calls channels");
 }
 
 if (!dispatch.includes('target_route: "/chat/[threadId]"') || !dispatch.includes("function buildRoute")) {

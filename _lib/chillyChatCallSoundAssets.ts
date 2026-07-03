@@ -3,7 +3,7 @@ import { Audio, InterruptionModeAndroid, type AVPlaybackSource } from "expo-av";
 import { normalizeChillyChatRingtoneKey, type ChillyChatRingtoneKey } from "./chillyChatCalls";
 
 export const CHILLY_CHAT_MESSAGE_CHANNEL_ID = "chilly_chat_messages";
-export const CHILLY_CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v2";
+export const CHILLY_CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v3";
 export const CHILLY_CHAT_MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls";
 export const CHILLY_CHAT_DEFAULT_NOTIFICATION_SOUND = "chilly_ring.wav";
 

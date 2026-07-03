@@ -80,7 +80,8 @@ expected.forEach((file) => {
 
 assert(licenses.includes("original generated Chi'llywood app assets"), "sound license doc must identify the new assets as original/generated");
 assert(licenses.includes("No third-party ringtone files are used"), "sound license doc must say no third-party ringtone files are used");
-assert(soundAssets.includes('CHILLY_CHAT_DEFAULT_NOTIFICATION_SOUND = "chilly_ring.wav"'), "background call channel must keep Chi'lly Ring as the default bundled sound");
+assert(soundAssets.includes('CHILLY_CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v3"'), "background call channel must use the fresh v3 channel so v76 devices do not stay pinned to stale v2 sound settings");
+assert(soundAssets.includes('CHILLY_CHAT_DEFAULT_NOTIFICATION_SOUND = "chilly_ring.wav"'), "Chi'lly Ring must remain the default bundled sound name for future native builds");
 assert(calls.includes("Silent / Vibrate Only"), "silent/vibrate preference must remain compatible");
 
 if (failures.length) {

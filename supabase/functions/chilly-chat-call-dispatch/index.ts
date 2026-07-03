@@ -72,8 +72,8 @@ const JSON_HEADERS = {
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
-const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v2";
-const CHAT_CALL_SOUND = "chilly_ring.wav";
+const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v3";
+const CHAT_CALL_SOUND = "default";
 const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls";
 const VALID_CALL_TYPES = new Set(["voice", "video"]);
 const TERMINAL_STATUSES = new Set(["accepted", "declined", "missed", "canceled", "ended", "busy"]);

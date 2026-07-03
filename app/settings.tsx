@@ -803,7 +803,7 @@ export default function SettingsScreen() {
       ? "Silent / Vibrate Only is selected. In-app calls will not play a ringtone."
       : notificationPreferences.chillyChatCallSoundKey === "quiet_buzz"
         ? "Quiet Buzz preview started. It is a quieter, vibration-first alert, so keep Vibrate on calls enabled if you want the buzz pattern."
-        : "Preview sound started. Background push sound uses the Android call channel from the native app bundle.";
+        : "Preview sound started. Background push sound uses the Android call channel and Android settings may override it.";
     Alert.alert(
       "Chi'lly Chat preview",
       previewMessage,
@@ -2019,7 +2019,7 @@ export default function SettingsScreen() {
         ))}
         <SettingsRow
           title="Incoming call sound"
-          subtitle="Choose the ringtone used when Ring on calls is on. Background call alerts use the Android call channel sound from the native app bundle, and Android settings may override it."
+          subtitle="Choose the ringtone used when Ring on calls is on. Background call alerts use the Android call channel, and Android settings may override it."
           value={
             notificationPreferences?.chillyChatCallSoundKey === "silent_vibrate"
               ? "Ring off"
@@ -2059,7 +2059,7 @@ export default function SettingsScreen() {
               <Text style={styles.utilityButtonText}>Preview sound</Text>
             </TouchableOpacity>
             <Text style={styles.metaText}>
-              Downloaded/imported sounds are in-app only for V1. Background push sounds use bundled app files in the call notification channel, not downloaded sounds.
+              Downloaded/imported sounds are in-app only for V1. Background push sounds use the Android call notification channel, not downloaded sounds.
             </Text>
           </View>
         </SettingsRow>

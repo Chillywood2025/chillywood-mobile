@@ -83,6 +83,8 @@ assertIncludes(bell, "dismissNotification", "Bell Activity must dismiss");
 ].forEach((needle) => assertIncludes(layout, needle, "room-safe incoming call policy"));
 
 assertIncludes(notifications, "dismissPresentedChillyChatCallNotifications", "handled call notifications must be dismissible by invite/path");
+assertIncludes(notifications, "Notifications.getLastNotificationResponseAsync", "background/cold-start notification taps must restore the pending call route");
+assertIncludes(notifications, "Notifications.clearLastNotificationResponseAsync", "handled notification taps must clear the last response to avoid stale re-routing");
 assertIncludes(notifications, "Notifications.getPresentedNotificationsAsync", "handled call notifications must inspect presented Android notifications");
 assertIncludes(notifications, "Notifications.dismissNotificationAsync", "handled call notifications must dismiss only matching call notifications");
 assertIncludes(notifications, "presentedNotificationId", "handled call notifications must carry the exact presented Android notification identifier");
