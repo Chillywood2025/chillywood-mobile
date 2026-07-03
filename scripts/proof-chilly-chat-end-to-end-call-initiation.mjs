@@ -94,7 +94,7 @@ const callDispatch = read("supabase/functions/chilly-chat-call-dispatch/index.ts
   "readLatestRingingChillyChatCallInviteForCallee",
   "subscribeToIncomingChillyChatCallInvites",
   "chilly_chat_call_invite",
-  "app-wide-incoming-call-banner",
+  "app-wide-incoming-call-modal",
   "openCall: \"1\"",
 ].forEach((needle) => requireText("app-wide receiver source", appLayout, needle));
 

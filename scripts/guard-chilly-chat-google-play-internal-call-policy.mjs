@@ -208,7 +208,7 @@ forbidSentence("Google Play internal call proof doc", doc, (sentence) => (
   "readLatestRingingChillyChatCallInviteForCallee",
   "subscribeToIncomingChillyChatCallInvites",
   "chilly_chat_call_invite",
-  "app-wide-incoming-call-banner",
+  "app-wide-incoming-call-modal",
 ].forEach((needle) => requireText("app-wide receiver source", appLayout, needle));
 
 [

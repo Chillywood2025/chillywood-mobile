@@ -35,6 +35,9 @@ const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
   "\"/watch-party\"",
   "\"/watch-party/live-stage\"",
   "\"/communication\"",
+  "app-wide-incoming-call-modal",
+  "alreadyOnSameThread) return null;",
+  "roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay",
   "room-safe-incoming-call-banner",
   "Incoming Chi'lly Chat call",
   "Answering will leave or pause your current room media session.",
@@ -53,15 +56,24 @@ const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
 ].forEach((needle) => add(`incoming call room-safe behavior includes ${needle}`, includes(layout, needle), needle));
 
 add("room-safe call action does not auto-answer", !includes(layout, "autoAnswer") && !includes(layout, "answerAutomatically"), "no auto answer code");
-add("room-safe call action does not auto-leave before explicit button", includes(layout, "onPress={roomSafeCall ? leaveRoomAndAnswer : openCall}"), "explicit leave button");
+add(
+  "room-safe call action does not auto-leave before explicit button",
+  includes(layout, "testID=\"room-safe-incoming-call-leave-answer\"")
+    && includes(layout, "onPress={leaveRoomAndAnswer}")
+    && includes(layout, "testID=\"app-wide-incoming-call-answer\"")
+    && includes(layout, "onPress={openCall}"),
+  "room-safe leave/answer and normal app answer are separate explicit controls",
+);
 add("Reply in Chat routes to chat without answering", includes(layout, "replyInChat") && includes(layout, "`/chat/${threadId}`"), "replyInChat route");
 add(
-  "app-wide incoming call banner rings/vibrates outside the same chat thread",
+  "normal app surfaces use full incoming call modal and ring/vibrate outside the same chat thread",
   includes(layout, "playChillyChatCallSound")
     && includes(layout, "Vibration.vibrate")
     && includes(layout, "alreadyOnSameThread")
+    && includes(layout, "app-wide-incoming-call-modal")
+    && includes(layout, "app-wide-incoming-call-answer")
     && includes(layout, "readNotificationPreferences"),
-  "global call bridge must ring/vibrate on non-thread app surfaces without double-ringing the same thread",
+  "global call bridge must ring/vibrate and show the full modal on normal app surfaces without double-ringing or duplicating the same thread",
 );
 add(
   "declined/answered call rows are removed from in-app Activity",

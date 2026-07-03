@@ -50,6 +50,9 @@ assertIncludes(bell, "dismissNotification", "Bell Activity must dismiss");
 
 [
   "Incoming Chi'lly Chat call",
+  "app-wide-incoming-call-modal",
+  "alreadyOnSameThread) return null;",
+  "roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay",
   "Decline",
   "Reply in Chat",
   "Leave room and answer",
@@ -89,6 +92,10 @@ assertIncludes(layout, "dismissAllPresentedNotificationsFallback: true,\n       
 assertIncludes(layout, "playChillyChatCallSound", "app-wide incoming call bridge must ring outside the same chat thread");
 assertIncludes(layout, "Vibration.vibrate", "app-wide incoming call bridge must vibrate outside the same chat thread");
 assertIncludes(layout, "alreadyOnSameThread", "app-wide ringing must avoid double-ringing when receiver is already inside that chat thread");
+assertIncludes(layout, "app-wide-incoming-call-modal", "normal app surfaces must show a full incoming-call modal instead of only a top banner");
+assertIncludes(layout, "app-wide-incoming-call-answer", "normal app surface modal must keep an answer action");
+assertIncludes(layout, "room-safe-incoming-call-banner", "room-safe surfaces must keep the compact incoming call banner");
+assertIncludes(layout, "roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay", "room-safe and normal incoming-call surfaces must use different presentations");
 assertIncludes(layout, "readNotificationPreferences", "app-wide call ringing must respect notification preferences");
 assertIncludes(notifications, "reconcileChillyChatCallNotificationRows", "notification reads must reconcile stale incoming-call rows against invite state");
 assertIncludes(notifications, "CHAT_CALL_INVITES_TABLE", "notification stale-call reconciliation must read real call invites");

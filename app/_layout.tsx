@@ -440,6 +440,22 @@ const isHostedLiveSurfacePath = (pathname: string) => (
   pathname === "/watch-party/live-stage" || pathname.startsWith("/watch-party/live-stage/")
 );
 
+const getIncomingCallKind = (alert: IncomingCallAlert) => {
+  if (alert.invite?.callType === "voice") return "voice";
+  const normalizedTitle = String(alert.title ?? "").toLowerCase();
+  return normalizedTitle.includes("voice") ? "voice" : "video";
+};
+
+const getIncomingCallerLabel = (alert: IncomingCallAlert) => {
+  const normalizedBody = String(alert.body ?? "").trim();
+  const match = normalizedBody.match(/^(.+?) is calling you on Chi'lly Chat\.?$/u);
+  return String(match?.[1] ?? "").trim() || "Someone";
+};
+
+const getIncomingCallerInitial = (callerLabel: string) => (
+  String(callerLabel ?? "").trim().charAt(0).toUpperCase() || "C"
+);
+
 const normalizeRoutePathOnly = (value?: string | null) => {
   const normalized = String(value ?? "").trim().split("?")[0]?.replace(/\/+$/u, "") ?? "";
   return normalized || "/";
@@ -583,7 +599,15 @@ function IncomingCallNotificationBridge() {
 
   if (!alert) return null;
 
+  const currentPath = normalizeRoutePathOnly(pathname);
+  const alertPath = normalizeRoutePathOnly(alert.path);
+  const alreadyOnSameThread = currentPath.startsWith("/chat/") && !!alertPath && currentPath === alertPath;
+  if (alreadyOnSameThread) return null;
+
   const roomSafeCall = isRoomSafeIncomingCallPath(pathname);
+  const callKind = getIncomingCallKind(alert);
+  const callerLabel = getIncomingCallerLabel(alert);
+  const callerInitial = getIncomingCallerInitial(callerLabel);
 
   const clearAlert = () => {
     stopIncomingCallAttention();
@@ -691,24 +715,21 @@ function IncomingCallNotificationBridge() {
   return (
     <View
       pointerEvents="box-none"
-      style={styles.incomingCallOverlay}
+      style={roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay}
       testID="app-wide-incoming-call-overlay"
       accessibilityLabel="Incoming Chi'lly Chat call overlay"
     >
-      <View style={styles.incomingCallCard}>
+      {roomSafeCall ? (
+      <View style={styles.incomingCallBannerCard}>
         <View
           style={styles.incomingCallOpenAction}
-          testID={roomSafeCall ? "room-safe-incoming-call-banner" : "app-wide-incoming-call-banner"}
-          accessibilityLabel={roomSafeCall ? "Room-safe incoming Chi'lly Chat call" : "Incoming Chi'lly Chat call"}
+          testID="room-safe-incoming-call-banner"
+          accessibilityLabel="Room-safe incoming Chi'lly Chat call"
         >
           <Text style={styles.incomingCallEyebrow}>Chi'lly Chat</Text>
-          <Text style={styles.incomingCallTitle}>
-            {roomSafeCall ? "Incoming Chi'lly Chat call" : alert.title}
-          </Text>
+          <Text style={styles.incomingCallTitle}>Incoming Chi'lly Chat call</Text>
           <Text style={styles.incomingCallBody}>
-            {roomSafeCall
-              ? "Answering will leave or pause your current room media session."
-              : alert.body}
+            Answering will leave or pause your current room media session.
           </Text>
         </View>
         <View style={styles.incomingCallActions}>
@@ -718,7 +739,7 @@ function IncomingCallNotificationBridge() {
               void decline();
             }}
             style={[styles.incomingCallButton, styles.incomingCallSecondaryButton]}
-            testID={roomSafeCall ? "room-safe-incoming-call-decline" : "app-wide-incoming-call-decline"}
+            testID="room-safe-incoming-call-decline"
             accessibilityLabel="Decline incoming Chi'lly Chat call"
           >
             <Text style={styles.incomingCallSecondaryText}>Decline</Text>
@@ -727,24 +748,72 @@ function IncomingCallNotificationBridge() {
             activeOpacity={0.82}
             onPress={replyInChat}
             style={[styles.incomingCallButton, styles.incomingCallSecondaryButton]}
-            testID={roomSafeCall ? "room-safe-incoming-call-reply-chat" : "app-wide-incoming-call-reply-chat"}
+            testID="room-safe-incoming-call-reply-chat"
             accessibilityLabel="Reply in Chi'lly Chat"
           >
             <Text style={styles.incomingCallSecondaryText}>Reply in Chat</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.86}
-            onPress={roomSafeCall ? leaveRoomAndAnswer : openCall}
+            onPress={leaveRoomAndAnswer}
             style={[styles.incomingCallButton, styles.incomingCallPrimaryButton]}
-            testID={roomSafeCall ? "room-safe-incoming-call-leave-answer" : "app-wide-incoming-call-answer"}
-            accessibilityLabel={roomSafeCall ? "Leave room and answer Chi'lly Chat call" : "Answer Chi'lly Chat call"}
+            testID="room-safe-incoming-call-leave-answer"
+            accessibilityLabel="Leave room and answer Chi'lly Chat call"
           >
-            <Text style={styles.incomingCallPrimaryText}>
-              {roomSafeCall ? "Leave room and answer" : "Answer"}
-            </Text>
+            <Text style={styles.incomingCallPrimaryText}>Leave room and answer</Text>
           </TouchableOpacity>
         </View>
       </View>
+      ) : (
+      <View
+        style={styles.incomingCallModalSheet}
+        testID="app-wide-incoming-call-modal"
+        accessibilityLabel={`Incoming Chi'lly Chat ${callKind} call from ${callerLabel}`}
+      >
+        <View style={styles.incomingCallRingGlow}>
+          <View style={styles.incomingCallAvatar}>
+            <Text style={styles.incomingCallAvatarText}>{callerInitial}</Text>
+          </View>
+        </View>
+        <Text style={styles.incomingCallModalKicker}>Chi'lly Chat</Text>
+        <Text style={styles.incomingCallModalTitle}>{callerLabel} is calling...</Text>
+        <Text style={styles.incomingCallModalBody}>Incoming {callKind} call</Text>
+        <View style={styles.incomingCallModalActionRow}>
+          <TouchableOpacity
+            activeOpacity={0.86}
+            onPress={() => {
+              void decline();
+            }}
+            style={[styles.incomingCallModalButton, styles.incomingCallModalDeclineButton]}
+            testID="app-wide-incoming-call-decline"
+            accessibilityLabel="Decline incoming Chi'lly Chat call"
+          >
+            <Text style={styles.incomingCallModalButtonText}>Decline</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={openCall}
+            style={[styles.incomingCallModalButton, styles.incomingCallModalAcceptButton]}
+            testID="app-wide-incoming-call-answer"
+            accessibilityLabel="Answer incoming Chi'lly Chat call"
+          >
+            <Text style={styles.incomingCallModalButtonText}>Answer</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
+          activeOpacity={0.82}
+          onPress={replyInChat}
+          style={styles.incomingCallModalReplyButton}
+          testID="app-wide-incoming-call-reply-chat"
+          accessibilityLabel="Reply in Chi'lly Chat without answering"
+        >
+          <Text style={styles.incomingCallModalReplyText}>Reply in Chat</Text>
+        </TouchableOpacity>
+        <Text style={styles.incomingCallModalFootnote}>
+          Rings for about 45 seconds, then becomes a missed call.
+        </Text>
+      </View>
+      )}
     </View>
   );
 }
@@ -1178,14 +1247,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-  incomingCallOverlay: {
+  incomingCallBannerOverlay: {
     position: "absolute",
     top: 18,
     left: 14,
     right: 14,
     zIndex: 40,
   },
-  incomingCallCard: {
+  incomingCallModalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 22,
+    backgroundColor: "rgba(0,0,0,0.58)",
+  },
+  incomingCallBannerCard: {
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(169,246,210,0.34)",
@@ -1196,6 +1273,109 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
+  },
+  incomingCallModalSheet: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(10,12,21,0.96)",
+    padding: 24,
+    alignItems: "center",
+    gap: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.34,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 12,
+  },
+  incomingCallRingGlow: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(243,75,116,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(243,75,116,0.42)",
+  },
+  incomingCallAvatar: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  incomingCallAvatarText: {
+    color: "#FFF5F8",
+    fontSize: 28,
+    fontWeight: "900",
+  },
+  incomingCallModalKicker: {
+    color: "#FFB4C6",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.15,
+    textTransform: "uppercase",
+  },
+  incomingCallModalTitle: {
+    color: "#FFFFFF",
+    fontSize: 23,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  incomingCallModalBody: {
+    color: "#C9D4E8",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  incomingCallModalActionRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+    marginTop: 8,
+  },
+  incomingCallModalButton: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  incomingCallModalDeclineButton: {
+    backgroundColor: "#B91C1C",
+  },
+  incomingCallModalAcceptButton: {
+    backgroundColor: "#16A34A",
+  },
+  incomingCallModalButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  incomingCallModalReplyButton: {
+    minHeight: 42,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  incomingCallModalReplyText: {
+    color: "#D7E4EA",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  incomingCallModalFootnote: {
+    color: "#8E9AB0",
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
   },
   incomingCallOpenAction: {
     gap: 4,

@@ -151,7 +151,7 @@ if (/catch\s*\([^)]*invite[^)]*\)\s*{[^}]*delivery\s*=\s*{/is.test(chatLib)) {
   "readLatestRingingChillyChatCallInviteForCallee",
   "subscribeToIncomingChillyChatCallInvites",
   "chilly_chat_call_invite",
-  "app-wide-incoming-call-banner",
+  "app-wide-incoming-call-modal",
 ].forEach((needle) => requireText("app-wide receiver source", appLayout, needle));
 
 [
