@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Linking, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Linking, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -527,34 +527,53 @@ function IncomingCallNotificationBridge() {
     }
 
     let active = true;
+    let refreshInFlight = false;
     const refreshIncomingInvite = async () => {
-      const preferences = await readNotificationPreferences(currentUserId).catch(() => null);
-      if (!active) return;
-      setCallPreferences(preferences);
-      if (preferences?.chillyChatCallsEnabled === false || preferences?.inAppEnabled === false) {
-        setAlert((current) => current?.triggerType === "chilly_chat_call_invite" ? null : current);
-        return;
-      }
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        const preferences = await readNotificationPreferences(currentUserId).catch(() => null);
+        if (!active) return;
+        setCallPreferences(preferences);
+        if (preferences?.chillyChatCallsEnabled === false || preferences?.inAppEnabled === false) {
+          setAlert((current) => current?.triggerType === "chilly_chat_call_invite" ? null : current);
+          return;
+        }
 
-      const invite = await readLatestRingingChillyChatCallInviteForCallee(currentUserId).catch(() => null);
-      if (!active) return;
-      if (!invite) {
-        latestInviteAlertIdRef.current = "";
-        setAlert((current) => current?.triggerType === "chilly_chat_call_invite" ? null : current);
-        return;
-      }
+        const invite = await readLatestRingingChillyChatCallInviteForCallee(currentUserId).catch(() => null);
+        if (!active) return;
+        if (!invite) {
+          latestInviteAlertIdRef.current = "";
+          setAlert((current) => current?.triggerType === "chilly_chat_call_invite" ? null : current);
+          return;
+        }
 
-      const nextAlert = await buildIncomingCallAlertFromInvite(invite);
-      if (active) showAlert(nextAlert);
+        const nextAlert = await buildIncomingCallAlertFromInvite(invite);
+        if (active) showAlert(nextAlert);
+      } finally {
+        refreshInFlight = false;
+      }
     };
 
     void refreshIncomingInvite();
+    const refreshInterval = setInterval(() => {
+      if (AppState.currentState === "active") {
+        void refreshIncomingInvite();
+      }
+    }, 3000);
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        void refreshIncomingInvite();
+      }
+    });
     const unsubscribe = subscribeToIncomingChillyChatCallInvites(currentUserId, () => {
       void refreshIncomingInvite();
     });
 
     return () => {
       active = false;
+      clearInterval(refreshInterval);
+      appStateSubscription.remove();
       unsubscribe();
     };
   }, [isSignedIn, user?.id]);

@@ -52,6 +52,10 @@ assertIncludes(bell, "dismissNotification", "Bell Activity must dismiss");
   "Incoming Chi'lly Chat call",
   "app-wide-incoming-call-modal",
   "alreadyOnSameThread) return null;",
+  "AppState.addEventListener",
+  "AppState.currentState === \"active\"",
+  "readLatestRingingChillyChatCallInviteForCallee",
+  "setInterval",
   "roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay",
   "Decline",
   "Reply in Chat",
@@ -94,6 +98,10 @@ assertIncludes(layout, "Vibration.vibrate", "app-wide incoming call bridge must 
 assertIncludes(layout, "alreadyOnSameThread", "app-wide ringing must avoid double-ringing when receiver is already inside that chat thread");
 assertIncludes(layout, "app-wide-incoming-call-modal", "normal app surfaces must show a full incoming-call modal instead of only a top banner");
 assertIncludes(layout, "app-wide-incoming-call-answer", "normal app surface modal must keep an answer action");
+assertIncludes(layout, "readLatestRingingChillyChatCallInviteForCallee", "normal app surfaces must read back active ringing call invites");
+assertIncludes(layout, "AppState.addEventListener", "normal app surfaces must refresh incoming call readback when the app returns active");
+assertIncludes(layout, "AppState.currentState === \"active\"", "foreground readback must be limited to active app state");
+assertIncludes(layout, "setInterval", "normal app surfaces must not depend on a single missed realtime or foreground notification event");
 assertIncludes(layout, "room-safe-incoming-call-banner", "room-safe surfaces must keep the compact incoming call banner");
 assertIncludes(layout, "roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay", "room-safe and normal incoming-call surfaces must use different presentations");
 assertIncludes(layout, "readNotificationPreferences", "app-wide call ringing must respect notification preferences");

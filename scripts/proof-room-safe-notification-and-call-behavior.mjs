@@ -53,6 +53,10 @@ const clearEndedCallBody = clearEndedCallMatch?.[0] ?? "";
   "cleanupChillyChatCallNotifications",
   "[750, 1800, 5000]",
   "clearEndedChatThreadCall",
+  "AppState.addEventListener",
+  "AppState.currentState === \"active\"",
+  "readLatestRingingChillyChatCallInviteForCallee",
+  "setInterval",
 ].forEach((needle) => add(`incoming call room-safe behavior includes ${needle}`, includes(layout, needle), needle));
 
 add("room-safe call action does not auto-answer", !includes(layout, "autoAnswer") && !includes(layout, "answerAutomatically"), "no auto answer code");
@@ -72,8 +76,12 @@ add(
     && includes(layout, "alreadyOnSameThread")
     && includes(layout, "app-wide-incoming-call-modal")
     && includes(layout, "app-wide-incoming-call-answer")
+    && includes(layout, "readLatestRingingChillyChatCallInviteForCallee")
+    && includes(layout, "AppState.addEventListener")
+    && includes(layout, "AppState.currentState === \"active\"")
+    && includes(layout, "setInterval")
     && includes(layout, "readNotificationPreferences"),
-  "global call bridge must ring/vibrate and show the full modal on normal app surfaces without double-ringing or duplicating the same thread",
+  "global call bridge must ring/vibrate and show the full modal on normal app surfaces without double-ringing, duplicating the same thread, or depending on a single missed realtime/foreground-notification event",
 );
 add(
   "declined/answered call rows are removed from in-app Activity",
