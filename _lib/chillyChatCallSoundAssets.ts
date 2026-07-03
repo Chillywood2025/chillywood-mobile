@@ -1,4 +1,4 @@
-import { Audio, type AVPlaybackSource } from "expo-av";
+import { Audio, InterruptionModeAndroid, type AVPlaybackSource } from "expo-av";
 
 import { normalizeChillyChatRingtoneKey, type ChillyChatRingtoneKey } from "./chillyChatCalls";
 
@@ -17,6 +17,8 @@ export const CHILLY_CHAT_NOTIFICATION_SOUND_FILES = [
 ] as const;
 
 export type ChillyChatPlayingSound = Audio.Sound;
+
+const SOUND_START_TIMEOUT_MS = 900;
 
 const SOUND_SOURCE_BY_KEY: Record<Exclude<ChillyChatRingtoneKey, "silent_vibrate">, AVPlaybackSource> = {
   chilly_ring: require("../assets/sounds/chilly-chat/chilly_ring.wav") as AVPlaybackSource,
@@ -42,21 +44,46 @@ export async function playChillyChatCallSound(
 
   await Audio.setAudioModeAsync({
     allowsRecordingIOS: false,
+    interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
     playsInSilentModeIOS: true,
-    shouldDuckAndroid: true,
+    playThroughEarpieceAndroid: false,
+    shouldDuckAndroid: false,
     staysActiveInBackground: false,
   });
 
   const { sound } = await Audio.Sound.createAsync(source, {
     isLooping: !!options?.loop,
-    shouldPlay: true,
+    shouldPlay: false,
     volume: Math.max(0, Math.min(1, options?.volume ?? 0.85)),
   });
-  return sound;
+  try {
+    await sound.setVolumeAsync(Math.max(0, Math.min(1, options?.volume ?? 0.85)));
+    await sound.playAsync();
+    const status = await waitForChillyChatSoundPlayback(sound);
+    if (!status) {
+      throw new Error("Chi'lly Chat call sound did not start.");
+    }
+    return sound;
+  } catch (error) {
+    await stopChillyChatCallSound(sound);
+    throw error;
+  }
 }
 
 export async function stopChillyChatCallSound(sound: Audio.Sound | null | undefined): Promise<void> {
   if (!sound) return;
   await sound.stopAsync().catch(() => null);
   await sound.unloadAsync().catch(() => null);
+}
+
+async function waitForChillyChatSoundPlayback(sound: Audio.Sound): Promise<boolean> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < SOUND_START_TIMEOUT_MS) {
+    const status = await sound.getStatusAsync();
+    if (status.isLoaded && status.isPlaying) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
+  return false;
 }

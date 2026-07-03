@@ -21,6 +21,7 @@ const chatLib = read("_lib/chat.ts");
 const settings = read("app/settings.tsx");
 const notifications = read("_lib/notifications.ts");
 const chillyChatCalls = read("_lib/chillyChatCalls.ts");
+const chillyChatCallSoundAssets = read("_lib/chillyChatCallSoundAssets.ts");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const chatIndex = read("app/chat/index.tsx");
@@ -48,6 +49,10 @@ assertIncludes(settings, "Bell Activity", "Settings must point users to the bell
 assertIncludes(settings, "Ring on calls", "Settings Chi'lly Chat calls section must expose a ring toggle next to vibration");
 assertIncludes(settings, "onToggleChillyChatCallRing", "Settings ring toggle must persist through notification preferences");
 assertIncludes(settings, "silent_vibrate", "Settings ring toggle must use the existing silent/vibrate call preference instead of a schema-only toggle");
+assertIncludes(settings, "Sound could not play. Check media volume, notification volume, or Android sound settings.", "Settings preview must show a clear sound playback failure instead of fake success");
+assertIncludes(settings, "Preview sound started.", "Settings preview must only report a bounded playback start, not fake completion");
+assertIncludes(settings, "Quiet Buzz preview started. It is a quieter, vibration-first alert", "Quiet Buzz preview copy must make quiet/vibration-first behavior clear");
+assertNotIncludes(settings, "Playing the selected in-app call sound", "Settings preview must not show the old fake-success sound message");
 assertIncludes(bell, "markNotificationRead", "Bell Activity must mark read");
 assertIncludes(bell, "dismissNotification", "Bell Activity must dismiss");
 
@@ -112,6 +117,13 @@ assertIncludes(layout, "setInterval", "normal app surfaces must not depend on a 
 assertIncludes(layout, "room-safe-incoming-call-banner", "room-safe surfaces must keep the compact incoming call banner");
 assertIncludes(layout, "roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay", "room-safe and normal incoming-call surfaces must use different presentations");
 assertIncludes(layout, "readNotificationPreferences", "app-wide call ringing must respect notification preferences");
+assertIncludes(chillyChatCallSoundAssets, "InterruptionModeAndroid.DoNotMix", "call sound playback must request audible media focus instead of ducking under other audio");
+assertIncludes(chillyChatCallSoundAssets, "playThroughEarpieceAndroid: false", "call sound playback must use the speaker path on Android");
+assertIncludes(chillyChatCallSoundAssets, "shouldDuckAndroid: false", "call sound playback must not duck itself into near-silence");
+assertIncludes(chillyChatCallSoundAssets, "shouldPlay: false", "call sound playback must start explicitly so failures can be caught");
+assertIncludes(chillyChatCallSoundAssets, "sound.playAsync()", "call sound playback must explicitly start preview/ringtone audio");
+assertIncludes(chillyChatCallSoundAssets, "waitForChillyChatSoundPlayback", "call sound playback must verify Expo reports the selected ringtone as playing");
+assertIncludes(chillyChatCallSoundAssets, "status.isLoaded && status.isPlaying", "call sound playback verification must require a loaded playing sound");
 assertIncludes(notifications, "reconcileChillyChatCallNotificationRows", "notification reads must reconcile stale incoming-call rows against invite state");
 assertIncludes(notifications, "CHAT_CALL_INVITES_TABLE", "notification stale-call reconciliation must read real call invites");
 assertIncludes(notifications, "status: \"handled\"", "stale incoming-call rows must become non-actionable history");

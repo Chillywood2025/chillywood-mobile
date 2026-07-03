@@ -254,6 +254,9 @@ const NOTIFICATION_GROUPS: {
   },
 ];
 
+const CHILLY_CHAT_SOUND_PLAYBACK_ERROR =
+  "Sound could not play. Check media volume, notification volume, or Android sound settings.";
+
 const LEGAL_POLICY_DESCRIPTIONS: Record<string, string> = {
   "account-deletion": "How to request account and data deletion.",
   "community-guidelines": "Rules for safe participation across Chi'llywood.",
@@ -780,6 +783,10 @@ export default function SettingsScreen() {
     if (notificationPreferences.chillyChatCallSoundKey !== "silent_vibrate") {
       try {
         const sound = await playChillyChatCallSound(notificationPreferences.chillyChatCallSoundKey, { volume: 0.85 });
+        if (!sound) {
+          Alert.alert("Chi'lly Chat preview", CHILLY_CHAT_SOUND_PLAYBACK_ERROR);
+          return;
+        }
         ringtonePreviewSoundRef.current = sound;
         setTimeout(() => {
           void stopChillyChatCallSound(sound);
@@ -788,15 +795,18 @@ export default function SettingsScreen() {
           }
         }, 1800);
       } catch {
-        Alert.alert("Chi'lly Chat preview", "Unable to preview that sound. Incoming calls will fall back to Chi'lly Ring.");
+        Alert.alert("Chi'lly Chat preview", CHILLY_CHAT_SOUND_PLAYBACK_ERROR);
         return;
       }
     }
+    const previewMessage = notificationPreferences.chillyChatCallSoundKey === "silent_vibrate"
+      ? "Silent / Vibrate Only is selected. In-app calls will not play a ringtone."
+      : notificationPreferences.chillyChatCallSoundKey === "quiet_buzz"
+        ? "Quiet Buzz preview started. It is a quieter, vibration-first alert, so keep Vibrate on calls enabled if you want the buzz pattern."
+        : "Preview sound started. Background push sound uses the Android call channel from the native app bundle.";
     Alert.alert(
       "Chi'lly Chat preview",
-      notificationPreferences.chillyChatCallSoundKey === "silent_vibrate"
-        ? "Silent / Vibrate Only is selected. In-app calls will not play a ringtone."
-        : "Playing the selected in-app call sound. Background push sound uses the Android call channel from the native app bundle.",
+      previewMessage,
     );
   }, [notificationPreferences]);
 
