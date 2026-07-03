@@ -26,7 +26,8 @@
         "CAMERA",
         "POST_NOTIFICATIONS",
         "RECORD_AUDIO",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "USE_FULL_SCREEN_INTENT"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#03030F",

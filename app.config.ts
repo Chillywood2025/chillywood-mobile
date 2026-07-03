@@ -129,6 +129,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           sounds: CHILLY_CHAT_NOTIFICATION_SOUND_FILES,
         },
       ],
+      "./plugins/withChillyChatNativeCallNotifications",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "@react-native-firebase/perf",

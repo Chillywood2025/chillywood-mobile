@@ -5,7 +5,7 @@ import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
+import { NativeModules, Platform } from "react-native";
 
 import {
   buildCreatorEventSummary,
@@ -25,10 +25,35 @@ import {
   CHILLY_CHAT_CALL_CHANNEL_ID,
   CHILLY_CHAT_MESSAGE_CHANNEL_ID,
   CHILLY_CHAT_MISSED_CALL_CHANNEL_ID,
+  CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID,
 } from "./chillyChatCallSoundAssets";
 
 export const NOTIFICATIONS_TABLE = "notifications";
 export const EVENT_REMINDERS_TABLE = "event_reminders";
+
+type NativeCallAlertStatusPayload = {
+  available?: boolean;
+  canOpenSettings?: boolean;
+  channelId?: string;
+  granted?: boolean;
+  message?: string;
+};
+
+type NativeCallNotificationModule = {
+  ensureNativeCallNotificationChannel?: () => Promise<boolean>;
+  openFullScreenCallAlertSettings?: () => Promise<boolean>;
+  readFullScreenCallAlertStatus?: () => Promise<NativeCallAlertStatusPayload>;
+};
+
+const nativeCallNotificationModule = NativeModules.ChillyChatCallNotifications as NativeCallNotificationModule | undefined;
+
+export type NativeCallAlertStatus = {
+  available: boolean;
+  canOpenSettings: boolean;
+  channelId: string;
+  granted: boolean | null;
+  message: string;
+};
 
 export type NotificationCategory =
   | "creator_went_live"
@@ -1597,12 +1622,61 @@ export async function configureNotificationRuntime() {
       name: "Chi'lly Chat calls",
       vibrationPattern: [0, 400, 180, 400],
     });
+    await nativeCallNotificationModule?.ensureNativeCallNotificationChannel?.().catch(() => false);
     await Notifications.setNotificationChannelAsync(CHILLY_CHAT_MISSED_CALL_CHANNEL_ID, {
       importance: Notifications.AndroidImportance.HIGH,
       name: "Missed Chi'lly Chat calls",
       vibrationPattern: [0, 220, 180, 220],
     });
   }
+}
+
+export async function readNativeCallAlertStatus(): Promise<NativeCallAlertStatus> {
+  if (Platform.OS !== "android") {
+    return {
+      available: false,
+      canOpenSettings: false,
+      channelId: CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID,
+      granted: null,
+      message: "Full-screen Chi'lly Chat call alerts are Android-only in this build.",
+    };
+  }
+
+  if (!nativeCallNotificationModule?.readFullScreenCallAlertStatus) {
+    return {
+      available: false,
+      canOpenSettings: false,
+      channelId: CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID,
+      granted: null,
+      message: "Native full-screen call alert support requires the next Google Play internal Android build.",
+    };
+  }
+
+  try {
+    const payload = await nativeCallNotificationModule.readFullScreenCallAlertStatus();
+    return {
+      available: payload?.available === true,
+      canOpenSettings: payload?.canOpenSettings === true,
+      channelId: String(payload?.channelId || CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID),
+      granted: typeof payload?.granted === "boolean" ? payload.granted : null,
+      message: String(payload?.message || "Android full-screen call alert status was read."),
+    };
+  } catch {
+    return {
+      available: false,
+      canOpenSettings: false,
+      channelId: CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID,
+      granted: null,
+      message: "Unable to read Android full-screen call alert permission.",
+    };
+  }
+}
+
+export async function openNativeCallAlertSettings(): Promise<boolean> {
+  if (Platform.OS !== "android" || !nativeCallNotificationModule?.openFullScreenCallAlertSettings) return false;
+  return nativeCallNotificationModule.openFullScreenCallAlertSettings()
+    .then(() => true)
+    .catch(() => false);
 }
 
 const buildUnsupportedPushRegistration = (message: string): PushRegistrationState => ({

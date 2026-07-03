@@ -10,6 +10,20 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Google-Signed V77 Native Chi'lly Chat CallStyle / Full-Screen
+
+Status: Partial/Pending.
+
+Doc: `docs/release/GOOGLE_SIGNED_V77_NATIVE_CALLSTYLE_FULLSCREEN_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`.
+
+Source/native work is implemented and validated for Android CallStyle outside-app incoming calls. It adds `USE_FULL_SCREEN_INTENT`, `chilly_chat_calls_fullscreen_v1`, native channel creation, a custom Firebase messaging service that intercepts only Chi'lly Chat incoming-call data pushes, `NotificationCompat.CallStyle.forIncomingCall`, native Answer/Decline actions, Settings full-screen call alert permission readback/settings route, and data-only incoming call push dispatch.
+
+This is not OTA-only. A new Google Play internal Android build, expected v77 or newer, is required because the lane changes native Android manifest, Firebase messaging service, channel creation, and native notification actions. Do not claim full-screen/lock-screen closure from v76 or OTA.
+
+Installed proof remains pending. Full readiness requires Google Play-installed v77+ package proof from `com.android.vending`, notification permission/DND/volume/channel readbacks, full-screen intent permission readback, locked-screen/background call proof, Answer and Decline action proof, stale-call rejection, fallback proof when full-screen permission is denied, and regression proof for same-thread full UI, normal in-app full modal, and room-safe compact banner.
+
+Validation passed so far: Deno check for `chilly-chat-call-dispatch`, native Kotlin compile, notification/call guards, notification proof scripts, typecheck, runtime validation, and Supabase dry-run. No Money Center changes, provider mutation, live money, payout/cashout, auth/RLS weakening, WebRTC/media setup change, room routing change, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, or clear data happened.
+
 ## Google-Signed V76 Modern Chi'lly Chat Ringtones
 
 Status: Partial.

@@ -16,12 +16,14 @@ const assertNotIncludes = (source, needle, label) => assert(!source.includes(nee
 const packageJson = read("package.json");
 const bell = read("components/notifications/notification-bell-button.tsx");
 const layout = read("app/_layout.tsx");
+const appConfig = read("app.config.ts");
 const chatThread = read("app/chat/[threadId].tsx");
 const chatLib = read("_lib/chat.ts");
 const settings = read("app/settings.tsx");
 const notifications = read("_lib/notifications.ts");
 const chillyChatCalls = read("_lib/chillyChatCalls.ts");
 const chillyChatCallSoundAssets = read("_lib/chillyChatCallSoundAssets.ts");
+const nativeCallPlugin = read("plugins/withChillyChatNativeCallNotifications.js");
 const communicationPanel = read("components/communication/in-room-communication-panel.tsx");
 const moneyFlags = read("_lib/moneyFeatureFlags.ts");
 const chatIndex = read("app/chat/index.tsx");
@@ -42,11 +44,14 @@ assertIncludes(bell, "accessibilityLabel={accessibilityLabel}", "bell accessibil
 assertIncludes(bell, "roomSafe", "bell must support room-safe mode");
 assertIncludes(profile, 'NotificationBellButton surface="profile"', "Profile header must use the shared top-right notification bell");
 assertIncludes(profile, "headerBackButton", "Profile header must keep the back and bell controls balanced");
+assertIncludes(appConfig, "./plugins/withChillyChatNativeCallNotifications", "Expo config must install the native Android CallStyle notification plugin");
 
 assertNotIncludes(settings, "readNotificationActivityList", "Settings must not duplicate bell Activity records");
 assertNotIncludes(settings, "settings-notification-activity-list", "Settings must not render an Activity inbox");
 assertIncludes(settings, "Bell Activity", "Settings must point users to the bell tray for Activity");
 assertIncludes(settings, "Ring on calls", "Settings Chi'lly Chat calls section must expose a ring toggle next to vibration");
+assertIncludes(settings, "Full-screen call alerts", "Settings must expose Android full-screen call alert status for native builds");
+assertIncludes(settings, "Open Android call alert settings", "Settings must provide a route to Android full-screen call alert settings when available");
 assertIncludes(settings, "onToggleChillyChatCallRing", "Settings ring toggle must persist through notification preferences");
 assertIncludes(settings, "silent_vibrate", "Settings ring toggle must use the existing silent/vibrate call preference instead of a schema-only toggle");
 assertIncludes(settings, "Sound could not play. Check media volume, notification volume, or Android sound settings.", "Settings preview must show a clear sound playback failure instead of fake success");
@@ -87,6 +92,10 @@ assertIncludes(notifications, "Notifications.getLastNotificationResponseAsync", 
 assertIncludes(notifications, "Notifications.clearLastNotificationResponseAsync", "handled notification taps must clear the last response to avoid stale re-routing");
 assertIncludes(notifications, "Notifications.getPresentedNotificationsAsync", "handled call notifications must inspect presented Android notifications");
 assertIncludes(notifications, "Notifications.dismissNotificationAsync", "handled call notifications must dismiss only matching call notifications");
+assertIncludes(notifications, "readNativeCallAlertStatus", "Settings must be able to read native Android full-screen call alert status");
+assertIncludes(notifications, "openNativeCallAlertSettings", "Settings must be able to open Android full-screen call alert settings");
+assertIncludes(notifications, "CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID", "notification runtime must create the native full-screen call channel");
+assertIncludes(notifications, "ensureNativeCallNotificationChannel", "notification runtime must ask native Android to create the native call channel");
 assertIncludes(notifications, "presentedNotificationId", "handled call notifications must carry the exact presented Android notification identifier");
 assertIncludes(notifications, "isIncomingChillyChatCallTitle", "handled call notifications must fallback only to incoming Chi'lly Chat call titles");
 assertIncludes(notifications, "dismissIncomingCallFallback", "handled call notification title fallback must require an explicit call action");
@@ -120,6 +129,7 @@ assertIncludes(layout, "room-safe-incoming-call-banner", "room-safe surfaces mus
 assertIncludes(layout, "roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay", "room-safe and normal incoming-call surfaces must use different presentations");
 assertIncludes(layout, "readNotificationPreferences", "app-wide call ringing must respect notification preferences");
 assertIncludes(chillyChatCallSoundAssets, "InterruptionModeAndroid.DoNotMix", "call sound playback must request audible media focus instead of ducking under other audio");
+assertIncludes(chillyChatCallSoundAssets, 'CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1"', "native Android call channel id must be explicit and versioned");
 assertIncludes(chillyChatCallSoundAssets, "playThroughEarpieceAndroid: false", "call sound playback must use the speaker path on Android");
 assertIncludes(chillyChatCallSoundAssets, "shouldDuckAndroid: false", "call sound playback must not duck itself into near-silence");
 assertIncludes(chillyChatCallSoundAssets, "shouldPlay: false", "call sound playback must start explicitly so failures can be caught");
@@ -136,6 +146,8 @@ assertIncludes(chatThread, "outgoingCallInvite", "caller screen must track outgo
 assertIncludes(chatThread, "Voice call ringing", "caller screen must show ringing instead of stale one-person connected success");
 assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing\" : null}", "call panel must label one-person outgoing calls as ringing");
 assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
+assertIncludes(chatThread, "nativeCallAction", "native Android notification actions must route through the chat thread");
+assertIncludes(chatThread, "incomingCallInvite.id !== requestedCallInviteId", "native Android notification actions must reject stale invite ids");
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
 assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");
@@ -149,6 +161,24 @@ assertNotIncludes(layout, "answerAutomatically", "incoming calls must not auto-a
 assertNotIncludes(layout, "autoLeave", "incoming calls must not auto-leave rooms");
 assertNotIncludes(layout, "setMicrophoneEnabled(true)", "incoming calls must not hijack mic");
 assertNotIncludes(layout, "setCameraEnabled(true)", "incoming calls must not hijack camera");
+
+assertIncludes(nativeCallPlugin, "android.permission.USE_FULL_SCREEN_INTENT", "native CallStyle plugin must request full-screen intent permission for native call alerts");
+assertIncludes(nativeCallPlugin, "ChillyChatFirebaseMessagingService", "native CallStyle plugin must register the custom Chi'lly Chat FCM service");
+assertIncludes(nativeCallPlugin, "ExpoFirebaseMessagingService", "native CallStyle plugin must replace the Expo FCM service without double-handling incoming call pushes");
+assertIncludes(nativeCallPlugin, "tools:node", "native CallStyle plugin must remove Expo's default FCM service before registering the custom service");
+assertIncludes(nativeCallPlugin, "ChillyChatCallNotificationActionReceiver", "native CallStyle plugin must register Answer/Decline action receiver");
+assertIncludes(nativeCallPlugin, "NotificationCompat.CallStyle.forIncomingCall", "native Android incoming calls must use CallStyle");
+assertIncludes(nativeCallPlugin, "ACTION_ANSWER", "native CallStyle must expose Answer action");
+assertIncludes(nativeCallPlugin, "ACTION_DECLINE", "native CallStyle must expose Decline action");
+assertIncludes(nativeCallPlugin, "setFullScreenIntent", "native CallStyle must use full-screen intent when Android allows it");
+assertIncludes(nativeCallPlugin, "canUseFullScreenIntent", "native full-screen behavior must check Android permission");
+assertIncludes(nativeCallPlugin, "ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT", "native module must provide the Android full-screen intent settings route");
+assertIncludes(nativeCallPlugin, "FLAG_INSISTENT", "native incoming call notification must ring like an incoming call until handled or timed out");
+assertIncludes(nativeCallPlugin, "super.onMessageReceived(remoteMessage)", "custom FCM service must forward non-call pushes to Expo");
+assertIncludes(nativeCallPlugin, "showIncomingCallNotification", "custom FCM service must render native incoming call notifications outside the app");
+assertIncludes(nativeCallPlugin, "openDeepLinkForAction", "native Answer/Decline must deep-link into authenticated app call handling");
+assertIncludes(nativeCallPlugin, "readFullScreenCallAlertStatus", "native module must expose full-screen permission readback");
+assertIncludes(nativeCallPlugin, "openFullScreenCallAlertSettings", "native module must expose full-screen permission settings route");
 
 assertIncludes(notifications, "NOTIFICATION_PRIORITY_ORDER", "priority model must exist");
 assertIncludes(notifications, "INTERRUPTIVE_NOTIFICATION_PRIORITIES", "interruptive priority model must exist");

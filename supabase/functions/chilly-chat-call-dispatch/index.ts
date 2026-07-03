@@ -72,8 +72,7 @@ const JSON_HEADERS = {
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
-const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v3";
-const CHAT_CALL_SOUND = "default";
+const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1";
 const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls";
 const VALID_CALL_TYPES = new Set(["voice", "video"]);
 const TERMINAL_STATUSES = new Set(["accepted", "declined", "missed", "canceled", "ended", "busy"]);
@@ -361,7 +360,6 @@ function buildRoute(threadId: string, inviteId: string, action: DispatchAction) 
   const params = new URLSearchParams({
     callInviteId: inviteId,
   });
-  if (action === "incoming") params.set("openCall", "1");
   return `/chat/${threadId}?${params.toString()}`;
 }
 
@@ -491,24 +489,32 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
   let sentCount = 0;
   const channelId = input.action === "missed" ? MISSED_CALL_CHANNEL_ID : CHAT_CALL_CHANNEL_ID;
   for (const token of tokens) {
-    const pushResult = await sendExpoPush({
-      body: copy.body,
-      channelId,
+    const pushMessage: JsonObject = {
       data: {
         callInviteId: input.invite.id,
         callType: input.callType,
-        notificationId,
+        callerName: input.callerName,
+        body: copy.body,
+        nativeCallStyle: input.action === "incoming" ? "android_callstyle" : "standard",
+        notificationId: notificationId ?? "",
         notificationChannelId: channelId,
-        openCall: input.action === "incoming",
+        openCall: input.action === "incoming" ? "true" : "false",
         path: route,
+        threadId: input.invite.thread_id,
+        title: copy.title,
         triggerType: notificationType,
       },
       priority: "high",
-      sound: input.action === "incoming" ? CHAT_CALL_SOUND : "default",
-      title: copy.title,
       to: token.token,
       ttl: input.action === "incoming" ? 45 : 3600,
-    });
+    };
+    if (input.action === "missed") {
+      pushMessage.body = copy.body;
+      pushMessage.channelId = channelId;
+      pushMessage.sound = "default";
+      pushMessage.title = copy.title;
+    }
+    const pushResult = await sendExpoPush(pushMessage);
     const firstTicket = Array.isArray((pushResult.body as { data?: unknown }).data)
       ? ((pushResult.body as { data: JsonObject[] }).data[0] ?? {})
       : ((pushResult.body as { data?: JsonObject }).data ?? {});

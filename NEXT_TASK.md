@@ -1,5 +1,18 @@
 # NEXT TASK
 
+# V77 Native Chi'lly Chat CallStyle / Full-Screen Proof Follow-Up
+
+Current latest truth:
+- Native Android Chi'lly Chat CallStyle/full-screen incoming-call work is source-validated but installed proof remains Partial/Pending in `docs/release/GOOGLE_SIGNED_V77_NATIVE_CALLSTYLE_FULLSCREEN_PROOF.md`.
+- Artifact folder: `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`.
+- Starting source was aligned at `HEAD == origin/main == 5f03cd85ec3da2ff7aca7be2791c75f978a74c99`.
+- Source now adds a bounded Expo config plugin that generates the native Android call-notification files during prebuild/EAS build: `USE_FULL_SCREEN_INTENT`, `chilly_chat_calls_fullscreen_v1`, a custom `ChillyChatFirebaseMessagingService`, Android `NotificationCompat.CallStyle.forIncomingCall`, native Answer/Decline actions, Settings full-screen call alert permission readback/settings route, and data-only incoming call push dispatch.
+- Passive notification taps open an answerable incoming-call route. Only explicit native Answer attempts to accept, and the chat route verifies the requested `callInviteId` still matches the current ringing invite for the signed-in callee before mutating state.
+- This is not OTA-only. A new Google Play internal Android build, expected v77 or newer, is required before lock-screen/full-screen behavior can be claimed.
+- Next exact steps: commit/push source, deploy `chilly-chat-call-dispatch`, create Android AAB through EAS/approved Play internal path, submit to Google Play internal only, update physical devices through Google Play only, then run locked-screen/background Answer/Decline/full-screen/fallback/sound/vibration/stale-call/in-app-regression proof.
+- Android 14+ full-screen intent permission, DND/Zen, notification permission, channel settings, and notification volume can still block full-screen or audible ring; document these as Android/user-setting caveats instead of calling source broken.
+- Do not use OTA as final proof, sideload, `adb install`, logout, clear data, uninstall/reinstall, Play production, provider mutation, live money, payouts/cashout, Money Center changes, auth/RLS weakening, WebRTC/media rewrites, or room routing changes.
+
 # V76 Modern Chi'lly Chat Ringtone Proof Follow-Up
 
 Current latest truth:

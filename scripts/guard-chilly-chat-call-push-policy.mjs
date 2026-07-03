@@ -11,33 +11,45 @@ const fail = (message) => {
 
 const dispatchPath = "supabase/functions/chilly-chat-call-dispatch/index.ts";
 const callsLibPath = "_lib/chillyChatCalls.ts";
+const soundAssetsPath = "_lib/chillyChatCallSoundAssets.ts";
 const chatThreadPath = "app/chat/[threadId].tsx";
+const nativeCallPluginPath = "plugins/withChillyChatNativeCallNotifications.js";
 const configPath = "supabase/config.toml";
 const packagePath = "package.json";
 
-for (const filePath of [dispatchPath, callsLibPath, chatThreadPath, configPath, packagePath]) {
+for (const filePath of [dispatchPath, callsLibPath, soundAssetsPath, chatThreadPath, nativeCallPluginPath, configPath, packagePath]) {
   if (!fs.existsSync(path.join(ROOT, filePath))) fail(`missing required file ${filePath}`);
 }
 
 const dispatch = read(dispatchPath);
 const callsLib = read(callsLibPath);
+const soundAssets = read(soundAssetsPath);
 const chatThread = read(chatThreadPath);
+const nativeCallPlugin = read(nativeCallPluginPath);
 const config = read(configPath);
 const packageJson = JSON.parse(read(packagePath));
 
-if (!dispatch.includes('const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v3"')) {
-  fail("incoming call pushes must use chilly_chat_calls_v3");
+if (!dispatch.includes('const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1"')) {
+  fail("incoming call pushes must use the native CallStyle channel chilly_chat_calls_fullscreen_v1");
 }
 
-if (!dispatch.includes('const CHAT_CALL_SOUND = "default"')) {
-  fail("incoming call pushes must request Android default sound on the fresh call channel");
+if (!soundAssets.includes('CHILLY_CHAT_NATIVE_CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1"')) {
+  fail("native call channel constant must be shared by JS and guards");
+}
+
+if (!nativeCallPlugin.includes('CALL_CHANNEL_ID = "chilly_chat_calls_fullscreen_v1"')) {
+  fail("native Android CallStyle plugin must create the same full-screen call channel as JS/server");
+}
+
+if (!nativeCallPlugin.includes("NotificationCompat.CallStyle.forIncomingCall")) {
+  fail("native Android incoming call plugin must render CallStyle notifications");
 }
 
 if (!dispatch.includes('const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls"')) {
   fail("missed call pushes must use chilly_chat_missed_calls");
 }
 
-if (/\bchilly_chat_calls\b/.test(dispatch.replace(/chilly_chat_calls_v3/g, ""))) {
+if (/\bchilly_chat_calls\b/.test(dispatch.replace(/chilly_chat_calls_fullscreen_v1/g, ""))) {
   fail("new call push dispatcher must not use stale chilly_chat_calls channels");
 }
 
@@ -45,12 +57,18 @@ if (!dispatch.includes('target_route: "/chat/[threadId]"') || !dispatch.includes
   fail("call push payload must target the canonical /chat/[threadId] route");
 }
 
-if (!dispatch.includes("openCall") || !dispatch.includes("callInviteId")) {
-  fail("call push payload must include safe call context for tap routing");
+for (const requiredData of ["nativeCallStyle", "android_callstyle", "threadId", "callInviteId", "callerName"]) {
+  if (!dispatch.includes(requiredData)) {
+    fail(`incoming call push payload must include native CallStyle data: ${requiredData}`);
+  }
 }
 
-if (!dispatch.includes('sound: input.action === "incoming" ? CHAT_CALL_SOUND : "default"')) {
-  fail("incoming call pushes must request the call ringtone while missed calls stay calmer");
+if (!dispatch.includes("pushMessage.body = copy.body") || !dispatch.includes('if (input.action === "missed")')) {
+  fail("incoming call pushes must be data-only so native Android can render CallStyle while missed calls stay standard");
+}
+
+if (!dispatch.includes('pushMessage.sound = "default"') || dispatch.includes('sound: input.action === "incoming"')) {
+  fail("incoming call pushes must stay data-only while missed calls use standard Expo sound");
 }
 
 for (const forbidden of [
@@ -97,6 +115,10 @@ if (!callsLib.includes('action: "incoming"') || !callsLib.includes('action: "mis
 
 if (!chatThread.includes("incomingCallInvite") || !chatThread.includes("handleAcceptIncomingCall") || !chatThread.includes("handleDeclineIncomingCall")) {
   fail("in-app incoming call sheet behavior appears to be removed");
+}
+
+if (!chatThread.includes("nativeCallAction") || !chatThread.includes("requestedCallInviteId") || !chatThread.includes("incomingCallInvite.id !== requestedCallInviteId")) {
+  fail("native Answer/Decline route must verify the active invite before mutating call state");
 }
 
 if (!config.includes("[functions.chilly-chat-call-dispatch]")) {

@@ -21,9 +21,12 @@ import {
 import {
   readNotificationPreferences,
   readCurrentPushRegistration,
+  readNativeCallAlertStatus,
   requestAndroidPushPermissionAndRegister,
+  openNativeCallAlertSettings,
   revokeCurrentPushInstall,
   updateNotificationPreferences,
+  type NativeCallAlertStatus,
   type NotificationPreferencePatch,
   type NotificationPreferenceSettings,
   type PushRegistrationState,
@@ -461,6 +464,7 @@ export default function SettingsScreen() {
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationSavingKey, setNotificationSavingKey] = useState<string | null>(null);
   const [pushRegistration, setPushRegistration] = useState<PushRegistrationState | null>(null);
+  const [nativeCallAlertStatus, setNativeCallAlertStatus] = useState<NativeCallAlertStatus | null>(null);
   const ringtonePreviewSoundRef = useRef<ChillyChatPlayingSound | null>(null);
   const [canOpenAdminDashboard, setCanOpenAdminDashboard] = useState(false);
   const [adminAccessLoading, setAdminAccessLoading] = useState(false);
@@ -661,12 +665,14 @@ export default function SettingsScreen() {
     if (!isSignedIn) return;
     setNotificationLoading(true);
     try {
-      const [preferences, registration] = await Promise.all([
+      const [preferences, registration, callAlertStatus] = await Promise.all([
         readNotificationPreferences(),
         readCurrentPushRegistration(),
+        readNativeCallAlertStatus(),
       ]);
       setNotificationPreferences(preferences);
       setPushRegistration(registration);
+      setNativeCallAlertStatus(callAlertStatus);
     } finally {
       setNotificationLoading(false);
     }
@@ -722,8 +728,12 @@ export default function SettingsScreen() {
 
     setNotificationSavingKey("push-refresh");
     try {
-      const nextRegistration = await readCurrentPushRegistration();
+      const [nextRegistration, callAlertStatus] = await Promise.all([
+        readCurrentPushRegistration(),
+        readNativeCallAlertStatus(),
+      ]);
       setPushRegistration(nextRegistration);
+      setNativeCallAlertStatus(callAlertStatus);
     } catch (error) {
       const message = getUserFacingErrorMessage(error, "Unable to verify this device push registration.");
       setPushRegistration({
@@ -737,6 +747,16 @@ export default function SettingsScreen() {
       setNotificationSavingKey(null);
     }
   }, [notificationSavingKey]);
+
+  const onPressNativeCallAlertSettings = useCallback(async () => {
+    const opened = await openNativeCallAlertSettings();
+    if (!opened) {
+      Alert.alert(
+        "Chi'lly Chat calls",
+        "Android full-screen call alert settings are not available on this device.",
+      );
+    }
+  }, []);
 
   const onSelectChillyChatRingtone = useCallback(async (key: ChillyChatRingtoneKey) => {
     if (!notificationPreferences || notificationSavingKey) return;
@@ -849,6 +869,13 @@ export default function SettingsScreen() {
     || pushRegistration.status === "not_registered"
     || pushRegistration.status === "denied"
     || pushRegistration.status === "error";
+  const nativeCallAlertStatusLabel = useMemo(() => {
+    if (!nativeCallAlertStatus) return "Checking";
+    if (!nativeCallAlertStatus.available) return "Build update needed";
+    if (nativeCallAlertStatus.granted === true) return "On";
+    if (nativeCallAlertStatus.granted === false) return "Needs Android permission";
+    return "Not available";
+  }, [nativeCallAlertStatus]);
 
   const profileVisibilityLabel = profileVisibilityLoading ? "Loading" : getAccessVisibilityLabel(profileVisibility);
   const accountDeletionScheduled = accountDeletionStatus?.scheduled === true;
@@ -2017,6 +2044,30 @@ export default function SettingsScreen() {
             </View>
           </InlineAccordion>
         ))}
+        <SettingsRow
+          title="Full-screen call alerts"
+          subtitle="Android controls whether Chi'lly Chat calls can open over the lock screen."
+          value={nativeCallAlertStatusLabel}
+        >
+          <Text style={styles.metaText}>
+            {nativeCallAlertStatus?.message
+              ?? "Requires the native Google Play build with Android CallStyle support."}
+          </Text>
+          <Text style={styles.metaText}>
+            Channel: {nativeCallAlertStatus?.channelId ?? "chilly_chat_calls_fullscreen_v1"}. DND, notification volume, and Android channel settings can still silence ringing.
+          </Text>
+          {nativeCallAlertStatus?.canOpenSettings ? (
+            <TouchableOpacity
+              style={styles.utilityButton}
+              activeOpacity={0.86}
+              onPress={() => {
+                void onPressNativeCallAlertSettings();
+              }}
+            >
+              <Text style={styles.utilityButtonText}>Open Android call alert settings</Text>
+            </TouchableOpacity>
+          ) : null}
+        </SettingsRow>
         <SettingsRow
           title="Incoming call sound"
           subtitle="Choose the ringtone used when Ring on calls is on. Background call alerts use the Android call channel, and Android settings may override it."

@@ -211,13 +211,27 @@ export default function ChillyChatThreadScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isLoading: authLoading, isSignedIn } = useSession();
-  const { threadId: threadIdParam, startCall: startCallParam, openCall: openCallParam } =
-    useLocalSearchParams<{ threadId?: string; startCall?: string; openCall?: string }>();
+  const {
+    threadId: threadIdParam,
+    startCall: startCallParam,
+    openCall: openCallParam,
+    callInviteId: callInviteIdParam,
+    nativeCallAction: nativeCallActionParam,
+  } =
+    useLocalSearchParams<{
+      callInviteId?: string;
+      nativeCallAction?: string;
+      openCall?: string;
+      startCall?: string;
+      threadId?: string;
+    }>();
   const threadId = String(Array.isArray(threadIdParam) ? threadIdParam[0] : threadIdParam ?? "").trim();
   const requestedCallMode = String(Array.isArray(startCallParam) ? startCallParam[0] : startCallParam ?? "").trim().toLowerCase();
   const requestedOpenCall = ["1", "true", "yes", "on"].includes(
     String(Array.isArray(openCallParam) ? openCallParam[0] : openCallParam ?? "").trim().toLowerCase(),
   );
+  const requestedCallInviteId = String(Array.isArray(callInviteIdParam) ? callInviteIdParam[0] : callInviteIdParam ?? "").trim();
+  const requestedNativeCallAction = String(Array.isArray(nativeCallActionParam) ? nativeCallActionParam[0] : nativeCallActionParam ?? "").trim().toLowerCase();
 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -246,6 +260,7 @@ export default function ChillyChatThreadScreen() {
   const [composerFocused, setComposerFocused] = useState(false);
   const autoStartCallRef = useRef("");
   const autoOpenCallRef = useRef("");
+  const nativeCallActionHandledRef = useRef("");
   const lastReadReceiptWriteAtRef = useRef(0);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
@@ -1061,6 +1076,45 @@ export default function ChillyChatThreadScreen() {
   }, [callBusy, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, rememberHandledIncomingInvite, threadId]);
 
   useEffect(() => {
+    const action = requestedNativeCallAction === "answer" || requestedNativeCallAction === "decline"
+      ? requestedNativeCallAction
+      : "";
+    const requestKey = action && requestedCallInviteId ? `${threadId}:${requestedCallInviteId}:${action}` : "";
+    if (!requestKey) {
+      nativeCallActionHandledRef.current = "";
+      return;
+    }
+    if (
+      loading
+      || callBusy
+      || !currentUserId
+      || !incomingCallInvite
+      || incomingCallInvite.id !== requestedCallInviteId
+      || incomingCallInvite.calleeUserId !== currentUserId
+      || incomingCallInvite.callerUserId === currentUserId
+    ) {
+      return;
+    }
+    if (nativeCallActionHandledRef.current === requestKey) return;
+    nativeCallActionHandledRef.current = requestKey;
+    if (action === "answer") {
+      void handleAcceptIncomingCall();
+      return;
+    }
+    void handleDeclineIncomingCall();
+  }, [
+    callBusy,
+    currentUserId,
+    handleAcceptIncomingCall,
+    handleDeclineIncomingCall,
+    incomingCallInvite,
+    loading,
+    requestedCallInviteId,
+    requestedNativeCallAction,
+    threadId,
+  ]);
+
+  useEffect(() => {
     const nextMode: ChatCallType | null = requestedCallMode === "voice"
       ? "voice"
       : requestedCallMode === "video"
@@ -1118,6 +1172,7 @@ export default function ChillyChatThreadScreen() {
 
       if (
         incomingCallInvite
+        && (!requestedCallInviteId || incomingCallInvite.id === requestedCallInviteId)
         && currentUserId
         && incomingCallInvite.calleeUserId === currentUserId
         && incomingCallInvite.callerUserId !== currentUserId
@@ -1198,7 +1253,7 @@ export default function ChillyChatThreadScreen() {
         role: isHost ? "host" : "viewer",
       });
     }
-  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, stopOutgoingRingback, thread?.activeCallType, threadId]);
+  }, [activeCallRoomId, callPanelOpen, callRoom?.hostUserId, currentUserId, handleStartCall, incomingCallInvite, leaveRoom, loadThreadState, officialAccount, outgoingCallInvite, requestedCallInviteId, stopOutgoingRingback, thread?.activeCallType, threadId]);
 
   useEffect(() => {
     const requestKey = requestedOpenCall && activeCallRoomId ? `${threadId}:${activeCallRoomId}` : "";
