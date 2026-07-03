@@ -73,6 +73,7 @@ const JSON_HEADERS = {
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v2";
+const CHAT_CALL_SOUND = "chilly_ring.wav";
 const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls";
 const VALID_CALL_TYPES = new Set(["voice", "video"]);
 const TERMINAL_STATUSES = new Set(["accepted", "declined", "missed", "canceled", "ended", "busy"]);
@@ -503,7 +504,7 @@ async function dispatchCallNotification(adminClient: SupabaseClientLike, input: 
         triggerType: notificationType,
       },
       priority: "high",
-      sound: "default",
+      sound: input.action === "incoming" ? CHAT_CALL_SOUND : "default",
       title: copy.title,
       to: token.token,
       ttl: input.action === "incoming" ? 45 : 3600,

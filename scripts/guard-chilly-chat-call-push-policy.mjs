@@ -29,6 +29,10 @@ if (!dispatch.includes('const CHAT_CALL_CHANNEL_ID = "chilly_chat_calls_v2"')) {
   fail("incoming call pushes must use chilly_chat_calls_v2");
 }
 
+if (!dispatch.includes('const CHAT_CALL_SOUND = "chilly_ring.wav"')) {
+  fail("incoming call pushes must use the bundled chilly_ring ringtone sound");
+}
+
 if (!dispatch.includes('const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls"')) {
   fail("missed call pushes must use chilly_chat_missed_calls");
 }
@@ -43,6 +47,10 @@ if (!dispatch.includes('target_route: "/chat/[threadId]"') || !dispatch.includes
 
 if (!dispatch.includes("openCall") || !dispatch.includes("callInviteId")) {
   fail("call push payload must include safe call context for tap routing");
+}
+
+if (!dispatch.includes('sound: input.action === "incoming" ? CHAT_CALL_SOUND : "default"')) {
+  fail("incoming call pushes must request the call ringtone while missed calls stay calmer");
 }
 
 for (const forbidden of [
