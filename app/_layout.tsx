@@ -1,7 +1,7 @@
 import { Stack, useGlobalSearchParams, usePathname, useRouter, useSegments } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, Linking, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Linking, Modal, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
 import { setAnalyticsSink, trackEvent, trackScreen, type AnalyticsPayload } from "../_lib/analytics";
 import { BetaProgramProvider, useBetaProgram } from "../_lib/betaProgram";
@@ -731,7 +731,7 @@ function IncomingCallNotificationBridge() {
     );
   };
 
-  return (
+  const overlay = (
     <View
       pointerEvents="box-none"
       style={roomSafeCall ? styles.incomingCallBannerOverlay : styles.incomingCallModalOverlay}
@@ -834,6 +834,20 @@ function IncomingCallNotificationBridge() {
       </View>
       )}
     </View>
+  );
+
+  if (roomSafeCall) return overlay;
+
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={() => {}}
+      statusBarTranslucent
+      transparent
+      visible
+    >
+      {overlay}
+    </Modal>
   );
 }
 
