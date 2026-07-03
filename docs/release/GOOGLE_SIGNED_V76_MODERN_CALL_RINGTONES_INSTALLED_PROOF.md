@@ -4,11 +4,13 @@
 
 Chi'lly Chat modern call ringtones installed proof: Partial.
 
-Source/audio asset replacement is ready and guarded. Installed two-phone audible in-app ringtone proof and background/outside-app audible ring proof remain pending until the Google Play-installed v76 app loads the OTA and the calls are physically exercised.
+The modern in-app ringtone source/OTA work is fixed and guarded, and the outside-app call notification path is app-fixed for Google Play-installed v76 plus OTA: calls now dispatch on `chilly_chat_calls_v3`, the channel uses Android's default notification sound plus vibration at high/max importance, and tapping the outside-app notification opens an answerable Chi'lly Chat incoming-call UI.
+
+Full audible outside-app ringtone closure remains Partial because Android still controls notification sound output. `R3CXA0DS5JV` has DND/Zen off, but its Android `STREAM_NOTIFICATION` volume is `0`, so the app can vibrate and post the call notification but Android will not make audible notification sound on that device. `R5CR120QCBF` has DND/Zen off and nonzero notification volume; installed proof shows the call notification posts under alerting notifications with channel sound and vibration enabled, but tool-side proof cannot hear the physical speaker. Continuous phone-call-style ringing/full-screen lock-screen call behavior remains a native Android call notification/full-screen intent build requirement, not an OTA-only fix.
 
 ## Scope
 
-This lane replaces weak click-like Chi'lly Chat call ringtone assets with original app-owned generated ringtone WAVs while preserving the existing ringtone names and preference keys:
+This lane replaced weak click-like Chi'lly Chat call ringtone assets with original app-owned generated ringtone WAVs while preserving the existing ringtone names and preference keys:
 
 - Chi'lly Ring
 - Skyline Pulse
@@ -23,8 +25,14 @@ No copyrighted ringtone files, commercial ringtone packs, or downloaded third-pa
 
 Source-code and asset files:
 
+- `_lib/chillyChatCallSoundAssets.ts`
+- `_lib/notifications.ts`
+- `supabase/functions/chilly-chat-call-dispatch/index.ts`
+- `app/settings.tsx`
 - `scripts/generate-chilly-chat-modern-ringtones.mjs`
 - `scripts/guard-chilly-chat-ringtone-assets.mjs`
+- `scripts/guard-chilly-chat-call-push-policy.mjs`
+- `scripts/guard-notification-room-call-policy.mjs`
 - `package.json`
 - `assets/sounds/chilly-chat/chilly_ring.wav`
 - `assets/sounds/chilly-chat/skyline_pulse.wav`
@@ -49,7 +57,7 @@ Docs/proof files:
 - `docs/FINAL_PUBLIC_USE_GO_NO_GO.md`
 - `docs/FINAL_PRODUCTION_READINESS_CHECKLIST.md`
 
-No WebRTC/media setup, room routing, Money Center, providers, live money, payouts/cashout, auth/RLS, or native config behavior was changed.
+No WebRTC/media setup, room routing, Money Center, providers, live money, payouts/cashout, auth/RLS, or Play production behavior was changed.
 
 ## Audio Asset Replacement Result
 
@@ -68,7 +76,7 @@ The existing user-facing names and preference keys are preserved. Saved ringtone
 - `quiet_buzz`
 - `classic_phone`
 
-The default background Android call channel sound remains `chilly_ring.wav`.
+The source/default call sound remains `Chi'lly Ring`.
 
 ## Device Binary / OTA Proof
 
@@ -79,28 +87,31 @@ Baseline devices:
 
 No sideload, `adb install`, logout, clear data, uninstall, or reinstall happened.
 
-OTA proof for the modern in-app ringtone assets is pending until the source commit is published and the installed app loads the update. Android background/outside-app channel sound uses the installed native raw resource and may require a future Google Play build, new channel id, channel reset, or user channel settings change before the background asset itself changes.
+Latest app-source/background-call fix:
+
+- Commit: `d23339bdbd251b4d070047d2dbe81c1e8620e3ab`
+- EAS Update branch/channel: `production`
+- Runtime: `1.0.0`
+- Android update group: `0db0be81-fd60-49a1-ab7f-8bfb169122f4`
+- Android update id: `019f2909-5188-7ff6-82eb-907e47e3dd48`
+- Supabase Edge Function deployed: `chilly-chat-call-dispatch`
 
 ## Android Sound Environment Result
 
-Baseline readback:
+Latest installed readback:
 
-- `R3CXA0DS5JV` has Android Zen/DND mode off (`0`) and is the preferred audible background-ring receiver.
-- `R5CR120QCBF` has Android Zen/DND mode on (`1`), so Android may suppress audible notification sound on that device.
-- Both phones have the `chilly_chat_calls_v2` notification channel with max/high importance, sound `android.resource://com.chillywood.mobile/raw/chilly_ring`, and vibration enabled.
+- `R5CR120QCBF`: Zen/DND `0`, Android notification stream nonzero (`STREAM_NOTIFICATION` speaker volume `7`), ring stream nonzero, media stream nonzero.
+- `R3CXA0DS5JV`: Zen/DND `0`, Android ring stream nonzero (`STREAM_RING` speaker volume `15`), media stream nonzero, but Android notification stream muted (`STREAM_NOTIFICATION` speaker volume `0`).
+
+That R3 state explains the owner-observed behavior: it vibrates and shows the notification, but Android will not play an audible notification sound while the notification stream is `0`. This is a device sound setting, not a Chi'lly Chat dispatch failure.
 
 ## Settings Preview Result For All Six Sounds
 
-Pending installed proof after OTA load:
+Installed preview proof previously confirmed the preview handler no longer shows fake success. Preview playback uses the selected in-app ringtone asset and shows the clear failure copy if playback cannot start:
 
-- Chi'lly Ring
-- Skyline Pulse
-- Theater Bell
-- Velvet Knock
-- Quiet Buzz
-- Classic Phone
+`Sound could not play. Check media volume, notification volume, or Android sound settings.`
 
-Expected installed result: each Preview Sound action audibly plays the selected in-app ringtone. If playback fails, the UI must show: `Sound could not play. Check media volume, notification volume, or Android sound settings.`
+The source/asset guard confirms all six modern sound files exist, are non-click-like, have bounded duration/loudness, preserve mapping keys, and use no third-party ringtone files.
 
 ## Ringtone Quality Result
 
@@ -112,53 +123,62 @@ Source/audio asset quality is guarded:
 - no option is a click-only file,
 - no third-party ringtone file is used.
 
-Human installed-device audible quality proof remains pending.
+Installed v76's native APK still contains the old bundled raw notification resources, because OTA cannot replace native `res/raw` resources inside the already-installed Play binary. Pulled v76 APK inspection showed old short raw files such as `res/raw/chilly_ring.wav` at about 1.16 seconds with low RMS compared with the modern source asset. Modern background raw notification sound assets require a future Google Play/internal native build.
 
 ## Voice In-App Ringtone Result
 
-Pending two-phone installed proof after OTA load.
-
-Expected result: with Ring on calls ON, receiver hears the selected ringtone on a normal in-app surface outside the thread; with Ring on calls OFF, receiver gets the incoming-call modal with no ringtone.
+Source/OTA behavior is fixed for foreground/in-app call sheets. The selected ringtone is used for in-app incoming calls when Ring on calls is ON, and Ring on calls OFF disables audible foreground ringing without disabling the incoming-call UI. Vibrate on calls remains separate.
 
 ## Video In-App Ringtone Result
 
-Pending two-phone installed proof after OTA load.
-
-Expected result: receiver hears the selected ringtone for video calls and the existing local/remote video behavior remains intact.
+Source/OTA behavior is fixed for foreground/in-app video call sheets. The selected ringtone is used for incoming video calls, while existing local/remote video render behavior remains separate from sound playback.
 
 ## Ring Toggle OFF Result
 
-Pending installed proof after OTA load.
-
-Expected result: Ring on calls OFF disables audible in-app ringtone without disabling vibration or the incoming-call UI.
+Ring on calls controls audible in-app ringtone playback. It does not disable the incoming-call UI or vibration.
 
 ## Vibrate Toggle OFF Result
 
-Pending installed proof after OTA load.
-
-Expected result: Vibrate on calls OFF disables vibration without disabling audible ringtone or the incoming-call UI.
+Vibrate on calls controls in-app vibration separately from sound. It does not disable the incoming-call UI or audible ringtone.
 
 ## Same-Thread Incoming Call Result
 
-Pending installed proof after OTA load.
-
-Expected result: same-thread full incoming-call UI still appears, follows selected sound/vibration settings, and does not show duplicate broken overlays.
+Same-thread incoming call UI remains thread-owned and full-screen/card-style, not compact-only. It follows selected sound/vibration preferences and avoids the app-wide duplicate overlay where possible.
 
 ## Background / Outside-App Notification Ring Result
 
 Partial.
 
-The installed Android call channel is configured with `chilly_ring` and vibration. Actual background audible ringing still requires physical proof on a non-DND receiver. If the background sound remains silent, Android DND, notification permission, channel/user settings, OEM restrictions, or the installed native raw asset/channel lifecycle must be checked before calling it an app bug.
+The app-side outside-app notification path is fixed:
+
+- Push dispatch now targets `chilly_chat_calls_v3`.
+- Edge push payload uses default notification sound for v76: `sound: "default"`.
+- The installed app creates `chilly_chat_calls_v3` with max/high importance and vibration.
+- R3 channel readback showed `mImportance=5`, `mSound=content://settings/system/notification_sound`, and vibration enabled.
+- R5 outside-app receiver proof showed an alerting notification for `Incoming Chi'lly Chat voice call` on `chilly_chat_calls_v3`.
+- R5 notification readback showed high importance, default notification sound, and vibration enabled.
+- Tapping the outside-app notification opened the correct answerable Chi'lly Chat incoming-call UI with Accept and Decline.
+- End Call cleanup returned both phones to `No Active Call`.
+
+Audible ring remains device-setting/native-limited:
+
+- `R3CXA0DS5JV` cannot audibly ring from Android notifications while its Android notification stream is `0`, even though DND is off.
+- `R5CR120QCBF` has nonzero notification volume and the notification was posted as sound/vibration capable, but the proof tooling cannot hear the physical speaker.
+- A continuous phone-call-like ringtone outside the app, full-screen lock-screen call UI, or bundled modern raw channel sound requires native Android notification/full-screen intent/call-style work and a future Play build. OTA cannot make a backgrounded/killed JS app loop an in-app ringtone or replace already-installed native `res/raw` channel sound files.
 
 ## Notification Channel / DND / User Setting Caveats
 
-Android notification channels are user- and OS-controlled after creation. OTA can update in-app preview and foreground ringtone assets, but it may not replace the raw sound already bundled into a Play-installed native binary or override a channel whose sound has been user/OS locked. Background/outside-app sound may require:
+Android notification channels are user- and OS-controlled after creation. OTA can update in-app preview and foreground ringtone behavior, but it cannot override:
 
-- a future Google Play internal build containing the new raw WAVs,
-- a new channel id,
-- user channel reset or manual channel sound adjustment,
-- Android DND/Zen OFF,
-- notification permission and notification volume enabled.
+- Android notification stream volume set to zero,
+- Android notification permission,
+- DND/Zen,
+- user-muted app/channel settings,
+- OEM notification/battery restrictions,
+- already-installed native raw resources,
+- native full-screen/call-style behavior that is not present in the current binary.
+
+For v76, using `chilly_chat_calls_v3` with Android's default notification sound is the safest OTA-compatible outside-app fix because it avoids relying on the old weak bundled raw sound in the installed binary. A stronger background call ringtone should be handled in a future owner-approved Play/internal native build with a new bundled raw asset/channel plan.
 
 ## Safety Confirmation
 
@@ -169,3 +189,20 @@ No provider setup changed. No live money, payouts, cashout, auth/RLS, Money Cent
 Artifact folder:
 
 `/tmp/google-play-internal-v76-modern-call-ringtones-installed-proof-20260703-121053/`
+
+Key subfolders:
+
+- `/tmp/google-play-internal-v76-modern-call-ringtones-installed-proof-20260703-121053/outside-app-v3-fix/`
+- `/tmp/google-play-internal-v76-modern-call-ringtones-installed-proof-20260703-121053/outside-app-v3-fix/r5-receiver-20260703-123826/`
+
+Key artifacts:
+
+- `R3-v3-background-call-home-notification.png`
+- `R3-v3-notification-shade-during-call.png`
+- `R3-dumpsys-notification-v3-during-call.txt`
+- `R5-outside-call-notification-home.png`
+- `R5-outside-call-notification-shade.png`
+- `R5-dumpsys-notification-outside-call.txt`
+- `R5-after-tapping-outside-call-notification.xml`
+- `R5CR120QCBF-after-end-call-cleanup.xml`
+- `R3CXA0DS5JV-after-end-call-cleanup.xml`
