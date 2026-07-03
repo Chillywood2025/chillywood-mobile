@@ -249,11 +249,52 @@ export default function ChillyChatThreadScreen() {
   const lastReadReceiptWriteAtRef = useRef(0);
   const incomingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingCallSoundRef = useRef<ChillyChatPlayingSound | null>(null);
+  const handledIncomingInviteIdsRef = useRef<Set<string>>(new Set());
+  const handledIncomingRoomIdsRef = useRef<Set<string>>(new Set());
   const outgoingCallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const outgoingRingbackSoundRef = useRef<ChillyChatPlayingSound | null>(null);
 
   const activeCallRoomId = thread?.activeCommunicationRoomId ?? "";
   const currentUserId = String(user?.id ?? "").trim();
+
+  const rememberHandledIncomingInvite = useCallback((
+    invite: ChillyChatCallInvite | null | undefined,
+    options?: { clearRoom?: boolean },
+  ) => {
+    const inviteId = String(invite?.id ?? "").trim();
+    if (inviteId) {
+      handledIncomingInviteIdsRef.current.add(inviteId);
+      if (handledIncomingInviteIdsRef.current.size > 40) {
+        const oldestInviteId = handledIncomingInviteIdsRef.current.values().next().value;
+        if (oldestInviteId) handledIncomingInviteIdsRef.current.delete(oldestInviteId);
+      }
+    }
+
+    if (options?.clearRoom) {
+      const roomId = String(invite?.communicationRoomId ?? "").trim();
+      if (roomId) {
+        handledIncomingRoomIdsRef.current.add(roomId);
+        if (handledIncomingRoomIdsRef.current.size > 40) {
+          const oldestRoomId = handledIncomingRoomIdsRef.current.values().next().value;
+          if (oldestRoomId) handledIncomingRoomIdsRef.current.delete(oldestRoomId);
+        }
+      }
+    }
+  }, []);
+
+  const clearVisibleIncomingCallState = useCallback((invite: ChillyChatCallInvite | null | undefined) => {
+    rememberHandledIncomingInvite(invite, { clearRoom: true });
+    setIncomingCallInvite(null);
+    setCallPanelOpen(false);
+    setThread((current) => {
+      if (!current || current.threadId !== threadId) return current;
+      return {
+        ...current,
+        activeCommunicationRoomId: undefined,
+        activeCallType: undefined,
+      };
+    });
+  }, [rememberHandledIncomingInvite, threadId]);
 
   const stopOutgoingRingback = useCallback(() => {
     Vibration.cancel();
@@ -350,30 +391,42 @@ export default function ChillyChatThreadScreen() {
         return;
       }
 
-      setThread(nextThread);
+      const latestInviteForCurrentUser =
+        latestInvite?.calleeUserId === currentUserId && latestInvite.callerUserId !== currentUserId
+          ? latestInvite
+          : null;
+      const latestInviteWasHandled = !!latestInviteForCurrentUser?.id
+        && handledIncomingInviteIdsRef.current.has(latestInviteForCurrentUser.id);
+      const activeRoomWasHandled = !!nextThread.activeCommunicationRoomId
+        && handledIncomingRoomIdsRef.current.has(nextThread.activeCommunicationRoomId);
+      const visibleThread = latestInviteWasHandled || activeRoomWasHandled
+        ? {
+          ...nextThread,
+          activeCommunicationRoomId: undefined,
+          activeCallType: undefined,
+        }
+        : nextThread;
+
+      setThread(visibleThread);
       setMessages(nextMessages);
       setCallEvents(nextCallEvents);
       setCallPreferences(nextCallPreferences);
-      setIncomingCallInvite(
-        latestInvite?.calleeUserId === currentUserId && latestInvite.callerUserId !== currentUserId
-          ? latestInvite
-          : null,
-      );
+      setIncomingCallInvite(latestInviteForCurrentUser && !latestInviteWasHandled ? latestInviteForCurrentUser : null);
       setError(null);
       setLoading(false);
-      if (!nextThread.activeCommunicationRoomId) {
+      if (!visibleThread.activeCommunicationRoomId) {
         setCallDeliveryStatus(null);
       }
       logChatThread("load_state_success", {
         threadId,
         messageCount: nextMessages.length,
-        activeCommunicationRoomId: nextThread.activeCommunicationRoomId ?? "",
-        activeCallType: nextThread.activeCallType ?? "",
+        activeCommunicationRoomId: visibleThread.activeCommunicationRoomId ?? "",
+        activeCallType: visibleThread.activeCallType ?? "",
       });
 
       await markThreadReadWithThrottle();
 
-      setCallPanelOpen((wasOpen) => (wasOpen ? !!nextThread.activeCommunicationRoomId : false));
+      setCallPanelOpen((wasOpen) => (wasOpen ? !!visibleThread.activeCommunicationRoomId : false));
     } catch (loadError: any) {
       logChatThread("load_state_failed", {
         threadId,
@@ -626,7 +679,7 @@ export default function ChillyChatThreadScreen() {
         status: "missed",
       }).finally(() => {
         void clearEndedChatThreadCall(threadId);
-        setIncomingCallInvite(null);
+        clearVisibleIncomingCallState(incomingCallInvite);
         void loadThreadState();
       });
     }, timeoutMs);
@@ -641,7 +694,7 @@ export default function ChillyChatThreadScreen() {
         incomingCallTimeoutRef.current = null;
       }
     };
-  }, [callPanelOpen, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, currentUserId, incomingCallInvite, loadThreadState, threadId]);
+  }, [callPanelOpen, callPreferences?.chillyChatCallSoundKey, callPreferences?.chillyChatCallVibrateEnabled, callPreferences?.chillyChatCallsEnabled, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, threadId]);
 
   const otherMember = thread?.otherMember;
   const officialAccount = getOfficialPlatformAccount(otherMember?.userId);
@@ -945,6 +998,7 @@ export default function ChillyChatThreadScreen() {
       if (!acceptedInvite) {
         throw new Error("Unable to accept this Chi'lly Chat call right now.");
       }
+      rememberHandledIncomingInvite(acceptedInvite);
       await dismissChillyChatCallNotificationRows({
         callInviteId: incomingCallInvite.id,
         threadId,
@@ -963,7 +1017,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setCallBusy(false);
     }
-  }, [callBusy, currentUserId, incomingCallInvite, loadThreadState, threadId]);
+  }, [callBusy, currentUserId, incomingCallInvite, loadThreadState, rememberHandledIncomingInvite, threadId]);
 
   const handleDeclineIncomingCall = useCallback(async () => {
     if (!incomingCallInvite || callBusy || !currentUserId) return;
@@ -972,18 +1026,26 @@ export default function ChillyChatThreadScreen() {
     incomingCallSoundRef.current = null;
     setCallBusy(true);
     try {
-      await updateChillyChatCallInviteStatus({
+      const declinedInvite = await updateChillyChatCallInviteStatus({
         actorUserId: currentUserId,
         invite: incomingCallInvite,
         status: "declined",
       });
+      if (!declinedInvite) {
+        const latestInvite = await readChillyChatCallInvite(incomingCallInvite.id).catch(() => null);
+        if (!latestInvite || latestInvite.status === "ringing") {
+          throw new Error("Unable to decline this Chi'lly Chat call right now.");
+        }
+        rememberHandledIncomingInvite(latestInvite, { clearRoom: true });
+      } else {
+        rememberHandledIncomingInvite(declinedInvite, { clearRoom: true });
+      }
       await dismissChillyChatCallNotificationRows({
         callInviteId: incomingCallInvite.id,
         threadId,
       }).catch(() => 0);
       await clearEndedChatThreadCall(threadId);
-      setIncomingCallInvite(null);
-      setCallPanelOpen(false);
+      clearVisibleIncomingCallState(incomingCallInvite);
       setCallDeliveryStatus("Incoming call declined. Call state was cleared.");
       trackEvent("chat_call_declined", {
         surface: "chat-thread",
@@ -996,7 +1058,7 @@ export default function ChillyChatThreadScreen() {
     } finally {
       setCallBusy(false);
     }
-  }, [callBusy, currentUserId, incomingCallInvite, loadThreadState, threadId]);
+  }, [callBusy, clearVisibleIncomingCallState, currentUserId, incomingCallInvite, loadThreadState, rememberHandledIncomingInvite, threadId]);
 
   useEffect(() => {
     const nextMode: ChatCallType | null = requestedCallMode === "voice"
