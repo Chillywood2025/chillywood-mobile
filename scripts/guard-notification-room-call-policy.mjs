@@ -45,6 +45,9 @@ assertIncludes(profile, "headerBackButton", "Profile header must keep the back a
 assertNotIncludes(settings, "readNotificationActivityList", "Settings must not duplicate bell Activity records");
 assertNotIncludes(settings, "settings-notification-activity-list", "Settings must not render an Activity inbox");
 assertIncludes(settings, "Bell Activity", "Settings must point users to the bell tray for Activity");
+assertIncludes(settings, "Ring on calls", "Settings Chi'lly Chat calls section must expose a ring toggle next to vibration");
+assertIncludes(settings, "onToggleChillyChatCallRing", "Settings ring toggle must persist through notification preferences");
+assertIncludes(settings, "silent_vibrate", "Settings ring toggle must use the existing silent/vibrate call preference instead of a schema-only toggle");
 assertIncludes(bell, "markNotificationRead", "Bell Activity must mark read");
 assertIncludes(bell, "dismissNotification", "Bell Activity must dismiss");
 

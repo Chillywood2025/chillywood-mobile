@@ -100,6 +100,7 @@ type NotificationPreferenceItem = {
   key: NotificationPreferenceKey;
   label: string;
   description: string;
+  kind?: "default" | "chilly-chat-ring";
 };
 
 type SettingsAccordionProps = {
@@ -203,6 +204,12 @@ const NOTIFICATION_GROUPS: {
         key: "chillyChatCallVibrateEnabled",
         label: "Vibrate on calls",
         description: "Use a soft vibration pattern while in-app call alerts are ringing.",
+      },
+      {
+        key: "chillyChatCallSoundKey",
+        kind: "chilly-chat-ring",
+        label: "Ring on calls",
+        description: "Play the selected Chi'lly Chat ringtone while in-app call alerts are ringing.",
       },
     ],
   },
@@ -736,6 +743,27 @@ export default function SettingsScreen() {
       setNotificationPreferences(updated);
     } catch (error) {
       const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call sound.");
+      Alert.alert("Chi'lly Chat calls", message);
+    } finally {
+      setNotificationSavingKey(null);
+    }
+  }, [notificationPreferences, notificationSavingKey]);
+
+  const onToggleChillyChatCallRing = useCallback(async (enabled: boolean) => {
+    if (!notificationPreferences || notificationSavingKey) return;
+
+    const nextSoundKey: ChillyChatRingtoneKey = enabled
+      ? notificationPreferences.chillyChatCallSoundKey === "silent_vibrate"
+        ? "chilly_ring"
+        : notificationPreferences.chillyChatCallSoundKey
+      : "silent_vibrate";
+
+    setNotificationSavingKey("chillyChatCallSoundKey");
+    try {
+      const updated = await updateNotificationPreferences({ chillyChatCallSoundKey: nextSoundKey });
+      setNotificationPreferences(updated);
+    } catch (error) {
+      const message = getUserFacingErrorMessage(error, "Unable to update Chi'lly Chat call ring.");
       Alert.alert("Chi'lly Chat calls", message);
     } finally {
       setNotificationSavingKey(null);
@@ -1381,7 +1409,9 @@ export default function SettingsScreen() {
       );
     }
 
-    const value = !!notificationPreferences[item.key];
+    const value = item.kind === "chilly-chat-ring"
+      ? notificationPreferences.chillyChatCallSoundKey !== "silent_vibrate"
+      : !!notificationPreferences[item.key];
     return (
       <View key={item.key} style={styles.preferenceRow}>
         <View style={styles.preferenceTextWrap}>
@@ -1392,6 +1422,10 @@ export default function SettingsScreen() {
           value={value}
           disabled={!!notificationSavingKey}
           onValueChange={(nextValue) => {
+            if (item.kind === "chilly-chat-ring") {
+              void onToggleChillyChatCallRing(nextValue);
+              return;
+            }
             void onToggleNotificationPreference(item.key, nextValue);
           }}
           thumbColor={value ? "#FFE4EA" : "#A5AEC0"}
@@ -1399,7 +1433,7 @@ export default function SettingsScreen() {
         />
       </View>
     );
-  }, [notificationPreferences, notificationSavingKey, onToggleNotificationPreference]);
+  }, [notificationPreferences, notificationSavingKey, onToggleChillyChatCallRing, onToggleNotificationPreference]);
 
   const renderLegalPolicyRow = useCallback((slug: string) => {
     const policy = legalPolicyBySlug.get(slug);
@@ -1975,14 +2009,16 @@ export default function SettingsScreen() {
         ))}
         <SettingsRow
           title="Incoming call sound"
-          subtitle="Bundled Chi'llywood sounds play in-app. Background call alerts use the Android call channel sound from a native build, and Android settings may override it."
+          subtitle="Choose the ringtone used when Ring on calls is on. Background call alerts use the Android call channel sound from the native app bundle, and Android settings may override it."
           value={
-            CHILLY_CHAT_RINGTONE_OPTIONS.find((option) => option.key === notificationPreferences?.chillyChatCallSoundKey)?.label
-            ?? "Chi'lly Ring"
+            notificationPreferences?.chillyChatCallSoundKey === "silent_vibrate"
+              ? "Ring off"
+              : (CHILLY_CHAT_RINGTONE_OPTIONS.find((option) => option.key === notificationPreferences?.chillyChatCallSoundKey)?.label
+                ?? "Chi'lly Ring")
           }
         >
           <View style={styles.preferenceList}>
-            {CHILLY_CHAT_RINGTONE_OPTIONS.map((option) => {
+            {CHILLY_CHAT_RINGTONE_OPTIONS.filter((option) => option.key !== "silent_vibrate").map((option) => {
               const selected = notificationPreferences?.chillyChatCallSoundKey === option.key;
               return (
                 <TouchableOpacity
