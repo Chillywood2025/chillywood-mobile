@@ -22,6 +22,20 @@ The first follow-up OTA was not counted Closed because the caller still showed `
 
 This closes the reported Android two-phone installed latency issue only. iOS/tablet/foldable, background push, and broader room-notification closure remain separate proof scopes. No Play build, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, Money Center refactor, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure happened.
 
+## Google-Signed V76 Incoming Call Surface Behavior
+
+Status: Partial.
+
+Doc: `docs/release/GOOGLE_SIGNED_V76_INCOMING_CALL_SURFACE_BEHAVIOR_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v76-incoming-call-surface-behavior-20260703-005357/`.
+
+Source commit `37b4c12cbe0b95702849ecba1e8a7149af4b334a` was published by EAS Update production Android runtime `1.0.0`, group `cb225e0f-37f7-40b3-a93e-127bfd64d97e`, Android update `019f268e-c117-7e3a-8aff-7e177037e1ac`.
+
+The source fix resolves the observed presentation split: same-thread receivers keep the full thread-owned incoming-call sheet without duplicate app-wide UI; normal non-room surfaces use a full app-wide incoming-call modal with Answer / Decline / Reply in Chat; room-safe surfaces keep the compact room-safe banner with Decline / Reply in Chat / Leave room and answer. Guard coverage now fails if normal app surfaces regress to compact-only banner behavior or room-safe surfaces lose the compact banner.
+
+Both `R5CR120QCBF` and `R3CXA0DS5JV` remain Google Play-installed v76 from `com.android.vending`. Both devices saw the OTA available/download path before two safe app restarts and later reported no newer update available. Android notification channel readback shows `chilly_chat_calls_v2` with high/max importance, `chilly_ring`, and vibration enabled.
+
+Full readiness remains Partial until same-thread, normal outside-thread, room-safe, and background notification answer/decline behavior are physically rerun after the OTA. Android DND, notification permission, user channel settings, OEM restrictions, and native full-screen/call-style notification requirements must be documented separately if they suppress ring/vibration. No Play build, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure happened.
+
 ## Google-Signed V76 UI Consistency Cleanup
 
 Status: Closed for the four UI/UX consistency cleanup issues on Google Play-installed v76 plus verified runtime-compatible OTA behavior.

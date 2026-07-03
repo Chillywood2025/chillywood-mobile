@@ -1,5 +1,20 @@
 # NEXT TASK
 
+# V76 Incoming Call Surface Behavior Follow-Up
+
+Current latest truth:
+- Incoming Chi'lly Chat call surface behavior is source-fixed and OTA-published, but installed actual-user flow proof remains Partial in `docs/release/GOOGLE_SIGNED_V76_INCOMING_CALL_SURFACE_BEHAVIOR_PROOF.md`.
+- Artifact folder: `/tmp/google-play-internal-v76-incoming-call-surface-behavior-20260703-005357/`.
+- Source commit: `37b4c12cbe0b95702849ecba1e8a7149af4b334a`.
+- EAS Update: production Android runtime `1.0.0`, group `cb225e0f-37f7-40b3-a93e-127bfd64d97e`, Android update `019f268e-c117-7e3a-8aff-7e177037e1ac`.
+- Source behavior now suppresses duplicate app-wide UI when the receiver is already in the same chat thread, shows a full app-wide incoming-call modal on normal non-room app surfaces, and preserves the compact room-safe incoming-call banner on Party Room / Watch-Party Live / Live Stage surfaces.
+- Both proof phones remain Google Play-installed v76 from `com.android.vending`; both saw the OTA available/download path and after two safe restarts reported no newer update available.
+- Android call-channel readback shows `chilly_chat_calls_v2` with high/max importance, `chilly_ring`, and vibration enabled.
+- Still Partial: the same-thread, normal outside-thread, room-safe, and background answer/decline matrix was not physically rerun after the OTA. R3 was visible over ADB but on the lock screen during the final capture window.
+- Next proof should unlock/foreground both devices without logout or data reset, then rerun: same-thread voice/video, Home/Settings/Profile/Platform outside-thread voice/video, room-safe Party Room/Live Stage incoming call, and background notification tap-to-answer/decline.
+- If background notification still does not ring/vibrate, inspect Android notification permission, DND, user channel settings, OEM restrictions, and whether native Android full-screen intent/call-style work is required. Do not claim full phone-call-like background behavior from JS-only OTA if Android suppresses it.
+- No Play build, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, provider mutation, live money, payout, cashout, auth/RLS weakening, or private identifier exposure happened.
+
 # V76 Direct Chat Video Join Latency Follow-Up
 
 Current latest truth:
