@@ -1,6 +1,6 @@
 # Google-Signed v77 Native CallStyle Full-Screen Proof
 
-Status: Partial - source/native implementation validated; Google Play internal build and installed proof pending.
+Status: Blocked - source/native implementation validated and v77 AAB built; Google Play internal submission is blocked until the Play Console full-screen intent declaration is completed.
 
 Artifact folder: `/tmp/google-play-internal-v77-native-callstyle-fullscreen-proof-20260703-152217/`
 
@@ -102,11 +102,30 @@ Passed so far:
 
 ## Build Result
 
-Pending. A new Android Google Play internal build is required because this lane changes native Android manifest, Firebase messaging service, notification channel creation, and native notification actions.
+- EAS Build ID: `f888abdb-4154-40b8-91a3-2b410f58aa75`
+- Build profile: `production`
+- Artifact type: Android App Bundle
+- VersionName: `1.0.0`
+- VersionCode: `77`
+- RuntimeVersion: `1.0.0`
+- Commit: `fab16ef96368a637f96846846d4717d57d2ebb5e`
+- Build status: `FINISHED`
+- Build message: `Native Chilly Chat CallStyle notifications`
+
+This is the required native build path because the lane changes Android manifest, Firebase messaging service, notification channel creation, and native notification actions.
+
+## Google Play Internal Submission Result
+
+- EAS Submit ID: `47d90002-524f-41b7-968e-e975368d1285`
+- Track requested: Google Play `internal`
+- Result: blocked by Google Play app-content policy
+- Blocking error: `You must let us know whether your app uses any full-screen intent permissions`
+
+The build declares `android.permission.USE_FULL_SCREEN_INTENT`, so Google Play requires the full-screen intent declaration before accepting the AAB into the internal track. This must be completed in Play Console for the app's genuine voice/video calling use case, then the same v77 build can be resubmitted to internal testing. No Play production submission happened.
 
 ## Device / Installed Proof Result
 
-Pending. Closed requires Google Play-installed v77+ proof on physical Android devices.
+Blocked until Play internal accepts the v77 build and the phones update from Google Play. Closed requires Google Play-installed v77+ proof on physical Android devices.
 
 Required installed proof:
 
@@ -141,9 +160,7 @@ Required installed proof:
 
 ## Remaining Open Items
 
-- Commit and push the native source candidate.
-- Deploy `chilly-chat-call-dispatch` after source validation.
-- Build Android AAB through EAS / approved Play internal path.
-- Submit to Google Play internal only.
+- Complete the Google Play Console full-screen intent declaration for the legitimate Chi'lly Chat voice/video calling use case.
+- Resubmit EAS Build `f888abdb-4154-40b8-91a3-2b410f58aa75` to Google Play internal after the declaration is accepted/available.
 - Update both physical devices through Google Play only.
 - Prove locked-screen/full-screen allowed path, fallback denied path, background notification actions, sound/vibration, stale-call rejection, and in-app regressions.
