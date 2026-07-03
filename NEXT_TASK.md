@@ -1,5 +1,20 @@
 # NEXT TASK
 
+# V76 Modern Chi'lly Chat Ringtone Proof Follow-Up
+
+Current latest truth:
+- Chi'lly Chat modern ringtone asset replacement is source-ready and installed proof remains Partial in `docs/release/GOOGLE_SIGNED_V76_MODERN_CALL_RINGTONES_INSTALLED_PROOF.md`.
+- Artifact folder: `/tmp/google-play-internal-v76-modern-call-ringtones-installed-proof-20260703-121053/`.
+- Existing ringtone names and preference keys are preserved: Chi'lly Ring, Skyline Pulse, Theater Bell, Velvet Knock, Quiet Buzz, and Classic Phone.
+- The underlying app-owned WAV assets were replaced with original deterministic generated ringtone motifs using `scripts/generate-chilly-chat-modern-ringtones.mjs`.
+- `npm run guard:chilly-chat-ringtone-assets` verifies app assets and Android raw copies match, remain supported WAV files, have bounded duration/loudness, keep mapping/preference keys, and use no third-party ringtone files.
+- Both `R5CR120QCBF` and `R3CXA0DS5JV` are attached/authorized and remain Google Play-installed v76 from `com.android.vending`.
+- R3 has Zen/DND off and should be preferred for audible background-ring proof; R5 has Zen/DND on, so Android may suppress notification sound there.
+- Installed Android channel `chilly_chat_calls_v2` already uses `android.resource://com.chillywood.mobile/raw/chilly_ring`, max/high importance, and vibration.
+- Next proof: publish/load OTA for in-app ringtone assets, then prove Settings Preview Sound audibly works for all six sounds, selected ringtone audibly plays during real in-app incoming voice/video calls, Ring on calls and Vibrate on calls work independently, same-thread incoming call remains correct, and background/outside-app ring/vibrate is physically proved on a non-DND receiver or documented as Android channel/DND/user-setting/native limitation.
+- OTA can update in-app preview/foreground ringtone assets. Android background channel sound may require a future Google Play internal build, new channel id, channel reset, or user channel setting because native raw notification resources and Android channels are controlled by the installed binary/OS after creation.
+- Do not use copyrighted ringtone files, sideload, `adb install`, logout, clear data, uninstall/reinstall, Play production, provider mutation, live money, payouts/cashout, auth/RLS weakening, Money Center changes, room routing changes, or WebRTC/media rewrites.
+
 # V76 Incoming Call Surface Behavior Follow-Up
 
 Current latest truth:

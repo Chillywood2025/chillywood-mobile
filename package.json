@@ -120,6 +120,7 @@
     "guard:notification-money-policy": "node ./scripts/guard-notification-money-policy.mjs",
     "guard:notification-action-retention-policy": "node ./scripts/guard-notification-action-retention-policy.mjs",
     "guard:notification-room-call-policy": "node ./scripts/guard-notification-room-call-policy.mjs",
+    "guard:chilly-chat-ringtone-assets": "node ./scripts/guard-chilly-chat-ringtone-assets.mjs",
     "guard:creator-video-circle-visibility": "node ./scripts/guard-creator-video-circle-visibility.mjs",
     "guard:creator-feed-fanout-policy": "node ./scripts/guard-creator-feed-fanout-policy.mjs",
     "guard:money-access-grants-policy": "node ./scripts/guard-money-access-grants-policy.mjs",

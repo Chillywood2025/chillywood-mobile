@@ -10,6 +10,20 @@ Do not use OTA proof for native changes, runtimeVersion changes, Play Billing / 
 
 Final reports must separate Play binary proof, OTA update proof, source proof, and native/build proof.
 
+## Google-Signed V76 Modern Chi'lly Chat Ringtones
+
+Status: Partial.
+
+Doc: `docs/release/GOOGLE_SIGNED_V76_MODERN_CALL_RINGTONES_INSTALLED_PROOF.md`. Artifact folder: `/tmp/google-play-internal-v76-modern-call-ringtones-installed-proof-20260703-121053/`.
+
+Source/audio assets are updated so the existing ringtone names and preference keys now point at original generated modern Chi'lly Chat ringtone WAVs instead of weak/click-like sounds. The asset guard verifies app/raw parity, format, duration/loudness bounds, preserved mappings, and no third-party ringtone files.
+
+Installed proof remains Partial until the Google Play-installed v76 app loads the OTA and physical proof confirms Settings preview audibly plays all six sounds, selected ringtone audibly plays during real in-app voice/video incoming calls, Ring on calls and Vibrate on calls work separately, same-thread incoming call behavior remains correct, and background/outside-app ring/vibrate is either proved on a non-DND receiver or documented as Android channel/DND/user-setting/native limitation.
+
+The installed `chilly_chat_calls_v2` Android channel already uses `android.resource://com.chillywood.mobile/raw/chilly_ring`, max/high importance, and vibration. OTA can update in-app preview/foreground sound assets, but Android background channel raw sound replacement may require a future Play build, new channel id, channel reset, or user channel setting change.
+
+No copyrighted ringtone files, Play production submission, sideload, `adb install`, logout, uninstall, reinstall, clear data, provider mutation, live money, payout, cashout, auth/RLS weakening, Money Center change, room routing change, or WebRTC/media setup change happened.
+
 ## Google-Signed V76 Direct Chat Video Join Latency
 
 Status: Closed for the reported Android two-phone installed video-answer split/render delay.

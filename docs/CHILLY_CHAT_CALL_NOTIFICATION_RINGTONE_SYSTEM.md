@@ -99,7 +99,7 @@ Bundled sound files:
 - `assets/sounds/chilly-chat/quiet_buzz.wav`
 - `assets/sounds/chilly-chat/classic_phone.wav`
 
-Because this repo has a checked-in Android native project, the same bundled sounds are also committed under `android/app/src/main/res/raw/` with Android-safe underscore filenames. This avoids relying on config-plugin resource copying during native builds that use the existing `android/` directory.
+July 3, 2026 update: these files were replaced with original generated Chi'llywood app assets created by `scripts/generate-chilly-chat-modern-ringtones.mjs`. The six display names and preference keys stayed the same. The generated sounds are longer modern ringtone motifs rather than one-shot click-style UI sounds. Because this repo has a checked-in Android native project, the same bundled sounds are also committed under `android/app/src/main/res/raw/` with Android-safe underscore filenames. This avoids relying on config-plugin resource copying during native builds that use the existing `android/` directory.
 
 ## Push Notification Readiness
 
@@ -109,7 +109,7 @@ The app now creates Android channels:
 - `chilly_chat_calls_v2`
 - `chilly_chat_missed_calls`
 
-`chilly_chat_calls_v2` uses `chilly_ring.wav` as its bundled native sound where Android and the installed native build support it. Messages and missed-call channels stay calmer and do not use the call ringtone.
+`chilly_chat_calls_v2` uses `chilly_ring.wav` as its bundled native sound where Android and the installed native build support it. OTA can update in-app ringtone assets, but Android background notification channel sound can remain tied to the sound resource and channel settings from the installed native build. If a tester device already created the channel with older sound behavior, a new channel id, channel reset/user settings change, or a future native Google Play internal build may be required to change background call ringing. Messages and missed-call channels stay calmer and do not use the call ringtone.
 
 Notification tap routing accepts `/chat/...` deep links, including `openCall` context from the dedicated `chilly-chat-call-dispatch` path. This pass does not add service-role secrets to mobile code and does not log push tokens. The existing `notification-dispatch` Edge Function remains a discovery/activity dispatcher; Chi'lly Chat call pushes use the dedicated server-side call dispatch path and the `chilly_chat_calls_v2` / `chilly_chat_missed_calls` channels.
 
