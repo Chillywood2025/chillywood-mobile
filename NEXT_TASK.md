@@ -1,5 +1,19 @@
 # NEXT TASK
 
+# V79 Native Answer Action Final Room-Safe Rerun
+
+Current latest truth:
+- Native Android Chi'lly Chat CallStyle `Answer` handoff is Play-installed v79 Partial, with the core Answer bug closed on both physical phones.
+- Governing docs: `docs/release/GOOGLE_SIGNED_V77_NATIVE_CALLSTYLE_FULLSCREEN_PROOF.md`, `docs/release/GOOGLE_SIGNED_V78_NATIVE_ANSWER_ACTION_FIX.md`, and `docs/release/GOOGLE_SIGNED_V79_NATIVE_ANSWER_ACTION_FIX.md`.
+- Artifact folder: `/tmp/google-play-internal-v77-native-answer-action-fix-20260704-124252/v79-build-submit-proof-20260704-174313/`.
+- Source commit: `5c210fa52b3c95f2047295c9e0f696db42f48002`, pushed to `origin/main`.
+- EAS Build `8a144cae-959f-4acb-9266-8bf7bf2c94f8` produced Android AAB versionCode `79`; EAS Submit `db1e81e4-cd7c-4113-81f1-c05fe2cda6ed` submitted to Google Play internal testing only.
+- Both `R5CR120QCBF` and `R3CXA0DS5JV` updated through Google Play only and read back package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`.
+- Closed on installed v79: background voice native Answer opens/joins and caller leaves ringing; background video native Answer opens/joins and caller leaves ringing; native Decline clears receiver notification and caller state; same-thread Accept no longer hits `This communication room is unavailable`; normal in-app outside-thread Settings surface shows the full app-wide incoming-call modal and Answer joins correctly.
+- Remaining proof gap: room-safe compact-banner rerun on v79. Current safe route attempts are blocked: `/watch-party` hits Premium gate, `/watch-party/live-stage` shows `Live room unavailable`, visible room code `XQBBRE` returns `Room not found`, and `/communication` resolves to Chi'lly Chat inbox rather than a room-safe surface.
+- Next exact step: provide or create a safe active room fixture/account state without live-money/provider changes, then rerun room-safe incoming call banner proof on Google Play-installed v79: compact banner only, Decline keeps receiver in room, Reply in Chat does not auto-answer, Leave room and answer confirms and then answers.
+- Do not create a new Play build, sideload, `adb install`, logout, clear data, uninstall/reinstall, mutate providers, touch Money Center, enable live money/payouts/cashout, weaken auth/RLS, broadly rewrite WebRTC/media, or broadly change room routing unless fresh proof shows a real app bug.
+
 # V78 Native Answer Action Installed Proof Blocker
 
 Current latest truth:

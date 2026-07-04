@@ -1,5 +1,13 @@
 # Google-Signed v77 Native CallStyle Full-Screen Proof
 
+## July 4, 2026 v79 Native Answer Installed Proof
+
+Status: Partial after Google Play-installed v79 proof. The v79 source fix commit `5c210fa52b3c95f2047295c9e0f696db42f48002` was built as EAS Build `8a144cae-959f-4acb-9266-8bf7bf2c94f8` and submitted to Google Play internal testing as EAS Submit `db1e81e4-cd7c-4113-81f1-c05fe2cda6ed`. Both physical phones updated through Google Play only to package `com.chillywood.mobile`, installer `com.android.vending`, versionCode `79`, versionName `1.0.0`.
+
+Installed proof closed the native Answer handoff bug: background voice and background video CallStyle notifications showed `Decline` / `Answer`, tapping `Answer` opened/joined the valid call, caller state moved out of ringing, and End Call returned both sides to `No Active Call`. Native `Decline` cleared the active notification and caller state. Same-thread Accept no longer landed in `This communication room is unavailable`; after realtime settled both phones showed `2 in call` and `Connected`. Normal in-app outside-thread Settings showed the full app-wide incoming-call modal with `Answer`, `Decline`, and `Reply in Chat`, and Answer joined correctly.
+
+Remaining Partial item: v79 room-safe compact-banner regression was not closed because no usable room-safe surface was reachable without changing room/account state. `/watch-party` hit Premium gate, `/watch-party/live-stage` showed `Live room unavailable`, visible room code `XQBBRE` returned `Room not found`, and `/communication` resolved to Chi'lly Chat inbox. Artifact folder: `/tmp/google-play-internal-v77-native-answer-action-fix-20260704-124252/v79-build-submit-proof-20260704-174313/`.
+
 ## July 4, 2026 v78 Native Answer Handoff Fix
 
 Status: Blocked for final installed two-phone closure after source/native fix, build, submit, and one-device Play update. The user-proved failure was narrowed to the native Android CallStyle `Answer` action: the outside-app/lock-screen call notification appeared, rang, vibrated, and showed `Decline` / `Answer`, but tapping `Answer` only stopped ringing and did not open or join the call; the caller stayed in the trying/ringing state.
