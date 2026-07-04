@@ -47,6 +47,14 @@ if (!nativeCallPlugin.includes("NotificationCompat.CallStyle.forIncomingCall")) 
   fail("native Android incoming call plugin must render CallStyle notifications");
 }
 
+if (!nativeCallPlugin.includes('val answerIntent = buildActivityPendingIntent(context, data, "answer", 1)')) {
+  fail("native Android Answer action must start the app Activity with nativeCallAction=answer");
+}
+
+if (nativeCallPlugin.includes("val answerIntent = buildActionPendingIntent")) {
+  fail("native Android Answer action must not rely on a broadcast receiver to launch the app from background");
+}
+
 if (!dispatch.includes('const MISSED_CALL_CHANNEL_ID = "chilly_chat_missed_calls"')) {
   fail("missed call pushes must use chilly_chat_missed_calls");
 }
@@ -146,6 +154,10 @@ if (!chatThread.includes("nativeCallAction") || !chatThread.includes("requestedC
 
 if (!chatThread.includes("readAcceptableIncomingInvite") || !chatThread.includes("getCommunicationRoomSnapshot") || !chatThread.includes("latestInvite.status === \"ringing\"")) {
   fail("same-thread/native Answer must re-read the ringing invite and active communication room before accepting");
+}
+
+if (!chatThread.includes("dismissPresentedChillyChatCallNotifications") || !chatThread.includes("dismissAllPresentedNotificationsFallback: true")) {
+  fail("native Answer/Decline handling must dismiss presented Android call notifications after safe invite handling");
 }
 
 if (!config.includes("[functions.chilly-chat-call-dispatch]")) {

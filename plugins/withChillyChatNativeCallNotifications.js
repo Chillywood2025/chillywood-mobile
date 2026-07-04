@@ -115,7 +115,7 @@ object ChillyChatCallNotifications {
     }
 
     val contentIntent = buildActivityPendingIntent(context, data, "incoming", 0)
-    val answerIntent = buildActionPendingIntent(context, data, ACTION_ANSWER, 1)
+    val answerIntent = buildActivityPendingIntent(context, data, "answer", 1)
     val declineIntent = buildActionPendingIntent(context, data, ACTION_DECLINE, 2)
     val fullScreenIntent = buildActivityPendingIntent(context, data, "incoming", 3)
     val caller = Person.Builder()

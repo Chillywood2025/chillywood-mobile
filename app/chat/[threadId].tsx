@@ -63,6 +63,7 @@ import { reportRuntimeError } from "../../_lib/logger";
 import { buildSafetyReportContext, submitSafetyReport, trackModerationActionUsed } from "../../_lib/moderation";
 import {
   dismissChillyChatCallNotificationRows,
+  dismissPresentedChillyChatCallNotifications,
   readNotificationPreferences,
   requestAndroidPushPermissionAndRegister,
   type NotificationPreferenceSettings,
@@ -1042,6 +1043,12 @@ export default function ChillyChatThreadScreen() {
         throw new Error("Unable to accept this Chi'lly Chat call right now.");
       }
       rememberHandledIncomingInvite(acceptedInvite);
+      await dismissPresentedChillyChatCallNotifications({
+        callInviteId: currentInvite.id,
+        dismissAllPresentedNotificationsFallback: true,
+        dismissIncomingCallFallback: true,
+        threadId,
+      }).catch(() => 0);
       await dismissChillyChatCallNotificationRows({
         callInviteId: currentInvite.id,
         threadId,
@@ -1083,6 +1090,12 @@ export default function ChillyChatThreadScreen() {
       } else {
         rememberHandledIncomingInvite(declinedInvite, { clearRoom: true });
       }
+      await dismissPresentedChillyChatCallNotifications({
+        callInviteId: incomingCallInvite.id,
+        dismissAllPresentedNotificationsFallback: true,
+        dismissIncomingCallFallback: true,
+        threadId,
+      }).catch(() => 0);
       await dismissChillyChatCallNotificationRows({
         callInviteId: incomingCallInvite.id,
         threadId,

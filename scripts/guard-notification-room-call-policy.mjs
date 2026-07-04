@@ -154,6 +154,7 @@ assertIncludes(chatThread, "incomingCallInvite.id !== requestedCallInviteId", "n
 assertIncludes(chatThread, "readAcceptableIncomingInvite", "native and same-thread Answer must re-read current invite state before accepting");
 assertIncludes(chatThread, "latestInvite.status === \"ringing\"", "native and same-thread Answer must require a currently ringing invite");
 assertIncludes(chatThread, "getCommunicationRoomSnapshot", "native and same-thread Answer must verify the room is active before joining");
+assertIncludes(chatThread, "dismissPresentedChillyChatCallNotifications", "native Answer/Decline must clear presented Android call notifications after safe invite handling");
 assertIncludes(communicationPanel, "statusLabelOverride", "communication panel must allow honest call status labels");
 assertIncludes(chatLib, "reconcileActiveChatThreadCallState", "inbox/thread reads must reconcile stale active call state");
 assertIncludes(chatLib, "shouldClearStaleActiveThreadCall", "stale active call cleanup must be backed by invite/room readback");
@@ -176,6 +177,8 @@ assertIncludes(nativeCallPlugin, "ChillyChatCallNotificationActionReceiver", "na
 assertIncludes(nativeCallPlugin, "NotificationCompat.CallStyle.forIncomingCall", "native Android incoming calls must use CallStyle");
 assertIncludes(nativeCallPlugin, "ACTION_ANSWER", "native CallStyle must expose Answer action");
 assertIncludes(nativeCallPlugin, "ACTION_DECLINE", "native CallStyle must expose Decline action");
+assertIncludes(nativeCallPlugin, 'val answerIntent = buildActivityPendingIntent(context, data, "answer", 1)', "native Answer action must start the app Activity directly");
+assertNotIncludes(nativeCallPlugin, "val answerIntent = buildActionPendingIntent", "native Answer action must not rely on a broadcast receiver to launch from background");
 assertIncludes(nativeCallPlugin, "setFullScreenIntent", "native CallStyle must use full-screen intent when Android allows it");
 assertIncludes(nativeCallPlugin, "canUseFullScreenIntent", "native full-screen behavior must check Android permission");
 assertIncludes(nativeCallPlugin, "ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT", "native module must provide the Android full-screen intent settings route");
