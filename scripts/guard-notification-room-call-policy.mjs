@@ -150,7 +150,10 @@ assertIncludes(chatThread, "Voice call ringing", "caller screen must show ringin
 assertIncludes(chatThread, "statusLabelOverride={outgoingCallRinging ? \"Ringing\" : null}", "call panel must label one-person outgoing calls as ringing");
 assertIncludes(chatThread, "No answer. The call expired and active call state was cleared.", "caller timeout must clear stale active call state");
 assertIncludes(chatThread, "nativeCallAction", "native Android notification actions must route through the chat thread");
-assertIncludes(chatThread, "incomingCallInvite.id !== requestedCallInviteId", "native Android notification actions must reject stale invite ids");
+assertIncludes(chatThread, "readChillyChatCallInvite(requestedCallInviteId)", "native Android notification actions must read the invite by id after cold/background launch");
+assertIncludes(chatThread, "invite.threadId !== threadId", "native Android notification actions must reject wrong-thread invite ids");
+assertIncludes(chatThread, "invite.calleeUserId !== currentUserId", "native Android notification actions must reject invites for another callee");
+assertIncludes(chatThread, "invite.callerUserId === currentUserId", "native Android notification actions must reject self/caller-side stale invite actions");
 assertIncludes(chatThread, "readAcceptableIncomingInvite", "native and same-thread Answer must re-read current invite state before accepting");
 assertIncludes(chatThread, "latestInvite.status === \"ringing\"", "native and same-thread Answer must require a currently ringing invite");
 assertIncludes(chatThread, "getCommunicationRoomSnapshot", "native and same-thread Answer must verify the room is active before joining");
@@ -186,6 +189,9 @@ assertIncludes(nativeCallPlugin, "FLAG_INSISTENT", "native incoming call notific
 assertIncludes(nativeCallPlugin, "super.onMessageReceived(remoteMessage)", "custom FCM service must forward non-call pushes to Expo");
 assertIncludes(nativeCallPlugin, "showIncomingCallNotification", "custom FCM service must render native incoming call notifications outside the app");
 assertIncludes(nativeCallPlugin, "openDeepLinkForAction", "native Answer/Decline must deep-link into authenticated app call handling");
+assertIncludes(nativeCallPlugin, "Intent(Intent.ACTION_VIEW, deepLink)", "native Answer must launch with an explicit VIEW deep link");
+assertIncludes(nativeCallPlugin, "Intent.CATEGORY_BROWSABLE", "native Answer deep link must use a browser/deep-link category Expo can receive");
+assertIncludes(nativeCallPlugin, "putExtra(\"openCall\", if (nativeAction == \"answer\") \"1\" else \"0\")", "native Answer intent must preserve openCall=1 for the JS join trigger");
 assertIncludes(nativeCallPlugin, "readFullScreenCallAlertStatus", "native module must expose full-screen permission readback");
 assertIncludes(nativeCallPlugin, "openFullScreenCallAlertSettings", "native module must expose full-screen permission settings route");
 

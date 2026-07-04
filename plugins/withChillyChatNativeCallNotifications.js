@@ -162,12 +162,23 @@ object ChillyChatCallNotifications {
     nativeAction: String,
     requestOffset: Int,
   ): PendingIntent {
-    val intent = Intent(Intent.ACTION_VIEW, buildDeepLink(data, nativeAction)).apply {
-      setPackage(context.packageName)
+    val deepLink = buildDeepLink(data, nativeAction)
+    val launchComponent = context.packageManager
+      .getLaunchIntentForPackage(context.packageName)
+      ?.component
+    val intent = Intent(Intent.ACTION_VIEW, deepLink).apply {
+      if (launchComponent != null) {
+        component = launchComponent
+      } else {
+        setPackage(context.packageName)
+      }
+      addCategory(Intent.CATEGORY_DEFAULT)
+      addCategory(Intent.CATEGORY_BROWSABLE)
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       putExtra("callInviteId", data["callInviteId"])
       putExtra("threadId", data["threadId"])
       putExtra("nativeCallAction", nativeAction)
+      putExtra("openCall", if (nativeAction == "answer") "1" else "0")
     }
     return PendingIntent.getActivity(
       context,
@@ -223,9 +234,23 @@ object ChillyChatCallNotifications {
       "callInviteId" to inviteId,
       "threadId" to threadId,
     )
-    val intent = Intent(Intent.ACTION_VIEW, buildDeepLink(data, nativeAction)).apply {
-      setPackage(context.packageName)
+    val deepLink = buildDeepLink(data, nativeAction)
+    val launchComponent = context.packageManager
+      .getLaunchIntentForPackage(context.packageName)
+      ?.component
+    val intent = Intent(Intent.ACTION_VIEW, deepLink).apply {
+      if (launchComponent != null) {
+        component = launchComponent
+      } else {
+        setPackage(context.packageName)
+      }
+      addCategory(Intent.CATEGORY_DEFAULT)
+      addCategory(Intent.CATEGORY_BROWSABLE)
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+      putExtra("callInviteId", inviteId)
+      putExtra("threadId", threadId)
+      putExtra("nativeCallAction", nativeAction)
+      putExtra("openCall", if (nativeAction == "answer") "1" else "0")
     }
     context.startActivity(intent)
   }

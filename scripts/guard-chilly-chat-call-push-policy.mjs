@@ -148,8 +148,17 @@ if (!chatThread.includes("incomingCallInvite") || !chatThread.includes("handleAc
   fail("in-app incoming call sheet behavior appears to be removed");
 }
 
-if (!chatThread.includes("nativeCallAction") || !chatThread.includes("requestedCallInviteId") || !chatThread.includes("incomingCallInvite.id !== requestedCallInviteId")) {
-  fail("native Answer/Decline route must verify the active invite before mutating call state");
+for (const requiredNativeActionGuard of [
+  "nativeCallAction",
+  "requestedCallInviteId",
+  "readChillyChatCallInvite(requestedCallInviteId)",
+  "invite.threadId !== threadId",
+  "invite.calleeUserId !== currentUserId",
+  "invite.callerUserId === currentUserId",
+]) {
+  if (!chatThread.includes(requiredNativeActionGuard)) {
+    fail(`native Answer/Decline route must verify the active invite before mutating call state: ${requiredNativeActionGuard}`);
+  }
 }
 
 if (!chatThread.includes("readAcceptableIncomingInvite") || !chatThread.includes("getCommunicationRoomSnapshot") || !chatThread.includes("latestInvite.status === \"ringing\"")) {
